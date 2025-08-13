@@ -1,10 +1,10 @@
-import query from "@/lib/db/mysql"
+import { Projects } from "@/lib/supabase/queries"
 import { ProjectActivityTable } from "./table";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 
 const ProjectActivitySuspense = async ({ projectId }: { projectId: string }) => {
-    const logs = await query.projects.get_logs(projectId);
+    const logs = await Projects.get_logs(projectId);
 
     if (!logs) {
         return (

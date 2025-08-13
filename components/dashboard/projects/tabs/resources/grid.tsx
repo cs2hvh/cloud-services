@@ -1,14 +1,14 @@
 "use client";
 import React from 'react';
 import { Calendar, Server, Cpu, Database, HardDrive, Wifi, Clock, Activity, Map, User, Globe, ExternalLink } from 'lucide-react';
-import { DB_GameServer } from '@/lib/db/mysql/types';
+import { Tables } from '@/lib/supabase/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { getDaysRemaining, getRelativeTime } from '@/lib/utils';
 
-const GameServerGrid = ({ data }: { data: DB_GameServer[] }) => {
+const GameServerGrid = ({ data }: { data: Tables<'game_servers'>[] }) => {
     if (!data || data.length === 0) {
         return <div className="text-center p-8 text-gray-500">No game servers found</div>;
     }

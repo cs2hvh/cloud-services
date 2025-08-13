@@ -3,11 +3,11 @@ import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Separator } from "@/components/ui/separator";
 import { serviceLocations } from "@/config/locations";
-import query from "@/lib/db/mysql";
+import { Products } from "@/lib/supabase/queries";
 import { Suspense } from "react";
 
 const DatabaseNewSuspense = async () => {
-    const products = await query.products.get_by_type("database")
+    const products = await Products.get_by_type("database")
     // console.log(products)
     return <DatabaseSelect products={products} locations={serviceLocations} />
 }

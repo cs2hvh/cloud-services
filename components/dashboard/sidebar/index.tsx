@@ -25,14 +25,14 @@ import {
 import { NavProjects } from "./nav/projects";
 import { NavSecondary } from "./nav/secondary";
 import { NavUser } from "./nav/user";
-import { User } from "lucia";
+import { User } from "@supabase/supabase-js";
 import { usePathname } from "next/navigation";
-import { DB_Project } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 import { NavServices } from "./nav/services";
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
     user: User
-    projects: DB_Project[]
+    projects: Tables<'projects'>[]
     // sidebar: SidebarItemGroup[];
 };
 

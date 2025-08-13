@@ -1,5 +1,4 @@
-import db from '@/lib/db/mysql/lib';
-import { DB_User } from '@/lib/db/mysql/types';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -10,21 +9,28 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Missing users param' }, { status: 404 });
     }
 
-    const usernames = usersParam.split(',').map(u => u.trim()).filter(Boolean);
+    const userIds = usersParam.split(',').map(u => u.trim()).filter(Boolean);
 
-    if (usernames.length === 0) {
+    if (userIds.length === 0) {
         return NextResponse.json({ error: 'Invalid users param' }, { status: 404 });
     }
 
     try {
-        const placeholders = usernames.map(() => '?').join(',');
-        const [rows] = await db.query<DB_User[]>(
-            `SELECT id, username, avatar, email FROM users WHERE id IN (${placeholders}) ORDER BY created_at DESC`,
-            usernames
-        );
-        return NextResponse.json(rows);
+        const supabase = await createClient();
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .select('id, username, avatar')
+            .in('id', userIds)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('[Supabase] Error while getting users:', error);
+            return NextResponse.json({ error: 'Database error' }, { status: 500 });
+        }
+
+        return NextResponse.json(data);
     } catch (err) {
-        console.error('[DB] Error while getting users:', err);
+        console.error('[Supabase] Error while getting users:', err);
         return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
 }

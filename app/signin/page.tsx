@@ -1,11 +1,11 @@
 import { SignInForm } from "@/components/auth/signin";
-import { validateRequest } from "@/lib/lucia/auth";
+import { getUser } from "@/lib/supabase/auth";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
 export default async function SignInPage() {
 
-    const { user } = await validateRequest();
+    const user = await getUser();
 
     if (user) {
         redirect("/")

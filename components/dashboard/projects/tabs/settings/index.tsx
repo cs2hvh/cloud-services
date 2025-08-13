@@ -1,16 +1,16 @@
-import { DB_Project } from "@/lib/db/mysql/types"
+import { Tables } from "@/lib/supabase/types"
 import axios from "axios"
 import ProjectUsers from "./users"
 import EditProjectForm from "./edit"
 
 interface PageProps {
-    project: DB_Project
+    project: Tables<'projects'>
 }
 
 const ProjectSettingsPage = async ({ project }: PageProps) => {
     let users = []
 
-    if (project.users.length > 0) {
+    if (project.users && Array.isArray(project.users) && project.users.length > 0) {
         const userIds = project.users.join(",")
         const response = await axios.get(`${process.env.DOMAIN}/api/users?ids=${userIds}`)
         users = response.data

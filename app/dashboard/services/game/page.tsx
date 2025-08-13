@@ -1,10 +1,10 @@
-import query from "@/lib/db/mysql"
+import { GameServers } from "@/lib/supabase/queries"
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import GameServerGrid from "@/components/dashboard/projects/tabs/resources/grid";
 import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { Separator } from "@/components/ui/separator";
-import { validateRequest } from "@/lib/lucia/auth";
+import { getUser } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import Link from "next/link";
@@ -12,13 +12,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 
 const GameServiceSuspense = async () => {
-    const { user } = await validateRequest();
+    const user = await getUser();
 
     if (!user) {
         notFound()
     }
 
-    const gameservers = await query.gameservers.get_by_userid(user.id);
+    const gameservers = await GameServers.get_by_user(user.id);
 
     if (!gameservers) {
         return (

@@ -1,21 +1,41 @@
-import query from '@/lib/db/mysql';
-import { DB_Project } from '@/lib/db/mysql/types';
-import { generateRandomUuid } from '@/lib/utils';
+import { createClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
     try {
-        const { name, description, owner } = await req.json();
-        const id = generateRandomUuid();
-        await query.projects.create({
-            id,
-            name,
-            description,
-            owner,
-            users: [owner]
-        } as Partial<DB_Project>)
+        const { name, description } = await req.json();
+        const supabase = await createClient();
 
-        return NextResponse.json({ message: 'Project created successfully' }, { status: 201 });
+        // Get the current user
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError || !user) {
+            return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { data, error } = await supabase
+            .from('projects')
+            .insert({
+                name,
+                description,
+                owner: user.id,
+                users: [user.id]
+            })
+            .select('id')
+            .single();
+
+        if (error) {
+            console.error('[POST /projects]', error);
+            return NextResponse.json(
+                { message: error.message },
+                { status: 500 }
+            );
+        }
+
+        return NextResponse.json({ 
+            message: 'Project created successfully',
+            id: data.id
+        }, { status: 201 });
     } catch (error) {
         console.error('[POST /projects]', error);
         return NextResponse.json(

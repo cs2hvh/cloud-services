@@ -1,6 +1,6 @@
-import { DB_Location } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 
-export const serviceLocations: DB_Location[] = [
+export const serviceLocations: Tables<'locations'>[] = [
     {
         id: 1,
         short: "SGP",

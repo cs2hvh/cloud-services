@@ -1,4 +1,4 @@
-import query from "@/lib/db/mysql"
+import { GameServers } from "@/lib/supabase/queries"
 import GameServerGrid from "./grid";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
@@ -8,7 +8,7 @@ interface PageProps {
 }
 
 const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
-    const gameservers = await query.gameservers.get_by_projectid(projectId);
+    const gameservers = await GameServers.get_by_project(projectId);
 
     return (
         <div className="space-y-4">

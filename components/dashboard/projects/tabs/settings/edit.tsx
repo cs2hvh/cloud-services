@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { DB_Project } from '@/lib/db/mysql/types';
+import { Tables } from '@/lib/supabase/types';
 import { projectSchema } from '@/types/zod/project';
 import axios, { AxiosError } from 'axios';
 import { toast } from 'sonner';
@@ -25,7 +25,7 @@ import {
 type FormData = z.infer<typeof projectSchema>;
 
 type Props = {
-    project: DB_Project;
+    project: Tables<'projects'>;
 };
 
 const EditProjectForm = ({ project }: Props) => {

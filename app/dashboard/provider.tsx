@@ -1,50 +1,47 @@
 "use client";
 
 import React, { createContext, useContext, useState } from "react";
-import type { User, Session } from "lucia";
-import { DB_Project } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 
-interface LuciaSessionContextValue {
-    user: User | null;
-    session: Session | null;
-    setUser: (user: User | null) => void;
-    setSession: (session: Session | null) => void;
-    projects: DB_Project[]; // <-- add this
-    setProjects: (projects: DB_Project[]) => void; // <-- and this
+type UserProfile = Tables<'user_profiles'> & { email?: string };
+type Project = Tables<'projects'>;
+
+interface SupabaseSessionContextValue {
+    user: UserProfile | null;
+    setUser: (user: UserProfile | null) => void;
+    projects: Project[];
+    setProjects: (projects: Project[]) => void;
 }
 
-const LuciaSessionContext = createContext<LuciaSessionContextValue | undefined>(undefined);
+const SupabaseSessionContext = createContext<SupabaseSessionContextValue | undefined>(undefined);
 
-interface LuciaSessionProviderProps {
-    initialUser?: User | null;
-    initialSession?: Session | null;
-    initialProjects: DB_Project[];
+interface SupabaseSessionProviderProps {
+    initialUser?: UserProfile | null;
+    initialProjects: Project[];
     children: React.ReactNode;
 }
 
 export function SessionProvider({
     initialUser = null,
-    initialSession = null,
     initialProjects,
     children
-}: LuciaSessionProviderProps) {
-    const [user, setUser] = useState<User | null>(initialUser);
-    const [session, setSession] = useState<Session | null>(initialSession);
-    const [projects, setProjects] = useState<DB_Project[]>(initialProjects);
+}: SupabaseSessionProviderProps) {
+    const [user, setUser] = useState<UserProfile | null>(initialUser);
+    const [projects, setProjects] = useState<Project[]>(initialProjects);
 
     return (
-        <LuciaSessionContext.Provider value={{
-            user, session, setUser, setSession,
+        <SupabaseSessionContext.Provider value={{
+            user, setUser,
             projects, setProjects
         }}>
             {children}
-        </LuciaSessionContext.Provider>
+        </SupabaseSessionContext.Provider>
     );
 }
 
 // You can import and use this hook in any client component
 export function useSession() {
-    const context = useContext(LuciaSessionContext);
+    const context = useContext(SupabaseSessionContext);
     if (!context) {
         throw new Error("useSession must be used within a <SessionProvider>");
     }
@@ -52,7 +49,7 @@ export function useSession() {
 }
 
 export function useProjects() {
-    const context = useContext(LuciaSessionContext);
+    const context = useContext(SupabaseSessionContext);
     if (!context) {
         throw new Error("useProjects must be used within a <SessionProvider>");
     }

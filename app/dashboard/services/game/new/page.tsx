@@ -2,12 +2,12 @@ import GameServerSelect from "@/components/dashboard/game/new";
 import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Separator } from "@/components/ui/separator";
-import query from "@/lib/db/mysql";
+import { Products } from "@/lib/supabase/queries";
 import ptero_axios from "@/lib/pterodactyl";
 import { Suspense } from "react";
 
 const GameNewSuspense = async () => {
-    const products = await query.products.get_by_type("game")
+    const products = await Products.get_by_type("game")
     const { data } = await ptero_axios.get("/api/application/locations")
 
     return <GameServerSelect locations={data.data} products={products} />

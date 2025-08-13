@@ -12,7 +12,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import axios from "axios";
 import { formatPrice } from "@/lib/utils";
-import { DB_Location, DB_Product } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -20,8 +20,8 @@ import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/ui/icons";
 
 interface PageProps {
-    products: DB_Product[];
-    locations: DB_Location[];
+    products: Tables<'products'>[];
+    locations: Tables<'locations'>[];
 }
 
 const databaseVersions = {
@@ -37,7 +37,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
     const [isLoading, setIsLoading] = useState<boolean>(false);
     const [currentStep, setCurrentStep] = useState<number>(1);
     const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
-    const [availablePlans, setAvailablePlans] = useState<DB_Product[]>([]);
+    const [availablePlans, setAvailablePlans] = useState<Tables<'products'>[]>([]);
 
     const [state, setState] = useState({
         selectedDb: "",           // Selected database product

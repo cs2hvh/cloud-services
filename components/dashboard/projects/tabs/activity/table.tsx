@@ -25,10 +25,10 @@ import {
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 import { getRelativeTime } from "@/lib/utils"
-import { DB_ProjectLog } from "@/lib/db/mysql/types"
+import { Tables } from "@/lib/supabase/types"
 import * as Icons from "lucide-react";
 
-export const columns: ColumnDef<DB_ProjectLog>[] = [
+export const columns: ColumnDef<Tables<'project_logs'>>[] = [
     {
         id: "event",
         header: "Event",
@@ -44,18 +44,18 @@ export const columns: ColumnDef<DB_ProjectLog>[] = [
         },
     },
     {
-        accessorKey: "created",
+        accessorKey: "created_at",
         header: () => <p className="text-right">Date</p>,
         cell: ({ row }) => {
-            const createdAt: Date = row.getValue("created")
+            const createdAt: string = row.getValue("created_at")
             return <div className="text-right">
-                {getRelativeTime(createdAt.toLocaleString())}
+                {getRelativeTime(createdAt)}
             </div>
         },
     },
 ]
 
-export function ProjectActivityTable({ data }: { data: DB_ProjectLog[] }) {
+export function ProjectActivityTable({ data }: { data: Tables<'project_logs'>[] }) {
     const table = useReactTable({
         data,
         columns,

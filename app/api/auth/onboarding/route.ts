@@ -1,51 +1,55 @@
 import { NextRequest } from "next/server";
-import bcryptjs from "bcryptjs";
-import { generateIdFromEntropySize } from "lucia";
-import { generateRandomUuid, generateSixDigitOtp } from "@/lib/utils";
+import { generateSixDigitOtp } from "@/lib/utils";
 import { send_otp_email } from "@/lib/resend/send_otp";
-import query from "@/lib/db/mysql";
-import { DB_User } from "@/lib/db/mysql/types";
+import { createServiceClient } from "@/lib/supabase/server";
+import { OTPs } from "@/lib/supabase/queries";
 
 export async function POST(request: NextRequest) {
     try {
         const { email, name, password } = await request.json();
 
         if (!email || !password || !name) {
-            return Response.json({ message: "Not found" }, { status: 404 });
+            return Response.json({ message: "Email, password, and name are required" }, { status: 400 });
         }
 
-        const existing_user = await query.users.get_by_email(email);
+        const supabase = await createServiceClient();
+
+        // Check if user already exists in Supabase Auth
+        const { data: authUsers } = await supabase.auth.admin.listUsers();
+        const existingUser = authUsers.users.find(u => u.email === email);
 
         // --------------------------
         // 1. USER ALREADY EXISTS
         // --------------------------
-        if (existing_user) {
+        if (existingUser) {
             // If user is already verified, no need to re-register
-            if (existing_user.email_verified) {
+            if (existingUser.email_confirmed_at) {
                 return Response.json(
                     { message: "User already exists and is verified." },
                     { status: 403 }
                 );
             }
 
-            // If user exists but is NOT yet verified (email_verified is null),
-            // proceed to generating OTP again
+            // If user exists but is NOT yet verified, send new OTP
             const generatedOtp = generateSixDigitOtp();
             const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 min from now
 
-            // Generate or reuse OTP if unexpired doesn’t exist
-            const otpId = await query.otps.createIfExpired(email, generatedOtp, expiresAt);
+            const otpId = await OTPs.create({
+                email,
+                otp_code: generatedOtp,
+                expires_at: expiresAt.toISOString()
+            });
 
             if (!otpId) {
-                // Means there is already an unexpired OTP for this user
                 return Response.json({
-                    message: "User is not verified yet. Existing OTP is still valid."
-                });
+                    message: "Failed to generate OTP"
+                }, { status: 500 });
             }
 
-            // Otherwise, a new OTP was created
+            await send_otp_email(email, name, generatedOtp);
+
             return Response.json({
-                message: "User exists but not verified. New OTP has been generated.",
+                message: "User exists but not verified. New OTP has been sent.",
                 otpId
             });
         }
@@ -53,36 +57,39 @@ export async function POST(request: NextRequest) {
         // --------------------------
         // 2. CREATE NEW USER
         // --------------------------
-        const salt = await bcryptjs.genSalt(10);
-        const hashedPassword = await bcryptjs.hash(password, salt);
+        const { data: newUser, error: signUpError } = await supabase.auth.admin.createUser({
+            email,
+            password,
+            user_metadata: {
+                username: name,
+                display_name: name
+            },
+            email_confirm: false // We'll handle email confirmation with OTP
+        });
 
-        const generated_id = generateRandomUuid();
+        if (signUpError || !newUser.user) {
+            console.error("Error creating user:", signUpError);
+            return Response.json({ message: "Failed to create user" }, { status: 500 });
+        }
+
+        // Generate OTP for the new user
         const generatedOtp = generateSixDigitOtp();
         const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 min from now
 
-        // Create the user in the DB
-        await query.users.create({
-            id: generated_id,
-            username: name,
+        const otpId = await OTPs.create({
             email,
-            password: hashedPassword,
-        } as Partial<DB_User>);
+            otp_code: generatedOtp,
+            expires_at: expiresAt.toISOString()
+        });
 
+        if (!otpId) {
+            return Response.json({ message: "Failed to generate OTP" }, { status: 500 });
+        }
 
-        // Generate OTP for the *new* user
-        const otpId = await query.otps.createIfExpired(email, generatedOtp, expiresAt);
-
-        await send_otp_email(email, name, generatedOtp)
-
-        // await query.logs.add({
-        //     eventType: "registration",
-        //     created: new Date(),
-        //     userId: generated_id,
-        //     text: `${email} just registered with username: ${name}`
-        // });
+        await send_otp_email(email, name, generatedOtp);
 
         return Response.json({
-            message: "User registration successfull. OTP generated.",
+            message: "User registration successful. OTP generated.",
             name: name,
             otpId
         });

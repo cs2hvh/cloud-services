@@ -1,9 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DB_Project } from "@/lib/db/mysql/types"
+import { Tables } from "@/lib/supabase/types"
 import ProjectResourcesPage from "./tabs/resources/page"
 
 interface PageProps {
-    project: DB_Project
+    project: Tables<'projects'>
 }
 
 const ProjectUniquePage = ({ project }: PageProps) => {

@@ -1,10 +1,10 @@
 import SignUpMultiStep from "@/components/auth/signup";
-import { validateRequest } from "@/lib/lucia/auth";
+import { getUser } from "@/lib/supabase/auth";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 
 export default async function SignUpPage() {
-    const { user } = await validateRequest();
+    const user = await getUser();
 
     if (user) {
         redirect("/")

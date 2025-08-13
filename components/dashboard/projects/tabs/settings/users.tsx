@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import { Search, X, Trash, UserX } from "lucide-react";
-import { DB_User } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 import {
     Card,
     CardContent,
@@ -27,7 +27,7 @@ import axios from "axios";
 
 interface PageProps {
     projectId: string;
-    users: DB_User[];
+    users: Tables<'user_profiles'>[];
 }
 
 const ProjectUsers = ({ projectId, users }: PageProps) => {
@@ -39,9 +39,8 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
     const filteredUsers = users.filter((user) => {
         const query = searchQuery.toLowerCase();
         return (
-            user.username.toLowerCase().includes(query) ||
-            user.display_name?.toLowerCase().includes(query) ||
-            user.email.toLowerCase().includes(query)
+            user.username?.toLowerCase().includes(query) ||
+            user.display_name?.toLowerCase().includes(query)
         );
     });
 
@@ -156,7 +155,7 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
                                                     {user.display_name || user.username}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground truncate">
-                                                    {user.email}
+                                                    @{user.username}
                                                 </span>
                                             </div>
                                         </div>

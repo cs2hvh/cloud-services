@@ -17,13 +17,13 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/ui/icons";
 import { Switch } from "@/components/ui/switch";
-import { DB_Product } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 import { PP_Location } from "@/types/pterodactyl";
 import { useProjects } from "@/app/dashboard/provider";
 
 // Define prop types for the component
 interface PageProps {
-    products: DB_Product[];
+    products: Tables<'products'>[];
     locations: PP_Location[];
 }
 

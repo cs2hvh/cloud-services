@@ -24,11 +24,11 @@ import {
     SidebarMenuItem,
     useSidebar,
 } from "@/components/ui/sidebar"
-import { DB_Project } from "@/lib/db/mysql/types";
+import { Tables } from "@/lib/supabase/types";
 import CreateProjectDialog from "../../projects/create";
 import Link from "next/link";
 
-export function NavProjects({ projects }: { projects: DB_Project[] }) {
+export function NavProjects({ projects }: { projects: Tables<'projects'>[] }) {
     const { isMobile } = useSidebar()
 
     return (
@@ -36,7 +36,7 @@ export function NavProjects({ projects }: { projects: DB_Project[] }) {
             <SidebarGroupLabel>Projects</SidebarGroupLabel>
             <SidebarMenu>
                 {projects.map((item) => {
-                    const IconComponent = Icons[item.icon as keyof typeof Icons] as LucideIcon || Icons.HelpCircle;
+                    const IconComponent = Icons.Folder as LucideIcon;
                     return (
                         <SidebarMenuItem key={item.name}>
                             <SidebarMenuButton asChild>

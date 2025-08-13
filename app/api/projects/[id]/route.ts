@@ -1,5 +1,5 @@
-import db from '@/lib/db/mysql/lib';
-import { DB_ProjectLog } from '@/lib/db/mysql/types';
+import { createClient } from '@/lib/supabase/server';
+import { Projects } from '@/lib/supabase/queries';
 import { projectSchema } from '@/types/zod/project';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -7,55 +7,57 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: Request, { params }: Params) {
     const { id } = await params;
-    const conn = await db.getConnection(); // Get a connection for transaction
+    const supabase = await createClient();
+    
     try {
+        // Check if user is authenticated
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+            return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
         const parsed = projectSchema.parse(body);
 
-        const fields = Object.keys(parsed);
-        const values = Object.values(parsed);
+        // Update project
+        const updated = await Projects.update(id, parsed);
+        if (!updated) {
+            return NextResponse.json({ message: 'Failed to update project' }, { status: 500 });
+        }
 
-        const setClause = fields.map((key) => `\`${key}\` = ?`).join(', ');
-
-        await conn.query(
-            `UPDATE projects SET ${setClause} WHERE id = ?`,
-            [...values, id]
-        );
-
-        const logEntry = {
+        // Add log entry
+        const logAdded = await Projects.add_log({
             event: 'Settings',
-            text: `Updated fields: ${fields.join(', ')}`,
+            text: `Updated fields: ${Object.keys(parsed).join(', ')}`,
             project_id: id,
-        };
+        });
 
-        const logFields = Object.keys(logEntry);
-        const logValues = Object.values(logEntry);
+        if (!logAdded) {
+            console.warn('Failed to add project log');
+        }
 
-        await conn.query(
-            `INSERT INTO project_logs (${logFields.join(', ')}, created) VALUES (${logFields.map(() => '?').join(', ')}, NOW())`,
-            logValues
-        );
-
-        await conn.commit();
         return NextResponse.json({ message: 'Project updated successfully' });
     } catch (error) {
-        await conn.rollback();
         console.error('[PATCH /projects/:id]', error);
         return NextResponse.json(
             { message: error instanceof Error ? error.message : 'Internal server error' },
             { status: 500 }
         );
-    } finally {
-        conn.release(); // Important to release the connection
     }
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
     const { id } = await params;
+    const supabase = await createClient();
 
     try {
+        // Check if user is authenticated
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+            return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+        }
+
         const body = await req.json();
-        // console.log(body)
         const { event, users } = body as {
             event: 'add' | 'remove';
             users: string[];
@@ -65,20 +67,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
             return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
         }
 
-        // Get current users from DB
-        const [rows] = await db.query<any[]>(
-            'SELECT users FROM projects WHERE id = ?',
-            [id]
-        );
-
-        if (!rows.length) {
+        // Get current project data
+        const project = await Projects.get_by_id(id);
+        if (!project) {
             return NextResponse.json({ message: 'Project not found' }, { status: 404 });
         }
 
         let currentUsers: string[] = [];
-
         try {
-            currentUsers = JSON.parse(rows[0].users || '[]');
+            currentUsers = Array.isArray(project.users) ? project.users as string[] : JSON.parse(project.users as string || '[]');
         } catch (err) {
             console.warn('Invalid JSON in existing users field');
             currentUsers = [];
@@ -93,10 +90,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
             updatedUsers = currentUsers.filter(u => !users.includes(u));
         }
 
-        await db.query(
-            'UPDATE projects SET users = ? WHERE id = ?',
-            [JSON.stringify(updatedUsers), id]
-        );
+        const updated = await Projects.update(id, { users: updatedUsers });
+        if (!updated) {
+            return NextResponse.json({ message: 'Failed to update project users' }, { status: 500 });
+        }
 
         return NextResponse.json({
             message: `Users ${event === 'add' ? 'added to' : 'removed from'} project.`,

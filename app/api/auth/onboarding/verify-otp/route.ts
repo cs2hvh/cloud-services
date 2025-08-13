@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
-import { ResultSetHeader } from "mysql2";
-import db from "@/lib/db/mysql/lib";
-import { DB_OtpData } from "@/lib/db/mysql/types";
+import { createServiceClient } from "@/lib/supabase/server";
+import { OTPs } from "@/lib/supabase/queries";
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,77 +12,64 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const connection = await db.getConnection();
-        try {
-            await connection.beginTransaction();
+        const supabase = await createServiceClient();
 
-            // 1. Check for valid, unexpired, unverified OTP
-            const [otpRows] = await connection.query<DB_OtpData[]>(
-                `SELECT id
-                 FROM otps
-                 WHERE email = ?
-                   AND otp_code = ?
-                   AND verified = 0
-                   AND expires_at > NOW()
-                 ORDER BY created_at DESC
-                 LIMIT 1`,
-                [email, otpCode]
-            );
+        // 1. Check for valid, unexpired, unverified OTP
+        const { data: otp, error: otpError } = await supabase
+            .from('otps')
+            .select('id')
+            .eq('email', email)
+            .eq('otp_code', otpCode)
+            .eq('verified', false)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
-            if (!otpRows.length) {
-                await connection.rollback();
-                return Response.json(
-                    { message: "OTP is invalid or expired." },
-                    { status: 400 }
-                );
-            }
-
-            const otpId = otpRows[0].id;
-
-            // 2. Mark this OTP as verified
-            const [updateOtpResult] = await connection.query<ResultSetHeader>(
-                `UPDATE otps SET verified = 1 WHERE id = ?`,
-                [otpId]
-            );
-
-            if (updateOtpResult.affectedRows === 0) {
-                await connection.rollback();
-                return Response.json(
-                    { message: "Failed to update OTP record." },
-                    { status: 500 }
-                );
-            }
-
-            // 3. Mark user's email as verified
-            const [updateUserResult] = await connection.query<ResultSetHeader>(
-                `UPDATE users SET email_verified = NOW() WHERE email = ?`,
-                [email]
-            );
-
-            if (updateUserResult.affectedRows === 0) {
-                await connection.rollback();
-                return Response.json(
-                    { message: "Failed to update user record." },
-                    { status: 500 }
-                );
-            }
-
-            await connection.commit();
-            connection.release();
-
+        if (otpError || !otp) {
             return Response.json(
-                { message: "OTP verified successfully. Email is now verified." },
-                { status: 200 }
+                { message: "OTP is invalid or expired." },
+                { status: 400 }
             );
-        } catch (error) {
-            await connection.rollback();
-            connection.release();
-            console.error("[DB] Error verifying OTP:", error);
+        }
+
+        // 2. Mark this OTP as verified
+        const otpVerified = await OTPs.verify(otp.id);
+        if (!otpVerified) {
             return Response.json(
-                { message: "Internal server error (transaction)." },
+                { message: "Failed to update OTP record." },
                 { status: 500 }
             );
         }
+
+        // 3. Mark user's email as verified in Supabase Auth
+        const { data: authUsers } = await supabase.auth.admin.listUsers();
+        const user = authUsers.users.find(u => u.email === email);
+
+        if (!user) {
+            return Response.json(
+                { message: "User not found." },
+                { status: 404 }
+            );
+        }
+
+        const { error: updateError } = await supabase.auth.admin.updateUserById(
+            user.id,
+            { email_confirm: true }
+        );
+
+        if (updateError) {
+            console.error("Error confirming user email:", updateError);
+            return Response.json(
+                { message: "Failed to verify user email." },
+                { status: 500 }
+            );
+        }
+
+        return Response.json(
+            { message: "OTP verified successfully. Email is now verified." },
+            { status: 200 }
+        );
     } catch (error) {
         console.error("[Route] Error:", error);
         return Response.json(

@@ -1,6 +1,5 @@
-import query from "@/lib/db/mysql";
-import { DB_GameServer } from "@/lib/db/mysql/types";
-import { validateRequest } from "@/lib/lucia/auth";
+import { createClient } from "@/lib/supabase/server";
+import { Products } from "@/lib/supabase/queries";
 import ptero_axios from "@/lib/pterodactyl";
 import { getPterodactylGameConfig } from "@/lib/pterodactyl/manifest";
 import { getRandomPort } from "@/lib/utils";
@@ -12,13 +11,14 @@ export async function POST(request: Request) {
     try {
         const { name, game_type, plan_id, location, projectid, additional_services } = await request.json(); // Exclude ports from the request
 
-        const { user } = await validateRequest();
+        const supabase = await createClient();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-        if (!user) {
+        if (userError || !user) {
             return new Response("User not found", { status: 404 });
         }
 
-        const product = await query.products.get_by_id(plan_id);
+        const product = await Products.get_by_id(plan_id);
 
         if (!product) {
             return new Response("Product not found", { status: 404 });
@@ -96,23 +96,29 @@ export async function POST(request: Request) {
             const today = new Date();
             const endsAt = new Date(today.setDate(today.getDate() + 30));
 
-            await query.gameservers.create({
-                name,
-                id: svData.id,
-                game_type,
-                ip: allocations[0].attributes.ip,
-                port: randomPort,
-                node: svData.node,
-                identifier: svData.identifier,
-                allocation: svData.allocation,
-                ends_at: endsAt,
-                plan: plan_id,
-                status: "active",
-                userid: user.id,
-                location,
-                projectid,
-                resources: product.resources
-            } as Partial<DB_GameServer>)
+            const { error: insertError } = await supabase
+                .from('game_servers')
+                .insert({
+                    name,
+                    game_type,
+                    ip: allocations[0].attributes.ip,
+                    port: randomPort,
+                    node: svData.node,
+                    identifier: svData.identifier,
+                    allocation: svData.allocation,
+                    ends_at: endsAt.toISOString(),
+                    plan: plan_id,
+                    status: "active",
+                    user_id: user.id,
+                    location_id: Number(location),
+                    project_id: projectid,
+                    resources: product.resources as any
+                });
+
+            if (insertError) {
+                console.error('Error creating game server record:', insertError);
+                return new Response("Failed to create server record", { status: 500 });
+            }
 
             // Optionally, return the allocation ID or any other relevant information
             return new Response(`Successfully created ${name} server.`, { status: 200 });
