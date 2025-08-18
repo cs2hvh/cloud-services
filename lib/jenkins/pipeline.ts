@@ -2,7 +2,7 @@ export function createPipelineXml(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string // e.g. "31955"
+  nodePort: string, // e.g. "31955"
 ): string {
   const domain = `${name}.uizb210.xyz`;
   const appName = `${name}-app`;

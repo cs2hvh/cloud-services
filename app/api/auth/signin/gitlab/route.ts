@@ -4,11 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
     try {
         const supabase = await createClient();
-        const {type}=await request.json();
         const origin = request.headers.get('origin') || 'http://localhost:3000';
         
         const { data, error } = await supabase.auth.signInWithOAuth({
-            provider:type,
+            provider: 'gitlab',
             options: {
                 redirectTo: `${origin}/api/auth/callback`
             }

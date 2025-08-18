@@ -2,7 +2,7 @@
 
 ## Migration Summary
 
-Your cloud services project has been successfully migrated from MySQL + Lucia Auth to Supabase! 
+Your cloud services project has been successfully migrated from MySQL + Lucia Auth to Supabase!
 
 ### ✅ What Was Completed
 
@@ -29,7 +29,7 @@ Your cloud services project has been successfully migrated from MySQL + Lucia Au
 
 5. **API Routes Updated**
    - ✅ `/api/auth/signin/email` - Email authentication
-   - ✅ `/api/auth/signup` - User registration  
+   - ✅ `/api/auth/signup` - User registration
    - ✅ `/api/auth/signout` - Sign out
    - ✅ `/api/auth/callback` - OAuth callback
    - ✅ `/api/auth/onboarding` - Custom registration with OTP
@@ -44,6 +44,7 @@ Your cloud services project has been successfully migrated from MySQL + Lucia Au
 
 1. **Create Supabase project** at https://supabase.com
 2. **Add environment variables** to your `.env`:
+
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
@@ -118,7 +119,7 @@ MIGRATION_TO_SUPABASE.md  # Detailed migration guide
 ## 🎉 Benefits Achieved
 
 - **Security**: Built-in RLS and secure authentication
-- **Performance**: Optimized queries and connection pooling  
+- **Performance**: Optimized queries and connection pooling
 - **Scalability**: Serverless database with global CDN
 - **Developer Experience**: Type-safe operations and real-time features
 - **Maintenance**: Reduced code complexity and managed infrastructure

@@ -20,10 +20,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${suse.variable}`}
-      >
+    <html lang="en" >
+      <body className={`${suse.variable}`}>
         {children}
         <Toaster position="top-center" />
       </body>

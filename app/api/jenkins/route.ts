@@ -1,4 +1,3 @@
-
 // import { validateRequest } from '@/lib/auth';
 // import cloudflare from '@/lib/cloudflare';
 // import query from '@/lib/db';
@@ -9,7 +8,7 @@
 
 // /**
 //  * Triggers a build for the specified Jenkins job.
-//  * 
+//  *
 //  * @param jobName - The name of the Jenkins job to trigger.
 //  * @param parameters - Optional build parameters for parameterized jobs.
 //  */
