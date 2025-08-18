@@ -62,8 +62,17 @@ export function SignInForm() {
 
     const handleGithubSignIn = async () => {
         setIsLoading(true);
-        const response = await axios.post("/api/auth/signin/github");
-        router.push(response.data);
+        try {
+            const response = await axios.post("/api/auth/signin/github");
+            if (response.data.url) {
+                window.location.href = response.data.url;
+            }
+        } catch (error) {
+            console.error("GitHub sign-in error:", error);
+            toast.error("Failed to sign in with GitHub");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSteamSignIn = async () => {
