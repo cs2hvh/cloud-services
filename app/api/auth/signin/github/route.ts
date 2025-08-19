@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
                 redirectTo: `${origin}/api/auth/callback`
             }
         });
+
+        console.log(data,"..............data............17")
         
         if (error) {
             return Response.json(

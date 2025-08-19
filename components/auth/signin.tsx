@@ -24,7 +24,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Icons } from "@/components/ui/icons";
 import { PasswordInput } from "../ui/password-input";
-import GitLabLoginButton from "./gitlab";
+
+
 
 type Input = z.infer<typeof signin_schema>;
 
@@ -115,7 +116,7 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-               // onClick={handleGoogleSignIn}
+                onClick={()=>handleSignIn('google')}
                 disabled={isLoading}
               >
                 <Icons.google className="h-5 w-5" />
@@ -135,10 +136,10 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                //onClick={handleBitbucketSignIn}
+                 onClick={()=>handleSignIn ("bitbucket")}
                 disabled={isLoading}
               >
-                <Icons.youtube className="h-5 w-5" />
+                <Icons.steam className="h-5 w-5" />
                 <span className="hidden sm:inline">Bitbucket</span>
               </Button>
             </div>
