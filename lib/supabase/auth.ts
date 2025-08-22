@@ -1,6 +1,7 @@
 import { createClient } from "./server";
 import { createClient as createBrowserClient } from "./client";
 import { redirect } from "next/navigation";
+import { Json } from "./types";
 
 export async function getUser() {
   const supabase = await createClient();
@@ -90,14 +91,14 @@ export async function signInWithEmail(email: string, password: string) {
 export async function signUpWithEmail(
   email: string,
   password: string,
-  metadata?: any,
+  metadata?: Json,
 ) {
   const supabase = createBrowserClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: metadata,
+      data: metadata as Object,
     },
   });
 

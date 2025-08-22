@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const supabase = await createClient();
 
   // Try to get user from cookies
-  let { data: { user }, error } = await supabase.auth.getUser();
+  let { data: { user } } = await supabase.auth.getUser();
 
   // Fallback: try bearer token
   if (!user) {
@@ -33,7 +33,7 @@ export async function GET(request: Request) {
 const allProviders = ["github", "google", "gitlab", "bitbucket", "email"];
 
  
-const lastLoginProvider = user.app_metadata?.provider ?? null;
+//const lastLoginProvider = user.app_metadata?.provider ?? null;
 
 
 const linkedProviders = (user.identities ?? []).map((i) => i.provider);

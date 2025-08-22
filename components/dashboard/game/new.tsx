@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -140,7 +140,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
 
   // Calculate total cost
   const calculateTotalCost = () => {
-    let basePrice = selectedPlan ? selectedPlan.price : 0;
+    const basePrice = selectedPlan ? selectedPlan.price : 0;
     const discount = selectedPlan?.discount || 0;
     const discountedPrice = basePrice * (1 - discount / 100);
     const additionalServicesPrice = getAdditionalServicesCost();
@@ -217,7 +217,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
         location: state.selectedLocation,
         projectid: state.selectedProject,
         additional_services: Object.entries(state.additionalServices)
-          .filter(([_, value]) => value)
+          .filter(([, value]) => value)
           .map(([key]) => key),
       };
 

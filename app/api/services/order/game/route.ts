@@ -5,6 +5,7 @@ import { getPterodactylGameConfig } from "@/lib/pterodactyl/manifest";
 import { getRandomPort } from "@/lib/utils";
 import { PP_Allocation, PP_Node } from "@/types/pterodactyl";
 import { AxiosError } from "axios";
+import { Json } from "@/lib/supabase/types";
 
 export async function POST(request: Request) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       plan_id,
       location,
       projectid,
-      additional_services,
+      // additional_services,
     } = await request.json(); // Exclude ports from the request
 
     const supabase = await createClient();
@@ -84,10 +85,10 @@ export async function POST(request: Request) {
         allocationId = unassignedAllocation.attributes.id;
       } else {
         // Step 7: Create a new allocation if none are unassigned
-        const payload = {
-          ip: allocations[0].attributes.ip, // Use a default IP or modify this as needed
-          ports: [randomPort.toString()], // Ensure the port is a string in an array
-        };
+        // const payload = {
+        //   ip: allocations[0].attributes.ip, // Use a default IP or modify this as needed
+        //   ports: [randomPort.toString()], // Ensure the port is a string in an array
+        // };
         // Step 8: Retrieve all allocations again to get the newly created one
         const newAllocationsResponse = await ptero_axios.get(
           `/api/application/nodes/${nodeId}/allocations`,
@@ -95,19 +96,20 @@ export async function POST(request: Request) {
         const newAllocations: PP_Allocation[] =
           newAllocationsResponse.data.data;
 
-        // Find the newly created allocation
-        allocationId = newAllocations.find(
+        // ✅ Fixed: Find the newly created allocation safely
+        const newlyCreated = newAllocations.find(
           (allocation) =>
             !allocation.attributes.assigned &&
             allocation.attributes.port === randomPort,
-        )?.attributes.id!;
+        );
 
-        // Check if we found the new allocation ID
-        if (!allocationId) {
+        if (!newlyCreated || newlyCreated.attributes.id == null) {
           return new Response("Failed to find the newly created allocation", {
             status: 500,
           });
         }
+
+        allocationId = newlyCreated.attributes.id;
       }
 
       // console.log(availableNodes, allocationId, randomPort);
@@ -146,7 +148,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           location_id: Number(location),
           project_id: projectid,
-          resources: product.resources as any,
+          resources: product.resources as Json,
         });
 
       if (insertError) {

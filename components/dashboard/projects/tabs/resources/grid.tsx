@@ -1,17 +1,10 @@
 "use client";
 import React from "react";
 import {
-  Calendar,
-  Server,
   Cpu,
   Database,
   HardDrive,
   Wifi,
-  Clock,
-  Activity,
-  Map,
-  User,
-  Globe,
   ExternalLink,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
@@ -26,7 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getDaysRemaining, getRelativeTime } from "@/lib/utils";
+import { getDaysRemaining} from "@/lib/utils";
 
 const GameServerGrid = ({ data }: { data: Tables<"game_servers">[] }) => {
   if (!data || data.length === 0) {
@@ -105,7 +98,7 @@ const GameServerGrid = ({ data }: { data: Tables<"game_servers">[] }) => {
                   </div>
                   <div className="flex items-center">
                     <HardDrive className="w-4 h-4 mr-2 text-purple-500" />
-                    <span>{server.resources.storage} GB Storage</span>
+                    <span>{server?.resources?.storage} GB Storage</span>
                   </div>
                   <div className="flex items-center">
                     <Wifi className="w-4 h-4 mr-2 text-orange-500" />

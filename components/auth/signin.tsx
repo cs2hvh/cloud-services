@@ -20,7 +20,6 @@ import axios from "axios";
 import { signin_schema } from "@/types/zod/auth";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import Image from "next/image";
 import Link from "next/link";
 import { Icons } from "@/components/ui/icons";
 import { PasswordInput } from "../ui/password-input";
@@ -65,6 +64,7 @@ export function SignInForm() {
     setIsLoading(true);
         try {
         const response = await axios.post("/api/auth/signin/github",{type:type});
+       // return
         if (response.data.url) {
                 window.location.href = response.data.url;
             }
@@ -78,11 +78,11 @@ export function SignInForm() {
 
   
 
-  const handleSteamSignIn = async () => {
-    setIsLoading(true);
-    const response = await axios.post("/api/auth/steam");
-    router.push(response.data);
-  };
+  // const handleSteamSignIn = async () => {
+  //   setIsLoading(true);
+  //   const response = await axios.post("/api/auth/steam");
+  //   router.push(response.data);
+  // };
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">

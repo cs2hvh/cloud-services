@@ -94,7 +94,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
         ? (project.users as string[])
         : JSON.parse((project.users as string) || "[]");
     } catch (err) {
-      console.warn("Invalid JSON in existing users field");
+      console.warn("Invalid JSON in existing users field",err);
       currentUsers = [];
     }
 

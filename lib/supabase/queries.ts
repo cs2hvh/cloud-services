@@ -1,6 +1,6 @@
 import { createClient } from "./server";
 import { createServiceClient } from "./server";
-import { Database, Tables, TablesInsert, TablesUpdate } from "./types";
+import {  Tables, TablesInsert, TablesUpdate } from "./types";
 
 type UserProfile = Tables<"user_profiles">;
 type Project = Tables<"projects">;
@@ -695,7 +695,7 @@ export const OTPs = {
 };
 
 // Export the queries object for backward compatibility
-export default {
+const api = {
   users: Users,
   projects: Projects,
   gameservers: GameServers,
@@ -703,3 +703,6 @@ export default {
   locations: Locations,
   otps: OTPs,
 };
+
+export default api;
+

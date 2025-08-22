@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Search, X, Trash, UserX } from "lucide-react";
+import { Search, X, Trash } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,
@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 
 interface PageProps {
   projectId: string;
@@ -69,13 +69,11 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
         event: "remove",
         users: userToRemove ? [userToRemove] : selectedUsers,
       });
-    } catch (error: any) {
-      // Log or show error message
-      const message = error?.response?.data?.message || "An error occurred.";
-      console.error("Remove error:", message);
-      // Optionally, show message to user
-      // setErrorMessage(message);
-    } finally {
+    } catch (error: unknown) {
+  const err = error as AxiosError<{ message?: string }>;
+  const message = err.response?.data?.message || "An error occurred.";
+  console.error("Remove error:", message);
+}finally {
       if (!userToRemove) {
         setSelectedUsers([]);
       }
@@ -130,7 +128,7 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
           <div className="rounded-md border">
             {filteredUsers.length > 0 ? (
               <div className="divide-y">
-                {filteredUsers.map((user, index) => (
+                {filteredUsers.map((user) => (
                   <div
                     key={user.id}
                     className={`flex items-center justify-between p-3 ${

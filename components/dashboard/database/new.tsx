@@ -162,6 +162,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
       toast.success(response.data);
       // Redirect to success page or dashboard
     } catch (error) {
+      console.log(error);
       toast.error("Failed to create database. Please try again later.");
     } finally {
       setIsLoading(false);

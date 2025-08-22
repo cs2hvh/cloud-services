@@ -2,7 +2,6 @@
 import * as Icons from "lucide-react";
 import {
   Folder,
-  PlusCircle,
   Share,
   Trash2,
   type LucideIcon,
