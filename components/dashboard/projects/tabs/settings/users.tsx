@@ -142,10 +142,10 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
                         onCheckedChange={() => handleSelectUser(user.id)}
                       />
                       <Avatar className="h-10 w-10 rounded-lg flex-shrink-0">
-                        <AvatarImage src={user.avatar} alt={user.username} />
+                        <AvatarImage src={user.avatar || undefined} alt={user.username || undefined} />
                         <AvatarFallback className="rounded-lg">
                           {user.display_name?.substring(0, 2).toUpperCase() ||
-                            user.username.substring(0, 2).toUpperCase()}
+                            user.username?.substring(0, 2).toUpperCase() || "??"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="grid flex-1 min-w-0">

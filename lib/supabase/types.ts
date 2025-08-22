@@ -9,6 +9,57 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      apps: {
+        Row: {
+          id: string;
+          name: string;
+          github_url: string;
+          port: number;
+          user_id: string | null;
+          project_id: string | null;
+          status: string | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          github_url: string;
+          port: number;
+          user_id?: string | null;
+          project_id?: string | null;
+          status?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          github_url?: string;
+          port?: number;
+          user_id?: string | null;
+          project_id?: string | null;
+          status?: string | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "apps_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "apps_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       game_servers: {
         Row: {
           allocation: number;

@@ -34,6 +34,19 @@ export async function POST(request: Request) {
       return new Response("Product not found", { status: 404 });
     }
 
+    // Check if product has resources defined
+    if (!product.resources) {
+      return new Response("Product resources not configured", { status: 500 });
+    }
+
+    // Type assertion for resources structure
+    const productResources = product.resources as {
+      ram: number;
+      storage: number;
+      cpu?: number;
+      [key: string]: unknown;
+    };
+
     // Step 3: Get all nodes
     const nodesResponse = await ptero_axios.get("/api/application/nodes");
     const nodes: PP_Node[] = nodesResponse.data.data;
@@ -50,8 +63,8 @@ export async function POST(request: Request) {
       const remainingMemory = node.attributes.memory - allocatedMemory;
       const remainingDisk = node.attributes.disk - allocatedDisk;
 
-      const hasEnoughMemory = remainingMemory >= product.resources.ram;
-      const hasEnoughDisk = remainingDisk >= product.resources.storage;
+      const hasEnoughMemory = remainingMemory >= productResources.ram;
+      const hasEnoughDisk = remainingDisk >= productResources.storage;
 
       return isCorrectLocation && hasEnoughMemory && hasEnoughDisk;
     });
@@ -117,9 +130,9 @@ export async function POST(request: Request) {
         name,
         1,
         game_type,
-        product.resources.ram * 1000,
+        productResources.ram * 1000,
         0,
-        product.resources.storage * 1000,
+        productResources.storage * 1000,
         allocationId,
       );
       // console.log(payload)
@@ -148,7 +161,7 @@ export async function POST(request: Request) {
           user_id: user.id,
           location_id: Number(location),
           project_id: projectid,
-          resources: product.resources as Json,
+          resources: productResources as Json,
         });
 
       if (insertError) {

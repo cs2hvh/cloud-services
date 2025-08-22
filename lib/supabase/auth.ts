@@ -98,7 +98,7 @@ export async function signUpWithEmail(
     email,
     password,
     options: {
-      data: metadata as Object,
+      data: metadata as object,
     },
   });
 

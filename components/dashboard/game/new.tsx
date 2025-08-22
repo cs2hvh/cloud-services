@@ -140,7 +140,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
 
   // Calculate total cost
   const calculateTotalCost = () => {
-    const basePrice = selectedPlan ? selectedPlan.price : 0;
+    const basePrice = selectedPlan ? (selectedPlan.price || 0) : 0;
     const discount = selectedPlan?.discount || 0;
     const discountedPrice = basePrice * (1 - discount / 100);
     const additionalServicesPrice = getAdditionalServicesCost();
@@ -387,56 +387,58 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                             {plan.description}
                           </p>
 
-                          <div className="grid grid-cols-4 gap-3 mt-3">
-                            <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
-                              <Cpu
-                                size={16}
-                                className="text-muted-foreground mb-1"
-                              />
-                              <span className="text-sm font-medium">
-                                {plan.resources.cpu} CPU
-                              </span>
+                          {plan.resources && (
+                            <div className="grid grid-cols-4 gap-3 mt-3">
+                              <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
+                                <Cpu
+                                  size={16}
+                                  className="text-muted-foreground mb-1"
+                                />
+                                <span className="text-sm font-medium">
+                                  {(plan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).cpu} CPU
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
+                                <Server
+                                  size={16}
+                                  className="text-muted-foreground mb-1"
+                                />
+                                <span className="text-sm font-medium">
+                                  {(plan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).ram} GB
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
+                                <HardDrive
+                                  size={16}
+                                  className="text-muted-foreground mb-1"
+                                />
+                                <span className="text-sm font-medium">
+                                  {(plan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).storage} GB
+                                </span>
+                              </div>
+                              <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
+                                <Wifi
+                                  size={16}
+                                  className="text-muted-foreground mb-1"
+                                />
+                                <span className="text-sm font-medium">
+                                  {(plan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).bandwith} GB
+                                </span>
+                              </div>
                             </div>
-                            <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
-                              <Server
-                                size={16}
-                                className="text-muted-foreground mb-1"
-                              />
-                              <span className="text-sm font-medium">
-                                {plan.resources.ram} GB
-                              </span>
-                            </div>
-                            <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
-                              <HardDrive
-                                size={16}
-                                className="text-muted-foreground mb-1"
-                              />
-                              <span className="text-sm font-medium">
-                                {plan.resources.storage} GB
-                              </span>
-                            </div>
-                            <div className="flex flex-col items-center p-2 bg-primary/5 rounded">
-                              <Wifi
-                                size={16}
-                                className="text-muted-foreground mb-1"
-                              />
-                              <span className="text-sm font-medium">
-                                {plan.resources.bandwith} GB
-                              </span>
-                            </div>
-                          </div>
+                          )}
                         </div>
 
                         <div className="text-right">
                           <div className="font-bold text-lg">
                             {formatPrice(
-                              plan.price * (1 - plan.discount! / 100),
+                              (plan.price || 0) * (1 - (plan.discount || 0) / 100),
                             )}
                             /mo
                           </div>
-                          {plan.discount! > 0 && (
+                          {(plan.discount || 0) > 0 && (
                             <div className="text-sm text-muted-foreground line-through">
-                              {formatPrice(plan.price)}/mo
+                              {formatPrice(plan.price || 0)}/mo
                             </div>
                           )}
                         </div>
@@ -694,7 +696,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                     <h3 className="text-sm font-medium text-muted-foreground">
                       Resources
                     </h3>
-                    {selectedPlan && (
+                    {selectedPlan && selectedPlan.resources && (
                       <div className="bg-gray-50 dark:bg-secondary rounded-md p-4">
                         <div className="grid grid-cols-4 gap-4">
                           <div className="text-center p-2">
@@ -702,7 +704,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                               <Cpu className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedPlan.resources.cpu} vCPU
+                              {(selectedPlan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).cpu} vCPU
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Processor
@@ -713,7 +715,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                               <Server className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedPlan.resources.ram} GB
+                              {(selectedPlan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).ram} GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Memory
@@ -724,7 +726,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                               <HardDrive className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedPlan.resources.storage} GB
+                              {(selectedPlan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).storage} GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               SSD Storage
@@ -735,7 +737,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                               <Wifi className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedPlan.resources.bandwith} GB
+                              {(selectedPlan.resources as { cpu: number; ram: number; storage: number; bandwith?: number }).bandwith} GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Bandwidth
@@ -888,15 +890,15 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                   </div>
                 )}
 
-                {selectedPlan && (
+                {selectedPlan && selectedPlan.resources && (
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Resources:
                     </span>
                     <span className="font-medium text-xs">
-                      {selectedPlan.resources.cpu} vCPU /{" "}
-                      {selectedPlan.resources.ram} GB /{" "}
-                      {selectedPlan.resources.storage} GB
+                      {(selectedPlan.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU /{" "}
+                      {(selectedPlan.resources as { cpu: number; ram: number; storage: number }).ram} GB /{" "}
+                      {(selectedPlan.resources as { cpu: number; ram: number; storage: number }).storage} GB
                     </span>
                   </div>
                 )}
@@ -943,9 +945,9 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
                       <span>Server Plan</span>
                       <div className="text-right">
                         <span className="font-medium">
-                          {formatPrice(selectedPlan.price)}/mo
+                          {formatPrice(selectedPlan.price || 0)}/mo
                         </span>
-                        {selectedPlan.discount! > 0 && (
+                        {(selectedPlan.discount || 0) > 0 && (
                           <div className="text-green-600 dark:text-green-500 text-sm">
                             -{selectedPlan.discount}% discount
                           </div>

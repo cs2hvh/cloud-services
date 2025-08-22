@@ -453,34 +453,36 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                             {/* {database.description && (
                                                             <p className="text-xs text-muted-foreground">{database.description}</p>
                                                         )} */}
-                            <div className="flex gap-2 text-xs text-muted-foreground">
-                              <span>{database.resources.cpu} vCPU</span>
-                              <span>{database.resources.ram} GB RAM</span>
-                              <span>
-                                {database.resources.storage} GB Storage
-                              </span>
-                            </div>
+                            {database.resources && (
+                              <div className="flex gap-2 text-xs text-muted-foreground">
+                                <span>{(database.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU</span>
+                                <span>{(database.resources as { cpu: number; ram: number; storage: number }).ram} GB RAM</span>
+                                <span>
+                                  {(database.resources as { cpu: number; ram: number; storage: number }).storage} GB Storage
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="text-right">
                           <div className="font-semibold">
-                            {database.price === 0 ? (
+                            {database.price === 0 || database.price === null ? (
                               "Free"
                             ) : database.discount ? (
                               <div>
                                 <span className="line-through text-xs text-muted-foreground">
-                                  {formatPrice(database.price)}/mo
+                                  {formatPrice(database.price!)}/mo
                                 </span>
                                 <span className="ml-1">
                                   {formatPrice(
-                                    database.price *
+                                    database.price! *
                                       (1 - Number(database.discount) / 100),
                                   )}
                                   /mo
                                 </span>
                               </div>
                             ) : (
-                              `${formatPrice(database.price)}/mo`
+                              `${formatPrice(database.price!)}/mo`
                             )}
                           </div>
                           {database.discount &&
@@ -547,14 +549,14 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
 
                 <div>
                   <Label className="mb-2 block">Resources</Label>
-                  {selectedDatabase && (
+                  {selectedDatabase && selectedDatabase.resources && (
                     <div className="grid grid-cols-3 gap-4 bg-gray-50 dark:bg-secondary rounded-md p-4">
                       <div className="text-center p-2">
                         <div className="flex justify-center">
                           <Cpu className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {selectedDatabase.resources.cpu} vCPU
+                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Dedicated cores
@@ -565,7 +567,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                           <Server className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {selectedDatabase.resources.ram} GB
+                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Memory
@@ -576,7 +578,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                           <HardDrive className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {selectedDatabase.resources.storage} GB
+                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
                         </div>
                         <div className="text-xs text-muted-foreground">
                           NVMe SSD
@@ -691,7 +693,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                     <h3 className="text-sm font-medium text-muted-foreground">
                       Resources
                     </h3>
-                    {selectedDatabase && (
+                    {selectedDatabase && selectedDatabase.resources && (
                       <div className="bg-gray-50 dark:bg-secondary rounded-md p-4">
                         <div className="grid grid-cols-3 gap-4">
                           <div className="text-center p-2">
@@ -699,7 +701,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <Cpu className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedDatabase.resources.cpu} vCPU
+                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Dedicated cores
@@ -710,7 +712,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <Server className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedDatabase.resources.ram} GB
+                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Memory
@@ -721,7 +723,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <HardDrive className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {selectedDatabase.resources.storage} GB
+                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               NVMe SSD
@@ -864,15 +866,15 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                   </div>
                 )}
 
-                {selectedDatabase && (
+                {selectedDatabase && selectedDatabase.resources && (
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">
                       Resources:
                     </span>
                     <span className="font-medium text-xs">
-                      {selectedDatabase.resources.cpu} vCPU /{" "}
-                      {selectedDatabase.resources.ram} GB /{" "}
-                      {selectedDatabase.resources.storage} GB
+                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU /{" "}
+                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB /{" "}
+                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
                     </span>
                   </div>
                 )}
@@ -885,9 +887,9 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                     <span>Subtotal</span>
                     <span className="font-medium">
                       {selectedDatabase
-                        ? selectedDatabase.price === 0
+                        ? selectedDatabase.price === 0 || selectedDatabase.price === null
                           ? "Free"
-                          : `${formatPrice(selectedDatabase.price)}/mo`
+                          : `${formatPrice(selectedDatabase.price!)}/mo`
                         : "-"}
                     </span>
                   </div>
@@ -906,12 +908,12 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                   <span className="font-semibold">Total</span>
                   <span className="font-bold text-lg">
                     {selectedDatabase
-                      ? selectedDatabase.price === 0
+                      ? selectedDatabase.price === 0 || selectedDatabase.price === null
                         ? "Free"
                         : selectedDatabase.discount &&
                             Number(selectedDatabase.discount) > 0
-                          ? `${formatPrice(selectedDatabase.price * (1 - Number(selectedDatabase.discount) / 100))}/mo`
-                          : `${formatPrice(selectedDatabase.price)}/mo`
+                          ? `${formatPrice(selectedDatabase.price! * (1 - Number(selectedDatabase.discount) / 100))}/mo`
+                          : `${formatPrice(selectedDatabase.price!)}/mo`
                       : "-"}
                   </span>
                 </div>
