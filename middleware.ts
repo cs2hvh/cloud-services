@@ -18,7 +18,7 @@ const ipStore = new Map<string, IpRecord>();
 
 function getClientIp(req: NextRequest): string {
   return (
-    req.ip ||
+   // req.ip ||
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     "unknown"
