@@ -79,7 +79,7 @@ export function NavUser() {
             <BadgeCheck />
             Profile settings
           </DropdownMenuItem>
-           <DropdownMenuItem >
+           <DropdownMenuItem onClick={()=>router.push('/dashboard/nav/account')} >
             <BadgeCheck />
             authentication security
           </DropdownMenuItem>

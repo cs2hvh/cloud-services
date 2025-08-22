@@ -5,6 +5,7 @@ import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
+import EnableTotp from "../2fa/page";
 
 type OAuthProvider = "github" | "google" | "gitlab" | "bitbucket" | "email";
 
@@ -237,6 +238,7 @@ const Accounts = () => {
           />
         ))}
       </div>
+       <EnableTotp/>
     </div>
   );
 };

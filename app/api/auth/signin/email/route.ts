@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { limitByEmail } from "@/lib/cooldown/emailbased";
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -11,7 +12,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const windowLimit = await limitByEmail(email, { limit: 5, windowMs: 60_000 });
+    if (!windowLimit.allowed) {
+      return Response.json(
+        { error: "Too many requests. Try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(windowLimit.retryAfterSec) },
+        }
+      );
+    }
+
   const supabase = await createClient();
+
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,

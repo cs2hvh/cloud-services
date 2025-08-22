@@ -60,23 +60,31 @@ export function SignInForm() {
     }
   }
 
-  const handleSignIn  = async (type:string) => {
+  const handleSignIn = async (type: string) => {
     setIsLoading(true);
-        try {
-        const response = await axios.post("/api/auth/signin/github",{type:type});
-       // return
-        if (response.data.url) {
-                window.location.href = response.data.url;
-            }
-        } catch (error) {
-            console.error("GitHub sign-in error:", error);
-            toast.error("Failed to sign in with GitHub");
-        } finally {
-            setIsLoading(false);
-        }
+    try {
+     const response = await axios.post(
+  "/api/auth/signin/github",
+  { type }, // request body
+  {
+    headers: {
+      "secret": "ahura_client_secret",
+    },
+  }
+);
+      // return
+      if (response.data.url) {
+        window.location.href = response.data.url;
+      }
+    } catch (error) {
+      console.error("GitHub sign-in error:", error);
+      toast.error("Failed to sign in with GitHub");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  
+
 
   // const handleSteamSignIn = async () => {
   //   setIsLoading(true);
@@ -106,7 +114,7 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={()=>handleSignIn ("github")}
+                onClick={() => handleSignIn("github")}
                 disabled={isLoading}
               >
                 <Icons.gitHub className="h-5 w-5" />
@@ -116,7 +124,7 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={()=>handleSignIn('google')}
+                onClick={() => handleSignIn("google")}
                 disabled={isLoading}
               >
                 <Icons.google className="h-5 w-5" />
@@ -126,7 +134,7 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                onClick={()=>handleSignIn ("gitlab")}
+                onClick={() => handleSignIn("gitlab")}
                 disabled={isLoading}
               >
                 <Icons.gitHub className="h-5 w-5" />
@@ -136,7 +144,7 @@ export function SignInForm() {
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
-                 onClick={()=>handleSignIn ("bitbucket")}
+                onClick={() => handleSignIn("bitbucket")}
                 disabled={isLoading}
               >
                 <Icons.steam className="h-5 w-5" />
