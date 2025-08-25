@@ -1,0 +1,40 @@
+"use client"
+import axios, { AxiosError } from "axios";
+import { toast } from "sonner";
+
+const api = axios.create({
+  baseURL: "/api",
+  timeout: 10000,
+  headers: {
+    "Content-Type": "application/json",
+    // "secret": "ahura_client_secret",
+  },
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    debugger
+    const status = error.response?.status;
+    const serverMessage = (error.response?.data as { message?: string })
+      ?.message;
+
+    if (status === 400) {
+      toast.error(serverMessage || "Bad request - invalid input.");
+    } else if (status === 401) {
+      toast.error(serverMessage || "Unauthorized - please login.");
+    } else if (status === 403) {
+      toast.error(serverMessage || "Forbidden - access denied.");
+    } else if (status === 404) {
+      toast.error(serverMessage || "Not found.");
+    } else if (status === 500) {
+      toast.error(serverMessage || "Server error, please try again later.");
+    } else {
+      toast.error(serverMessage || "Something went wrong.");
+    }
+
+    return Promise.reject(error); // still reject so caller knows it failed
+  }
+);
+
+export default api;

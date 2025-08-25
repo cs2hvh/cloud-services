@@ -4,7 +4,7 @@ import { NextResponse } from "next/server"; // added
 
 // ---------- IP cooldown config ----------
 const WINDOW_MS = 60_000; // 1 minute window
-const MAX_REQUESTS = 20; // allow 20 requests per IP per window
+const MAX_REQUESTS = 30; // allow 20 requests per IP per window
 const COOLDOWN_MS = 5 * 60_000; // 5 minutes cooldown when exceeded
 
 type IpRecord = {
@@ -86,21 +86,21 @@ export async function middleware(request: NextRequest) {
   // IP cooldown check (early return if limited)
   const limited = applyIpCooldown(request);
   if (limited) return limited;
-  if (request?.headers?.get("secret")!=='ahura_client_secret') {
-    return new NextResponse(
-      JSON.stringify({
-        error: "this link is protected # cors protection",
-        // cooldown_ms: msLeft,
-      }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          //"Retry-After": Math.ceil(msLeft / 1000).toString(),
-        },
-      }
-    );
-  }
+  // if (request?.headers?.get("secret")!=='ahura_client_secret') {
+  //   return new NextResponse(
+  //     JSON.stringify({
+  //       error: "this link is protected # cors protection",
+  //       // cooldown_ms: msLeft,
+  //     }),
+  //     {
+  //       status: 429,
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //         //"Retry-After": Math.ceil(msLeft / 1000).toString(),
+  //       },
+  //     }
+  //   );
+  // }
 
   //console.log('middleware---calling---5');
   return await updateSession(request);
@@ -115,8 +115,9 @@ export const config = {
      * - favicon.ico (favicon file)
      * Feel free to modify this pattern to include more paths.
      */
-   // "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-   '/api/auth/signin/github',
-   '/api/auth/signin/email',
+   "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  //  '/api/auth/signin/github',
+  //  '/api/auth/signin/email',
+  //  '/api/auth/signup',
   ],
 };

@@ -17,7 +17,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useRouter } from "next/navigation";
-import axios, { AxiosError } from "axios";
 import { toast } from "sonner";
 import { otp_schema, signup_schema } from "@/types/zod/auth";
 import {
@@ -31,6 +30,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Icons } from "@/components/ui/icons";
 import { PasswordInput } from "../ui/password-input";
+import api from "@/lib/axios/axios";
 
 type Input = z.infer<typeof signup_schema>;
 type SignupFormData = z.infer<typeof signup_schema>;
@@ -74,10 +74,12 @@ export default function SignUpMultiStep({
    *  - Backend should create a "pending" user and send an OTP (email or SMS)
    */
   async function onSubmitSignup(data: SignupFormData) {
-    setIsLoading(true);
-    try {
+   // debugger
+    //lsetIsLoading(true);
+  
       // 1) Post sign-up data to your API
-      const response = await axios.post("/api/auth/onboarding", data);
+      const response = await api.post("/auth/onboarding", data);
+      //setIsLoading(false);
       if (response.status === 200) {
         // Suppose the backend returns { message: "...", email: "..." }
         toast.success(response.data.message);
@@ -88,79 +90,23 @@ export default function SignUpMultiStep({
         // e.g. response.status !== 200
         toast.error(response.data.message);
       }
-    } catch (error) {
-      if (error instanceof AxiosError) {
-        const status = error.response?.status;
+      
+    }  
+  
 
-        // Ensure error.response?.data is treated as an object with a `message` property
-        const serverMessage = (error.response?.data as { message?: string })
-          ?.message;
+async function onSubmitOtp(data: OtpFormData) {
+  setIsLoading(true);
 
-        if (status === 400) {
-          toast.error(serverMessage || "Bad request.");
-        } else if (status === 403) {
-          toast.error(serverMessage || "Forbidden .");
-        } else {
-          toast.error(serverMessage || "Something went wrong.");
-        }
-      } else if (error instanceof Error) {
-        toast.error(error.message || "An unexpected error occurred.");
-      } else {
-        toast.error("An unknown error occurred.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    const response = await api.post("/auth/onboarding/verify-otp", {
+      email: pendingEmail,
+      otpCode: data.pin,
+    });
 
-  /**
-   * Handle submission of Step 2 (OTP):
-   *  - Verify the OTP the user enters
-   */
-  async function onSubmitOtp(data: OtpFormData) {
-    setIsLoading(true);
-    try {
-      // 1) Post OTP to your verify-OTP endpoint
-      const response = await axios.post("/api/auth/onboarding/verify-otp", {
-        email: pendingEmail, // from step 1
-        otpCode: data.pin,
-      });
-
-      if (response.status === 200) {
-        toast.success(response.data.message);
-        router.push("/signin"); // or wherever you want to redirect
-      } else {
-        toast.error(response.data.message);
-      }
-    } catch (error: unknown) {
-      if (error instanceof AxiosError) {
-        const status = error.response?.status;
-
-        // Ensure error.response?.data is treated as an object with a `message` property
-        const serverMessage = (error.response?.data as { message?: string })
-          ?.message;
-
-        if (status === 400) {
-          toast.error(serverMessage || "Bad request - OTP invalid or expired.");
-        } else if (status === 403) {
-          toast.error(
-            serverMessage ||
-              "Forbidden - maybe OTP was used or user is blocked.",
-          );
-        } else {
-          toast.error(
-            serverMessage || "Something went wrong while verifying OTP.",
-          );
-        }
-      } else if (error instanceof Error) {
-        toast.error(error.message || "An unexpected error occurred.");
-      } else {
-        toast.error("An unknown error occurred.");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }
+    toast.success(response.data.message);
+    router.push("/signin");
+     setIsLoading(false);
+  
+}
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">

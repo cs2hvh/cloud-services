@@ -15,10 +15,26 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    
+    //checking if user has enabled 2FA-auth or not
+      const response = await supabase.auth.mfa.listFactors();
+      const has2FA = response?.data?.totp.some((factor) => factor.status === "verified");
+
+      console.log(has2FA,".........................23")
+
+      if(has2FA){
+         return Response.json({ url: data.url,enabled2fa:true }, { status: 200 });
+      }
+
+
+
+
+   
+
 
     
 
-    console.log(data, "..............data............17");
+   // console.log(data, "..............data............17");
 
     if (error) {
       return Response.json({ message: error.message }, { status: 400 });

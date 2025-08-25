@@ -75,7 +75,7 @@ export function NavUser() {
             <BadgeCheck />
             Account
           </DropdownMenuItem>
-           <DropdownMenuItem >
+           <DropdownMenuItem onClick={()=>router.push('/dashboard/nav/profile')} >
             <BadgeCheck />
             Profile settings
           </DropdownMenuItem>

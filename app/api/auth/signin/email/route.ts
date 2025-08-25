@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
     password,
   });
 
+  //console.log(data?.user,"data?.user");
+  const twofastatus=data?.user?.factors?.find(item=>item.factor_type==='totp')?.status==='verified';
+
   if (error) {
     return Response.json({ message: error.message }, { status: 401 });
   }
@@ -49,5 +52,6 @@ export async function POST(request: NextRequest) {
   return Response.json({
     message: "Signed in successfully.",
     name: profile?.username || data.user.email,
+    twofastatus:twofastatus
   });
 }
