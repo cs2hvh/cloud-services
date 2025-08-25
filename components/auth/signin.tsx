@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import axios from "axios";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -60,49 +59,34 @@ export function SignInForm() {
   // ---- email/password sign-in
   async function onSubmit(values: InputType) {
     setIsLoading(true);
-    try {
+      //debugger
       const res = await api.post("/auth/signin/email", {
         email: values.email,
         password: values.password,
       });
-
+      setIsLoading(false);
       // If server says 2FA is required, switch to 2FA mode
       if (res.data?.twofastatus) {
         setTwofaRequired(true);
         return; // don't redirect yet
       }
-
-      toast.success(`Welcome back ${res.data?.name || ""}!`);
-      router.push("/");
-    } catch (err) {
-      const msg =
-        (axios.isAxiosError(err) && err.response?.data?.message) ||
-        "Failed to sign in. Please check your credentials.";
-      toast.error(msg);
-    } finally {
-      setIsLoading(false);
-    }
+      else if(res.status===200){
+        toast.success(`Welcome back ${res.data?.name || ""}!`);
+        router.push("/");
+      }
   }
 
   // ---- social sign-in
-  const handleSignIn = async (type: string) => {
-    try {
-      setIsLoading(true);
-      const response = await api.post("/auth/signin/github", { type });
-      if (response.data?.url) {
-        window.location.href = response.data.url;
-      } else {
-        toast.error("Could not start OAuth flow.");
-        setIsLoading(false);
-      }
-    } catch (err) {
-      const msg =
-        (axios.isAxiosError(err) && err.response?.data?.message) ||
-        "Failed to start OAuth flow.";
-      toast.error(msg);
-      setIsLoading(false);
-    }
-  };
+const handleSignIn = async (type: string) => {
+  setIsLoading(true);
+  const response = await api.post("/auth/signin/github", { type });
+
+  if (response.data?.url) {
+    window.location.href = response.data.url;
+  }
+  setIsLoading(false);
+};
+
 
   // ---- kick off AAL check only when 2FA mode is active
   React.useEffect(() => {

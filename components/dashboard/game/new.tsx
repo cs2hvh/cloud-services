@@ -27,7 +27,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { toast } from "sonner";
-import axios from "axios";
 import { formatPrice } from "@/lib/utils";
 import {
   Card,
@@ -45,6 +44,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tables } from "@/lib/supabase/types";
 import { PP_Location } from "@/types/pterodactyl";
 import { useProjects } from "@/app/dashboard/provider";
+import api from "@/lib/axios/axios";
 
 // Define prop types for the component
 interface PageProps {
@@ -222,7 +222,7 @@ const GameServerSelect = ({ products, locations }: PageProps) => {
       };
 
       // Submit order to API
-      const response = await axios.post("/api/services/order/game", orderData);
+      const response = await api.post("/services/order/game", orderData);
 
       toast.success(response.data || "Game server ordered successfully!");
       // Redirect to success page or dashboard

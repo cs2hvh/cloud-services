@@ -16,10 +16,10 @@ import { Label } from "@/components/ui/label";
 import { projectSchema } from "@/types/zod/project";
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
-import axios, { AxiosError } from "axios";
 import { useSession } from "@/app/dashboard/provider";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { PlusCircle } from "lucide-react";
+import api from "@/lib/axios/axios";
 
 type ProjectData = z.infer<typeof projectSchema>;
 
@@ -41,26 +41,19 @@ const CreateProjectDialog = () => {
   });
 
   const onSubmit = async (data: ProjectData) => {
-    try {
-      await axios.post("/api/projects", {
+   
+     const response= await api.post("/projects", {
         ...data,
         owner: user?.id, // Static for now
       });
 
-      toast.success(`Project "${data.name}" was successfully created.`);
+      if(response.status===200){
+        toast.success(`Project "${data.name}" was successfully created.`);
+        reset();
+        setOpen(false);
+      }
 
-      reset();
-      setOpen(false);
-    } catch (err) {
-      const error = err as AxiosError<{ message?: string }>;
-
-      const message =
-        error.response?.data?.message || "Failed to update project.";
-
-      toast.error(message);
-
-      // console.error('[EditProjectForm]', error);
-    }
+     
   };
 
   return (

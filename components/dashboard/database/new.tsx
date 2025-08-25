@@ -25,7 +25,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { toast } from "sonner";
-import axios from "axios";
 import { formatPrice } from "@/lib/utils";
 import { Tables } from "@/lib/supabase/types";
 import {
@@ -40,6 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/ui/icons";
+import api from "@/lib/axios/axios";
 
 interface PageProps {
   products: Tables<"products">[];
@@ -151,7 +151,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
         return;
       }
 
-      const response = await axios.post("/api/services/order/database", {
+      const response = await api.post("/services/order/database", {
         name: state.selectedName,
         database_type: state.selectedDbType,
         database_plan: state.selectedDb,

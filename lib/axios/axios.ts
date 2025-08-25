@@ -14,7 +14,7 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    debugger
+    //debugger
     const status = error.response?.status;
     const serverMessage = (error.response?.data as { message?: string })
       ?.message;
@@ -33,7 +33,7 @@ api.interceptors.response.use(
       toast.error(serverMessage || "Something went wrong.");
     }
 
-    return Promise.reject(error); // still reject so caller knows it failed
+   return Promise.resolve({ error, data: null });
   }
 );
 

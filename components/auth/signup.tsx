@@ -97,15 +97,16 @@ export default function SignUpMultiStep({
 async function onSubmitOtp(data: OtpFormData) {
   setIsLoading(true);
 
-    const response = await api.post("/auth/onboarding/verify-otp", {
-      email: pendingEmail,
-      otpCode: data.pin,
-    });
+  const response = await api.post("/auth/onboarding/verify-otp", {
+    email: pendingEmail,
+    otpCode: data.pin,
+  });
 
+  setIsLoading(false);
+  if (response.status === 200) {
     toast.success(response.data.message);
     router.push("/signin");
-     setIsLoading(false);
-  
+  }
 }
 
   return (
