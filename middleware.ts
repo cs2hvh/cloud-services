@@ -86,8 +86,8 @@ export async function middleware(request: NextRequest) {
   // IP cooldown check (early return if limited)
   const limited = applyIpCooldown(request);
   if (limited) return limited;
-  console.log(request.headers, ".....................89");
-  if (request?.headers?.get("x-client-secret") !== process.env.CLIENT_SECRET) {
+  console.log(request?.headers?.get("x-client-secret"), ".....................89",process.env.NEXT_PUBLIC_CLIENT_SECRET,"....NEXT_PUBLIC_CLIENT_SECRET");
+  if (request?.headers?.get("x-client-secret") !== process.env.NEXT_PUBLIC_CLIENT_SECRET) {
     return new NextResponse(
       JSON.stringify({
         error: "this link is protected # cors protection",
