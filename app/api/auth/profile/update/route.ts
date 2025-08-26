@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest) {
 
     const body: UpdateBody = await req.json();
 
-    const { displayName,userName, profilePic, phone, password } = body;
+    const { displayName, userName, profilePic, phone, password } = body;
 
     // Build update payload
     // (user_metadata lives under `data` in updateUser)

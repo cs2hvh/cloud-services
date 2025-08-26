@@ -36,7 +36,7 @@ const ProfileSettings: React.FC = () => {
     async function fetchProfile() {
       try {
         const res = await api.get("/auth/profile/read");
-        console.log(res.data,"....res.data..")
+        console.log(res.data, "....res.data..");
         if (res.status != 200) throw new Error("Failed to load profile");
         const data: UserProfile = res.data;
         setProfile(data);
@@ -58,8 +58,8 @@ const ProfileSettings: React.FC = () => {
   const handleUpdate = async (): Promise<void> => {
     setLoading(true);
     try {
-      if(profile?.phone?.length>0){
-        toast.error('cannot update phone as message service is not attached')
+      if (profile?.phone?.length > 0) {
+        toast.error("cannot update phone as message service is not attached");
       }
       const res = await fetch("/api/auth/profile/update", {
         method: "PUT",
@@ -119,7 +119,6 @@ const ProfileSettings: React.FC = () => {
           <Mail className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
         </div>
       </div>
-
 
       {/* Username */}
       <div className="flex flex-col gap-2">
