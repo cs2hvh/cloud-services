@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 // Shape of accepted payload
 type UpdateBody = {
   displayName?: string;
+  userName?: string;
   profilePic?: string;
   phone?: string;
   password?: string;
@@ -25,12 +26,13 @@ export async function PUT(req: NextRequest) {
 
     const body: UpdateBody = await req.json();
 
-    const { displayName, profilePic, phone, password } = body;
+    const { displayName,userName, profilePic, phone, password } = body;
 
     // Build update payload
     // (user_metadata lives under `data` in updateUser)
     const metadata: Record<string, unknown> = {};
     if (typeof displayName === "string") metadata.display_name = displayName;
+    if (typeof userName === "string") metadata.username = userName;
     if (typeof profilePic === "string") metadata.avatar_url = profilePic;
 
     // Nothing to update?
