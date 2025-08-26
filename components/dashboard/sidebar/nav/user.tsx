@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  BadgeCheck,
-  Bell,
-  CreditCard,
-  LogOut,
-} from "lucide-react";
+import { BadgeCheck, Bell, CreditCard, LogOut } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -24,7 +19,7 @@ import { useRouter } from "next/navigation";
 export function NavUser() {
   const { user } = useSession();
 
-  const router=useRouter();
+  const router = useRouter();
 
   if (!user) {
     return null;
@@ -35,7 +30,10 @@ export function NavUser() {
       <DropdownMenuTrigger asChild>
         <Button size="lg" className="p-2" variant="ghost">
           <Avatar className="h-8 w-8 rounded-lg">
-            <AvatarImage src={user.avatar||undefined} alt={user.username|| undefined} />
+            <AvatarImage
+              src={user.avatar || undefined}
+              alt={user.username || undefined}
+            />
             <AvatarFallback className="rounded-lg">AV</AvatarFallback>
           </Avatar>
           <div className="grid flex-1 text-left text-sm leading-tight">
@@ -53,7 +51,10 @@ export function NavUser() {
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
             <Avatar className="h-8 w-8 rounded-lg">
-              <AvatarImage src={user.avatar ||undefined} alt={user.username ||undefined} />
+              <AvatarImage
+                src={user.avatar || undefined}
+                alt={user.username || undefined}
+              />
               <AvatarFallback className="rounded-lg">CN</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
@@ -71,15 +72,21 @@ export function NavUser() {
                 </DropdownMenuGroup> */}
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem onClick={()=>router.push('/dashboard/nav/account')}>
+          <DropdownMenuItem
+            onClick={() => router.push("/dashboard/nav/account")}
+          >
             <BadgeCheck />
             Account
           </DropdownMenuItem>
-           <DropdownMenuItem onClick={()=>router.push('/dashboard/nav/profile')} >
+          <DropdownMenuItem
+            onClick={() => router.push("/dashboard/nav/profile")}
+          >
             <BadgeCheck />
             Profile settings
           </DropdownMenuItem>
-           <DropdownMenuItem onClick={()=>router.push('/dashboard/nav/account')} >
+          <DropdownMenuItem
+            onClick={() => router.push("/dashboard/nav/account")}
+          >
             <BadgeCheck />
             authentication security
           </DropdownMenuItem>

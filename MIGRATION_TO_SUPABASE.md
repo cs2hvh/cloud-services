@@ -138,6 +138,7 @@ The migration includes comprehensive RLS policies:
    ```
 
 2. **GitHub OAuth**:
+
    - Visit `/signin` and test GitHub login button
    - Verify redirect to `/dashboard` after successful auth
 

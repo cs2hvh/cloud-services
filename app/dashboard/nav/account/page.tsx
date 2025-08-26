@@ -6,13 +6,10 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 
 import { Suspense } from "react";
 
-
 const AccountSuspense = async () => {
   try {
-
     return (
       <>
-        
         <Accounts />
       </>
     );
@@ -25,7 +22,6 @@ const AccountSuspense = async () => {
 };
 
 const NavAccount = async () => {
-
   return (
     <SidebarLayout>
       <Suspense fallback={<LoadingSpinner />}>

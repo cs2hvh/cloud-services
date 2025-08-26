@@ -10,14 +10,14 @@ const getJenkinsClient = () => {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL environment variable is required");
     }
-    
+
     jenkins = new Jenkins({
       baseUrl: process.env.JENKINS_URL,
       crumbIssuer: true,
       //   promisify: true,
     });
   }
-  
+
   return jenkins;
 };
 

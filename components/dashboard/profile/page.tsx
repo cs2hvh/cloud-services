@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, User, Phone, Lock, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
+import api from "@/lib/axios/axios";
 
 // Types for user profile
 interface UserProfile {
@@ -33,9 +34,9 @@ const ProfileSettings: React.FC = () => {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res = await fetch("/api/profile");
-        if (!res.ok) throw new Error("Failed to load profile");
-        const data: UserProfile = await res.json();
+        const res = await api.get("/api/profile");
+        if (res.status != 200) throw new Error("Failed to load profile");
+        const data: UserProfile = res.data;
         setProfile(data);
       } catch (err) {
         console.error("Failed to fetch profile:", err);

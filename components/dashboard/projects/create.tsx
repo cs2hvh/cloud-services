@@ -41,19 +41,16 @@ const CreateProjectDialog = () => {
   });
 
   const onSubmit = async (data: ProjectData) => {
-   
-     const response= await api.post("/projects", {
-        ...data,
-        owner: user?.id, // Static for now
-      });
+    const response = await api.post("/projects", {
+      ...data,
+      owner: user?.id, // Static for now
+    });
 
-      if(response.status===200){
-        toast.success(`Project "${data.name}" was successfully created.`);
-        reset();
-        setOpen(false);
-      }
-
-     
+    if (response.status === 200) {
+      toast.success(`Project "${data.name}" was successfully created.`);
+      reset();
+      setOpen(false);
+    }
   };
 
   return (

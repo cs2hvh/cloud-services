@@ -1,6 +1,6 @@
 import { createClient } from "./server";
 import { createServiceClient } from "./server";
-import {  Tables, TablesInsert, TablesUpdate } from "./types";
+import { Tables, TablesInsert, TablesUpdate } from "./types";
 
 type UserProfile = Tables<"user_profiles">;
 type Project = Tables<"projects">;
@@ -705,4 +705,3 @@ const api = {
 };
 
 export default api;
-

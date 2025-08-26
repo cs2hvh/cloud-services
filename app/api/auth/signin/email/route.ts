@@ -13,18 +13,17 @@ export async function POST(request: NextRequest) {
   }
 
   const windowLimit = await limitByEmail(email, { limit: 5, windowMs: 60_000 });
-    if (!windowLimit.allowed) {
-      return Response.json(
-        { error: "Too many requests. Try again later." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(windowLimit.retryAfterSec) },
-        }
-      );
-    }
+  if (!windowLimit.allowed) {
+    return Response.json(
+      { error: "Too many requests. Try again later." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(windowLimit.retryAfterSec) },
+      },
+    );
+  }
 
   const supabase = await createClient();
-
 
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
@@ -32,7 +31,9 @@ export async function POST(request: NextRequest) {
   });
 
   //console.log(data?.user,"data?.user");
-  const twofastatus=data?.user?.factors?.find(item=>item.factor_type==='totp')?.status==='verified';
+  const twofastatus =
+    data?.user?.factors?.find((item) => item.factor_type === "totp")?.status ===
+    "verified";
 
   if (error) {
     return Response.json({ message: error.message }, { status: 401 });
@@ -52,6 +53,6 @@ export async function POST(request: NextRequest) {
   return Response.json({
     message: "Signed in successfully.",
     name: profile?.username || data.user.email,
-    twofastatus:twofastatus
+    twofastatus: twofastatus,
   });
 }

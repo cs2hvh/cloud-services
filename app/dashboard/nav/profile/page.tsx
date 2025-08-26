@@ -1,12 +1,10 @@
 import ProfileSettings from "@/components/dashboard/profile/page";
 
-
 import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 
 import { Suspense } from "react";
-
 
 const ProfileSuspense = async () => {
   try {
@@ -20,7 +18,6 @@ const ProfileSuspense = async () => {
 
     return (
       <>
-        
         <ProfileSettings />
       </>
     );
@@ -33,7 +30,6 @@ const ProfileSuspense = async () => {
 };
 
 const ProfilePage = async () => {
-
   return (
     <SidebarLayout>
       <Suspense fallback={<LoadingSpinner />}>

@@ -1,12 +1,6 @@
 "use client";
 import React from "react";
-import {
-  Cpu,
-  Database,
-  HardDrive,
-  Wifi,
-  ExternalLink,
-} from "lucide-react";
+import { Cpu, Database, HardDrive, Wifi, ExternalLink } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,
@@ -19,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getDaysRemaining} from "@/lib/utils";
+import { getDaysRemaining } from "@/lib/utils";
 
 const GameServerGrid = ({ data }: { data: Tables<"game_servers">[] }) => {
   if (!data || data.length === 0) {
@@ -90,19 +84,58 @@ const GameServerGrid = ({ data }: { data: Tables<"game_servers">[] }) => {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div className="flex items-center">
                     <Cpu className="w-4 h-4 mr-2 text-blue-500" />
-                    <span>{(server.resources as { cpu: number; ram: number; storage: number } | null)?.cpu} CPU</span>
+                    <span>
+                      {
+                        (
+                          server.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          } | null
+                        )?.cpu
+                      }{" "}
+                      CPU
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Database className="w-4 h-4 mr-2 text-green-500" />
-                    <span>{(server.resources as { cpu: number; ram: number; storage: number } | null)?.ram} GB RAM</span>
+                    <span>
+                      {
+                        (
+                          server.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          } | null
+                        )?.ram
+                      }{" "}
+                      GB RAM
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <HardDrive className="w-4 h-4 mr-2 text-purple-500" />
-                    <span>{(server.resources as { cpu: number; ram: number; storage: number } | null)?.storage} GB Storage</span>
+                    <span>
+                      {
+                        (
+                          server.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          } | null
+                        )?.storage
+                      }{" "}
+                      GB Storage
+                    </span>
                   </div>
                   <div className="flex items-center">
                     <Wifi className="w-4 h-4 mr-2 text-orange-500" />
-                    <span>{(server.resources as { bandwith?: number } | null)?.bandwith} Mbps</span>
+                    <span>
+                      {
+                        (server.resources as { bandwith?: number } | null)
+                          ?.bandwith
+                      }{" "}
+                      Mbps
+                    </span>
                   </div>
                 </div>
               </div>
@@ -117,7 +150,10 @@ const GameServerGrid = ({ data }: { data: Tables<"game_servers">[] }) => {
               <div>
                 <h3 className="text-sm font-medium mb-2">Subscription</h3>
                 <div className="font-mono text-sm">
-                  {server.ends_at ? getDaysRemaining(new Date(server.ends_at)) : "No expiry"} remaining
+                  {server.ends_at
+                    ? getDaysRemaining(new Date(server.ends_at))
+                    : "No expiry"}{" "}
+                  remaining
                 </div>
               </div>
             </div>

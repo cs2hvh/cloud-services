@@ -2,8 +2,9 @@
 
 import { redis } from "../redis";
 
-
-export type LimitResult = { allowed: true } | { allowed: false; retryAfterSec: number };
+export type LimitResult =
+  | { allowed: true }
+  | { allowed: false; retryAfterSec: number };
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -13,9 +14,9 @@ export async function limitByEmail(
   email: string,
   {
     prefix = "rl:email",
-    limit = 5,           // e.g. 5 requests
-    windowMs = 60_000,   // per 1 minute
-  } = {}
+    limit = 5, // e.g. 5 requests
+    windowMs = 60_000, // per 1 minute
+  } = {},
 ): Promise<LimitResult> {
   const id = normalizeEmail(email);
   const key = `${prefix}:${id}:${Math.floor(Date.now() / windowMs)}`;

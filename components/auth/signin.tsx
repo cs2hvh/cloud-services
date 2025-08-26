@@ -16,7 +16,12 @@ import { Separator } from "@/components/ui/separator";
 import { Icons } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import {
-  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
 } from "@/components/ui/form";
 
 import { signin_schema } from "@/types/zod/auth";
@@ -59,34 +64,32 @@ export function SignInForm() {
   // ---- email/password sign-in
   async function onSubmit(values: InputType) {
     setIsLoading(true);
-      //debugger
-      const res = await api.post("/auth/signin/email", {
-        email: values.email,
-        password: values.password,
-      });
-      setIsLoading(false);
-      // If server says 2FA is required, switch to 2FA mode
-      if (res.data?.twofastatus) {
-        setTwofaRequired(true);
-        return; // don't redirect yet
-      }
-      else if(res.status===200){
-        toast.success(`Welcome back ${res.data?.name || ""}!`);
-        router.push("/");
-      }
+    //debugger
+    const res = await api.post("/auth/signin/email", {
+      email: values.email,
+      password: values.password,
+    });
+    setIsLoading(false);
+    // If server says 2FA is required, switch to 2FA mode
+    if (res.data?.twofastatus) {
+      setTwofaRequired(true);
+      return; // don't redirect yet
+    } else if (res.status === 200) {
+      toast.success(`Welcome back ${res.data?.name || ""}!`);
+      router.push("/");
+    }
   }
 
   // ---- social sign-in
-const handleSignIn = async (type: string) => {
-  setIsLoading(true);
-  const response = await api.post("/auth/signin/github", { type });
+  const handleSignIn = async (type: string) => {
+    setIsLoading(true);
+    const response = await api.post("/auth/signin/github", { type });
 
-  if (response.data?.url) {
-    window.location.href = response.data.url;
-  }
-  setIsLoading(false);
-};
-
+    if (response.data?.url) {
+      window.location.href = response.data.url;
+    }
+    setIsLoading(false);
+  };
 
   // ---- kick off AAL check only when 2FA mode is active
   React.useEffect(() => {
@@ -94,7 +97,8 @@ const handleSignIn = async (type: string) => {
 
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const { data, error } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
 
       if (cancelled) return;
 
@@ -119,9 +123,11 @@ const handleSignIn = async (type: string) => {
           setTwofaReady(true);
           return;
         }
-        const totp = factors.data.totp.find(f => f.status === "verified");
+        const totp = factors.data.totp.find((f) => f.status === "verified");
         if (!totp) {
-          setTwofaError("No verified TOTP factor found. Enable 2FA in settings first.");
+          setTwofaError(
+            "No verified TOTP factor found. Enable 2FA in settings first.",
+          );
           setTwofaReady(true);
           return;
         }
@@ -157,7 +163,10 @@ const handleSignIn = async (type: string) => {
 
       router.replace(nextPath);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Verification failed. Please try again.";
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Verification failed. Please try again.";
       setTwofaError(msg);
     } finally {
       setTwofaBusy(false);
@@ -169,7 +178,11 @@ const handleSignIn = async (type: string) => {
   // Show 2FA UI only when in 2FA mode
   if (twofaRequired) {
     if (!twofaReady) {
-      return <div className="p-6 text-sm text-muted-foreground">Checking your session…</div>;
+      return (
+        <div className="p-6 text-sm text-muted-foreground">
+          Checking your session…
+        </div>
+      );
     }
     if (!needsMfa) {
       // We’ll have redirected already
@@ -222,7 +235,9 @@ const handleSignIn = async (type: string) => {
 
           <div className="p-6 md:p-8">
             <div className="flex flex-col items-center text-center mb-6">
-              <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
+              <h1 className="text-2xl font-bold tracking-tight">
+                Welcome back
+              </h1>
               <p className="text-sm text-muted-foreground mt-1">
                 Please sign in to access your account.
               </p>
@@ -275,12 +290,17 @@ const handleSignIn = async (type: string) => {
                 <Separator />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="px-2 text-muted-foreground">Or continue with</span>
+                <span className="px-2 text-muted-foreground">
+                  Or continue with
+                </span>
               </div>
             </div>
 
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="flex flex-col gap-4"
+              >
                 <FormField
                   control={form.control}
                   name="email"
@@ -314,13 +334,21 @@ const handleSignIn = async (type: string) => {
                         </Link>
                       </div>
                       <FormControl>
-                        <PasswordInput field={field} placeholder="••••••••" disabled={isLoading} />
+                        <PasswordInput
+                          field={field}
+                          placeholder="••••••••"
+                          disabled={isLoading}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button type="submit" disabled={isLoading} className="w-full mt-2">
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full mt-2"
+                >
                   {isLoading ? (
                     <>
                       <Icons.spinner className="h-4 w-4 animate-spin" />
@@ -336,7 +364,10 @@ const handleSignIn = async (type: string) => {
             <div className="flex items-center justify-center mt-2">
               <p className="text-sm text-muted-foreground">
                 Don&apos;t have an account?{" "}
-                <Link href="/signup" className="text-primary hover:text-primary/90 transition-colors font-medium">
+                <Link
+                  href="/signup"
+                  className="text-primary hover:text-primary/90 transition-colors font-medium"
+                >
                   Sign up
                 </Link>
               </p>
@@ -346,8 +377,14 @@ const handleSignIn = async (type: string) => {
         <CardFooter className="px-6 flex items-center justify-center border-t">
           <div className="text-center text-sm text-muted-foreground [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-primary/90 transition-colors">
             By signing in, you agree to our{" "}
-            <Link href="/terms" target="_blank">Terms of Service</Link> and{" "}
-            <Link href="/privacy" target="_blank">Privacy Policy</Link>.
+            <Link href="/terms" target="_blank">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank">
+              Privacy Policy
+            </Link>
+            .
           </div>
         </CardFooter>
       </Card>

@@ -70,10 +70,10 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
         users: userToRemove ? [userToRemove] : selectedUsers,
       });
     } catch (error: unknown) {
-  const err = error as AxiosError<{ message?: string }>;
-  const message = err.response?.data?.message || "An error occurred.";
-  console.error("Remove error:", message);
-}finally {
+      const err = error as AxiosError<{ message?: string }>;
+      const message = err.response?.data?.message || "An error occurred.";
+      console.error("Remove error:", message);
+    } finally {
       if (!userToRemove) {
         setSelectedUsers([]);
       }
@@ -142,10 +142,14 @@ const ProjectUsers = ({ projectId, users }: PageProps) => {
                         onCheckedChange={() => handleSelectUser(user.id)}
                       />
                       <Avatar className="h-10 w-10 rounded-lg flex-shrink-0">
-                        <AvatarImage src={user.avatar || undefined} alt={user.username || undefined} />
+                        <AvatarImage
+                          src={user.avatar || undefined}
+                          alt={user.username || undefined}
+                        />
                         <AvatarFallback className="rounded-lg">
                           {user.display_name?.substring(0, 2).toUpperCase() ||
-                            user.username?.substring(0, 2).toUpperCase() || "??"}
+                            user.username?.substring(0, 2).toUpperCase() ||
+                            "??"}
                         </AvatarFallback>
                       </Avatar>
                       <div className="grid flex-1 min-w-0">

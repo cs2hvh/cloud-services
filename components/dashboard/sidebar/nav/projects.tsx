@@ -1,11 +1,6 @@
 "use client";
 import * as Icons from "lucide-react";
-import {
-  Folder,
-  Share,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { Folder, Share, Trash2, type LucideIcon } from "lucide-react";
 
 import {
   DropdownMenu,

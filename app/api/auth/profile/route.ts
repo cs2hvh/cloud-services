@@ -41,7 +41,7 @@ export async function PUT(req: NextRequest) {
     if (!hasMetadata && !hasPassword && !hasPhone) {
       return NextResponse.json(
         { error: "No valid fields to update." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,7 +56,8 @@ export async function PUT(req: NextRequest) {
     if (hasPassword) attrs.password = password;
     if (hasPhone) attrs.phone = phone;
 
-    const { data: updated, error: updErr } = await supabase.auth.updateUser(attrs);
+    const { data: updated, error: updErr } =
+      await supabase.auth.updateUser(attrs);
 
     if (updErr) {
       // Common causes:
@@ -70,7 +71,7 @@ export async function PUT(req: NextRequest) {
     const notes: string[] = [];
     if (hasPhone) {
       notes.push(
-        "Phone update initiated. A verification code may be required to confirm the change."
+        "Phone update initiated. A verification code may be required to confirm the change.",
       );
     }
 
@@ -88,7 +89,7 @@ export async function PUT(req: NextRequest) {
         },
         notes,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (e: unknown) {
     const message =

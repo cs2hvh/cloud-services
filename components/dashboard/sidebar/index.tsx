@@ -2,7 +2,12 @@
 
 import * as React from "react";
 
-import {Sidebar,SidebarContent, SidebarHeader, SidebarMenuButton} from "@/components/ui/sidebar";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenuButton,
+} from "@/components/ui/sidebar";
 import { NavProjects } from "./nav/projects";
 import { NavSecondary } from "./nav/secondary";
 import { User } from "@supabase/supabase-js";
@@ -16,7 +21,6 @@ type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
 };
 
 export function AppSidebar({ projects, ...props }: AppSidebarProps) {
-
   return (
     <Sidebar {...props}>
       <SidebarHeader>

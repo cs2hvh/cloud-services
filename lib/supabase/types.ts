@@ -207,9 +207,9 @@ export type Database = {
           discount: number | null;
           id: string;
           image: string | null;
-          name: string|null;
-          price: number|null;
-          resources: Json|null;
+          name: string | null;
+          price: number | null;
+          resources: Json | null;
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
@@ -221,7 +221,7 @@ export type Database = {
           image?: string | null;
           name: string;
           price: number;
-          resources: Json|null;
+          resources: Json | null;
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
