@@ -1,4 +1,3 @@
-import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/dashboard/sidebar";
 import { requireAuthProfile } from "@/lib/supabase/auth";
 import { SessionProvider } from "./provider";
@@ -16,10 +15,12 @@ export default async function DashboardLayout({
 
   return (
     <SessionProvider initialUser={user} initialProjects={projects}>
-      <SidebarProvider>
+      <div className="flex h-screen bg-black">
         <AppSidebar projects={projects} user={user} />
-        {children}
-      </SidebarProvider>
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
     </SessionProvider>
   );
 }
