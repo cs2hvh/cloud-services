@@ -27,6 +27,7 @@ CREATE TABLE apps (
 ### 2. Row Level Security
 
 Added RLS policies for the apps table:
+
 - Users can only view, create, update, and delete their own apps
 - Apps are automatically filtered by `user_id`
 
@@ -35,14 +36,17 @@ Added RLS policies for the apps table:
 **File:** `/app/api/jenkins/route.ts`
 
 #### Authentication Changes
+
 - **Old:** `import { validateRequest } from '@/lib/auth'`
 - **New:** `import { getUser } from '@/lib/supabase/auth'`
 
 #### Database Queries
+
 - **Old:** `query.apps.getUsedPorts()` and `query.apps.create()`
 - **New:** Supabase client queries with proper error handling
 
 #### ID Generation
+
 - **Old:** `generateIdFromEntropySize(10)` from Lucia
 - **New:** `uuid.v4().substring(0, 10)`
 
@@ -96,6 +100,7 @@ Or if you've already updated the main schema:
 ### 2. Test API Endpoints
 
 #### Create an App
+
 ```bash
 curl -X POST http://localhost:3000/api/jenkins \
   -H "Content-Type: application/json" \
@@ -110,12 +115,14 @@ curl -X POST http://localhost:3000/api/jenkins \
 ```
 
 #### List User's Apps
+
 ```bash
 curl http://localhost:3000/api/jenkins \
   -H "Cookie: your-auth-cookie"
 ```
 
 #### Delete an App
+
 ```bash
 curl -X DELETE "http://localhost:3000/api/jenkins?id=app-id" \
   -H "Cookie: your-auth-cookie"

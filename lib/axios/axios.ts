@@ -1,4 +1,4 @@
-"use client"
+"use client";
 import axios, { AxiosError } from "axios";
 import { toast } from "sonner";
 
@@ -7,14 +7,14 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     "Content-Type": "application/json",
-    // "secret": "ahura_client_secret",
+    "x-client-secret": process.env.NEXT_PUBLIC_CLIENT_SECRET,
   },
 });
 
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    debugger
+    //debugger
     const status = error.response?.status;
     const serverMessage = (error.response?.data as { message?: string })
       ?.message;
@@ -33,8 +33,8 @@ api.interceptors.response.use(
       toast.error(serverMessage || "Something went wrong.");
     }
 
-    return Promise.reject(error); // still reject so caller knows it failed
-  }
+    return Promise.resolve({ error, data: null });
+  },
 );
 
 export default api;

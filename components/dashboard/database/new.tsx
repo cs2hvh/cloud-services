@@ -25,7 +25,6 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { toast } from "sonner";
-import axios from "axios";
 import { formatPrice } from "@/lib/utils";
 import { Tables } from "@/lib/supabase/types";
 import {
@@ -40,6 +39,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Icons } from "@/components/ui/icons";
+import api from "@/lib/axios/axios";
 
 interface PageProps {
   products: Tables<"products">[];
@@ -151,7 +151,7 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
         return;
       }
 
-      const response = await axios.post("/api/services/order/database", {
+      const response = await api.post("/services/order/database", {
         name: state.selectedName,
         database_type: state.selectedDbType,
         database_plan: state.selectedDb,
@@ -455,10 +455,41 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                                                         )} */}
                             {database.resources && (
                               <div className="flex gap-2 text-xs text-muted-foreground">
-                                <span>{(database.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU</span>
-                                <span>{(database.resources as { cpu: number; ram: number; storage: number }).ram} GB RAM</span>
                                 <span>
-                                  {(database.resources as { cpu: number; ram: number; storage: number }).storage} GB Storage
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).cpu
+                                  }{" "}
+                                  vCPU
+                                </span>
+                                <span>
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).ram
+                                  }{" "}
+                                  GB RAM
+                                </span>
+                                <span>
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).storage
+                                  }{" "}
+                                  GB Storage
                                 </span>
                               </div>
                             )}
@@ -556,7 +587,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                           <Cpu className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU
+                          {
+                            (
+                              selectedDatabase.resources as {
+                                cpu: number;
+                                ram: number;
+                                storage: number;
+                              }
+                            ).cpu
+                          }{" "}
+                          vCPU
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Dedicated cores
@@ -567,7 +607,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                           <Server className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB
+                          {
+                            (
+                              selectedDatabase.resources as {
+                                cpu: number;
+                                ram: number;
+                                storage: number;
+                              }
+                            ).ram
+                          }{" "}
+                          GB
                         </div>
                         <div className="text-xs text-muted-foreground">
                           Memory
@@ -578,7 +627,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                           <HardDrive className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <div className="mt-1 font-medium">
-                          {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
+                          {
+                            (
+                              selectedDatabase.resources as {
+                                cpu: number;
+                                ram: number;
+                                storage: number;
+                              }
+                            ).storage
+                          }{" "}
+                          GB
                         </div>
                         <div className="text-xs text-muted-foreground">
                           NVMe SSD
@@ -701,7 +759,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <Cpu className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU
+                              {
+                                (
+                                  selectedDatabase.resources as {
+                                    cpu: number;
+                                    ram: number;
+                                    storage: number;
+                                  }
+                                ).cpu
+                              }{" "}
+                              vCPU
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Dedicated cores
@@ -712,7 +779,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <Server className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB
+                              {
+                                (
+                                  selectedDatabase.resources as {
+                                    cpu: number;
+                                    ram: number;
+                                    storage: number;
+                                  }
+                                ).ram
+                              }{" "}
+                              GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               Memory
@@ -723,7 +799,16 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                               <HardDrive className="h-5 w-5 text-muted-foreground" />
                             </div>
                             <div className="mt-1 font-medium">
-                              {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
+                              {
+                                (
+                                  selectedDatabase.resources as {
+                                    cpu: number;
+                                    ram: number;
+                                    storage: number;
+                                  }
+                                ).storage
+                              }{" "}
+                              GB
                             </div>
                             <div className="text-xs text-muted-foreground">
                               NVMe SSD
@@ -872,9 +957,36 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                       Resources:
                     </span>
                     <span className="font-medium text-xs">
-                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).cpu} vCPU /{" "}
-                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).ram} GB /{" "}
-                      {(selectedDatabase.resources as { cpu: number; ram: number; storage: number }).storage} GB
+                      {
+                        (
+                          selectedDatabase.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          }
+                        ).cpu
+                      }{" "}
+                      vCPU /{" "}
+                      {
+                        (
+                          selectedDatabase.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          }
+                        ).ram
+                      }{" "}
+                      GB /{" "}
+                      {
+                        (
+                          selectedDatabase.resources as {
+                            cpu: number;
+                            ram: number;
+                            storage: number;
+                          }
+                        ).storage
+                      }{" "}
+                      GB
                     </span>
                   </div>
                 )}
@@ -887,7 +999,8 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                     <span>Subtotal</span>
                     <span className="font-medium">
                       {selectedDatabase
-                        ? selectedDatabase.price === 0 || selectedDatabase.price === null
+                        ? selectedDatabase.price === 0 ||
+                          selectedDatabase.price === null
                           ? "Free"
                           : `${formatPrice(selectedDatabase.price!)}/mo`
                         : "-"}
@@ -908,7 +1021,8 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                   <span className="font-semibold">Total</span>
                   <span className="font-bold text-lg">
                     {selectedDatabase
-                      ? selectedDatabase.price === 0 || selectedDatabase.price === null
+                      ? selectedDatabase.price === 0 ||
+                        selectedDatabase.price === null
                         ? "Free"
                         : selectedDatabase.discount &&
                             Number(selectedDatabase.discount) > 0

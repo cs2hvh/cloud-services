@@ -11,13 +11,16 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Access was denied by the provider. Please try again or choose a different provider.",
   invalid_grant:
     "Your session has expired or is invalid. Please try signing in again.",
-  server_error:
-    "We hit a server issue. Please try again in a moment.",
+  server_error: "We hit a server issue. Please try again in a moment.",
 };
 
 function getFriendlyMessage(code?: string, fallback?: string) {
   if (!code) return fallback || "Something went wrong. Please try again.";
-  return ERROR_MESSAGES[code] || fallback || "Something went wrong. Please try again.";
+  return (
+    ERROR_MESSAGES[code] ||
+    fallback ||
+    "Something went wrong. Please try again."
+  );
 }
 
 function parseHashParams(hash: string) {
@@ -57,7 +60,8 @@ export default function AuthCodeError() {
       error_description: hashParams["error_description"],
     };
 
-    const effectiveCode = qp.error_code || hp.error_code || qp.error || hp.error;
+    const effectiveCode =
+      qp.error_code || hp.error_code || qp.error || hp.error;
     const effectiveDesc = qp.error_description || hp.error_description;
 
     return { code: effectiveCode, description: effectiveDesc };
@@ -77,9 +81,18 @@ export default function AuthCodeError() {
         <div className="text-sm text-gray-700 space-y-2 mb-4">
           <p>What you can do:</p>
           <ul className="list-disc ml-5 space-y-1">
-            <li>Sign in with the provider that’s already linked to your original account.</li>
-            <li>Or sign into that original account and disconnect the provider there, then try linking again here.</li>
-            <li>If you used a different email on the provider, check which account has it linked.</li>
+            <li>
+              Sign in with the provider that’s already linked to your original
+              account.
+            </li>
+            <li>
+              Or sign into that original account and disconnect the provider
+              there, then try linking again here.
+            </li>
+            <li>
+              If you used a different email on the provider, check which account
+              has it linked.
+            </li>
           </ul>
         </div>
       )}
@@ -91,10 +104,7 @@ export default function AuthCodeError() {
         >
           Try again
         </button>
-        <Link
-          href="/"
-          className="px-4 py-2 rounded-lg border hover:bg-gray-50"
-        >
+        <Link href="/" className="px-4 py-2 rounded-lg border hover:bg-gray-50">
           Go home
         </Link>
       </div>
@@ -104,8 +114,13 @@ export default function AuthCodeError() {
         <details className="mt-6 text-xs text-gray-500">
           <summary>Debug details</summary>
           <div className="mt-2 space-y-1">
-            <div><span className="font-mono">error_code</span>: {code || "-"}</div>
-            <div><span className="font-mono">error_description</span>: {description || "-"}</div>
+            <div>
+              <span className="font-mono">error_code</span>: {code || "-"}
+            </div>
+            <div>
+              <span className="font-mono">error_description</span>:{" "}
+              {description || "-"}
+            </div>
           </div>
         </details>
       )}

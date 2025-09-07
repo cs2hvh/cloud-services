@@ -17,97 +17,102 @@ export default function EnableTotp() {
   const [error, setError] = useState<string>("");
   const [has2FA, setHas2FA] = useState<boolean>(false);
 
- // ✅ Updated enrollment: always provide a non-empty friendlyName, and retry once if name conflict occurs
-const startEnrollment = async () => {
-  // Give each attempt a unique friendly name to avoid collisions
-  const friendlyName = `totp-${Date.now()}`;
+  // ✅ Updated enrollment: always provide a non-empty friendlyName, and retry once if name conflict occurs
+  const startEnrollment = async () => {
+    // Give each attempt a unique friendly name to avoid collisions
+    const friendlyName = `totp-${Date.now()}`;
 
-  const tryEnroll = async () =>
-    supabase.auth.mfa.enroll({
-      factorType: "totp",
-      friendlyName, // avoid empty-string collision
-    });
+    const tryEnroll = async () =>
+      supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName, // avoid empty-string collision
+      });
 
-  // First attempt
-  let { data, error: enrollError } = await tryEnroll();
+    // First attempt
+    let { data, error: enrollError } = await tryEnroll();
 
-  if (enrollError?.message?.includes("already exists")) {
-    const factors = await supabase.auth.mfa.listFactors();
-    if (!factors.error) {
-      const pending = factors.data.totp.find((f) => f.status === "unverified");
-      if (pending) {
-        await supabase.auth.mfa.unenroll({ factorId: pending.id });
-        ({ data, error: enrollError } = await tryEnroll());
+    if (enrollError?.message?.includes("already exists")) {
+      const factors = await supabase.auth.mfa.listFactors();
+      if (!factors.error) {
+        const pending = factors.data.totp.find(
+          (f) => f.status === "unverified",
+        );
+        if (pending) {
+          await supabase.auth.mfa.unenroll({ factorId: pending.id });
+          ({ data, error: enrollError } = await tryEnroll());
+        }
       }
     }
-  }
 
-  if (enrollError) {
-    setError(enrollError.message);
-    return;
-  }
+    if (enrollError) {
+      setError(enrollError.message);
+      return;
+    }
 
-  if(data){
-     setFactorId(data.id);
-  // If your API returns raw SVG markup, convert to data URL. If it's already a data URL, just set it.
-  const qr = data.totp.qr_code;
-  setQrSvg(qr.startsWith("<svg") ? `data:image/svg+xml;utf8,${encodeURIComponent(qr)}` : qr);
-
-  }
-
- 
-};
+    if (data) {
+      setFactorId(data.id);
+      // If your API returns raw SVG markup, convert to data URL. If it's already a data URL, just set it.
+      const qr = data.totp.qr_code;
+      setQrSvg(
+        qr.startsWith("<svg")
+          ? `data:image/svg+xml;utf8,${encodeURIComponent(qr)}`
+          : qr,
+      );
+    }
+  };
   // On mount: detect if user already has a verified TOTP. If yes, show "Disable".
   // If not, begin enrollment to get the QR.
-useEffect(() => {
-  let cancelled = false;
-  (async () => {
-    const factors = await supabase.auth.mfa.listFactors();
-    if (cancelled) return;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const factors = await supabase.auth.mfa.listFactors();
+      if (cancelled) return;
 
-    if (factors.error) {
-      setError(factors.error.message);
-      return;
-    }
-
-    const verifiedTotp = factors.data.totp.find((f) => f.status === "verified");
-    if (verifiedTotp) {
-      // Already enabled → no QR
-      setHas2FA(true);
-      setFactorId(verifiedTotp.id);
-      setQrSvg("");
-      return;
-    }
-
-    // If an unverified TOTP exists, remove it so we can re-enroll and get a fresh QR
-    const pendingTotp = factors.data.totp.find((f) => f.status === "unverified");
-    if (pendingTotp) {
-      const unenroll = await supabase.auth.mfa.unenroll({ factorId: pendingTotp.id });
-      if (unenroll.error) {
-        setError(unenroll.error.message);
+      if (factors.error) {
+        setError(factors.error.message);
         return;
       }
-    }
 
-    setHas2FA(false);
-    await startEnrollment(); // will set factorId + qrSvg
-  })();
+      const verifiedTotp = factors.data.totp.find(
+        (f) => f.status === "verified",
+      );
+      if (verifiedTotp) {
+        // Already enabled → no QR
+        setHas2FA(true);
+        setFactorId(verifiedTotp.id);
+        setQrSvg("");
+        return;
+      }
 
-  return () => {
-    cancelled = true;
-  };
-}, [supabase]);
+      // If an unverified TOTP exists, remove it so we can re-enroll and get a fresh QR
+      const pendingTotp = factors.data.totp.find(
+        (f) => f.status === "unverified",
+      );
+      if (pendingTotp) {
+        const unenroll = await supabase.auth.mfa.unenroll({
+          factorId: pendingTotp.id,
+        });
+        if (unenroll.error) {
+          setError(unenroll.error.message);
+          return;
+        }
+      }
+
+      setHas2FA(false);
+      await startEnrollment(); // will set factorId + qrSvg
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase]);
 
   const onVerify = async () => {
     setError("");
     setBusy(true);
     try {
-
       const challenge = await supabase.auth.mfa.challenge({ factorId });
       if (challenge.error) throw new Error(challenge.error.message);
-
-
-
 
       const verify = await supabase.auth.mfa.verify({
         factorId,
@@ -129,7 +134,9 @@ useEffect(() => {
       alert("2FA enabled!");
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Failed to enable 2FA. Please try again.";
+        e instanceof Error
+          ? e.message
+          : "Failed to enable 2FA. Please try again.";
       setError(message);
     } finally {
       setBusy(false);
@@ -144,13 +151,17 @@ useEffect(() => {
       const factors = await supabase.auth.mfa.listFactors();
       if (factors.error) throw new Error(factors.error.message);
 
-      const verifiedTotp = factors.data.totp.find((f) => f.status === "verified");
+      const verifiedTotp = factors.data.totp.find(
+        (f) => f.status === "verified",
+      );
       if (!verifiedTotp) {
         setError("No verified 2FA factor found to disable.");
         return;
       }
 
-      const unenroll = await supabase.auth.mfa.unenroll({ factorId: verifiedTotp.id });
+      const unenroll = await supabase.auth.mfa.unenroll({
+        factorId: verifiedTotp.id,
+      });
       if (unenroll.error) throw new Error(unenroll.error.message);
 
       // Reflect in your profile table (optional)
@@ -167,7 +178,9 @@ useEffect(() => {
       alert("2FA disabled.");
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Failed to disable 2FA. Please try again.";
+        e instanceof Error
+          ? e.message
+          : "Failed to disable 2FA. Please try again.";
       setError(message);
     } finally {
       setBusy(false);
@@ -187,7 +200,9 @@ useEffect(() => {
                 className="mt-2 border rounded-md"
               />
             ) : (
-              <div className="text-sm text-muted-foreground mt-2">Generating QR…</div>
+              <div className="text-sm text-muted-foreground mt-2">
+                Generating QR…
+              </div>
             )}
           </div>
 
@@ -204,14 +219,20 @@ useEffect(() => {
             {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
           </div>
 
-          <Button onClick={onVerify} disabled={busy || !factorId || code.length < 6}>
+          <Button
+            onClick={onVerify}
+            disabled={busy || !factorId || code.length < 6}
+          >
             {busy ? "Enabling…" : "Enable 2FA"}
           </Button>
         </>
       ) : (
         <>
           <div className="space-y-2">
-            <Label>Two-factor authentication is currently <span className="font-semibold">Enabled</span>.</Label>
+            <Label>
+              Two-factor authentication is currently{" "}
+              <span className="font-semibold">Enabled</span>.
+            </Label>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
           <Button variant="destructive" onClick={onDisable} disabled={busy}>

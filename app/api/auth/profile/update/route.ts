@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 // Shape of accepted payload
 type UpdateBody = {
   displayName?: string;
+  userName?: string;
   profilePic?: string;
   phone?: string;
   password?: string;
@@ -25,12 +26,13 @@ export async function PUT(req: NextRequest) {
 
     const body: UpdateBody = await req.json();
 
-    const { displayName, profilePic, phone, password } = body;
+    const { displayName, userName, profilePic, phone, password } = body;
 
     // Build update payload
     // (user_metadata lives under `data` in updateUser)
     const metadata: Record<string, unknown> = {};
     if (typeof displayName === "string") metadata.display_name = displayName;
+    if (typeof userName === "string") metadata.username = userName;
     if (typeof profilePic === "string") metadata.avatar_url = profilePic;
 
     // Nothing to update?
@@ -41,7 +43,7 @@ export async function PUT(req: NextRequest) {
     if (!hasMetadata && !hasPassword && !hasPhone) {
       return NextResponse.json(
         { error: "No valid fields to update." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -56,7 +58,8 @@ export async function PUT(req: NextRequest) {
     if (hasPassword) attrs.password = password;
     if (hasPhone) attrs.phone = phone;
 
-    const { data: updated, error: updErr } = await supabase.auth.updateUser(attrs);
+    const { data: updated, error: updErr } =
+      await supabase.auth.updateUser(attrs);
 
     if (updErr) {
       // Common causes:
@@ -70,7 +73,7 @@ export async function PUT(req: NextRequest) {
     const notes: string[] = [];
     if (hasPhone) {
       notes.push(
-        "Phone update initiated. A verification code may be required to confirm the change."
+        "Phone update initiated. A verification code may be required to confirm the change.",
       );
     }
 
@@ -88,7 +91,7 @@ export async function PUT(req: NextRequest) {
         },
         notes,
       },
-      { status: 200 }
+      { status: 200 },
     );
   } catch (e: unknown) {
     const message =

@@ -74,39 +74,38 @@ export default function SignUpMultiStep({
    *  - Backend should create a "pending" user and send an OTP (email or SMS)
    */
   async function onSubmitSignup(data: SignupFormData) {
-   // debugger
+    // debugger
     //lsetIsLoading(true);
-  
-      // 1) Post sign-up data to your API
-      const response = await api.post("/auth/onboarding", data);
-      //setIsLoading(false);
-      if (response.status === 200) {
-        // Suppose the backend returns { message: "...", email: "..." }
-        toast.success(response.data.message);
-        setPendingEmail(data.email); // store email in state to verify
-        // 2) Switch to the OTP step
-        setStep(2);
-      } else {
-        // e.g. response.status !== 200
-        toast.error(response.data.message);
-      }
-      
-    }  
-  
 
-async function onSubmitOtp(data: OtpFormData) {
-  setIsLoading(true);
+    // 1) Post sign-up data to your API
+    const response = await api.post("/auth/onboarding", data);
+    //setIsLoading(false);
+    if (response.status === 200) {
+      // Suppose the backend returns { message: "...", email: "..." }
+      toast.success(response.data.message);
+      setPendingEmail(data.email); // store email in state to verify
+      // 2) Switch to the OTP step
+      setStep(2);
+    } else {
+      // e.g. response.status !== 200
+      toast.error(response.data.message);
+    }
+  }
+
+  async function onSubmitOtp(data: OtpFormData) {
+    setIsLoading(true);
 
     const response = await api.post("/auth/onboarding/verify-otp", {
       email: pendingEmail,
       otpCode: data.pin,
     });
 
-    toast.success(response.data.message);
-    router.push("/signin");
-     setIsLoading(false);
-  
-}
+    setIsLoading(false);
+    if (response.status === 200) {
+      toast.success(response.data.message);
+      router.push("/signin");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">

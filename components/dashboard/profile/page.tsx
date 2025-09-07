@@ -4,8 +4,10 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, User, Phone, Lock, Image as ImageIcon } from "lucide-react";
+import { Mail, User, Phone, Image as ImageIcon } from "lucide-react";
 import Image from "next/image";
+import api from "@/lib/axios/axios";
+import { toast } from "sonner";
 
 // Types for user profile
 interface UserProfile {
@@ -13,7 +15,7 @@ interface UserProfile {
   password: string;
   profilePic: string;
   phone: string;
-  username: string;
+  userName: string;
   displayName: string;
 }
 
@@ -23,7 +25,7 @@ const ProfileSettings: React.FC = () => {
     password: "",
     profilePic: "",
     phone: "",
-    username: "",
+    userName: "",
     displayName: "",
   });
 
@@ -33,9 +35,10 @@ const ProfileSettings: React.FC = () => {
   useEffect(() => {
     async function fetchProfile() {
       try {
-        const res = await fetch("/api/profile");
-        if (!res.ok) throw new Error("Failed to load profile");
-        const data: UserProfile = await res.json();
+        const res = await api.get("/auth/profile/read");
+        console.log(res.data, "....res.data..");
+        if (res.status != 200) throw new Error("Failed to load profile");
+        const data: UserProfile = res.data;
         setProfile(data);
       } catch (err) {
         console.error("Failed to fetch profile:", err);
@@ -55,7 +58,10 @@ const ProfileSettings: React.FC = () => {
   const handleUpdate = async (): Promise<void> => {
     setLoading(true);
     try {
-      const res = await fetch("/api/profile", {
+      if (profile?.phone?.length > 0) {
+        toast.error("cannot update phone as message service is not attached");
+      }
+      const res = await fetch("/api/auth/profile/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
@@ -114,34 +120,17 @@ const ProfileSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Password */}
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="password">Password</Label>
-        <div className="relative">
-          <Input
-            id="password"
-            type="password"
-            name="password"
-            value={profile.password}
-            onChange={handleChange}
-            placeholder="********"
-            className="pl-9"
-          />
-          <Lock className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-        </div>
-      </div>
-
       {/* Username */}
       <div className="flex flex-col gap-2">
         <Label htmlFor="username">Username</Label>
         <div className="relative">
           <Input
-            id="username"
+            id="userName"
             type="text"
-            name="username"
-            value={profile.username}
+            name="userName"
+            value={profile.userName}
             onChange={handleChange}
-            placeholder="username"
+            placeholder="userName"
             className="pl-9"
           />
           <User className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />

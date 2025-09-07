@@ -1,11 +1,11 @@
 // app/components/accounts/Accounts.tsx
 "use client";
 
-import axios from "axios";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import EnableTotp from "../2fa/page";
+import api from "@/lib/axios/axios";
 
 type OAuthProvider = "github" | "google" | "gitlab" | "bitbucket" | "email";
 
@@ -13,8 +13,6 @@ type ProviderItem = {
   provider: string;
   status: boolean; // true = linked, false = not linked
 };
-
-
 
 /**
  * Example API calls:
@@ -36,8 +34,6 @@ async function connectAccount(provider: OAuthProvider, method: string) {
   }
   return res.json().catch(() => ({}));
 }
-
-
 
 const PROVIDER_LABEL: Record<Exclude<OAuthProvider, "email">, string> = {
   github: "GitHub",
@@ -126,7 +122,7 @@ function ProviderRow({
     <div
       className={twMerge(
         "flex items-center justify-between rounded-2xl border p-4",
-        "bg-white shadow-sm hover:shadow transition"
+        "bg-white shadow-sm hover:shadow transition",
       )}
     >
       <div className="flex items-center gap-3">
@@ -138,7 +134,7 @@ function ProviderRow({
           <div
             className={twMerge(
               "text-xs",
-              isLinked ? "text-green-600" : "text-neutral-500"
+              isLinked ? "text-green-600" : "text-neutral-500",
             )}
           >
             {isLinked ? "Connected" : "Not connected"}
@@ -156,7 +152,7 @@ function ProviderRow({
           isLinked
             ? "bg-white text-red-600 border-red-200 hover:bg-red-50 focus:ring-red-400"
             : "bg-black text-white border-black hover:opacity-90 focus:ring-black/50",
-          loading && "opacity-60 cursor-not-allowed"
+          loading && "opacity-60 cursor-not-allowed",
         )}
       >
         {loading ? "Please wait..." : btnText}
@@ -168,53 +164,45 @@ function ProviderRow({
 const Accounts = () => {
   // local state for optimistic UI & per-provider loading
   const [loading, setLoading] = useState(false);
-  const [providers, setProviders] = useState([{provider:"google" as OAuthProvider,status:false}]);
- // const [items, setItems] = useState<ProviderItem[]>(providers);
-  const [hitprovider,sethitprovider]=useState(false)
+  const [providers, setProviders] = useState([
+    { provider: "google" as OAuthProvider, status: false },
+  ]);
+  // const [items, setItems] = useState<ProviderItem[]>(providers);
+  const [hitprovider, sethitprovider] = useState(false);
 
   const handleProviders = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get("/api/auth/providers");
-      setLoading(false);
-      if (response.status === 200) {
-        //console.log(response,"......response.......192")
-        setProviders(response.data.providers);
-      }
-      else{
-        toast.error(response?.data?.message)
-      }
-    } catch (err) {
-  console.error(err);
-  toast.error((err as Error).message || "Something went wrong");
-}
+    setLoading(true);
+    const response = await api.get("/auth/providers");
+    setLoading(false);
+    if (response.status === 200) {
+      //console.log(response,"......response.......192")
+      setProviders(response.data.providers);
+    }
   };
 
   const handleConnect = async (provider: OAuthProvider, method: string) => {
     try {
       setLoading(true);
       // optimistic
-    //   setItems((prev) =>
-    //     prev.map((p) => (p.provider === provider ? { ...p, status: true } : p))
-    //   );
+      //   setItems((prev) =>
+      //     prev.map((p) => (p.provider === provider ? { ...p, status: true } : p))
+      //   );
       const response = await connectAccount(provider, method);
       //console.log(response, ".....................223");
       if (response.url && method === "connect") {
         window.location.href = response?.url;
-        sethitprovider(!hitprovider)
-      }
-      else{
-        toast.info('disconnect success');
-        sethitprovider(!hitprovider)
+        sethitprovider(!hitprovider);
+      } else {
+        toast.info("disconnect success");
+        sethitprovider(!hitprovider);
       }
     } catch (err) {
-  console.error(err);
-  toast.error((err as Error).message || "Something went wrong");
-} finally {
-  setLoading(false);
-}
+      console.error(err);
+      toast.error((err as Error).message || "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
   };
-
 
   useEffect(() => {
     handleProviders();
@@ -238,7 +226,7 @@ const Accounts = () => {
           />
         ))}
       </div>
-       <EnableTotp/>
+      <EnableTotp />
     </div>
   );
 };
