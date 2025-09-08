@@ -1,4 +1,4 @@
-"use client";
+'use client';
 import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -30,7 +30,6 @@ import { Tables } from "@/lib/supabase/types";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -52,7 +51,78 @@ const databaseVersions = {
   mongodb: ["4.4", "5.0", "6.0", "7.0"],
   redis: ["6.2", "7.0", "7.2"],
   mariadb: ["10.6", "10.7", "10.8", "10.11"],
-  clickhouse: ["22.8", "23.8", "24.1"],
+  kafka: ["3.4", "3.5", "3.6"],
+};
+
+const databaseInfo = {
+  mysql: { 
+    name: "MySQL", 
+    description: "Popular open-source relational database", 
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg" 
+  },
+  postgresql: { 
+    name: "PostgreSQL", 
+    description: "Advanced open-source database", 
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg" 
+  },
+  mongodb: { 
+    name: "MongoDB", 
+    description: "NoSQL document database", 
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg" 
+  },
+  redis: { 
+    name: "Redis", 
+    description: "In-memory data structure store", 
+    icon: "/redis.png" 
+  },
+  mariadb: { 
+    name: "MariaDB", 
+    description: "MySQL-compatible database", 
+    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mariadb/mariadb-original.svg" 
+  },
+  kafka: { 
+    name: "Apache Kafka", 
+    description: "Distributed event streaming", 
+    icon: "/kafka.png" 
+  },
+};
+
+// Sample database plans if products are empty
+const sampleDatabasePlans = {
+  mysql: [
+    { id: 'mysql-starter', name: 'Starter', sub: 'mysql', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
+    { id: 'mysql-basic', name: 'Basic', sub: 'mysql', type: 'database', price: 35, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
+    { id: 'mysql-pro', name: 'Professional', sub: 'mysql', type: 'database', price: 75, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
+    { id: 'mysql-business', name: 'Business', sub: 'mysql', type: 'database', price: 150, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
+  ],
+  postgresql: [
+    { id: 'pg-starter', name: 'Starter', sub: 'postgresql', type: 'database', price: 20, resources: { cpu: 1, ram: 2, storage: 25 }, discount: null },
+    { id: 'pg-basic', name: 'Basic', sub: 'postgresql', type: 'database', price: 45, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
+    { id: 'pg-pro', name: 'Professional', sub: 'postgresql', type: 'database', price: 95, resources: { cpu: 4, ram: 8, storage: 150 }, discount: 10 },
+    { id: 'pg-enterprise', name: 'Enterprise', sub: 'postgresql', type: 'database', price: 250, resources: { cpu: 16, ram: 32, storage: 500 }, discount: 20 },
+  ],
+  mongodb: [
+    { id: 'mongo-free', name: 'Free Tier', sub: 'mongodb', type: 'database', price: 0, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
+    { id: 'mongo-starter', name: 'Starter', sub: 'mongodb', type: 'database', price: 25, resources: { cpu: 1, ram: 2, storage: 30 }, discount: null },
+    { id: 'mongo-pro', name: 'Professional', sub: 'mongodb', type: 'database', price: 85, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 15 },
+    { id: 'mongo-scale', name: 'Scale', sub: 'mongodb', type: 'database', price: 199, resources: { cpu: 8, ram: 16, storage: 300 }, discount: 20 },
+  ],
+  redis: [
+    { id: 'redis-cache', name: 'Cache', sub: 'redis', type: 'database', price: 10, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
+    { id: 'redis-standard', name: 'Standard', sub: 'redis', type: 'database', price: 30, resources: { cpu: 1, ram: 4, storage: 10 }, discount: null },
+    { id: 'redis-pro', name: 'Professional', sub: 'redis', type: 'database', price: 60, resources: { cpu: 2, ram: 8, storage: 25 }, discount: 10 },
+    { id: 'redis-enterprise', name: 'Enterprise', sub: 'redis', type: 'database', price: 120, resources: { cpu: 4, ram: 16, storage: 50 }, discount: 15 },
+  ],
+  mariadb: [
+    { id: 'maria-starter', name: 'Starter', sub: 'mariadb', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
+    { id: 'maria-standard', name: 'Standard', sub: 'mariadb', type: 'database', price: 40, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
+    { id: 'maria-pro', name: 'Professional', sub: 'mariadb', type: 'database', price: 80, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 10 },
+  ],
+  kafka: [
+    { id: 'kafka-basic', name: 'Basic', sub: 'kafka', type: 'database', price: 50, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
+    { id: 'kafka-standard', name: 'Standard', sub: 'kafka', type: 'database', price: 120, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
+    { id: 'kafka-pro', name: 'Professional', sub: 'kafka', type: 'database', price: 250, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
+  ],
 };
 
 const DatabaseSelect = ({ products, locations }: PageProps) => {
@@ -75,9 +145,18 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
   // Filter products when database type changes
   useEffect(() => {
     if (state.selectedDbType) {
-      const filteredProducts = products.filter(
+      let filteredProducts = products.filter(
         (product) => product.sub === state.selectedDbType,
       );
+      
+      // Use sample plans if no products available
+      if (filteredProducts.length === 0) {
+        const samplePlans = sampleDatabasePlans[state.selectedDbType as keyof typeof sampleDatabasePlans];
+        if (samplePlans) {
+          filteredProducts = samplePlans as any;
+        }
+      }
+      
       setAvailablePlans(filteredProducts);
 
       // Set versions based on selected DB type
@@ -201,137 +280,223 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
   );
 
   const steps = [
-    { id: 1, name: "Cluster Name" },
+    { id: 1, name: "Name" },
     { id: 2, name: "Location" },
-    { id: 3, name: "Database Type" },
-    { id: 4, name: "Database Plan" },
-    { id: 5, name: "Configuration" },
-    { id: 6, name: "Review & Pay" },
+    { id: 3, name: "Type" },
+    { id: 4, name: "Plan" },
+    { id: 5, name: "Config" },
+    { id: 6, name: "Review" },
   ];
 
-  // Get unique database types from products
-  const dbTypes = [
-    ...new Set(products.filter((p) => p.type === "database").map((p) => p.sub)),
-  ].filter(Boolean) as string[];
+  // Use predefined database types
+  const dbTypes = Object.keys(databaseInfo);
 
   return (
     <div className="py-4">
-      {/* Progress indicator */}
       <div className="mb-8">
         <div className="flex justify-between mb-2">
-          {steps.map((step) => (
-            <div key={step.id} className="flex flex-col items-center">
-              <div
-                className={`flex items-center justify-center w-8 h-8 rounded-full mb-1 
-                  ${
-                    currentStep === step.id
-                      ? "bg-primary text-primary-foreground"
-                      : currentStep > step.id
-                        ? "bg-green-500 text-white"
-                        : "bg-secondary text-secondary-foreground"
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex-1 flex flex-col items-center">
+              <div className="flex items-center w-full">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
+                    currentStep > step.id ? "bg-blue-600 text-white" : 
+                    currentStep === step.id ? "bg-blue-500 text-white" : "bg-white/10 text-white/50"
                   }`}
-              >
-                {currentStep > step.id ? <CheckCircle2 size={16} /> : step.id}
+                >
+                  {currentStep > step.id ? <CheckCircle2 size={16} /> : step.id}
+                </div>
+                {index < steps.length - 1 && (
+                  <div className={`flex-1 h-0.5 transition-colors duration-300 ${
+                    currentStep > step.id ? 'bg-blue-600' : 'bg-white/10'
+                  }`}></div>
+                )}
               </div>
-              <span
-                className={`text-xs ${currentStep === step.id ? "text-primary font-medium" : "text-muted-foreground"}`}
-              >
-                {step.name}
-              </span>
+              <p className={`mt-2 text-xs ${currentStep >= step.id ? 'text-white' : 'text-white/50'}`}>{step.name}</p>
             </div>
           ))}
         </div>
-        <Progress value={(currentStep / steps.length) * 100} className="h-2" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {/* Step 1: Database Name */}
           {currentStep === 1 && (
-            <Card>
+            <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle>Database Cluster Name</CardTitle>
-                <CardDescription>
-                  Choose a unique name for your database cluster
-                </CardDescription>
+                <CardTitle className="text-white">Database Cluster Name</CardTitle>
               </CardHeader>
               <CardContent>
                 <Input
                   value={selectedName}
-                  onChange={(e) =>
-                    setState((prevState) => ({
-                      ...prevState,
-                      selectedName: e.target.value,
-                    }))
-                  }
+                  onChange={(e) => setState({ ...state, selectedName: e.target.value })}
                   type="text"
                   placeholder="my-production-db"
-                  className="text-base"
+                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
                 />
-                <p className="text-xs text-muted-foreground mt-2">
-                  The name will be used to identify your database in the
-                  dashboard
-                </p>
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button onClick={handleNextStep}>
-                  Next <ChevronRight size={16} />
+                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">
+                  Next <ChevronRight size={16} className="ml-2" />
                 </Button>
               </CardFooter>
             </Card>
           )}
 
-          {/* Step 2: Location Selection */}
           {currentStep === 2 && (
-            <Card>
+            <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle>Location</CardTitle>
-                <CardDescription>
-                  Choose a datacenter region for your database
-                </CardDescription>
+                <CardTitle className="text-white">Location</CardTitle>
               </CardHeader>
               <CardContent>
                 <RadioGroup
                   value={selectedLocation}
-                  onValueChange={(value) =>
-                    setState((prevState) => ({
-                      ...prevState,
-                      selectedLocation: value,
-                    }))
-                  }
+                  onValueChange={(value) => setState({ ...state, selectedLocation: value })}
                   className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
                 >
                   {locations.map((region) => (
                     <div key={region.id}>
-                      <RadioGroupItem
-                        value={region.short}
-                        id={region.city}
-                        className="peer sr-only"
-                        disabled={!region.available}
-                      />
+                      <RadioGroupItem value={region.short} id={region.city} className="peer sr-only" disabled={!region.available} />
                       <Label
                         htmlFor={region.city}
-                        className="flex gap-3 rounded-md bg-gray-50 dark:bg-secondary border-2 cursor-pointer border-muted p-4 peer-data-[state=checked]:border-primary peer-data-[state=checked]:cursor-default transition-all duration-100 ease-in-out transform-gpu active:scale-[0.98]"
+                        className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
                       >
-                        <div className="flex items-center">
-                          <Image
-                            src={`https://flagsapi.com/${region.country_code}/flat/64.png`}
-                            alt={region.city}
-                            className="rounded-md"
-                            width={32}
-                            height={24}
-                          />
-                        </div>
+                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" />
                         <div>
-                          <div className="font-medium">{region.city}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {region.country}
+                          <div className="font-medium text-white">{region.city}</div>
+                          <div className="text-xs text-white/60">{region.country}</div>
+                        </div>
+                        {!region.available && <Badge variant="outline" className="text-xs ml-auto text-white/70 border-white/30">Coming soon</Badge>}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {currentStep === 3 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white">Database Type</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={selectedDbType} onValueChange={handleDbTypeChange} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {dbTypes.map((dbType) => {
+                    const info = databaseInfo[dbType as keyof typeof databaseInfo];
+                    let planCount = products.filter((p) => p.sub === dbType).length;
+                    // Use sample plan count if no products
+                    if (planCount === 0) {
+                      const samplePlans = sampleDatabasePlans[dbType as keyof typeof sampleDatabasePlans];
+                      planCount = samplePlans ? samplePlans.length : 0;
+                    }
+                    return (
+                      <div key={dbType}>
+                        <RadioGroupItem value={dbType} id={`type-${dbType}`} className="peer sr-only" />
+                        <Label htmlFor={`type-${dbType}`} className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
+                          <div className="w-10 h-10 relative flex-shrink-0">
+                            <Image 
+                              src={info.icon} 
+                              alt={info.name}
+                              width={40}
+                              height={40}
+                              className="object-contain"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-semibold text-white">{info.name}</p>
+                            <p className="text-xs text-white/60 mt-1">{info.description}</p>
+                          </div>
+                          {planCount > 0 && (
+                            <Badge variant="outline" className="ml-auto text-white/70">{planCount} plans</Badge>
+                          )}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </RadioGroup>
+              </CardContent>
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+              </CardFooter>
+            </Card>
+          )}
+
+          {currentStep === 4 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white">Database Plan</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RadioGroup value={selectedDb} onValueChange={handleDbPlanChange} className="grid grid-cols-1 gap-4">
+                  {availablePlans.map((database) => (
+                    <div key={database.id}>
+                      <RadioGroupItem value={database.id} id={database.id} className="peer sr-only" />
+                      <Label htmlFor={database.id} className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <p className="font-bold text-lg text-white">{database.name}</p>
+                            {database.discount && Number(database.discount) > 0 && (
+                              <Badge variant="outline" className="text-green-400 bg-green-500/10 border-green-500/30 mt-2">
+                                Save {database.discount}%
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            {database.price === 0 || database.price === null ? (
+                              <div>
+                                <span className="text-2xl font-bold text-white">Free</span>
+                              </div>
+                            ) : database.discount ? (
+                              <div>
+                                <span className="line-through text-sm text-white/40">${database.price}</span>
+                                <div className="text-2xl font-bold text-white">
+                                  ${(database.price! * (1 - Number(database.discount) / 100)).toFixed(0)}
+                                  <span className="text-sm font-normal text-white/60">/mo</span>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-2xl font-bold text-white">
+                                ${database.price}
+                                <span className="text-sm font-normal text-white/60">/mo</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        {!region.available && (
-                          <Badge variant="outline" className="text-xs">
-                            Coming soon
-                          </Badge>
+                        {database.resources && (
+                          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Cpu className="w-4 h-4 text-blue-400" />
+                                <span className="text-xs text-white/60">CPU</span>
+                              </div>
+                              <p className="font-semibold text-white">
+                                {(database.resources as { cpu: number; ram: number; storage: number; }).cpu} vCPU
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <Server className="w-4 h-4 text-green-400" />
+                                <span className="text-xs text-white/60">RAM</span>
+                              </div>
+                              <p className="font-semibold text-white">
+                                {(database.resources as { cpu: number; ram: number; storage: number; }).ram} GB
+                              </p>
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <HardDrive className="w-4 h-4 text-purple-400" />
+                                <span className="text-xs text-white/60">Storage</span>
+                              </div>
+                              <p className="font-semibold text-white">
+                                {(database.resources as { cpu: number; ram: number; storage: number; }).storage} GB
+                              </p>
+                            </div>
+                          </div>
                         )}
                       </Label>
                     </div>
@@ -339,722 +504,106 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
                 </RadioGroup>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep}>
-                  Back
-                </Button>
-                <Button onClick={handleNextStep}>
-                  Next <ChevronRight size={16} />
-                </Button>
+                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
               </CardFooter>
             </Card>
           )}
 
-          {/* Step 3: Database Type Selection (New) */}
-          {currentStep === 3 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Database Type</CardTitle>
-                <CardDescription>
-                  Select your database engine type
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={selectedDbType}
-                  onValueChange={handleDbTypeChange}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-3"
-                >
-                  {dbTypes.map((dbType) => (
-                    <div key={dbType}>
-                      <RadioGroupItem
-                        value={dbType}
-                        id={`type-${dbType}`}
-                        className="peer sr-only"
-                      />
-                      <Label
-                        htmlFor={`type-${dbType}`}
-                        className="flex items-center gap-3 bg-gray-50 dark:bg-secondary rounded-md border-2 cursor-pointer border-muted p-4 peer-data-[state=checked]:border-primary peer-data-[state=checked]:cursor-default transition-all duration-100 ease-in-out transform-gpu active:scale-[0.99]"
-                      >
-                        <div className="flex-shrink-0">
-                          <Database className="size-6 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-base font-semibold capitalize">
-                            {dbType}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {dbType === "mysql" &&
-                              "Reliable, popular SQL database"}
-                            {dbType === "postgresql" &&
-                              "Advanced open-source database"}
-                            {dbType === "mongodb" && "NoSQL document database"}
-                            {dbType === "redis" &&
-                              "In-memory data structure store"}
-                            {dbType === "mariadb" &&
-                              "Community-developed MySQL fork"}
-                            {dbType === "clickhouse" &&
-                              "Column-oriented OLAP database"}
-                          </p>
-                        </div>
-                        <div className="ml-auto">
-                          <Badge variant="outline">
-                            {products.filter((p) => p.sub === dbType).length}{" "}
-                            plans
-                          </Badge>
-                        </div>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep}>
-                  Back
-                </Button>
-                <Button onClick={handleNextStep}>
-                  Next <ChevronRight size={16} />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {/* Step 4: Database Plan Selection */}
-          {currentStep === 4 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Database Plan</CardTitle>
-                <CardDescription>
-                  Select your {selectedDbType} database plan
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RadioGroup
-                  value={selectedDb}
-                  onValueChange={handleDbPlanChange}
-                  className="grid grid-cols-1 gap-3"
-                >
-                  {availablePlans.map((database) => (
-                    <div key={database.id}>
-                      <RadioGroupItem
-                        value={database.id}
-                        id={database.id}
-                        className="peer sr-only"
-                      />
-                      <Label
-                        htmlFor={database.id}
-                        className="flex justify-between items-center gap-4 bg-gray-50 dark:bg-secondary rounded-md border-2 cursor-pointer border-muted p-4 peer-data-[state=checked]:border-primary peer-data-[state=checked]:cursor-default transition-all duration-100 ease-in-out transform-gpu active:scale-[0.99]"
-                      >
-                        <div className="flex items-center gap-3">
-                          <Icons.tailwind className="size-5" />
-                          <div>
-                            <p className="text-base font-semibold">
-                              {database.name}
-                            </p>
-                            {/* {database.description && (
-                                                            <p className="text-xs text-muted-foreground">{database.description}</p>
-                                                        )} */}
-                            {database.resources && (
-                              <div className="flex gap-2 text-xs text-muted-foreground">
-                                <span>
-                                  {
-                                    (
-                                      database.resources as {
-                                        cpu: number;
-                                        ram: number;
-                                        storage: number;
-                                      }
-                                    ).cpu
-                                  }{" "}
-                                  vCPU
-                                </span>
-                                <span>
-                                  {
-                                    (
-                                      database.resources as {
-                                        cpu: number;
-                                        ram: number;
-                                        storage: number;
-                                      }
-                                    ).ram
-                                  }{" "}
-                                  GB RAM
-                                </span>
-                                <span>
-                                  {
-                                    (
-                                      database.resources as {
-                                        cpu: number;
-                                        ram: number;
-                                        storage: number;
-                                      }
-                                    ).storage
-                                  }{" "}
-                                  GB Storage
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold">
-                            {database.price === 0 || database.price === null ? (
-                              "Free"
-                            ) : database.discount ? (
-                              <div>
-                                <span className="line-through text-xs text-muted-foreground">
-                                  {formatPrice(database.price!)}/mo
-                                </span>
-                                <span className="ml-1">
-                                  {formatPrice(
-                                    database.price! *
-                                      (1 - Number(database.discount) / 100),
-                                  )}
-                                  /mo
-                                </span>
-                              </div>
-                            ) : (
-                              `${formatPrice(database.price!)}/mo`
-                            )}
-                          </div>
-                          {database.discount &&
-                            Number(database.discount) > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="text-green-600 bg-green-50 dark:bg-green-950/20"
-                              >
-                                Save {database.discount}%
-                              </Badge>
-                            )}
-                        </div>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep}>
-                  Back
-                </Button>
-                <Button onClick={handleNextStep}>
-                  Next <ChevronRight size={16} />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {/* Step 5: Version and Configuration */}
           {currentStep === 5 && selectedDb && (
-            <Card>
+            <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle>Configuration</CardTitle>
-                <CardDescription>
-                  Select version for your {selectedDbType} database
-                </CardDescription>
+                <CardTitle className="text-white">Configuration</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="version" className="mb-2 block">
-                    Database Version
-                  </Label>
-                  <Select
-                    value={selectedVersion}
-                    onValueChange={(value) =>
-                      setState((prevState) => ({
-                        ...prevState,
-                        selectedVersion: value,
-                      }))
-                    }
-                  >
-                    <SelectTrigger id="version" className="w-full">
+                  <Label htmlFor="version" className="mb-2 block text-white">Database Version</Label>
+                  <Select value={selectedVersion} onValueChange={(value) => setState({ ...state, selectedVersion: value }) }>
+                    <SelectTrigger id="version" className="w-full bg-white/10 border-white/20 rounded-md text-white">
                       <SelectValue placeholder="Select version" />
                     </SelectTrigger>
-                    <SelectContent>
-                      {versions.map((version) => (
-                        <SelectItem key={version} value={version}>
-                          v{version}
-                        </SelectItem>
-                      ))}
+                    <SelectContent className="bg-black border-white/20 text-white">
+                      {versions.map((version) => <SelectItem key={version} value={version}>v{version}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div>
-                  <Label className="mb-2 block">Resources</Label>
-                  {selectedDatabase && selectedDatabase.resources && (
-                    <div className="grid grid-cols-3 gap-4 bg-gray-50 dark:bg-secondary rounded-md p-4">
-                      <div className="text-center p-2">
-                        <div className="flex justify-center">
-                          <Cpu className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="mt-1 font-medium">
-                          {
-                            (
-                              selectedDatabase.resources as {
-                                cpu: number;
-                                ram: number;
-                                storage: number;
-                              }
-                            ).cpu
-                          }{" "}
-                          vCPU
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Dedicated cores
-                        </div>
-                      </div>
-                      <div className="text-center p-2">
-                        <div className="flex justify-center">
-                          <Server className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="mt-1 font-medium">
-                          {
-                            (
-                              selectedDatabase.resources as {
-                                cpu: number;
-                                ram: number;
-                                storage: number;
-                              }
-                            ).ram
-                          }{" "}
-                          GB
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Memory
-                        </div>
-                      </div>
-                      <div className="text-center p-2">
-                        <div className="flex justify-center">
-                          <HardDrive className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                        <div className="mt-1 font-medium">
-                          {
-                            (
-                              selectedDatabase.resources as {
-                                cpu: number;
-                                ram: number;
-                                storage: number;
-                              }
-                            ).storage
-                          }{" "}
-                          GB
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          NVMe SSD
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep}>
-                  Back
-                </Button>
-                <Button onClick={handleNextStep}>
-                  Next <ChevronRight size={16} />
-                </Button>
+                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
               </CardFooter>
             </Card>
           )}
 
-          {/* Step 6: Review & Payment */}
           {currentStep === 6 && (
-            <Card>
+            <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle>Review & Payment</CardTitle>
-                <CardDescription>
-                  Review your database configuration and complete the order
-                </CardDescription>
+                <CardTitle className="text-white">Review & Payment</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">
-                        Database Details
-                      </h3>
-                      <div className="bg-gray-50 dark:bg-secondary rounded-md p-4 space-y-3">
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Cluster Name:
-                          </span>
-                          <span className="font-medium">{selectedName}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Database Type:
-                          </span>
-                          <span className="font-medium capitalize">
-                            {selectedDbType}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Plan:
-                          </span>
-                          <span className="font-medium">
-                            {selectedDatabase?.name}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">
-                            Version:
-                          </span>
-                          <span className="font-medium">
-                            v{selectedVersion}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-sm font-medium text-muted-foreground">
-                        Deployment Location
-                      </h3>
-                      <div className="bg-gray-50 dark:bg-secondary rounded-md p-4 space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">
-                            Region:
-                          </span>
-                          <div className="flex items-center gap-2">
-                            {selectedLocationData && (
-                              <Image
-                                src={`https://flagsapi.com/${selectedLocationData.country_code}/flat/64.png`}
-                                alt={selectedLocationData.city}
-                                className="rounded-sm"
-                                width={18}
-                                height={14}
-                              />
-                            )}
-                            <span className="font-medium">
-                              {selectedLocationData?.city},{" "}
-                              {selectedLocationData?.country}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">
-                            Datacenter:
-                          </span>
-                          <div className="flex items-center gap-1">
-                            <MapPin size={14} />
-                            <span className="font-medium">
-                              {selectedLocationData?.short}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-medium text-muted-foreground">
-                      Resources
-                    </h3>
-                    {selectedDatabase && selectedDatabase.resources && (
-                      <div className="bg-gray-50 dark:bg-secondary rounded-md p-4">
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="text-center p-2">
-                            <div className="flex justify-center">
-                              <Cpu className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                            <div className="mt-1 font-medium">
-                              {
-                                (
-                                  selectedDatabase.resources as {
-                                    cpu: number;
-                                    ram: number;
-                                    storage: number;
-                                  }
-                                ).cpu
-                              }{" "}
-                              vCPU
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Dedicated cores
-                            </div>
-                          </div>
-                          <div className="text-center p-2">
-                            <div className="flex justify-center">
-                              <Server className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                            <div className="mt-1 font-medium">
-                              {
-                                (
-                                  selectedDatabase.resources as {
-                                    cpu: number;
-                                    ram: number;
-                                    storage: number;
-                                  }
-                                ).ram
-                              }{" "}
-                              GB
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              Memory
-                            </div>
-                          </div>
-                          <div className="text-center p-2">
-                            <div className="flex justify-center">
-                              <HardDrive className="h-5 w-5 text-muted-foreground" />
-                            </div>
-                            <div className="mt-1 font-medium">
-                              {
-                                (
-                                  selectedDatabase.resources as {
-                                    cpu: number;
-                                    ram: number;
-                                    storage: number;
-                                  }
-                                ).storage
-                              }{" "}
-                              GB
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              NVMe SSD
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between py-2">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="terms"
-                        checked={termsAccepted}
-                        onCheckedChange={(checked) =>
-                          setTermsAccepted(checked === true)
-                        }
-                      />
-                      <label htmlFor="terms" className="text-sm leading-none">
-                        I accept the{" "}
-                        <Link
-                          href="/terms"
-                          className="underline underline-offset-4 hover:text-primary"
-                          target="_blank"
-                        >
-                          Terms of Service
-                        </Link>{" "}
-                        and{" "}
-                        <Link
-                          href="/privacy"
-                          className="underline underline-offset-4 hover:text-primary"
-                          target="_blank"
-                        >
-                          Privacy Policy
-                        </Link>
-                      </label>
-                    </div>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="terms" checked={termsAccepted} onCheckedChange={(checked) => setTermsAccepted(checked === true)} className="rounded-sm" />
+                  <label htmlFor="terms" className="text-sm leading-none text-white">
+                    I accept the <Link href="/terms" className="text-blue-400 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-blue-400 hover:underline">Privacy Policy</Link>
+                  </label>
                 </div>
               </CardContent>
-              <CardFooter className="flex flex-col sm:flex-row gap-4 justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  disabled={isLoading}
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={onSubmit}
-                  className="w-full sm:w-auto"
-                  size="lg"
-                  disabled={isLoading || !termsAccepted}
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>Pay and Deploy</>
-                  )}
+              <CardFooter className="flex justify-between">
+                <Button variant="outline" onClick={handlePrevStep} disabled={isLoading} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={onSubmit} size="lg" disabled={isLoading || !termsAccepted} className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto">
+                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Processing...</> : <>Pay and Deploy</>}
                 </Button>
               </CardFooter>
             </Card>
           )}
         </div>
 
-        {/* Order summary sidebar */}
         <div className="lg:col-span-1">
-          <Card className="sticky top-8">
+          <Card className="sticky top-8 bg-white/5 border-white/10">
             <CardHeader>
-              <CardTitle>Order Summary</CardTitle>
-              <CardDescription>Current database configuration</CardDescription>
+              <CardTitle className="text-white">Order Summary</CardTitle>
+              {selectedDbType && (
+                <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
+                  <Image 
+                    src={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.icon || ""} 
+                    alt={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
+                    width={60}
+                    height={60}
+                    className="object-contain"
+                  />
+                </div>
+              )}
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Database Info */}
-              <div className="space-y-4">
-                {selectedName && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Cluster Name:
-                    </span>
-                    <span className="font-medium">{selectedName}</span>
-                  </div>
-                )}
-
-                {selectedDbType && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Database Type:
-                    </span>
-                    <span className="font-medium capitalize">
-                      {selectedDbType}
+            <CardContent className="space-y-4">
+              {selectedName && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Name:</span><span className="font-medium text-white">{selectedName}</span></div>}
+              {selectedDbType && (
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-white/60">Type:</span>
+                  <div className="flex items-center gap-2">
+                    <Image 
+                      src={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.icon || ""} 
+                      alt={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                    <span className="font-medium text-white">
+                      {databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
                     </span>
                   </div>
-                )}
-
-                {selectedDatabase && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Plan:</span>
-                    <div className="flex items-center">
-                      <Icons.tailwind className="size-5 mr-2" />
-                      <span className="font-medium">
-                        {selectedDatabase.name}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {selectedVersion && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Version:
-                    </span>
-                    <span className="font-medium">v{selectedVersion}</span>
-                  </div>
-                )}
-
-                {selectedLocationData && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Location:
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Image
-                        src={`https://flagsapi.com/${selectedLocationData.country_code}/flat/64.png`}
-                        alt={selectedLocationData.city}
-                        className="rounded-sm"
-                        width={16}
-                        height={12}
-                      />
-                      <span className="font-medium">
-                        {selectedLocationData.city}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {selectedDatabase && selectedDatabase.resources && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Resources:
-                    </span>
-                    <span className="font-medium text-xs">
-                      {
-                        (
-                          selectedDatabase.resources as {
-                            cpu: number;
-                            ram: number;
-                            storage: number;
-                          }
-                        ).cpu
-                      }{" "}
-                      vCPU /{" "}
-                      {
-                        (
-                          selectedDatabase.resources as {
-                            cpu: number;
-                            ram: number;
-                            storage: number;
-                          }
-                        ).ram
-                      }{" "}
-                      GB /{" "}
-                      {
-                        (
-                          selectedDatabase.resources as {
-                            cpu: number;
-                            ram: number;
-                            storage: number;
-                          }
-                        ).storage
-                      }{" "}
-                      GB
-                    </span>
-                  </div>
-                )}
-
-                <Separator />
-
-                {/* Pricing */}
-                <div className="pt-2">
-                  <div className="flex justify-between items-center">
-                    <span>Subtotal</span>
-                    <span className="font-medium">
-                      {selectedDatabase
-                        ? selectedDatabase.price === 0 ||
-                          selectedDatabase.price === null
-                          ? "Free"
-                          : `${formatPrice(selectedDatabase.price!)}/mo`
-                        : "-"}
-                    </span>
-                  </div>
-
-                  {selectedDatabase &&
-                    selectedDatabase.discount &&
-                    Number(selectedDatabase.discount) > 0 && (
-                      <div className="flex justify-between items-center text-green-600 dark:text-green-500">
-                        <span>Discount</span>
-                        <span>-{selectedDatabase.discount}%</span>
-                      </div>
-                    )}
                 </div>
-
-                <div className="bg-primary/5 p-4 rounded-md flex justify-between items-center">
-                  <span className="font-semibold">Total</span>
-                  <span className="font-bold text-lg">
-                    {selectedDatabase
-                      ? selectedDatabase.price === 0 ||
-                        selectedDatabase.price === null
-                        ? "Free"
-                        : selectedDatabase.discount &&
-                            Number(selectedDatabase.discount) > 0
-                          ? `${formatPrice(selectedDatabase.price! * (1 - Number(selectedDatabase.discount) / 100))}/mo`
-                          : `${formatPrice(selectedDatabase.price!)}/mo`
-                      : "-"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-xs text-muted-foreground">
-                Databases are billed on a monthly basis. You can cancel at any
-                time.
+              )}
+              {selectedDatabase && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Plan:</span><span className="font-medium text-white">{selectedDatabase.name}</span></div>}
+              {selectedVersion && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Version:</span><span className="font-medium text-white">v{selectedVersion}</span></div>}
+              {selectedLocationData && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Location:</span><div className="flex items-center gap-2"><Image src={`https://flagsapi.com/${selectedLocationData.country_code}/flat/64.png`} alt={selectedLocationData.city} width={16} height={12} className="rounded-sm" /><span className="font-medium text-white">{selectedLocationData.city}</span></div></div>}
+              <Separator className="bg-white/10" />
+              <div className="flex justify-between items-center font-bold text-lg text-white">
+                <span>Total</span>
+                <span>
+                  {selectedDatabase ? selectedDatabase.price === 0 || selectedDatabase.price === null ? "Free" : selectedDatabase.discount && Number(selectedDatabase.discount) > 0 ? `${formatPrice(selectedDatabase.price! * (1 - Number(selectedDatabase.discount) / 100))}/mo` : `${formatPrice(selectedDatabase.price!)}/mo` : "-"}
+                </span>
               </div>
             </CardContent>
-
-            {currentStep < 6 && (
-              <CardFooter>
-                <Button
-                  className="w-full"
-                  variant={
-                    currentStep === steps.length - 1 ? "default" : "outline"
-                  }
-                  onClick={handleNextStep}
-                >
-                  {currentStep === steps.length - 1
-                    ? "Review Order"
-                    : "Continue"}
-                  <ChevronRight size={16} />
-                </Button>
-              </CardFooter>
-            )}
           </Card>
         </div>
       </div>

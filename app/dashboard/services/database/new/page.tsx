@@ -11,22 +11,20 @@ const DatabaseNewSuspense = async () => {
 
 const DatabaseNewPage = () => {
   return (
-    <div className="flex-1 bg-black min-h-screen">
-      <div className="px-6 py-4">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-white mb-2">New Database Cluster</h1>
-          <p className="text-gray-400">Deploy a managed database with automated backups and high availability</p>
-        </div>
-        
-        <div className="border-t border-gray-800 pt-4">
-          <Suspense fallback={
-            <div className="flex items-center justify-center py-20">
-              <LoadingSpinner />
-            </div>
-          }>
-            <DatabaseNewSuspense />
-          </Suspense>
-        </div>
+    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">New Database Cluster</h1>
+        <p className="text-white/60">Deploy a managed database with automated backups and high availability.</p>
+      </div>
+      
+      <div className="border-t border-white/10 pt-8">
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-20">
+            <LoadingSpinner />
+          </div>
+        }>
+          <DatabaseNewSuspense />
+        </Suspense>
       </div>
     </div>
   );

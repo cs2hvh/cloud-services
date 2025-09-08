@@ -68,29 +68,29 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   ];
 
   return (
-    <div className="flex h-screen w-64 flex-col bg-black border-r border-gray-800">
+    <div className="flex h-screen w-72 flex-col bg-black border-r border-slate-800/50">
       {/* Logo Header */}
-      <div className="h-16 flex items-center px-6 border-b border-gray-800">
+      <div className="h-16 flex items-center px-6 border-b border-slate-800/50 bg-slate-900/20">
         <Link href="/dashboard" className="flex items-center">
-          <span className="text-xl font-semibold text-white">
+          <span className="text-xl font-bold text-white">
             AhuraSense
           </span>
         </Link>
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-4 py-6 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
         {/* Primary Nav */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           {navigation.map((item) => (
             <Link
               key={item.name}
               href={item.href}
               className={`
-                block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                block px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200
                 ${item.current
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-900"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                 }
               `}
             >
@@ -100,18 +100,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         </div>
 
         {/* Projects Section */}
-        <div className="mt-8">
-          <div className="flex items-center justify-between mb-2">
+        <div className="mt-10">
+          <div className="flex items-center justify-between mb-3 px-1">
             <button
               onClick={() => setProjectsExpanded(!projectsExpanded)}
-              className="flex items-center text-xs font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-300 transition-colors"
+              className="flex items-center text-xs font-bold text-white/70 uppercase tracking-widest hover:text-white transition-colors"
             >
               Projects
               <ChevronDown className={`ml-1 h-3 w-3 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`} />
             </button>
             <Link
               href="/dashboard/projects/new"
-              className="text-gray-500 hover:text-white transition-colors"
+              className="text-white/60 hover:text-white transition-colors p-1 hover:bg-slate-800/30 rounded"
               title="New Project"
             >
               <Plus className="h-4 w-4" />
@@ -127,28 +127,28 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       key={project.id}
                       href={`/dashboard/projects/${project.id}`}
                       className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        flex items-center px-4 py-2.5 text-sm rounded-lg transition-all duration-200
                         ${pathname.includes(`/projects/${project.id}`)
-                          ? "bg-gray-900 text-white"
-                          : "text-gray-400 hover:text-white hover:bg-gray-900"
+                          ? "bg-white text-black font-medium"
+                          : "text-white/60 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
-                      <Circle className="w-1.5 h-1.5 mr-2 fill-current" />
+                      <Circle className="w-2 h-2 mr-3 fill-current opacity-60" />
                       <span className="truncate">{project.name}</span>
                     </Link>
                   ))}
                   {projects.length > 5 && (
                     <Link
                       href="/dashboard/projects"
-                      className="block px-3 py-2 text-sm text-blue-400 hover:text-blue-300"
+                      className="block px-4 py-2.5 text-sm text-blue-400 hover:text-blue-300 font-medium"
                     >
                       View all →
                     </Link>
                   )}
                 </>
               ) : (
-                <p className="px-3 py-2 text-sm text-gray-600">
+                <p className="px-4 py-2.5 text-sm text-white/40">
                   No projects yet
                 </p>
               )}
@@ -157,8 +157,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         </div>
 
         {/* Services Section */}
-        <div className="mt-8">
-          <h3 className="px-1 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+        <div className="mt-10">
+          <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
             Services
           </h3>
           <div className="space-y-1">
@@ -169,8 +169,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 className={`
                   block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
                   ${service.current
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-gray-900"
+                    ? "bg-white text-black"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                   }
                 `}
               >
@@ -182,7 +182,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
         {/* Support Section */}
         <div className="mt-8">
-          <h3 className="px-1 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
             Support
           </h3>
           <div className="space-y-1">
@@ -191,8 +191,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               className={`
                 block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
                 ${pathname.includes("/settings")
-                  ? "bg-gray-900 text-white"
-                  : "text-gray-400 hover:text-white hover:bg-gray-900"
+                  ? "bg-white text-black"
+                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                 }
               `}
             >
@@ -200,13 +200,13 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             </Link>
             <Link
               href="/docs"
-              className="block px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-900 rounded-md transition-all duration-150"
+              className="block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-all duration-150"
             >
               Documentation
             </Link>
             <Link
               href="/support"
-              className="block px-3 py-2.5 text-sm font-medium text-gray-400 hover:text-white hover:bg-gray-900 rounded-md transition-all duration-150"
+              className="block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-all duration-150"
             >
               Help Center
             </Link>
@@ -215,24 +215,24 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       </nav>
 
       {/* User Section */}
-      <div className="border-t border-gray-800 p-4">
+      <div className="border-t border-slate-800/50 p-4 bg-slate-900/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center min-w-0">
-            <div className="w-9 h-9 bg-gray-900 rounded-full flex items-center justify-center text-sm font-medium text-gray-300">
+            <div className="w-9 h-9 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center text-sm font-medium text-white">
               {user?.email?.charAt(0).toUpperCase() || "U"}
             </div>
             <div className="ml-3 min-w-0">
               <p className="text-sm font-medium text-white truncate">
                 {user?.user_metadata?.full_name || user?.email?.split("@")[0]}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-slate-400 truncate">
                 {user?.email}
               </p>
             </div>
           </div>
           <button
             onClick={handleSignOut}
-            className="ml-3 p-1.5 text-gray-500 hover:text-white hover:bg-gray-900 rounded transition-all duration-150"
+            className="ml-3 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded transition-all duration-150"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />

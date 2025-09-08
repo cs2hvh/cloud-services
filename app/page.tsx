@@ -4,16 +4,22 @@ import { Navbar } from "@/components/navbar";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
 import { WorldMap } from "@/components/world-map";
 import { motion } from "motion/react";
-import { ArrowRight, Server, Database, Globe, Shield, Zap, Cloud } from "lucide-react";
+import { ArrowRight, Server, Database, Globe, Shield, Zap, Cloud, HardDrive } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
   const services = [
     {
+      icon: HardDrive,
+      title: "Dedicated Servers",
+      description: "Powerful, bare-metal servers for your most demanding workloads.",
+      features: ["Full Root Access", "99.99% Uptime SLA", "24/7 Support"],
+    },
+    {
       icon: Server,
-      title: "Game Servers",
-      description: "Deploy high-performance game servers with one-click installation and auto-scaling.",
-      features: ["Minecraft, CS:GO, Rust", "DDoS Protection", "Instant Setup"],
+      title: "Virtual Private Servers",
+      description: "Flexible and scalable virtual servers with predictable pricing.",
+      features: ["Instant Provisioning", "Choice of OS", "Scalable Resources"],
     },
     {
       icon: Database,
@@ -22,10 +28,10 @@ export default function Home() {
       features: ["PostgreSQL, MySQL", "Auto Backups", "High Availability"],
     },
     {
-      icon: Globe,
-      title: "App Platform",
-      description: "Deploy and scale web applications with integrated CI/CD pipelines.",
-      features: ["Auto Deploy", "Custom Domains", "SSL Certificates"],
+      icon: Shield,
+      title: "DDoS Protection",
+      description: "Always-on DDoS protection to keep your services online.",
+      features: ["Network-level Mitigation", "Real-time Monitoring", "Global Network"],
     },
   ];
 
@@ -66,17 +72,16 @@ export default function Home() {
           >
             <h1 className="text-5xl md:text-7xl font-bold mb-6">
               <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                Cloud Infrastructure
+                Your Vision, Our Infrastructure
               </span>
               <br />
               <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Simplified
+                Globally Delivered
               </span>
             </h1>
             
             <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
-              Deploy game servers, databases, and applications across our global network 
-              with enterprise-grade security and performance.
+              Power your applications with our high-performance, secure, and scalable cloud infrastructure. From dedicated servers to managed databases, we've got you covered.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -108,11 +113,11 @@ export default function Home() {
             className="grid grid-cols-3 gap-8 mt-16 pt-8 border-t border-white/10"
           >
             <div>
-              <div className="text-3xl font-bold text-white">50K+</div>
-              <div className="text-sm text-gray-500">Active Deployments</div>
+              <div className="text-3xl font-bold text-white">1M+</div>
+              <div className="text-sm text-gray-500">Happy Customers</div>
             </div>
             <div>
-              <div className="text-3xl font-bold text-white">9</div>
+              <div className="text-3xl font-bold text-white">12</div>
               <div className="text-sm text-gray-500">Global Regions</div>
             </div>
             <div>
@@ -134,14 +139,14 @@ export default function Home() {
             className="text-center mb-12"
           >
             <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-              Everything You Need to Scale
+              A Solution for Every Workload
             </h2>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              From game servers to databases, deploy any workload with confidence.
+              We offer a comprehensive suite of cloud services to meet your needs.
             </p>
           </motion.div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {services.map((service, index) => (
               <motion.div
                 key={service.title}
@@ -152,7 +157,7 @@ export default function Home() {
                 className="group relative"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative bg-black/50 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:border-white/20 transition-all duration-300">
+                <div className="relative bg-black/50 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:border-white/20 transition-all duration-300 h-full">
                   <service.icon className="h-12 w-12 text-blue-400 mb-4" />
                   <h3 className="text-xl font-semibold text-white mb-3">
                     {service.title}
@@ -218,7 +223,7 @@ export default function Home() {
             viewport={{ once: true }}
           >
             <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-              Ready to Get Started?
+              Ready to Build Something Great?
             </h2>
             <p className="text-gray-400 text-lg mb-8">
               Join thousands of developers deploying with confidence.
