@@ -107,31 +107,93 @@ export default function SignUpMultiStep({
     }
   }
 
+  // ---- social sign-up
+  const handleSignIn = async (type: string) => {
+    setIsLoading(true);
+    const response = await api.post("/auth/signin/github", { type });
+
+    if (response.data?.url) {
+      window.location.href = response.data.url;
+    }
+    setIsLoading(false);
+  };
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-      <Card className="overflow-hidden shadow-lg bg-background/60">
+      <Card className="overflow-hidden shadow-lg bg-black/40 backdrop-blur-md border border-white/10">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <div className="relative hidden md:block h-full min-h-80 rounded-r-xl">
-            <Image
-              src=""
-              alt="Logo"
-              fill
-              sizes="(min-width: 768px) 320px, 100vw"
-              className="object-cover rounded-r-xl"
-            />
+          <div className="relative hidden md:block h-full min-h-80 rounded-l-xl bg-gradient-to-br from-gray-900 to-black">
+            <div className="w-full h-full rounded-l-xl flex items-center justify-center">
+              <div className="text-center space-y-4 p-8">
+                <h2 className="text-2xl font-bold text-white">Join AhuraSense</h2>
+                <p className="text-gray-300">Start your cloud services journey today</p>
+              </div>
+            </div>
           </div>
 
           <div className="p-6 md:p-8">
             <div className="flex flex-col items-center text-center mb-6">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-white">
                 Welcome to AhuraSense
               </h1>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-gray-300 mt-1">
                 We&apos;re excited to have you! Let&apos;s create your account.
               </p>
             </div>
 
             <div className={cn("grid gap-4", className)} {...props}>
+              {step === 1 && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
+                      onClick={() => handleSignIn("github")}
+                      disabled={isLoading}
+                    >
+                      <Icons.gitHub className="h-5 w-5" />
+                      <span>GitHub</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
+                      onClick={() => handleSignIn("google")}
+                      disabled={isLoading}
+                    >
+                      <Icons.google className="h-5 w-5" />
+                      <span>Google</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
+                      onClick={() => handleSignIn("gitlab")}
+                      disabled={isLoading}
+                    >
+                      <Image src="/gitlab.png" alt="GitLab" width={20} height={20} className="h-5 w-5" />
+                      <span>GitLab</span>
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
+                      onClick={() => handleSignIn("bitbucket")}
+                      disabled={isLoading}
+                    >
+                      <Image src="/BitBucket.png" alt="Bitbucket" width={20} height={20} className="h-5 w-5" />
+                      <span>Bitbucket</span>
+                    </Button>
+                  </div>
+
+                  <div className="flex justify-center mb-6">
+                    <span className="px-4 py-1 text-gray-300 bg-black/60 rounded-md border border-white/10 text-xs uppercase">
+                      Or continue with
+                    </span>
+                  </div>
+                </>
+              )}
+
               {step === 1 && (
                 <Form {...signupForm}>
                   <form
@@ -144,13 +206,14 @@ export default function SignUpMultiStep({
                       name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Username</FormLabel>
+                          <FormLabel className="text-white">Username</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="Provide your desired username"
                               {...field}
                               type="text"
                               disabled={isLoading}
+                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />
@@ -163,13 +226,14 @@ export default function SignUpMultiStep({
                       name="email"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Email</FormLabel>
+                          <FormLabel className="text-white">Email</FormLabel>
                           <FormControl>
                             <Input
                               placeholder="Enter an email"
                               {...field}
                               type="email"
                               disabled={isLoading}
+                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />
@@ -182,12 +246,13 @@ export default function SignUpMultiStep({
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <FormLabel className="text-white">Password</FormLabel>
                           <FormControl>
                             <PasswordInput
                               field={field}
                               placeholder="Enter a good password"
                               disabled={isLoading}
+                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />
@@ -200,12 +265,13 @@ export default function SignUpMultiStep({
                       name="confirmPassword"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Confirm Password</FormLabel>
+                          <FormLabel className="text-white">Confirm Password</FormLabel>
                           <FormControl>
                             <PasswordInput
                               field={field}
                               placeholder="Confirm your password"
                               disabled={isLoading}
+                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />
@@ -274,11 +340,11 @@ export default function SignUpMultiStep({
               )}
             </div>
             <div className="flex items-center justify-center mt-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-300">
                 Already have an account?{" "}
                 <Link
                   href="/signin"
-                  className="text-primary hover:text-primary/90 transition-colors font-medium"
+                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
                 >
                   Sign In
                 </Link>
@@ -286,8 +352,8 @@ export default function SignUpMultiStep({
             </div>
           </div>
         </CardContent>
-        <CardFooter className="px-6 flex items-center justify-center border-t">
-          <div className="text-center text-sm text-muted-foreground [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-primary/90 transition-colors">
+        <CardFooter className="px-6 flex items-center justify-center border-t border-white/10">
+          <div className="text-center text-sm text-gray-300 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-blue-300 transition-colors">
             By creating account, you agree to our{" "}
             <Link href="/terms" target="_blank">
               Terms of Service

@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -190,9 +191,9 @@ export function SignInForm() {
     }
 
     return (
-      <div className="max-w-sm mx-auto p-6 bg-white border rounded-lg shadow-sm">
-        <h1 className="text-xl font-semibold mb-2">Two-Factor Verification</h1>
-        <p className="text-sm text-muted-foreground mb-4">
+      <div className="max-w-sm mx-auto p-6 bg-black/40 border border-white/10 rounded-lg shadow-sm backdrop-blur-md">
+        <h1 className="text-xl font-semibold mb-2 text-white">Two-Factor Verification</h1>
+        <p className="text-sm text-gray-300 mb-4">
           Enter the 6-digit code from your authenticator app to continue.
         </p>
 
@@ -227,73 +228,73 @@ export function SignInForm() {
   // Normal sign-in UI
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-      <Card className="overflow-hidden shadow-lg bg-background/60">
+      <Card className="overflow-hidden shadow-lg bg-black/40 backdrop-blur-md border border-white/10">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <div className="relative hidden md:block h-full min-h-80 rounded-r-xl">
-            <div className="w-full h-full rounded-r-xl" />
+          <div className="relative hidden md:block h-full min-h-80 rounded-l-xl bg-gradient-to-br from-gray-900 to-black">
+            <div className="w-full h-full rounded-l-xl flex items-center justify-center">
+              <div className="text-center space-y-4 p-8">
+                <h2 className="text-2xl font-bold text-white">Welcome Back</h2>
+                <p className="text-gray-300">Access your cloud services platform</p>
+              </div>
+            </div>
           </div>
 
           <div className="p-6 md:p-8">
             <div className="flex flex-col items-center text-center mb-6">
-              <h1 className="text-2xl font-bold tracking-tight">
+              <h1 className="text-2xl font-bold tracking-tight text-white">
                 Welcome back
               </h1>
-              <p className="text-sm text-muted-foreground mt-1">
+              <p className="text-sm text-gray-300 mt-1">
                 Please sign in to access your account.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
               <Button
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
                 onClick={() => handleSignIn("github")}
                 disabled={isLoading}
               >
                 <Icons.gitHub className="h-5 w-5" />
-                <span className="hidden sm:inline">GitHub</span>
+                <span>GitHub</span>
               </Button>
 
               <Button
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
                 onClick={() => handleSignIn("google")}
                 disabled={isLoading}
               >
                 <Icons.google className="h-5 w-5" />
-                <span className="hidden sm:inline">Google</span>
+                <span>Google</span>
               </Button>
 
               <Button
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
                 onClick={() => handleSignIn("gitlab")}
                 disabled={isLoading}
               >
-                <Icons.gitHub className="h-5 w-5" />
-                <span className="hidden sm:inline">GitLab</span>
+                <Image src="/gitlab.png" alt="GitLab" width={20} height={20} className="h-5 w-5" />
+                <span>GitLab</span>
               </Button>
 
               <Button
                 variant="outline"
-                className="w-full flex items-center justify-center gap-2"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
                 onClick={() => handleSignIn("bitbucket")}
                 disabled={isLoading}
               >
-                <Icons.steam className="h-5 w-5" />
-                <span className="hidden sm:inline">Bitbucket</span>
+                <Image src="/BitBucket.png" alt="Bitbucket" width={20} height={20} className="h-5 w-5" />
+                <span>Bitbucket</span>
               </Button>
             </div>
 
-            <div className="relative mb-6">
-              <div className="absolute inset-0 flex items-center">
-                <Separator />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="px-2 text-muted-foreground">
-                  Or continue with
-                </span>
-              </div>
+            <div className="flex justify-center mb-6">
+              <span className="px-4 py-1 text-gray-300 bg-black/60 rounded-md border border-white/10 text-xs uppercase">
+                Or continue with
+              </span>
             </div>
 
             <Form {...form}>
@@ -306,13 +307,14 @@ export function SignInForm() {
                   name="email"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email</FormLabel>
+                      <FormLabel className="text-white">Email</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="name@example.com"
                           {...field}
                           disabled={isLoading}
                           type="email"
+                          className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                         />
                       </FormControl>
                       <FormMessage />
@@ -325,10 +327,10 @@ export function SignInForm() {
                   render={({ field }) => (
                     <FormItem>
                       <div className="flex items-center justify-between">
-                        <FormLabel htmlFor="password">Password</FormLabel>
+                        <FormLabel htmlFor="password" className="text-white">Password</FormLabel>
                         <Link
                           href="/reset-password"
-                          className="text-xs text-primary hover:text-primary/90 transition-colors"
+                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                         >
                           Forgot password?
                         </Link>
@@ -338,6 +340,7 @@ export function SignInForm() {
                           field={field}
                           placeholder="••••••••"
                           disabled={isLoading}
+                          className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                         />
                       </FormControl>
                       <FormMessage />
@@ -362,11 +365,11 @@ export function SignInForm() {
             </Form>
 
             <div className="flex items-center justify-center mt-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-300">
                 Don&apos;t have an account?{" "}
                 <Link
                   href="/signup"
-                  className="text-primary hover:text-primary/90 transition-colors font-medium"
+                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
                 >
                   Sign up
                 </Link>
@@ -374,8 +377,8 @@ export function SignInForm() {
             </div>
           </div>
         </CardContent>
-        <CardFooter className="px-6 flex items-center justify-center border-t">
-          <div className="text-center text-sm text-muted-foreground [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-primary/90 transition-colors">
+        <CardFooter className="px-6 flex items-center justify-center border-t border-white/10">
+          <div className="text-center text-sm text-gray-300 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-blue-300 transition-colors">
             By signing in, you agree to our{" "}
             <Link href="/terms" target="_blank">
               Terms of Service

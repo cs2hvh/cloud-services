@@ -7,7 +7,18 @@ import {
   ChevronDown,
   Plus,
   LogOut,
-  Circle
+  Circle,
+  Server,
+  HardDrive,
+  Gamepad2,
+  Database,
+  Rocket,
+  Box,
+  Shield,
+  Lock,
+  Archive,
+  Cpu,
+  Code
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -22,6 +33,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [projectsExpanded, setProjectsExpanded] = useState(true);
+  const [computeExpanded, setComputeExpanded] = useState(false);
 
   const handleSignOut = async () => {
     await fetch("/api/auth/signout", {
@@ -51,19 +63,61 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
   const services = [
     {
-      name: "Game Servers",
-      href: "/dashboard/services/game",
-      current: pathname.includes("/services/game"),
-    },
-    {
       name: "Databases",
       href: "/dashboard/services/database",
       current: pathname.includes("/services/database"),
+      icon: Database,
     },
     {
-      name: "Applications",
+      name: "Application Deployment",
       href: "/dashboard/services/apps",
       current: pathname.includes("/services/apps"),
+      icon: Code,
+    },
+    {
+      name: "Kubernetes",
+      href: "/dashboard/services/kubernetes",
+      current: pathname.includes("/services/kubernetes"),
+      icon: Box,
+    },
+    {
+      name: "Game Servers",
+      href: "/dashboard/services/game",
+      current: pathname.includes("/services/game"),
+      icon: Gamepad2,
+    },
+    {
+      name: "Network DDoS Protection",
+      href: "/dashboard/services/network-ddos",
+      current: pathname.includes("/services/network-ddos"),
+      icon: Shield,
+    },
+    {
+      name: "Firewall",
+      href: "/dashboard/services/firewall",
+      current: pathname.includes("/services/firewall"),
+      icon: Lock,
+    },
+    {
+      name: "Object Storage",
+      href: "/dashboard/services/object-storage",
+      current: pathname.includes("/services/object-storage"),
+      icon: Archive,
+    },
+  ];
+
+  const computeServices = [
+    {
+      name: "Bare Metal Servers",
+      href: "/dashboard/services/compute/bare-metal",
+      current: pathname.includes("/services/compute/bare-metal"),
+      icon: HardDrive,
+    },
+    {
+      name: "Virtual Private Servers",
+      href: "/dashboard/services/compute/vps",
+      current: pathname.includes("/services/compute/vps"),
+      icon: Server,
     },
   ];
 
@@ -79,7 +133,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       </div>
 
       {/* Main Navigation */}
-      <nav className="flex-1 px-4 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+      <nav className="flex-1 px-4 py-6 overflow-y-auto custom-scrollbar">
         {/* Primary Nav */}
         <div className="space-y-1.5">
           {navigation.map((item) => (
@@ -162,21 +216,70 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             Services
           </h3>
           <div className="space-y-1">
-            {services.map((service) => (
-              <Link
-                key={service.name}
-                href={service.href}
+            {/* Compute Service with Sub-navigation - MOVED TO TOP */}
+            <div>
+              <button
+                onClick={() => setComputeExpanded(!computeExpanded)}
                 className={`
-                  block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                  ${service.current
+                  w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                  ${pathname.includes("/services/compute")
                     ? "bg-white text-black"
                     : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                   }
                 `}
               >
-                {service.name}
-              </Link>
-            ))}
+                <div className="flex items-center">
+                  <Cpu className="w-4 h-4 mr-3" />
+                  <span>Compute</span>
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform ${computeExpanded ? "" : "-rotate-90"}`} />
+              </button>
+              
+              {computeExpanded && (
+                <div className="mt-1 ml-4 space-y-1">
+                  {computeServices.map((service) => {
+                    const IconComponent = service.icon;
+                    return (
+                      <Link
+                        key={service.name}
+                        href={service.href}
+                        className={`
+                          flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                          ${service.current
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                          }
+                        `}
+                      >
+                        <IconComponent className="w-4 h-4 mr-2" />
+                        {service.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Other Services */}
+            {services.map((service) => {
+              const IconComponent = service.icon;
+              return (
+                <Link
+                  key={service.name}
+                  href={service.href}
+                  className={`
+                    flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                    ${service.current
+                      ? "bg-white text-black"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                    }
+                  `}
+                >
+                  <IconComponent className="w-4 h-4 mr-3" />
+                  {service.name}
+                </Link>
+              );
+            })}
           </div>
         </div>
 

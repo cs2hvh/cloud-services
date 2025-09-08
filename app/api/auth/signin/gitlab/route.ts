@@ -10,6 +10,11 @@ export async function POST(request: NextRequest) {
       provider: "gitlab",
       options: {
         redirectTo: `${origin}/api/auth/callback`,
+        scopes: "read_repository read_user",
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
       },
     });
 

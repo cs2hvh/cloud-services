@@ -4,38 +4,19 @@ import { createClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { type } = await request.json();
     const origin = request.headers.get("origin") || "http://localhost:3000";
-    console.log(origin, "..................9");
 
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: type,
+      provider: "bitbucket",
       options: {
         redirectTo: `${origin}/api/auth/callback`,
-        scopes: "repo user:email",
+        scopes: 'repositories account',
         queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
+          access_type: 'offline',
+          prompt: 'consent'
+        }
       },
     });
-
-    //checking if user has enabled 2FA-auth or not
-    // const response = await supabase.auth.mfa.listFactors();
-    // const has2FA = response?.data?.totp.some(
-    //   (factor) => factor.status === "verified",
-    // );
-
-    // console.log(has2FA, ".........................23");
-
-    // if (has2FA) {
-    //   return Response.json(
-    //     { url: data.url, enabled2fa: true },
-    //     { status: 200 },
-    //   );
-    // }
-
-    // console.log(data, "..............data............17");
 
     if (error) {
       return Response.json({ message: error.message }, { status: 400 });
@@ -48,11 +29,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(data.url, "......................36");
-
     return Response.json({ url: data.url }, { status: 200 });
   } catch (error) {
-    console.error("[Route] GitHub signin error:", error);
+    console.error("[Route] Bitbucket signin error:", error);
     return Response.json(
       { message: "Something went wrong :(" },
       { status: 500 },
