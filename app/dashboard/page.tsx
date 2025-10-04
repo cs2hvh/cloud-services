@@ -7,7 +7,7 @@ import {
   Database, 
   Globe, 
   Activity,
-  ArrowUp,
+  // ArrowUp,
   MoreVertical,
   Plus,
   ShieldCheck,

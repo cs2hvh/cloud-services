@@ -12,7 +12,6 @@ import {
   HardDrive,
   Gamepad2,
   Database,
-  Rocket,
   Box,
   Shield,
   Lock,
@@ -25,7 +24,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type AppSidebarProps = {
-  user: any;
+   user: {
+    id: string;
+    email: string | null;
+    user_metadata: { full_name?: string } | null;
+  } ,
   projects: Tables<"projects">[];
 };
 

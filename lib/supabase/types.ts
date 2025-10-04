@@ -372,7 +372,8 @@ export type Database = {
         Row: {
           clusterId: string;
           clusterName: string;
-
+          project_id:string;
+          owner_id:string;
           controlPlane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
           createStatus?: boolean;

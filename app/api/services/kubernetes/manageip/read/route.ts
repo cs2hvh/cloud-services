@@ -1,6 +1,5 @@
 // import { vmFetchSchema } from "@/lib/schema/vmSchema";
 import { Vms } from "@/lib/supabase/queries";
-import { createSSRClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 
 

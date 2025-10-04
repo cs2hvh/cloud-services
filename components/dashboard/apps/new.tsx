@@ -15,13 +15,13 @@ import {
   ChevronRight,
   Code,
   Loader2,
-  GitBranch,
-  Globe,
-  Settings,
-  ExternalLink,
+  // GitBranch,
+  // Globe,
+  // Settings,
+  // ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+// import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Card,

@@ -12,6 +12,10 @@ type Location = Tables<"locations">;
 type OTP = Tables<"otps">;
 type  Clusters = Tables<"clusters">;
 
+
+type Patch = {
+  [key: string]: boolean | string[] | string | NodeConfig | null | Status;
+};
 interface NodeConfig {
   // Define the expected properties and their types
   ram: number;
@@ -19,25 +23,25 @@ interface NodeConfig {
   storage: number;  // Optional field
 }
 type Plan = { cpu: number; ram: number;storage: number };
- type CreateClusterInput = {
-  clusterId: string;
-  clusterName: string;
+//  type CreateClusterInput = {
+//   clusterId: string;
+//   clusterName: string;
 
-  controlPlane?: string | null;        // e.g., API VIP or CP-1 IP
-  workers?: string[];                  // list of worker IPs/hosts
-  createStatus?: boolean;
-  connectStatus?: boolean;
-  verifyStatus?: boolean;
+//   controlPlane?: string | null;        // e.g., API VIP or CP-1 IP
+//   workers?: string[];                  // list of worker IPs/hosts
+//   createStatus?: boolean;
+//   connectStatus?: boolean;
+//   verifyStatus?: boolean;
 
-  kubeConfig?: string | null;          // kubeconfig YAML
-  nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
+//   kubeConfig?: string | null;          // kubeconfig YAML
+//   nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
 
-  cniPlugin?: 'flannel' | 'calico' | 'cilium' | string | null;
-  k8sVersion?: string | null;
+//   cniPlugin?: 'flannel' | 'calico' | 'cilium' | string | null;
+//   k8sVersion?: string | null;
 
-  status?: 'pending' | 'creating' | 'ready' | 'failed' | 'deleted';
-  // ownerId?: string | null;             // link to auth.users.id if you use RLS
-};
+//   status?: 'pending' | 'creating' | 'ready' | 'failed' | 'deleted';
+//   // ownerId?: string | null;             // link to auth.users.id if you use RLS
+// };
 
 type Phase = "create" | "connect" | "verify";
 type Status = "pending" | "creating" | "ready" | "failed" | "deleted";
@@ -897,11 +901,11 @@ export const Clusters = {
     verify: "verify_status",
   };
 
-  const patch: any = {
+  const patch:Patch  = {
     [fieldMap[phase]]: value,
     ...extras,
   };
-  if (status) patch.status = status;
+   if (status) patch.status = status;
 
 
   const supabase = clientWorker(
@@ -922,6 +926,32 @@ export const Clusters = {
     return { success: false, error: error.message };
   }
   return { success: true, cluster: data };
+  },
+  
+   get_by_project_id: async (id: string)=> {
+    try {
+      console.log(id);
+       const supabase = clientWorker(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+  { auth: { persistSession: false } }
+);
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("project_id", id)
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return null;
+    }
   },
 };
 

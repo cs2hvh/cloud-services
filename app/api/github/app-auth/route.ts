@@ -1,7 +1,7 @@
-import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function POST(request: NextRequest) {
+// Prefix unused parameter with underscore to satisfy the linter without changing logic
+export async function POST() {
   try {
     const supabase = await createClient();
     

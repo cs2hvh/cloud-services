@@ -3,7 +3,7 @@ import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Separator } from "@/components/ui/separator";
-import { Projects } from "@/lib/supabase/queries";
+import { Clusters, Projects } from "@/lib/supabase/queries";
 import { Suspense } from "react";
 
 interface PageProps {
@@ -13,7 +13,9 @@ interface PageProps {
 const ProjectSuspense = async ({ id }: { id: string }) => {
   try {
     const project = await Projects.get_by_id(id);
-
+     //console.log(project);
+     const clusters = await Clusters.get_by_project_id(id); 
+     console.log(clusters,".......")
     if (!project) {
       return (
         <ErrorMessage message="Unable to load application forms. Please try again later." />

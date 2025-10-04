@@ -1,5 +1,21 @@
-import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+// import { boolean } from "zod";
+
+
+interface transformedRepos {
+  uuid: string;
+  name: string;
+  full_name: string;
+  description: string | null;
+  is_private: boolean;
+  mainbranch?: { name: string };  // Optional field for main branch
+  language: string | null;
+  updated_on: string;  // Assuming `updated_on` is a string (ISO date)
+  links?: {
+    clone?: { name: string; href: string }[];  // `clone` is an array of link objects
+    html?: { href: string };  // HTML URL for the repo
+  };
+}
 
 export async function GET() {
   try {
@@ -96,7 +112,7 @@ export async function GET() {
     console.log(`Fetched ${repos.length} repositories from Bitbucket`);
     
     // Transform Bitbucket API response to our format
-    const transformedRepos = repos.map((repo: any) => ({
+    const transformedRepos = repos.map((repo: transformedRepos) => ({
       id: repo.uuid,
       name: repo.name,
       fullName: repo.full_name,
@@ -106,7 +122,7 @@ export async function GET() {
       language: repo.language || 'Unknown',
       updatedAt: repo.updated_on,
       provider: 'bitbucket',
-      cloneUrl: repo.links?.clone?.find((link: any) => link.name === 'https')?.href,
+      cloneUrl: repo.links?.clone?.find((link) => link.name === 'https')?.href,
       htmlUrl: repo.links?.html?.href
     }));
 

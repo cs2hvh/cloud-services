@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -14,10 +14,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Cpu,
-  Database,
+//   Database,
   HardDrive,
   Loader2,
-  MapPin,
+//   MapPin,
   Server,
 } from "lucide-react";
 import Image from "next/image";
@@ -36,25 +36,36 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Icons } from "@/components/ui/icons";
+// import { Progress } from "@/components/ui/progress";
+// import { Icons } from "@/components/ui/icons";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
 
 interface PageProps {
   locations: Tables<"locations">[];
-  projects:any;
+  projects:Tables<"projects">[];
   userId:string;
 }
 
-const databaseVersions = {
-  mysql: ["5.7", "8.0", "8.1"],
-  postgresql: ["12", "13", "14", "15", "16"],
-  mongodb: ["4.4", "5.0", "6.0", "7.0"],
-  redis: ["6.2", "7.0", "7.2"],
-  mariadb: ["10.6", "10.7", "10.8", "10.11"],
-  kafka: ["3.4", "3.5", "3.6"],
-};
+
+// interface Project{
+//     id: string;
+//     name: string;
+//     description: string | null;
+//     owner: string;
+//     users: string[];
+//     created_at: string;
+//     updated_at: string | null;
+//     }
+
+// const databaseVersions = {
+//   mysql: ["5.7", "8.0", "8.1"],
+//   postgresql: ["12", "13", "14", "15", "16"],
+//   mongodb: ["4.4", "5.0", "6.0", "7.0"],
+//   redis: ["6.2", "7.0", "7.2"],
+//   mariadb: ["10.6", "10.7", "10.8", "10.11"],
+//   kafka: ["3.4", "3.5", "3.6"],
+// };
 
 const databaseInfo = {
   mysql: { 
@@ -90,50 +101,50 @@ const databaseInfo = {
 };
 
 // Sample database plans if products are empty
-const sampleDatabasePlans = {
-  mysql: [
-    { id: 'mysql-starter', name: 'Starter', sub: 'mysql', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
-    { id: 'mysql-basic', name: 'Basic', sub: 'mysql', type: 'database', price: 35, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
-    { id: 'mysql-pro', name: 'Professional', sub: 'mysql', type: 'database', price: 75, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
-    { id: 'mysql-business', name: 'Business', sub: 'mysql', type: 'database', price: 150, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
-  ],
-  postgresql: [
-    { id: 'pg-starter', name: 'Starter', sub: 'postgresql', type: 'database', price: 20, resources: { cpu: 1, ram: 2, storage: 25 }, discount: null },
-    { id: 'pg-basic', name: 'Basic', sub: 'postgresql', type: 'database', price: 45, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
-    { id: 'pg-pro', name: 'Professional', sub: 'postgresql', type: 'database', price: 95, resources: { cpu: 4, ram: 8, storage: 150 }, discount: 10 },
-    { id: 'pg-enterprise', name: 'Enterprise', sub: 'postgresql', type: 'database', price: 250, resources: { cpu: 16, ram: 32, storage: 500 }, discount: 20 },
-  ],
-  mongodb: [
-    { id: 'mongo-free', name: 'Free Tier', sub: 'mongodb', type: 'database', price: 0, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
-    { id: 'mongo-starter', name: 'Starter', sub: 'mongodb', type: 'database', price: 25, resources: { cpu: 1, ram: 2, storage: 30 }, discount: null },
-    { id: 'mongo-pro', name: 'Professional', sub: 'mongodb', type: 'database', price: 85, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 15 },
-    { id: 'mongo-scale', name: 'Scale', sub: 'mongodb', type: 'database', price: 199, resources: { cpu: 8, ram: 16, storage: 300 }, discount: 20 },
-  ],
-  redis: [
-    { id: 'redis-cache', name: 'Cache', sub: 'redis', type: 'database', price: 10, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
-    { id: 'redis-standard', name: 'Standard', sub: 'redis', type: 'database', price: 30, resources: { cpu: 1, ram: 4, storage: 10 }, discount: null },
-    { id: 'redis-pro', name: 'Professional', sub: 'redis', type: 'database', price: 60, resources: { cpu: 2, ram: 8, storage: 25 }, discount: 10 },
-    { id: 'redis-enterprise', name: 'Enterprise', sub: 'redis', type: 'database', price: 120, resources: { cpu: 4, ram: 16, storage: 50 }, discount: 15 },
-  ],
-  mariadb: [
-    { id: 'maria-starter', name: 'Starter', sub: 'mariadb', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
-    { id: 'maria-standard', name: 'Standard', sub: 'mariadb', type: 'database', price: 40, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
-    { id: 'maria-pro', name: 'Professional', sub: 'mariadb', type: 'database', price: 80, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 10 },
-  ],
-  kafka: [
-    { id: 'kafka-basic', name: 'Basic', sub: 'kafka', type: 'database', price: 50, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
-    { id: 'kafka-standard', name: 'Standard', sub: 'kafka', type: 'database', price: 120, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
-    { id: 'kafka-pro', name: 'Professional', sub: 'kafka', type: 'database', price: 250, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
-  ],
-};
+// const sampleDatabasePlans = {
+//   mysql: [
+//     { id: 'mysql-starter', name: 'Starter', sub: 'mysql', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
+//     { id: 'mysql-basic', name: 'Basic', sub: 'mysql', type: 'database', price: 35, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
+//     { id: 'mysql-pro', name: 'Professional', sub: 'mysql', type: 'database', price: 75, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
+//     { id: 'mysql-business', name: 'Business', sub: 'mysql', type: 'database', price: 150, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
+//   ],
+//   postgresql: [
+//     { id: 'pg-starter', name: 'Starter', sub: 'postgresql', type: 'database', price: 20, resources: { cpu: 1, ram: 2, storage: 25 }, discount: null },
+//     { id: 'pg-basic', name: 'Basic', sub: 'postgresql', type: 'database', price: 45, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
+//     { id: 'pg-pro', name: 'Professional', sub: 'postgresql', type: 'database', price: 95, resources: { cpu: 4, ram: 8, storage: 150 }, discount: 10 },
+//     { id: 'pg-enterprise', name: 'Enterprise', sub: 'postgresql', type: 'database', price: 250, resources: { cpu: 16, ram: 32, storage: 500 }, discount: 20 },
+//   ],
+//   mongodb: [
+//     { id: 'mongo-free', name: 'Free Tier', sub: 'mongodb', type: 'database', price: 0, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
+//     { id: 'mongo-starter', name: 'Starter', sub: 'mongodb', type: 'database', price: 25, resources: { cpu: 1, ram: 2, storage: 30 }, discount: null },
+//     { id: 'mongo-pro', name: 'Professional', sub: 'mongodb', type: 'database', price: 85, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 15 },
+//     { id: 'mongo-scale', name: 'Scale', sub: 'mongodb', type: 'database', price: 199, resources: { cpu: 8, ram: 16, storage: 300 }, discount: 20 },
+//   ],
+//   redis: [
+//     { id: 'redis-cache', name: 'Cache', sub: 'redis', type: 'database', price: 10, resources: { cpu: 0.5, ram: 1, storage: 5 }, discount: null },
+//     { id: 'redis-standard', name: 'Standard', sub: 'redis', type: 'database', price: 30, resources: { cpu: 1, ram: 4, storage: 10 }, discount: null },
+//     { id: 'redis-pro', name: 'Professional', sub: 'redis', type: 'database', price: 60, resources: { cpu: 2, ram: 8, storage: 25 }, discount: 10 },
+//     { id: 'redis-enterprise', name: 'Enterprise', sub: 'redis', type: 'database', price: 120, resources: { cpu: 4, ram: 16, storage: 50 }, discount: 15 },
+//   ],
+//   mariadb: [
+//     { id: 'maria-starter', name: 'Starter', sub: 'mariadb', type: 'database', price: 15, resources: { cpu: 1, ram: 2, storage: 20 }, discount: null },
+//     { id: 'maria-standard', name: 'Standard', sub: 'mariadb', type: 'database', price: 40, resources: { cpu: 2, ram: 4, storage: 60 }, discount: null },
+//     { id: 'maria-pro', name: 'Professional', sub: 'mariadb', type: 'database', price: 80, resources: { cpu: 4, ram: 8, storage: 120 }, discount: 10 },
+//   ],
+//   kafka: [
+//     { id: 'kafka-basic', name: 'Basic', sub: 'kafka', type: 'database', price: 50, resources: { cpu: 2, ram: 4, storage: 50 }, discount: null },
+//     { id: 'kafka-standard', name: 'Standard', sub: 'kafka', type: 'database', price: 120, resources: { cpu: 4, ram: 8, storage: 100 }, discount: 10 },
+//     { id: 'kafka-pro', name: 'Professional', sub: 'kafka', type: 'database', price: 250, resources: { cpu: 8, ram: 16, storage: 250 }, discount: 15 },
+//   ],
+// };
 
 const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
     const router = useRouter();
-    let planValue:string="";
+     const planValue:string="";
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
-  const [availablePlans, setAvailablePlans] = useState(
+  const [availablePlans] = useState(
     [
   {
     planId: "nano",
@@ -280,7 +291,7 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
 //   };
 
   const handleKcPlanChange = (dbId: string) => {
-    debugger
+    //debugger
     setState((prevState) => ({
       ...prevState,
       selectedPlan: availablePlans.find((plan) => plan.planId === dbId) || {},
@@ -288,7 +299,6 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
   };
 
   const {
-    selectedPlan,
     selectedName,
     selectedNode,
     selectedVersion,
@@ -314,7 +324,7 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
   ];
 
   // Use predefined database types
-  const dbTypes = Object.keys(databaseInfo);
+//   const dbTypes = Object.keys(databaseInfo);
 
   return (
     <div className="py-4">

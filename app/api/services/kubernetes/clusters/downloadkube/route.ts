@@ -1,10 +1,10 @@
 // app/api/clusters/[id]/kubeconfig/route.ts
 import { NextResponse } from "next/server";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import fs from "node:fs/promises";
+// import { readFile } from "node:fs/promises";
+// import path from "node:path";
+// import fs from "node:fs/promises";
 
-const KUBECONFIG_DIR = process.env.KUBECONFIG_DIR || "/srv/kubeconfigs";
+// const KUBECONFIG_DIR = process.env.KUBECONFIG_DIR || "/srv/kubeconfigs";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -25,8 +25,11 @@ export async function POST(req: Request) {
       success: true,
       data: str,
     });
-  } catch (_e: any) {
-    console.error(_e.message);
-    return new NextResponse(_e.message, { status: 500 });
+  } catch (err: unknown) {
+     if (err instanceof Error) {
+    return NextResponse.json({ error: err.message ?? 'Invalid request' }, { status: 400 });
+  } else {
+    return NextResponse.json({ error: 'Unknown error occurred' }, { status: 400 });
   }
+}
 }

@@ -14,10 +14,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Cpu,
-  Database,
+  // Database,
   HardDrive,
   Loader2,
-  MapPin,
+  // MapPin,
   Server,
 } from "lucide-react";
 import Image from "next/image";
@@ -36,14 +36,33 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Icons } from "@/components/ui/icons";
+// import { Progress } from "@/components/ui/progress";
+// import { Icons } from "@/components/ui/icons";
 import api from "@/lib/axios/axios";
 
 interface PageProps {
   products: Tables<"products">[];
   locations: Tables<"locations">[];
 }
+
+
+
+
+interface SamplePlans {
+    id: string;
+    name: string;
+    sub: string;
+    type: string;
+    price: number;
+    resources: {
+        cpu: number;
+        ram: number;
+        storage: number;
+    };
+    discount: null;
+}
+
+
 
 const databaseVersions = {
   mysql: ["5.7", "8.0", "8.1"],

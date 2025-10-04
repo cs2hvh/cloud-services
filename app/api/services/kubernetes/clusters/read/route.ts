@@ -3,15 +3,8 @@ import { createSSRClient } from "@/lib/supabase/server"; // your server-side hel
 
 export const dynamic = "force-dynamic"; // avoid caching
 
-type Row = {
-  create_status: boolean | null;
-  connect_status: boolean | null;
-  verify_status: boolean | null;
-  status: "pending" | "creating" | "ready" | "failed" | "deleted" | null;
-};
-
 export async function POST(
-  req: Request
+//   req: Request
 ) {
   const supabase = await createSSRClient();
 
@@ -44,3 +37,30 @@ export async function POST(
     data: data
   });
 }
+
+// export async function GET(_req: Request) {
+//   const supabase = await createSSRClient();
+
+//   const { data, error } = await supabase
+//     .from("clusters")
+//     .select("*");
+
+//   if (error) {
+//     return NextResponse.json(
+//       { success: false, error: error.message },
+//       { status: 400 }
+//     );
+//   }
+
+//   if (!data) {
+//     return NextResponse.json(
+//       { success: false, error: "Cluster not found" },
+//       { status: 404 }
+//     );
+//   }
+
+//   return NextResponse.json({
+//     success: true,
+//     data: data
+//   });
+// }
