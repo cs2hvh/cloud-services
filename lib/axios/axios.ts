@@ -14,7 +14,7 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    //debugger
+    debugger
     const status = error.response?.status;
     const serverMessage = (error.response?.data as { message?: string })
       ?.message;

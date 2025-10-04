@@ -108,6 +108,69 @@ CREATE TABLE game_servers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+
+
+
+
+
+
+
+-- Kubernetes cluster table
+create table clusters (
+  id uuid primary key default gen_random_uuid(),
+
+  cluster_id text not null,
+  cluster_name text not null,
+
+  control_plane text,
+  workers jsonb default '[]'::jsonb,
+
+  create_status boolean default false,
+  connect_status boolean default false,
+  verify_status boolean default false,
+
+  kubeconfig text,
+  node_config jsonb,
+
+  cni_plugin text,
+  k8s_version text,
+
+  status text default 'pending' check (status in ('pending','creating','ready','failed','deleted')),
+
+  owner_id uuid references auth.users (id) on delete cascade,
+
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+
+
+-- All VMs table
+create table if not exists public.vms (
+  id          uuid primary key default gen_random_uuid(),
+  ip_address  inet    not null unique,           -- e.g. '172.105.52.85'
+  username    text    not null,
+  password    text    not null,                  -- consider encrypting / storing elsewhere
+  location    text    not null,
+  ram         integer not null check (ram >= 1),
+  storage     integer not null check (storage >= 1),
+  cpu         integer not null check (cpu >= 1),
+  status      public.vm_status not null default 'free',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+
+
+
+
+
+
+
+
+
+
+
 -- Row Level Security (RLS) Policies
 
 -- Enable RLS on all tables

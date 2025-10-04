@@ -6,6 +6,12 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[];
 
+interface NodeConfig {
+  ram: number;
+  cpu: number;
+  storage: number;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -361,6 +367,45 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      clusters: {
+        Row: {
+          clusterId: string;
+          clusterName: string;
+
+          controlPlane?: string | null; // e.g., API VIP or CP-1 IP
+          workers?: string[]; // list of worker IPs/hosts
+          createStatus?: boolean;
+          connectStatus?: boolean;
+          verifyStatus?: boolean;
+
+          kubeConfig?: string | null; // kubeconfig YAML
+          nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
+
+          cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
+          k8sVersion?: string | null;
+
+          status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+        };
+        Insert: {
+          clusterId: string;
+          clusterName: string;
+
+          controlPlane?: string | null; // e.g., API VIP or CP-1 IP
+          workers?: string[]; // list of worker IPs/hosts
+          createStatus?: boolean;
+          connectStatus?: boolean;
+          verifyStatus?: boolean;
+
+          kubeConfig?: string | null; // kubeconfig YAML
+          nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
+
+          cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
+          k8sVersion?: string | null;
+
+          status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+        };
+         Relationships: [];
       };
     };
     Views: {

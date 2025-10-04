@@ -58,3 +58,38 @@ export const serviceLocations: Tables<"locations">[] = [
     available: true,
   },
 ];
+
+
+
+
+
+export const vmLocations: Tables<"locations">[] = [
+ {
+  id: 2,
+  short: "FRA",
+  city: "Frankfurt",
+  country: "Germany",
+  country_code: "DE",
+  available: true
+},
+
+{
+  id: 3,
+  short: "YYZ",
+  city: "Toronto",
+  country: "Canada",
+  country_code: "CA",
+  available: true
+},
+
+{
+  id: 4,
+  short: "BOM",
+  city: "Mumbai",
+  country: "India",
+  country_code: "IN",
+  available: true
+}
+
+];
+
