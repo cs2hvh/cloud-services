@@ -236,6 +236,11 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
       return;
     }
 
+     if (currentStep === 6 && !state.selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
+
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
     }
@@ -248,7 +253,7 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
   };
 
   const onSubmit = async () => {
-    debugger;
+   // debugger;
     if (!termsAccepted) {
       toast.error("Please accept the terms of service and privacy policy");
       return;

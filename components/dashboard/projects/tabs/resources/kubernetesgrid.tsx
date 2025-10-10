@@ -205,7 +205,7 @@ const KubernetesGrid = ({ data,type }:{
               <div>
                 <h3 className="text-sm font-medium mb-2">Connection Info</h3>
                 <div className="bg-muted p-2 rounded-md font-mono text-sm">
-                  {server.control_plane}:{6443}
+                  {server.control_plane?.public_ip}:{6443}
                 </div>
               </div>
             </div>

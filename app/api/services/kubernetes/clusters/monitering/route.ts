@@ -3,7 +3,7 @@ import { vmCreateSchema } from "@/types/zod/vm";
 import bcrypt from "bcryptjs";
 import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
-import { generateStrongPassword } from "@/config/functions";
+import { generateStrongPassword, timeRange } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,15 +11,12 @@ export async function POST(req: NextRequest) {
     const json = await req.json();
     console.log(json,"...............................25")
 
-    const vmPassword=generateStrongPassword();
-  console.log(vmPassword,"...............................28")
-    const payload={...json,
-     user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
-    }
-    console.log(payload,"...............................28")
-    const droplets=await axios.post(
-        "https://api.digitalocean.com/v2/droplets",
-       payload,
+    const {start,end}=timeRange(json.hrs || 1);
+     //https://api.digitalocean.com/v2/monitoring/metrics/droplet/memory_cached?host_id=523430540&start=1760018865&end=1760105265
+   // https://api.digitalocean.com/v2/monitering/metrics/droplet/cpu?host_id=523430540&start=1760094220&end=1760115820
+
+    const droplets=await axios.get(
+        `https://api.digitalocean.com/v2/monitoring/metrics/droplet/${json.type}?host_id=${json.droplet_id}&start=${start}&end=${end}`,
         {
           headers: {
             Authorization:
@@ -31,14 +28,14 @@ export async function POST(req: NextRequest) {
     
 
 
-    if (droplets.status===202){
+    if (droplets.status===200){
          return NextResponse.json(
       {
         data:droplets.data,
-        vmPassword:vmPassword,
-        message:'droplet created success'
+        matrix:droplets.data?.data?.result || [],
+        message:'droplet get success'
       },
-      { status: 202 }
+      { status: 200 }
     );
     }
 

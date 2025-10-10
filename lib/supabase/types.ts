@@ -412,8 +412,8 @@ export type Database = {
           cluster_name: string;
           project_id:string;
           owner_id:string;
-          control_plane?: string | null; // e.g., API VIP or CP-1 IP
-          workers?: string[]; // list of worker IPs/hosts
+          control_plane?: { public_ip: string; private_ip: string; droplet_id: string } | null; // e.g., API VIP or CP-1 IP
+          workers?: { public_ip: string; private_ip: string; droplet_id: string }[] | null; // list of worker IPs/hosts
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;

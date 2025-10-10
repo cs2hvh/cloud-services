@@ -9,17 +9,12 @@ export async function POST(req: NextRequest) {
   try {
     //debugger
     const json = await req.json();
-    console.log(json,"...............................25")
-
-    const vmPassword=generateStrongPassword();
-  console.log(vmPassword,"...............................28")
-    const payload={...json,
-     user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
-    }
-    console.log(payload,"...............................28")
-    const droplets=await axios.post(
-        "https://api.digitalocean.com/v2/droplets",
-       payload,
+    console.log(json,"...............................25");
+    // https://api.digitalocean.com/v2/droplets/523430540
+   //  https://api.digitalocean.com/v2/droplets/523400755
+    console.log(`https://api.digitalocean.com/v2/droplets/${json.droplet_id}`)
+    const droplets=await axios.delete(
+        `https://api.digitalocean.com/v2/droplets/${json.droplet_id}`,
         {
           headers: {
             Authorization:
@@ -28,26 +23,30 @@ export async function POST(req: NextRequest) {
           },
         }
       );
+
+
+      console.log(droplets,"...............................28");
     
 
 
-    if (droplets.status===202){
+    if (droplets.status===204){
          return NextResponse.json(
       {
-        data:droplets.data,
-        vmPassword:vmPassword,
-        message:'droplet created success'
+        //data:droplets.data,
+       // vmPassword:vmPassword,
+        message:'droplet deleted success'
       },
-      { status: 202 }
+      { status: 200 }
     );
     }
 
-    if(droplets.status!=202){
+    if(droplets.status!=200){
 return NextResponse.json({ error: "there is some internal error. please try later" }, { status: 400 });
     }
 
   } catch (err: unknown) {
     if (err instanceof Error) {
+        console.log(err.message,"...........................47");
       return NextResponse.json(
         { error: err.message ?? "Invalid request" },
         { status: 400 }

@@ -960,6 +960,33 @@ export const Clusters = {
       return [];
     }
   },
+
+   get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
+    try {
+      console.log(cluster_id,"..................933..id");
+       const supabase = clientWorker(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+  { auth: { persistSession: false } }
+);
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("cluster_id", cluster_id)
+        .single();
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return null;
+    }
+  },
 };
 
 

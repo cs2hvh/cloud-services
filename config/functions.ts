@@ -79,3 +79,12 @@ export class Encryption {
 
 
 
+export function timeRange(hrs: number) {
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - hrs * 60 * 60;
+  return { start, end };
+}
+
+
+
+
