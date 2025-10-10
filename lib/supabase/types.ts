@@ -371,6 +371,7 @@ export type Database = {
       clusters: {
         Row: {
           clusterId: string;
+          id: string;
           clusterName: string;
           project_id:string;
           owner_id:string;
@@ -379,13 +380,10 @@ export type Database = {
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
-
           kubeConfig?: string | null; // kubeconfig YAML
           nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
-
           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
           k8sVersion?: string | null;
-
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
         };
         Insert: {
@@ -404,6 +402,41 @@ export type Database = {
           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
           k8sVersion?: string | null;
 
+          status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+        };
+         Relationships: [];
+      };
+      clusters_get: {
+        Row: {
+          cluster_id: string;
+          cluster_name: string;
+          project_id:string;
+          owner_id:string;
+          control_plane?: string | null; // e.g., API VIP or CP-1 IP
+          workers?: string[]; // list of worker IPs/hosts
+          create_status?: boolean;
+          connect_status?: boolean;
+          verify_status?: boolean;
+          kube_config?: string | null; // kubeconfig YAML
+          node_config?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
+          cni_plugin?: "flannel" | "calico" | "cilium" | string | null;
+          k8s_version?: string | null;
+          status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+        };
+        Insert: {
+           cluster_id: string;
+          cluster_name: string;
+          project_id:string;
+          owner_id:string;
+          control_plane?: string | null; // e.g., API VIP or CP-1 IP
+          workers?: string[]; // list of worker IPs/hosts
+          create_status?: boolean;
+          connect_status?: boolean;
+          verify_status?: boolean;
+          kube_config?: string | null; // kubeconfig YAML
+          node_config?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
+          cni_plugin?: "flannel" | "calico" | "cilium" | string | null;
+          k8s_version?: string | null;
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
         };
          Relationships: [];

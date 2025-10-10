@@ -1,4 +1,5 @@
 "use client";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type CheckStatus = {
@@ -6,14 +7,17 @@ type CheckStatus = {
   connectStatus: boolean;
   verifyStatus: boolean;
 };
-
-export default function SingleCluster({ clusterId }: { clusterId: string }) {
+ function SingleCluster({ clusterId }: { clusterId: string }) {
+    
     console.log(clusterId,".............clusterId in single cluster...........");
   const [status, setStatus] = useState<CheckStatus>({
     createStatus: false,
     connectStatus: false,
     verifyStatus: false,
   });
+ // const router=useRouter();
+ const searchParams = useSearchParams();
+   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -63,7 +67,7 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
 
       const data = (await res.json()) as Partial<CheckStatus>;
 
-      console.log(data, ".............data");
+      //console.log(data, ".............data");
 
       // Merge new truthy statuses without flipping any true back to false
       setStatus((prev) => ({
@@ -71,6 +75,9 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
         connectStatus: prev.connectStatus || !!data.connectStatus,
         verifyStatus: prev.verifyStatus || !!data.verifyStatus,
       }));
+      if(data.connectStatus && data.createStatus && data.verifyStatus){
+        setReady(true)
+      }
       setLastUpdated(new Date());
     } catch (err: unknown) {
       console.log(err, ".........98");
@@ -82,7 +89,31 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
     }
   }
 
-  // Start polling on mount, stop on unmount
+
+
+  // Stop polling once all steps complete (and alert once)
+  useEffect(() => {
+    if (allDone) {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+      abortRef.current?.abort();
+      if (!alertedRef.current) {
+        debugger
+        alertedRef.current = true;
+        const check=searchParams.get('clusterStatus')
+        if(searchParams.get('clusterStatus')!='ready'){
+            alert("Cluster is ready!");
+        }
+      }
+    }
+  }, [allDone]);
+
+
+
+
+    // Start polling on mount, stop on unmount
   useEffect(() => {
     // immediate check
     pollOnce();
@@ -95,21 +126,6 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
-
-  // Stop polling once all steps complete (and alert once)
-  useEffect(() => {
-    if (allDone) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      abortRef.current?.abort();
-      if (!alertedRef.current) {
-        alertedRef.current = true;
-        alert("Cluster is ready!");
-      }
-    }
-  }, [allDone]);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 py-10 px-4">
@@ -125,7 +141,8 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
           {steps.map((s, idx) => {
             const done = status[s.key];
             const inProgress = !done && idx === currentIndex;
-            return (
+            if(ready===false){
+                 return (
               <StepRow
                 key={s.key}
                 label={s.label}
@@ -133,6 +150,18 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
                 inProgress={inProgress}
               />
             );
+            }
+            else{
+                 return (
+              <StepRow
+                key={s.key}
+                label={s.label}
+                done={true}
+                inProgress={false}
+              />
+            );
+            }
+           
           })}
 
           <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
@@ -157,12 +186,14 @@ export default function SingleCluster({ clusterId }: { clusterId: string }) {
             </div>
           </div>
 
-          {error && (
+          {/* {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </div>
-          )}
+          )} */}
         </div>
+
+        //prompt
       </div>
     </div>
   );
@@ -264,3 +295,7 @@ function Spinner() {
     </svg>
   );
 }
+
+
+
+export default SingleCluster

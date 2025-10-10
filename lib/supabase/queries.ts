@@ -1,3 +1,4 @@
+import { Encryption } from "@/config/functions";
 import { createClient, createSSRClient, supabase } from "./server";
 import { createServiceClient } from "./server";
 import { Tables, TablesInsert, TablesUpdate } from "./types";
@@ -11,6 +12,7 @@ type Product = Tables<"products">;
 type Location = Tables<"locations">;
 type OTP = Tables<"otps">;
 type  Clusters = Tables<"clusters">;
+type  ClustersGet = Tables<"clusters_get">;
 
 
 type Patch = {
@@ -836,6 +838,10 @@ export const Vms = {
 export const Clusters = {
   // Get a project by ID
   create:async(payload:Clusters )=>{
+
+    const encryptedKubeconfig = payload.kubeConfig
+        ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
+        : null;
       const row = {
     cluster_id: payload.clusterId,
     cluster_name: payload.clusterName,
@@ -847,7 +853,7 @@ export const Clusters = {
     connect_status: payload.connectStatus ?? false,
     verify_status: payload.verifyStatus ?? false,
 
-    kubeconfig: payload.kubeConfig ?? null,
+    kubeconfig: encryptedKubeconfig ?? null,
     node_config: payload.nodeConfig ?? null,
 
     cni_plugin: payload.cniPlugin ?? null,
@@ -928,9 +934,9 @@ export const Clusters = {
   return { success: true, cluster: data };
   },
   
-   get_by_project_id: async (id: string)=> {
+   get_by_project_id: async (projectId: string): Promise<ClustersGet[]>=> {
     try {
-      console.log(id);
+      console.log(projectId,"..................933..id");
        const supabase = clientWorker(
   process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
   process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
@@ -939,18 +945,19 @@ export const Clusters = {
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
-        .eq("project_id", id)
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
 
       if (error) {
         console.log(
           `[Supabase] Error while getting project by id: ${error.message}`,
         );
-        return null;
+        return [];
       }
       return data;
     } catch (err) {
       console.log(`[Supabase] Error while getting project by id: ${err}`);
-      return null;
+      return [];
     }
   },
 };

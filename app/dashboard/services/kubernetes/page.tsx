@@ -175,6 +175,8 @@ import { DockIcon, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import fs from "node:fs/promises";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 
 
@@ -191,65 +193,82 @@ type Cluster = {
 
 const KubernetesPage = () => {
   // Dummy data for now, replace with actual data from your backend
-  const [clusters,setClusters]=useState([] as Cluster[]);
+  const [clusters, setClusters] = useState([] as Cluster[]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
+    const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kubeconfig: kubeconfig }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const blob = new Blob([data.data], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
 
-  const downloadKubeconfig= async (clusterId:string,kubeconfig:string)=>{
-                        
-                      const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kubeconfig: kubeconfig }),
-        });
-        if(res.ok){
-          const data = await res.json();
-           const blob = new Blob([data.data], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${clusterId}.txt`;
+      a.click();
+    }
 
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${clusterId}.txt`;
-    a.click();
-        }
+    // console.log(await res.json(),".............res from download api...........");
+  };
 
-
-       // console.log(await res.json(),".............res from download api...........");
-                    }
-
-  useEffect(()=>{
+  useEffect(() => {
     //fetch clusters from backend.
-    async function fetchClusters(){
-      try{
+    async function fetchClusters() {
+      try {
         //debugger;
+        setLoading(true);
         const res = await fetch("/api/services/kubernetes/clusters/read", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
         });
         if (res.ok) {
           const response = await res.json();
-          console.log(response,".............response from clusters read api...........");
-          if(response.success){
+          console.log(
+            response,
+            ".............response from clusters read api..........."
+          );
+          if (response.success) {
             //set clusters
-            setClusters(response.data);
+            setClusters(
+              response.data.filter((item: Cluster) => item.status === "ready")
+            );
           }
         }
-      }catch(err){}
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
     }
-    fetchClusters()
+    fetchClusters();
+  }, []);
 
-  },[])
-
+  if (loading) {
+    return (
+      <div className="flex-1 bg-black min-h-screen flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-8"
       >
         <div>
           <h1 className="text-3xl font-bold">Kubernetes</h1>
-          <p className="text-white/60">Manage and provision your Kubernetes clusters.</p>
+          <p className="text-white/60">
+            Manage and provision your Kubernetes clusters.
+          </p>
         </div>
         <Link
           href="/dashboard/services/kubernetes/new"
@@ -274,12 +293,15 @@ const KubernetesPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-             
               {clusters.map((c) => (
                 <tr key={c.id} className="hover:bg-slate-50/60">
                   <Td>
-                    <div className="font-medium text-slate-900">{c.cluster_name}</div>
-                    <div className="text-xs text-slate-500 font-mono">{c.id}</div>
+                    <div className="font-medium text-slate-900">
+                      {c.cluster_name}
+                    </div>
+                    <div className="text-xs text-slate-500 font-mono">
+                      {c.id}
+                    </div>
                   </Td>
                   <Td>{c.workers?.length}</Td>
                   <Td>
@@ -287,26 +309,25 @@ const KubernetesPage = () => {
                       {new Date(c.created_at).toLocaleString()}
                     </time>
                   </Td>
+                  <Td>{c.k8s_version}</Td>
+                  <Td>{c.status}</Td>
                   <Td>
-                    {c.k8s_version}
-                  </Td>
-                 <Td>{c.status}</Td>
-                  <Td>
-                    <div  className="flex gap-2">
+                    <div className="flex gap-2">
                       <a
-                       onClick={()=>{
-                        downloadKubeconfig(c.cluster_id,c.kubeconfig)
-
-                       }
-                       }
+                        onClick={() => {
+                          downloadKubeconfig(c.cluster_id, c.kubeconfig);
+                        }}
                         //href={`/api/clusters/${encodeURIComponent(c.cluster_id)}/kubeconfig`}
                         className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                       // download
+                        // download
                       >
                         Download kubeconfig
                       </a>
                       <Link
-                        href={`/dashboard/services/kubernetes/clusters/${encodeURIComponent(c.cluster_id)}`}
+                        href={{
+                          pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(c.cluster_id)}`,
+                          query: { clusterStatus: c.status },
+                        }}
                         className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
                       >
                         View Cluster
@@ -319,7 +340,7 @@ const KubernetesPage = () => {
           </table>
         </div>
       ) : (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -327,9 +348,11 @@ const KubernetesPage = () => {
         >
           <DockIcon className="mx-auto h-16 w-16 text-white/20" />
           <h3 className="mt-4 text-xl font-semibold">No Kubernetes Found</h3>
-          <p className="mt-2 text-sm text-white/50">Get started by provisioning a new Kubernetes cluster.</p>
+          <p className="mt-2 text-sm text-white/50">
+            Get started by provisioning a new Kubernetes cluster.
+          </p>
           <div className="mt-6">
-            <Link 
+            <Link
               href="/dashboard/services/Kubernetes/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >
@@ -343,19 +366,22 @@ const KubernetesPage = () => {
   );
 };
 
-
-
-
-
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th scope="col" className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600">
+    <th
+      scope="col"
+      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600"
+    >
       {children}
     </th>
   );
 }
 function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-6 py-4 text-sm text-slate-800 align-middle">{children}</td>;
+  return (
+    <td className="px-6 py-4 text-sm text-slate-800 align-middle">
+      {children}
+    </td>
+  );
 }
 
 

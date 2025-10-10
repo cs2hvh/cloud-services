@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -14,10 +14,10 @@ import {
   CheckCircle2,
   ChevronRight,
   Cpu,
-//   Database,
+  //   Database,
   HardDrive,
   Loader2,
-//   MapPin,
+  //   MapPin,
   Server,
 } from "lucide-react";
 import Image from "next/image";
@@ -40,13 +40,42 @@ import { Badge } from "@/components/ui/badge";
 // import { Icons } from "@/components/ui/icons";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
+import axios from "axios";
+import { headers } from "next/headers";
+import { Json } from "@/lib/supabase/types";
+import { stat } from "fs";
 
 interface PageProps {
   locations: Tables<"locations">[];
-  projects:Tables<"projects">[];
-  userId:string;
+  projects: Tables<"projects">[];
+  userId: string;
 }
 
+type NodeInfo = {
+  host: string;
+  role: "control-plane" | "worker"; // Add more roles if needed
+  hostname: string;
+  cpu: number;
+  memory_mb: number;
+  storage: number;
+};
+
+type SendPayload = {
+  provider: string;
+  cluster: {
+    name: string;
+    location: string;
+    pod_cidr: string;
+    k8s_minor: string;
+  };
+  auth: {
+    method: string;
+    user: string;
+    password: string;
+  };
+  nodes: NodeInfo[];
+  ips: string[];
+};
 
 // interface Project{
 //     id: string;
@@ -67,38 +96,38 @@ interface PageProps {
 //   kafka: ["3.4", "3.5", "3.6"],
 // };
 
-const databaseInfo = {
-  mysql: { 
-    name: "MySQL", 
-    description: "Popular open-source relational database", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg" 
-  },
-  postgresql: { 
-    name: "PostgreSQL", 
-    description: "Advanced open-source database", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg" 
-  },
-  mongodb: { 
-    name: "MongoDB", 
-    description: "NoSQL document database", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg" 
-  },
-  redis: { 
-    name: "Redis", 
-    description: "In-memory data structure store", 
-    icon: "/redis.png" 
-  },
-  mariadb: { 
-    name: "MariaDB", 
-    description: "MySQL-compatible database", 
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mariadb/mariadb-original.svg" 
-  },
-  kafka: { 
-    name: "Apache Kafka", 
-    description: "Distributed event streaming", 
-    icon: "/kafka.png" 
-  },
-};
+// const databaseInfo = {
+//   mysql: {
+//     name: "MySQL",
+//     description: "Popular open-source relational database",
+//     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg"
+//   },
+//   postgresql: {
+//     name: "PostgreSQL",
+//     description: "Advanced open-source database",
+//     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg"
+//   },
+//   mongodb: {
+//     name: "MongoDB",
+//     description: "NoSQL document database",
+//     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg"
+//   },
+//   redis: {
+//     name: "Redis",
+//     description: "In-memory data structure store",
+//     icon: "/redis.png"
+//   },
+//   mariadb: {
+//     name: "MariaDB",
+//     description: "MySQL-compatible database",
+//     icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mariadb/mariadb-original.svg"
+//   },
+//   kafka: {
+//     name: "Apache Kafka",
+//     description: "Distributed event streaming",
+//     icon: "/kafka.png"
+//   },
+// };
 
 // Sample database plans if products are empty
 // const sampleDatabasePlans = {
@@ -138,50 +167,48 @@ const databaseInfo = {
 //   ],
 // };
 
-const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
-    const router = useRouter();
-     const planValue:string="";
+const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
+  const router = useRouter();
+  const planValue: string = "";
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
-  const [availablePlans] = useState(
-    [
-  {
-    planId: "nano",
-    label: "Nano • 1GB RAM • 1 vCPU • 27GB SSD",
-    ram: 1,
-    cpu: 1,
-    storage: 27,
-  },
-  {
-    planId: "micro",
-    label: "Micro • 1GB RAM • 1 vCPU • 27GB SSD",
-    ram: 1,
-    cpu: 1,
-    storage: 27,
-  },
-  {
-    planId: "small",
-    label: "Small • 4GB RAM • 2 vCPU • 27GB SSD",
-    ram: 4,
-    cpu: 2,
-    storage: 27,
-  },
-],
-  );
+  //we need to make plan dynamic
+  const [availablePlans] = useState([
+    {
+      planId: "Shared",
+      label: "s-1vcpu-1gb-amd",
+      ram: 1,
+      cpu: 1,
+      storage: 25,
+      processor: "amd",
+    },
+    {
+      planId: "Shared",
+      label: "s-2vcpu-2gb-amd",
+      ram: 2,
+      cpu: 1,
+      storage: 25,
+    },
+    {
+      planId: "Shared",
+      label: "s-2vcpu-4gb-amd",
+      ram: 4,
+      cpu: 2,
+      storage: 25,
+    },
+  ]);
 
   const [state, setState] = useState({
-    selectedPlan: {}, // Selected database product
+    selectedPlan: "", // Selected database product
     selectedName: "", // Cluster name
-    selectedNode: "", // Number of nodes
+    selectedNode: 0, // Number of nodes
     selectedVersion: "", // Selected version
     selectedLocation: "", // Selected location
     selectedDbType: "", // Selected database type (mysql, mongodb, etc.)
     selectedProject: "", // Selected project (if applicable)
     versions: ["1.31.1"] as string[], // Available versions
   });
-
-
 
   const handleNextStep = () => {
     if (currentStep === 1 && !state.selectedName) {
@@ -199,7 +226,7 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
       return;
     }
 
-    if (currentStep === 4 && !Object.keys(state.selectedPlan).length) {
+    if (currentStep === 4 && !state.selectedPlan) {
       toast.error("Please select a cluster plan");
       return;
     }
@@ -221,6 +248,7 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
   };
 
   const onSubmit = async () => {
+    debugger;
     if (!termsAccepted) {
       toast.error("Please accept the terms of service and privacy policy");
       return;
@@ -233,70 +261,209 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
         !state.selectedName ||
         !state.selectedVersion ||
         !state.selectedLocation ||
-        !state.selectedProject 
+        !state.selectedProject
       ) {
         toast.error("Please fill in all the required fields");
         return;
       }
 
-      const response = await api.post("/services/kubernetes/manageip/read", {
-        name: state.selectedName,
-        nodes: state.selectedNode,
-        planDetails: state.selectedPlan,
-        version: state.selectedVersion,
-        location: state.selectedLocation,
-       // project: state.selectedProject,
-       // ownerId: userId,
+      // const response = await api.post("/services/kubernetes/manageip/read", {
+      //   name: state.selectedName,
+      //   nodes: state.selectedNode,
+      //   planDetails: state.selectedPlan,
+      //   version: state.selectedVersion,
+      //   location: state.selectedLocation,
+      //  // project: state.selectedProject,
+      //  // ownerId: userId,
+      // });
+
+      //  if (response.data.success === false) {
+      //   toast.error(response.data.error || "An error occurred. Please try again.");
+      //   return;
+      //  }
+
+      //make nodes name array
+      let nodeNames = makeNodeKeys(state.selectedNode);
+      console.log(nodeNames, ".....nodeNames.....262");
+
+      //generate password for vms
+      // const generateStrongPassword = () => {
+      //   const chars =
+      //     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      //   let password = "";
+
+      //   for (let i = 0; i < 12; i++) {
+      //     const randomIndex = Math.floor(Math.random() * chars.length);
+      //     password += chars[randomIndex];
+      //   }
+
+      //   return password;
+      // };
+      // const vmPassword = generateStrongPassword();
+     // console.log(vmPassword, ".........................278");
+
+      //generate vms from digitalOcean apis
+      const payload = {
+        names: nodeNames,
+        region: state.selectedLocation, //form-dependent
+        size: state.selectedPlan, //form-dependent
+        image: "ubuntu-25-04-x64",
+        backups: true,
+        ipv6: true,
+        monitoring: true,
+        tags: ["env:prod", "web", "ssh-allowed"],
+       // user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
+      };
+
+      console.log(payload, "...............298");
+
+     
+
+      const createDroplet = await api.post(
+        "/services/kubernetes/manageip/createdroplet",
+        payload,
+        // {
+        //   headers: {
+        //     Authorization:
+        //       "Bearer dop_v1_d8c411020fc7d2d41f5f30f35b1e8d8a0b06fffd4de117c28b93a5a461be5e8a",
+        //     "Content-Type": "application/json",
+        //   },
+        // }
+      );
+
+
+       let sendPayload: SendPayload = {
+        provider: "existing",
+        cluster: {
+          name: state.selectedName,
+          location: state.selectedLocation,
+          pod_cidr: "10.244.0.0/16",
+          k8s_minor: "1.31.1",
+        },
+        auth: { method: "password", user: "root", password: createDroplet.data.vmPassword },
+        nodes: [],
+        // "cp-1": { "host": "172.104.206.68", "role": "control-plane", "hostname": "cp-1", "cpu": 2, "memory_mb": 512 }
+
+        ips: [],
+      };
+
+      //one more idea clicked my mind , instead check status , call get droplet and see status =active or not.
+
+      if (createDroplet.status === 202) {
+        let counter = 0;
+        while (counter != state.selectedNode + 1) {
+          const checkStatus = await api.post(
+            // `https://api.digitalocean.com/v2/actions/${createDroplet.data.links.actions[counter].id}`,
+            // {
+            //   headers: {
+            //     Authorization:
+            //       "Bearer dop_v1_d8c411020fc7d2d41f5f30f35b1e8d8a0b06fffd4de117c28b93a5a461be5e8a",
+            //     "Content-Type": "application/json",
+            //   },
+            // }
+            "/services/kubernetes/manageip/dropletstatus",
+             {
+              id:createDroplet.data.data.links.actions[counter].id
+             }
+          );
+          if (checkStatus.status === 200) {
+            if (checkStatus.data.data.action.status === "completed") {
+              // https://api.digitalocean.com/v2/actions/2831633833
+              const vmData = await api.post(
+                `/services/kubernetes/manageip/readdroplet`,
+                 {id:checkStatus.data.data.action.resource_id}
+              );
+              if (vmData.status === 200) {
+                const vmDetails: {
+                  host: string;
+                  memory_mb: number;
+                  name: string;
+                  cpu: number;
+                  storage: number;
+                } = {
+                  host: vmData.data.data.droplet.networks.v4.find(
+                    (item: { type: string; ip_address: string }) =>
+                      item.type === "public"
+                  ).ip_address,
+                  memory_mb: vmData.data.data.droplet.memory,
+                  name: vmData.data.data.droplet.name,
+                  cpu: vmData.data.data.droplet.vcpus,
+                  storage: vmData.data.data.droplet.disk,
+                };
+                sendPayload.ips.push(vmDetails.host);
+                sendPayload.nodes.push({
+                  host: vmDetails.host,
+                  role: counter === 0 ? "control-plane" : "worker",
+                  hostname: vmDetails.name,
+                  cpu: vmDetails.cpu,
+                  memory_mb: vmDetails.memory_mb,
+                  storage: vmDetails.storage,
+                });
+                counter++;
+              }
+            }
+          } else {
+            continue;
+          }
+        }
+      }
+
+      
+
+      await sleep(120000);
+
+      //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
+      const response4 = await api.post("/services/kubernetes/clusters", {
+        ...sendPayload,
+        ownerId: userId,
+        projectId: state.selectedProject,
       });
-
-       if (response.data.success === false) {
-        toast.error(response.data.error || "An error occurred. Please try again.");
-        return;
-       }
-
-       const response2 = await api.post("/services/kubernetes/clusters", {...response.data.payload,ownerId:userId,project:selectedProject});
-        if (response2.status == 200) {
+      if (response4.status == 200) {
         alert(
           "your cluster is being created. please wait for some time......."
         );
-        debugger
+        //debugger
         toast.success("Cluster request captured");
         //navigate to status page.
         // window.location.href=`/dashboard/${response.data.clusterId}/status`;
         router.push(
-          `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response2.data.clusterId)}`
+          `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
         );
       }
 
-
-
-     // toast.success(response.data);
+      // toast.success(response.data);
       // Redirect to success page or dashboard
-    } catch (error) {
+    } catch (error: any) {
       console.log(error);
+      if (error.message) {
+        console.log(
+          error.message,
+          ".......error.message...................404"
+        );
+      }
       toast.error("Failed to create database. Please try again later.");
     } finally {
       setIsLoading(false);
     }
   };
 
-//   const handleDbTypeChange = (dbType: string) => {
-//     setState((prevState) => ({
-//       ...prevState,
-//       selectedDbType: dbType,
-//       selectedDb: "", // Reset selected plan when changing DB type
-//       selectedVersion:
-//         databaseVersions[dbType as keyof typeof databaseVersions]?.[0] || "",
-//     }));
-//   };
+  //   const handleDbTypeChange = (dbType: string) => {
+  //     setState((prevState) => ({
+  //       ...prevState,
+  //       selectedDbType: dbType,
+  //       selectedDb: "", // Reset selected plan when changing DB type
+  //       selectedVersion:
+  //         databaseVersions[dbType as keyof typeof databaseVersions]?.[0] || "",
+  //     }));
+  //   };
 
-  const handleKcPlanChange = (dbId: string) => {
-    //debugger
-    setState((prevState) => ({
-      ...prevState,
-      selectedPlan: availablePlans.find((plan) => plan.planId === dbId) || {},
-    }));
-  };
+  // const handleKcPlanChange = (dbId: string) => {
+  //   //debugger
+  //   setState((prevState) => ({
+  //     ...prevState,
+  //     selectedPlan: availablePlans.find((plan) => plan.planId === dbId) || {},
+  //   }));
+  // };
 
   const {
     selectedName,
@@ -310,7 +477,7 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
 
   //const selectedDatabase = products?.find((db) => db.id === selectedDb);
   const selectedLocationData = locations?.find(
-    (location) => location.short === selectedLocation,
+    (location) => location.short === selectedLocation
   );
 
   const steps = [
@@ -323,8 +490,18 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
     { id: 7, name: "Payment" },
   ];
 
+  function makeNodeKeys(workers: number): string[] {
+    const n = Math.max(0, Math.floor(workers)); // sanitize
+    const keys = ["cp-1"];
+    for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
+    return keys;
+  }
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
   // Use predefined database types
-//   const dbTypes = Object.keys(databaseInfo);
+  //   const dbTypes = Object.keys(databaseInfo);
 
   return (
     <div className="py-4">
@@ -335,19 +512,28 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
               <div className="flex items-center w-full">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
-                    currentStep > step.id ? "bg-blue-600 text-white" : 
-                    currentStep === step.id ? "bg-blue-500 text-white" : "bg-white/10 text-white/50"
+                    currentStep > step.id
+                      ? "bg-blue-600 text-white"
+                      : currentStep === step.id
+                        ? "bg-blue-500 text-white"
+                        : "bg-white/10 text-white/50"
                   }`}
                 >
                   {currentStep > step.id ? <CheckCircle2 size={16} /> : step.id}
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 transition-colors duration-300 ${
-                    currentStep > step.id ? 'bg-blue-600' : 'bg-white/10'
-                  }`}></div>
+                  <div
+                    className={`flex-1 h-0.5 transition-colors duration-300 ${
+                      currentStep > step.id ? "bg-blue-600" : "bg-white/10"
+                    }`}
+                  ></div>
                 )}
               </div>
-              <p className={`mt-2 text-xs ${currentStep >= step.id ? 'text-white' : 'text-white/50'}`}>{step.name}</p>
+              <p
+                className={`mt-2 text-xs ${currentStep >= step.id ? "text-white" : "text-white/50"}`}
+              >
+                {step.name}
+              </p>
             </div>
           ))}
         </div>
@@ -358,19 +544,26 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
           {currentStep === 1 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Kubernetes Cluster Name</CardTitle>
+                <CardTitle className="text-white">
+                  Kubernetes Cluster Name
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <Input
                   value={selectedName}
-                  onChange={(e) => setState({ ...state, selectedName: e.target.value })}
+                  onChange={(e) =>
+                    setState({ ...state, selectedName: e.target.value })
+                  }
                   type="text"
                   placeholder="my-production-db"
                   className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
                 />
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
               </CardFooter>
@@ -385,30 +578,65 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
               <CardContent>
                 <RadioGroup
                   value={selectedLocation}
-                  onValueChange={(value) => setState({ ...state, selectedLocation: value })}
+                  onValueChange={(value) =>
+                    setState({ ...state, selectedLocation: value })
+                  }
                   className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
                 >
                   {locations.map((region) => (
                     <div key={region.id}>
-                      <RadioGroupItem value={region.city.toLowerCase()} id={region.city} className="peer sr-only" disabled={!region.available} />
+                      <RadioGroupItem
+                        value={region.short}
+                        id={region.city}
+                        className="peer sr-only"
+                        disabled={!region.available}
+                      />
                       <Label
                         htmlFor={region.city}
                         className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
                       >
-                        <Image src={`https://flagsapi.com/${region.country_code}/flat/64.png`} alt={region.city} width={32} height={24} className="rounded-sm" />
+                        <Image
+                          src={`https://flagsapi.com/${region.country_code}/flat/64.png`}
+                          alt={region.city}
+                          width={32}
+                          height={24}
+                          className="rounded-sm"
+                        />
                         <div>
-                          <div className="font-medium text-white">{region.city}</div>
-                          <div className="text-xs text-white/60">{region.country}</div>
+                          <div className="font-medium text-white">
+                            {region.city}
+                          </div>
+                          <div className="text-xs text-white/60">
+                            {region.country}
+                          </div>
                         </div>
-                        {!region.available && <Badge variant="outline" className="text-xs ml-auto text-white/70 border-white/30">Coming soon</Badge>}
+                        {!region.available && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs ml-auto text-white/70 border-white/30"
+                          >
+                            Coming soon
+                          </Badge>
+                        )}
                       </Label>
                     </div>
                   ))}
                 </RadioGroup>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -419,18 +647,30 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                 <CardTitle className="text-white">Number of Nodes</CardTitle>
               </CardHeader>
               <CardContent>
-                 <Input
+                <Input
                   value={selectedNode}
-                  onChange={(e) => setState({ ...state, selectedNode: e.target.value })}
+                  onChange={(e) =>
+                    setState({ ...state, selectedNode: Number(e.target.value) })
+                  }
                   type="number"
                   placeholder="number of nodes (e.g., 3)"
                   className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
                 />
-               
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -441,11 +681,24 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                 <CardTitle className="text-white">Cluster Plan</CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup value={planValue} onValueChange={handleKcPlanChange} className="grid grid-cols-1 gap-4">
+                <RadioGroup
+                  value={state.selectedPlan}
+                  onValueChange={(value) =>
+                    setState({ ...state, selectedPlan: value })
+                  }
+                  className="grid grid-cols-1 gap-4"
+                >
                   {availablePlans.map((plan) => (
-                    <div key={plan.planId}>
-                      <RadioGroupItem value={plan.planId} id={plan.planId} className="peer sr-only" />
-                      <Label htmlFor={plan.planId} className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
+                    <div key={plan.label}>
+                      <RadioGroupItem
+                        value={plan.label}
+                        id={plan.label}
+                        className="peer sr-only"
+                      />
+                      <Label
+                        htmlFor={plan.label}
+                        className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                      >
                         {/* <div className="flex justify-between items-start mb-4">
                           <div>
                             <p className="font-bold text-lg text-white">{database.name}</p>
@@ -481,7 +734,9 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <Cpu className="w-4 h-4 text-blue-400" />
-                                <span className="text-xs text-white/60">CPU</span>
+                                <span className="text-xs text-white/60">
+                                  CPU
+                                </span>
                               </div>
                               <p className="font-semibold text-white">
                                 {plan.cpu} vCPU
@@ -490,7 +745,9 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <Server className="w-4 h-4 text-green-400" />
-                                <span className="text-xs text-white/60">RAM</span>
+                                <span className="text-xs text-white/60">
+                                  RAM
+                                </span>
                               </div>
                               <p className="font-semibold text-white">
                                 {plan.ram} GB
@@ -499,10 +756,12 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <HardDrive className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs text-white/60">Storage</span>
+                                <span className="text-xs text-white/60">
+                                  Storage
+                                </span>
                               </div>
                               <p className="font-semibold text-white">
-                               {plan.storage} GB
+                                {plan.storage} GB
                               </p>
                             </div>
                           </div>
@@ -513,58 +772,119 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
                 </RadioGroup>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
 
-          {currentStep === 5  && (
+          {currentStep === 5 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <CardTitle className="text-white">Configuration</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="version" className="mb-2 block text-white">Kubernetes Version</Label>
-                  <Select value={selectedVersion} onValueChange={(value) => setState({ ...state, selectedVersion: value }) }>
-                    <SelectTrigger id="version" className="w-full bg-white/10 border-white/20 rounded-md text-white">
+                  <Label htmlFor="version" className="mb-2 block text-white">
+                    Kubernetes Version
+                  </Label>
+                  <Select
+                    value={selectedVersion}
+                    onValueChange={(value) =>
+                      setState({ ...state, selectedVersion: value })
+                    }
+                  >
+                    <SelectTrigger
+                      id="version"
+                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                    >
                       <SelectValue placeholder="Select version" />
                     </SelectTrigger>
                     <SelectContent className="bg-black border-white/20 text-white">
-                      {versions.map((version) => <SelectItem key={version} value={version}>v{version}</SelectItem>)}
+                      {versions.map((version) => (
+                        <SelectItem key={version} value={version}>
+                          v{version}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
 
-          {currentStep === 6  && (
+          {currentStep === 6 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <CardTitle className="text-white">Select Project</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="version" className="mb-2 block text-white">Project</Label>
-                  <Select value={selectedProject} onValueChange={(value) => setState({ ...state, selectedProject: value }) }>
-                    <SelectTrigger id="version" className="w-full bg-white/10 border-white/20 rounded-md text-white">
+                  <Label htmlFor="version" className="mb-2 block text-white">
+                    Project
+                  </Label>
+                  <Select
+                    value={selectedProject}
+                    onValueChange={(value) =>
+                      setState({ ...state, selectedProject: value })
+                    }
+                  >
+                    <SelectTrigger
+                      id="version"
+                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                    >
                       <SelectValue placeholder="Select version" />
                     </SelectTrigger>
                     <SelectContent className="bg-black border-white/20 text-white">
-                      {projects.map((item:any) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}
+                      {projects.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-gray-200">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -576,69 +896,62 @@ const NewClusterPage = ({ locations,projects,userId }: PageProps) => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
-                  <Checkbox id="terms" checked={termsAccepted} onCheckedChange={(checked) => setTermsAccepted(checked === true)} className="rounded-sm" />
-                  <label htmlFor="terms" className="text-sm leading-none text-white">
-                    I accept the <Link href="/terms" className="text-blue-400 hover:underline">Terms of Service</Link> and <Link href="/privacy" className="text-blue-400 hover:underline">Privacy Policy</Link>
+                  <Checkbox
+                    id="terms"
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) =>
+                      setTermsAccepted(checked === true)
+                    }
+                    className="rounded-sm"
+                  />
+                  <label
+                    htmlFor="terms"
+                    className="text-sm leading-none text-white"
+                  >
+                    I accept the{" "}
+                    <Link
+                      href="/terms"
+                      className="text-blue-400 hover:underline"
+                    >
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      href="/privacy"
+                      className="text-blue-400 hover:underline"
+                    >
+                      Privacy Policy
+                    </Link>
                   </label>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} disabled={isLoading} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={onSubmit} size="lg" disabled={isLoading || !termsAccepted} className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto">
-                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Processing...</> : <>Pay and Deploy</>}
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  disabled={isLoading}
+                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={onSubmit}
+                  size="lg"
+                  disabled={isLoading || !termsAccepted}
+                  className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>Pay and Deploy</>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
           )}
-        </div>
-
-        <div className="lg:col-span-1">
-          <Card className="sticky top-8 bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Order Summary</CardTitle>
-              {selectedDbType && (
-                <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
-                  <Image 
-                    src={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.icon || ""} 
-                    alt={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
-                    width={60}
-                    height={60}
-                    className="object-contain"
-                  />
-                </div>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {selectedName && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Name:</span><span className="font-medium text-white">{selectedName}</span></div>}
-              {selectedDbType && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Type:</span>
-                  <div className="flex items-center gap-2">
-                    <Image 
-                      src={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.icon || ""} 
-                      alt={databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
-                      width={20}
-                      height={20}
-                      className="object-contain"
-                    />
-                    <span className="font-medium text-white">
-                      {databaseInfo[selectedDbType as keyof typeof databaseInfo]?.name || selectedDbType}
-                    </span>
-                  </div>
-                </div>
-              )}
-              {/* {selectedDatabase && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Plan:</span><span className="font-medium text-white">{selectedDatabase.name}</span></div>} */}
-              {selectedVersion && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Version:</span><span className="font-medium text-white">v{selectedVersion}</span></div>}
-              {selectedLocationData && <div className="flex justify-between items-center"><span className="text-sm text-white/60">Location:</span><div className="flex items-center gap-2"><Image src={`https://flagsapi.com/${selectedLocationData.country_code}/flat/64.png`} alt={selectedLocationData.city} width={16} height={12} className="rounded-sm" /><span className="font-medium text-white">{selectedLocationData.city}</span></div></div>}
-              <Separator className="bg-white/10" />
-              <div className="flex justify-between items-center font-bold text-lg text-white">
-                <span>Total</span>
-                <span>
-                  {/* {selectedDatabase ? selectedDatabase.price === 0 || selectedDatabase.price === null ? "Free" : selectedDatabase.discount && Number(selectedDatabase.discount) > 0 ? `${formatPrice(selectedDatabase.price! * (1 - Number(selectedDatabase.discount) / 100))}/mo` : `${formatPrice(selectedDatabase.price!)}/mo` : "-"} */}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>

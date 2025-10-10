@@ -20,7 +20,8 @@ const NodeSpec = z.object({
   role: z.enum(["control-plane", "worker"]),
   hostname: z.string().optional(),
   cpu: z.number().int().min(1).optional(),        // validated only
-  memory_mb: z.number().int().min(1).optional() // validated only
+  memory_mb: z.number().int().min(1).optional(), // validated only
+  storage:z.number().int().min(1).optional(),
 });
 
 const Payload = z.object({
@@ -32,13 +33,17 @@ const Payload = z.object({
     k8s_minor: z.string().default("1.31.0")
   }),
   auth: Auth,
-  nodes: z.record(z.string(), NodeSpec) ,
-   ips: z.array(z.string())            // {"cp-1":{...}, "w-1":{...}}
+  nodes: z.array(NodeSpec) ,
+   ips: z.array(z.string()),                 // {"cp-1":{...}, "w-1":{...}}
+    ownerId: z.string(),      
+     projectId: z.string(),
 });
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
+  //console.log(body,".........................41")
   const parsed = Payload.safeParse(body);
+  //console.log(parsed.data,".................42")
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Invalid payload", details: parsed.error.flatten() },
@@ -50,5 +55,5 @@ export async function POST(req: Request) {
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data });
   console.log(job,"...............job")
 
-  return NextResponse.json({ clusterId, jobId: job.id, status: "QUEUED" });
+  return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

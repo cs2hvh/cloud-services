@@ -17,7 +17,7 @@ const ClusterNewPage = async ({
 }) => {
 
 
-    console.log(params,".............params...........");
+    //console.log(params,".............params...........");
 
     const { clusterId } = await params;   
     console.log(clusterId,".............clusterId...........");

@@ -61,12 +61,24 @@ export const serviceLocations: Tables<"locations">[] = [
 
 
 
+//  "ams3",
+//           "blr1",
+//           "fra1",
+//           "lon1",
+//           "nyc1",
+//           "nyc2",
+//           "nyc3",
+//           "sfo2",
+//           "sfo3",
+//           "sgp1",
+//           "syd1",
+//           "tor1"
 
 
 export const vmLocations: Tables<"locations">[] = [
  {
   id: 2,
-  short: "FRA",
+  short: "fra1",
   city: "Frankfurt",
   country: "Germany",
   country_code: "DE",
@@ -75,7 +87,7 @@ export const vmLocations: Tables<"locations">[] = [
 
 {
   id: 3,
-  short: "YYZ",
+  short: "tor1",
   city: "Toronto",
   country: "Canada",
   country_code: "CA",
@@ -84,8 +96,8 @@ export const vmLocations: Tables<"locations">[] = [
 
 {
   id: 4,
-  short: "BOM",
-  city: "Mumbai",
+  short: "blr1",
+  city: "Banglore",
   country: "India",
   country_code: "IN",
   available: true

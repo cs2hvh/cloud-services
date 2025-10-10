@@ -14,8 +14,8 @@ const ProjectSuspense = async ({ id }: { id: string }) => {
   try {
     const project = await Projects.get_by_id(id);
      //console.log(project);
-     const clusters = await Clusters.get_by_project_id(id); 
-     console.log(clusters,".......")
+    // const clusters = await Clusters.get_by_project_id(id); 
+    // console.log(clusters,".......")
     if (!project) {
       return (
         <ErrorMessage message="Unable to load application forms. Please try again later." />
