@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Tables } from "@/lib/supabase/types";
 
 // A simple bar chart component
 const BarChart = ({ data, colors }: { data: { name: string, value: number }[], colors: string[] }) => {
@@ -38,8 +39,8 @@ const BarChart = ({ data, colors }: { data: { name: string, value: number }[], c
 };
 
 const DashboardPage = () => {
-  const [projects, setProjects] = useState<any[]>([]);
-  const [gameServers, setGameServers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Tables<"projects">[]>([]);
+  const [gameServers, setGameServers] = useState<Tables<"game_servers">[]>([]);
   const [loading, setLoading] = useState(true);
   const supabase = createClient();
 

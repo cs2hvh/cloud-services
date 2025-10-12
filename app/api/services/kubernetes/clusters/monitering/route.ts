@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { vmCreateSchema } from "@/types/zod/vm";
-import bcrypt from "bcryptjs";
-import { createServiceClient } from "@/lib/supabase/server";
+// import { vmCreateSchema } from "@/types/zod/vm";
+// import bcrypt from "bcryptjs";
+// import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
-import { generateStrongPassword, timeRange } from "@/config/functions";
+// import { generateStrongPassword, timeRange } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   try {

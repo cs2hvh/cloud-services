@@ -385,6 +385,7 @@ export type Database = {
           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
           k8sVersion?: string | null;
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+          password: string | null;
         };
         Insert: {
           clusterId: string;
@@ -403,6 +404,7 @@ export type Database = {
           k8sVersion?: string | null;
 
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
+          password: string | null;
         };
          Relationships: [];
       };

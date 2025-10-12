@@ -860,6 +860,7 @@ export const Clusters = {
     k8s_version: payload.k8sVersion ?? null,
 
     status: payload.status ?? "pending",
+    password: payload.password ?? null,
    // owner_id: payload.ownerId ?? null,
   };
 

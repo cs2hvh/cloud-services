@@ -1,4 +1,5 @@
 "use client";
+import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
 import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -25,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { toast } from "sonner";
-import { formatPrice } from "@/lib/utils";
+// import { formatPrice } from "@/lib/utils";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,
@@ -34,16 +35,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 // import { Progress } from "@/components/ui/progress";
 // import { Icons } from "@/components/ui/icons";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-import { headers } from "next/headers";
-import { Json } from "@/lib/supabase/types";
-import { stat } from "fs";
+// import axios from "axios";
+// import { headers } from "next/headers";
+// import { Json } from "@/lib/supabase/types";
+// import { stat } from "fs";
+import z from "zod";
+// import { send } from "process";
 
 interface PageProps {
   locations: Tables<"locations">[];
@@ -58,6 +61,8 @@ type NodeInfo = {
   cpu: number;
   memory_mb: number;
   storage: number;
+  private_ip?: string;
+  droplet_id?: number;
 };
 
 type SendPayload = {
@@ -169,10 +174,17 @@ type SendPayload = {
 
 const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
   const router = useRouter();
-  const planValue: string = "";
+  // const planValue: string = "";
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
+  const [validationErrors, setValidationErrors] = useState<{
+    name?: string;
+    nodes?: string;
+  }>({
+    name: undefined,
+    nodes: undefined,
+  });
   //we need to make plan dynamic
   const [availablePlans] = useState([
     {
@@ -211,36 +223,37 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
   });
 
   const handleNextStep = () => {
-    if (currentStep === 1 && !state.selectedName) {
-      toast.error("Please enter a database cluster name");
-      return;
+    if (currentStep === 1) {
+      try {
+        kubernetesClusterSchema.shape.name.parse(state.selectedName);
+        setValidationErrors((prev) => ({ ...prev, name: undefined }));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            name: error.errors[0].message,
+          }));
+          return;
+        }
+      }
     }
 
-    if (currentStep === 2 && !state.selectedLocation) {
-      toast.error("Please select a location");
-      return;
+    if (currentStep === 3) {
+      try {
+        kubernetesClusterSchema.shape.nodes.parse(state.selectedNode);
+        setValidationErrors((prev) => ({ ...prev, nodes: undefined }));
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            nodes: error.errors[0].message,
+          }));
+          return;
+        }
+      }
     }
 
-    if (currentStep === 3 && !state.selectedNode) {
-      toast.error("Please select  node count");
-      return;
-    }
-
-    if (currentStep === 4 && !state.selectedPlan) {
-      toast.error("Please select a cluster plan");
-      return;
-    }
-
-    if (currentStep === 5 && !state.selectedVersion) {
-      toast.error("Please select a database version");
-      return;
-    }
-
-     if (currentStep === 6 && !state.selectedProject) {
-      toast.error("Please select a project first");
-      return;
-    }
-
+    // Continue with existing step logic
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
     }
@@ -253,13 +266,15 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
   };
 
   const onSubmit = async () => {
-   // debugger;
+    
     if (!termsAccepted) {
       toast.error("Please accept the terms of service and privacy policy");
       return;
     }
 
     try {
+
+      //debugger;
       setIsLoading(true);
       if (
         !state.selectedNode ||
@@ -288,24 +303,9 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
       //  }
 
       //make nodes name array
-      let nodeNames = makeNodeKeys(state.selectedNode);
+      const nodeNames = makeNodeKeys(state.selectedNode);
       console.log(nodeNames, ".....nodeNames.....262");
 
-      //generate password for vms
-      // const generateStrongPassword = () => {
-      //   const chars =
-      //     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-      //   let password = "";
-
-      //   for (let i = 0; i < 12; i++) {
-      //     const randomIndex = Math.floor(Math.random() * chars.length);
-      //     password += chars[randomIndex];
-      //   }
-
-      //   return password;
-      // };
-      // const vmPassword = generateStrongPassword();
-     // console.log(vmPassword, ".........................278");
 
       //generate vms from digitalOcean apis
       const payload = {
@@ -337,7 +337,7 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
       );
 
 
-       let sendPayload: SendPayload = {
+       const sendPayload: SendPayload = {
         provider: "existing",
         cluster: {
           name: state.selectedName,
@@ -358,14 +358,6 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
         let counter = 0;
         while (counter != state.selectedNode + 1) {
           const checkStatus = await api.post(
-            // `https://api.digitalocean.com/v2/actions/${createDroplet.data.links.actions[counter].id}`,
-            // {
-            //   headers: {
-            //     Authorization:
-            //       "Bearer dop_v1_d8c411020fc7d2d41f5f30f35b1e8d8a0b06fffd4de117c28b93a5a461be5e8a",
-            //     "Content-Type": "application/json",
-            //   },
-            // }
             "/services/kubernetes/manageip/dropletstatus",
              {
               id:createDroplet.data.data.links.actions[counter].id
@@ -380,29 +372,38 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
               );
               if (vmData.status === 200) {
                 const vmDetails: {
-                  host: string;
+                  public_ip: string;
                   memory_mb: number;
                   name: string;
                   cpu: number;
                   storage: number;
+                  private_ip?: string;
+                  droplet_id?: number;
                 } = {
-                  host: vmData.data.data.droplet.networks.v4.find(
+                  public_ip: vmData.data.data.droplet.networks.v4.find(
                     (item: { type: string; ip_address: string }) =>
                       item.type === "public"
+                  ).ip_address,
+                   private_ip: vmData.data.data.droplet.networks.v4.find(
+                    (item: { type: string; ip_address: string }) =>
+                      item.type === "private"
                   ).ip_address,
                   memory_mb: vmData.data.data.droplet.memory,
                   name: vmData.data.data.droplet.name,
                   cpu: vmData.data.data.droplet.vcpus,
                   storage: vmData.data.data.droplet.disk,
+                  droplet_id: vmData.data.data.droplet.id,
                 };
-                sendPayload.ips.push(vmDetails.host);
+                sendPayload.ips.push(vmDetails.public_ip);
                 sendPayload.nodes.push({
-                  host: vmDetails.host,
+                  host: vmDetails.public_ip,
                   role: counter === 0 ? "control-plane" : "worker",
                   hostname: vmDetails.name,
                   cpu: vmDetails.cpu,
                   memory_mb: vmDetails.memory_mb,
                   storage: vmDetails.storage,
+                  private_ip: vmDetails.private_ip,
+                  droplet_id: vmDetails.droplet_id,
                 });
                 counter++;
               }
@@ -412,6 +413,8 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
           }
         }
       }
+
+      console.log(sendPayload, "...........sendPayload.............");
 
       
 
@@ -438,16 +441,14 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
 
       // toast.success(response.data);
       // Redirect to success page or dashboard
-    } catch (error: any) {
-      console.log(error);
-      if (error.message) {
-        console.log(
-          error.message,
-          ".......error.message...................404"
-        );
-      }
-      toast.error("Failed to create database. Please try again later.");
-    } finally {
+    }catch (err: unknown) {
+        if (err instanceof Error) {
+            console.log(err.message,"...........................47");
+         toast.error(err.message);
+        } else {
+          toast.error("Unknown error occurred");
+        }
+      } finally {
       setIsLoading(false);
     }
   };
@@ -475,15 +476,15 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
     selectedNode,
     selectedVersion,
     selectedLocation,
-    selectedDbType,
+   // selectedDbType,
     versions,
     selectedProject,
   } = state;
 
   //const selectedDatabase = products?.find((db) => db.id === selectedDb);
-  const selectedLocationData = locations?.find(
-    (location) => location.short === selectedLocation
-  );
+  // const selectedLocationData = locations?.find(
+  //   (location) => location.short === selectedLocation
+  // );
 
   const steps = [
     { id: 1, name: "Name" },
@@ -554,15 +555,22 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="space-y-2">
                 <Input
                   value={selectedName}
                   onChange={(e) =>
                     setState({ ...state, selectedName: e.target.value })
                   }
                   type="text"
-                  placeholder="my-production-db"
-                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  placeholder="my-production-cluster"
+                  className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
+                    validationErrors.name ? "border-red-500" : ""
+                  }`}
                 />
+                {validationErrors.name && (
+                  <p className="text-sm text-red-500">{validationErrors.name}</p>
+                )}
+                </div>
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button
@@ -652,15 +660,23 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
                 <CardTitle className="text-white">Number of Nodes</CardTitle>
               </CardHeader>
               <CardContent>
+                <div className="space-y-2">
                 <Input
                   value={selectedNode}
                   onChange={(e) =>
                     setState({ ...state, selectedNode: Number(e.target.value) })
                   }
                   type="number"
+                  min="1"
                   placeholder="number of nodes (e.g., 3)"
-                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
+                    validationErrors.nodes ? "border-red-500" : ""
+                  }`}
                 />
+                {validationErrors.nodes && (
+                  <p className="text-sm text-red-500">{validationErrors.nodes}</p>
+                )}
+                </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button

@@ -3,14 +3,12 @@ import GameServerGrid from "./grid";
 import KubernetesGrid from "./kubernetesgrid";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-// import cluster from "cluster";
-import { Json } from "@/lib/supabase/types";
 
 interface PageProps {
   projectId: string;
 }
 
-type TableTypes = 'clusters' | 'game_servers';
+// type TableTypes = 'clusters' | 'game_servers';
 // interface GameServerGridProps {
 //   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
 //   data:{          cluster_id: string;

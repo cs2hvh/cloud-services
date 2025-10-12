@@ -7,34 +7,18 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 type GraphProps = {
   open?: boolean;
   setGraphOpen: (open: boolean) => void;
+  data: [number, string][];
 };
 
-// Your raw data: [unixSeconds, "numberAsString"]
-const data: [number, string][] = [
-  [1760127240, "1191772160"],
-  [1760127360, "1192235008"],
-  [1760127480, "1191968768"],
-  [1760127600, "1192132608"],
-  [1760127720, "1192230912"],
-  [1760127840, "1192558592"],
-  [1760127960, "1192583168"],
-  [1760128080, "1193054208"],
-  [1760128200, "1192722432"],
-  [1760128320, "1193009152"],
-  [1760128440, "1193107456"],
-  [1760128560, "1193107456"],
-];
-
-export default function Graph({ open, setGraphOpen }: GraphProps) {
+export default function Graph({ open, setGraphOpen, data }: GraphProps) {
   // Transform to recharts-friendly objects: { timeLabel, value }
   const points = React.useMemo(
     () =>
-      data.map(([ts, v]) => ({
-        // format as hh:mm or whatever you prefer:
+      (data ?? []).map(([ts, v]) => ({
         timeLabel: new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         value: Number(v),
       })),
-    []
+    [data]
   );
 
   return (
@@ -45,27 +29,31 @@ export default function Graph({ open, setGraphOpen }: GraphProps) {
         </DialogHeader>
 
         <div className="h-[360px] w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          {/* Vertical layout: time on Y-axis, value on X-axis */}
+          {/* Standard layout: time (category) on X-axis, numeric value on Y-axis */}
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={points} layout="vertical" margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
+            <LineChart data={points} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              {/* X = numeric value axis */}
-              <XAxis
-                type="number"
-                domain={["auto", "auto"]}
-                tick={{ fill: "#475569", fontSize: 12 }}
-                tickFormatter={(n) => String(n)}
-              >
-                <Label value="Value" offset={-5} position="insideBottom" fill="#475569" />
-              </XAxis>
 
-              {/* Y = time labels */}
-              <YAxis
+              {/* X = time labels */}
+              <XAxis
                 dataKey="timeLabel"
                 type="category"
                 tick={{ fill: "#475569", fontSize: 12 }}
-                width={70}
-              />
+                interval="preserveStartEnd"
+                minTickGap={20}
+              >
+                <Label value="Time" offset={-5} position="insideBottom" fill="#475569" />
+              </XAxis>
+
+              {/* Y = numeric values */}
+              <YAxis
+                type="number"
+                domain={["auto", "auto"]}
+                tick={{ fill: "#475569", fontSize: 12 }}
+                width={60}
+              >
+                <Label value="Value" angle={-90} position="insideLeft" fill="#475569" />
+              </YAxis>
 
               <Tooltip
                 labelFormatter={(lab) => `Time: ${lab}`}
@@ -73,7 +61,6 @@ export default function Graph({ open, setGraphOpen }: GraphProps) {
                 contentStyle={{ backgroundColor: "#ffffff", borderColor: "#e2e8f0", borderRadius: 8 }}
               />
 
-              {/* Green line */}
               <Line
                 type="monotone"
                 dataKey="value"
@@ -87,7 +74,7 @@ export default function Graph({ open, setGraphOpen }: GraphProps) {
         </div>
 
         <div className="text-xs text-slate-500">
-          Time on Y-axis, metric value on X-axis. Background kept light.
+          Time on X-axis, metric value on Y-axis.
         </div>
       </DialogContent>
     </Dialog>

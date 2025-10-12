@@ -3,7 +3,7 @@ import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Separator } from "@/components/ui/separator";
-import { Clusters, Projects } from "@/lib/supabase/queries";
+import {  Projects } from "@/lib/supabase/queries";
 import { Suspense } from "react";
 
 interface PageProps {

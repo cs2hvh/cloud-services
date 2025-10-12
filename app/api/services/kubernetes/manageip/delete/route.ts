@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { vmCreateSchema } from "@/types/zod/vm";
-import bcrypt from "bcryptjs";
-import { createServiceClient } from "@/lib/supabase/server";
+// import { vmCreateSchema } from "@/types/zod/vm";
+// import bcrypt from "bcryptjs";
+// import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
-import { generateStrongPassword } from "@/config/functions";
+// import { generateStrongPassword } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     );
     }
 
-    if(droplets.status!=200){
+    if(droplets.status!=204){
 return NextResponse.json({ error: "there is some internal error. please try later" }, { status: 400 });
     }
 

@@ -6,7 +6,6 @@ import {
   HardDrive,
   Wifi,
   ExternalLink,
-  Link2,
 } from "lucide-react";
 import { Json, Tables } from "@/lib/supabase/types";
 import {
@@ -26,43 +25,43 @@ import { useRouter } from "next/navigation";
 
 type TableTypes = "clusters" | "game_servers"; // Add more types as needed
 
-interface GameServerGridProps {
-  // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
-  data: {
-    cluster_id: string;
-    id: string;
-    clusterName: string;
-    project_id: string;
-    owner_id: string;
-    control_plane?: string | null; // e.g., API VIP or CP-1 IP
-    workers?: string[]; // list of worker IPs/hosts
-    createStatus?: boolean;
-    connectStatus?: boolean;
-    verifyStatus?: boolean;
-    kubeConfig?: string | null; // kubeconfig YAML
-    node_config?: null; // {region, plan, cpu, ram, disk ...}
-    cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
-    k8s_version?: string | null;
-    status?: string | null;
-    allocation: number;
-    created_at: string | null;
-    ends_at: string | null;
-    game_type: string;
-    //id: number;
-    identifier: string;
-    ip: string;
-    location_id: number | null;
-    name: string;
-    node: number;
-    plan: string | null;
-    port: number;
-    // project_id: string | null;
-    resources: Json;
-    //status: string | null;
-    user_id: string | null;
-  }[];
-  type: TableTypes; // `type` can be 'server' | 'game', etc.
-}
+// interface GameServerGridProps {
+//   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
+//   data: {
+//     cluster_id: string;
+//     id: string;
+//     clusterName: string;
+//     project_id: string;
+//     owner_id: string;
+//     control_plane?: string | null; // e.g., API VIP or CP-1 IP
+//     workers?: string[]; // list of worker IPs/hosts
+//     createStatus?: boolean;
+//     connectStatus?: boolean;
+//     verifyStatus?: boolean;
+//     kubeConfig?: string | null; // kubeconfig YAML
+//     node_config?: null; // {region, plan, cpu, ram, disk ...}
+//     cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
+//     k8s_version?: string | null;
+//     status?: string | null;
+//     allocation: number;
+//     created_at: string | null;
+//     ends_at: string | null;
+//     game_type: string;
+//     //id: number;
+//     identifier: string;
+//     ip: string;
+//     location_id: number | null;
+//     name: string;
+//     node: number;
+//     plan: string | null;
+//     port: number;
+//     // project_id: string | null;
+//     resources: Json;
+//     //status: string | null;
+//     user_id: string | null;
+//   }[];
+//   type: TableTypes; // `type` can be 'server' | 'game', etc.
+// }
 
 const GameServerGrid = ({
   data,
@@ -71,7 +70,7 @@ const GameServerGrid = ({
   data: Tables<"game_servers">[];
   type: string;
 }) => {
-  const router = useRouter();
+  // const router = useRouter();
   if (!data || data.length === 0) {
     return (
       <>
@@ -105,7 +104,7 @@ const GameServerGrid = ({
     <div className="mx-6">
       <div>
         <h1 className="text-xs text-white font-semibold mb-2 uppercase">
-          {type}"......" ({data.length})
+          {type} ({data.length})
         </h1>
       </div>
 

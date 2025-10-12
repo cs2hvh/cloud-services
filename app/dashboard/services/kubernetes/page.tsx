@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { motion } from "motion/react";
 import { DockIcon, Plus, Search } from "lucide-react";
@@ -7,8 +7,6 @@ import { useEffect, useState } from "react";
 import fs from "node:fs/promises";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-
-
 
 type Cluster = {
   id: string;
@@ -47,35 +45,33 @@ const KubernetesPage = () => {
   //   // console.log(await res.json(),".............res from download api...........");
   // };
 
-   const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
-     const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ kubeconfig }),
-     });
+  const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
+    const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kubeconfig }),
+    });
 
-     if (res.ok) {
-       const data = await res.json();
+    if (res.ok) {
+      const data = await res.json();
 
-       // Ensure the data is stringified as JSON
-       const jsonString = JSON.stringify(data.data, null, 2); // nicely formatted JSON
+      // Ensure the data is stringified as JSON
+      const jsonString = JSON.stringify(data.data, null, 2); // nicely formatted JSON
 
-       const blob = new Blob([jsonString], { type: "application/json" });
-       const url = URL.createObjectURL(blob);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
 
-       const a = document.createElement("a");
-       a.href = url;
-       a.download = `${clusterId}.json`; // Change extension to .json
-       a.click();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${clusterId}.json`; // Change extension to .json
+      a.click();
 
-       // Optional: revoke the URL after some time
-       setTimeout(() => URL.revokeObjectURL(url), 1000);
-     } else {
-       console.error("Failed to download kubeconfig");
-     }
-   };
-
-
+      // Optional: revoke the URL after some time
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else {
+      console.error("Failed to download kubeconfig");
+    }
+  };
 
   useEffect(() => {
     //fetch clusters from backend.
@@ -244,31 +240,4 @@ function Td({ children }: { children: React.ReactNode }) {
   );
 }
 
-
-
-
-
-
-
-
-
-
-
-
 export default KubernetesPage;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

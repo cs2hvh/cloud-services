@@ -3,10 +3,11 @@
 import { motion } from "motion/react";
 import { Folder, Plus, Search } from "lucide-react";
 import Link from "next/link";
+import { Tables } from "@/lib/supabase/types";
 
 const ProjectsPage = () => {
   // Dummy data for now, replace with actual data from your backend
-  const projects: any[] = [];
+  const projects: Tables<"projects">[] = [];
 
   return (
     <div className="flex-1 bg-black min-h-screen p-4 sm:p-6 lg:p-8 text-white">

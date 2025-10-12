@@ -22,6 +22,8 @@ const NodeSpec = z.object({
   cpu: z.number().int().min(1).optional(),        // validated only
   memory_mb: z.number().int().min(1).optional(), // validated only
   storage:z.number().int().min(1).optional(),
+  private_ip: z.string(),
+  droplet_id: z.number()
 });
 
 const Payload = z.object({

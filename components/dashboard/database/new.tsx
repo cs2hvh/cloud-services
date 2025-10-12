@@ -48,19 +48,19 @@ interface PageProps {
 
 
 
-interface SamplePlans {
-    id: string;
-    name: string;
-    sub: string;
-    type: string;
-    price: number;
-    resources: {
-        cpu: number;
-        ram: number;
-        storage: number;
-    };
-    discount: null;
-}
+// interface SamplePlans {
+//     id: string;
+//     name: string;
+//     sub: string;
+//     type: string;
+//     price: number;
+//     resources: {
+//         cpu: number;
+//         ram: number;
+//         storage: number;
+//     };
+//     discount: null;
+// }
 
 
 

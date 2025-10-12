@@ -1,6 +1,6 @@
 "use client";
 import api from "@/lib/axios/axios";
-import { Json } from "@/lib/supabase/types";
+// import { Json } from "@/lib/supabase/types";
 import { Cpu, Download, HardDrive, MemoryStick, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -48,15 +48,16 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
   // const router=useRouter();
   const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [graphOpen, setGraphOpen] = useState(false);
+  const [graphData, setGraphData] = useState([]);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const alertedRef = useRef(false);
 
-  let x = 10;
+  //const x = 10;
   const steps = useMemo(
     () =>
       [
@@ -77,7 +78,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
   }, [status]);
 
   async function pollOnce() {
-    setError(null);
+    //setError(null);
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -125,9 +126,9 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     } catch (err: unknown) {
       console.log(err, ".........98");
       if (err instanceof Error) {
-        setError(err?.message || "Something went wrong while submitting.");
+        //setError(err?.message || "Something went wrong while submitting.");
       } else {
-        setError("Something went wrong while submitting.");
+       // setError("Something went wrong while submitting.");
       }
     }
   }
@@ -160,28 +161,79 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     }
   };
 
-  const onDeleteNode = async (droplet_id: string, index: number) => {
+  const onDeleteNode = async (droplet_id: [string], index?: number) => {
 
-  debugger
+  //debugger
 
     if(index===0){
       toast.error("You cannot delete control plane node");
       return;
     }
+   for(let i=0;i<droplet_id.length;i++){
+     const res = await api.post(
+      `/services/kubernetes/manageip/delete`,
+      {
+        droplet_id: droplet_id[i],
+      }
+    );
+
+    if (res.status === 200) {
+
+      toast.success("Node deleted successfully");
+      // Handle successful deletion
+      if (nodesData && nodesData?.length > 0) {
+        setNodesData((prev) =>
+          prev ? prev.filter((n) => n.droplet_id !== droplet_id[i]) : []
+        );
+      }
+    }
+  }
+}
+
+
+ const onDeleteCluster = async () => {
+  if (!nodesData) {
+    console.error("nodesData is null or undefined");
+    return; // Exit early if nodesData is null or undefined
+  }
+
+  for (let i = 0; i < nodesData.length; i++) {
     const res = await api.post(
       `/services/kubernetes/manageip/delete`,
       {
+        droplet_id: nodesData[i].droplet_id,
+      }
+    );
+
+    if (res.status === 200) {
+      continue;
+    }
+  }
+}
+
+  const ViewGraph = async (droplet_id: string, hrs: number,type: string) => {
+
+    //debugger
+
+    const res = await api.post(
+      `/services/kubernetes/clusters/monitering`,
+      {
         droplet_id: droplet_id,
+        type: type,
+        hrs: hrs
       }
     );
 
     if (res.status === 200) {
       // Handle successful deletion
-      if (nodesData && nodesData?.length > 0) {
-        setNodesData((prev) =>
-          prev ? prev.filter((n) => n.droplet_id !== droplet_id) : []
-        );
-      }
+      // if (nodesData && nodesData?.length > 0) {
+      //   setNodesData((prev) =>
+      //     prev ? prev.filter((n) => n.droplet_id !== droplet_id) : []
+      //   );
+      // }
+      setGraphData(res.data.matrix[0]?.values || []);
+      setGraphOpen(true);
+
     }
   };
 
@@ -196,7 +248,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
       if (!alertedRef.current) {
         //  debugger;
         alertedRef.current = true;
-        const check = searchParams.get("clusterStatus");
+       // const check = searchParams.get("clusterStatus");
         if (searchParams.get("clusterStatus") != "ready") {
           alert("Cluster is ready!");
         }
@@ -224,9 +276,19 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
         <h2 className="text-2xl font-semibold text-slate-900 mb-1">
           Getting Started with Kubernetes
         </h2>
-        <p className="text-sm text-slate-600 mb-6">
-          Cluster: <span className="font-mono">{clusterId}</span>
-        </p>
+
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-sm text-slate-600">
+            Cluster:{" "}
+            <span className="font-mono text-slate-800">{clusterId}</span>
+          </p>
+          <button 
+          onClick={()=>onDeleteCluster()}
+          className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-600 border-2 border-red-600 px-4 py-2 text-sm font-medium transition-all hover:bg-red-100 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
+            <Trash2 className="h-4 w-4 text-red-600" />
+            Delete cluster
+          </button>
+        </div>
 
         <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 p-6 md:p-8 space-y-5">
           {steps.map((s, idx) => {
@@ -334,7 +396,9 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
         <section className="rounded-2xl my-2 bg-white shadow-sm ring-1 ring-slate-200 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-base font-semibold text-slate-800">Nodes</h3>
-            <div className="text-xs text-slate-500">{3} total</div>
+            <div className="text-xs text-slate-500">
+              {nodesData?.length || 0} total
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -358,10 +422,12 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                     <td className="py-2 pr-4 text-slate-600">
                       {index === 0 ? "control-plane" : "worker"}
                     </td>
-                    <td className="py-2 pr-4 text-slate-600 ">{n.private_ip}</td>
+                    <td className="py-2 pr-4 text-slate-600 ">
+                      {n.private_ip}
+                    </td>
                     <td className={`py-2 pr-4 font-semibold `}>
                       <button
-                        onClick={() => setGraphOpen(true)}
+                        onClick={() => ViewGraph(n.droplet_id, 1, "cpu")}
                         className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
                       >
                         View insight
@@ -369,7 +435,9 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                     </td>
                     <td className={`py-2 pr-4 font-semibold`}>
                       <button
-                         onClick={() => setGraphOpen(true)}
+                        onClick={() =>
+                          ViewGraph(n.droplet_id, 1, "memory_free")
+                        }
                         className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
                       >
                         View insight
@@ -377,7 +445,9 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                     </td>
                     <td className={`py-2 pr-4 font-semibold `}>
                       <button
-                        onClick={() => setGraphOpen(true)}
+                        onClick={() =>
+                          ViewGraph(n.droplet_id, 1, "filesystem_free")
+                        }
                         className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
                       >
                         View insight
@@ -385,7 +455,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                     </td>
                     <td className="py-2 pr-0 text-right">
                       <button
-                        onClick={() => onDeleteNode(n.droplet_id,index)}
+                        onClick={() => onDeleteNode([n.droplet_id], index)}
                         className="inline-flex items-center gap-1 rounded-lg text-red-400 border border-2 border-red-400 px-2.5 py-1.5 text-xs  hover:bg-green-50 hover:text-red-700 hover:border-green-200"
                       >
                         <Trash2 className="h-3.5 w-3.5  text-red-400" /> Delete
@@ -393,21 +463,21 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                     </td>
                   </tr>
                 ))}
-                {x === 0 && (
+                {/* {x === 0 && (
                   <tr>
                     <td className="py-6 text-center text-slate-400" colSpan={7}>
                       No nodes yet.
                     </td>
                   </tr>
-                )}
+                )} */}
               </tbody>
             </table>
           </div>
         </section>
       </div>
-      {
-        graphOpen && <Graph open={graphOpen}  setGraphOpen={setGraphOpen} />
-      }
+      {graphOpen && (
+        <Graph open={graphOpen} setGraphOpen={setGraphOpen} data={graphData} />
+      )}
     </div>
   );
 }

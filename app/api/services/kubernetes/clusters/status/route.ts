@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server"; // your server-side helper
-import { Json } from "@/lib/supabase/types";
+// import { Json } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic"; // avoid caching
 
