@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { HardDrive, Plus } from "lucide-react";
+// import { Button } from "@/components/ui/button";
+import { HardDrive } from "lucide-react";
 
 export default function BareMetalPage() {
   return (

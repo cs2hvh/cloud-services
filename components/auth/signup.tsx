@@ -252,7 +252,7 @@ export default function SignUpMultiStep({
                               field={field}
                               placeholder="Enter a good password"
                               disabled={isLoading}
-                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
+                             // className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />
@@ -271,7 +271,7 @@ export default function SignUpMultiStep({
                               field={field}
                               placeholder="Confirm your password"
                               disabled={isLoading}
-                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
+                              //className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                             />
                           </FormControl>
                           <FormMessage />

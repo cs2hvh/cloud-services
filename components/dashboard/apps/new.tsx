@@ -53,6 +53,11 @@ interface GitProvider {
   connected: boolean;
 }
 
+interface ProviderConnection {
+  provider: string;
+  status: boolean;
+}
+
 // Framework detection and build settings
 const frameworkConfigs = {
   'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install' },
@@ -94,10 +99,10 @@ const AppDeploymentSelect = () => {
         const data = await response.json();
         const providers = data.providers || [];
         
-        // Update git providers with real connection status
+        // Update git providers with real connection status - replace 'any' with proper type
         setGitProviders(prev => prev.map(provider => ({
           ...provider,
-          connected: providers.find((p: any) => p.provider === provider.id)?.status || false
+          connected: providers.find((p: ProviderConnection) => p.provider === provider.id)?.status || false
         })));
       } else {
         toast.error('Failed to fetch provider status');
@@ -419,7 +424,7 @@ const AppDeploymentSelect = () => {
                         type="text"
                         placeholder="Search repositories..."
                         className="w-full bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 p-3"
-                        onChange={(e) => {
+                        onChange={() => {
                           // You can implement repository filtering here
                         }}
                       />

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-//import Image from "next/image";
+import Image from "next/image";
 
 export default function EnableTotp() {
   const supabase = createClient();
@@ -16,9 +16,12 @@ export default function EnableTotp() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
   const [has2FA, setHas2FA] = useState<boolean>(false);
+  // const [enrollmentStep, setEnrollmentStep] = useState<"start" | "verify">(
+  //   "start",
+  // );
 
   // ✅ Updated enrollment: always provide a non-empty friendlyName, and retry once if name conflict occurs
-  const startEnrollment = async () => {
+  const startEnrollment = useCallback(async () => {
     // Give each attempt a unique friendly name to avoid collisions
     const friendlyName = `totp-${Date.now()}`;
 
@@ -59,7 +62,8 @@ export default function EnableTotp() {
           : qr,
       );
     }
-  };
+  }, [supabase]);
+
   // On mount: detect if user already has a verified TOTP. If yes, show "Disable".
   // If not, begin enrollment to get the QR.
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function EnableTotp() {
     return () => {
       cancelled = true;
     };
-  }, [supabase]);
+  }, [supabase, startEnrollment]);
 
   const onVerify = async () => {
     setError("");
@@ -194,10 +198,13 @@ export default function EnableTotp() {
           <div>
             <Label>Scan this QR in your Authenticator app</Label>
             {qrSvg ? (
-              <img
+              <Image
                 alt="TOTP QR"
                 src={qrSvg}
+                width={200}
+                height={200}
                 className="mt-2 border rounded-md"
+                unoptimized={true} // Important for data URLs
               />
             ) : (
               <div className="text-sm text-muted-foreground mt-2">

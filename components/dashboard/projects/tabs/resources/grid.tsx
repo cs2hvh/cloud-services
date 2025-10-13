@@ -7,7 +7,7 @@ import {
   Wifi,
   ExternalLink,
 } from "lucide-react";
-import { Json, Tables } from "@/lib/supabase/types";
+import { Tables } from "@/lib/supabase/types";
 import {
   Card,
   CardContent,
@@ -21,9 +21,9 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { getDaysRemaining } from "@/lib/utils";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 
-type TableTypes = "clusters" | "game_servers"; // Add more types as needed
+// type TableTypes = "clusters" | "game_servers"; // Add more types as needed
 
 // interface GameServerGridProps {
 //   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically

@@ -964,8 +964,7 @@ const NewClusterPage = ({ locations, projects, userId }: PageProps) => {
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Processing...
-                    </>
+                      Processing.. please wait for some time                    </>
                   ) : (
                     <>Pay and Deploy</>
                   )}

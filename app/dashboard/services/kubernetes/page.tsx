@@ -1,19 +1,19 @@
 "use client";
 
 import { motion } from "motion/react";
-import { DockIcon, Plus, Search } from "lucide-react";
+import { DockIcon, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import fs from "node:fs/promises";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+// import fs from "node:fs/promises";
+// import { useRouter } from "next/navigation";
+// import { Button } from "@/components/ui/button";
 
 type Cluster = {
   id: string;
   cluster_name: string;
   cluster_id: string;
   status: string;
-  workers: Array<any>;
+  workers: { id: string }[] | null;
   created_at: string; // ISO
   k8s_version: string;
   kubeconfig: string;
@@ -23,7 +23,7 @@ const KubernetesPage = () => {
   // Dummy data for now, replace with actual data from your backend
   const [clusters, setClusters] = useState([] as Cluster[]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  // const router = useRouter();
 
   // const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
   //   const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
@@ -209,7 +209,7 @@ const KubernetesPage = () => {
           </p>
           <div className="mt-6">
             <Link
-              href="/dashboard/services/Kubernetes/new"
+              href="/dashboard/services/kubernetes/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >
               <Plus className="-ml-1 mr-2 h-5 w-5" />

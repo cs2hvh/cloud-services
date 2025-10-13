@@ -1,5 +1,32 @@
 import { createClient } from "@/lib/supabase/server";
 
+interface GitLabRepository {
+  id: number;
+  name: string;
+  path_with_namespace: string;
+  description: string | null;
+  visibility: 'private' | 'public' | 'internal';
+  default_branch: string;
+  language: string | null;
+  last_activity_at: string;
+  http_url_to_repo: string;
+  web_url: string;
+}
+
+interface TransformedRepository {
+  id: string;
+  name: string;
+  fullName: string;
+  description: string;
+  private: boolean;
+  defaultBranch: string;
+  language: string;
+  updatedAt: string;
+  provider: 'gitlab';
+  cloneUrl: string;
+  htmlUrl: string;
+}
+
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -72,7 +99,7 @@ export async function GET() {
 
         if (response.ok) {
           const repos = await response.json();
-          const transformedRepos = repos.map((repo: any) => ({
+          const transformedRepos = repos.map((repo: GitLabRepository) => ({
             id: repo.id.toString(),
             name: repo.name,
             fullName: repo.path_with_namespace,
@@ -81,7 +108,7 @@ export async function GET() {
             defaultBranch: repo.default_branch,
             language: repo.language || 'Unknown',
             updatedAt: repo.last_activity_at,
-            provider: 'gitlab',
+            provider: 'gitlab' as const,
             cloneUrl: repo.http_url_to_repo,
             htmlUrl: repo.web_url
           }));
@@ -131,7 +158,7 @@ export async function GET() {
     console.log(`Fetched ${repos.length} repositories (public + private) from GitLab`);
     
     // Transform GitLab API response to our format
-    const transformedRepos = repos.map((repo: any) => ({
+    const transformedRepos = repos.map((repo: GitLabRepository) => ({
       id: repo.id.toString(),
       name: repo.name,
       fullName: repo.path_with_namespace,
@@ -140,14 +167,14 @@ export async function GET() {
       defaultBranch: repo.default_branch,
       language: repo.language || 'Unknown',
       updatedAt: repo.last_activity_at,
-      provider: 'gitlab',
+      provider: 'gitlab' as const,
       cloneUrl: repo.http_url_to_repo,
       htmlUrl: repo.web_url
     }));
 
     return Response.json({ 
       repositories: transformedRepos,
-      note: `Successfully loaded ${transformedRepos.length} repositories including ${transformedRepos.filter((r: any) => r.private).length} private repositories`
+      note: `Successfully loaded ${transformedRepos.length} repositories including ${transformedRepos.filter((r: TransformedRepository) => r.private).length} private repositories`
     }, { status: 200 });
 
   } catch (error) {

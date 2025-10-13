@@ -45,24 +45,23 @@ interface PageProps {
   locations: Tables<"locations">[];
 }
 
-
-
-
-// interface SamplePlans {
-//     id: string;
-//     name: string;
-//     sub: string;
-//     type: string;
-//     price: number;
-//     resources: {
-//         cpu: number;
-//         ram: number;
-//         storage: number;
-//     };
-//     discount: null;
+// Define the proper type for the database products
+// interface DatabaseProduct {
+//   id: string;
+//   name: string | null;
+//   sub: string | null;
+//   type: string;
+//   price: number | null;
+//   resources: {
+//     cpu: number;
+//     ram: number;
+//     storage: number;
+//   };
+//   discount: number | null;
+//   created_at?: string | null;
+//   description?: string | null;
+//   image?: string | null;
 // }
-
-
 
 const databaseVersions = {
   mysql: ["5.7", "8.0", "8.1"],
@@ -164,16 +163,18 @@ const DatabaseSelect = ({ products, locations }: PageProps) => {
   // Filter products when database type changes
   useEffect(() => {
     if (state.selectedDbType) {
-      let filteredProducts = products.filter(
+      const filteredProducts = products.filter(
         (product) => product.sub === state.selectedDbType,
       );
       
       // Use sample plans if no products available
       if (filteredProducts.length === 0) {
-        const samplePlans = sampleDatabasePlans[state.selectedDbType as keyof typeof sampleDatabasePlans];
-        if (samplePlans) {
-          filteredProducts = samplePlans as any;
-        }
+        // const samplePlans = sampleDatabasePlans[
+        //   state.selectedDbType as keyof typeof sampleDatabasePlans
+        // ];
+        // if (samplePlans) {
+        //   filteredProducts = samplePlans as DatabaseProduct[];
+        // }
       }
       
       setAvailablePlans(filteredProducts);

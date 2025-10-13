@@ -1,11 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent,  } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Server, Plus, Search } from "lucide-react";
 import Link from "next/link";
 
 export default function VPSPage() {
   // No dummy data - will be replaced with actual VPS instances from backend
-  const vpsInstances: any[] = [];
+  const vpsInstances= [];
 
   return (
     <div className="p-6 space-y-6">

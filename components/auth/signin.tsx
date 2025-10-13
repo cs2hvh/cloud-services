@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Icons } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import {
@@ -340,7 +339,7 @@ export function SignInForm() {
                           field={field}
                           placeholder="••••••••"
                           disabled={isLoading}
-                          className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
+                          //className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
                         />
                       </FormControl>
                       <FormMessage />

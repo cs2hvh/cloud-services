@@ -10,7 +10,7 @@ import Image from "next/image";
 
 const ApplicationDeploymentPage = () => {
   // No dummy data - will be replaced with actual deployed applications from backend
-  const deployedApps: any[] = [];
+  const deployedApps = [];
 
   // Mock stats for demonstration
   const stats = {

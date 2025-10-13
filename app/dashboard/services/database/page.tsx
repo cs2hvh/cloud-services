@@ -1,12 +1,12 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Database, Plus, MoreVertical, Search } from "lucide-react";
+import { Database, Plus,  Search } from "lucide-react";
 import Link from "next/link";
 
 const DatabasePage = () => {
   // Dummy data for now, replace with actual data from your backend
-  const databases: any[] = [];
+  const databases = [];
 
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">

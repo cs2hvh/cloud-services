@@ -1,15 +1,15 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Shield, Plus, Search, Lock, Activity, CheckCircle, Server } from "lucide-react";
+import { Shield, Plus, Search, Lock, Activity, Server } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+// import { Badge } from "@/components/ui/badge";
 
 const FirewallPage = () => {
   // No dummy data - will be replaced with actual firewall rules from backend
-  const firewallRules: any[] = [];
+  const firewallRules = [];
 
   // Mock stats for demonstration
   const stats = {

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 
 const NetworkDDoSPage = () => {
   // No dummy data - will be replaced with actual protection applications from backend
-  const protectionApplications: any[] = [];
+  const protectionApplications = [];
 
   // Mock stats for demonstration
   const stats = {

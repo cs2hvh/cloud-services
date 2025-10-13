@@ -9,10 +9,7 @@ export async function POST(req: NextRequest) {
   try {
     //debugger
     const json = await req.json();
-    console.log(json,"...............................25");
-    // https://api.digitalocean.com/v2/droplets/523430540
-   //  https://api.digitalocean.com/v2/droplets/523400755
-    console.log(`https://api.digitalocean.com/v2/droplets/${json.droplet_id}`)
+   
     const droplets=await axios.delete(
         `https://api.digitalocean.com/v2/droplets/${json.droplet_id}`,
         {
@@ -25,15 +22,13 @@ export async function POST(req: NextRequest) {
       );
 
 
-      console.log(droplets,"...............................28");
+     
     
 
 
     if (droplets.status===204){
          return NextResponse.json(
       {
-        //data:droplets.data,
-       // vmPassword:vmPassword,
         message:'droplet deleted success'
       },
       { status: 200 }

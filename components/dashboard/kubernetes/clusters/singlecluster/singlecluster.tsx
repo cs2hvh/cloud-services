@@ -1,11 +1,12 @@
 "use client";
 import api from "@/lib/axios/axios";
 // import { Json } from "@/lib/supabase/types";
-import { Cpu, Download, HardDrive, MemoryStick, Trash2 } from "lucide-react";
+import { Cpu, Download, HardDrive, LucideIcon, MemoryStick, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import Graph from "./graph";
+import { useRouter } from "next/navigation";
 
 type CheckStatus = {
   createStatus: boolean;
@@ -36,12 +37,14 @@ type NodeInfo =
   | null;
 
 function SingleCluster({ clusterId }: { clusterId: string }) {
-  //console.log(clusterId,".............clusterId in single cluster...........");
+  
   const [status, setStatus] = useState<CheckStatus>({
     createStatus: false,
     connectStatus: false,
     verifyStatus: false,
   });
+
+  const [loading, setLoading] = useState(false);
 
   const [clusterData, setClusterData] = useState<CheckStatus | null>(null);
   const [nodesData, setNodesData] = useState<NodeInfo | null>(null);
@@ -56,6 +59,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const alertedRef = useRef(false);
+  const router=useRouter()
 
   //const x = 10;
   const steps = useMemo(
@@ -162,33 +166,40 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
   };
 
   const onDeleteNode = async (droplet_id: [string], index?: number) => {
+    //debugger
 
-  //debugger
-
-    if(index===0){
+    if (index === 0) {
       toast.error("You cannot delete control plane node");
       return;
     }
-   for(let i=0;i<droplet_id.length;i++){
-     const res = await api.post(
-      `/services/kubernetes/manageip/delete`,
-      {
+    setLoading(true);
+    for (let i = 0; i < droplet_id.length; i++) {
+      const res = await api.post(`/services/kubernetes/manageip/delete`, {
         droplet_id: droplet_id[i],
-      }
-    );
+      });
 
-    if (res.status === 200) {
-
-      toast.success("Node deleted successfully");
-      // Handle successful deletion
-      if (nodesData && nodesData?.length > 0) {
-        setNodesData((prev) =>
-          prev ? prev.filter((n) => n.droplet_id !== droplet_id[i]) : []
+      if (res.status === 200) {
+        const delNode = await api.post(
+          "/services/kubernetes/clusters/delete_node",
+          {
+            droplet_id: droplet_id[i],
+            cluster_id: clusterId,
+          }
         );
+
+        if (delNode.status === 200) {
+          toast.success("Node deleted successfully");
+        }
+
+        if (nodesData && nodesData?.length > 0) {
+          setNodesData((prev) =>
+            prev ? prev.filter((n) => n.droplet_id !== droplet_id[i]) : []
+          );
+        }
       }
     }
-  }
-}
+    setLoading(false);
+  };
 
 
  const onDeleteCluster = async () => {
@@ -197,6 +208,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     return; // Exit early if nodesData is null or undefined
   }
 
+  setLoading(true);
   for (let i = 0; i < nodesData.length; i++) {
     const res = await api.post(
       `/services/kubernetes/manageip/delete`,
@@ -205,11 +217,27 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
       }
     );
 
-    if (res.status === 200) {
-      continue;
-    }
+
+    console.log(res.status,".............res from delete node api...........");
+
+    // if (res.status === 200) {
+    //   continue;
+    // }
   }
+  const delCluster = await api.post(
+    `/services/kubernetes/clusters/delete`,
+    {
+      cluster_id: clusterId,
+    }
+  );
+
+  if (delCluster.status === 200) {
+    toast.success("Cluster deleted successfully");
+    router.push('/dashboard/services/kubernetes')
+  
 }
+setLoading(false);
+ }
 
   const ViewGraph = async (droplet_id: string, hrs: number,type: string) => {
 
@@ -254,7 +282,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
         }
       }
     }
-  }, [allDone]);
+  }, [allDone,searchParams]);
 
   // Start polling on mount, stop on unmount
   useEffect(() => {
@@ -269,6 +297,16 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
+
+
+
+   if (loading) {
+    return (
+      <div className="flex-1 bg-black min-h-screen flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-slate-50 py-10 px-4">
@@ -585,7 +623,7 @@ function StatCard({
   value,
   sub,
 }: {
-  icon: any;
+  icon: LucideIcon;
   label: string;
   value: string;
   sub?: string;

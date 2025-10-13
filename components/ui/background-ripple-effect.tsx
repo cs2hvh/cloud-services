@@ -16,7 +16,7 @@ export const BackgroundRippleEffect = ({
     col: number;
   } | null>(null);
   const [rippleKey, setRippleKey] = useState(0);
-  const ref:React.RefObject<any> = useRef(null);
+  const ref= useRef(null);
 
   return (
     <div
