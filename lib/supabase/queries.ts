@@ -846,7 +846,7 @@ export const Clusters = {
     cluster_id: payload.clusterId,
     cluster_name: payload.clusterName,
 
-    control_plane: payload.controlPlane ?? null,
+    control_plane: payload.control_plane ?? null,
     workers: payload.workers ?? [],
 
     create_status: payload.createStatus ?? false,
@@ -860,7 +860,7 @@ export const Clusters = {
     k8s_version: payload.k8sVersion ?? null,
 
     status: payload.status ?? "pending",
-    password: payload.password ?? null,
+    password: payload.vmPassword ?? null,
    // owner_id: payload.ownerId ?? null,
   };
 
@@ -934,7 +934,29 @@ export const Clusters = {
   }
   return { success: true, cluster: data };
   },
-  
+
+
+  update_cluster_worker: async (params: {
+  clusterId: string;
+  kubeConfig: Buffer;
+
+}) => {
+  const { clusterId, kubeConfig } = params;
+
+ const { data, error } = await supabase
+    .from("clusters")
+    .update({ kubeconfig: kubeConfig })
+    .eq("cluster_id", clusterId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[updateClusterPhaseWorker] failed:", error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true, cluster: data };
+},
+
    get_by_project_id: async (projectId: string): Promise<ClustersGet[]>=> {
     try {
       console.log(projectId,"..................933..id");
@@ -989,6 +1011,35 @@ export const Clusters = {
     }
   },
 };
+
+
+
+
+
+export async function updateClusterWorker(params: {
+  clusterId: string;
+  kubeConfig: Buffer;
+  
+}) {
+  const { clusterId, kubeConfig} = params;
+
+
+
+  
+
+  const { data, error } = await supabase
+    .from("clusters")
+    .update({ kubeconfig: kubeConfig })
+    .eq("cluster_id", clusterId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[updateClusterPhaseWorker] failed:", error.message);
+    return { success: false, error: error.message };
+  }
+  return { success: true, cluster: data };
+}
 
 
 

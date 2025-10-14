@@ -371,12 +371,12 @@ export type Database = {
       clusters: {
         Row: {
           clusterId: string;
-          id: string;
+          //id: string;
           clusterName: string;
           project_id:string;
           owner_id:string;
-          controlPlane?: string | null; // e.g., API VIP or CP-1 IP
-          workers?: string[]; // list of worker IPs/hosts
+          control_plane: {public_ip:string,private_ip:string,droplet_id:number} | null;        
+  workers: { public_ip: string; private_ip: string; droplet_id: number}[]   | null;              
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -385,14 +385,14 @@ export type Database = {
           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
           k8sVersion?: string | null;
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
-          password: string | null;
+          vmPassword?: string | null;
         };
         Insert: {
           clusterId: string;
           clusterName: string;
 
-          controlPlane?: string | null; // e.g., API VIP or CP-1 IP
-          workers?: string[]; // list of worker IPs/hosts
+          control_plane: {public_ip:string,private_ip:string,droplet_id:number} | null;        
+  workers: { public_ip: string; private_ip: string; droplet_id: number}[]   | null;     
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -404,7 +404,7 @@ export type Database = {
           k8sVersion?: string | null;
 
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
-          password: string | null;
+           vmPassword?: string | null;
         };
          Relationships: [];
       };
@@ -414,8 +414,8 @@ export type Database = {
           cluster_name: string;
           project_id:string;
           owner_id:string;
-          control_plane?: { public_ip: string; private_ip: string; droplet_id: string } | null; // e.g., API VIP or CP-1 IP
-          workers?: { public_ip: string; private_ip: string; droplet_id: string }[] | null; // list of worker IPs/hosts
+          control_plane: {public_ip:string,private_ip:string,droplet_id:number} | null;        
+  workers: { public_ip: string; private_ip: string; droplet_id: string}[]   | null;    
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;
@@ -431,7 +431,7 @@ export type Database = {
           project_id:string;
           owner_id:string;
           control_plane?: string | null; // e.g., API VIP or CP-1 IP
-          workers?: string[]; // list of worker IPs/hosts
+          workers: { public_ip: string; private_ip: string; droplet_id: string}[]   | null;   
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;
