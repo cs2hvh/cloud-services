@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 // import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
 import { generateStrongPassword } from "@/config/functions";
+import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const payload={...json,
      user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
     }
-    console.log(payload,"...............................28")
+    //console.log(payload,"...............................28")
     const droplets=await axios.post(
         "https://api.digitalocean.com/v2/droplets",
        payload,
@@ -28,6 +29,11 @@ export async function POST(req: NextRequest) {
           },
         }
       );
+
+
+      //hash password and store in db
+       const salt = await bcrypt.genSalt(10);
+       const hashedPassword = await bcrypt.hash(vmPassword, salt);
     
 
 
@@ -35,7 +41,7 @@ export async function POST(req: NextRequest) {
          return NextResponse.json(
       {
         data:droplets.data,
-        vmPassword:vmPassword,
+        vmPassword:hashedPassword,
         message:'droplet created success'
       },
       { status: 202 }
