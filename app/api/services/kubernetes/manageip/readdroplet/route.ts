@@ -15,7 +15,6 @@ import { NextRequest, NextResponse } from "next/server";
 // import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
 // import { generateStrongPassword } from "@/config/functions";
-import "dotenv/config"
 
 export async function POST(req: NextRequest) {
   try {

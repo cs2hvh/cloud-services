@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Agent as UndiciAgent } from "undici";
 
 const DEBUG = process.env.NODE_ENV === 'development';
@@ -104,7 +105,7 @@ export async function proxmoxAuth(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-    })
+    } as any)
   );
 
   if (!res.ok) {
@@ -140,7 +141,7 @@ export async function fetchJson(
       method: 'GET',
       headers,
       dispatcher,
-    })
+    } as any)
   );
 
   if (!res.ok) {
@@ -184,7 +185,7 @@ export async function postForm(
       body: formData,
       headers,
       dispatcher,
-    })
+    } as any)
   );
 
   if (!res.ok) {
