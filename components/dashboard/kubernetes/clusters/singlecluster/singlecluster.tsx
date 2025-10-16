@@ -1,12 +1,14 @@
 "use client";
 import api from "@/lib/axios/axios";
 // import { Json } from "@/lib/supabase/types";
-import { Cpu, Download, HardDrive, LucideIcon, MemoryStick, Trash2 } from "lucide-react";
+import { Check, Cpu, Download, HardDrive, LucideIcon, MemoryStick, Trash2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import Graph from "./graph";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+// import { read } from "fs";
 
 type CheckStatus = {
   createStatus: boolean;
@@ -278,7 +280,8 @@ setLoading(false);
         alertedRef.current = true;
        // const check = searchParams.get("clusterStatus");
         if (searchParams.get("clusterStatus") != "ready") {
-          alert("Cluster is ready!");
+         // alert("Cluster is ready!");
+         toast.success("Cluster is ready!");
         }
       }
     }
@@ -309,214 +312,231 @@ setLoading(false);
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 py-10 px-4">
-      <div className="mx-auto max-w-3xl">
-        <h2 className="text-2xl font-semibold text-slate-900 mb-1">
-          Getting Started with Kubernetes
-        </h2>
+    <div className="min-h-[calc(100vh-4rem)] bg-black py-10 px-4">
+  <div className="mx-auto max-w-3xl">
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <h2 className="text-2xl font-semibold text-white mb-1">
+        Getting Started with Kubernetes
+      </h2>
 
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-sm text-slate-600">
-            Cluster:{" "}
-            <span className="font-mono text-slate-800">{clusterId}</span>
-          </p>
-          <button 
-          onClick={()=>onDeleteCluster()}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-50 text-red-600 border-2 border-red-600 px-4 py-2 text-sm font-medium transition-all hover:bg-red-100 hover:border-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
-            <Trash2 className="h-4 w-4 text-red-600" />
-            Delete cluster
-          </button>
-        </div>
-
-        <div className="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 p-6 md:p-8 space-y-5">
-          {steps.map((s, idx) => {
-            const done = status[s.key];
-            const inProgress = !done && idx === currentIndex;
-            if (ready === false) {
-              return (
-                <StepRow
-                  key={s.key}
-                  label={s.label}
-                  done={done}
-                  inProgress={inProgress}
-                />
-              );
-            } else {
-              return (
-                <StepRow
-                  key={s.key}
-                  label={s.label}
-                  done={true}
-                  inProgress={false}
-                />
-              );
-            }
-          })}
-
-          <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
-            <div className="flex items-center gap-2">
-              {!allDone ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner />
-                  <span>Checking status every 1 minute…</span>
-                </span>
-              ) : (
-                <span className="text-emerald-600 font-medium">
-                  All steps complete.
-                </span>
-              )}
-            </div>
-            <div>
-              {lastUpdated ? (
-                <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-              ) : (
-                <span>Waiting for first update…</span>
-              )}
-            </div>
-          </div>
-
-          {/* {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )} */}
-        </div>
-
-        <section className="rounded-2xl my-2 bg-white shadow-sm ring-1 ring-slate-200 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-800">
-              Kubeconfig
-            </h3>
-            <button
-              onClick={() => {
-                downloadKubeconfig(
-                  clusterId,
-                  clusterData?.clusterInfo?.kubeconfig || ""
-                );
-              }}
-              //disabled={downloading}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-50 cursor-pointer"
-            >
-              <Download className="h-4 w-4" />{" "}
-              {/* {downloading ? "Preparing…" : "Download kubeconfig"} */}
-            </button>
-          </div>
-          <p className="text-sm text-slate-500">
-            This file contains credentials for accessing your cluster. Store it
-            securely and avoid committing it to version control.
-          </p>
-        </section>
-        <section className="rounded-2xl my-2 bg-white shadow-sm ring-1 ring-slate-200 p-6 space-y-4">
-          <h3 className="text-base font-semibold text-slate-800">
-            Cluster Resources
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <StatCard
-              icon={Cpu}
-              label="vCPU"
-              value={`${clusterData?.clusterInfo?.node_config?.cpu || 0} vCPU`}
-              sub="Total allocated"
-            />
-            <StatCard
-              icon={MemoryStick}
-              label="Memory"
-              value={`${clusterData?.clusterInfo?.node_config?.ram || 0} MB`}
-              sub="Total RAM"
-            />
-            <StatCard
-              icon={HardDrive}
-              label="Storage"
-              value={`${clusterData?.clusterInfo?.node_config?.storage || 0} GB`}
-              sub="Total disk"
-            />
-          </div>
-        </section>
-        <section className="rounded-2xl my-2 bg-white shadow-sm ring-1 ring-slate-200 p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold text-slate-800">Nodes</h3>
-            <div className="text-xs text-slate-500">
-              {nodesData?.length || 0} total
-            </div>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-left text-slate-600">
-                <tr className="border-b border-slate-200">
-                  <th className="py-2 pr-4">public_ip</th>
-                  <th className="py-2 pr-4">Role</th>
-                  <th className="py-2 pr-4">private_ip</th>
-                  <th className="py-2 pr-4">CPU</th>
-                  <th className="py-2 pr-4">Memory</th>
-                  <th className="py-2 pr-4">Disk</th>
-                  <th className="py-2 pr-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {nodesData?.map((n, index) => (
-                  <tr key={index}>
-                    <td className="py-2 pr-4 font-medium text-slate-800">
-                      {n.public_ip}
-                    </td>
-                    <td className="py-2 pr-4 text-slate-600">
-                      {index === 0 ? "control-plane" : "worker"}
-                    </td>
-                    <td className="py-2 pr-4 text-slate-600 ">
-                      {n.private_ip}
-                    </td>
-                    <td className={`py-2 pr-4 font-semibold `}>
-                      <button
-                        onClick={() => ViewGraph(n.droplet_id, 1, "cpu")}
-                        className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
-                      >
-                        View insight
-                      </button>
-                    </td>
-                    <td className={`py-2 pr-4 font-semibold`}>
-                      <button
-                        onClick={() =>
-                          ViewGraph(n.droplet_id, 1, "memory_free")
-                        }
-                        className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
-                      >
-                        View insight
-                      </button>
-                    </td>
-                    <td className={`py-2 pr-4 font-semibold `}>
-                      <button
-                        onClick={() =>
-                          ViewGraph(n.droplet_id, 1, "filesystem_free")
-                        }
-                        className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-400 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-50 hover:text-green-700 hover:border-green-200"
-                      >
-                        View insight
-                      </button>
-                    </td>
-                    <td className="py-2 pr-0 text-right">
-                      <button
-                        onClick={() => onDeleteNode([n.droplet_id], index)}
-                        className="inline-flex items-center gap-1 rounded-lg text-red-400 border border-2 border-red-400 px-2.5 py-1.5 text-xs  hover:bg-green-50 hover:text-red-700 hover:border-green-200"
-                      >
-                        <Trash2 className="h-3.5 w-3.5  text-red-400" /> Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {/* {x === 0 && (
-                  <tr>
-                    <td className="py-6 text-center text-slate-400" colSpan={7}>
-                      No nodes yet.
-                    </td>
-                  </tr>
-                )} */}
-              </tbody>
-            </table>
-          </div>
-        </section>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-white/60">
+          Cluster:{" "}
+          <span className="font-mono text-white">{clusterId}</span>
+        </p>
+       {
+        ready && (
+           <button 
+          onClick={() => onDeleteCluster()}
+          className="inline-flex items-center gap-2 rounded-lg bg-red-900/30 text-red-400 border-2 border-red-600 px-4 py-2 text-sm font-medium transition-all hover:bg-red-800/40 hover:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          <Trash2 className="h-4 w-4 text-red-400" />
+          Delete cluster
+        </button>
+        )
+       }
       </div>
-      {graphOpen && (
-        <Graph open={graphOpen} setGraphOpen={setGraphOpen} data={graphData} />
-      )}
-    </div>
+    </motion.div>
+
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 md:p-8 space-y-5"
+    >
+      {steps.map((s, idx) => {
+        const done = status[s.key];
+        const inProgress = !done && idx === currentIndex;
+        if (ready === false) {
+          return (
+            <StepRow
+              key={s.key}
+              label={s.label}
+              done={done}
+              inProgress={inProgress}
+            />
+          );
+        } else {
+          return (
+            <StepRow
+              key={s.key}
+              label={s.label}
+              done={true}
+              inProgress={false}
+            />
+          );
+        }
+      })}
+
+      <div className="flex items-center justify-between text-xs text-white/60 pt-2">
+        <div className="flex items-center gap-2">
+          {!allDone ? (
+            <span className="inline-flex items-center gap-2">
+              <Spinner />
+              <span>Checking status every 1 minute…</span>
+            </span>
+          ) : (
+            <span className="text-green-400 font-medium">
+              All steps complete.
+            </span>
+          )}
+        </div>
+        <div>
+          {lastUpdated ? (
+            <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+          ) : (
+            <span>Waiting for first update…</span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2 }}
+      className="rounded-2xl my-2 bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-white">
+          Kubeconfig
+        </h3>
+      {
+        ready &&
+          <button
+          onClick={() => {
+            downloadKubeconfig(
+              clusterId,
+              clusterData?.clusterInfo?.kubeconfig || ""
+            );
+          }}
+          className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-black font-medium hover:bg-gray-200 transition-colors"
+        >
+          <Download className="h-4 w-4" />
+          Download kubeconfig
+        </button>
+      }
+      </div>
+      <p className="text-sm text-white/60">
+        This file contains credentials for accessing your cluster. Store it
+        securely and avoid committing it to version control.
+      </p>
+    </motion.section>
+
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 }}
+      className="rounded-2xl my-2 bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+    >
+      <h3 className="text-base font-semibold text-white">
+        Cluster Resources
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard
+          icon={Cpu}
+          label="vCPU"
+          value={`${clusterData?.clusterInfo?.node_config?.cpu || 0} vCPU`}
+          sub="Total allocated"
+        />
+        <StatCard
+          icon={MemoryStick}
+          label="Memory"
+          value={`${clusterData?.clusterInfo?.node_config?.ram || 0} MB`}
+          sub="Total RAM"
+        />
+        <StatCard
+          icon={HardDrive}
+          label="Storage"
+          value={`${clusterData?.clusterInfo?.node_config?.storage || 0} GB`}
+          sub="Total disk"
+        />
+      </div>
+    </motion.section>
+
+    <motion.section
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+      className="rounded-2xl my-2 bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+    >
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-white">Nodes</h3>
+        <div className="text-xs text-white/60">
+          {nodesData?.length || 0} total
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="text-left text-white/70">
+            <tr className="border-b border-white/10">
+              <th className="py-3 pr-4 font-medium">Public IP</th>
+              <th className="py-3 pr-4 font-medium">Role</th>
+              <th className="py-3 pr-4 font-medium">Private IP</th>
+              <th className="py-3 pr-4 font-medium">CPU</th>
+              <th className="py-3 pr-4 font-medium">Memory</th>
+              <th className="py-3 pr-4 font-medium">Disk</th>
+              <th className="py-3 pr-4 text-right font-medium">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/10">
+            {nodesData?.map((n, index) => (
+              <tr key={index} className="hover:bg-white/5 transition-colors">
+                <td className="py-3 pr-4 font-medium text-white">
+                  {n.public_ip}
+                </td>
+                <td className="py-3 pr-4 text-white/70">
+                  {index === 0 ? "control-plane" : "worker"}
+                </td>
+                <td className="py-3 pr-4 text-white/70">
+                  {n.private_ip}
+                </td>
+                <td className="py-3 pr-4">
+                  <button
+                    onClick={() => ViewGraph(n.droplet_id, 1, "cpu")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-500 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-500/20 hover:text-green-300 transition-colors"
+                  >
+                    View insight
+                  </button>
+                </td>
+                <td className="py-3 pr-4">
+                  <button
+                    onClick={() => ViewGraph(n.droplet_id, 1, "memory_free")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-500 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-500/20 hover:text-green-300 transition-colors"
+                  >
+                    View insight
+                  </button>
+                </td>
+                <td className="py-3 pr-4">
+                  <button
+                    onClick={() => ViewGraph(n.droplet_id, 1, "filesystem_free")}
+                    className="inline-flex items-center gap-1 rounded-lg border border-2 border-green-500 px-2.5 py-1.5 text-xs text-green-400 hover:bg-green-500/20 hover:text-green-300 transition-colors"
+                  >
+                    View insight
+                  </button>
+                </td>
+                <td className="py-3 pr-0 text-right">
+                  <button
+                    onClick={() => onDeleteNode([n.droplet_id], index)}
+                    className="inline-flex items-center gap-1 rounded-lg text-red-400 border border-2 border-red-500 px-2.5 py-1.5 text-xs hover:bg-red-500/20 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </motion.section>
+  </div>
+  {graphOpen && (
+    <Graph open={graphOpen} setGraphOpen={setGraphOpen} data={graphData} />
+  )}
+</div>
   );
 }
 
@@ -531,64 +551,69 @@ function StepRow({
   inProgress: boolean;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <StatusDot done={done} inProgress={inProgress} />
-      <div
-        className={`text-sm md:text-base ${done ? "text-slate-900" : "text-slate-700"}`}
-      >
-        {label}
-      </div>
+   <div className="flex items-center gap-3">
+    <div className={`flex h-6 w-6 items-center justify-center rounded-full transition-colors ${
+      done ? 'bg-green-500' : inProgress ? 'bg-blue-500' : 'bg-white/20'
+    }`}>
+      {done && <Check className="h-4 w-4 text-white" />}
+      {inProgress && <Spinner  />}
     </div>
+    <span className={`text-sm transition-colors ${
+      done ? 'text-white' : inProgress ? 'text-white' : 'text-white/60'
+    }`}>
+      {label}
+    </span>
+  </div>
   );
 }
 
-function StatusDot({
-  done,
-  inProgress,
-}: {
-  done: boolean;
-  inProgress: boolean;
-}) {
-  if (done) {
-    return (
-      <span
-        className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500"
-        aria-label="done"
-      >
-        <svg
-          viewBox="0 0 20 20"
-          fill="none"
-          className="h-4 w-4"
-          aria-hidden="true"
-        >
-          <path
-            d="M5 10.5l3 3 7-7"
-            stroke="white"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
-    );
-  }
-  if (inProgress) {
-    return (
-      <span
-        className="inline-flex h-6 w-6 rounded-full bg-blue-500"
-        aria-label="in progress"
-        title="in progress"
-      />
-    );
-  }
-  return (
-    <span
-      className="inline-flex h-6 w-6 rounded-full ring-2 ring-slate-300 bg-white"
-      aria-label="pending"
-      title="pending"
-    />
-  );
-}
+// function StatusDot({
+//   done,
+//   inProgress,
+// }: {
+//   done: boolean;
+//   inProgress: boolean;
+// }) {
+//   if (done) {
+//     return (
+//       <span
+//         className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500"
+//         aria-label="done"
+//       >
+//         <svg
+//           viewBox="0 0 20 20"
+//           fill="none"
+//           className="h-4 w-4"
+//           aria-hidden="true"
+//         >
+//           <path
+//             d="M5 10.5l3 3 7-7"
+//             stroke="white"
+//             strokeWidth="2"
+//             strokeLinecap="round"
+//             strokeLinejoin="round"
+//           />
+//         </svg>
+//       </span>
+//     );
+//   }
+//   if (inProgress) {
+//     return (
+//       <span
+//         className="inline-flex h-6 w-6 rounded-full bg-blue-500"
+//         aria-label="in progress"
+//         title="in progress"
+//       />
+//     );
+//   }
+//   return (
+//     <span
+//       className="inline-flex h-6 w-6 rounded-full ring-2 ring-slate-300 bg-white"
+//       aria-label="pending"
+//       title="pending"
+//     />
+//   );
+// }
 
 function Spinner() {
   return (
@@ -629,16 +654,18 @@ function StatCard({
   sub?: string;
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="rounded-xl bg-slate-100 p-3">
-        <Icon className="h-5 w-5 text-slate-700" />
+    <div className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10 hover:bg-white/10 transition-colors">
+    <div className="flex items-center gap-3">
+      <div className="rounded-lg bg-white/10 p-2">
+        <Icon className="h-5 w-5 text-white" />
       </div>
       <div>
-        <div className="text-xs text-slate-500">{label}</div>
-        <div className="text-lg font-semibold text-slate-800">{value}</div>
-        {sub && <div className="text-[11px] text-slate-500">{sub}</div>}
+        <div className="text-sm font-medium text-white/70">{label}</div>
+        <div className="text-lg font-semibold text-white">{value}</div>
+        <div className="text-xs text-white/50">{sub}</div>
       </div>
     </div>
+  </div>
   );
 }
 

@@ -101,7 +101,62 @@ export const vmLocations: Tables<"locations">[] = [
   country: "India",
   country_code: "IN",
   available: true
-}
+},
+{
+  id: 5,
+  short: "ams3",
+  city: "Amsterdam",
+  country: "Netherlands",
+  country_code: "NL",
+  available: true
+},
+{
+  id: 6,
+  short: "blr1",
+  city: "Banglore",
+  country: "India",
+  country_code: "IN",
+  available: true
+},
+{
+  id: 7,
+  short: "nyc1",
+  city: "New York",
+  country: "United States",
+  country_code: "US",
+  available: true
+},
+{
+  id: 4,
+  short: "sfo3",
+  city: "San Francisco",
+  country: "United States",
+  country_code: "US",
+  available: true
+},
+{
+  id: 5,
+  short: "sgp1",
+  city: "Singapore",
+  country: "Singapore",
+  country_code: "SG",
+  available: true
+},
+
 
 ];
+
+// "ams3",
+//           "blr1",
+//           "fra1",
+//           "lon1",
+//           "nyc1",
+//           "nyc2",
+//           "nyc3",
+//           "sfo2",
+//           "sfo3",
+//           "sgp1",
+//           "syd1",
+//           "tor1"
+
 

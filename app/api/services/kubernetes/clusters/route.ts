@@ -1,19 +1,23 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
+import { Encryption } from "@/config/functions";
 
-const Auth = z.discriminatedUnion("method", [
-  z.object({
+
+
+
+const EncryptedData = z.object({
+  encrypted: z.string(),
+  iv: z.string(),
+  tag: z.string(),
+  salt: z.string(),
+});
+// type TEncryptedData = z.infer<typeof EncryptedData>;
+const Auth =  z.object({
     method: z.literal("password"),
     user: z.string().default("ubuntu"),
-    password: z.string().min(1),
-  }),
-  z.object({
-    method: z.literal("key"),
-    user: z.string().default("ubuntu"),
-    private_key_path: z.string().min(1),
-  }),
-]);
+    password: EncryptedData
+  })
 
 const NodeSpec = z.object({
   host: z.string(),                               // external IP or DNS
@@ -44,7 +48,12 @@ const Payload = z.object({
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   //console.log(body,".........................41")
+
+  
   const parsed = Payload.safeParse(body);
+
+ 
+ 
   //console.log(parsed.data,".................42")
   if (!parsed.success) {
     return NextResponse.json(
@@ -53,8 +62,16 @@ export async function POST(req: Request) {
     );
   }
 
+   let decryptedPassword=undefined;
+   if(parsed.data?.auth?.password){
+
+      console.log(parsed.data.auth.password,".........................57")
+      decryptedPassword=Encryption.decrypt(parsed.data.auth.password,"secret");
+      console.log(decryptedPassword,".........................60");
+  }
+
   const clusterId = crypto.randomUUID();
-  const job = await provisionQueue.add("provision", { clusterId, ...parsed.data });
+  const job = await provisionQueue.add("provision", { clusterId, ...parsed.data,decryptedPassword });
   console.log(job,"...............job")
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });

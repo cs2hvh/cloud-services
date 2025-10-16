@@ -3,12 +3,13 @@ import { cookies } from "next/headers";
 import { createClient as clientWorker } from "@supabase/supabase-js";
 
 import "dotenv/config";
+import { Database } from "./types";
 
 export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
@@ -36,7 +37,7 @@ export async function createSSRClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
@@ -61,7 +62,7 @@ export async function createSSRClient() {
 
 export async function createServiceClient() {
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
       cookies: {
@@ -76,10 +77,18 @@ export async function createServiceClient() {
   );
 }
 
-export const supabase = await clientWorker(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false, autoRefreshToken: false } }
-    );
+// export const supabase = await clientWorker(
+//       process.env.SUPABASE_URL!,
+//       process.env.SUPABASE_SERVICE_ROLE_KEY!,
+//       { auth: { persistSession: false, autoRefreshToken: false } }
+//     );
 
-
+export async function createWorkerClient() {
+  return clientWorker<Database>(
+  process.env.SUPABASE_URL!, // or SUPABASE_URL
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+  { auth: {  persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false } }
+);
+}

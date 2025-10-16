@@ -13,7 +13,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 // type TableTypes = 'clusters' | 'game_servers';  // Add more types as needed
 
@@ -60,7 +61,7 @@ const KubernetesGrid = ({ data,type }:{
 }) => {
 
     //console.log(data,"...................64");
-  const router=useRouter();
+  // const router=useRouter();
   if (!data || data.length === 0) {
     return (
       <>
@@ -210,20 +211,15 @@ const KubernetesGrid = ({ data,type }:{
           </CardContent>
 
           <CardFooter className="pt-2 flex gap-2">
-            <Button
+            <Link
               className="w-1/2"
-              variant="secondary"
-              onClick={() =>
-                // window.open(
-                //   `https://panel.hav0k.dev/server/${server.identifier}`,
-                //   "_blank",
-                // )
-
-                router.push(`/dashboard/services/kubernetes/clusters/${server.cluster_id}`)
-              }
+               href={{
+                            pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(server.cluster_id)}`,
+                            query: { clusterStatus: server.status},
+                          }}
             >
               Open Control Panel
-            </Button>
+            </Link>
             <Button
               className="w-1/2"
               onClick={() =>

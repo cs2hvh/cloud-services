@@ -136,64 +136,88 @@ const KubernetesPage = () => {
       </motion.div>
 
       {clusters.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200">
-            <thead className="bg-slate-50">
-              <tr>
-                <Th>Cluster</Th>
-                <Th>Nodes</Th>
-                <Th>Created</Th>
-                <Th>Version</Th>
-                <Th>Status</Th>
-                <Th>Actions</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clusters.map((c) => (
-                <tr key={c.id} className="hover:bg-slate-50/60">
-                  <Td>
-                    <div className="font-medium text-slate-900">
-                      {c.cluster_name}
-                    </div>
-                    <div className="text-xs text-slate-500 font-mono">
-                      {c.id}
-                    </div>
-                  </Td>
-                  <Td>{c.workers?.length}</Td>
-                  <Td>
-                    <time dateTime={c.created_at}>
-                      {new Date(c.created_at).toLocaleString()}
-                    </time>
-                  </Td>
-                  <Td>{c.k8s_version}</Td>
-                  <Td>{c.status}</Td>
-                  <Td>
-                    <div className="flex gap-2">
-                      <a
-                        onClick={() => {
-                          downloadKubeconfig(c.cluster_id, c.kubeconfig);
-                        }}
-                        //href={`/api/clusters/${encodeURIComponent(c.cluster_id)}/kubeconfig`}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                        // download
-                      >
-                        Download kubeconfig
-                      </a>
-                      <Link
-                        href={{
-                          pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(c.cluster_id)}`,
-                          query: { clusterStatus: c.status },
-                        }}
-                        className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-                      >
-                        View Cluster
-                      </Link>
-                    </div>
-                  </Td>
+        <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-700">
+              <thead className="bg-slate-700/50 text-white">
+                <tr>
+                  <Th>Cluster</Th>
+                  <Th>Nodes</Th>
+                  <Th>Created</Th>
+                  <Th>Version</Th>
+                  <Th>Status</Th>
+                  <Th>Actions</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700/60 bg-white/5">
+                {clusters.map((c) => (
+                  
+                  <tr
+                    key={c.id}
+                    className="hover:bg-slate-700/30 transition-colors duration-150"
+                  >
+                    <Td>
+                      <div className="font-medium text-white">
+                        {c.cluster_name}
+                      </div>
+                      <div className="text-xs text-slate-400 font-mono mt-1">
+                        {c.id}
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-200">
+                        {c.workers?.length}
+                      </span>
+                    </Td>
+                    <Td>
+                      <time dateTime={c.created_at} className="text-slate-300">
+                        {new Date(c.created_at).toLocaleString()}
+                      </time>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-300">{c.k8s_version}</span>
+                    </Td>
+                    <Td>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          c.status === "ready"
+                            ? "bg-green-500/20 text-green-400"
+                            : c.status === "pending"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : c.status === "error"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-slate-500/20 text-slate-400"
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            downloadKubeconfig(c.cluster_id, c.kubeconfig);
+                          }}
+                          className="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors duration-200"
+                        >
+                          Download kubeconfig
+                        </button>
+                        <Link
+                          href={{
+                            pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(c.cluster_id)}`,
+                            query: { clusterStatus: c.status },
+                          }}
+                          className="rounded-lg border border-blue-600 px-3 py-1.5 text-sm text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors duration-200"
+                        >
+                          View Cluster
+                        </Link>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <motion.div
@@ -209,6 +233,8 @@ const KubernetesPage = () => {
           </p>
           <div className="mt-6">
             <Link
+              //want to send clusters through link
+              
               href="/dashboard/services/kubernetes/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >

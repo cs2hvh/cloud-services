@@ -1,8 +1,8 @@
-import { Encryption } from "@/config/functions";
-import { createClient, createSSRClient, supabase } from "./server";
+// import { Encryption } from "@/config/functions";
+import { createClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
 import { Tables, TablesInsert, TablesUpdate } from "./types";
-import { createClient as clientWorker } from "@supabase/supabase-js";
+// import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
 type Project = Tables<"projects">;
@@ -15,38 +15,6 @@ type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
 
 
-type Patch = {
-  [key: string]: boolean | string[] | string | NodeConfig | null | Status;
-};
-interface NodeConfig {
-  // Define the expected properties and their types
-  ram: number;
-  cpu: number;
-  storage: number;  // Optional field
-}
-type Plan = { cpu: number; ram: number;storage: number };
-//  type CreateClusterInput = {
-//   clusterId: string;
-//   clusterName: string;
-
-//   controlPlane?: string | null;        // e.g., API VIP or CP-1 IP
-//   workers?: string[];                  // list of worker IPs/hosts
-//   createStatus?: boolean;
-//   connectStatus?: boolean;
-//   verifyStatus?: boolean;
-
-//   kubeConfig?: string | null;          // kubeconfig YAML
-//   nodeConfig?: NodeConfig | null; // {region, plan, cpu, ram, disk ...}
-
-//   cniPlugin?: 'flannel' | 'calico' | 'cilium' | string | null;
-//   k8sVersion?: string | null;
-
-//   status?: 'pending' | 'creating' | 'ready' | 'failed' | 'deleted';
-//   // ownerId?: string | null;             // link to auth.users.id if you use RLS
-// };
-
-type Phase = "create" | "connect" | "verify";
-type Status = "pending" | "creating" | "ready" | "failed" | "deleted";
 
 export const Users = {
   // Get a user by ID
@@ -733,216 +701,226 @@ export const OTPs = {
 };
 
 
-export const Vms = {
-  // Get a project by ID
-  get_by_specs: async (payloads: {
-    name: string;
-    location: string;
-    version: string;
-    planDetails: Plan;
-    nodes: number;
-  }) => {
-    console.log(payloads, "...........in buildPayloadWithFreeIps........");
-    const nodeKeys = makeNodeKeys(payloads.nodes);
-    console.log(nodeKeys, "...........nodeKeys........");
+// export const Vms = {
+//   // Get a project by ID
+//   get_by_specs: async (payloads: {
+//     name: string;
+//     location: string;
+//     version: string;
+//     planDetails: Plan;
+//     nodes: number;
+//   }) => {
+//    // console.log(payloads, "...........in buildPayloadWithFreeIps........");
+//     const nodeKeys = makeNodeKeys(payloads.nodes);
+//     console.log(nodeKeys, "...........nodeKeys........");
 
-    const supabase = await createSSRClient()
+//     const supabase = await createSSRClient()
 
-    const { data, error } = await supabase
-      .from("vms")
-      .select(
-        "id, ip_address, username, location,ram,cpu,storage, status, created_at"
-      )
-      .eq("location", payloads.location)
-      .eq("status", "free")
-      .eq("ram", payloads.planDetails.ram)
-      .eq("cpu", payloads.planDetails.cpu)
-      .eq("storage", payloads.planDetails.storage)
-      .order("created_at", { ascending: true })
-      .limit(payloads.nodes + 1);
+//     const { data, error } = await supabase
+//       .from("vms")
+//       .select(
+//         "id, ip_address, username, location,ram,cpu,storage, status, created_at"
+//       )
+//       .eq("location", payloads.location)
+//       .eq("status", "free")
+//       .eq("ram", payloads.planDetails.ram)
+//       .eq("cpu", payloads.planDetails.cpu)
+//       .eq("storage", payloads.planDetails.storage)
+//       .order("created_at", { ascending: true })
+//       .limit(payloads.nodes + 1);
 
-    //console.log(res.status, "...........res.status........");
+//     //console.log(res.status, "...........res.status........");
 
-    if (error) {
-      // const msg = await res.text().catch(() => "Failed to fetch free IPs");
-      console.log(error.message, "...............error.message");
-      return { success: false, error: error.message };
-    }
-    console.log(data, "...............data");
+//     if (error) {
+//       // const msg = await res.text().catch(() => "Failed to fetch free IPs");
+//       console.log(error.message, "...............error.message");
+//       return { success: false, error: error.message };
+//     }
+//     console.log(data, "...............data");
 
-    const ips = data.slice(0, payloads.nodes + 1).map((v) => v.ip_address);
+//     const ips = data.slice(0, payloads.nodes + 1).map((v) => v.ip_address);
 
-    //3) Build node map with attached IPs
-    const nodes: Record<
-      string,
-      {
-        host: string;
-        role: "control-plane" | "worker";
-        hostname: string;
-        cpu: number;
-        memory_mb: number;
-      }
-    > = {};
+//     //3) Build node map with attached IPs
+//     const nodes: Record<
+//       string,
+//       {
+//         host: string;
+//         role: "control-plane" | "worker";
+//         hostname: string;
+//         cpu: number;
+//         memory_mb: number;
+//       }
+//     > = {};
 
-    nodeKeys.forEach((key, i) => {
-      nodes[key] = {
-        host: ips[i],
-        role: key.startsWith("cp-") ? "control-plane" : "worker",
-        hostname: key,
-        cpu: payloads.planDetails.cpu,
-        memory_mb: payloads.planDetails.ram,
-      };
-    });
+//     nodeKeys.forEach((key, i) => {
+//       nodes[key] = {
+//         host: ips[i],
+//         role: key.startsWith("cp-") ? "control-plane" : "worker",
+//         hostname: key,
+//         cpu: payloads.planDetails.cpu,
+//         memory_mb: payloads.planDetails.ram,
+//       };
+//     });
 
-    // 4) Final payload (IPs included; no passwords in ips array)
-    const payload = {
-      provider: "existing",
-      cluster: {
-        name: payloads.name,
-        location: payloads.location,
-        pod_cidr: "10.244.0.0/16",
-        k8s_minor: payloads.version,
-      },
-      auth: { method: "password", user: "root", password: "luV5DivOV98g" }, // <-- replace with your real secret handling
-      nodes,
-      ips, // only IPs, as requested
-    };
+//     // 4) Final payload (IPs included; no passwords in ips array)
+//     const payload = {
+//       provider: "existing",
+//       cluster: {
+//         name: payloads.name,
+//         location: payloads.location,
+//         pod_cidr: "10.244.0.0/16",
+//         k8s_minor: payloads.version,
+//       },
+//       auth: { method: "password", user: "root", password: "luV5DivOV98g" }, // <-- replace with your real secret handling
+//       nodes,
+//       ips, // only IPs, as requested
+//     };
 
-    return { success: true, payload };
-  },
+//     return { success: true, payload };
+//   },
 
-  update_vm_by_ip: async (ips: string[]) => {
-    console.log(ips, "...............ips");
+//   update_vm_by_ip: async (ips: string[]) => {
+//     console.log(ips, "...............ips");
 
 
-    const { data, error } = await supabase
-      .from("vms")
-      .update({ status: "used" })
-      .in("ip_address", ips) // <- match multiple rows by IP
-      .eq("status", "free") // optional guard: only free -> used
-      .select("id, ip_address, username, location, status, created_at");
-    if (error?.message) {
-      console.log(error?.message, "...............error.message");
-      throw new Error(error.message);
-    }
+//     const { data, error } = await supabase
+//       .from("vms")
+//       .update({ status: "used" })
+//       .in("ip_address", ips) // <- match multiple rows by IP
+//       .eq("status", "free") // optional guard: only free -> used
+//       .select("id, ip_address, username, location, status, created_at");
+//     if (error?.message) {
+//       console.log(error?.message, "...............error.message");
+//       throw new Error(error.message);
+//     }
 
-    return {
-      success: true,
-      message: "IP status updated successfully",
-      data: data,
-    };
-  },
-};
+//     return {
+//       success: true,
+//       message: "IP status updated successfully",
+//       data: data,
+//     };
+//   },
+// };
 
 
 export const Clusters = {
   // Get a project by ID
-  create:async(payload:Clusters )=>{
+//   create:async(payload:Clusters )=>{
 
-    const encryptedKubeconfig = payload.kubeConfig
-        ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
-        : null;
-      const row = {
-    cluster_id: payload.clusterId,
-    cluster_name: payload.clusterName,
+//     const encryptedKubeconfig = payload.kubeConfig
+//         ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
+//         : null;
+//       const row = {
+//     cluster_id: payload.clusterId,
+//     cluster_name: payload.clusterName,
 
-    control_plane: payload.controlPlane ?? null,
-    workers: payload.workers ?? [],
+//     control_plane: payload.controlPlane ?? null,
+//     workers: payload.workers ?? [],
 
-    create_status: payload.createStatus ?? false,
-    connect_status: payload.connectStatus ?? false,
-    verify_status: payload.verifyStatus ?? false,
+//     create_status: payload.createStatus ?? false,
+//     connect_status: payload.connectStatus ?? false,
+//     verify_status: payload.verifyStatus ?? false,
 
-    kubeconfig: encryptedKubeconfig ?? null,
-    node_config: payload.nodeConfig ?? null,
+//     kubeconfig: encryptedKubeconfig ?? null,
+//     node_config: payload.nodeConfig ?? null,
 
-    cni_plugin: payload.cniPlugin ?? null,
-    k8s_version: payload.k8sVersion ?? null,
+//     cni_plugin: payload.cniPlugin ?? null,
+//     k8s_version: payload.k8sVersion ?? null,
 
-    status: payload.status ?? "pending",
-    password: payload.password ?? null,
-   // owner_id: payload.ownerId ?? null,
-  };
+//     status: payload.status ?? "pending",
+//     password: payload.password ?? null,
+//    // owner_id: payload.ownerId ?? null,
+//   };
 
 
   
 
-  const { data, error } = await supabase
-    .from("clusters")
-    .insert(row)
-    .select()
-    .single();
+//   const { data, error } = await supabase
+//     .from("clusters")
+//     .insert(row)
+//     .select()
+//     .single();
 
-  if (error) {
-    console.error("[createClusterWorker] insert failed:", error.message);
-    return { success: false, error: error.message };
-  }
-  return { 
-    success: true, 
-    cluster: data 
-  };
-  },
+//   if (error) {
+//     console.error("[createClusterWorker] insert failed:", error.message);
+//     return { success: false, error: error.message };
+//   }
+//   return { 
+//     success: true, 
+//     cluster: data 
+//   };
+//   },
 
-  update: async (params: {
-  clusterId: string;
-  phase: Phase;
-  value?: boolean;
-  status?: Status;
-  extras?: Partial<{
-    control_plane: string | null;
-    workers: string[];
-    kubeconfig: string | null;
-    node_config: NodeConfig | null;
-    cni_plugin: string | null;
-    k8s_version: string | null;
-  }>;
-}) => {
-  const { clusterId, phase, value = true, status, extras = {} } = params;
+//   update: async (params: {
+//   clusterId: string;
+//   phase: Phase;
+//   value?: boolean;
+//   status?: Status;
+//   extras?: Partial<{
+//     control_plane: string | null;
+//     workers: string[];
+//     kubeconfig: string | null;
+//     node_config: NodeConfig | null;
+//     cni_plugin: string | null;
+//     k8s_version: string | null;
+//   }>;
+// }) => {
+//   const { clusterId, phase, value = true, status, extras = {} } = params;
 
-  const fieldMap: Record<
-    Phase,
-    "create_status" | "connect_status" | "verify_status"
-  > = {
-    create: "create_status",
-    connect: "connect_status",
-    verify: "verify_status",
-  };
+//   const fieldMap: Record<
+//     Phase,
+//     "create_status" | "connect_status" | "verify_status"
+//   > = {
+//     create: "create_status",
+//     connect: "connect_status",
+//     verify: "verify_status",
+//   };
 
-  const patch:Patch  = {
-    [fieldMap[phase]]: value,
-    ...extras,
-  };
-   if (status) patch.status = status;
+//   const patch:Patch  = {
+//     [fieldMap[phase]]: value,
+//     ...extras,
+//   };
+//    if (status) patch.status = status;
 
 
-  const supabase = clientWorker(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
-  { auth: { persistSession: false } }
-);
+//   const supabase = clientWorker(
+//   process.env.SUPABASE_URL!, // or SUPABASE_URL
+//   process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+//   { auth: { persistSession: false } }
+// );
 
-  const { data, error } = await supabase
-    .from("clusters")
-    .update(patch)
-    .eq("cluster_id", clusterId)
-    .select()
-    .single();
+//   const { data, error } = await supabase
+//     .from("clusters")
+//     .update(patch)
+//     .eq("cluster_id", clusterId)
+//     .select()
+//     .single();
 
-  if (error) {
-    console.error("[updateClusterPhaseWorker] failed:", error.message);
-    return { success: false, error: error.message };
-  }
-  return { success: true, cluster: data };
-  },
+//   if (error) {
+//     console.error("[updateClusterPhaseWorker] failed:", error.message);
+//     return { success: false, error: error.message };
+//   }
+//   return { success: true, cluster: data };
+//   },
   
    get_by_project_id: async (projectId: string): Promise<ClustersGet[]>=> {
     try {
-      console.log(projectId,"..................933..id");
-       const supabase = clientWorker(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
-  { auth: { persistSession: false } }
-);
+      //console.log(projectId,"..................933..id");
+
+
+       if (!projectId || typeof projectId !== 'string') {
+      console.error('[Clusters.get_by_project_id] Invalid project ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      console.error('[Clusters.get_by_project_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
@@ -962,14 +940,49 @@ export const Clusters = {
     }
   },
 
+
+
+   get_by_user_id: async (userId: string): Promise<ClustersGet[]>=> {
+    try {
+      //console.log(projectId,"..................933..id");
+
+
+       if (!userId || typeof userId !== 'string') {
+      console.error('[Clusters.get_by_user_id] Invalid user ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error('[Clusters.get_by_user_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("owner_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return [];
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return [];
+    }
+  },
+
    get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
     try {
       console.log(cluster_id,"..................933..id");
-       const supabase = clientWorker(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!, // or SUPABASE_URL
-  process.env.SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
-  { auth: { persistSession: false } }
-);
+       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
@@ -993,12 +1006,12 @@ export const Clusters = {
 
 
 
-function makeNodeKeys(workers: number): string[] {
-  const n = Math.max(0, Math.floor(workers)); // sanitize
-  const keys = ["cp-1"];
-  for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
-  return keys;
-}
+// function makeNodeKeys(workers: number): string[] {
+//   const n = Math.max(0, Math.floor(workers)); // sanitize
+//   const keys = ["cp-1"];
+//   for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
+//   return keys;
+// }
 
 
 
@@ -1016,7 +1029,7 @@ const api = {
   products: Products,
   locations: Locations,
   otps: OTPs,
-  vms:Vms,
+  // vms:Vms,
   clusters:Clusters,
 };
 

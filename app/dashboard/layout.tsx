@@ -12,11 +12,12 @@ export default async function DashboardLayout({
 }: DashboardLayoutProps) {
   const user = await requireAuthProfile();
   const projects = await Projects.get_all_by_user(user.id);
+  // const clusters = await Clusters.get_by_id(user.id);
 
   return (
     <SessionProvider initialUser={user} initialProjects={projects}>
       <div className="flex h-screen bg-black">
-        <AppSidebar projects={projects} user={user} />
+        <AppSidebar projects={projects} user={user}  />
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

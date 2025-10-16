@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 // import bcrypt from "bcryptjs";
 // import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
-import { generateStrongPassword } from "@/config/functions";
-import bcrypt from "bcryptjs";
+import { Encryption, generateStrongPassword } from "@/config/functions";
+// import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     console.log(json,"...............................25")
 
     const vmPassword=generateStrongPassword();
-  console.log(vmPassword,"...............................28")
+  console.log(vmPassword,".................generateStrongPassword..............28")
     const payload={...json,
      user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
     }
@@ -32,20 +32,23 @@ export async function POST(req: NextRequest) {
 
 
       //hash password and store in db
-       const salt = await bcrypt.genSalt(10);
-       const hashedPassword = await bcrypt.hash(vmPassword, salt);
-    
+       //const salt = await bcrypt.genSalt(10);
+       //const hashedPassword = await bcrypt.hash(vmPassword, salt);
+        const hashedPassword=Encryption.encrypt(vmPassword,"secret");
+
+        console.log(hashedPassword,"...............hashedPassword................39")
 
 
-    if (droplets.status===202){
-         return NextResponse.json(
-      {
-        data:droplets.data,
-        vmPassword:hashedPassword,
-        message:'droplet created success'
-      },
-      { status: 202 }
-    );
+
+    if (droplets.status === 202) {
+      return NextResponse.json(
+        {
+          data: droplets.data,
+          vmPassword: hashedPassword,
+          message: "droplet created success",
+        },
+        { status: 202 }
+      );
     }
 
     if(droplets.status!=202){
