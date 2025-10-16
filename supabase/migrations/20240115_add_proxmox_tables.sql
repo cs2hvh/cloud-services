@@ -110,6 +110,156 @@ ALTER TABLE servers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE server_backups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE server_snapshots ENABLE ROW LEVEL SECURITY;
 
+-- RLS Policies for proxmox_hosts (admin only)
+CREATE POLICY "Admins can view proxmox hosts" ON proxmox_hosts
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can create proxmox hosts" ON proxmox_hosts
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can update proxmox hosts" ON proxmox_hosts
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can delete proxmox hosts" ON proxmox_hosts
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+-- RLS Policies for public_ip_pools (admin only)
+CREATE POLICY "Admins can view public ip pools" ON public_ip_pools
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can manage public ip pools" ON public_ip_pools
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+-- RLS Policies for public_ip_pool_ips (admin only)
+CREATE POLICY "Admins can view public ip pool ips" ON public_ip_pool_ips
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can manage public ip pool ips" ON public_ip_pool_ips
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+-- RLS Policies for proxmox_templates (admin only)
+CREATE POLICY "Admins can view proxmox templates" ON proxmox_templates
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can manage proxmox templates" ON proxmox_templates
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can delete proxmox templates" ON proxmox_templates
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can update proxmox templates" ON proxmox_templates
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+-- RLS Policies for public_ip_pools - UPDATE and DELETE
+CREATE POLICY "Admins can update public ip pools" ON public_ip_pools
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can delete public ip pools" ON public_ip_pools
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+-- RLS Policies for public_ip_pool_ips - UPDATE and DELETE
+CREATE POLICY "Admins can update public ip pool ips" ON public_ip_pool_ips
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
+CREATE POLICY "Admins can delete public ip pool ips" ON public_ip_pool_ips
+    FOR DELETE USING (
+        EXISTS (
+            SELECT 1 FROM user_profiles 
+            WHERE user_profiles.id = auth.uid() 
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+
 -- RLS Policies for servers
 CREATE POLICY "Users can view their own servers" ON servers
     FOR SELECT USING (auth.uid()::text = owner_id::text);
