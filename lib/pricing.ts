@@ -98,9 +98,7 @@ export function formatCurrency(amount: number): string {
  * Get custom pricing tier
  * Use this to customize pricing per location or plan
  */
-export function getCustomPricingTier(
-  locationName?: string
-): PricingTier {
+export function getCustomPricingTier(): PricingTier {
   // Could be fetched from database in future
   return { ...DEFAULT_PRICING };
 }
