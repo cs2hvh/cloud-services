@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient as clientWorker } from "@supabase/supabase-js";
 
-import "dotenv/config";
+
 import { Database } from "./types";
 
 export async function createClient() {

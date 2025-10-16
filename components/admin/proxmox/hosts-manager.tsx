@@ -25,7 +25,7 @@ interface HostData {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  public_ip_pools?: Array<{ id: string; ip_range: string; gateway_ip: string | null }>;
+  public_ip_pools?: Array<{ id: string; mac: string; ip_range: string; gateway_ip: string | null }>;
   proxmox_templates?: Array<{ id: string; vmid: number; name: string; os_type: string | null }>;
 }
 
@@ -46,7 +46,7 @@ interface FormState {
   dns_secondary: string;
   template_vmid: string;
   is_active: boolean;
-  pools: Array<{ ip_range: string; gateway_ip: string }>;
+  pools: Array<{ mac: string; ip_range: string; gateway_ip: string }>;
   templates: Array<{ name: string; vmid: string; os_type: string }>;
 }
 
@@ -126,7 +126,7 @@ export function ProxmoxHostsManager() {
       dns_secondary: host.dns_secondary || '',
       template_vmid: host.template_vmid?.toString() || '',
       is_active: host.is_active,
-      pools: host.public_ip_pools?.map(p => ({ ip_range: p.ip_range, gateway_ip: p.gateway_ip || '' })) || [],
+      pools: host.public_ip_pools?.map(p => ({ mac: p.mac, ip_range: p.ip_range, gateway_ip: p.gateway_ip || '' })) || [],
       templates: host.proxmox_templates?.map(t => ({ name: t.name, vmid: t.vmid.toString(), os_type: t.os_type || '' })) || [],
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -136,7 +136,7 @@ export function ProxmoxHostsManager() {
   const addPool = useCallback(() => {
     setForm(prev => ({
       ...prev,
-      pools: [...prev.pools, { ip_range: '', gateway_ip: '' }]
+      pools: [...prev.pools, { mac: '', ip_range: '', gateway_ip: '' }]
     }));
   }, []);
 
@@ -393,40 +393,55 @@ export function ProxmoxHostsManager() {
               </div>
               <div className="space-y-3">
                 {form.pools.map((pool, idx) => (
-                  <div key={idx} className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <Label className="text-white/80 text-sm">IP Range</Label>
-                      <Input
-                        value={pool.ip_range}
-                        onChange={(e) => setForm(prev => ({
-                          ...prev,
-                          pools: prev.pools.map((p, i) => i === idx ? { ...p, ip_range: e.target.value } : p)
-                        }))}
-                        placeholder="203.0.113.0/24"
-                        className="bg-black/50 text-white border-white/10 mt-1"
-                      />
+                  <div key={idx} className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <Label className="text-white/80 text-sm">Pool MAC Address</Label>
+                        <Input
+                          value={pool.mac}
+                          onChange={(e) => setForm(prev => ({
+                            ...prev,
+                            pools: prev.pools.map((p, i) => i === idx ? { ...p, mac: e.target.value } : p)
+                          }))}
+                          placeholder="02:00:00:17:73:3d"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                        <p className="text-xs text-white/50 mt-1">MAC address for this IP pool</p>
+                      </div>
+                      <div className="flex-1">
+                        <Label className="text-white/80 text-sm">IP Range</Label>
+                        <Input
+                          value={pool.ip_range}
+                          onChange={(e) => setForm(prev => ({
+                            ...prev,
+                            pools: prev.pools.map((p, i) => i === idx ? { ...p, ip_range: e.target.value } : p)
+                          }))}
+                          placeholder="203.0.113.0/24"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <Label className="text-white/80 text-sm">Gateway</Label>
+                        <Input
+                          value={pool.gateway_ip}
+                          onChange={(e) => setForm(prev => ({
+                            ...prev,
+                            pools: prev.pools.map((p, i) => i === idx ? { ...p, gateway_ip: e.target.value } : p)
+                          }))}
+                          placeholder="203.0.113.1"
+                          className="bg-black/50 text-white border-white/10 mt-1"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => removePool(idx)}
+                        variant="destructive"
+                        size="sm"
+                        className="mt-6"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <div className="flex-1">
-                      <Label className="text-white/80 text-sm">Gateway</Label>
-                      <Input
-                        value={pool.gateway_ip}
-                        onChange={(e) => setForm(prev => ({
-                          ...prev,
-                          pools: prev.pools.map((p, i) => i === idx ? { ...p, gateway_ip: e.target.value } : p)
-                        }))}
-                        placeholder="203.0.113.1"
-                        className="bg-black/50 text-white border-white/10 mt-1"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => removePool(idx)}
-                      variant="destructive"
-                      size="sm"
-                      className="mb-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
                 ))}
               </div>
@@ -625,7 +640,7 @@ export function ProxmoxHostsManager() {
                           <div className="space-y-1">
                             {host.public_ip_pools.map((pool) => (
                               <p key={pool.id} className="text-white/70 text-xs ml-2">
-                                • {pool.ip_range} (GW: {pool.gateway_ip || '-'})
+                                • {pool.mac || '-'} | {pool.ip_range} (GW: {pool.gateway_ip || '-'})
                               </p>
                             ))}
                           </div>

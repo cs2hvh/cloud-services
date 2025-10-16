@@ -20,7 +20,7 @@ interface HostInput {
   dns_secondary?: string;
   template_vmid?: number;
   is_active?: boolean;
-  pools?: Array<{ ip_range: string; gateway_ip?: string }>;
+  pools?: Array<{ mac: string; ip_range: string; gateway_ip?: string }>;
   templates?: Array<{ name: string; vmid: number; os_type?: string }>;
 }
 
@@ -72,7 +72,7 @@ export async function GET() {
         id, name, host_url, allow_insecure_tls, token_id, node, storage, 
         bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, 
         is_active, created_at, updated_at,
-        public_ip_pools ( id, ip_range, gateway_ip ),
+        public_ip_pools ( id, mac, ip_range, gateway_ip ),
         proxmox_templates ( id, vmid, name, os_type, is_active )
       `
       )
@@ -159,26 +159,64 @@ export async function POST(req: NextRequest) {
 
     const hostId = (upserted as Record<string, unknown>)?.id as string;
 
-    // Handle IP pools
+    // Handle IP pools - sync by MAC (each MAC is a unique pool)
     if (body.pools && Array.isArray(body.pools)) {
-      // Delete existing pools for this host
-      await supabase.from("public_ip_pools").delete().eq("host_id", hostId);
+      const pools = body.pools
+        .filter((p) => p?.mac && p?.ip_range)
+        .map((p) => ({
+          mac: String(p.mac),
+          ip_range: String(p.ip_range),
+          gateway_ip: p.gateway_ip ? String(p.gateway_ip) : null,
+        }));
 
-      // Insert new pools
-      for (const pool of body.pools) {
-        if (!pool.ip_range) continue;
+      // Get existing pools for this host
+      const { data: existingPools } = await supabase
+        .from("public_ip_pools")
+        .select("id, mac")
+        .eq("host_id", hostId);
 
-        const { error: poolErr } = await supabase
-          .from("public_ip_pools")
-          .insert({
-            host_id: hostId,
-            ip_range: pool.ip_range,
-            gateway_ip: pool.gateway_ip || null,
-            is_active: true,
-          });
+      const existingMap = new Map<string, string>();
+      for (const p of existingPools || []) {
+        const pool = p as unknown as { mac: string; id: string };
+        existingMap.set(String(pool.mac), String(pool.id));
+      }
 
-        if (poolErr) {
-          console.error("Pool insert error:", poolErr);
+      const incomingMacs = new Set(pools.map((p) => p.mac));
+
+      // Delete pools that are no longer present
+      for (const [mac, id] of existingMap.entries()) {
+        if (!incomingMacs.has(mac)) {
+          await supabase.from("public_ip_pools").delete().eq("id", id);
+        }
+      }
+
+      // Upsert each pool
+      for (const pool of pools) {
+        if (existingMap.has(pool.mac)) {
+          // Update existing pool
+          const poolId = existingMap.get(pool.mac);
+          await supabase
+            .from("public_ip_pools")
+            .update({
+              ip_range: pool.ip_range,
+              gateway_ip: pool.gateway_ip,
+            })
+            .eq("id", poolId);
+        } else {
+          // Insert new pool
+          const { error: poolErr } = await supabase
+            .from("public_ip_pools")
+            .insert({
+              host_id: hostId,
+              mac: pool.mac,
+              ip_range: pool.ip_range,
+              gateway_ip: pool.gateway_ip,
+              is_active: true,
+            });
+
+          if (poolErr) {
+            console.error("Pool insert error:", poolErr);
+          }
         }
       }
     }

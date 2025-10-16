@@ -40,6 +40,7 @@
     "dotted-map": "^2.2.3",
     "input-otp": "^1.4.2",
     "ioredis": "^5.8.0",
+     "proxmox-api": "^1.1.1",
     "jenkins": "^1.1.0",
     "lucide-react": "^0.487.0",
     "motion": "^12.23.12",
