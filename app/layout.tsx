@@ -21,9 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${suse.variable}`}
-      >
+      <body className={`${suse.variable}`}>
         {children}
         <Toaster position="top-center" />
       </body>

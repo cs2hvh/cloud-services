@@ -1,4 +1,4 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createBrowserClient } from "@supabase/ssr";
 
 export function createClient() {
   return createBrowserClient(
@@ -8,8 +8,8 @@ export function createClient() {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    }
-  )
+        detectSessionInUrl: true,
+      },
+    },
+  );
 }

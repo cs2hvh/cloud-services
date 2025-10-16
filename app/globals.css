@@ -7,6 +7,30 @@ body {
   font-family: var(--font-suse), cursive;
 }
 
+/* Custom scrollbar for dark theme */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #1e293b;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -123,5 +147,21 @@ body {
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+@theme inline {
+  --animate-cell-ripple: cell-ripple var(--duration, 200ms) ease-out none 1
+  var(--delay, 0ms);
+ 
+  @keyframes cell-ripple {
+    0% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 0.8;
+    }
+    100% {
+      opacity: 0.4;
+    }
   }
 }

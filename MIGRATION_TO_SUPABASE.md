@@ -1,7 +1,7 @@
-
 # Supabase Migration Guide
 
 ## Overview
+
 This project has been migrated from MySQL + Lucia Auth to Supabase for authentication and database management.
 
 ## Environment Setup
@@ -24,6 +24,7 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
 1. **Create a new Supabase project** at https://supabase.com
 
 2. **Run the schema migration** in your Supabase SQL editor:
+
    ```sql
    -- Copy and paste the contents of supabase/schema.sql
    ```
@@ -36,15 +37,17 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
 ## Key Changes Made
 
 ### 1. Authentication System
+
 - **Removed**: Lucia Auth, bcryptjs, MySQL sessions
 - **Added**: Supabase Auth with built-in OAuth support
-- **Benefits**: 
+- **Benefits**:
   - Built-in email verification
   - OAuth providers (GitHub, Discord, etc.)
   - Secure session management
   - Password reset functionality
 
 ### 2. Database Layer
+
 - **Removed**: MySQL connection, custom query builders
 - **Added**: Supabase client with Row Level Security (RLS)
 - **Benefits**:
@@ -54,6 +57,7 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
   - Type-safe database operations
 
 ### 3. File Structure Changes
+
 ```
 lib/
 ├── supabase/
@@ -67,6 +71,7 @@ lib/
 ```
 
 ### 4. API Routes Updated
+
 - `app/api/auth/signin/email/route.ts` - Supabase password auth
 - `app/api/auth/signup/route.ts` - User registration
 - `app/api/auth/signout/route.ts` - Sign out
@@ -78,6 +83,7 @@ lib/
 ## Migration Steps for Existing Users
 
 ### 1. Data Migration (if needed)
+
 If you have existing MySQL data, you'll need to migrate it:
 
 ```sql
@@ -87,21 +93,22 @@ If you have existing MySQL data, you'll need to migrate it:
 ```
 
 ### 2. Update Frontend Components
+
 Replace authentication calls:
 
 ```typescript
 // Old (Lucia)
-import { validateRequest } from '@/lib/lucia/auth'
+import { validateRequest } from "@/lib/lucia/auth";
 
 // New (Supabase)
-import { getUser, getUserProfile } from '@/lib/supabase/auth'
+import { getUser, getUserProfile } from "@/lib/supabase/auth";
 ```
 
 ### 3. OAuth Setup
+
 1. **GitHub OAuth**:
    - Update redirect URI in GitHub App settings
    - Add credentials to Supabase Auth providers
-   
 2. **Discord OAuth** (if needed):
    - Same process as GitHub
 
@@ -117,12 +124,13 @@ The migration includes comprehensive RLS policies:
 ## Testing the Migration
 
 1. **Authentication Flow**:
+
    ```bash
    # Test email signup
    curl -X POST http://localhost:3000/api/auth/signup \
      -H "Content-Type: application/json" \
      -d '{"email":"test@example.com","password":"password","username":"testuser"}'
-   
+
    # Test email signin
    curl -X POST http://localhost:3000/api/auth/signin/email \
      -H "Content-Type: application/json" \
@@ -130,6 +138,7 @@ The migration includes comprehensive RLS policies:
    ```
 
 2. **GitHub OAuth**:
+
    - Visit `/signin` and test GitHub login button
    - Verify redirect to `/dashboard` after successful auth
 
@@ -148,9 +157,11 @@ The migration includes comprehensive RLS policies:
 4. **Type errors**: Run `npm run build` to check for TypeScript issues
 
 ### Debug Mode:
+
 Enable Supabase debug mode:
+
 ```typescript
-const supabase = createClient(url, key, { debug: true })
+const supabase = createClient(url, key, { debug: true });
 ```
 
 ## Benefits of Migration

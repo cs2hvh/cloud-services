@@ -4,17 +4,23 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'samatva.blr1.cdn.digitaloceanspaces.com',
-        port: '',
-        pathname: '/**',
-        search: '',
+        protocol: "https",
+        hostname: "samatva.blr1.cdn.digitaloceanspaces.com",
+        port: "",
+        pathname: "/**",
+        search: "",
       },
       {
-        protocol: 'https',
-        hostname: 'flagsapi.com',
-        port: '',
-        pathname: '/**',
+        protocol: "https",
+        hostname: "flagsapi.com",
+        port: "",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn.jsdelivr.net",
+        port: "",
+        pathname: "/**",
       },
     ],
   },

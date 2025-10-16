@@ -75,6 +75,19 @@ CREATE TABLE locations (
     available BOOLEAN DEFAULT TRUE
 );
 
+-- Apps table (for Jenkins deployments)
+CREATE TABLE apps (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    github_url TEXT NOT NULL,
+    port INTEGER NOT NULL UNIQUE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'building',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Game servers table
 CREATE TABLE game_servers (
     id BIGSERIAL PRIMARY KEY,
@@ -105,6 +118,7 @@ ALTER TABLE otps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE locations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_servers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE apps ENABLE ROW LEVEL SECURITY;
 
 -- Projects policies
 CREATE POLICY "Users can view projects they are part of" ON projects
@@ -178,6 +192,19 @@ CREATE POLICY "Users can update their own game servers" ON game_servers
 CREATE POLICY "Users can delete their own game servers" ON game_servers
     FOR DELETE USING (auth.uid() = user_id);
 
+-- Apps policies
+CREATE POLICY "Users can view their own apps" ON apps
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create apps" ON apps
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own apps" ON apps
+    FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own apps" ON apps
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- Functions and triggers
 
 -- Function to automatically create user profile on signup
@@ -209,3 +236,12 @@ CREATE TRIGGER update_user_profiles_updated_at
     BEFORE UPDATE ON user_profiles
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger for apps updated_at
+CREATE TRIGGER update_apps_updated_at
+    BEFORE UPDATE ON apps
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create index for port lookups
+CREATE INDEX idx_apps_port ON apps(port);

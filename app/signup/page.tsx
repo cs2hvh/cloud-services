@@ -1,36 +1,36 @@
 import SignUpMultiStep from "@/components/auth/signup";
 import { getUser } from "@/lib/supabase/auth";
-import Image from "next/image";
+import { Spotlight } from "@/components/ui/spotlight";
+import { cn } from "@/lib/utils";
 import { redirect } from "next/navigation";
 
 export default async function SignUpPage() {
-    const user = await getUser();
+  const user = await getUser();
 
-    if (user) {
-        redirect("/")
-    }
+  if (user) {
+    redirect("/");
+  }
 
-    return (
-        <div className="relative min-h-svh w-full overflow-hidden">
-            {/* Background Image */}
-            <div className="absolute inset-0">
-                <Image
-                    src="https://samatva.blr1.cdn.digitaloceanspaces.com/images/rp1.jpg"
-                    alt="Background"
-                    fill
-                    priority
-                    className="object-cover"
-                    sizes="100vw"
-                />
-                <div className="absolute inset-0" />
-            </div>
+  return (
+    <div className="relative min-h-svh w-full overflow-hidden bg-black/[0.96] antialiased">
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 [background-size:40px_40px] select-none",
+          "[background-image:linear-gradient(to_right,#171717_1px,transparent_1px),linear-gradient(to_bottom,#171717_1px,transparent_1px)]",
+        )}
+      />
 
-            {/* Content */}
-            <div className="relative z-10 flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
-                <div className="w-full max-w-sm rounded-xl backdrop-blur-md shadow-2xl md:max-w-3xl">
-                    <SignUpMultiStep />
-                </div>
-            </div>
+      <Spotlight
+        className="-top-40 left-0 md:-top-20 md:left-60"
+        fill="white"
+      />
+
+      {/* Content */}
+      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-sm md:max-w-3xl">
+          <SignUpMultiStep />
         </div>
-    );
+      </div>
+    </div>
+  );
 }

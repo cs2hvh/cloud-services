@@ -1,36 +1,33 @@
 import DatabaseSelect from "@/components/dashboard/database/new";
-import { SidebarLayout } from "@/components/dashboard/sidebar/layout";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Separator } from "@/components/ui/separator";
 import { serviceLocations } from "@/config/locations";
 import { Products } from "@/lib/supabase/queries";
 import { Suspense } from "react";
 
 const DatabaseNewSuspense = async () => {
-    const products = await Products.get_by_type("database")
-    // console.log(products)
-    return <DatabaseSelect products={products} locations={serviceLocations} />
-}
+  const products = await Products.get_by_type("database");
+  return <DatabaseSelect products={products} locations={serviceLocations} />;
+};
 
 const DatabaseNewPage = () => {
+  return (
+    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold">New Database Cluster</h1>
+        <p className="text-white/60">Deploy a managed database with automated backups and high availability.</p>
+      </div>
+      
+      <div className="border-t border-white/10 pt-8">
+        <Suspense fallback={
+          <div className="flex items-center justify-center py-20">
+            <LoadingSpinner />
+          </div>
+        }>
+          <DatabaseNewSuspense />
+        </Suspense>
+      </div>
+    </div>
+  );
+};
 
-    return (
-        <SidebarLayout>
-            <div className="flex justify-between pt-4">
-                <div>
-                    <h2 className="text-2xl font-bold">New Database Cluster</h2>
-                    <p className="text-muted-foreground">
-                        Create a new Database Cluster
-                    </p>
-                </div>
-            </div>
-            <Separator className="my-4" />
-            <Suspense fallback={<LoadingSpinner />}>
-                <DatabaseNewSuspense />
-            </Suspense>
-        </SidebarLayout>
-    )
-
-}
-
-export default DatabaseNewPage
+export default DatabaseNewPage;
