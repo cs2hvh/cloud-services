@@ -111,14 +111,6 @@ export const vmLocations: Tables<"locations">[] = [
   available: true
 },
 {
-  id: 6,
-  short: "blr1",
-  city: "Banglore",
-  country: "India",
-  country_code: "IN",
-  available: true
-},
-{
   id: 7,
   short: "nyc1",
   city: "New York",
@@ -127,7 +119,7 @@ export const vmLocations: Tables<"locations">[] = [
   available: true
 },
 {
-  id: 4,
+  id: 8,
   short: "sfo3",
   city: "San Francisco",
   country: "United States",
@@ -135,7 +127,7 @@ export const vmLocations: Tables<"locations">[] = [
   available: true
 },
 {
-  id: 5,
+  id: 9,
   short: "sgp1",
   city: "Singapore",
   country: "Singapore",

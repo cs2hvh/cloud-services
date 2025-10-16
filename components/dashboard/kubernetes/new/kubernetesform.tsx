@@ -236,7 +236,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
   const handleNextStep = () => {
     if (currentStep === 1) {
       try {
-        debugger
+       // debugger
         //check if cluster name already exists
          //const clusters = await Clusters.get_by_owner(userId);
         const clusterExists = clusters?.some((cluster) => cluster.cluster_name === state.selectedName);
@@ -259,6 +259,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         }
       }
     }
+
+    if(currentStep===2){
+      if (!state.selectedLocation) {
+        toast.error("Please select a location");
+        return;
+    }
+  }
 
     if (currentStep === 3) {
       try {
@@ -991,36 +998,52 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         </div>
 
          <div className="lg:col-span-1">
-        <Card className="sticky top-8 bg-white/5 border-white/10">
-          <CardHeader>
-            <CardTitle className="text-white">Order Summary</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {selectedLocation && (
-              <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
-                {selectedLocation && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-white/60">Name:</span>
-                    <span className="font-medium text-white">
-                      {selectedLocation}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-            {selectedNode && (
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-white/60">Name:</span>
-                <span className="font-medium text-white">{selectedNode}</span>
-              </div>
-            )}
+       <Card className="sticky top-8 bg-white/5 border-white/10">
+  <CardHeader>
+    <CardTitle className="text-white">Order Summary</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-4">
+    {selectedName && (
+      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+        <span className="text-sm text-white/60">Name:</span>
+        <span className="font-medium text-white">{selectedName}</span>
+      </div>
+    )}
+    
+    {selectedLocation && (
+      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+        <span className="text-sm text-white/60">Location:</span>
+        <span className="font-medium text-white">{selectedLocation}</span>
+      </div>
+    )}
+    
+    {selectedNode && (
+      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+        <span className="text-sm text-white/60">Node:</span>
+        <span className="font-medium text-white">{selectedNode}</span>
+      </div>
+    )}
+    
+    {selectedVersion && (
+      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+        <span className="text-sm text-white/60">Version:</span>
+        <span className="font-medium text-white">{selectedVersion}</span>
+      </div>
+    )}
+    
+    {/* {selectedProject && (
+      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+        <span className="text-sm text-white/60">Project:</span>
+        <span className="font-medium text-white">{selectedProject}</span>
+      </div>
+    )} */}
 
-            <Separator className="bg-white/10" />
-            <div className="flex justify-between items-center font-bold text-lg text-white">
-              <span>Total</span>
-            </div>
-          </CardContent>
-        </Card>
+    <Separator className="bg-white/10" />
+    <div className="flex justify-between items-center font-bold text-lg text-white">
+      <span>Total</span>
+    </div>
+  </CardContent>
+</Card>
       </div>
       </div>
 
