@@ -151,6 +151,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [selectedOS, setSelectedOS] = useState<string>('');
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [sshPassword, setSshPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Use computed options if provided, otherwise use hardcoded defaults
@@ -203,9 +204,24 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
   };
 
   const handleNextStep = () => {
-    if (currentStep === 1 && !vpsName.trim()) {
-      toast.error('Please enter a VPS name');
-      return;
+    if (currentStep === 1) {
+      if (!vpsName.trim()) {
+        toast.error('Please enter a VPS name');
+        return;
+      }
+      if (!sshPassword || sshPassword.length < 12) {
+        toast.error('SSH password must be at least 12 characters');
+        return;
+      }
+      const hasUpperCase = /[A-Z]/.test(sshPassword);
+      const hasLowerCase = /[a-z]/.test(sshPassword);
+      const hasNumbers = /[0-9]/.test(sshPassword);
+      const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(sshPassword);
+      
+      if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+        toast.error('Password must contain uppercase, lowercase, numbers, and special characters');
+        return;
+      }
     }
     if (currentStep === 2 && !selectedLocation) {
       toast.error('Please select a location');
@@ -268,11 +284,12 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       // Prepare the payload for VM creation
       const createPayload = {
         hostname: vpsName,
-        locationId: selectedLocation,
-        osTemplateId: selectedOS,
+        location: selectedLocation,
+        os: selectedOS,
         cpuCores,
         memoryMB,
         diskGB,
+        sshPassword,
       };
 
       // Call the VM creation API
@@ -347,20 +364,36 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Step 1: Name */}
+          {/* Step 1: Name & SSH Password */}
           {currentStep === 1 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">VPS Instance Name</CardTitle>
+                <CardTitle className="text-white">VPS Configuration</CardTitle>
               </CardHeader>
-              <CardContent>
-                <Input
-                  value={vpsName}
-                  onChange={(e) => setVpsName(e.target.value)}
-                  type="text"
-                  placeholder="web-server-01"
-                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
-                />
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-white mb-2 block">Instance Name</Label>
+                  <Input
+                    value={vpsName}
+                    onChange={(e) => setVpsName(e.target.value)}
+                    type="text"
+                    placeholder="web-server-01"
+                    className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Alphanumeric and hyphens only</p>
+                </div>
+
+                <div>
+                  <Label className="text-white mb-2 block">SSH Root Password</Label>
+                  <Input
+                    value={sshPassword}
+                    onChange={(e) => setSshPassword(e.target.value)}
+                    type="password"
+                    placeholder="••••••••••••"
+                    className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Minimum 12 characters with uppercase, lowercase, numbers, and special characters</p>
+                </div>
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-white/90">
