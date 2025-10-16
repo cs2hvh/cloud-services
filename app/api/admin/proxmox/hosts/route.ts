@@ -25,30 +25,39 @@ interface HostInput {
 }
 
 // Check if user is admin
-async function requireAdmin(): Promise<{ ok: boolean; email?: string }> {
+async function requireAdmin(): Promise<{ ok: boolean; email?: string; userId?: string }> {
   try {
     const supabase = await createClient();
     const { data: userData } = await supabase.auth.getUser();
     const email = userData?.user?.email || "";
+    const userId = userData?.user?.id || "";
 
-    if (!email) {
+    if (!email || !userId) {
       return { ok: false };
     }
 
-    // Check if user is admin (you can modify this logic based on your user_profiles roles)
-    const { data: profile } = await supabase
-      .from("user_profiles")
-      .select("roles")
-      .eq("id", userData?.user?.id)
-      .single();
+    // Try to check if user has admin role in user_profiles
+    try {
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("roles")
+        .eq("id", userId)
+        .single();
 
-    const isAdmin = profile?.roles?.includes("admin");
-    if (!isAdmin) {
+      const isAdmin = profile?.roles?.includes("admin");
+      if (!isAdmin) {
+        console.warn(`User ${email} attempted admin access but is not an admin`);
+        return { ok: false };
+      }
+    } catch (profileError) {
+      // If user_profiles lookup fails, deny access
+      console.error(`Failed to check admin status for ${email}:`, profileError);
       return { ok: false };
     }
 
-    return { ok: true, email };
-  } catch {
+    return { ok: true, email, userId };
+  } catch (error) {
+    console.error("Admin check error:", error);
     return { ok: false };
   }
 }
