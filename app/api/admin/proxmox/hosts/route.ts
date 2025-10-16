@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createSSRClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +63,8 @@ export async function GET() {
   }
 
   try {
-    const supabase = await createClient();
+    // Use service role client to bypass RLS for admin operations
+    const supabase = await createSSRClient();
 
     const { data: hosts, error } = await supabase
       .from("proxmox_hosts")
@@ -121,7 +122,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = await createClient();
+    // Use service role client to bypass RLS for admin operations
+    const supabase = await createSSRClient();
 
     // Prepare host payload
     const hostPayload: Record<string, unknown> = {
