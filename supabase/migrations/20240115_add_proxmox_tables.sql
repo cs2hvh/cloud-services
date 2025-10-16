@@ -312,20 +312,3 @@ CREATE INDEX idx_public_ip_pool_ips_pool_id ON public_ip_pool_ips(pool_id);
 CREATE INDEX idx_proxmox_templates_host_id ON proxmox_templates(host_id);
 CREATE INDEX idx_server_backups_server_id ON server_backups(server_id);
 CREATE INDEX idx_server_snapshots_server_id ON server_snapshots(server_id);
-
--- Trigger for servers updated_at
-CREATE OR REPLACE TRIGGER update_servers_updated_at
-    BEFORE UPDATE ON servers
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- Insert default Proxmox host configuration (optional - customize as needed)
--- INSERT INTO proxmox_hosts (
---     id, name, host_url, node, storage, bridge,
---     gateway_ip, dns_primary, dns_secondary, is_active
--- ) VALUES (
---     'default', 'Default Proxmox Cluster', 'https://proxmox.example.com:8006',
---     'pve', 'local', 'vmbr0',
---     '192.168.1.1'::inet, '8.8.8.8'::inet, '8.8.4.4'::inet, true
--- )
--- ON CONFLICT DO NOTHING;
