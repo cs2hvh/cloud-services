@@ -8,9 +8,29 @@
 const fs = require("fs");
 const path = require("path");
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const projectRef = supabaseUrl ? supabaseUrl.split("/")[3] : "YOUR_PROJECT_REF";
+// Read .env file manually
+const envPath = path.join(__dirname, "../.env");
+const envContent = fs.readFileSync(envPath, "utf-8");
+const envLines = envContent.split("\n");
+
+let supabaseUrl = "";
+let serviceRoleKey = "";
+
+for (const line of envLines) {
+  const trimmed = line.trim();
+  if (trimmed.startsWith("SUPABASE_URL=") && !trimmed.startsWith("NEXT_PUBLIC")) {
+    const value = trimmed.substring("SUPABASE_URL=".length).trim();
+    supabaseUrl = value.replace(/^["']|["']$/g, "");
+  }
+  if (trimmed.startsWith("SUPABASE_SERVICE_ROLE_KEY=")) {
+    const value = trimmed.substring("SUPABASE_SERVICE_ROLE_KEY=".length).trim();
+    serviceRoleKey = value.replace(/^["']|["']$/g, "");
+  }
+}
+
+const projectRef = supabaseUrl 
+  ? supabaseUrl.split("/")[2].split(".")[0]  // Extract from subdomain (e.g., xafjjpgazdxhktpfeuri from xafjjpgazdxhktpfeuri.supabase.co)
+  : "YOUR_PROJECT_REF";
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error("❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env");
