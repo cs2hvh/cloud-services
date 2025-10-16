@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     const payload={...json,
      user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
     }
-    //console.log(payload,"...............................28")
+    console.log(payload,"...............................28")
     const droplets=await axios.post(
         "https://api.digitalocean.com/v2/droplets",
        payload,

@@ -27,6 +27,46 @@ interface EncryptedData {
   salt: string;
 }
 
+
+// Add these types at the top of your file
+interface MetricValue {
+  timestamp: number;
+  value: string | number;
+}
+
+interface CpuMetric {
+  metric: {
+    host_id: string;
+    mode: 'idle' | 'iowait' | 'irq' | 'nice' | 'softirq' | 'steal' | 'system' | 'user';
+  };
+  values: [number, string][]; // [timestamp, value]
+}
+
+interface MonitoringResponse {
+  data: {
+    status: string;
+    data: {
+      resultType: string;
+      result: CpuMetric[];
+    };
+  };
+  matrix: CpuMetric[];
+  message: string;
+}
+
+interface GraphData {
+  labels: string[]; // Timestamps for X-axis
+  datasets: {
+    label: string;
+    data: number[];
+    borderColor?: string;
+    backgroundColor?: string;
+  }[];
+}
+
+
+
+
 export class Encryption {
   private static getKey(password: string, salt: Buffer): Buffer {
     return crypto.pbkdf2Sync(password, salt, ITERATIONS, KEY_LENGTH, "sha256");
@@ -77,4 +117,147 @@ export function timeRange(hrs: number) {
   const end = Math.floor(Date.now() / 1000);
   const start = end - hrs * 60 * 60;
   return { start, end };
+}
+
+
+
+
+
+
+
+
+
+
+
+
+// Add these helper functions before the component
+
+/**
+ * Transform CPU metrics for visualization
+ * Calculates actual CPU usage = 100% - idle%
+ */
+export function transformCpuData(metrics: CpuMetric[]): GraphData {
+  // Find the idle metric
+  const idleMetric = metrics.find(m => m.metric.mode === 'idle');
+  const userMetric = metrics.find(m => m.metric.mode === 'user');
+  const systemMetric = metrics.find(m => m.metric.mode === 'system');
+  
+  if (!idleMetric || !userMetric || !systemMetric) {
+    throw new Error('Missing required CPU metrics');
+  }
+
+  // Extract timestamps (convert to readable format)
+  const labels = idleMetric.values.map(([timestamp]) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  });
+
+  // Calculate CPU usage percentage
+  // CPU Usage = (User + System) / (User + System + Idle) * 100
+  const cpuUsageData = idleMetric.values.map(([timestamp, idleValue], index) => {
+    const idle = parseFloat(idleValue);
+    const user = parseFloat(userMetric.values[index][1]);
+    const system = parseFloat(systemMetric.values[index][1]);
+    
+    const total = idle + user + system;
+    const usage = total > 0 ? ((user + system) / total) * 100 : 0;
+    
+    return parseFloat(usage.toFixed(2));
+  });
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'CPU Usage (%)',
+        data: cpuUsageData,
+        borderColor: 'rgb(59, 130, 246)', // Blue
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      },
+      {
+        label: 'User Mode (%)',
+        data: userMetric.values.map(([, value]) => {
+          const total = idleMetric.values[0] ? parseFloat(idleMetric.values[0][1]) : 1;
+          return parseFloat(((parseFloat(value) / total) * 100).toFixed(2));
+        }),
+        borderColor: 'rgb(34, 197, 94)', // Green
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      },
+      {
+        label: 'System Mode (%)',
+        data: systemMetric.values.map(([, value]) => {
+          const total = idleMetric.values[0] ? parseFloat(idleMetric.values[0][1]) : 1;
+          return parseFloat(((parseFloat(value) / total) * 100).toFixed(2));
+        }),
+        borderColor: 'rgb(249, 115, 22)', // Orange
+        backgroundColor: 'rgba(249, 115, 22, 0.1)',
+      }
+    ]
+  };
+}
+
+/**
+ * Transform memory metrics
+ */
+export function transformMemoryData(metrics: CpuMetric[]): GraphData {
+  // Memory metrics would have different structure
+  // This is a placeholder - adjust based on actual memory response
+  const memoryMetric = metrics[0];
+  
+  const labels = memoryMetric.values.map(([timestamp]) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  });
+
+  const memoryData = memoryMetric.values.map(([, value]) => {
+    // Convert to GB if needed
+    return parseFloat((parseFloat(value) / 1024).toFixed(2));
+  });
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Free Memory (GB)',
+        data: memoryData,
+        borderColor: 'rgb(168, 85, 247)', // Purple
+        backgroundColor: 'rgba(168, 85, 247, 0.1)',
+      }
+    ]
+  };
+}
+
+
+export function transformDiskData(metrics: CpuMetric[]): GraphData {
+  const diskMetric = metrics[0];
+  
+  const labels = diskMetric.values.map(([timestamp]) => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+  });
+
+  const diskData = diskMetric.values.map(([, value]) => {
+    return parseFloat((parseFloat(value) / 1024).toFixed(2)); // Convert to GB
+  });
+
+  return {
+    labels,
+    datasets: [
+      {
+        label: 'Free Disk Space (GB)',
+        data: diskData,
+        borderColor: 'rgb(236, 72, 153)', // Pink
+        backgroundColor: 'rgba(236, 72, 153, 0.1)',
+      }
+    ]
+  };
 }

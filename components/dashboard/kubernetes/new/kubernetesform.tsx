@@ -314,23 +314,8 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         return;
       }
 
-      // const response = await api.post("/services/kubernetes/manageip/read", {
-      //   name: state.selectedName,
-      //   nodes: state.selectedNode,
-      //   planDetails: state.selectedPlan,
-      //   version: state.selectedVersion,
-      //   location: state.selectedLocation,
-      //  // project: state.selectedProject,
-      //  // ownerId: userId,
-      // });
-
-      //  if (response.data.success === false) {
-      //   toast.error(response.data.error || "An error occurred. Please try again.");
-      //   return;
-      //  }
-
-      //make nodes name array
-      const nodeNames = makeNodeKeys(state.selectedNode);
+     
+      const nodeNames = makeNodeKeys(state.selectedNode,state.selectedName);
       console.log(nodeNames, ".....nodeNames.....262");
 
       //generate vms from digitalOcean apis
@@ -339,7 +324,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         region: state.selectedLocation, //form-dependent
         size: state.selectedPlan, //form-dependent
         image: "ubuntu-25-04-x64",
-        backups: true,
+        backups: false,
         ipv6: true,
         monitoring: true,
         tags: ["env:prod", "web", "ssh-allowed"],
@@ -351,13 +336,6 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
       const createDroplet = await api.post(
         "/services/kubernetes/manageip/createdroplet",
         payload
-        // {
-        //   headers: {
-        //     Authorization:
-        //       "Bearer dop_v1_d8c411020fc7d2d41f5f30f35b1e8d8a0b06fffd4de117c28b93a5a461be5e8a",
-        //     "Content-Type": "application/json",
-        //   },
-        // }
       );
 
       const sendPayload: SendPayload = {
@@ -489,6 +467,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
     // selectedDbType,
     versions,
     selectedProject,
+    selectedPlan
   } = state;
 
   //const selectedDatabase = products?.find((db) => db.id === selectedDb);
@@ -506,12 +485,19 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
     { id: 7, name: "Payment" },
   ];
 
-  function makeNodeKeys(workers: number): string[] {
-    const n = Math.max(0, Math.floor(workers)); // sanitize
-    const keys = ["cp-1"];
-    for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
-    return keys;
+  function makeNodeKeys(workers: number, clusterName: string) {
+    
+    const nodeNames = [];
+    for(let i=0;i<=workers;i++){
+      const uuid = crypto.randomUUID();
+      if(i===0){
+        nodeNames.push(`${clusterName}-${uuid}-cp-1`);
+      }else{
+        nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
+      }
   }
+    return nodeNames;
+}
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -918,7 +904,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
@@ -997,57 +983,103 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
           )}
         </div>
 
-         <div className="lg:col-span-1">
-       <Card className="sticky top-8 bg-white/5 border-white/10">
-  <CardHeader>
-    <CardTitle className="text-white">Order Summary</CardTitle>
-  </CardHeader>
-  <CardContent className="space-y-4">
-    {selectedName && (
-      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-        <span className="text-sm text-white/60">Name:</span>
-        <span className="font-medium text-white">{selectedName}</span>
+        <div className="lg:col-span-1">
+          <Card className="sticky top-8 bg-white/5 border-white/10">
+            <CardHeader>
+              <CardTitle className="text-white">Order Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {selectedName && (
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <span className="text-sm text-white/60">Name:</span>
+                  <span className="font-medium text-white">{selectedName}</span>
+                </div>
+              )}
+
+              {selectedLocation && (
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <span className="text-sm text-white/60">Location:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-white">
+                      {locations.find((loc) => loc.short === selectedLocation)?.city}
+                    </span>
+                    <Image
+                      src={`https://flagsapi.com/${locations.find((loc) => loc.short === selectedLocation)?.country_code}/flat/64.png`}
+                      alt={selectedLocation}
+                      width={20}
+                      height={20}
+                      className="object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedNode && (
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <span className="text-sm text-white/60">Node:</span>
+                  <span className="font-medium text-white">{selectedNode}</span>
+                </div>
+              )}
+
+
+               {selectedPlan && (
+  <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-xl p-4 shadow-lg">
+    <div className="flex items-center justify-between mb-3">
+      <span className="text-sm font-medium text-white/80">Selected Plan</span>
+      <div className="px-2 py-1 bg-white/10 rounded-full">
+        <span className="text-xs font-semibold text-white">{selectedPlan}</span>
       </div>
-    )}
+    </div>
     
-    {selectedLocation && (
-      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-        <span className="text-sm text-white/60">Location:</span>
-        <span className="font-medium text-white">{selectedLocation}</span>
+    <div className="grid grid-cols-3 gap-4">
+      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+        <div className="text-2xl font-bold text-blue-400 mb-1">
+          {availablePlans.find(plan => plan.label === selectedPlan)?.cpu}
+        </div>
+        <div className="text-xs text-white/60 uppercase tracking-wide">vCPU</div>
       </div>
-    )}
-    
-    {selectedNode && (
-      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-        <span className="text-sm text-white/60">Node:</span>
-        <span className="font-medium text-white">{selectedNode}</span>
+      
+      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+        <div className="text-2xl font-bold text-green-400 mb-1">
+          {availablePlans.find(plan => plan.label === selectedPlan)?.ram}
+        </div>
+        <div className="text-xs text-white/60 uppercase tracking-wide">RAM</div>
       </div>
-    )}
-    
-    {selectedVersion && (
-      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-        <span className="text-sm text-white/60">Version:</span>
-        <span className="font-medium text-white">{selectedVersion}</span>
+      
+      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+        <div className="text-2xl font-bold text-purple-400 mb-1">
+          {availablePlans.find(plan => plan.label === selectedPlan)?.storage}
+        </div>
+        <div className="text-xs text-white/60 uppercase tracking-wide">Storage</div>
       </div>
-    )}
-    
-    {/* {selectedProject && (
+    </div>
+  </div>
+)}
+
+              {selectedVersion && (
+                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
+                  <span className="text-sm text-white/60">Version:</span>
+                  <span className="font-medium text-white">
+                    {selectedVersion}
+                  </span>
+                </div>
+              )}
+
+              {/* {selectedProject && (
       <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
         <span className="text-sm text-white/60">Project:</span>
         <span className="font-medium text-white">{selectedProject}</span>
       </div>
     )} */}
 
-    <Separator className="bg-white/10" />
-    <div className="flex justify-between items-center font-bold text-lg text-white">
-      <span>Total</span>
-    </div>
-  </CardContent>
-</Card>
+              <Separator className="bg-white/10" />
+              <div className="flex justify-between items-center font-bold text-lg text-white">
+                <span>Total</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-      </div>
-
-     
     </div>
   );
 };
