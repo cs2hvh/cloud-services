@@ -443,6 +443,235 @@ export type Database = {
         };
          Relationships: [];
       };
+      proxmox_hosts: {
+        Row: {
+          id: string;
+          name: string;
+          host_url: string;
+          allow_insecure_tls: boolean;
+          token_id: string | null;
+          token_secret: string | null;
+          username: string | null;
+          password: string | null;
+          node: string;
+          storage: string;
+          bridge: string;
+          gateway_ip: string | null;
+          dns_primary: string | null;
+          dns_secondary: string | null;
+          template_vmid: number | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          name: string;
+          host_url: string;
+          allow_insecure_tls?: boolean;
+          token_id?: string | null;
+          token_secret?: string | null;
+          username?: string | null;
+          password?: string | null;
+          node: string;
+          storage: string;
+          bridge?: string;
+          gateway_ip?: string | null;
+          dns_primary?: string | null;
+          dns_secondary?: string | null;
+          template_vmid?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          host_url?: string;
+          allow_insecure_tls?: boolean;
+          token_id?: string | null;
+          token_secret?: string | null;
+          username?: string | null;
+          password?: string | null;
+          node?: string;
+          storage?: string;
+          bridge?: string;
+          gateway_ip?: string | null;
+          dns_primary?: string | null;
+          dns_secondary?: string | null;
+          template_vmid?: number | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      public_ips: {
+        Row: {
+          id: number;
+          host_id: string;
+          ip: string;
+          pool_id: number | null;
+          is_used: boolean;
+          server_id: number | null;
+          allocated_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          host_id: string;
+          ip: string;
+          pool_id?: number | null;
+          is_used?: boolean;
+          server_id?: number | null;
+          allocated_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          host_id?: string;
+          ip?: string;
+          pool_id?: number | null;
+          is_used?: boolean;
+          server_id?: number | null;
+          allocated_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "public_ips_host_id_fkey";
+            columns: ["host_id"];
+            isOneToOne: false;
+            referencedRelation: "proxmox_hosts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      proxmox_templates: {
+        Row: {
+          id: number;
+          host_id: string;
+          vmid: number;
+          name: string;
+          os_type: string | null;
+          description: string | null;
+          is_active: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          host_id: string;
+          vmid: number;
+          name: string;
+          os_type?: string | null;
+          description?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          host_id?: string;
+          vmid?: number;
+          name?: string;
+          os_type?: string | null;
+          description?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "proxmox_templates_host_id_fkey";
+            columns: ["host_id"];
+            isOneToOne: false;
+            referencedRelation: "proxmox_hosts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      servers: {
+        Row: {
+          id: number;
+          vmid: number | null;
+          node: string | null;
+          name: string;
+          ip: string;
+          os: string | null;
+          location: string;
+          cpu_cores: number;
+          memory_mb: number;
+          disk_gb: number;
+          status: string;
+          owner_id: string | null;
+          owner_email: string | null;
+          hourly_cost: number;
+          monthly_cost: number;
+          billing_start: string | null;
+          billing_end: string | null;
+          details: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          vmid?: number | null;
+          node?: string | null;
+          name: string;
+          ip: string;
+          os?: string | null;
+          location: string;
+          cpu_cores: number;
+          memory_mb: number;
+          disk_gb: number;
+          status?: string;
+          owner_id?: string | null;
+          owner_email?: string | null;
+          hourly_cost?: number;
+          monthly_cost?: number;
+          billing_start?: string | null;
+          billing_end?: string | null;
+          details?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          vmid?: number | null;
+          node?: string | null;
+          name?: string;
+          ip?: string;
+          os?: string | null;
+          location?: string;
+          cpu_cores?: number;
+          memory_mb?: number;
+          disk_gb?: number;
+          status?: string;
+          owner_id?: string | null;
+          owner_email?: string | null;
+          hourly_cost?: number;
+          monthly_cost?: number;
+          billing_start?: string | null;
+          billing_end?: string | null;
+          details?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "servers_location_fkey";
+            columns: ["location"];
+            isOneToOne: false;
+            referencedRelation: "proxmox_hosts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "servers_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
