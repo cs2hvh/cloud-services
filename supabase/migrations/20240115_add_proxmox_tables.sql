@@ -22,26 +22,23 @@ CREATE TABLE IF NOT EXISTS proxmox_hosts (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Public IP pools table (for tracking available IPs per host)
+-- Public IP pools table (for tracking MAC addresses and their assigned IPs)
 CREATE TABLE IF NOT EXISTS public_ip_pools (
     id BIGSERIAL PRIMARY KEY,
     host_id TEXT NOT NULL REFERENCES proxmox_hosts(id) ON DELETE CASCADE,
-    ip_range TEXT NOT NULL COMMENT 'e.g., 203.0.113.0/24',
-    gateway_ip INET,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    mac TEXT NOT NULL,
+    label TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(host_id, mac)
 );
 
--- Public IPs table (individual IP tracking)
-CREATE TABLE IF NOT EXISTS public_ips (
+-- Public IP pool IPs table (individual IPs per pool)
+CREATE TABLE IF NOT EXISTS public_ip_pool_ips (
     id BIGSERIAL PRIMARY KEY,
-    host_id TEXT NOT NULL REFERENCES proxmox_hosts(id) ON DELETE CASCADE,
-    ip INET NOT NULL UNIQUE,
-    pool_id BIGINT REFERENCES public_ip_pools(id),
-    is_used BOOLEAN DEFAULT FALSE,
-    server_id BIGINT,
-    allocated_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    pool_id BIGINT NOT NULL REFERENCES public_ip_pools(id) ON DELETE CASCADE,
+    ip TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(pool_id, ip)
 );
 
 -- Proxmox templates table (for OS/Image management)
@@ -107,7 +104,7 @@ CREATE TABLE IF NOT EXISTS server_snapshots (
 -- Enable RLS
 ALTER TABLE proxmox_hosts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public_ip_pools ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public_ips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public_ip_pool_ips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE proxmox_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE servers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE server_backups ENABLE ROW LEVEL SECURITY;
@@ -160,8 +157,8 @@ CREATE INDEX idx_servers_owner_id ON servers(owner_id);
 CREATE INDEX idx_servers_location ON servers(location);
 CREATE INDEX idx_servers_status ON servers(status);
 CREATE INDEX idx_servers_vmid ON servers(vmid, node);
-CREATE INDEX idx_public_ips_host_id ON public_ips(host_id);
-CREATE INDEX idx_public_ips_is_used ON public_ips(is_used);
+CREATE INDEX idx_public_ip_pools_host_id ON public_ip_pools(host_id);
+CREATE INDEX idx_public_ip_pool_ips_pool_id ON public_ip_pool_ips(pool_id);
 CREATE INDEX idx_proxmox_templates_host_id ON proxmox_templates(host_id);
 CREATE INDEX idx_server_backups_server_id ON server_backups(server_id);
 CREATE INDEX idx_server_snapshots_server_id ON server_snapshots(server_id);
