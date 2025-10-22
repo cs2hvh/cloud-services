@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-// import { vmCreateSchema } from "@/types/zod/vm";
-// import bcrypt from "bcryptjs";
-// import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
 import { Encryption, generateStrongPassword } from "@/config/functions";
-// import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,11 +25,6 @@ export async function POST(req: NextRequest) {
           },
         }
       );
-
-
-      //hash password and store in db
-       //const salt = await bcrypt.genSalt(10);
-       //const hashedPassword = await bcrypt.hash(vmPassword, salt);
         const hashedPassword=Encryption.encrypt(vmPassword,"secret");
 
         console.log(hashedPassword,"...............hashedPassword................39")

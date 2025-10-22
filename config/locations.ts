@@ -8,6 +8,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "Singapore",
     country_code: "SG",
     available: true,
+    cluster_type:"database"
   },
   {
     id: 2,
@@ -16,6 +17,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "India",
     country_code: "IN",
     available: true,
+    cluster_type:"database"
   },
   {
     id: 3,
@@ -24,6 +26,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "India",
     country_code: "IN",
     available: false,
+    cluster_type:"database"
   },
   {
     id: 4,
@@ -32,6 +35,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "Germany",
     country_code: "DE",
     available: true,
+    cluster_type:"database"
   },
   {
     id: 5,
@@ -40,6 +44,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "United States",
     country_code: "US",
     available: true,
+    cluster_type:"database"
   },
   {
     id: 6,
@@ -48,6 +53,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "Japan",
     country_code: "JP",
     available: false,
+    cluster_type:"database"
   },
   {
     id: 7,
@@ -56,6 +62,7 @@ export const serviceLocations: Tables<"locations">[] = [
     country: "Australia",
     country_code: "AU",
     available: true,
+    cluster_type:"database"
   },
 ];
 
@@ -82,7 +89,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "Frankfurt",
   country: "Germany",
   country_code: "DE",
-  available: true
+  available: true,
+  cluster_type:"kubernetes"
 },
 
 {
@@ -91,7 +99,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "Toronto",
   country: "Canada",
   country_code: "CA",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 
 {
@@ -100,7 +109,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "Banglore",
   country: "India",
   country_code: "IN",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 {
   id: 5,
@@ -108,7 +118,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "Amsterdam",
   country: "Netherlands",
   country_code: "NL",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 {
   id: 7,
@@ -116,7 +127,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "New York",
   country: "United States",
   country_code: "US",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 {
   id: 8,
@@ -124,7 +136,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "San Francisco",
   country: "United States",
   country_code: "US",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 {
   id: 9,
@@ -132,7 +145,8 @@ export const vmLocations: Tables<"locations">[] = [
   city: "Singapore",
   country: "Singapore",
   country_code: "SG",
-  available: true
+  available: true,
+   cluster_type:"kubernetes"
 },
 
 

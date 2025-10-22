@@ -1,12 +1,82 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Database, Plus,  Search } from "lucide-react";
+import { Database, Loader2, Plus,  Search } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import api from "@/lib/axios/axios";
+import { useSession } from "../../provider";
 
-const DatabasePage = () => {
+
+
+
+type DbCluster = {
+  id: string;
+  name: string;
+  engine: string;
+  status: string;
+  num_nodes: number;
+  created_at: string; // ISO
+  version: string;
+};
+
+const DatabasePage =  () => {
   // Dummy data for now, replace with actual data from your backend
-  const databases = [];
+  const databases = [
+    {
+      name:"production-db-1",
+    }
+  ];
+
+  const user= useSession();
+  const router=useRouter();
+
+  if(!user) {
+    router.push("/login");
+    toast.error("You must be logged in to access the dashboard.");
+  }
+
+   const [clusters, setClusters] = useState([] as DbCluster[]);
+    const [loading, setLoading] = useState(true);
+
+
+     useEffect(() => {
+        //fetch clusters from backend.
+        async function fetchClusters() {
+          try {
+            //debugger;
+            setLoading(true);
+            const res = await api.post("/services/database/read_all_owner", {
+              id: user?.user?.id,
+            });
+            if (res.status === 200) {
+                setClusters(
+                  res.data.data.filter((item: DbCluster) => item.status === "online")
+                );
+              
+            }
+          } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+          } finally {
+            setLoading(false);
+          }
+        }
+        fetchClusters();
+      }, []);
+
+
+       if (loading) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Loading database cluster...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
@@ -28,40 +98,69 @@ const DatabasePage = () => {
         </Link>
       </motion.div>
 
-      {databases.length > 0 ? (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-          <div className="bg-white/5 p-4 rounded-lg mb-6 flex items-center justify-between">
-              <div className="flex items-center w-full max-w-md">
-                  <Search className="w-5 h-5 text-white/50 mr-3"/>
-                  <input 
-                      type="text" 
-                      placeholder="Search databases..." 
-                      className="w-full bg-transparent focus:outline-none"
-                  />
-              </div>
-              {/* Add filter button if needed */}
+      {clusters.length > 0 ?(
+        <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-700">
+              <thead className="bg-slate-700/50 text-white">
+                <tr>
+                  <Th>Cluster</Th>
+                  <Th>Engine</Th>
+                  <Th>Nodes</Th>
+                  <Th>Version</Th>
+                  <Th>Status</Th>
+                  
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/60 bg-white/5">
+                {clusters.map((c) => (
+                  
+                  <tr
+                    key={c.id}
+                    className="hover:bg-slate-700/30 transition-colors duration-150"
+                  >
+                    <Td>
+                      <div className="font-medium text-white">
+                        {c.name}
+                      </div>
+                      <div className="text-xs text-slate-400 font-mono mt-1">
+                        {c.id}
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-200">
+                        {c.num_nodes}
+                      </span>
+                    </Td>
+                    <Td>
+                      <time dateTime={c.created_at} className="text-slate-300">
+                        {new Date(c.created_at).toLocaleString()}
+                      </time>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-300">{c.version}</span>
+                    </Td>
+                    <Td>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          c.status === "online"
+                            ? "bg-green-500/20 text-green-400"
+                            : c.status === "creating"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : c.status === "failed"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-slate-500/20 text-slate-400"
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* This is where you would map through your databases */}
-            {/* Example card:
-            <div className="bg-white/5 p-6 rounded-lg">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-bold text-lg">production-db-1</h3>
-                  <p className="text-sm text-white/60">PostgreSQL 16</p>
-                </div>
-                <button className="text-white/70 hover:text-white">
-                  <MoreVertical size={20}/>
-                </button>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <span className="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium bg-green-500/10 text-green-400">Active</span>
-                <p className="text-sm text-white/60">2 hours ago</p>
-              </div>
-            </div>
-            */}
-          </div>
-        </motion.div>
+        </div>
       ) : (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -86,5 +185,25 @@ const DatabasePage = () => {
     </div>
   );
 };
+
+
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th
+      scope="col"
+      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600"
+    >
+      {children}
+    </th>
+  );
+}
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td className="px-6 py-4 text-sm text-slate-800 align-middle">
+      {children}
+    </td>
+  );
+}
 
 export default DatabasePage;

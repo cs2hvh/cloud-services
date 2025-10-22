@@ -1,3 +1,6 @@
+import { UUID } from "crypto";
+import { boolean } from "zod";
+
 export type Json =
   | string
   | number
@@ -10,6 +13,18 @@ interface NodeConfig {
   ram: number;
   cpu: number;
   storage: number;
+}
+
+export interface Database_Connection{
+  ssl: boolean;
+  uri: string;
+  host: string;
+  port: number;
+  user: string;
+  database: string;
+  password: string;
+  protocol: string;
+
 }
 
 export type Database = {
@@ -160,6 +175,7 @@ export type Database = {
           country_code: string;
           id: number;
           short: string;
+          cluster_type: string;
         };
         Insert: {
           available?: boolean | null;
@@ -168,6 +184,7 @@ export type Database = {
           country_code: string;
           id?: number;
           short: string;
+          cluster_type: string;
         };
         Update: {
           available?: boolean | null;
@@ -176,6 +193,7 @@ export type Database = {
           country_code?: string;
           id?: number;
           short?: string;
+          cluster_type: string;
         };
         Relationships: [];
       };
@@ -442,6 +460,61 @@ export type Database = {
           status?: "pending" | "creating" | "ready" | "failed" | "deleted";
         };
          Relationships: [];
+      };
+
+       database_clusters: {
+        Row: {
+          id?:string
+          name: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" ;
+          password: string ;
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+          size:string;
+          region?:string;
+          ca_certificate?:string;
+
+        };
+        Insert: {
+          name: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" ;
+          password: string ;
+          ca_certificate?:string;
+           region?:string;
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+
+        };
+         Relationships: [
+           {
+            foreignKeyName: "database_owner_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+           {
+            foreignKeyName: "database_project_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+         ];
       };
     };
     Views: {

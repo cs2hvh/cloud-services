@@ -1,5 +1,5 @@
 // import { Encryption } from "@/config/functions";
-import { createClient, createWorkerClient } from "./server";
+import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
 import { Tables, TablesInsert, TablesUpdate } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
@@ -13,7 +13,21 @@ type Location = Tables<"locations">;
 type OTP = Tables<"otps">;
 type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
+type Database = Tables<"database_clusters">;
 
+
+
+interface Database_Connection{
+  ssl: boolean;
+  uri: string;
+  host: string;
+  port: number;
+  user: string;
+  database: string;
+  password: string;
+  protocol: string;
+
+}
 
 
 export const Users = {
@@ -619,11 +633,12 @@ export const Locations = {
         .from("locations")
         .select("*")
         .eq("available", true)
+        .eq("cluster_type", "database")
         .order("city");
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting locations: ${error.message}`,
+          `[Supabase] Error while getting locations: ${error.message}`
         );
         return [];
       }
@@ -633,7 +648,24 @@ export const Locations = {
       return [];
     }
   },
+  create: async (payload: Location) => {
+    const supabase = await createSSRClient();
+    const { data, error } = await supabase
+      .from("locations")
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[Locations] insert failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
 };
+
+        
 
 export const OTPs = {
   create: async (props: TablesInsert<"otps">): Promise<number | null> => {
@@ -1005,6 +1037,119 @@ export const Clusters = {
 
 
 
+export const Database_Clusters = {
+ 
+  create:async(payload:Database )=>{
+  
+
+
+    console.log(payload, "...........in createDatabaseClusterWorker........");
+   const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .insert(payload)
+     .select()
+     .single();
+
+       if (error) {
+    console.error("[createClusterWorker] insert failed:", error.message);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true, data: data };
+  },
+
+  update_status: async(cluster_id:string,status:string,caCertificate:string,public_connection:Database_Connection,private_connection:Database_Connection)=>{
+
+
+    console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
+  const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .update({ status, ca_certificate: caCertificate, public_connection, private_connection })
+     .eq("cluster_id", cluster_id)
+     .select()
+     .single();
+     console.log(data, "...........in updateDatabaseClusterWorker........");
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, cluster: data };
+},
+
+  read: async(id:string)=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("cluster_id", id)
+     .single();
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+ },
+  read_all_owner: async(owner_id:string)=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("owner_id", owner_id);
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+ },
+  delete: async(cluster_id:string)=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .delete()
+     .eq("cluster_id", cluster_id)
+     .select()
+     .single();
+    if (error) {
+      console.error("[deleteClusterWorker] delete failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, cluster: data };
+ },
+}
+
+
+
+
+
+
+//All storage of files in s3 bucket and recieve the url to store in database
+
+export const storeFile=async(clusterId:string, file:File)=>{
+
+  const path = `clusters/${clusterId}/${Date.now()}-${file.name}`;
+  const supabase = await createSSRClient();
+  const { data, error: uploadError } = await supabase
+    .storage
+    .from('kubeconfigs')   // bucket name
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type
+    });
+
+    if (uploadError) throw uploadError;
+
+  return { path }; 
+}
+
+
+
 
 // function makeNodeKeys(workers: number): string[] {
 //   const n = Math.max(0, Math.floor(workers)); // sanitize
@@ -1031,6 +1176,7 @@ const api = {
   otps: OTPs,
   // vms:Vms,
   clusters:Clusters,
+  database_clusters:Database_Clusters,
 };
 
 export default api;

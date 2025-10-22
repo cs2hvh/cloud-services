@@ -1,4 +1,6 @@
 import * as crypto from "crypto";
+// import { lookup, resolve4, resolve6, resolveCname, resolveMx } from "dns/promises";
+import type { MxRecord } from "dns";
 
 export const generateStrongPassword = () => {
   const chars =
@@ -12,6 +14,7 @@ export const generateStrongPassword = () => {
 
   return password;
 };
+
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -63,6 +66,22 @@ interface GraphData {
     backgroundColor?: string;
   }[];
 }
+
+
+
+
+
+export type DNSRecord =
+  | { type: "A" | "AAAA" | "CNAME" | "MX" | "lookup"; records: Array<string | LookupInfo | MxRecord> }
+  ;
+
+export type LookupInfo = { address: string; family: number };
+
+export type ResolveResult = {
+  host: string;
+  records: DNSRecord[];
+  error: string | null;
+};
 
 
 
@@ -120,22 +139,6 @@ export function timeRange(hrs: number) {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-// Add these helper functions before the component
-
-/**
- * Transform CPU metrics for visualization
- * Calculates actual CPU usage = 100% - idle%
- */
 export function transformCpuData(metrics: CpuMetric[]): GraphData {
   // Find the idle metric
   const idleMetric = metrics.find(m => m.metric.mode === 'idle');
@@ -199,9 +202,7 @@ export function transformCpuData(metrics: CpuMetric[]): GraphData {
   };
 }
 
-/**
- * Transform memory metrics
- */
+
 export function transformMemoryData(metrics: CpuMetric[]): GraphData {
   // Memory metrics would have different structure
   // This is a placeholder - adjust based on actual memory response
@@ -260,4 +261,34 @@ export function transformDiskData(metrics: CpuMetric[]): GraphData {
       }
     ]
   };
+}
+
+
+
+
+
+
+
+
+
+
+// export function getHostFromUrl(urlOrHost: string): string | null {
+//   if (!urlOrHost) return null;
+//   const maybe = urlOrHost.trim();
+//   const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(maybe) ? maybe : `http://${maybe}`;
+//   try {
+//     const u = new URL(withScheme);
+//     return u.hostname;
+//   } catch {
+//     return null;
+//   }
+// }
+
+
+export function createCertificateFile(certText:string, filename = "certificate.crt") {
+  // MIME for x509 certificate (PEM). Some use "application/x-x509-ca-cert".
+  const mime = "application/x-x509-ca-cert";
+  const blob = new Blob([certText], { type: mime });
+  // File constructor is widely supported in browsers
+  return new File([blob], filename, { type: mime });
 }
