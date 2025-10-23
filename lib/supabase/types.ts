@@ -494,7 +494,7 @@ export type Database = {
           private_connection?: Database_Connection;
           status: "pending" | "online" | "creating" ;
           password: string ;
-          ca_certificate?:string;
+          ca_certificate?:BlobPart;
            region?:string;
           // resource_config?:{ cpu: number; ram: number; storage: number }
 

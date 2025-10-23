@@ -36,8 +36,6 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-// import { Progress } from "@/components/ui/progress";
-// import { Icons } from "@/components/ui/icons";
 import api from "@/lib/axios/axios";
 import { send } from "process";
 import { useRouter } from "next/navigation";
@@ -49,23 +47,6 @@ interface PageProps {
   userId: string;
 }
 
-// Define the proper type for the database products
-// interface DatabaseProduct {
-//   id: string;
-//   name: string | null;
-//   sub: string | null;
-//   type: string;
-//   price: number | null;
-//   resources: {
-//     cpu: number;
-//     ram: number;
-//     storage: number;
-//   };
-//   discount: number | null;
-//   created_at?: string | null;
-//   description?: string | null;
-//   image?: string | null;
-// }
 
 const databaseVersions = {
   mysql: ["8"],

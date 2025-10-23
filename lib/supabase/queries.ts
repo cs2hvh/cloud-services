@@ -1068,7 +1068,7 @@ export const Database_Clusters = {
      .from("database_cluster")
      .update({ status, ca_certificate: caCertificate, public_connection, private_connection })
      .eq("cluster_id", cluster_id)
-     .select()
+     .select("*")
      .single();
      console.log(data, "...........in updateDatabaseClusterWorker........");
 
@@ -1076,7 +1076,7 @@ export const Database_Clusters = {
      console.error("[updateClusterWorker] update failed:", error.message);
      return { success: false, error: error.message };
    }
-   return { success: true, cluster: data };
+   return { success: true, data: data };
 },
 
   read: async(id:string)=>{
@@ -1107,13 +1107,13 @@ export const Database_Clusters = {
    return { success: true, data: data };
  },
   delete: async(cluster_id:string)=>{
-   const supabase = await createSSRClient();
+    console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
+   const supabase = await createWorkerClient();
    const { data, error } = await supabase
      .from("database_cluster")
      .delete()
      .eq("cluster_id", cluster_id)
-     .select()
-     .single();
+     .select();
     if (error) {
       console.error("[deleteClusterWorker] delete failed:", error.message);
       return { success: false, error: error.message };

@@ -16,24 +16,28 @@ export async function POST(req: NextRequest) {
       }
     );
 
-   
-      const sendData = {
-        cluster_id: body.id,
-      };
-      const supabase_delete = await Database_Clusters.delete(
-        sendData.cluster_id
-      );
-      if (supabase_delete.success) {
-        return NextResponse.json(
-          {
-            data: database.data,
+    console.log(database.status,"............database delete response...........");
 
-            message: "database deleted successfully",
-          },
-          { status: 200 }
-        );
-      }
+    const sendData = {
+      cluster_id: body.id,
+    };
+    const supabase_delete = await Database_Clusters.delete(sendData.cluster_id);
+
+    console.log(supabase_delete,"...........supabase delete response........");
     
+    if (supabase_delete.success) {
+      return NextResponse.json(
+        {
+          message: "database deleted successfully",
+        },
+        { status: 200 }
+      );
+    } else {
+      return NextResponse.json(
+        { error: supabase_delete.error || "Failed to delete from database" },
+        { status: 500 }
+      );
+    }
   } catch (err: unknown) {
     if (err instanceof Error) {
       return NextResponse.json(

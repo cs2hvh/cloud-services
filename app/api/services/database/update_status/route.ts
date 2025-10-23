@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
           if (supabase_read.success) {
             return NextResponse.json(
               {
+                data: supabase_read.data,
                 message: "database updated successfully",
               },
               { status: 200 }

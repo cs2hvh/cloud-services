@@ -21,6 +21,7 @@ import {
   DollarSign,
   RefreshCw,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
@@ -57,49 +58,91 @@ interface SingleDbProps {
 }
 
 const Singledb = ({ databaseId }: SingleDbProps) => {
-  const [database, setDatabase] = useState<Tables<"database_clusters"> | null>(null);
+  const [database, setDatabase] = useState<Tables<"database_clusters"> | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<"public" | "private">("public");
- // const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
-   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  // const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const hasShownOnlineToast = useRef<boolean>(false); // Track if we've shown the toast
+  const previousStatus = useRef<string | null>(null); // Track previous status
 
   // Fetch database cluster details
- const fetchDatabaseCluster = useCallback(async () => {
+  const fetchDatabaseCluster = useCallback(async () => {
     try {
-     // debugger;
-      const response = await api.post(`/services/database/read/`, { 
+      // debugger;
+      const response = await api.post(`/services/database/read/`, {
         id: databaseId,
-        checkStatus: true  // Backend will check DO and update Supabase
+        checkStatus: true, // Backend will check DO and update Supabase
       });
-      
+
       if (response.status === 200) {
         const dbData = response.data.data;
-        setDatabase(dbData);
 
-        // If status changed to online, show success and stop polling
-        if (response.data.status && intervalRef.current) {
+        // Debug: Log the structure to identify object issues
+        console.log("Database Data:", dbData);
+        console.log("Public Connection:", dbData.public_connection);
+        console.log("Private Connection:", dbData.private_connection);
+        console.log("Region:", dbData.region);
+
+        setDatabase(dbData);
+        setLoading(false);
+
+        // If backend detected status changed to online, update and stop polling
+        // Also check if status actually changed from a non-online status
+        if (response.data.status && intervalRef.current && previousStatus.current !== "online") {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
-          updateDatabaseStatus(dbData.cluster_id, dbData.status, dbData.public_connection, dbData.private_connection);
-         // toast.success("Database cluster is now online!");
-          
+
+          // Update backend with new status
+          await updateDatabaseStatus(
+            dbData.cluster_id,
+            dbData.status,
+            dbData.public_connection,
+            dbData.private_connection
+          );
+
+          // Fetch updated data after backend update completes
+          await fetchDatabaseCluster();
+
+          // Only show toast if we haven't shown it yet
+          if (!hasShownOnlineToast.current) {
+            toast.success("Database cluster is now online!");
+            hasShownOnlineToast.current = true;
+          }
         }
-        setLoading(false)
+        
+        // Update previous status
+        previousStatus.current = dbData.status;
       }
     } catch (error: any) {
       console.error("[fetchDatabaseCluster] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to fetch database details");
-    } finally {
+      toast.error(
+        error.response?.data?.error || "Failed to fetch database details"
+      );
       setLoading(false);
     }
   }, [databaseId]); // ✅ Only databaseId needed
 
-
   // Update database status in backend
-  const updateDatabaseStatus = async (dbId: string, status: string, publicConnection: Database_Connection, privateConnection: Database_Connection) => {
+  const updateDatabaseStatus = async (
+    dbId: string,
+    status: string,
+    publicConnection: Database_Connection,
+    privateConnection: Database_Connection
+  ) => {
     try {
-      await api.post(`/services/database/update_status`, { id:dbId, status, public_connection: publicConnection, private_connection: privateConnection });
+      await api.post(`/services/database/update_status`, {
+        id: dbId,
+        status,
+        public_connection: publicConnection,
+        private_connection: privateConnection,
+      });
     } catch (error) {
       console.error("[updateDatabaseStatus] Error:", error);
     }
@@ -130,6 +173,37 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
     toast.success(`${label} copied to clipboard!`);
   };
 
+  // Delete database cluster
+  const handleDeleteCluster = async () => {
+    if (deleteConfirmText !== database?.name) {
+      toast.error("Cluster name does not match!");
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      const response = await api.post(`/services/database/delete`, {
+        id: database?.cluster_id,
+      });
+
+      if (response.status === 200) {
+        toast.success("Database cluster deleted successfully!");
+        setShowDeleteModal(false);
+        // Redirect to databases list after a short delay
+        setTimeout(() => {
+          window.location.href = "/dashboard/services?tab=databases";
+        }, 1500);
+      }
+    } catch (error: any) {
+      console.error("[handleDeleteCluster] Error:", error);
+      toast.error(
+        error.response?.data?.error || "Failed to delete database cluster"
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Status badge component
   const StatusBadge = ({ status }: { status: string }) => {
     const statusConfig = {
@@ -156,7 +230,8 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
       },
     };
 
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.failed;
+    const config =
+      statusConfig[status as keyof typeof statusConfig] || statusConfig.failed;
     const Icon = config.icon;
 
     return (
@@ -201,23 +276,28 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between"
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
         >
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-3">
               <Database className="h-8 w-8 text-blue-400" />
-              <h1 className="text-3xl font-bold text-white">{database.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white break-all">{database.name}</h1>
             </div>
-            <p className="text-slate-400 mt-1">
-              {database.engine.toUpperCase()} {database.version} • {database.num_nodes} node(s)
+            <p className="text-slate-400 mt-1 text-sm sm:text-base">
+              {database.engine.toUpperCase()} {database.version} •{" "}
+              {database.num_nodes} node(s)
             </p>
           </div>
-          <button
-            onClick={fetchDatabaseCluster}
-            className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
-          >
-            <RefreshCw className="h-5 w-5 text-white" />
-          </button>
+          <div className="flex items-center gap-2">
+           
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 transition-colors"
+              title="Delete Cluster"
+            >
+              <Trash2 className="h-5 w-5 text-red-400" />
+            </button>
+          </div>
         </motion.div>
 
         {/* Section 1: Database Cluster Status */}
@@ -249,7 +329,8 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 Creating Your Database Cluster
               </h3>
               <p className="text-slate-400 text-lg mb-6">
-                Your database cluster is being provisioned. This may take a few minutes.
+                Your database cluster is being provisioned. This may take a few
+                minutes.
               </p>
               <div className="flex items-center justify-center gap-2 text-slate-500">
                 <RefreshCw className="h-4 w-4 animate-spin" />
@@ -271,8 +352,8 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 Cluster Creation Failed
               </h3>
               <p className="text-slate-300 text-lg mb-6">
-                There was an error creating your database cluster. Please contact support or try
-                again later.
+                There was an error creating your database cluster. Please
+                contact support or try again later.
               </p>
               <button className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
                 Contact Support
@@ -327,70 +408,97 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 <div className="space-y-3">
                   <ConnectionField
                     label="Host"
-                    value={
+                    value={safeStringValue(
                       activeTab === "public"
-                        ? database.public_connection?.host || "N/A"
-                        : database.private_connection?.host || "N/A"
-                    }
+                        ? database.public_connection?.host
+                        : database.private_connection?.host
+                    )}
                     onCopy={() =>
                       copyToClipboard(
-                        activeTab === "public"
-                          ? database.public_connection?.host || "N/A"
-                          : database.private_connection?.host || "N/A",
+                        safeStringValue(
+                          activeTab === "public"
+                            ? database.public_connection?.host
+                            : database.private_connection?.host
+                        ),
                         "Host"
                       )
                     }
                   />
                   <ConnectionField
                     label="Port"
-                    value={
+                    value={safeStringValue(
                       activeTab === "public"
-                        ? database.public_connection?.port?.toString() || "N/A"
-                        : database.private_connection?.port?.toString() || "N/A"
-                    }
+                        ? database.public_connection?.port
+                        : database.private_connection?.port
+                    )}
                     onCopy={() =>
                       copyToClipboard(
-                        activeTab === "public"
-                          ? database.public_connection?.port?.toString() || "N/A"
-                          : database.private_connection?.port?.toString() || "N/A",
+                        safeStringValue(
+                          activeTab === "public"
+                            ? database.public_connection?.port
+                            : database.private_connection?.port
+                        ),
                         "Port"
                       )
                     }
                   />
                   <ConnectionField
                     label="Username"
-                    value={database.public_connection?.user || "N/A"}
-                    onCopy={() => copyToClipboard(database.public_connection?.user || "N/A", "Username")}
+                    value={safeStringValue(database.public_connection?.user)}
+                    onCopy={() =>
+                      copyToClipboard(
+                        safeStringValue(database.public_connection?.user),
+                        "Username"
+                      )
+                    }
                   />
                   <ConnectionField
                     label="Password"
-                    value={database.public_connection?.password || "N/A"}
+                    value={safeStringValue(
+                      database.public_connection?.password
+                    )}
                     isPassword
                     showPassword={showPassword}
                     onTogglePassword={() => setShowPassword(!showPassword)}
-                    onCopy={() => copyToClipboard(database.public_connection?.password || "N/A", "Password")}
+                    onCopy={() =>
+                      copyToClipboard(
+                        safeStringValue(database.public_connection?.password),
+                        "Password"
+                      )
+                    }
                   />
                   <ConnectionField
                     label="Database"
-                    value={database.public_connection?.database || "N/A"}
-                    onCopy={() => copyToClipboard(database.public_connection?.database || "N/A", "Database")}
+                    value={safeStringValue(
+                      database.public_connection?.database
+                    )}
+                    onCopy={() =>
+                      copyToClipboard(
+                        safeStringValue(database.public_connection?.database),
+                        "Database"
+                      )
+                    }
                   />
                   <ConnectionField
                     label="SSL Mode"
-                    value={database.public_connection?.ssl ? "require" : "disable"}
+                    value={
+                      database.public_connection?.ssl ? "require" : "disable"
+                    }
                   />
                   <ConnectionField
                     label="Connection URI"
-                    value={
+                    value={safeStringValue(
                       activeTab === "public"
-                        ? database.public_connection?.uri || "N/A"
-                        : database.private_connection?.uri || "N/A"
-                    }
+                        ? database.public_connection?.uri
+                        : database.private_connection?.uri
+                    )}
                     onCopy={() =>
                       copyToClipboard(
-                        activeTab === "public"
-                          ? database.public_connection?.uri || "N/A"
-                          : database.private_connection?.uri || "N/A",
+                        safeStringValue(
+                          activeTab === "public"
+                            ? database.public_connection?.uri
+                            : database.private_connection?.uri
+                        ),
                         "Connection URI"
                       )
                     }
@@ -398,7 +506,6 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                   />
                 </div>
               </motion.section>
-
 
               {/* Section 3: Configuration */}
               <motion.section
@@ -433,7 +540,7 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                   <ConfigCard
                     icon={MapPin}
                     label="Region"
-                    value={database?.region || "N/A"}
+                    value={extractRegion(database.region)}
                     color="text-orange-400"
                   />
                 </div>
@@ -453,24 +560,29 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 <div className="flex items-start gap-4">
                   <div className="flex-1">
                     <p className="text-slate-300 mb-4">
-                      Download the CA certificate to establish secure SSL connections to your
-                      database cluster.
+                      Download the CA certificate to establish secure SSL
+                      connections to your database cluster.
                     </p>
                     <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-                      <p className="text-slate-400 text-sm font-mono mb-2">Usage example:</p>
+                      <p className="text-slate-400 text-sm font-mono mb-2">
+                        Usage example:
+                      </p>
                       <code className="text-green-400 text-xs block">
-                        psql "sslmode=require sslrootcert=ca-certificate.crt host={database.public_connection?.host} port={database.public_connection?.port} user={database.public_connection?.user} dbname={database.public_connection?.database}"
+                        {`psql "sslmode=require sslrootcert=ca-certificate.crt host=${safeStringValue(database.public_connection?.host)} port=${safeStringValue(database.public_connection?.port)} user=${safeStringValue(database.public_connection?.user)} dbname=${safeStringValue(database.public_connection?.database)}"`}
                       </code>
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => downloadCACertificate(database.cluster_id)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                  Download CA Certificate
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => downloadCACertificate(database.cluster_id,database.ca_certificate)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download CA Certificate
+                  </button>
+                 
+                </div>
               </motion.section>
 
               {/* Section 5: Monthly Cost */}
@@ -501,6 +613,86 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
             </>
           )}
         </AnimatePresence>
+
+        {/* Delete Confirmation Modal */}
+        <AnimatePresence>
+          {showDeleteModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              onClick={() => !isDeleting && setShowDeleteModal(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-slate-900 rounded-2xl border-2 border-red-500/30 shadow-2xl max-w-md w-full p-6"
+              >
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="p-3 rounded-full bg-red-500/20">
+                    <AlertCircle className="h-6 w-6 text-red-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-white mb-2">
+                      Delete Database Cluster
+                    </h3>
+                    <p className="text-slate-400 text-sm">
+                      This action cannot be undone. This will permanently delete
+                      the database cluster and all its data.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-6">
+                  <label className="block text-slate-300 text-sm font-medium mb-2">
+                    Type <span className="font-bold text-white">{database?.name}</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder="Enter cluster name"
+                    disabled={isDeleting}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setDeleteConfirmText("");
+                    }}
+                    disabled={isDeleting}
+                    className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteCluster}
+                    disabled={deleteConfirmText !== database?.name || isDeleting}
+                    className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
@@ -529,7 +721,9 @@ const ConnectionField = ({
 }: ConnectionFieldProps) => {
   return (
     <div className="bg-slate-900/50 rounded-lg p-4">
-      <label className="text-slate-400 text-sm font-medium block mb-2">{label}</label>
+      <label className="text-slate-400 text-sm font-medium block mb-2">
+        {label}
+      </label>
       <div className="flex items-center gap-2">
         <input
           type={isPassword && !showPassword ? "password" : "text"}
@@ -585,6 +779,17 @@ const ConfigCard = ({ icon: Icon, label, value, color }: ConfigCardProps) => {
 
 // Helper Functions
 
+const safeStringValue = (value: any): string => {
+  if (!value) return "N/A";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return value.toString();
+  // Handle objects with address or family properties
+  if (typeof value === "object") {
+    return value.address || value.family || JSON.stringify(value);
+  }
+  return String(value);
+};
+
 const extractCpu = (size: string): string => {
   const match = size.match(/(\d+)vcpu/);
   return match ? `${match[1]} vCPU` : "N/A";
@@ -608,6 +813,25 @@ const extractDisk = (size: string): string => {
   return diskMap[size] || "N/A";
 };
 
+const extractRegion = (region: string | undefined): string => {
+  if (!region) return "N/A";
+
+  // If region is already a string, return it
+  if (typeof region === "string") {
+    // Check if it's a JSON string
+    try {
+      const parsed = JSON.parse(region);
+      return parsed?.address || parsed?.family || region;
+    } catch {
+      // Not JSON, return as is
+      return region;
+    }
+  }
+
+  // If it's an object (shouldn't happen based on types, but handle it)
+  return (region as any)?.address || (region as any)?.family || "N/A";
+};
+
 const calculateMonthlyCost = (size: string): string => {
   // Pricing based on DigitalOcean's managed database pricing
   const priceMap: Record<string, number> = {
@@ -621,21 +845,100 @@ const calculateMonthlyCost = (size: string): string => {
   return (priceMap[size] || 0).toFixed(2);
 };
 
-const downloadCACertificate = async (databaseId:UUID|undefined) => {
+const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | undefined) => {
   try {
-    const response = await api.get(`/api/databases/${databaseId}/ca-cert`, {
-      responseType: "blob",
-    });
+    if (!ca_certificate) {
+      toast.error("CA Certificate not available");
+      return;
+    }
 
-    const blob = new Blob([response.data], { type: "application/x-pem-file" });
+    console.log("=== CA Certificate Download Debug ===");
+    console.log("Original certificate (first 100 chars):", ca_certificate.substring(0, 100));
+    console.log("Certificate length:", ca_certificate.length);
+    
+    let formattedCert = ca_certificate;
+    
+    // Check if the certificate is Base64 encoded (no PEM headers, only base64 characters)
+    const isBase64Only = !ca_certificate.includes('-----BEGIN CERTIFICATE-----') && 
+                         /^[A-Za-z0-9+/=\s]+$/.test(ca_certificate.trim());
+    
+    if (isBase64Only) {
+      console.log("✓ Detected Base64-encoded certificate, decoding...");
+      try {
+        // Decode Base64 to get the actual PEM certificate
+        const decodedCert = atob(ca_certificate.trim());
+        formattedCert = decodedCert;
+        console.log("✓ Successfully decoded Base64 certificate");
+        console.log("Decoded certificate (first 200 chars):", decodedCert.substring(0, 200));
+      } catch (decodeError) {
+        console.error("❌ Failed to decode Base64:", decodeError);
+        toast.error("Failed to decode certificate");
+        return;
+      }
+    } else {
+      console.log("Certificate is not Base64-only, checking for other encodings...");
+      
+      // Handle escaped newlines
+      if (ca_certificate.includes('\\n')) {
+        formattedCert = ca_certificate.replace(/\\n/g, '\n');
+        console.log("✓ Replaced escaped \\n with actual newlines");
+      }
+      
+      // Handle double-escaped newlines
+      if (ca_certificate.includes('\\\\n')) {
+        formattedCert = formattedCert.replace(/\\\\n/g, '\n');
+        console.log("✓ Replaced double-escaped \\\\n with actual newlines");
+      }
+      
+      // Handle URL-encoded newlines
+      if (ca_certificate.includes('%0A')) {
+        formattedCert = formattedCert.replace(/%0A/g, '\n');
+        console.log("✓ Replaced URL-encoded newlines");
+      }
+    }
+    
+    // Verify certificate has proper PEM format
+    const hasPEMHeaders = formattedCert.includes('-----BEGIN CERTIFICATE-----') && 
+                          formattedCert.includes('-----END CERTIFICATE-----');
+    
+    if (!hasPEMHeaders) {
+      console.error("❌ Certificate does not have proper PEM format headers");
+      console.log("Certificate content (first 500 chars):", formattedCert.substring(0, 500));
+      toast.error("Invalid certificate format - missing PEM headers");
+      return;
+    }
+    
+    console.log("✓ Certificate has valid PEM headers");
+    console.log("Final certificate length:", formattedCert.length);
+    console.log("Has actual newlines:", formattedCert.includes('\n'));
+    console.log("Number of newlines:", (formattedCert.match(/\n/g) || []).length);
+    
+    // Ensure the certificate ends with a newline (PEM standard)
+    if (!formattedCert.endsWith('\n')) {
+      formattedCert += '\n';
+      console.log("✓ Added trailing newline");
+    }
+    
+    // Create blob with UTF-8 encoding for proper text handling
+    const blob = new Blob([formattedCert], { type: 'application/x-pem-file' });
+    console.log("✓ Blob created, size:", blob.size, "bytes");
+    
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = `ca-certificate-${databaseId}.crt`;
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    
+    // Clean up after a small delay to ensure download starts
+    setTimeout(() => {
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      console.log("✓ Download cleanup completed");
+    }, 100);
 
     toast.success("CA Certificate downloaded successfully!");
+    console.log("=== Download Complete ===");
   } catch (error) {
     console.error("[downloadCACertificate] Error:", error);
     toast.error("Failed to download CA certificate");
