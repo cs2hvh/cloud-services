@@ -20,6 +20,7 @@ type DbCluster = {
   num_nodes: number;
   created_at: string; // ISO
   version: string;
+  cluster_id: string;
 };
 
 const DatabasePage =  () => {
@@ -53,7 +54,8 @@ const DatabasePage =  () => {
             });
             if (res.status === 200) {
                 setClusters(
-                  res.data.data.filter((item: DbCluster) => item.status === "online")
+                  // res.data.data.filter((item: DbCluster) => item.status === "online")
+                   res.data.data
                 );
               
             }
@@ -109,6 +111,7 @@ const DatabasePage =  () => {
                   <Th>Nodes</Th>
                   <Th>Version</Th>
                   <Th>Status</Th>
+                  <Th>Actions</Th>
                   
                 </tr>
               </thead>
@@ -154,6 +157,19 @@ const DatabasePage =  () => {
                       >
                         {c.status}
                       </span>
+                    </Td>
+
+                     <Td>
+                     
+                        <Link
+                          href={{
+                            pathname: `/dashboard/services/database/clusters/${encodeURIComponent(c.cluster_id)}`,
+                            query: { clusterStatus: c.status },
+                          }}
+                          className="rounded-lg border border-blue-600 px-3 py-1.5 text-sm text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors duration-200"
+                        >
+                          View Cluster
+                        </Link>
                     </Td>
                   </tr>
                 ))}

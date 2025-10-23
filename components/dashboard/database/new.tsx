@@ -47,280 +47,15 @@ interface PageProps {
   userId: string;
 }
 
-
-const databaseVersions = {
-  mysql: ["8"],
-  pg: ["14", "15", "16", "17"],
-  mongodb: ["7", "8"],
-  // redis: ["6.2", "7.0", "7.2"],
-  // mariadb: ["10.6", "10.7", "10.8", "10.11"],
-  kafka: ["3.8"],
-};
-
-const databaseInfo = {
-  mysql: {
-    name: "MySQL",
-    description: "Popular open-source relational database",
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg",
-  },
-  pg: {
-    name: "PostgreSQL",
-    description: "Advanced open-source database",
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg",
-  },
-  mongodb: {
-    name: "MongoDB",
-    description: "NoSQL document database",
-    icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg",
-  },
-  // redis: {
-  //   name: "Redis",
-  //   description: "In-memory data structure store",
-  //   icon: "/redis.png"
-  // },
-  // mariadb: {
-  //   name: "MariaDB",
-  //   description: "MySQL-compatible database",
-  //   icon: "https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mariadb/mariadb-original.svg"
-  // },
-  kafka: {
-    name: "Apache Kafka",
-    description: "Distributed event streaming",
-    icon: "/kafka.png",
-  },
-};
-
-// Sample database plans if products are empty
-const sampleDatabasePlans = {
-  mysql: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "mysql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "mysql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "mysql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "mysql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-  pg: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "postgresql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "postgresql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "postgresql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "postgresql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-  mongodb: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "mysql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "mysql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "mysql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "mysql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-  redis: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "mysql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "mysql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "mysql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "mysql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-  mariadb: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "mysql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "mysql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "mysql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "mysql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-  kafka: [
-    {
-      id: "db-s-1vcpu-1gb",
-      name: "Starter",
-      sub: "mysql",
-      type: "database",
-      price: 15,
-      resources: { cpu: 1, ram: 1, storage: 15 },
-      discount: null,
-    },
-    {
-      id: "db-s-1vcpu-2gb",
-      name: "Basic",
-      sub: "mysql",
-      type: "database",
-      price: 35,
-      resources: { cpu: 1, ram: 2, storage: 34 },
-      discount: null,
-    },
-    {
-      id: "db-s-2vcpu-4gb",
-      name: "Professional",
-      sub: "mysql",
-      type: "database",
-      price: 75,
-      resources: { cpu: 2, ram: 4, storage: 56 },
-      discount: null,
-    },
-    {
-      id: "db-s-4vcpu-8gb",
-      name: "Business",
-      sub: "mysql",
-      type: "database",
-      price: 150,
-      resources: { cpu: 4, ram: 8, storage: 120 },
-      discount: null,
-    },
-  ],
-};
+interface DatabaseType {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  icon_url: string;
+  versions: string[];
+  available: boolean;
+}
 
 const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -329,6 +64,8 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
   const [availablePlans, setAvailablePlans] = useState<Tables<"products">[]>(
     []
   );
+  const [databaseTypes, setDatabaseTypes] = useState<DatabaseType[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState<boolean>(true);
 
   const [state, setState] = useState({
     selectedDb: "", // Selected database product
@@ -343,40 +80,49 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
 
   const router = useRouter();
 
+  // Fetch database types on mount
+  useEffect(() => {
+    const fetchDatabaseTypes = async () => {
+      try {
+        setLoadingTypes(true);
+        const response = await api.get("/database-types");
+        if (response.data.success) {
+          setDatabaseTypes(response.data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching database types:", error);
+        toast.error("Failed to load database types");
+      } finally {
+        setLoadingTypes(false);
+      }
+    };
+
+    fetchDatabaseTypes();
+  }, []);
+
   // Filter products when database type changes
   useEffect(() => {
     if (state.selectedDbType) {
-      let filteredProducts = products.filter(
+      const filteredProducts = products.filter(
         (product) => product.sub === state.selectedDbType
       );
 
-      // Use sample plans if no products available
-      if (filteredProducts.length === 0) {
-        const samplePlans =
-          sampleDatabasePlans[
-            state.selectedDbType as keyof typeof sampleDatabasePlans
-          ];
-        if (samplePlans) {
-          filteredProducts = samplePlans as any;
-        }
-      }
-
       setAvailablePlans(filteredProducts);
 
-      // Set versions based on selected DB type
-      setState((prevState) => ({
-        ...prevState,
-        versions:
-          databaseVersions[
-            state.selectedDbType as keyof typeof databaseVersions
-          ] || [],
-        selectedVersion:
-          databaseVersions[
-            state.selectedDbType as keyof typeof databaseVersions
-          ]?.[0] || "",
-      }));
+      // Set versions based on selected DB type from fetched database types
+      const selectedType = databaseTypes.find(
+        (type) => type.code === state.selectedDbType
+      );
+      
+      if (selectedType) {
+        setState((prevState) => ({
+          ...prevState,
+          versions: selectedType.versions || [],
+          selectedVersion: selectedType.versions?.[0] || "",
+        }));
+      }
     }
-  }, [state.selectedDbType, products]);
+  }, [state.selectedDbType, products, databaseTypes]);
 
   const handleNextStep = () => {
     if (currentStep === 1 && !state.selectedName) {
@@ -388,37 +134,28 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
       toast.error("Please select a location");
       return;
     }
-    // if (currentStep === 3 && !state.selectedNode) {
-    //   toast.error("Please select a number of nodes");
-    //   return;
-    // }
-    if (currentStep === 3 && state.selectedNode.length > 2) {
-      toast.error(
-        "Please select valid number of nodes.It should be less than 100"
-      );
-      return;
-    }
 
-    if (currentStep === 4 && !state.selectedDbType) {
+    if (currentStep === 3 && !state.selectedDbType) {
       toast.error("Please select a database type");
       return;
     }
 
-    if (currentStep === 5 && !state.selectedDb) {
+    if (currentStep === 4 && !state.selectedDb) {
       toast.error("Please select a database plan");
       return;
     }
 
-    if (currentStep === 6 && !state.selectedVersion) {
+    if (currentStep === 4 && !state.selectedVersion) {
       toast.error("Please select a database version");
       return;
     }
-    if (currentStep === 7 && !state.selectedProject) {
+
+    if (currentStep === 5 && !state.selectedProject) {
       toast.error("Please select a project");
       return;
     }
 
-    if (currentStep < 8) {
+    if (currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -456,7 +193,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
         engine: state.selectedDbType,
         version: state.selectedVersion,
         num_nodes: 1,
-        size: state.selectedDb,
+        size: `db-s-${availablePlans.find(plan => plan.id === state.selectedDb)?.resources?.cpu || 1}vcpu-${availablePlans.find(plan => plan.id === state.selectedDb)?.resources?.ram || 1}gb`,
         region: state.selectedLocation,
         project_id: selectedProject,
         owner_id: userId,
@@ -479,12 +216,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
   };
 
   const handleDbTypeChange = (dbType: string) => {
+    const selectedType = databaseTypes.find((type) => type.code === dbType);
+    
     setState((prevState) => ({
       ...prevState,
       selectedDbType: dbType,
       selectedDb: "", // Reset selected plan when changing DB type
-      selectedVersion:
-        databaseVersions[dbType as keyof typeof databaseVersions]?.[0] || "",
+      selectedVersion: selectedType?.versions?.[0] || "",
     }));
   };
 
@@ -514,16 +252,16 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
   const steps = [
     { id: 1, name: "Name" },
     { id: 2, name: "Location" },
-    // { id: 3, name: "Nodes" },
     { id: 3, name: "Type" },
     { id: 4, name: "Plan" },
-    { id: 5, name: "Config" },
-    { id: 6, name: "Project" },
-    { id: 7, name: "Review" },
+    { id: 5, name: "Project" },
+    { id: 6, name: "Review" },
   ];
 
-  // Use predefined database types
-  const dbTypes = Object.keys(databaseInfo);
+  // Get current selected database type info
+  const selectedDbTypeInfo = databaseTypes.find(
+    (type) => type.code === selectedDbType
+  );
 
   return (
     <div className="py-4">
@@ -729,66 +467,63 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                 <CardTitle className="text-white">Database Type</CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup
-                  value={selectedDbType}
-                  onValueChange={handleDbTypeChange}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                >
-                  {dbTypes.map((dbType) => {
-                    const info =
-                      databaseInfo[dbType as keyof typeof databaseInfo];
-                    let planCount = products.filter(
-                      (p) => p.sub === dbType
-                    ).length;
-                    // Use sample plan count if no products
-                    if (planCount === 0) {
-                      const samplePlans =
-                        sampleDatabasePlans[
-                          dbType as keyof typeof sampleDatabasePlans
-                        ];
-                      planCount = samplePlans ? samplePlans.length : 0;
-                    }
-                    return (
-                      <div key={dbType}>
-                        <RadioGroupItem
-                          value={dbType}
-                          id={`type-${dbType}`}
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor={`type-${dbType}`}
-                          className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                        >
-                          <div className="w-10 h-10 relative flex-shrink-0">
-                            <Image
-                              src={info.icon}
-                              alt={info.name}
-                              width={40}
-                              height={40}
-                              className="object-contain"
-                            />
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-semibold text-white">
-                              {info.name}
-                            </p>
-                            <p className="text-xs text-white/60 mt-1">
-                              {info.description}
-                            </p>
-                          </div>
-                          {planCount > 0 && (
-                            <Badge
-                              variant="outline"
-                              className="ml-auto text-white/70"
-                            >
-                              {planCount} plans
-                            </Badge>
-                          )}
-                        </Label>
-                      </div>
-                    );
-                  })}
-                </RadioGroup>
+                {loadingTypes ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-8 h-8 animate-spin text-white" />
+                  </div>
+                ) : (
+                  <RadioGroup
+                    value={selectedDbType}
+                    onValueChange={handleDbTypeChange}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                  >
+                    {databaseTypes.map((dbType) => {
+                      const planCount = products.filter(
+                        (p) => p.sub === dbType.code
+                      ).length;
+                      
+                      return (
+                        <div key={dbType.code}>
+                          <RadioGroupItem
+                            value={dbType.code}
+                            id={`type-${dbType.code}`}
+                            className="peer sr-only"
+                          />
+                          <Label
+                            htmlFor={`type-${dbType.code}`}
+                            className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                          >
+                            <div className="w-10 h-10 relative flex-shrink-0">
+                              <Image
+                                src={dbType.icon_url}
+                                alt={dbType.name}
+                                width={40}
+                                height={40}
+                                className="object-contain"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold text-white">
+                                {dbType.name}
+                              </p>
+                              <p className="text-xs text-white/60 mt-1">
+                                {dbType.description}
+                              </p>
+                            </div>
+                            {planCount > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="ml-auto text-white/70"
+                              >
+                                {planCount} plans
+                              </Badge>
+                            )}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -811,141 +546,172 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
           {currentStep === 4 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Database Plan</CardTitle>
+                <CardTitle className="text-white">Database Plan & Version</CardTitle>
               </CardHeader>
               <CardContent>
-                <RadioGroup
-                  value={selectedDb}
-                  onValueChange={handleDbPlanChange}
-                  className="grid grid-cols-1 gap-4"
-                >
-                  {availablePlans.map((database) => (
-                    <div key={database.id}>
-                      <RadioGroupItem
-                        value={database.id}
-                        id={database.id}
-                        className="peer sr-only"
-                      />
-                      <Label
-                        htmlFor={database.id}
-                        className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                      >
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                            <p className="font-bold text-lg text-white">
-                              {database.name}
-                            </p>
-                            {database.discount &&
-                              Number(database.discount) > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-green-400 bg-green-500/10 border-green-500/30 mt-2"
-                                >
-                                  Save {database.discount}%
-                                </Badge>
-                              )}
-                          </div>
-                          <div className="text-right">
-                            {database.price === 0 || database.price === null ? (
-                              <div>
-                                <span className="text-2xl font-bold text-white">
-                                  Free
-                                </span>
-                              </div>
-                            ) : database.discount ? (
-                              <div>
-                                <span className="line-through text-sm text-white/40">
-                                  ${database.price}
-                                </span>
+                {availablePlans.length === 0 ? (
+                  <div className="text-center py-8 text-white/60">
+                    No plans available for this database type
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {availablePlans.map((database) => (
+                      <div key={database.id}>
+                        <div
+                          onClick={() => handleDbPlanChange(database.id)}
+                          className={`block bg-white/10 rounded-lg border-2 cursor-pointer p-5 transition-all hover:bg-white/15 ${
+                            selectedDb === database.id
+                              ? "border-blue-500"
+                              : "border-transparent"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="font-bold text-lg text-white">
+                                {database.name}
+                              </p>
+                              {database.discount &&
+                                Number(database.discount) > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-green-400 bg-green-500/10 border-green-500/30 mt-2"
+                                  >
+                                    Save {database.discount}%
+                                  </Badge>
+                                )}
+                            </div>
+                            <div className="text-right">
+                              {database.price === 0 || database.price === null ? (
+                                <div>
+                                  <span className="text-2xl font-bold text-white">
+                                    Free
+                                  </span>
+                                </div>
+                              ) : database.discount ? (
+                                <div>
+                                  <span className="line-through text-sm text-white/40">
+                                    ${database.price}
+                                  </span>
+                                  <div className="text-2xl font-bold text-white">
+                                    $
+                                    {(
+                                      database.price! *
+                                      (1 - Number(database.discount) / 100)
+                                    ).toFixed(0)}
+                                    <span className="text-sm font-normal text-white/60">
+                                      /mo
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
                                 <div className="text-2xl font-bold text-white">
-                                  $
-                                  {(
-                                    database.price! *
-                                    (1 - Number(database.discount) / 100)
-                                  ).toFixed(0)}
+                                  ${database.price}
                                   <span className="text-sm font-normal text-white/60">
                                     /mo
                                   </span>
                                 </div>
-                              </div>
-                            ) : (
-                              <div className="text-2xl font-bold text-white">
-                                ${database.price}
-                                <span className="text-sm font-normal text-white/60">
-                                  /mo
-                                </span>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
+                          {database.resources && (
+                            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Cpu className="w-4 h-4 text-blue-400" />
+                                  <span className="text-xs text-white/60">
+                                    CPU
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).cpu
+                                  }{" "}
+                                  vCPU
+                                </p>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Server className="w-4 h-4 text-green-400" />
+                                  <span className="text-xs text-white/60">
+                                    RAM
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).ram
+                                  }{" "}
+                                  GB
+                                </p>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <HardDrive className="w-4 h-4 text-purple-400" />
+                                  <span className="text-xs text-white/60">
+                                    Storage
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).storage
+                                  }{" "}
+                                  GB
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Version Selection - Show only when this plan is selected */}
+                          {selectedDb === database.id && versions.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-white/10">
+                              <Label htmlFor="version" className="mb-2 block text-white text-sm">
+                                Select Version
+                              </Label>
+                              <Select
+                                value={selectedVersion}
+                                onValueChange={(value) =>
+                                  setState({ ...state, selectedVersion: value })
+                                }
+                              >
+                                <SelectTrigger
+                                  id="version"
+                                  className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <SelectValue placeholder="Select version" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-black border-white/20 text-white">
+                                  {versions.map((version) => (
+                                    <SelectItem key={version} value={version}>
+                                      v{version}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                         </div>
-                        {database.resources && (
-                          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Cpu className="w-4 h-4 text-blue-400" />
-                                <span className="text-xs text-white/60">
-                                  CPU
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {
-                                  (
-                                    database.resources as {
-                                      cpu: number;
-                                      ram: number;
-                                      storage: number;
-                                    }
-                                  ).cpu
-                                }{" "}
-                                vCPU
-                              </p>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Server className="w-4 h-4 text-green-400" />
-                                <span className="text-xs text-white/60">
-                                  RAM
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {
-                                  (
-                                    database.resources as {
-                                      cpu: number;
-                                      ram: number;
-                                      storage: number;
-                                    }
-                                  ).ram
-                                }{" "}
-                                GB
-                              </p>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <HardDrive className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs text-white/60">
-                                  Storage
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {
-                                  (
-                                    database.resources as {
-                                      cpu: number;
-                                      ram: number;
-                                      storage: number;
-                                    }
-                                  ).storage
-                                }{" "}
-                                GB
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -965,58 +731,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
             </Card>
           )}
 
-          {currentStep === 5 && selectedDb && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Configuration</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="version" className="mb-2 block text-white">
-                    Database Version
-                  </Label>
-                  <Select
-                    value={selectedVersion}
-                    onValueChange={(value) =>
-                      setState({ ...state, selectedVersion: value })
-                    }
-                  >
-                    <SelectTrigger
-                      id="version"
-                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
-                    >
-                      <SelectValue placeholder="Select version" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-black border-white/20 text-white">
-                      {versions.map((version) => (
-                        <SelectItem key={version} value={version}>
-                          v{version}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-
-           {currentStep === 6 && (
+          {currentStep === 5 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <CardTitle className="text-white">Project</CardTitle>
@@ -1066,7 +781,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
             </Card>
           )}
 
-          {currentStep === 7 && (
+          {currentStep === 6 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <CardTitle className="text-white">Review & Payment</CardTitle>
@@ -1135,17 +850,11 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
           <Card className="sticky top-8 bg-white/5 border-white/10">
             <CardHeader>
               <CardTitle className="text-white">Order Summary</CardTitle>
-              {selectedDbType && (
+              {selectedDbTypeInfo && (
                 <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
                   <Image
-                    src={
-                      databaseInfo[selectedDbType as keyof typeof databaseInfo]
-                        ?.icon || ""
-                    }
-                    alt={
-                      databaseInfo[selectedDbType as keyof typeof databaseInfo]
-                        ?.name || selectedDbType
-                    }
+                    src={selectedDbTypeInfo.icon_url}
+                    alt={selectedDbTypeInfo.name}
                     width={60}
                     height={60}
                     className="object-contain"
@@ -1160,28 +869,19 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                   <span className="font-medium text-white">{selectedName}</span>
                 </div>
               )}
-              {selectedDbType && (
+              {selectedDbTypeInfo && (
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-white/60">Type:</span>
                   <div className="flex items-center gap-2">
                     <Image
-                      src={
-                        databaseInfo[
-                          selectedDbType as keyof typeof databaseInfo
-                        ]?.icon || ""
-                      }
-                      alt={
-                        databaseInfo[
-                          selectedDbType as keyof typeof databaseInfo
-                        ]?.name || selectedDbType
-                      }
+                      src={selectedDbTypeInfo.icon_url}
+                      alt={selectedDbTypeInfo.name}
                       width={20}
                       height={20}
                       className="object-contain"
                     />
                     <span className="font-medium text-white">
-                      {databaseInfo[selectedDbType as keyof typeof databaseInfo]
-                        ?.name || selectedDbType}
+                      {selectedDbTypeInfo.name}
                     </span>
                   </div>
                 </div>

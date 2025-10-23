@@ -233,7 +233,7 @@ export type Database = {
           image: string | null;
           name: string | null;
           price: number | null;
-          resources: Json | null;
+          resources: { cpu: number; ram: number };
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
@@ -245,7 +245,7 @@ export type Database = {
           image?: string | null;
           name: string;
           price: number;
-          resources: Json | null;
+         resources: { cpu: number; ram: number };
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
