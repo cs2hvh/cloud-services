@@ -15,6 +15,34 @@ interface NodeConfig {
   storage: number;
 }
 
+
+
+type Rule = {
+  uuid: string;
+  cluster_uuid: string;
+  type: string; // e.g. "ip_addr"
+  value: string; // e.g. "172.105.39.76"
+  created_at: string; // ISO timestamp
+};
+
+export type network_rules = {
+  rules: Rule[];
+};
+
+export interface DatabaseUser {
+  id: string;           // DigitalOcean user ID/name
+  name: string;         // Username
+  role: string;         // mysql_role (e.g., "normal", "primary")
+  password?: string;    // Optional, for reference
+  created_at?: string;  // ISO timestamp
+}
+
+export interface DatabaseInstance {
+  id: string;           // Database name (unique identifier)
+  name: string;         // Database name
+  created_at: string;   // ISO timestamp
+}
+
 export interface Database_Connection{
   ssl: boolean;
   uri: string;
@@ -480,6 +508,9 @@ export type Database = {
           size:string;
           region?:string;
           ca_certificate?:string;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
 
         };
         Insert: {
@@ -495,7 +526,10 @@ export type Database = {
           status: "pending" | "online" | "creating" ;
           password: string ;
           ca_certificate?:BlobPart;
-           region?:string;
+          region?:string;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
           // resource_config?:{ cpu: number; ram: number; storage: number }
 
         };

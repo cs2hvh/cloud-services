@@ -1,7 +1,7 @@
 // import { Encryption } from "@/config/functions";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
-import { Tables, TablesInsert, TablesUpdate } from "./types";
+import { network_rules, Tables, TablesInsert, TablesUpdate } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
@@ -1121,6 +1121,242 @@ export const Database_Clusters = {
 
     return { success: true, cluster: data };
  },
+
+  update_network_rules: async(cluster_id:string, network_rules:network_rules)=>{
+
+
+    console.log(network_rules, "...........in updateDatabaseClusterWorker........");
+  const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .update({ network_rules })
+     .eq("cluster_id", cluster_id)
+     .select("*")
+     .single();
+     console.log(data, "...........in updateDatabaseClusterWorker........");
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+},
+
+  // Database user management functions
+  add_user: async(cluster_id: string, user: any) => {
+    console.log(user, "...........in addDatabaseUser........");
+    const supabase = await createWorkerClient();
+    
+    // First, get current users
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[addDatabaseUser] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentUsers = currentData?.users || [];
+    const updatedUsers = [...currentUsers, user];
+
+    // Update with new user added
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users: updatedUsers })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[addDatabaseUser] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  remove_user: async(cluster_id: string, username: string) => {
+    console.log(username, "...........in removeDatabaseUser........");
+    const supabase = await createWorkerClient();
+    
+    // Get current users
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[removeDatabaseUser] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentUsers = currentData?.users || [];
+    const updatedUsers = currentUsers.filter((u: any) => u.name !== username);
+
+    // Update with user removed
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users: updatedUsers })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[removeDatabaseUser] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  update_users: async(cluster_id: string, users: any[]) => {
+    console.log(users, "...........in updateDatabaseUsers........");
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateDatabaseUsers] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  get_users: async(cluster_id: string) => {
+    const supabase = await createSSRClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (error) {
+      console.error("[getDatabaseUsers] read failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data?.users || [] };
+  },
+
+  // Database instance management functions
+  add_db: async(cluster_id: string, database: any) => {
+    console.log(database, "...........in addDatabase........");
+    const supabase = await createWorkerClient();
+    
+    // First, get current databases
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[addDatabase] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentDbs = currentData?.dbs || [];
+    const updatedDbs = [...currentDbs, database];
+
+    // Update with new database added
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: updatedDbs })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[addDatabase] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  remove_db: async(cluster_id: string, db_name: string) => {
+    console.log(db_name, "...........in removeDatabase........");
+    const supabase = await createWorkerClient();
+    
+    // Get current databases
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[removeDatabase] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentDbs = currentData?.dbs || [];
+    const updatedDbs = currentDbs.filter((db: any) => db.name !== db_name);
+
+    // Update with database removed
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: updatedDbs })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[removeDatabase] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  update_dbs: async(cluster_id: string, databases: any[]) => {
+    console.log(databases, "...........in updateDatabases........");
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: databases })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateDatabases] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  get_dbs: async(cluster_id: string) => {
+    const supabase = await createSSRClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (error) {
+      console.error("[getDatabases] read failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data?.dbs || [] };
+  },
+ 
+
 }
 
 

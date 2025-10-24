@@ -1,0 +1,87 @@
+import { NextRequest, NextResponse } from "next/server";
+import axios from "axios";
+import { Database_Clusters } from "@/lib/supabase/queries";
+
+interface database_error {
+  response: {
+    data: { message: string };
+  };
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { cluster_id } = body;
+
+    if (!cluster_id) {
+      return NextResponse.json(
+        { error: "cluster_id is required" },
+        { status: 400 }
+      );
+    }
+
+    // Get databases from DigitalOcean
+    const response = await axios.get(
+      `https://api.digitalocean.com/v2/databases/${cluster_id}/dbs`,
+      {
+        headers: {
+          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (response.status === 200) {
+      console.log("[listDatabases] Databases fetched successfully:", response.data.dbs);
+
+      const databases = response.data.dbs;
+
+      // Format databases for Supabase
+      const formattedDbs = databases.map((db: any) => ({
+        id: db.name,
+        name: db.name,
+        created_at: new Date().toISOString(),
+      }));
+
+      // Sync databases with Supabase
+      const supabase_result = await Database_Clusters.update_dbs(
+        cluster_id,
+        formattedDbs
+      );
+
+      if (supabase_result.success) {
+        return NextResponse.json(
+          {
+            data: databases,
+            message: "Databases fetched and synced successfully",
+          },
+          { status: 200 }
+        );
+      } else {
+        // Even if sync fails, return the databases from DigitalOcean
+        return NextResponse.json(
+          {
+            data: databases,
+            message: "Databases fetched successfully (sync failed)",
+            warning: supabase_result.error,
+          },
+          { status: 200 }
+        );
+      }
+    }
+  } catch (err: unknown) {
+    if (err as database_error) {
+      const message = (err as database_error)?.response?.data?.message;
+      console.error("[listDatabases] Error:", message);
+      return NextResponse.json(
+        { error: message ?? "Invalid request" },
+        { status: 400 }
+      );
+    } else {
+      return NextResponse.json(
+        { error: "Unknown error occurred" },
+        { status: 400 }
+      );
+    }
+  }
+}
