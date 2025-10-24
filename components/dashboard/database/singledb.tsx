@@ -299,7 +299,12 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
             </TabsContent>
 
             <TabsContent value="network" className="mt-0">
-              <NetworkTab />
+              <NetworkTab 
+                clusterId={database.cluster_id || ""}
+                databaseId={database.cluster_id || ""}
+                initialNetworkRules={database.network_rules}
+                onRulesUpdate={fetchDatabaseCluster}
+              />
             </TabsContent>
 
             <TabsContent value="users-dbs" className="mt-0">
