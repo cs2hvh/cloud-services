@@ -4,40 +4,18 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Database,
-  CheckCircle2,
-  XCircle,
   Loader2,
-  Server,
-  HardDrive,
-  Cpu,
-  MapPin,
-  Copy,
-  Eye,
-  EyeOff,
-  Download,
-  Shield,
-  Globe,
-  Lock,
-  DollarSign,
-  RefreshCw,
-  AlertCircle,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Database_Connection, Tables } from "@/lib/supabase/types";
-import { UUID } from "crypto";
-import {
-  ConnectionField,
-  ConfigCard,
-  safeStringValue,
-  extractCpu,
-  extractRam,
-  extractDisk,
-  extractRegion,
-  calculateMonthlyCost,
-  downloadCACertificate,
-} from "./singledb-helpers";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { OverviewTab } from "./tabs/overview-tab";
+import { NetworkTab } from "./tabs/network-tab";
+import { UsersDbsTab } from "./tabs/users-dbs-tab";
+import { SettingsTab } from "./tabs/settings-tab";
 // import api from "@/lib/axios";
 
 // interface DatabaseCluster {
@@ -75,14 +53,14 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
   );
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [activeTab, setActiveTab] = useState<"public" | "private">("public");
+  const [connectionTab, setConnectionTab] = useState<"public" | "private">("public");
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
-  // const [statusCheckInterval, setStatusCheckInterval] = useState<NodeJS.Timeout | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasShownOnlineToast = useRef<boolean>(false); // Track if we've shown the toast
-  const previousStatus = useRef<string | null>(null); // Track previous status
+  const hasShownOnlineToast = useRef<boolean>(false);
+  const previousStatus = useRef<string | null>(null);
 
   // Fetch database cluster details
   const fetchDatabaseCluster = useCallback(async () => {
@@ -216,48 +194,6 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
     }
   };
 
-  // Status badge component
-  const StatusBadge = ({ status }: { status: string }) => {
-    const statusConfig = {
-      online: {
-        color: "text-green-400",
-        bg: "bg-green-500/20",
-        border: "border-green-500",
-        icon: CheckCircle2,
-        text: "Online",
-      },
-      creating: {
-        color: "text-yellow-400",
-        bg: "bg-yellow-500/20",
-        border: "border-yellow-500",
-        icon: Loader2,
-        text: "Creating",
-      },
-      failed: {
-        color: "text-red-400",
-        bg: "bg-red-500/20",
-        border: "border-red-500",
-        icon: XCircle,
-        text: "Failed",
-      },
-    };
-
-    const config =
-      statusConfig[status as keyof typeof statusConfig] || statusConfig.failed;
-    const Icon = config.icon;
-
-    return (
-      <div
-        className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${config.border} ${config.bg}`}
-      >
-        <Icon
-          className={`h-5 w-5 ${config.color} ${status === "creating" ? "animate-spin" : ""}`}
-        />
-        <span className={`font-semibold ${config.color}`}>{config.text}</span>
-      </div>
-    );
-  };
-
   // Loading state
   if (loading) {
     return (
@@ -274,7 +210,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
         <div className="text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-white text-lg">Database cluster not found</p>
         </div>
       </div>
@@ -283,7 +219,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-black py-10 px-4">
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -293,7 +229,9 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
           <div className="flex-1">
             <div className="flex items-center gap-3">
               <Database className="h-8 w-8 text-blue-400" />
-              <h1 className="text-2xl sm:text-3xl font-bold text-white break-all">{database.name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-white break-all">
+                {database.name}
+              </h1>
             </div>
             <p className="text-slate-400 mt-1 text-sm sm:text-base">
               {database.engine.toUpperCase()} {database.version} •{" "}
@@ -301,7 +239,6 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
             </p>
           </div>
           <div className="flex items-center gap-2">
-           
             <button
               onClick={() => setShowDeleteModal(true)}
               className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 transition-colors"
@@ -312,319 +249,68 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
           </div>
         </motion.div>
 
-        {/* Section 1: Database Cluster Status */}
-        <motion.section
+        {/* Tabs */}
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
         >
-          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Server className="h-5 w-5 text-blue-400" />
-            Cluster Status
-          </h2>
-          <StatusBadge status={database.status} />
-        </motion.section>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            {/* Tab Navigation */}
+            <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-2 mb-6">
+              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 bg-transparent p-0 h-auto">
+                <TabsTrigger 
+                  value="overview" 
+                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                >
+                  Overview
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="network" 
+                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                >
+                  Network
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="users-dbs" 
+                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                >
+                  Users & DBs
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="settings" 
+                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                >
+                  Settings
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-        {/* Show content based on status */}
-        <AnimatePresence mode="wait">
-          {database.status === "creating" && (
-            <motion.div
-              key="creating"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 text-center"
-            >
-              <Loader2 className="h-16 w-16 text-blue-500 animate-spin mx-auto mb-6" />
-              <h3 className="text-2xl font-bold text-white mb-3">
-                Creating Your Database Cluster
-              </h3>
-              <p className="text-slate-400 text-lg mb-6">
-                Your database cluster is being provisioned. This may take a few
-                minutes.
-              </p>
-              <div className="flex items-center justify-center gap-2 text-slate-500">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Checking status every minute...</span>
-              </div>
-            </motion.div>
-          )}
+            {/* Tab Content */}
+            <TabsContent value="overview" className="mt-0">
+              <OverviewTab
+                database={database}
+                showPassword={showPassword}
+                setShowPassword={setShowPassword}
+                activeTab={connectionTab}
+                setActiveTab={setConnectionTab}
+                copyToClipboard={copyToClipboard}
+              />
+            </TabsContent>
 
-          {database.status === "pending" && (
-            <motion.div
-              key="pending"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="rounded-2xl bg-red-500/10 border-2 border-red-500/30 shadow-lg p-12 text-center"
-            >
-              <XCircle className="h-16 w-16 text-red-500 mx-auto mb-6" />
-              <h3 className="text-2xl font-bold text-white mb-3">
-                Cluster Creation Failed
-              </h3>
-              <p className="text-slate-300 text-lg mb-6">
-                There was an error creating your database cluster. Please
-                contact support or try again later.
-              </p>
-              <button className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
-                Contact Support
-              </button>
-            </motion.div>
-          )}
+            <TabsContent value="network" className="mt-0">
+              <NetworkTab />
+            </TabsContent>
 
-          {database.status === "online" && (
-            <>
-              {/* Section 2: Connection Details */}
-              <motion.section
-                key="connection"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
-              >
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-green-400" />
-                  Connection Details
-                </h2>
+            <TabsContent value="users-dbs" className="mt-0">
+              <UsersDbsTab clusterId={database.cluster_id || ""} />
+            </TabsContent>
 
-                {/* Tabs */}
-                <div className="flex gap-2 mb-6">
-                  <button
-                    onClick={() => setActiveTab("public")}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                      activeTab === "public"
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/10 text-slate-400 hover:bg-white/20"
-                    }`}
-                  >
-                    <Globe className="h-4 w-4" />
-                    Public Connection
-                  </button>
-                  {database.private_connection && (
-                    <button
-                      onClick={() => setActiveTab("private")}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                        activeTab === "private"
-                          ? "bg-blue-500 text-white"
-                          : "bg-white/10 text-slate-400 hover:bg-white/20"
-                      }`}
-                    >
-                      <Lock className="h-4 w-4" />
-                      Private Connection
-                    </button>
-                  )}
-                </div>
-
-                {/* Connection Info */}
-                <div className="space-y-3">
-                  <ConnectionField
-                    label="Host"
-                    value={safeStringValue(
-                      activeTab === "public"
-                        ? database.public_connection?.host
-                        : database.private_connection?.host
-                    )}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(
-                          activeTab === "public"
-                            ? database.public_connection?.host
-                            : database.private_connection?.host
-                        ),
-                        "Host"
-                      )
-                    }
-                  />
-                  <ConnectionField
-                    label="Port"
-                    value={safeStringValue(
-                      activeTab === "public"
-                        ? database.public_connection?.port
-                        : database.private_connection?.port
-                    )}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(
-                          activeTab === "public"
-                            ? database.public_connection?.port
-                            : database.private_connection?.port
-                        ),
-                        "Port"
-                      )
-                    }
-                  />
-                  <ConnectionField
-                    label="Username"
-                    value={safeStringValue(database.public_connection?.user)}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(database.public_connection?.user),
-                        "Username"
-                      )
-                    }
-                  />
-                  <ConnectionField
-                    label="Password"
-                    value={safeStringValue(
-                      database.public_connection?.password
-                    )}
-                    isPassword
-                    showPassword={showPassword}
-                    onTogglePassword={() => setShowPassword(!showPassword)}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(database.public_connection?.password),
-                        "Password"
-                      )
-                    }
-                  />
-                  <ConnectionField
-                    label="Database"
-                    value={safeStringValue(
-                      database.public_connection?.database
-                    )}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(database.public_connection?.database),
-                        "Database"
-                      )
-                    }
-                  />
-                  <ConnectionField
-                    label="SSL Mode"
-                    value={
-                      database.public_connection?.ssl ? "require" : "disable"
-                    }
-                  />
-                  <ConnectionField
-                    label="Connection URI"
-                    value={safeStringValue(
-                      activeTab === "public"
-                        ? database.public_connection?.uri
-                        : database.private_connection?.uri
-                    )}
-                    onCopy={() =>
-                      copyToClipboard(
-                        safeStringValue(
-                          activeTab === "public"
-                            ? database.public_connection?.uri
-                            : database.private_connection?.uri
-                        ),
-                        "Connection URI"
-                      )
-                    }
-                    multiline
-                  />
-                </div>
-              </motion.section>
-
-              {/* Section 3: Configuration */}
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
-              >
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Server className="h-5 w-5 text-purple-400" />
-                  Configuration
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <ConfigCard
-                    icon={Cpu}
-                    label="vCPU"
-                    value={extractCpu(database.size)}
-                    color="text-blue-400"
-                  />
-                  <ConfigCard
-                    icon={Database}
-                    label="RAM"
-                    value={extractRam(database.size)}
-                    color="text-green-400"
-                  />
-                  <ConfigCard
-                    icon={HardDrive}
-                    label="Disk"
-                    value={extractDisk(database.size)}
-                    color="text-purple-400"
-                  />
-                  <ConfigCard
-                    icon={MapPin}
-                    label="Region"
-                    value={extractRegion(database.region)}
-                    color="text-orange-400"
-                  />
-                </div>
-              </motion.section>
-
-              {/* Section 4: CA Certificate */}
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
-              >
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-yellow-400" />
-                  CA Certificate
-                </h2>
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <p className="text-slate-300 mb-4">
-                      Download the CA certificate to establish secure SSL
-                      connections to your database cluster.
-                    </p>
-                    <div className="bg-slate-900/50 rounded-lg p-4 mb-4">
-                      <p className="text-slate-400 text-sm font-mono mb-2">
-                        Usage example:
-                      </p>
-                      <code className="text-green-400 text-xs block">
-                        {`psql "sslmode=require sslrootcert=ca-certificate.crt host=${safeStringValue(database.public_connection?.host)} port=${safeStringValue(database.public_connection?.port)} user=${safeStringValue(database.public_connection?.user)} dbname=${safeStringValue(database.public_connection?.database)}"`}
-                      </code>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => downloadCACertificate(database.cluster_id,database.ca_certificate)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-colors"
-                  >
-                    <Download className="h-4 w-4" />
-                    Download CA Certificate
-                  </button>
-                 
-                </div>
-              </motion.section>
-
-              {/* Section 5: Monthly Cost */}
-              <motion.section
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30 shadow-lg p-6"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-                      <DollarSign className="h-5 w-5 text-green-400" />
-                      Monthly Cost
-                    </h2>
-                    <p className="text-slate-400">
-                      Estimated cost for this database cluster
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-4xl font-bold text-white">
-                      {/* ${database.monthly_cost || calculateMonthlyCost(database.size)} */}
-                    </p>
-                    <p className="text-slate-400 text-sm">per month</p>
-                  </div>
-                </div>
-              </motion.section>
-            </>
-          )}
-        </AnimatePresence>
+            <TabsContent value="settings" className="mt-0">
+              <SettingsTab />
+            </TabsContent>
+          </Tabs>
+        </motion.div>
 
         {/* Delete Confirmation Modal */}
         <AnimatePresence>
@@ -660,7 +346,11 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
 
                 <div className="mb-6">
                   <label className="block text-slate-300 text-sm font-medium mb-2">
-                    Type <span className="font-bold text-white">{database?.name}</span> to confirm
+                    Type{" "}
+                    <span className="font-bold text-white">
+                      {database?.name}
+                    </span>{" "}
+                    to confirm
                   </label>
                   <input
                     type="text"
@@ -685,7 +375,9 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
                   </button>
                   <button
                     onClick={handleDeleteCluster}
-                    disabled={deleteConfirmText !== database?.name || isDeleting}
+                    disabled={
+                      deleteConfirmText !== database?.name || isDeleting
+                    }
                     className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {isDeleting ? (
