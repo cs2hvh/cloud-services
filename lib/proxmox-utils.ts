@@ -4,8 +4,7 @@ import { Agent as UndiciAgent } from "undici";
 const DEBUG = process.env.NODE_ENV === 'development';
 
 export interface ProxmoxAuth {
-  ticket: string;
-  csrf: string;
+  headers: HeadersInit;
 }
 
 export interface ProxmoxHost {
@@ -72,33 +71,31 @@ export function getDispatcher(allowInsecureTls: boolean) {
 }
 
 /**
- * Authenticate with Proxmox API
+ * Authenticate with Proxmox API using username/password
  * Returns ticket and CSRF token
  */
 export async function proxmoxAuth(
   host: ProxmoxHost,
   dispatcher?: any
 ): Promise<ProxmoxAuth> {
-  const authData = host.token_id && host.token_secret
-    ? {
-        tokenid: host.token_id,
-        token: host.token_secret,
-      }
-    : {
-        username: host.username || 'root@pam',
-        password: host.password || '',
-        realm: 'pam',
-      };
+  // Normalize host URL (remove trailing slash)
+  const apiBase = host.host_url.replace(/\/$/, '');
 
-  const url = new URL('/api2/json/access/ticket', host.host_url);
+  // Username/password authentication only
+  if (!host.username || !host.password) {
+    throw new Error('Proxmox username and password required');
+  }
+
+  console.log('[Proxmox Auth] Using password authentication');
+  console.log('[Proxmox Auth] Username:', host.username);
+  console.log('[Proxmox Auth] URL:', `${apiBase}/api2/json/access/ticket`);
+
   const formData = new URLSearchParams();
-
-  Object.entries(authData).forEach(([key, value]) => {
-    if (value) formData.append(key, String(value));
-  });
+  formData.append('username', host.username);
+  formData.append('password', host.password);
 
   const res = await withTimeout(
-    fetch(url.toString(), {
+    fetch(`${apiBase}/api2/json/access/ticket`, {
       method: 'POST',
       body: formData,
       dispatcher,
@@ -109,15 +106,24 @@ export async function proxmoxAuth(
   );
 
   if (!res.ok) {
-    throw new Error(`Proxmox auth failed: ${res.statusText}`);
+    const errorText = await res.text().catch(() => res.statusText);
+    throw new Error(`Proxmox auth failed: ${res.status} ${errorText}`);
   }
 
   const json = (await res.json()) as any;
   const data = json.data || {};
 
+  if (!data.ticket || !data.CSRFPreventionToken) {
+    throw new Error('Missing ticket or CSRF token in auth response');
+  }
+
+  console.log('[Proxmox Auth] Password authentication successful');
+
   return {
-    ticket: data.ticket || '',
-    csrf: data.CSRFPreventionToken || '',
+    headers: {
+      Cookie: `PVEAuthCookie=${data.ticket}`,
+      CSRFPreventionToken: data.CSRFPreventionToken,
+    } as HeadersInit,
   };
 }
 
@@ -130,23 +136,30 @@ export async function fetchJson(
   auth: ProxmoxAuth,
   dispatcher?: any
 ): Promise<any> {
-  const url = new URL(endpoint, host.host_url);
-  const headers: Record<string, string> = {
-    Cookie: `PVEAuthCookie=${auth.ticket}`,
-    CSRFPreventionToken: auth.csrf,
-  };
+  const apiBase = host.host_url.replace(/\/$/, '');
+  const url = `${apiBase}${endpoint}`;
+
+  console.log(`[fetchJson] Calling: ${url}`);
+  console.log(`[fetchJson] Auth headers:`, auth.headers);
 
   const res = await withTimeout(
-    fetch(url.toString(), {
+    fetch(url, {
       method: 'GET',
-      headers,
+      cache: 'no-store',
+      redirect: 'follow',
+      headers: auth.headers as any,
       dispatcher,
     } as any)
   );
 
+  console.log(`[fetchJson] Response status: ${res.status}`);
+  console.log(`[fetchJson] Response URL: ${res.url}`);
+
   if (!res.ok) {
+    const errorText = await res.text().catch(() => res.statusText);
+    console.error(`[fetchJson] Error response:`, errorText);
     throw new Error(
-      `Proxmox API error: ${res.status} ${res.statusText}`
+      `Proxmox API error: ${res.status} ${errorText}`
     );
   }
 
@@ -164,7 +177,8 @@ export async function postForm(
   auth: ProxmoxAuth,
   dispatcher?: any
 ): Promise<any> {
-  const url = new URL(endpoint, host.host_url);
+  const apiBase = host.host_url.replace(/\/$/, '');
+  const url = `${apiBase}${endpoint}`;
   const formData = new URLSearchParams();
 
   Object.entries(data).forEach(([key, value]) => {
@@ -173,23 +187,21 @@ export async function postForm(
     }
   });
 
-  const headers: Record<string, string> = {
-    Cookie: `PVEAuthCookie=${auth.ticket}`,
-    CSRFPreventionToken: auth.csrf,
-    'Content-Type': 'application/x-www-form-urlencoded',
-  };
-
   const res = await withTimeout(
-    fetch(url.toString(), {
+    fetch(url, {
       method: 'POST',
       body: formData,
-      headers,
+      redirect: 'follow',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...(auth.headers as any),
+      },
       dispatcher,
     } as any)
   );
 
   if (!res.ok) {
-    const text = await res.text();
+    const text = await res.text().catch(() => res.statusText);
     throw new Error(`Proxmox API error: ${res.status} ${text}`);
   }
 

@@ -359,7 +359,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { 
+import {
   ChevronDown,
   Plus,
   LogOut,
@@ -375,7 +375,10 @@ import {
   Cpu,
   Code,
   Menu,
-  X
+  X,
+  Settings,
+  Users,
+  Network
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -394,9 +397,11 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [projectsExpanded, setProjectsExpanded] = useState(true);
-  const [computeExpanded, setComputeExpanded] = useState(false);
+  const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
+  const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -415,6 +420,19 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Check if user is admin
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        const res = await fetch('/api/admin/proxmox/hosts', { cache: 'no-store' });
+        setIsAdmin(res.ok);
+      } catch {
+        setIsAdmin(false);
+      }
+    };
+    checkAdmin();
   }, []);
 
   const handleSignOut = async () => {
@@ -673,6 +691,79 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
             })}
           </div>
         </div>
+
+        {/* Admin Section */}
+        {isAdmin && (
+          <div className="mt-6 sm:mt-10">
+            <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
+              Admin
+            </h3>
+            <div className="space-y-1">
+              <div>
+                <button
+                  onClick={() => setAdminExpanded(!adminExpanded)}
+                  className={`
+                    w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                    ${pathname.includes("/dashboard/admin")
+                      ? "bg-white text-black"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                    }
+                  `}
+                >
+                  <div className="flex items-center">
+                    <Settings className="w-4 h-4 mr-3" />
+                    <span className="text-sm">Administration</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${adminExpanded ? "" : "-rotate-90"}`} />
+                </button>
+
+                {adminExpanded && (
+                  <div className="mt-1 ml-3 sm:ml-4 space-y-1">
+                    <Link
+                      href="/dashboard/admin/hosts"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${pathname === "/dashboard/admin/hosts"
+                          ? "bg-slate-700 text-white font-medium"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Network className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Proxmox Hosts</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/servers"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${pathname === "/dashboard/admin/servers"
+                          ? "bg-slate-700 text-white font-medium"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Server className="w-4 h-4 mr-2" />
+                      <span className="text-sm">All Servers</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/users"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${pathname === "/dashboard/admin/users"
+                          ? "bg-slate-700 text-white font-medium"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Users</span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Support Section */}
         <div className="mt-6 sm:mt-8">

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +10,10 @@ interface Location {
 }
 
 interface OSTemplate {
-  id: number;
+  id: string;
   name: string;
   hostId: string;
+  vmid?: number;  // Include VMID for direct cloning
 }
 
 interface ComputeOptions {
@@ -30,7 +31,8 @@ interface ComputeOptions {
 
 export async function GET() {
   try {
-    const supabase = await createClient();
+    // Use worker client to bypass RLS for admin tables
+    const supabase = await createWorkerClient();
 
     // Get active Proxmox hosts (locations)
     const { data: hosts, error: hostsErr } = await supabase
@@ -65,11 +67,20 @@ export async function GET() {
       );
     }
 
-    const osTemplates = (templates || []).map((t) => ({
-      id: t.vmid,
+    let osTemplates = (templates || []).map((t) => ({
+      id: t.name,
       name: t.name,
       hostId: t.host_id,
+      vmid: t.vmid,  // Include VMID
     })) as OSTemplate[];
+
+    // Fallback to default OS if no templates found
+    if (osTemplates.length === 0) {
+      osTemplates = [
+        { id: "Ubuntu 24.04 LTS", name: "Ubuntu 24.04 LTS", hostId: "", vmid: undefined },
+        { id: "Debian 12", name: "Debian 12", hostId: "", vmid: undefined },
+      ];
+    }
 
     const options: ComputeOptions = {
       locations,

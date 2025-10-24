@@ -167,10 +167,55 @@ export function ProxmoxHostsManager() {
     }));
   }, []);
 
+  // Delete host
+  const handleDelete = useCallback(async (hostId: string, hostName: string) => {
+    if (!confirm(`Are you sure you want to delete host "${hostName}"? This will also delete all associated IP pools and templates.`)) {
+      return;
+    }
+
+    try {
+      // First attempt without force
+      let res = await fetch(`/api/admin/proxmox/hosts?id=${encodeURIComponent(hostId)}`, {
+        method: 'DELETE',
+      });
+
+      let data = await res.json();
+
+      // If there are existing servers, ask for confirmation to force delete
+      if (!res.ok && data.requiresForce) {
+        const serverCount = data.serverCount || 0;
+        const forceConfirm = confirm(
+          `This host has ${serverCount} existing server(s). Do you want to delete the host AND all its servers?\n\nThis action cannot be undone!`
+        );
+
+        if (!forceConfirm) {
+          return;
+        }
+
+        // Retry with force=true
+        res = await fetch(`/api/admin/proxmox/hosts?id=${encodeURIComponent(hostId)}&force=true`, {
+          method: 'DELETE',
+        });
+
+        data = await res.json();
+      }
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Delete failed');
+      }
+
+      toast.success('Host deleted successfully');
+      await loadHosts();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Delete failed';
+      toast.error(msg);
+    }
+  }, [loadHosts]);
+
   // Submit
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!form.name || !form.host_url || !form.node) {
       toast.error('Name, host URL, and node are required');
       return;
@@ -640,6 +685,17 @@ export function ProxmoxHostsManager() {
                         className="bg-white/10 text-white hover:bg-white/20"
                       >
                         <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(host.id, host.name);
+                        }}
+                        size="sm"
+                        variant="destructive"
+                        className="bg-red-600/20 text-red-400 border border-red-400/30 hover:bg-red-600/30"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                       {expandedHostId === host.id ? (
                         <ChevronUp className="w-5 h-5 text-white/60" />

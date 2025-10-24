@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createSSRClient } from "@/lib/supabase/server";
+import { createClient, createServerSupabase } from "@/lib/supabase/server";
+import { v4 as uuidv4 } from "uuid";
 
 export const dynamic = "force-dynamic";
 
@@ -84,8 +85,8 @@ export async function GET() {
   }
 
   try {
-    // Use service role client to bypass RLS for admin operations
-    const supabase = await createSSRClient();
+    // Use server Supabase client (anon key with disabled cookies)
+    const supabase = createServerSupabase();
 
     const { data: hosts, error } = await supabase
       .from("proxmox_hosts")
@@ -101,6 +102,11 @@ export async function GET() {
       .order("created_at", { ascending: false });
 
     if (error) {
+      console.error("Supabase query error:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+      });
       return NextResponse.json(
         { ok: false, error: error.message },
         { status: 500 }
@@ -112,6 +118,7 @@ export async function GET() {
       hosts: hosts || [],
     });
   } catch (error) {
+    console.error("GET /api/admin/proxmox/hosts error:", error);
     const err = error instanceof Error ? error : new Error(String(error));
     return NextResponse.json(
       { ok: false, error: err.message },
@@ -143,12 +150,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use service role client to bypass RLS for admin operations
-    const supabase = await createSSRClient();
+    // Use server Supabase client (anon key with disabled cookies)
+    const supabase = createServerSupabase();
 
     // Prepare host payload
     const hostPayload: Record<string, unknown> = {
-      id: body.id || undefined,
+      id: body.id || uuidv4(), // Generate UUID if creating new host
       name: body.name,
       host_url: body.host_url,
       allow_insecure_tls: body.allow_insecure_tls ?? false,
@@ -257,13 +264,13 @@ export async function POST(req: NextRequest) {
         }
 
         // Delete removed IPs
-        const toDelete = [...existingIpSet].filter((ip) => !incomingIpSet.has(ip));
+        const toDelete = [...existingIpSet].filter((ip) => !incomingIpSet.has(String(ip)));
         if (toDelete.length > 0) {
           await supabase
             .from("public_ip_pool_ips")
             .delete()
             .eq("pool_id", poolId)
-            .in("ip", toDelete as unknown as string[]);
+            .in("ip", toDelete as string[]);
         }
       }
     }
@@ -297,6 +304,103 @@ export async function POST(req: NextRequest) {
       ok: true,
       message: "Host saved successfully",
       hostId,
+    });
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    return NextResponse.json(
+      { ok: false, error: err.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  const auth = await requireAdmin();
+  if (!auth.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Not authorized" },
+      { status: 403 }
+    );
+  }
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const hostId = searchParams.get('id');
+    const force = searchParams.get('force') === 'true';
+
+    if (!hostId) {
+      return NextResponse.json(
+        { ok: false, error: "Host ID required" },
+        { status: 400 }
+      );
+    }
+
+    // Use server Supabase client
+    const supabase = createServerSupabase();
+
+    // Check if host exists
+    const { data: host } = await supabase
+      .from("proxmox_hosts")
+      .select("id, name")
+      .eq("id", hostId)
+      .maybeSingle();
+
+    if (!host) {
+      return NextResponse.json(
+        { ok: false, error: "Host not found" },
+        { status: 404 }
+      );
+    }
+
+    // Check for existing servers
+    const { data: servers, count } = await supabase
+      .from("servers")
+      .select("id, name", { count: 'exact' })
+      .eq("location", hostId);
+
+    if (count && count > 0 && !force) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Cannot delete host. ${count} server(s) still reference this host.`,
+          serverCount: count,
+          requiresForce: true
+        },
+        { status: 409 }
+      );
+    }
+
+    // If force=true, delete servers first
+    if (force && count && count > 0) {
+      const { error: serversDeleteErr } = await supabase
+        .from("servers")
+        .delete()
+        .eq("location", hostId);
+
+      if (serversDeleteErr) {
+        return NextResponse.json(
+          { ok: false, error: `Failed to delete servers: ${serversDeleteErr.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
+    // Delete host (cascade will delete IP pools, templates, etc.)
+    const { error: deleteErr } = await supabase
+      .from("proxmox_hosts")
+      .delete()
+      .eq("id", hostId);
+
+    if (deleteErr) {
+      return NextResponse.json(
+        { ok: false, error: deleteErr.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      message: `Host "${host.name}" deleted successfully`,
     });
   } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
