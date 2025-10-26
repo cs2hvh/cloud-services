@@ -181,7 +181,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
         setShowDeleteModal(false);
         // Redirect to databases list after a short delay
         setTimeout(() => {
-          window.location.href = "/dashboard/services?tab=databases";
+          window.location.href = "/dashboard/services/database";
         }, 1500);
       }
     } catch (error: any) {
@@ -312,7 +312,10 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">
-              <SettingsTab />
+              <SettingsTab 
+                database={database}
+                onDatabaseUpdate={fetchDatabaseCluster}
+              />
             </TabsContent>
           </Tabs>
         </motion.div>

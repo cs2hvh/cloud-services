@@ -23,11 +23,11 @@ import { getDaysRemaining } from "@/lib/utils";
 import Link from "next/link";
 
 
-const GameServerGrid = ({
+const DbClusterGrid = ({
   data,
   type,
 }: {
-  data: Tables<"game_servers">[];
+  data: Tables<"database_clusters">[];
   type: string;
 }) => {
   // const router = useRouter();
@@ -78,11 +78,11 @@ const GameServerGrid = ({
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">
-                    {getGameIcon(server.game_type)}
+                    {getGameIcon(server.engine)}
                   </span>
                   <CardTitle>{server.name}</CardTitle>
                 </div>
-                {server.status === "active" ? (
+                {server.status === "online" ? (
                   <div className="relative">
                     <Badge
                       variant="outline"
@@ -101,7 +101,7 @@ const GameServerGrid = ({
                 )}
               </div>
               <CardDescription className="capitalize">
-                {server.game_type} Server
+                {server.engine} Server
               </CardDescription>
             </CardHeader>
             <Separator />
@@ -110,13 +110,13 @@ const GameServerGrid = ({
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium mb-2">Resources</h3>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  {/* <div className="grid grid-cols-2 gap-3 text-sm">
                     <div className="flex items-center">
                       <Cpu className="w-4 h-4 mr-2 text-blue-500" />
                       <span>
                         {
                           (
-                            server.resources as {
+                            s as {
                               cpu: number;
                               ram: number;
                               storage: number;
@@ -166,25 +166,28 @@ const GameServerGrid = ({
                         Mbps
                       </span>
                     </div>
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* Connection Info */}
-                <div>
+                {/* <div>
                   <h3 className="text-sm font-medium mb-2">Connection Info</h3>
-                  <div className="bg-muted p-2 rounded-md font-mono text-sm">
-                    {server.ip}:{server.port}
+                  <div className="space-y-2">
+                    {server.public_connection && (
+                      <div className="bg-muted p-2 rounded-md font-mono text-sm">
+                        <span className="text-xs text-muted-foreground">Public: </span>
+                        {server.public_connection.host}:{server.public_connection.port}
+                      </div>
+                    )}
+                    {server.private_connection && (
+                      <div className="bg-muted p-2 rounded-md font-mono text-sm">
+                        <span className="text-xs text-muted-foreground">Private: </span>
+                        {server.private_connection.host}:{server.private_connection.port}
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium mb-2">Subscription</h3>
-                  <div className="font-mono text-sm">
-                    {server.ends_at
-                      ? getDaysRemaining(new Date(server.ends_at))
-                      : "No expiry"}{" "}
-                    remaining
-                  </div>
-                </div>
+                </div> */}
+               
               </div>
             </CardContent>
 
@@ -201,7 +204,7 @@ const GameServerGrid = ({
                 className="w-1/2"
                 onClick={() =>
                   window.open(
-                    `https://panel.hav0k.dev/server/${server.identifier}`,
+                    `https://panel.hav0k.dev/server/${server.id}`,
                     "_blank"
                   )
                 }
@@ -217,4 +220,4 @@ const GameServerGrid = ({
   );
 };
 
-export default GameServerGrid;
+export default DbClusterGrid;

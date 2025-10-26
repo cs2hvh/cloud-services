@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (database.status === 200) {
-      console.log(database.data.database.status,".............database status fetch for check.............");
+      //console.log(database.data.database.status,".............database status fetch for check.............");
       status=database.data.database.status==="online"?true:false;
     }
     }

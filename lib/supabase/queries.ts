@@ -1355,6 +1355,104 @@ export const Database_Clusters = {
 
     return { success: true, data: data?.dbs || [] };
   },
+
+  // Update project assignment for database cluster
+  update_project: async(cluster_id: string, project_id: string) => {
+    console.log(`[updateProject] cluster_id: ${cluster_id}, project_id: ${project_id}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ project_id })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateProject] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update region and status for migration
+  update_region: async(cluster_id: string, region: string, status: string = "migrating") => {
+    console.log(`[updateRegion] cluster_id: ${cluster_id}, region: ${region}, status: ${status}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ region, status })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateRegion] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update maintenance window
+  update_maintenance_window: async(cluster_id: string, window: { day: string, hour: string }) => {
+    console.log(`[updateMaintenanceWindow] cluster_id: ${cluster_id}, window:`, window);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ window })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateMaintenanceWindow] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+   get_by_project_id: async (projectId: string): Promise<Database[]>=> {
+    try {
+      //console.log(projectId,"..................933..id");
+
+
+       if (!projectId || typeof projectId !== 'string') {
+      console.error('[Clusters.get_by_project_id] Invalid project ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      console.error('[Clusters.get_by_project_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("database_cluster")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return [];
+      }
+      console.log(data, "...........data in database cluster by project id........");
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return [];
+    }
+  },
  
 
 }

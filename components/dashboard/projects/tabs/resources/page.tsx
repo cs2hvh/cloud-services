@@ -1,53 +1,18 @@
-import { Clusters, GameServers } from "@/lib/supabase/queries";
+import { Clusters, Database_Clusters, GameServers } from "@/lib/supabase/queries";
 import GameServerGrid from "./grid";
 import KubernetesGrid from "./kubernetesgrid";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
+import DbClusterGrid from "./db_cluster_grid";
 
 interface PageProps {
   projectId: string;
 }
 
-// type TableTypes = 'clusters' | 'game_servers';
-// interface GameServerGridProps {
-//   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
-//   data:{          cluster_id: string;
-//           id: string;
-//           clusterName: string;
-//           project_id:string;
-//           owner_id:string;
-//            control_plane?: string | null; // e.g., API VIP or CP-1 IP
-//           workers?: string[]; // list of worker IPs/hosts
-//           createStatus?: boolean;
-//           connectStatus?: boolean;
-//           verifyStatus?: boolean;
-//           kubeConfig?: string | null; // kubeconfig YAML
-//           node_config?:  null; // {region, plan, cpu, ram, disk ...}
-//           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
-//            k8s_version?: string | null;
-//           status?: string | null;
-//                     allocation: number;
-//                     created_at: string | null;
-//                     ends_at: string | null;
-//                     game_type: string;
-//                     //id: number;
-//                     identifier: string;
-//                     ip: string;
-//                     location_id: number | null;
-//                     name: string;
-//                     node: number;
-//                     plan: string | null;
-//                     port: number;
-//                    // project_id: string | null;
-//                     resources: Json;
-//                     //status: string | null;
-//                     user_id: string | null;
-//         }[]
-//   type: TableTypes;  // `type` can be 'server' | 'game', etc.
-// }
 const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
   const gameservers = await GameServers.get_by_project(projectId);
-   const clusters = (await Clusters.get_by_project_id(projectId)).filter(item=>item.status==='ready');
+  const clusters = (await Clusters.get_by_project_id(projectId)).filter(item=>item.status==='ready');
+  const db_clusters = (await Database_Clusters.get_by_project_id(projectId));;
 
 
    console.log(clusters,".......................16")
@@ -57,6 +22,7 @@ const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
      
       <GameServerGrid data={gameservers } type="game_servers" />
       <KubernetesGrid data={clusters  } type="clusters" />
+      <DbClusterGrid data={db_clusters} type="database_cluster" />
     </div>
   );
 };

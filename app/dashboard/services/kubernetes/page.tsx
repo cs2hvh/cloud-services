@@ -92,7 +92,8 @@ const KubernetesPage = () => {
           if (response.success) {
             //set clusters
             setClusters(
-              response.data.filter((item: Cluster) => item.status === "ready")
+              //response.data.filter((item: Cluster) => item.status === "ready")
+               response.data
             );
           }
         }

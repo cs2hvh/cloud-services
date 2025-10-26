@@ -82,14 +82,16 @@ const DatabasePage =  () => {
 
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-8"
       >
         <div>
           <h1 className="text-3xl font-bold">Databases</h1>
-          <p className="text-white/60">Manage and provision your database clusters.</p>
+          <p className="text-white/60">
+            Manage and provision your database clusters.
+          </p>
         </div>
         <Link
           href="/dashboard/services/database/new"
@@ -100,7 +102,7 @@ const DatabasePage =  () => {
         </Link>
       </motion.div>
 
-      {clusters.length > 0 ?(
+      {clusters.length > 0 ? (
         <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-700">
@@ -112,28 +114,22 @@ const DatabasePage =  () => {
                   <Th>Version</Th>
                   <Th>Status</Th>
                   <Th>Actions</Th>
-                  
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/60 bg-white/5">
                 {clusters.map((c) => (
-                  
                   <tr
                     key={c.id}
                     className="hover:bg-slate-700/30 transition-colors duration-150"
                   >
                     <Td>
-                      <div className="font-medium text-white">
-                        {c.name}
-                      </div>
+                      <div className="font-medium text-white">{c.name}</div>
                       <div className="text-xs text-slate-400 font-mono mt-1">
                         {c.id}
                       </div>
                     </Td>
                     <Td>
-                      <span className="text-slate-200">
-                        {c.num_nodes}
-                      </span>
+                      <span className="text-slate-200">{c.num_nodes}</span>
                     </Td>
                     <Td>
                       <time dateTime={c.created_at} className="text-slate-300">
@@ -150,26 +146,56 @@ const DatabasePage =  () => {
                             ? "bg-green-500/20 text-green-400"
                             : c.status === "creating"
                               ? "bg-yellow-500/20 text-yellow-400"
-                              : c.status === "failed"
-                                ? "bg-red-500/20 text-red-400"
-                                : "bg-slate-500/20 text-slate-400"
+                              : c.status === "migrating"
+                                ? "bg-orange-500/20 text-orange-400"
+                                : c.status === "failed"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "bg-slate-500/20 text-slate-400"
                         }`}
                       >
                         {c.status}
                       </span>
                     </Td>
 
-                     <Td>
-                     
+                    <Td>
+                      {c.status === "migrating" ? (
+                        <div className="relative group">
+                          <button
+                            disabled
+                            className="
+                              inline-flex items-center justify-center
+                              rounded-md border border-slate-600
+                              px-3 py-1.5 text-sm font-medium
+                              text-slate-500 cursor-not-allowed
+                              w-full sm:w-auto
+                            "
+                          >
+                            View Cluster
+                          </button>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            Cluster is currently migrating
+                          </div>
+                        </div>
+                      ) : (
                         <Link
                           href={{
                             pathname: `/dashboard/services/database/clusters/${encodeURIComponent(c.cluster_id)}`,
                             query: { clusterStatus: c.status },
                           }}
-                          className="rounded-lg border border-blue-600 px-3 py-1.5 text-sm text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors duration-200"
+                          className="
+                            inline-flex items-center justify-center
+                            rounded-md border border-blue-500
+                            px-3 py-1.5 text-sm font-medium
+                            text-blue-400
+                            hover:bg-blue-500/15 hover:text-blue-300
+                            active:scale-[0.97]
+                            transition-all duration-200
+                            w-full sm:w-auto
+                          "
                         >
                           View Cluster
                         </Link>
+                      )}
                     </Td>
                   </tr>
                 ))}
@@ -178,7 +204,7 @@ const DatabasePage =  () => {
           </div>
         </div>
       ) : (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -186,9 +212,11 @@ const DatabasePage =  () => {
         >
           <Database className="mx-auto h-16 w-16 text-white/20" />
           <h3 className="mt-4 text-xl font-semibold">No Databases Found</h3>
-          <p className="mt-2 text-sm text-white/50">Get started by provisioning a new database cluster.</p>
+          <p className="mt-2 text-sm text-white/50">
+            Get started by provisioning a new database cluster.
+          </p>
           <div className="mt-6">
-            <Link 
+            <Link
               href="/dashboard/services/database/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >

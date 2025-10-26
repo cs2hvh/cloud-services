@@ -16,45 +16,6 @@ import { Separator } from "@/components/ui/separator";
 // import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// type TableTypes = 'clusters' | 'game_servers';  // Add more types as needed
-
-// interface GameServerGridProps {
-//   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
-//   data:{          cluster_id: string;
-//           id: string;
-//           clusterName: string;
-//           project_id:string;
-//           owner_id:string;
-//            control_plane?: string | null; // e.g., API VIP or CP-1 IP
-//           workers?: string[]; // list of worker IPs/hosts
-//           createStatus?: boolean;
-//           connectStatus?: boolean;
-//           verifyStatus?: boolean;
-//           kubeConfig?: string | null; // kubeconfig YAML
-//           node_config?:  null; // {region, plan, cpu, ram, disk ...}
-//           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
-//            k8s_version?: string | null;
-//           status?: string | null;
-//                     allocation: number;
-//                     created_at: string | null;
-//                     ends_at: string | null;
-//                     game_type: string;
-//                     //id: number;
-//                     identifier: string;
-//                     ip: string;
-//                     location_id: number | null;
-//                     name: string;
-//                     node: number;
-//                     plan: string | null;
-//                     port: number;
-//                    // project_id: string | null;
-//                     resources: Json;
-//                     //status: string | null;
-//                     user_id: string | null;
-//         }[]
-//   type: TableTypes;  // `type` can be 'server' | 'game', etc.
-// }
-
 const KubernetesGrid = ({ data,type }:{
   data: Tables<"clusters_get">[];
   type: string;
@@ -73,23 +34,6 @@ const KubernetesGrid = ({ data,type }:{
     );
   }
 
-  // Function to get a nice icon for game type
-  // const getGameIcon = (gameType: string) => {
-  //   switch (gameType?.toLowerCase()) {
-  //     case "minecraft":
-  //       return "🧱";
-  //     case "valheim":
-  //       return "⚔️";
-  //     case "rust":
-  //       return "🔧";
-  //     case "ark":
-  //       return "🦖";
-  //     case "csgo":
-  //       return "🔫";
-  //     default:
-  //       return "🎮";
-  //   }
-  // };
 
   return (
    <div className="mx-6">

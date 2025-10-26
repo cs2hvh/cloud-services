@@ -502,7 +502,7 @@ export type Database = {
           cluster_id?: UUID;
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
-          status: "pending" | "online" | "creating" ;
+          status: "pending" | "online" | "creating" | "migrating" ;
           password: string ;
           // resource_config?:{ cpu: number; ram: number; storage: number }
           size:string;
@@ -511,6 +511,7 @@ export type Database = {
           network_rules?:network_rules;
           users?: DatabaseUser[];
           dbs?: DatabaseInstance[];
+          window?: { day: string; hour: string };
 
         };
         Insert: {
