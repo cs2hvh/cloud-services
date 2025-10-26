@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const json = await req.json();
 

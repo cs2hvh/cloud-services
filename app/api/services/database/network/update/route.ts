@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 interface database_error {
   response: {
@@ -9,6 +10,12 @@ interface database_error {
 }
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
     const { cluster_id, name } = body;
@@ -33,7 +40,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 201) {
-      console.log("[createDatabase] Database created successfully:", response.data.db);
+    //  console.log("[createDatabase] Database created successfully:", response.data.db);
 
       const database = response.data.db;
       const dbData = {
@@ -41,6 +48,8 @@ export async function POST(req: NextRequest) {
         name: database.name,
         created_at: new Date().toISOString(),
       };
+
+      
 
       // Add database to Supabase
       const supabase_result = await Database_Clusters.add_db(
@@ -59,7 +68,7 @@ export async function POST(req: NextRequest) {
       } else {
         return NextResponse.json(
           {
-            error: "Database created in DigitalOcean but failed to sync with database",
+            error: "there is some issue in creating database in our database",
             details: supabase_result.error,
           },
           { status: 500 }

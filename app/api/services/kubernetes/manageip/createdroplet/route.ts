@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
           },
         }
       );
-        const hashedPassword=Encryption.encrypt(vmPassword,"secret");
+        const hashedPassword=Encryption.encrypt(vmPassword,process.env.ENCRYPTION_KEY!);
 
         console.log(hashedPassword,"...............hashedPassword................39")
 

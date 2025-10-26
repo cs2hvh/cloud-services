@@ -1,8 +1,23 @@
 // app/api/resolve/route.js  (Next.js App Router)
 import { NextResponse } from "next/server";
 import dns from "dns/promises";
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET(req) {
+  // Check authentication
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json(
+      { message: "Unauthorized - please login" },
+      { status: 401 }
+    );
+  }
+
   const url = new URL(req.url);
   const host = url.searchParams.get("host") || url.searchParams.get("url");
   if (!host) return NextResponse.json({ error: "Provide ?host=" }, { status: 400 });

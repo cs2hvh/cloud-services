@@ -239,6 +239,7 @@ export const SettingsTab = ({
         setIsMigrating(true);
         setTargetRegion(selectedRegion);
         onDatabaseUpdate?.();
+        router.push('/dashboard/services/database/');
       }
     } catch (error: any) {
       console.error("Error migrating database:", error);

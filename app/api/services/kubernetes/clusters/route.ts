@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 
 
@@ -46,6 +47,12 @@ const Payload = z.object({
 });
 
 export async function POST(req: Request) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   const body = await req.json().catch(() => null);
   //console.log(body,".........................41")
 
@@ -65,9 +72,9 @@ export async function POST(req: Request) {
    let decryptedPassword=undefined;
    if(parsed.data?.auth?.password){
 
-      console.log(parsed.data.auth.password,".........................57")
-      decryptedPassword=Encryption.decrypt(parsed.data.auth.password,"secret");
-      console.log(decryptedPassword,".........................60");
+     // console.log(parsed.data.auth.password,".........................57")
+      decryptedPassword=Encryption.decrypt(parsed.data.auth.password,process.env.ENCRYPTION_KEY!);
+      //console.log(decryptedPassword,".........................60");
   }
 
   const clusterId = crypto.randomUUID();

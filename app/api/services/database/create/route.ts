@@ -3,6 +3,7 @@ import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { resolve } from "path";
 import { resolveHost } from "@/config/hosttoip";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 interface database_error {
   response: {
@@ -11,6 +12,12 @@ interface database_error {
 }
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
 
@@ -26,19 +33,10 @@ export async function POST(req: NextRequest) {
     );
 
     if (database.status === 201) {
-      //console.log("[createDatabase] Database created successfully:", database.data.database);
-      //get the ip address from database.data.database.connection.host
-      // const host_public=await resolveHost(database.data.database.connection.host);
-      // console.log(host_public,".............database host ip.............");
-      // const host_private=await resolveHost(database.data.database.private_connection.host);
-      // console.log(host_private,".............database private host ip.............");
-
-      // database.data.database.connection.host=host_public;
-      // database.data.database.private_connection.host=host_private;
 
 
+      //encrypt the db password here before storing in supabase
 
-      console.log("[createDatabase] Database created successfully:", database.data.database);
       const sendData = {
         name: database.data.database.name,
         engine: database.data.database.engine,
@@ -53,10 +51,13 @@ export async function POST(req: NextRequest) {
         password: database.data.database.password,
         size: database.data.database.size,
         region: database.data.database.region,
+        window: database.data.database.maintenance_window,
+        users: database.data.database.users,
+        dbs: database.data.database.db_names,
       };
 
       const supabase_data = await Database_Clusters.create(sendData);
-      console.log(supabase_data, "...........supabase create database response...........");
+    
       if (supabase_data.success) {
         return NextResponse.json(
           {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 interface database_error {
   response: {
@@ -9,6 +10,12 @@ interface database_error {
 }
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
     const { cluster_id, name } = body;
