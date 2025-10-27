@@ -1,7 +1,7 @@
 // import { Encryption } from "@/config/functions";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
-import { network_rules, Tables, TablesInsert, TablesUpdate } from "./types";
+import { network_rules, Tables, TablesInsert, TablesUpdate, EncryptedData, Database_Connection } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
@@ -14,20 +14,6 @@ type OTP = Tables<"otps">;
 type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
 type Database = Tables<"database_clusters">;
-
-
-
-interface Database_Connection{
-  ssl: boolean;
-  uri: string;
-  host: string;
-  port: number;
-  user: string;
-  database: string;
-  password: string;
-  protocol: string;
-
-}
 
 
 export const Users = {
@@ -1059,7 +1045,7 @@ export const Database_Clusters = {
   return { success: true, data: data };
   },
 
-  update_status: async(cluster_id:string,status:string,caCertificate:string,public_connection:Database_Connection,private_connection:Database_Connection)=>{
+  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData, public_connection:Database_Connection, private_connection:Database_Connection)=>{
 
 
     console.log(caCertificate, "...........in updateDatabaseClusterWorker........");

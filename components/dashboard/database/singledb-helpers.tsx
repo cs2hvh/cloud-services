@@ -2,6 +2,8 @@ import React from "react";
 import { Copy, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { UUID } from "crypto";
+import { EncryptedData } from "@/lib/supabase/types";
+import { dbLocations } from "@/config/locations";
 
 // Helper Components
 
@@ -129,7 +131,7 @@ export const extractRegion = (region: string | undefined): string => {
       return parsed?.address || parsed?.family || region;
     } catch {
       // Not JSON, return as is
-      return region;
+      return dbLocations.find((loc) => loc.short === region)?.city || "N/A";
     }
   }
 
@@ -150,7 +152,7 @@ export const calculateMonthlyCost = (size: string): string => {
   return (priceMap[size] || 0).toFixed(2);
 };
 
-export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | undefined) => {
+export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | EncryptedData | undefined) => {
   try {
     if (!ca_certificate) {
       toast.error("CA Certificate not available");
@@ -158,20 +160,26 @@ export const downloadCACertificate = async (databaseId: UUID | undefined, ca_cer
     }
 
     console.log("=== CA Certificate Download Debug ===");
-    console.log("Original certificate (first 100 chars):", ca_certificate.substring(0, 100));
-    console.log("Certificate length:", ca_certificate.length);
+    console.log("Certificate type:", typeof ca_certificate);
     
-    let formattedCert = ca_certificate;
+    // Convert to string if it's an encrypted object
+    let certString = typeof ca_certificate === 'string' ? ca_certificate : String(ca_certificate);
+    
+    console.log("Certificate length:", certString?.length);
+    
+    console.log("Original certificate (first 100 chars):", certString.substring(0, 100));
+    
+    let formattedCert = certString;
     
     // Check if the certificate is Base64 encoded (no PEM headers, only base64 characters)
-    const isBase64Only = !ca_certificate.includes('-----BEGIN CERTIFICATE-----') && 
-                         /^[A-Za-z0-9+/=\s]+$/.test(ca_certificate.trim());
+    const isBase64Only = !certString.includes('-----BEGIN CERTIFICATE-----') && 
+                         /^[A-Za-z0-9+/=\s]+$/.test(certString.trim());
     
     if (isBase64Only) {
       console.log("✓ Detected Base64-encoded certificate, decoding...");
       try {
         // Decode Base64 to get the actual PEM certificate
-        const decodedCert = atob(ca_certificate.trim());
+        const decodedCert = atob(certString.trim());
         formattedCert = decodedCert;
         console.log("✓ Successfully decoded Base64 certificate");
         console.log("Decoded certificate (first 200 chars):", decodedCert.substring(0, 200));
@@ -184,19 +192,19 @@ export const downloadCACertificate = async (databaseId: UUID | undefined, ca_cer
       console.log("Certificate is not Base64-only, checking for other encodings...");
       
       // Handle escaped newlines
-      if (ca_certificate.includes('\\n')) {
-        formattedCert = ca_certificate.replace(/\\n/g, '\n');
+      if (certString.includes('\\n')) {
+        formattedCert = certString.replace(/\\n/g, '\n');
         console.log("✓ Replaced escaped \\n with actual newlines");
       }
       
       // Handle double-escaped newlines
-      if (ca_certificate.includes('\\\\n')) {
+      if (certString.includes('\\\\n')) {
         formattedCert = formattedCert.replace(/\\\\n/g, '\n');
         console.log("✓ Replaced double-escaped \\\\n with actual newlines");
       }
       
       // Handle URL-encoded newlines
-      if (ca_certificate.includes('%0A')) {
+      if (certString.includes('%0A')) {
         formattedCert = formattedCert.replace(/%0A/g, '\n');
         console.log("✓ Replaced URL-encoded newlines");
       }

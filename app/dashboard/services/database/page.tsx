@@ -1,16 +1,15 @@
-'use client';
+"use client";
 
 import { motion } from "motion/react";
-import { Database, Loader2, Plus,  Search } from "lucide-react";
+import { Database, Loader2, Plus, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { useSession } from "../../provider";
-
-
-
+import { DatabaseIcon } from "@/components/dashboard/database/database-icon";
+import { serviceLocations, vmLocations } from "@/config/locations";
 
 type DbCluster = {
   id: string;
@@ -21,55 +20,71 @@ type DbCluster = {
   created_at: string; // ISO
   version: string;
   cluster_id: string;
+  region: string;
 };
 
-const DatabasePage =  () => {
+// Helper function to get location name from region code
+const getLocationName = (regionCode: string): string => {
+  // Combine both location arrays
+  const allLocations = [...serviceLocations, ...vmLocations];
+  
+  // Find location by matching the region code with the short code
+  const location = allLocations.find(
+    (loc) => loc.short.toLowerCase() === regionCode.toLowerCase()
+  );
+  
+  if (location) {
+    return `${location.city}`;
+  }
+  
+  // If not found, return the region code in a more readable format
+  return regionCode || "Unknown";
+};
+
+const DatabasePage = () => {
   // Dummy data for now, replace with actual data from your backend
   const databases = [
     {
-      name:"production-db-1",
-    }
+      name: "production-db-1",
+    },
   ];
 
-  const user= useSession();
-  const router=useRouter();
+  const user = useSession();
+  const router = useRouter();
 
-  if(!user) {
+  if (!user) {
     router.push("/login");
     toast.error("You must be logged in to access the dashboard.");
   }
 
-   const [clusters, setClusters] = useState([] as DbCluster[]);
-    const [loading, setLoading] = useState(true);
+  const [clusters, setClusters] = useState([] as DbCluster[]);
+  const [loading, setLoading] = useState(true);
 
-
-     useEffect(() => {
-        //fetch clusters from backend.
-        async function fetchClusters() {
-          try {
-            //debugger;
-            setLoading(true);
-            const res = await api.post("/services/database/read_all_owner", {
-              id: user?.user?.id,
-            });
-            if (res.status === 200) {
-                setClusters(
-                  // res.data.data.filter((item: DbCluster) => item.status === "online")
-                   res.data.data
-                );
-              
-            }
-          } catch (error) {
-            console.error("Error fetching dashboard data:", error);
-          } finally {
-            setLoading(false);
-          }
+  useEffect(() => {
+    //fetch clusters from backend.
+    async function fetchClusters() {
+      try {
+        //debugger;
+        setLoading(true);
+        const res = await api.post("/services/database/read_all_owner", {
+          id: user?.user?.id,
+        });
+        if (res.status === 200) {
+          setClusters(
+            // res.data.data.filter((item: DbCluster) => item.status === "online")
+            res.data.data
+          );
         }
-        fetchClusters();
-      }, []);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchClusters();
+  }, []);
 
-
-       if (loading) {
+  if (loading) {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
         <div className="text-center">
@@ -109,8 +124,9 @@ const DatabasePage =  () => {
               <thead className="bg-slate-700/50 text-white">
                 <tr>
                   <Th>Cluster</Th>
-                  <Th>Engine</Th>
-                  <Th>Nodes</Th>
+                  <Th>DB_Type</Th>
+                  <Th>Location</Th>
+                  <Th>Date</Th>
                   <Th>Version</Th>
                   <Th>Status</Th>
                   <Th>Actions</Th>
@@ -129,13 +145,20 @@ const DatabasePage =  () => {
                       </div>
                     </Td>
                     <Td>
-                      <span className="text-slate-200">{c.num_nodes}</span>
+                      <DatabaseIcon engine={c.engine} className="h-8 w-8" />
+                    </Td>
+
+                    <Td>
+                      <span className="text-slate-300">
+                        {getLocationName(c.region)}
+                      </span>
                     </Td>
                     <Td>
                       <time dateTime={c.created_at} className="text-slate-300">
                         {new Date(c.created_at).toLocaleString()}
                       </time>
                     </Td>
+
                     <Td>
                       <span className="text-slate-300">{c.version}</span>
                     </Td>
@@ -229,8 +252,6 @@ const DatabasePage =  () => {
     </div>
   );
 };
-
-
 
 function Th({ children }: { children: React.ReactNode }) {
   return (

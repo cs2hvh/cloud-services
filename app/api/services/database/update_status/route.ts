@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
-import { resolveHost } from "@/config/hosttoip";
+import { resolveCached } from "@/lib/cache/cached-dns-resolver";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { Encryption } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -16,21 +17,36 @@ export async function POST(req: NextRequest) {
 
     //console.log(body, "...........in update database status api........");
 
-    const host_public =
-      (await resolveHost(body.public_connection.host)).records[0].records[0] ||
-      body.public_connection.host;
+    // ✅ PERFORMANCE OPTIMIZATION: Resolve both hosts in parallel with caching
+    const [host_public, host_private] = await Promise.all([
+      resolveCached(body.public_connection.host),
+      resolveCached(body.private_connection.host)
+    ]);
+    
     //console.log(host_public, ".............database host ip.............");
-    const host_private =
-      (await resolveHost(body.private_connection.host)).records[0].records[0] ||
-      body.private_connection.host;
     //console.log(
     //  host_private,
     //  ".............database private host ip............."
     //);
 
     //encrypt the host and password here and then store in supabase
-    body.public_connection.host = host_public;
-    body.private_connection.host = host_private;
+    
+    // Encryption key from environment
+    const encryptionKey = process.env.ENCRYPTION_KEY!;
+    
+    // Encrypt hosts
+    const encryptedPublicHost = Encryption.encrypt(host_public, encryptionKey);
+    const encryptedPrivateHost = Encryption.encrypt(host_private, encryptionKey);
+    
+    // Encrypt passwords
+    const encryptedPublicPassword = Encryption.encrypt(
+      body.public_connection.password,
+      encryptionKey
+    );
+    const encryptedPrivatePassword = Encryption.encrypt(
+      body.private_connection.password,
+      encryptionKey
+    );
 
     let caCertificate: string = "";
 
@@ -58,13 +74,26 @@ export async function POST(req: NextRequest) {
       caCertificate = database.data.ca.certificate;
       //encrypt the caCertificate here before storing in supabase
     }
+    
+    // Encrypt CA certificate
+    const encryptedCaCert = caCertificate 
+      ? Encryption.encrypt(caCertificate, encryptionKey)
+      : "";
 
     const supabase_read = await Database_Clusters.update_status(
       body.id,
       "online",
-      caCertificate,
-      body.public_connection,
-      body.private_connection
+      encryptedCaCert,
+      {
+        ...body.public_connection,
+        host: encryptedPublicHost,
+        password: encryptedPublicPassword
+      },
+      {
+        ...body.private_connection,
+        host: encryptedPrivateHost,
+        password: encryptedPrivatePassword
+      }
     );
     if (supabase_read.success) {
       return NextResponse.json(

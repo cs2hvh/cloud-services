@@ -85,7 +85,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
 
         // If backend detected status changed to online, update and stop polling
         // Also check if status actually changed from a non-online status
-        if (response.data.status && intervalRef.current && status !== "online") {
+        if (response.data.status && intervalRef.current && dbData.status !== "online") {
           clearInterval(intervalRef.current);
           intervalRef.current = null;
 
@@ -106,9 +106,18 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
             hasShownOnlineToast.current = true;
           }
         }
+
+        // If database is already online, stop polling
+        if (dbData.status === "online" && intervalRef.current) {
+          console.log("✓ Database is online, stopping polling");
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
         
         // Update previous status
         previousStatus.current = dbData.status;
+
+        return dbData.status; // Return status for use in useEffect
       }
     } catch (error: any) {
       console.error("[fetchDatabaseCluster] Error:", error);
@@ -141,12 +150,21 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
   // Initial load and status polling
   useEffect(() => {
     // Initial fetch
-    fetchDatabaseCluster();
+    const initializePolling = async () => {
+      const currentStatus = await fetchDatabaseCluster();
+      
+      // Only set up polling if the database is not already online
+      if (currentStatus !== "online") {
+        console.log("✓ Database is not online, starting polling...");
+        intervalRef.current = setInterval(() => {
+          fetchDatabaseCluster();
+        }, 60000); // 1 minute
+      } else {
+        console.log("✓ Database is already online, skipping polling");
+      }
+    };
 
-    // Set up polling interval (check every 60 seconds)
-    intervalRef.current = setInterval(() => {
-      fetchDatabaseCluster();
-    }, 60000); // 1 minute
+    initializePolling();
 
     // Cleanup on unmount
     return () => {
@@ -218,37 +236,9 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-black py-10 px-4">
-      <div className="mx-auto max-w-6xl space-y-6">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-        >
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <Database className="h-8 w-8 text-blue-400" />
-              <h1 className="text-2xl sm:text-3xl font-bold text-white break-all">
-                {database.name}
-              </h1>
-            </div>
-            <p className="text-slate-400 mt-1 text-sm sm:text-base">
-              {database.engine.toUpperCase()} {database.version} •{" "}
-              {database.num_nodes} node(s)
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowDeleteModal(true)}
-              className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 transition-colors"
-              title="Delete Cluster"
-            >
-              <Trash2 className="h-5 w-5 text-red-400" />
-            </button>
-          </div>
-        </motion.div>
-
+    <div className="min-h-[calc(100vh-4rem)] bg-black py-4 px-4 ">
+      
+      <div className="mx-auto max-w-6xl space-y-6 mb-6">
         {/* Tabs */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -257,29 +247,29 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
         >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {/* Tab Navigation */}
-            <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-2 mb-6">
-              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 bg-transparent p-0 h-auto">
+            <div className="rounded-xl bg-black shadow-md p-1.5 mb-6">
+              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-transparent p-0 h-auto">
                 <TabsTrigger 
                   value="overview" 
-                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Overview
                 </TabsTrigger>
                 <TabsTrigger 
                   value="network" 
-                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Network
                 </TabsTrigger>
                 <TabsTrigger 
                   value="users-dbs" 
-                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Users & DBs
                 </TabsTrigger>
                 <TabsTrigger 
                   value="settings" 
-                  className="text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-blue-500 data-[state=active]:text-white data-[state=active]:shadow-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all border-0"
+                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Settings
                 </TabsTrigger>

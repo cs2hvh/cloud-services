@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { updateMaintenanceSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -13,22 +15,22 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Validate required fields
-    if (!body.database_id || !body.day || !body.hour) {
-      return NextResponse.json(
-        { error: "database_id, day, and hour are required" },
-        { status: 400 }
-      );
+    // ✅ VALIDATE REQUEST PAYLOAD
+    const validation = validateRequest(updateMaintenanceSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
 
+    const validatedData = validation.data;
+
     const payload = {
-      day: body.day,
-      hour: body.hour,
+      day: validatedData.day,
+      hour: validatedData.hour,
     };
 
     // Update maintenance window via DigitalOcean API
     const response = await axios.put(
-      `https://api.digitalocean.com/v2/databases/${body.database_id}/maintenance`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.database_id}/maintenance`,
       payload,
       {
         headers: {

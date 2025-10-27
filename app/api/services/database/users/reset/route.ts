@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { Encryption } from "@/config/functions";
+import { resetUserPasswordSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 interface database_error {
   response: {
@@ -18,18 +21,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_id, username } = body;
-
-    if (!cluster_id || !username) {
-      return NextResponse.json(
-        { error: "cluster_id and username are required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(resetUserPasswordSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Reset user password in DigitalOcean
     const response = await axios.post(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/users/${username}/reset_auth`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/users/${validatedData.username}/reset_auth`,
       {},
       {
         headers: {
@@ -43,23 +45,24 @@ export async function POST(req: NextRequest) {
       console.log("[resetDatabaseUserPassword] Password reset successfully:", response.data.user);
 
       const user = response.data.user;
+      const encryptionKey = process.env.ENCRYPTION_KEY!;
 
-      // Optional: Update user password in Supabase
+      // Optional: Update user password in Supabase with encryption
       // Get current users and update the specific user's password
-      const usersResult = await Database_Clusters.get_users(cluster_id);
+      const usersResult = await Database_Clusters.get_users(validatedData.cluster_id);
       
       if (usersResult.success && Array.isArray(usersResult.data)) {
         const updatedUsers = usersResult.data.map((u: any) => {
-          if (u.name === username) {
+          if (u.name === validatedData.username) {
             return {
               ...u,
-              password: user.password,
+              password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
             };
           }
           return u;
         });
 
-        await Database_Clusters.update_users(cluster_id, updatedUsers);
+        await Database_Clusters.update_users(validatedData.cluster_id, updatedUsers);
       }
 
       return NextResponse.json(

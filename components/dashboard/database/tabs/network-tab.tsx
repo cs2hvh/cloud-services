@@ -142,7 +142,7 @@ export const NetworkTab = ({
     }
   };
 
-  // Delete rule (Note: This will need a backend endpoint to delete specific rules)
+  // Delete rule
   const handleDeleteRule = async () => {
     if (!deleteModal.rule) return;
 
@@ -154,19 +154,25 @@ export const NetworkTab = ({
     setDeletingRule(true);
 
     try {
-      // Filter out the rule to delete and update with remaining rules
-      const remainingRules = rules.filter(
-        (rule) => rule.uuid !== deleteModal.rule?.uuid
-      );
+      const response = await api.post("/services/database/network/delete", {
+        id: databaseId,
+        rule_uuid: deleteModal.rule.uuid,
+      });
 
-      // For now, we'll need to update all remaining rules
-      // This is a workaround until we have a dedicated delete endpoint
-      toast.info(
-        "Delete functionality requires backend update endpoint for specific rules"
-      );
-
-      // Close modal
-      setDeleteModal({ show: false, rule: null, confirmText: "" });
+      if (response.status === 200) {
+        toast.success("IP address deleted successfully!");
+        
+        // Refresh the rules list
+        await fetchNetworkRules();
+        
+        // Notify parent to update
+        if (onRulesUpdate) {
+          onRulesUpdate();
+        }
+        
+        // Close modal
+        setDeleteModal({ show: false, rule: null, confirmText: "" });
+      }
     } catch (error: any) {
       console.error("[handleDeleteRule] Error:", error);
       toast.error(
@@ -216,50 +222,24 @@ export const NetworkTab = ({
 
   return (
     <div className="space-y-6">
-      {/* Header with Refresh Button */}
+      {/* Section 1: Add New IP Address */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
-      >
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-lg bg-blue-500/20">
-              <Shield className="h-6 w-6 text-blue-400" />
-            </div>
-            <div>
-              <h3 className="text-xl font-bold text-white">Firewall Rules</h3>
-              <p className="text-slate-400 text-sm">
-                Manage trusted IP addresses for database access
-              </p>
-            </div>
-          </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="bg-white/10 hover:bg-white/20 text-white border-0"
-          >
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-        </div>
-      </motion.div>
-
-      {/* Add New IP Form */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
+        className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4"
       >
         <div className="flex items-center gap-3 mb-4">
-          <Plus className="h-5 w-5 text-blue-400" />
-          <h4 className="text-lg font-semibold text-white">
-            Add IP Address
-          </h4>
+          <div className="p-2 rounded-lg bg-blue-500/20">
+            <Plus className="h-5 w-5 text-blue-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Add IP Address</h3>
+            <p className="text-slate-400 text-sm">
+              Add trusted IPs for database access
+            </p>
+          </div>
         </div>
+
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <Input
@@ -281,7 +261,7 @@ export const NetworkTab = ({
               }}
             />
             {ipError && (
-              <p className="text-red-400 text-sm mt-1 flex items-center gap-1">
+              <p className="text-red-400 text-sm mt-1.5 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" />
                 {ipError}
               </p>
@@ -290,7 +270,7 @@ export const NetworkTab = ({
           <Button
             onClick={handleAddRule}
             disabled={addingRule}
-            className="bg-blue-500 hover:bg-blue-600 text-white"
+            className="bg-white hover:bg-gray-100 text-black font-semibold"
           >
             {addingRule ? (
               <>
@@ -300,40 +280,58 @@ export const NetworkTab = ({
             ) : (
               <>
                 <Plus className="h-4 w-4 mr-2" />
-                Add Rule
+                Add IP
               </>
             )}
           </Button>
         </div>
+
         <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <p className="text-sm text-slate-300 flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
             <span>
-              Add trusted IP addresses to allow secure connections to your
-              database. Only connections from these IPs will be permitted.
+              Only connections from these IP addresses will be permitted to access your database.
             </span>
           </p>
         </div>
       </motion.div>
 
-      {/* Rules List */}
+      {/* Section 2: IP Address List */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.1 }}
       >
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-bold text-white">Trusted IP Addresses</h3>
+            <p className="text-slate-400 text-sm">
+              {rules.length} {rules.length === 1 ? 'address' : 'addresses'} configured
+            </p>
+          </div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="bg-white/10 hover:bg-white/20 text-white border-0"
+            size="sm"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+            />
+          </Button>
+        </div>
+
         {rules.length === 0 ? (
-          <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 text-center">
+          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 text-center">
             <div className="max-w-md mx-auto">
-              <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/20 flex items-center justify-center mb-6">
+              <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/20 flex items-center justify-center mb-4">
                 <Network className="h-8 w-8 text-slate-400" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-3">
-                No Firewall Rules
-              </h3>
+              <h4 className="text-xl font-bold text-white mb-2">
+                No IP Addresses Added
+              </h4>
               <p className="text-slate-400">
-                Add IP addresses above to allow secure database connections.
-                Your database is currently not accessible from any IP address.
+                Right now, your database is open to all incoming connections. Add trusted IPs above to enable connections.
               </p>
             </div>
           </div>
@@ -347,11 +345,11 @@ export const NetworkTab = ({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
                   transition={{ delay: index * 0.05 }}
-                  className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-5 hover:bg-white/10 transition-colors"
+                  className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4 hover:bg-white/10 transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <Globe className="h-5 w-5 text-blue-400" />
+                      <Globe className="h-4 w-4 text-blue-400" />
                       <span className="text-xs font-medium text-blue-400 uppercase">
                         {rule.type}
                       </span>
@@ -360,14 +358,14 @@ export const NetworkTab = ({
                       onClick={() =>
                         setDeleteModal({ show: true, rule, confirmText: "" })
                       }
-                      className="p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 transition-colors"
-                      title="Delete Rule"
+                      className="p-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500/50 transition-colors"
+                      title="Delete IP"
                     >
                       <Trash2 className="h-4 w-4 text-red-400" />
                     </button>
                   </div>
-                  <div className="mb-3">
-                    <p className="text-lg font-mono font-semibold text-white break-all">
+                  <div className="mb-2">
+                    <p className="text-base font-mono font-semibold text-white break-all">
                       {rule.value}
                     </p>
                   </div>
@@ -408,7 +406,7 @@ export const NetworkTab = ({
                 </div>
                 <div className="flex-1">
                   <h3 className="text-xl font-bold text-white mb-2">
-                    Delete Firewall Rule
+                    Delete IP Address
                   </h3>
                   <p className="text-slate-400 text-sm">
                     This will remove the IP address from trusted sources. The

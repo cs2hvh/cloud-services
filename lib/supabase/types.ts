@@ -1,5 +1,9 @@
 import { UUID } from "crypto";
 import { boolean } from "zod";
+import type { EncryptedData } from "@/config/functions";
+
+// Re-export EncryptedData for convenience
+export type { EncryptedData };
 
 export type Json =
   | string
@@ -46,11 +50,11 @@ export interface DatabaseInstance {
 export interface Database_Connection{
   ssl: boolean;
   uri: string;
-  host: string;
+  host: string | EncryptedData;
   port: number;
   user: string;
   database: string;
-  password: string;
+  password: string | EncryptedData;
   protocol: string;
 
 }
@@ -503,11 +507,11 @@ export type Database = {
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
           status: "pending" | "online" | "creating" | "migrating" ;
-          password: string ;
+          password: string | EncryptedData;
           // resource_config?:{ cpu: number; ram: number; storage: number }
           size:string;
           region?:string;
-          ca_certificate?:string;
+          ca_certificate?: string | EncryptedData;
           network_rules?:network_rules;
           users?: DatabaseUser[];
           dbs?: DatabaseInstance[];
@@ -525,8 +529,8 @@ export type Database = {
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
           status: "pending" | "online" | "creating" ;
-          password: string ;
-          ca_certificate?:BlobPart;
+          password: string | EncryptedData;
+          ca_certificate?: string | EncryptedData;
           region?:string;
           network_rules?:network_rules;
           users?: DatabaseUser[];

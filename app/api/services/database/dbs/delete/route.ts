@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { deleteDbSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 interface database_error {
   response: {
@@ -18,18 +20,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_id, db_name } = body;
-
-    if (!cluster_id || !db_name) {
-      return NextResponse.json(
-        { error: "cluster_id and db_name are required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(deleteDbSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Delete database from DigitalOcean
     const response = await axios.delete(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/dbs/${db_name}`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/dbs/${validatedData.db_name}`,
       {
         headers: {
           Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
 
       // Remove database from Supabase
       const supabase_result = await Database_Clusters.remove_db(
-        cluster_id,
-        db_name
+        validatedData.cluster_id,
+        validatedData.db_name
       );
 
       if (supabase_result.success) {

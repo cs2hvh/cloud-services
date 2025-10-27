@@ -23,7 +23,7 @@ const TAG_LENGTH = 16;
 const KEY_LENGTH = 32;
 const ITERATIONS = 100000;
 
-interface EncryptedData {
+export interface EncryptedData {
   encrypted: string;
   iv: string;
   tag: string;

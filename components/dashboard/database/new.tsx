@@ -173,7 +173,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     }
 
     try {
-       debugger
+       //debugger
       setIsLoading(true);
       if (
         !state.selectedDb ||

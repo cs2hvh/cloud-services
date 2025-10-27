@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { listDbsSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 interface database_error {
   response: {
@@ -18,18 +20,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_id } = body;
-
-    if (!cluster_id) {
-      return NextResponse.json(
-        { error: "cluster_id is required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(listDbsSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Get databases from DigitalOcean
     const response = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/dbs`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/dbs`,
       {
         headers: {
           Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
 
       // Sync databases with Supabase
       const supabase_result = await Database_Clusters.update_dbs(
-        cluster_id,
+        validatedData.cluster_id,
         formattedDbs
       );
 

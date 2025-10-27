@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { deleteDatabaseUserSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 interface database_error {
   response: {
@@ -18,18 +20,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_id, username } = body;
-
-    if (!cluster_id || !username) {
-      return NextResponse.json(
-        { error: "cluster_id and username are required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(deleteDatabaseUserSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Delete user from DigitalOcean
     const response = await axios.delete(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/users/${username}`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/users/${validatedData.username}`,
       {
         headers: {
           Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
 
       // Remove user from Supabase
       const supabase_result = await Database_Clusters.remove_user(
-        cluster_id,
-        username
+        validatedData.cluster_id,
+        validatedData.username
       );
 
       if (supabase_result.success) {

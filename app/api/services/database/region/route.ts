@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { migrateRegionSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -13,21 +15,21 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Validate required fields
-    if (!body.database_id || !body.region) {
-      return NextResponse.json(
-        { error: "database_id and region are required" },
-        { status: 400 }
-      );
+    // ✅ VALIDATE REQUEST PAYLOAD
+    const validation = validateRequest(migrateRegionSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
 
+    const validatedData = validation.data;
+
     const payload = {
-      region: body.region,
+      region: validatedData.region,
     };
 
     // Migrate database cluster to new region via DigitalOcean API
     const response = await axios.put(
-      `https://api.digitalocean.com/v2/databases/${body.database_id}/migrate`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.database_id}/migrate`,
       payload,
       {
         headers: {
@@ -46,8 +48,8 @@ export async function PUT(req: NextRequest) {
     if (response.status === 202) {
       // Update Supabase with new region and status='migrating'
       const supabaseUpdate = await Database_Clusters.update_region(
-        body.database_id,
-        body.region,
+        validatedData.database_id,
+        validatedData.region,
         "migrating"
       );
 

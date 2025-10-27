@@ -281,313 +281,319 @@ export const SettingsTab = ({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-6"
     >
-      {/* Update Project */}
-      <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-            <FolderKanban className="h-5 w-5 text-blue-400" />
+      {/* Two Column Layout for Large Screens */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Update Project */}
+          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <FolderKanban className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">Update Project</h3>
+                <p className="text-sm text-slate-400">
+                  Assign this database to a different project
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Select Project
+                </label>
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-48 overflow-y-auto"
+                  disabled={loading === "project"}
+                >
+                  <option value="" className="bg-slate-900">
+                    Select a project
+                  </option>
+                  {projects.map((project) => (
+                    <option
+                      key={project.id}
+                      value={project.id}
+                      className="bg-slate-900"
+                    >
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleUpdateProject}
+                  disabled={loading === "project" || !selectedProject}
+                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                >
+                  {loading === "project" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedProject(database.project_id || "")}
+                  disabled={loading === "project"}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">Update Project</h3>
-            <p className="text-sm text-slate-400">
-              Assign this database to a different project
-            </p>
+
+          {/* Configure Maintenance Window */}
+          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                <Calendar className="h-5 w-5 text-purple-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">
+                  Configure Maintenance Window
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Set the preferred time for automatic maintenance updates
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* {currentMaintenanceWindow && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
+                  <div className="flex items-start gap-2">
+                    <Clock className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-slate-300">
+                      <p className="font-semibold text-blue-400 mb-1">
+                        Current Window
+                      </p>
+                      <p className="text-xs">
+                        {currentMaintenanceWindow.day.charAt(0).toUpperCase() +
+                          currentMaintenanceWindow.day.slice(1)}{" "}
+                        at {currentMaintenanceWindow.hour} (UTC)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )} */}
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Day of Week
+                </label>
+                <select
+                  value={maintenanceDay}
+                  onChange={(e) => setMaintenanceDay(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-48 overflow-y-auto"
+                  disabled={loading === "maintenance"}
+                >
+                  {DAYS.map((day) => (
+                    <option
+                      key={day}
+                      value={day}
+                      className={`bg-slate-900 ${
+                        day === currentMaintenanceWindow?.day ? "font-bold" : ""
+                      }`}
+                    >
+                      {day.charAt(0).toUpperCase() + day.slice(1)}
+                      {day === currentMaintenanceWindow?.day && " ✓"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Time (UTC)
+                </label>
+                <select
+                  value={maintenanceHour}
+                  onChange={(e) => setMaintenanceHour(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-48 overflow-y-auto"
+                  disabled={loading === "maintenance"}
+                >
+                  {TIME_SLOTS.map((time) => (
+                    <option
+                      key={time}
+                      value={time}
+                      className={`bg-slate-900 ${
+                        time === currentMaintenanceWindow?.hour ? "font-bold" : ""
+                      }`}
+                    >
+                      {time}
+                      {time === currentMaintenanceWindow?.hour && " ✓"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleUpdateMaintenanceWindow}
+                  disabled={loading === "maintenance"}
+                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                >
+                  {loading === "maintenance" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Updating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => {
+                    if (currentMaintenanceWindow) {
+                      setMaintenanceDay(currentMaintenanceWindow.day);
+                      setMaintenanceHour(currentMaintenanceWindow.hour);
+                    }
+                  }}
+                  disabled={loading === "maintenance"}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Select Project
-            </label>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled={loading === "project"}
-            >
-              <option value="" className="bg-slate-900">
-                Select a project
-              </option>
-              {projects.map((project) => (
-                <option
-                  key={project.id}
-                  value={project.id}
-                  className="bg-slate-900"
-                >
-                  {project.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Update Database Region */}
+          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <MapPin className="h-5 w-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">
+                  Update Database Region
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Migrate your database cluster to a different datacenter
+                </p>
+              </div>
+            </div>
 
-          <div className="flex gap-3">
-            <button
-              onClick={handleUpdateProject}
-              disabled={loading === "project" || !selectedProject}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
-            >
-              {loading === "project" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save
-                </>
+            <div className="space-y-4">
+              {isMigrating && (
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <Loader2 className="h-4 w-4 text-orange-400 flex-shrink-0 mt-0.5 animate-spin" />
+                    <div className="text-xs text-slate-300">
+                      <p className="font-semibold text-orange-400 mb-1">
+                        Migration In Progress
+                      </p>
+                      <p>
+                        Migrating to{" "}
+                        {REGIONS.find((r) => r.slug === targetRegion)?.name}. This
+                        typically takes 10-30 minutes.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
-            </button>
-            <button
-              onClick={() => setSelectedProject(database.project_id || "")}
-              disabled={loading === "project"}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
-            >
-              <X className="h-4 w-4" />
-              Cancel
-            </button>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Select Region
+                </label>
+                <select
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500 max-h-48 overflow-y-auto"
+                  disabled={loading === "region" || isMigrating}
+                >
+                  <option value="" className="bg-slate-900">
+                    Select a region
+                  </option>
+                  {REGIONS.map((region) => (
+                    <option
+                      key={region.slug}
+                      value={region.slug}
+                      className={`bg-slate-900 ${region.slug === database.region ? "font-bold" : ""}`}
+                    >
+                      {region.name}
+                      {region.slug === database.region && " (Current)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedRegion && selectedRegion !== database.region && !isMigrating && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-300">
+                      <p className="font-semibold text-yellow-400 mb-1">
+                        Migration Notice
+                      </p>
+                      <p>
+                        Migrating will cause temporary unavailability. The cluster will transition back to "online" when complete.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleUpdateRegion}
+                  disabled={
+                    loading === "region" ||
+                    !selectedRegion ||
+                    selectedRegion === database.region ||
+                    isMigrating
+                  }
+                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                >
+                  {loading === "region" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Migrating...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Migrate
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedRegion(database.region || "")}
+                  disabled={loading === "region" || isMigrating}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Configure Maintenance Window */}
-      <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-            <Calendar className="h-5 w-5 text-purple-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              Configure Maintenance Window
-            </h3>
-            <p className="text-sm text-slate-400">
-              Set the preferred time for automatic maintenance updates
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {currentMaintenanceWindow && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Clock className="h-5 w-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-slate-300">
-                  <p className="font-semibold text-blue-400 mb-1">
-                    Current Maintenance Window
-                  </p>
-                  <p>
-                    {currentMaintenanceWindow.day.charAt(0).toUpperCase() +
-                      currentMaintenanceWindow.day.slice(1)}{" "}
-                    at {currentMaintenanceWindow.hour} (GMT)
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Day of Week
-            </label>
-            <select
-              value={maintenanceDay}
-              onChange={(e) => setMaintenanceDay(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={loading === "maintenance"}
-            >
-              {DAYS.map((day) => (
-                <option
-                  key={day}
-                  value={day}
-                  className={`bg-slate-900 ${
-                    day === currentMaintenanceWindow?.day ? "font-bold" : ""
-                  }`}
-                >
-                  {day.charAt(0).toUpperCase() + day.slice(1)}
-                  {day === currentMaintenanceWindow?.day && " ✓"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Time (GMT)
-            </label>
-            <select
-              value={maintenanceHour}
-              onChange={(e) => setMaintenanceHour(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-              disabled={loading === "maintenance"}
-            >
-              {TIME_SLOTS.map((time) => (
-                <option
-                  key={time}
-                  value={time}
-                  className={`bg-slate-900 ${
-                    time === currentMaintenanceWindow?.hour ? "font-bold" : ""
-                  }`}
-                >
-                  {time}
-                  {time === currentMaintenanceWindow?.hour && " ✓"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleUpdateMaintenanceWindow}
-              disabled={loading === "maintenance"}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-500 hover:bg-purple-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
-            >
-              {loading === "maintenance" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => {
-                if (currentMaintenanceWindow) {
-                  setMaintenanceDay(currentMaintenanceWindow.day);
-                  setMaintenanceHour(currentMaintenanceWindow.hour);
-                }
-              }}
-              disabled={loading === "maintenance"}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
-            >
-              <X className="h-4 w-4" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Update Database Region */}
-      <div className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-            <MapPin className="h-5 w-5 text-green-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              Update Database Region
-            </h3>
-            <p className="text-sm text-slate-400">
-              Migrate your database cluster to a different datacenter
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {isMigrating && (
-            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Loader2 className="h-5 w-5 text-orange-400 flex-shrink-0 mt-0.5 animate-spin" />
-                <div className="text-sm text-slate-300">
-                  <p className="font-semibold text-orange-400 mb-1">
-                    Migration In Progress
-                  </p>
-                  <p>
-                    Your database is currently being migrated to{" "}
-                    {REGIONS.find((r) => r.slug === targetRegion)?.name}. This
-                    process typically takes 10-30 minutes. You'll be notified when
-                    it's complete.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
-              Select Region
-            </label>
-            <select
-              value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-              className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500"
-              disabled={loading === "region" || isMigrating}
-            >
-              <option value="" className="bg-slate-900">
-                Select a region
-              </option>
-              {REGIONS.map((region) => (
-                <option
-                  key={region.slug}
-                  value={region.slug}
-                  className={`bg-slate-900 ${region.slug === database.region ? "font-bold" : ""}`}
-                >
-                  {region.name}
-                  {region.slug === database.region && " (Current)"}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {selectedRegion && selectedRegion !== database.region && !isMigrating && (
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-slate-300">
-                  <p className="font-semibold text-yellow-400 mb-1">
-                    Migration Notice
-                  </p>
-                  <p>
-                    Migrating your database will cause it to be temporarily
-                    unavailable. The cluster status will change to "migrating"
-                    and will transition back to "online" when complete.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={handleUpdateRegion}
-              disabled={
-                loading === "region" ||
-                !selectedRegion ||
-                selectedRegion === database.region ||
-                isMigrating
-              }
-              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
-            >
-              {loading === "region" ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Migrating...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Migrate
-                </>
-              )}
-            </button>
-            <button
-              onClick={() => setSelectedRegion(database.region || "")}
-              disabled={loading === "region" || isMigrating}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
-            >
-              <X className="h-4 w-4" />
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Delete Database Cluster */}
-      <div className="rounded-2xl bg-red-500/10 border border-red-500/30 shadow-lg p-6">
+      {/* Delete Database Cluster - Full Width */}
+      <div className="rounded-xl bg-black border border-red-500/30 shadow-lg p-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
             <Trash2 className="h-5 w-5 text-red-400" />
@@ -602,17 +608,15 @@ export const SettingsTab = ({
           </div>
         </div>
 
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-4">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-slate-300">
+        <div className="bg-black border border-red-500/30 rounded-lg p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-300">
               <p className="font-semibold text-red-400 mb-1">
                 Warning: This action cannot be undone!
               </p>
               <p>
-                Deleting this database cluster will permanently remove all data,
-                backups, and configurations. Make sure you have exported any
-                important data before proceeding.
+                Deleting will permanently remove all data, backups, and configurations.
               </p>
             </div>
           </div>

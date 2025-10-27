@@ -46,20 +46,18 @@ export async function resolveHost(hostOrUrl: string): Promise<ResolveResult> {
   }
 
   try {
-    // A (IPv4)
-    const a = await resolve4(parsedHost).catch(() => []);
+    // Resolve all DNS record types in parallel for better performance
+    const [a, aaaa, cname, mx] = await Promise.all([
+      resolve4(parsedHost).catch(() => []),
+      resolve6(parsedHost).catch(() => []),
+      resolveCname(parsedHost).catch(() => []),
+      resolveMx(parsedHost).catch(() => [])
+    ]);
+
+    // Add results to records array
     if (a && a.length) result.records.push({ type: "A", records: a });
-
-    // AAAA (IPv6)
-    const aaaa = await resolve6(parsedHost).catch(() => []);
     if (aaaa && aaaa.length) result.records.push({ type: "AAAA", records: aaaa });
-
-    // CNAME
-    const cname = await resolveCname(parsedHost).catch(() => []);
     if (cname && cname.length) result.records.push({ type: "CNAME", records: cname });
-
-    // MX
-    const mx = await resolveMx(parsedHost).catch(() => []);
     if (mx && mx.length) {
       // mx are objects {exchange, priority} — keep them as-is (typed as MxRecord)
       result.records.push({ type: "MX", records: mx as unknown as Array<MxRecord> });
