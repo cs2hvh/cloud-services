@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             data: database,
-            message: "Database created successfully",
+            message: "Database creation started",
           },
           { status: 200 }
         );

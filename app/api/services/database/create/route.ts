@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
+    console.log("Creating database with data:", validatedData);
     const database = await axios.post(
       "https://api.digitalocean.com/v2/databases",
       validatedData,

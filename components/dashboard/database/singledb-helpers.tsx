@@ -154,6 +154,7 @@ export const calculateMonthlyCost = (size: string): string => {
 
 export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | EncryptedData | undefined) => {
   try {
+    debugger
     if (!ca_certificate) {
       toast.error("CA Certificate not available");
       return;

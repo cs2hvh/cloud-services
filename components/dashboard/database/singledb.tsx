@@ -61,11 +61,20 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const hasShownOnlineToast = useRef<boolean>(false);
   const previousStatus = useRef<string | null>(null);
+  const isFetchingRef = useRef<boolean>(false);
 
   // Fetch database cluster details
   const fetchDatabaseCluster = useCallback(async () => {
+    // Prevent concurrent fetches
+    if (isFetchingRef.current) {
+      console.log("⚠️ Fetch already in progress, skipping...");
+      return;
+    }
+
     try {
-      // debugger;
+      isFetchingRef.current = true;
+      console.log("🔄 Fetching database cluster...");
+      
       const response = await api.post(`/services/database/read/`, {
         id: databaseId,
         checkStatus: true, // Backend will check DO and update Supabase
@@ -75,47 +84,44 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
         const dbData = response.data.data;
 
         // Debug: Log the structure to identify object issues
-        console.log("Database Data:", dbData);
-        console.log("Public Connection:", dbData.public_connection);
-        console.log("Private Connection:", dbData.private_connection);
-        console.log("Region:", dbData.region);
+        console.log("📊 [Frontend] Database Data received:", dbData);
+        console.log("📊 [Frontend] Status from API:", dbData.status, "Type:", typeof dbData.status);
+        console.log("📊 [Frontend] Previous status:", previousStatus.current);
 
         setDatabase(dbData);
         setLoading(false);
 
-        // If backend detected status changed to online, update and stop polling
-        // Also check if status actually changed from a non-online status
-        if (response.data.status && intervalRef.current && dbData.status !== "online") {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
+        // Check if status changed to online
+        const wasCreating = previousStatus.current === "creating";
+        const isNowOnline = dbData.status === "online";
 
-          // Update backend with new status
-          await updateDatabaseStatus(
-            dbData.cluster_id,
-            dbData.status,
-            dbData.public_connection,
-            dbData.private_connection
-          );
+        console.log(`📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`);
 
-          // Fetch updated data after backend update completes
-          await fetchDatabaseCluster();
+        // If database is now online, stop polling and show toast
+        if (isNowOnline) {
+          console.log("✅ [Frontend] Database is online, stopping polling");
+          
+          // Stop polling
+          if (intervalRef.current) {
+            console.log("🛑 [Frontend] Clearing polling interval");
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          } else {
+            console.log("⚠️ [Frontend] No interval to clear (already stopped)");
+          }
 
-          // Only show toast if we haven't shown it yet
-          if (!hasShownOnlineToast.current) {
+          // Show toast only if status changed from creating to online
+          if (wasCreating && !hasShownOnlineToast.current) {
             toast.success("Database cluster is now online!");
             hasShownOnlineToast.current = true;
           }
-        }
-
-        // If database is already online, stop polling
-        if (dbData.status === "online" && intervalRef.current) {
-          console.log("✓ Database is online, stopping polling");
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
+        } else {
+          console.log(`ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`);
         }
         
         // Update previous status
         previousStatus.current = dbData.status;
+        console.log(`📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`);
 
         return dbData.status; // Return status for use in useEffect
       }
@@ -125,42 +131,29 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
         error.response?.data?.error || "Failed to fetch database details"
       );
       setLoading(false);
+    } finally {
+      isFetchingRef.current = false;
     }
   }, [databaseId]); // ✅ Only databaseId needed
-
-  // Update database status in backend
-  const updateDatabaseStatus = async (
-    dbId: string,
-    status: string,
-    publicConnection: Database_Connection,
-    privateConnection: Database_Connection
-  ) => {
-    try {
-      await api.post(`/services/database/update_status`, {
-        id: dbId,
-        status,
-        public_connection: publicConnection,
-        private_connection: privateConnection,
-      });
-    } catch (error) {
-      console.error("[updateDatabaseStatus] Error:", error);
-    }
-  };
 
   // Initial load and status polling
   useEffect(() => {
     // Initial fetch
     const initializePolling = async () => {
+      console.log("🚀 [Frontend] Initializing polling...");
       const currentStatus = await fetchDatabaseCluster();
+      
+      console.log(`📊 [Frontend] Initial status after fetch: "${currentStatus}"`);
       
       // Only set up polling if the database is not already online
       if (currentStatus !== "online") {
-        console.log("✓ Database is not online, starting polling...");
+        console.log("⏱️ [Frontend] Database is not online, starting polling every 60s...");
         intervalRef.current = setInterval(() => {
+          console.log("🔄 [Frontend] Polling interval fired, fetching database status...");
           fetchDatabaseCluster();
         }, 60000); // 1 minute
       } else {
-        console.log("✓ Database is already online, skipping polling");
+        console.log("✅ [Frontend] Database is already online, skipping polling setup");
       }
     };
 
@@ -169,6 +162,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
     // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
+        console.log("🧹 [Frontend] Component unmounting, clearing interval");
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }

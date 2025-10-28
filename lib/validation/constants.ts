@@ -52,6 +52,11 @@ export const VALID_DATABASE_SIZES = [
   
   // Standard tier - 4 vCPU
   'db-s-4vcpu-8gb',
+   'db-s-6vcpu-12gb',
+    'db-s-6vcpu-6gb',
+     'db-s-2vcpu-2gb',
+      'db-s-2vcpu-4gb',
+  
   
   // Professional tier - 6-8 vCPU (comment out if not allowed)
   // 'db-s-6vcpu-16gb',

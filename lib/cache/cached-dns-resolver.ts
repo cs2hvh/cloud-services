@@ -29,9 +29,15 @@ export async function resolveCached(host: string): Promise<string> {
     const result = await resolveHost(host);
     
     // Extract first IP from records
-    const ip = result.records[0]?.records[0] as string || host;
+    const ip = result.records[0]?.records[0] as string;
     
-    // Cache the result
+    // If no IP found or resolution failed, return original host
+    if (!ip || result.error) {
+      console.warn(`⚠ No IP found for ${host}, using original host`);
+      return host;
+    }
+    
+    // Cache the result only if we got a valid IP
     dnsCache.set(host, ip);
     
     console.log(`✓ Resolved ${host} -> ${ip} (cached)`);

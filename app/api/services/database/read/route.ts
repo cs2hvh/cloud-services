@@ -25,6 +25,8 @@ export async function POST(req: NextRequest) {
     const validatedData = validation.data;
 
     let status=false;
+    let doStatus: string | null = null;
+    
     if (validatedData.checkStatus) {
       const database = await axios.get(
         `https://api.digitalocean.com/v2/databases/${validatedData.id}`,
@@ -37,13 +39,102 @@ export async function POST(req: NextRequest) {
       );
 
       if (database.status === 200) {
-        //console.log(database.data.database.status,".............database status fetch for check.............");
-        status = database.data.database.status === "online" ? true : false;
+        doStatus = database.data.database.status;
+        status = doStatus === "online" ? true : false;
+        console.log(`[checkStatus] DO Status: ${doStatus}, Supabase will be checked/updated if needed`);
       }
     }
 
-
-      const supabase_read = await Database_Clusters.read(validatedData.id);
+    const supabase_read = await Database_Clusters.read(validatedData.id);
+    
+    // ✅ UPDATE SUPABASE IF STATUS CHANGED TO ONLINE
+    if (doStatus && supabase_read.success && supabase_read.data.status !== doStatus) {
+      console.log(`[checkStatus] ⚠️ Status mismatch! Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
+      
+      if (doStatus === "online") {
+        console.log(`[checkStatus] 🔄 Cluster is now online, updating Supabase...`);
+        
+        // Get full cluster details to update Supabase with connection info
+        const fullClusterData = await axios.get(
+          `https://api.digitalocean.com/v2/databases/${validatedData.id}`,
+          {
+            headers: {
+              Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        
+        if (fullClusterData.status === 200) {
+          const dbData = fullClusterData.data.database;
+          
+          // Encrypt connection details
+          const encryptionKey = process.env.ENCRYPTION_KEY!;
+          
+          // Encrypt public connection
+          const encryptedPublicPassword = Encryption.encrypt(
+            dbData.connection.password,
+            encryptionKey
+          );
+          
+          // Encrypt private connection
+          const encryptedPrivatePassword = Encryption.encrypt(
+            dbData.private_connection.password,
+            encryptionKey
+          );
+          
+          // Get CA certificate
+          let caCertificate = "";
+          try {
+            const caResponse = await axios.get(
+              `https://api.digitalocean.com/v2/databases/${validatedData.id}/ca`,
+              {
+                headers: {
+                  Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            if (caResponse.status === 200) {
+              caCertificate = caResponse.data.ca.certificate;
+            }
+          } catch (error) {
+            console.error("[checkStatus] Failed to fetch CA certificate:", error);
+          }
+          
+          // Encrypt CA certificate
+          const encryptedCaCert = caCertificate 
+            ? Encryption.encrypt(caCertificate, encryptionKey)
+            : "";
+          
+          // Update Supabase with online status and connection details
+          await Database_Clusters.update_status(
+            validatedData.id,
+            "online",
+            encryptedCaCert,
+            {
+              ...dbData.connection,
+              password: encryptedPublicPassword
+            },
+            {
+              ...dbData.private_connection,
+              password: encryptedPrivatePassword
+            }
+          );
+          
+          console.log(`[checkStatus] ✅ Supabase updated with online status`);
+          
+          // Re-read from Supabase to get updated data
+          const updatedRead = await Database_Clusters.read(validatedData.id);
+          if (updatedRead.success) {
+            supabase_read.data = updatedRead.data;
+            console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
+          }
+        }
+      }
+    } else if (doStatus && supabase_read.success) {
+      console.log(`[checkStatus] ℹ️ Status matches - Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
+    }
       //decrypt the host , password , caCertificate here before sending response
       if (supabase_read.success) {
         const data = supabase_read.data;
@@ -76,6 +167,9 @@ export async function POST(req: NextRequest) {
             password: isEncrypted(data.public_connection.password)
               ? Encryption.decrypt(data.public_connection.password, encryptionKey)
               : data.public_connection.password,
+            uri: isEncrypted(data.public_connection.uri)
+              ? Encryption.decrypt(data.public_connection.uri, encryptionKey)
+              : data.public_connection.uri,
           } : undefined,
           // Decrypt private connection
           private_connection: data.private_connection ? {
@@ -99,7 +193,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             data: decryptedData,
-            status: status,
             message: "database fetched successfully",
           },
           { status: 200 }

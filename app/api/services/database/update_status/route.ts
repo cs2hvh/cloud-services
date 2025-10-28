@@ -18,25 +18,47 @@ export async function POST(req: NextRequest) {
     //console.log(body, "...........in update database status api........");
 
     // ✅ PERFORMANCE OPTIMIZATION: Resolve both hosts in parallel with caching
+    // If resolution fails, the original host will be returned as fallback
     const [host_public, host_private] = await Promise.all([
       resolveCached(body.public_connection.host),
       resolveCached(body.private_connection.host)
     ]);
     
-    //console.log(host_public, ".............database host ip.............");
-    //console.log(
-    //  host_private,
-    //  ".............database private host ip............."
-    //);
+    // ✅ FALLBACK: Ensure we always have valid hosts (use original if resolution failed)
+    const finalPublicHost = host_public || body.public_connection.host;
+    const finalPrivateHost = host_private || body.private_connection.host;
+    
+    console.log("Public host - Original:", body.public_connection.host, "| Resolved:", finalPublicHost);
+    console.log("Private host - Original:", body.private_connection.host, "| Resolved:", finalPrivateHost);
+
+    // ✅ UPDATE URIs: Replace hostname with IP address in connection URIs
+    // Extract hostname from URI (part after @ and before :port or /)
+    const publicHostnameMatch = body.public_connection.uri.match(/@([^:\/]+)/);
+    const privateHostnameMatch = body.private_connection.uri.match(/@([^:\/]+)/);
+    
+    const public_uri_with_ip = publicHostnameMatch
+      ? body.public_connection.uri.replace(publicHostnameMatch[1], finalPublicHost)
+      : body.public_connection.uri;
+      
+    const private_uri_with_ip = privateHostnameMatch
+      ? body.private_connection.uri.replace(privateHostnameMatch[1], finalPrivateHost)
+      : body.private_connection.uri;
+
+    console.log("Original public URI:", body.public_connection.uri);
+    console.log("Extracted public hostname:", publicHostnameMatch?.[1]);
+    console.log("Updated public URI:", public_uri_with_ip);
+    console.log("Original private URI:", body.private_connection.uri);
+    console.log("Extracted private hostname:", privateHostnameMatch?.[1]);
+    console.log("Updated private URI:", private_uri_with_ip);
 
     //encrypt the host and password here and then store in supabase
     
     // Encryption key from environment
     const encryptionKey = process.env.ENCRYPTION_KEY!;
     
-    // Encrypt hosts
-    const encryptedPublicHost = Encryption.encrypt(host_public, encryptionKey);
-    const encryptedPrivateHost = Encryption.encrypt(host_private, encryptionKey);
+    // Encrypt hosts (using resolved IPs or original hosts as fallback)
+    const encryptedPublicHost = Encryption.encrypt(finalPublicHost, encryptionKey);
+    const encryptedPrivateHost = Encryption.encrypt(finalPrivateHost, encryptionKey);
     
     // Encrypt passwords
     const encryptedPublicPassword = Encryption.encrypt(
@@ -47,6 +69,10 @@ export async function POST(req: NextRequest) {
       body.private_connection.password,
       encryptionKey
     );
+
+    // Encrypt URIs (with IP addresses)
+    const encryptedPublicUri = Encryption.encrypt(public_uri_with_ip, encryptionKey);
+    const encryptedPrivateUri = Encryption.encrypt(private_uri_with_ip, encryptionKey);
 
     let caCertificate: string = "";
 
@@ -86,11 +112,13 @@ export async function POST(req: NextRequest) {
       encryptedCaCert,
       {
         ...body.public_connection,
+        uri: encryptedPublicUri,
         host: encryptedPublicHost,
         password: encryptedPublicPassword
       },
       {
         ...body.private_connection,
+        uri: encryptedPrivateUri,
         host: encryptedPrivateHost,
         password: encryptedPrivatePassword
       }
