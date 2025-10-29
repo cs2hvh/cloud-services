@@ -17,6 +17,7 @@ const DashboardSuspense = async () => {
   const gameservers = await GameServers.get_by_user(user.id);
   const database_clusters = (await Database_Clusters.read_all_owner_id(user.id));
   const kubernetes_clusters = (await Clusters.get_by_user_id(user.id));
+  
 
   if (!gameservers) {
     return (

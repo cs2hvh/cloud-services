@@ -3,6 +3,7 @@ import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { Projects } from "@/lib/supabase/queries";
 
 
 
@@ -80,6 +81,16 @@ export async function POST(req: Request) {
   const clusterId = crypto.randomUUID();
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data,decryptedPassword });
   console.log(job,"...............job")
+
+  // Add activity log for Kubernetes cluster creation
+  if (parsed.data.projectId) {
+    await Projects.add_log({
+      project_id: parsed.data.projectId,
+      event: "Box",
+      text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`
+    });
+    console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
+  }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

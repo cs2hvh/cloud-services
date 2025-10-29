@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createDbSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
@@ -59,6 +59,17 @@ export async function POST(req: NextRequest) {
       );
 
       if (supabase_result.success) {
+        // Add activity log for database creation
+        const clusterData = await Database_Clusters.read(validatedData.cluster_id);
+        if (clusterData.success && clusterData.data.project_id) {
+          await Projects.add_log({
+            project_id: clusterData.data.project_id,
+            event: "Database",
+            text: `Database '${validatedData.name}' created in cluster`
+          });
+          console.log(`[createDatabase] ✅ Activity log added for database creation`);
+        }
+        
         return NextResponse.json(
           {
             data: database,

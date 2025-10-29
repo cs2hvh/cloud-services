@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { updateMaintenanceSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
@@ -59,6 +59,17 @@ export async function PUT(req: NextRequest) {
           supabaseUpdate.error
         );
         // Still return success as DigitalOcean update was successful
+      }
+
+      // Add activity log for maintenance window update
+      const clusterData = await Database_Clusters.read(validatedData.database_id);
+      if (clusterData.success && clusterData.data.project_id) {
+        await Projects.add_log({
+          project_id: clusterData.data.project_id,
+          event: "Settings",
+          text: `Maintenance window updated: ${validatedData.day} at ${validatedData.hour}`
+        });
+        console.log(`[updateMaintenanceWindow] ✅ Activity log added for maintenance window update`);
       }
 
       return NextResponse.json(

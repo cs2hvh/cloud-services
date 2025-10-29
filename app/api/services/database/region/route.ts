@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { migrateRegionSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
@@ -56,6 +56,17 @@ export async function PUT(req: NextRequest) {
       if (!supabaseUpdate.success) {
         console.error("[region/route] Failed to update Supabase:", supabaseUpdate.error);
         // Still return success as DigitalOcean migration was initiated
+      }
+
+      // Add activity log for region migration
+      const clusterData = await Database_Clusters.read(validatedData.database_id);
+      if (clusterData.success && clusterData.data.project_id) {
+        await Projects.add_log({
+          project_id: clusterData.data.project_id,
+          event: "Globe",
+          text: `Database cluster migrating to region: ${validatedData.region}`
+        });
+        console.log(`[migrateRegion] ✅ Activity log added for region migration`);
       }
 
       return NextResponse.json(

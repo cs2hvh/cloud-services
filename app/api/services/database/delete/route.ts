@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function POST(req: NextRequest) {
@@ -12,6 +12,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+
+    // Get cluster details before deletion for logging
+    const clusterData = await Database_Clusters.read(body.id);
+    const clusterName = clusterData.success ? clusterData.data.name : 'Unknown';
+    const projectId = clusterData.success ? clusterData.data.project_id : null;
 
     const database = await axios.delete(
       `https://api.digitalocean.com/v2/databases/${body.id}`,
@@ -33,6 +38,16 @@ export async function POST(req: NextRequest) {
     console.log(supabase_delete,"...........supabase delete response........");
     
     if (supabase_delete.success) {
+      // Add activity log for database cluster deletion
+      if (projectId) {
+        await Projects.add_log({
+          project_id: projectId,
+          event: "Trash2",
+          text: `Database cluster '${clusterName}' deleted`
+        });
+        console.log(`[deleteDatabase] ✅ Activity log added for cluster deletion`);
+      }
+      
       return NextResponse.json(
         {
           message: "database deleted successfully",

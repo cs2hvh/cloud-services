@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
@@ -51,6 +51,12 @@ export async function POST(req: NextRequest) {
 
     console.log("Remaining rules after deletion:", remainingRules);
 
+    // Find the deleted rule for logging
+    const deletedRule = currentRules.find(
+      (rule: any) => rule.uuid === validatedData.rule_uuid
+    );
+    const deletedRuleValue = deletedRule?.value || 'unknown IP';
+
     // Step 3: Update DigitalOcean firewall with remaining rules
     const payload = {
       rules: remainingRules,
@@ -98,6 +104,17 @@ export async function POST(req: NextRequest) {
         );
 
         if (supabase_update.success) {
+          // Add activity log for firewall rule deletion
+          const clusterData = await Database_Clusters.read(validatedData.id);
+          if (clusterData.success && clusterData.data.project_id) {
+            await Projects.add_log({
+              project_id: clusterData.data.project_id,
+              event: "Shield",
+              text: `Removed firewall rule: ${deletedRuleValue}`
+            });
+            console.log(`[deleteNetworkRule] ✅ Activity log added for firewall rule deletion`);
+          }
+          
           return NextResponse.json(
             {
               message: "IP address deleted successfully",

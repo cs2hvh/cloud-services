@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
 import { EncryptedData } from "@/lib/supabase/types";
 import { readDatabaseSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { resolveHost } from "@/config/hosttoip";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -71,17 +72,67 @@ export async function POST(req: NextRequest) {
           // Encrypt connection details
           const encryptionKey = process.env.ENCRYPTION_KEY!;
           
-          // Encrypt public connection
+          // Encrypt public connection password
           const encryptedPublicPassword = Encryption.encrypt(
             dbData.connection.password,
             encryptionKey
           );
           
-          // Encrypt private connection
+          // Encrypt private connection password
           const encryptedPrivatePassword = Encryption.encrypt(
             dbData.private_connection.password,
             encryptionKey
           );
+
+          // Get IP addresses for both public and private connection hosts (only for MySQL and PostgreSQL)
+          let publicHostIP = dbData.connection.host;
+          let privateHostIP = dbData.private_connection.host;
+          let encryptedPublicURI = dbData.connection.uri;
+          
+          // Only resolve IP for MySQL and PostgreSQL databases
+          const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
+          
+          if (shouldResolveIP) {
+            try {
+              // Resolve public connection host to IP
+              const publicHostResult = await resolveHost(dbData.connection.host);
+              if (!publicHostResult.error && publicHostResult.records.length > 0) {
+                const aRecord = publicHostResult.records.find(r => r.type === "A");
+                if (aRecord && aRecord.records.length > 0) {
+                  publicHostIP = aRecord.records[0] as string;
+                  console.log(`[checkStatus] Resolved public host ${dbData.connection.host} to IP: ${publicHostIP}`);
+                  
+                  // Replace hostname in URI with IP address
+                  // URI format: protocol://user:password@hostname:port/database
+                  const uriMatch = dbData.connection.uri.match(/^(.+@)([^:\/]+)(.+)$/);
+                  if (uriMatch) {
+                    encryptedPublicURI = `${uriMatch[1]}${publicHostIP}${uriMatch[3]}`;
+                    console.log(`[checkStatus] Updated URI with IP address`);
+                  }
+                }
+              }
+              
+              // Resolve private connection host to IP
+              const privateHostResult = await resolveHost(dbData.private_connection.host);
+              if (!privateHostResult.error && privateHostResult.records.length > 0) {
+                const aRecord = privateHostResult.records.find(r => r.type === "A");
+                if (aRecord && aRecord.records.length > 0) {
+                  privateHostIP = aRecord.records[0] as string;
+                  console.log(`[checkStatus] Resolved private host ${dbData.private_connection.host} to IP: ${privateHostIP}`);
+                }
+              }
+            } catch (error) {
+              console.error("[checkStatus] Failed to resolve host to IP:", error);
+              // Continue with original hostnames if resolution fails
+            }
+          } else {
+            console.log(`[checkStatus] Skipping IP resolution for engine: ${dbData.engine} (only MySQL and PostgreSQL supported)`);
+          }
+          
+          // Encrypt the IP addresses
+          const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
+          const encryptedPrivateHost = Encryption.encrypt(privateHostIP, encryptionKey);
+          const encryptedPublicURIValue = Encryption.encrypt(encryptedPublicURI, encryptionKey);
           
           // Get CA certificate
           let caCertificate = "";
@@ -114,10 +165,13 @@ export async function POST(req: NextRequest) {
             encryptedCaCert,
             {
               ...dbData.connection,
-              password: encryptedPublicPassword
+              host: encryptedPublicHost,
+              password: encryptedPublicPassword,
+              uri: encryptedPublicURIValue
             },
             {
               ...dbData.private_connection,
+              host: encryptedPrivateHost,
               password: encryptedPrivatePassword
             }
           );
@@ -129,6 +183,16 @@ export async function POST(req: NextRequest) {
           if (updatedRead.success) {
             supabase_read.data = updatedRead.data;
             console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
+            
+            // Add activity log for database cluster going online
+            if (updatedRead.data.project_id) {
+              await Projects.add_log({
+                project_id: updatedRead.data.project_id,
+                event: "Database",
+                text: `Database cluster '${updatedRead.data.name}' is now online`
+              });
+              console.log(`[checkStatus] ✅ Activity log added for cluster going online`);
+            }
           }
         }
       }

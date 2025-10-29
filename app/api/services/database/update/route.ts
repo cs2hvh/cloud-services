@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects as ProjectQueries } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function PUT(req: NextRequest) {
@@ -31,6 +31,18 @@ export async function PUT(req: NextRequest) {
         { error: result.error || "Failed to update project" },
         { status: 500 }
       );
+    }
+
+    // Add activity log for project assignment change
+    const clusterData = await Database_Clusters.read(body.cluster_id);
+    const projectData = await ProjectQueries.get_by_id(body.project_id);
+    if (clusterData.success && projectData) {
+      await ProjectQueries.add_log({
+        project_id: body.project_id,
+        event: "FolderKanban",
+        text: `Database cluster '${clusterData.data.name}' moved to this project`
+      });
+      console.log(`[updateProject] ✅ Activity log added for project assignment`);
     }
 
     return NextResponse.json(

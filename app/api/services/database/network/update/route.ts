@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { updateNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
@@ -112,6 +112,17 @@ export async function POST(req: NextRequest) {
       );
 
       if (supabase_read.success) {
+        // Add activity log for firewall rule addition
+        const clusterData = await Database_Clusters.read(validatedData.id);
+        if (clusterData.success && clusterData.data.project_id) {
+          await Projects.add_log({
+            project_id: clusterData.data.project_id,
+            event: "Shield",
+            text: `Added firewall rule: ${validatedData.ip_address}`
+          });
+          console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
+        }
+        
         return NextResponse.json(
           {
             message: "IP address added to firewall successfully",
