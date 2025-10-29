@@ -154,9 +154,31 @@ const DatabasePage = () => {
                       </span>
                     </Td>
                     <Td>
-                      <time dateTime={c.created_at} className="text-slate-300">
-                        {new Date(c.created_at).toLocaleString()}
-                      </time>
+                      <div className="flex flex-col leading-tight text-xs text-slate-300">
+                        <time
+                          dateTime={c.created_at}
+                          className="font-medium text-slate-100"
+                          title={new Date(c.created_at).toLocaleString()}
+                        >
+                          {new Date(c.created_at).toLocaleDateString(
+                            undefined,
+                            {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            }
+                          )}
+                        </time>
+                        <span className="text-slate-400 text-[11px]">
+                          {new Date(c.created_at).toLocaleTimeString(
+                            undefined,
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </span>
+                      </div>
                     </Td>
 
                     <Td>

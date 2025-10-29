@@ -14,6 +14,7 @@ type OTP = Tables<"otps">;
 type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
 type Database = Tables<"database_clusters">;
+type Activity = Tables<"activities">;
 
 
 export const Users = {
@@ -1040,12 +1041,14 @@ export const Database_Clusters = {
        if (error) {
     console.error("[createClusterWorker] insert failed:", error.message);
     return { success: false, error: error.message };
-  }
+  } 
+
+  console.log(data, "...........in createDatabaseClusterWorker........");
 
   return { success: true, data: data };
   },
 
-  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData, public_connection:Database_Connection, private_connection:Database_Connection)=>{
+  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null, public_connection:Database_Connection, private_connection:Database_Connection)=>{
 
 
     console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
@@ -1091,6 +1094,24 @@ export const Database_Clusters = {
      return { success: false, error: error.message };
    }
    return { success: true, data: data };
+ },
+
+ read_all_owner_id: async(owner_id:string):Promise<Database[]>=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("owner_id", owner_id);
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return [];
+   }
+   return data;
+
+   if (error) {
+     return [];
+   }
  },
   delete: async(cluster_id:string)=>{
     console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
@@ -1443,7 +1464,108 @@ export const Database_Clusters = {
 
 }
 
+// Activities queries
+export const Activities = {
+  // Add a new activity
+  add: async (
+    props: TablesInsert<"activities">,
+  ): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .insert(props)
+        .select("id")
+        .single();
 
+      if (error) {
+        console.error(`[Activities.add] Error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, id: data.id };
+    } catch (err) {
+      console.error(`[Activities.add] Error: ${err}`);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Unknown error",
+      };
+    }
+  },
+
+  // Get all activities for a project
+  get_by_project_id: async (
+    projectId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<Activity[]> => {
+    try {
+      if (!projectId || typeof projectId !== "string") {
+        console.error("[Activities.get_by_project_id] Invalid project ID");
+        return [];
+      }
+
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(projectId)) {
+        console.error("[Activities.get_by_project_id] Invalid UUID format");
+        return [];
+      }
+
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error(
+          `[Activities.get_by_project_id] Error: ${error.message}`,
+        );
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error(`[Activities.get_by_project_id] Error: ${err}`);
+      return [];
+    }
+  },
+
+  // Get activities by owner
+  get_by_owner_id: async (
+    ownerId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<Activity[]> => {
+    try {
+      if (!ownerId || typeof ownerId !== "string") {
+        console.error("[Activities.get_by_owner_id] Invalid owner ID");
+        return [];
+      }
+
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error(`[Activities.get_by_owner_id] Error: ${error.message}`);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error(`[Activities.get_by_owner_id] Error: ${err}`);
+      return [];
+    }
+  },
+};
 
 
 
@@ -1497,6 +1619,7 @@ const api = {
   // vms:Vms,
   clusters:Clusters,
   database_clusters:Database_Clusters,
+  activities: Activities,
 };
 
 export default api;

@@ -25,6 +25,17 @@ CREATE TABLE project_logs (
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE
 );
 
+-- Activities table
+CREATE TABLE activities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cluster_name TEXT NOT NULL,
+    cluster_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE
+);
+
 -- User profiles table (extends Supabase auth.users)
 CREATE TABLE user_profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -176,6 +187,7 @@ create table if not exists public.vms (
 -- Enable RLS on all tables
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE otps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
@@ -217,6 +229,31 @@ CREATE POLICY "Users can insert logs for their projects" ON project_logs
         EXISTS (
             SELECT 1 FROM projects 
             WHERE projects.id = project_logs.project_id 
+            AND (
+                auth.uid() = projects.owner OR 
+                auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))
+            )
+        )
+    );
+
+-- Activities policies
+CREATE POLICY "Users can view activities for their projects" ON activities
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM projects 
+            WHERE projects.id = activities.project_id 
+            AND (
+                auth.uid() = projects.owner OR 
+                auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))
+            )
+        )
+    );
+
+CREATE POLICY "Users can insert activities for their projects" ON activities
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM projects 
+            WHERE projects.id = activities.project_id 
             AND (
                 auth.uid() = projects.owner OR 
                 auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))

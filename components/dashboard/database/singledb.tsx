@@ -72,6 +72,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
     }
 
     try {
+     // debugger
       isFetchingRef.current = true;
       console.log("🔄 Fetching database cluster...");
       
@@ -167,7 +168,7 @@ const Singledb = ({ databaseId, status }: SingleDbProps) => {
         intervalRef.current = null;
       }
     };
-  }, [fetchDatabaseCluster]); // ✅ Proper dependency
+  }, []); // ✅ Proper dependency
 
   // Copy to clipboard helper
   const copyToClipboard = (text: string, label: string) => {

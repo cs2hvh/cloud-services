@@ -1,12 +1,6 @@
-"use client";
+﻿"use client";
 import React from "react";
-import {
-  Cpu,
-  Database,
-  HardDrive,
-  Wifi,
-  ExternalLink,
-} from "lucide-react";
+import { Database, ExternalLink, Server, Cpu, MapIcon, MapPin } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,
@@ -19,9 +13,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getDaysRemaining } from "@/lib/utils";
 import Link from "next/link";
-
+import { dbLocations } from "@/config/locations";
+import { DatabaseIcon } from "@/components/dashboard/database/database-icon";
 
 const DbClusterGrid = ({
   data,
@@ -30,191 +24,156 @@ const DbClusterGrid = ({
   data: Tables<"database_clusters">[];
   type: string;
 }) => {
-  // const router = useRouter();
   if (!data || data.length === 0) {
     return (
-      <>
-        <h1 className="text-xs ms-2 text-white font-semibold mb-2 uppercase">
-          {type} ({data.length})
-        </h1>
-        <div className="text-center p-8 text-gray-500">No {type} found</div>
-      </>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Database className="h-5 w-5 text-purple-400" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+            Database Clusters ({data.length})
+          </h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
+          No database clusters found
+        </div>
+      </div>
     );
   }
 
-  // Function to get a nice icon for game type
-  const getGameIcon = (gameType: string) => {
-    switch (gameType?.toLowerCase()) {
-      case "minecraft":
-        return "🧱";
-      case "valheim":
-        return "⚔️";
-      case "rust":
-        return "🔧";
-      case "ark":
-        return "🦖";
-      case "csgo":
-        return "🔫";
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "online":
+        return "bg-green-500/20 text-green-400 border-green-500/30";
+      case "offline":
+        return "bg-red-500/20 text-red-400 border-red-500/30";
+      case "creating":
+        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
       default:
-        return "🎮";
+        return "bg-gray-500/20 text-gray-400 border-gray-500/30";
     }
   };
 
+  const getEngineIcon = (engine: string) => {
+    const icons: Record<string, string> = {
+      postgresql: "P",
+      mysql: "M",
+      mongodb: "Mo",
+      redis: "R",
+    };
+    return icons[engine?.toLowerCase()] || "DB";
+  };
+
+  const parseSize = (size: string) => {
+    if (!size) return { vcpu: "N/A", ram: "N/A" };
+    const match = size.match(/(\d+)vcpu-(\d+)gb/i);
+    if (match) {
+      return { vcpu: match[1], ram: match[2] };
+    }
+    return { vcpu: "N/A", ram: "N/A" };
+  };
+
   return (
-    <div className="mx-6">
-      <div>
-        <h1 className="text-xs text-white font-semibold mb-2 uppercase">
-          {type} ({data.length})
-        </h1>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Database className="h-5 w-5 text-purple-400" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+          Database Clusters ({data.length})
+        </h2>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {data.map((server) => (
-          <Card
-            key={server.id}
-            className="overflow-hidden transition-all duration-300 hover:shadow-md"
-          >
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">
-                    {getGameIcon(server.engine)}
-                  </span>
-                  <CardTitle>{server.name}</CardTitle>
-                </div>
-                {server.status === "online" ? (
-                  <div className="relative">
-                    <Badge
-                      variant="outline"
-                      className="bg-green-100 text-green-800 border-green-300"
-                    >
-                      Active
-                    </Badge>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {data.map((cluster) => {
+          const { vcpu, ram } = parseSize(cluster.size);
+          return (
+            <Card
+              key={cluster.id}
+              className="group overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-500/50 bg-card border-border"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start gap-3">
+                    <div className="text-2xl mt-1">
+                      <DatabaseIcon engine={cluster.engine} className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <CardTitle className="text-base line-clamp-1 text-foreground">
+                        {cluster.name}
+                      </CardTitle>
+                      <CardDescription className="text-xs capitalize text-muted-foreground">
+                        {cluster.engine} v{cluster.version || "Latest"}
+                      </CardDescription>
+                    </div>
                   </div>
-                ) : (
                   <Badge
                     variant="outline"
-                    className="bg-gray-100 text-gray-800 border-gray-300"
+                    className={`${getStatusColor(cluster.status)} text-xs font-medium`}
                   >
-                    {server.status}
+                    {cluster.status}
                   </Badge>
-                )}
-              </div>
-              <CardDescription className="capitalize">
-                {server.engine} Server
-              </CardDescription>
-            </CardHeader>
-            <Separator />
-            <CardContent>
-              {/* Resources */}
-              <div className="space-y-4">
+                </div>
+              </CardHeader>
+
+              <Separator className="bg-border" />
+
+              <CardContent className="pt-4 space-y-4">
                 <div>
-                  <h3 className="text-sm font-medium mb-2">Resources</h3>
-                  {/* <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center">
-                      <Cpu className="w-4 h-4 mr-2 text-blue-500" />
-                      <span>
-                        {
-                          (
-                            s as {
-                              cpu: number;
-                              ram: number;
-                              storage: number;
-                            } | null
-                          )?.cpu
-                        }{" "}
-                        CPU
-                      </span>
+                  <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                    Resources
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-foreground">
+                      <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{vcpu} vCPU</span>
                     </div>
-                    <div className="flex items-center">
-                      <Database className="w-4 h-4 mr-2 text-green-500" />
-                      <span>
-                        {
-                          (
-                            server.resources as {
-                              cpu: number;
-                              ram: number;
-                              storage: number;
-                            } | null
-                          )?.ram
-                        }{" "}
-                        MB RAM
-                      </span>
+                    <div className="flex items-center gap-1.5 text-foreground">
+                      <Database className="w-3.5 h-3.5 text-green-400" />
+                      <span>{ram} GB RAM</span>
                     </div>
-                    <div className="flex items-center">
-                      <HardDrive className="w-4 h-4 mr-2 text-purple-500" />
-                      <span>
-                        {
-                          (
-                            server.resources as {
-                              cpu: number;
-                              ram: number;
-                              storage: number;
-                            } | null
-                          )?.storage
-                        }{" "}
-                        GB Storage
-                      </span>
+                     <div className="flex items-center gap-1.5 text-foreground">
+                      <Database className="w-3.5 h-3.5 text-green-400" />
+                      <span>{ram} GB RAM</span>
                     </div>
-                    <div className="flex items-center">
-                      <Wifi className="w-4 h-4 mr-2 text-orange-500" />
-                      <span>
-                        {
-                          (server.resources as { bandwith?: number } | null)
-                            ?.bandwith
-                        }{" "}
-                        Mbps
-                      </span>
-                    </div>
-                  </div> */}
+                  </div>
                 </div>
 
-                {/* Connection Info */}
-                {/* <div>
-                  <h3 className="text-sm font-medium mb-2">Connection Info</h3>
-                  <div className="space-y-2">
-                    {server.public_connection && (
-                      <div className="bg-muted p-2 rounded-md font-mono text-sm">
-                        <span className="text-xs text-muted-foreground">Public: </span>
-                        {server.public_connection.host}:{server.public_connection.port}
-                      </div>
-                    )}
-                    {server.private_connection && (
-                      <div className="bg-muted p-2 rounded-md font-mono text-sm">
-                        <span className="text-xs text-muted-foreground">Private: </span>
-                        {server.private_connection.host}:{server.private_connection.port}
-                      </div>
-                    )}
+                <div>
+                  <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                    Region
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="truncate">{ dbLocations.find((loc) => loc.short === cluster.region)?.city || "N/A"}</span>
                   </div>
-                </div> */}
-               
-              </div>
-            </CardContent>
+                </div>
 
-            <CardFooter className="pt-2 flex gap-2">
-              Open Control Panel
-              <Link
-                href={{
-                  pathname: `/dashboard/services/kubernetes/clusters/${server.id}`,
-                  query: { clusterStatus: "ready" },
-                }}
-                className="h-4 w-4"
-              />
-              <Button
-                className="w-1/2"
-                onClick={() =>
-                  window.open(
-                    `https://panel.hav0k.dev/server/${server.id}`,
-                    "_blank"
-                  )
-                }
-              >
-                Renew Subscription
-                <ExternalLink className="h-4 w-4" />
-              </Button>
-            </CardFooter>
-          </Card>
-        ))}
+                 <div>
+                  <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                    Version
+                  </h3>
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                     <DatabaseIcon engine={cluster.engine} className="h-6 w-6" />
+                    <span className="truncate">{cluster.version}</span>
+                  </div>
+                </div>
+
+               
+              </CardContent>
+
+              <CardFooter className="pt-2 gap-2">
+                <Button
+                  asChild
+                  className="flex-1 group-hover:bg-purple-600 group-hover:text-white transition-colors"
+                  size="sm"
+                >
+                  <Link href={`/dashboard/services/database/clusters/${cluster.cluster_id}`}>
+                    Open Dashboard
+                    <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              </CardFooter>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

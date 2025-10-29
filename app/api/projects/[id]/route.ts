@@ -127,3 +127,58 @@ export async function PUT(req: NextRequest, { params }: Params) {
     );
   }
 }
+
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  try {
+    // Check if user is authenticated
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+    }
+
+    // Get project to verify it exists and user has access
+    const project = await Projects.get_by_id(id);
+    if (!project) {
+      return NextResponse.json(
+        { message: "Project not found" },
+        { status: 404 },
+      );
+    }
+
+    // Verify user owns the project or has access
+    if (project.owner !== user.id) {
+      return NextResponse.json(
+        { message: "You don't have permission to delete this project" },
+        { status: 403 },
+      );
+    }
+
+    // Delete project (cascade will handle related records)
+    const deleted = await Projects.delete(id);
+    if (!deleted) {
+      return NextResponse.json(
+        { message: "Failed to delete project" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({
+      message: "Project deleted successfully",
+    });
+  } catch (error) {
+    console.error("[DELETE /projects/:id]", error);
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error ? error.message : "Internal server error",
+      },
+      { status: 500 },
+    );
+  }
+}

@@ -308,7 +308,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
         name: state.selectedName,
         engine: state.selectedDbType,
         version: state.selectedVersion,
-        num_nodes: 3,
+        num_nodes: 1,
         size: `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`,
         region: state.selectedLocation,
         project_id: state.selectedProject,

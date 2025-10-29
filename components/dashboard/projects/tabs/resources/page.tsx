@@ -12,16 +12,12 @@ interface PageProps {
 const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
   const gameservers = await GameServers.get_by_project(projectId);
   const clusters = (await Clusters.get_by_project_id(projectId)).filter(item=>item.status==='ready');
-  const db_clusters = (await Database_Clusters.get_by_project_id(projectId));;
-
-
-   console.log(clusters,".......................16")
+  const db_clusters = (await Database_Clusters.get_by_project_id(projectId));
 
   return (
-    <div className="space-y-4">
-     
-      <GameServerGrid data={gameservers } type="game_servers" />
-      <KubernetesGrid data={clusters  } type="clusters" />
+    <div className="space-y-8 p-6">
+      <GameServerGrid data={gameservers} type="game_servers" />
+      <KubernetesGrid data={clusters} type="clusters" />
       <DbClusterGrid data={db_clusters} type="database_cluster" />
     </div>
   );

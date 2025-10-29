@@ -327,6 +327,51 @@ export type Database = {
           },
         ];
       };
+      activities: {
+        Row: {
+          id: string;
+          cluster_name: string;
+          cluster_type: string;
+          action: string;
+          created_at: string | null;
+          owner_id: string | null;
+          project_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          cluster_name: string;
+          cluster_type: string;
+          action: string;
+          created_at?: string | null;
+          owner_id?: string | null;
+          project_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          cluster_name?: string;
+          cluster_type?: string;
+          action?: string;
+          created_at?: string | null;
+          owner_id?: string | null;
+          project_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activities_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "activities_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       projects: {
         Row: {
           created_at: string | null;

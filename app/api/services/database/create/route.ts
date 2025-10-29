@@ -121,11 +121,13 @@ export async function POST(req: NextRequest) {
 
       const supabase_data = await Database_Clusters.create(sendData);
 
+      console.log(supabase_data, "...........supabase create database response...........");
+
       if (supabase_data.success) {
         return NextResponse.json(
           {
             data: supabase_data.data,
-            message: "database created success",
+            message: "database creation started",
           },
           { status: 200 }
         );

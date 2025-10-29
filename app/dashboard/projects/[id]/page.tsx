@@ -23,9 +23,9 @@ const ProjectSuspense = async ({ id }: { id: string }) => {
     return (
       <>
         <div className="flex justify-between pt-4">
-          <div>
-            <h2 className="text-2xl font-bold">{project.name}</h2>
-            <p className="text-muted-foreground">{project.description}</p>
+          <div className="my-auto">
+            <h2 className="px-5 text-2xl font-bold">{project.name}</h2>
+            <p className="px-5 text-muted-foreground">{project.description}</p>
           </div>
         </div>
         <Separator className="my-4" />
