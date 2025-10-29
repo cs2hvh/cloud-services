@@ -112,8 +112,9 @@ export async function POST(req: NextRequest) {
         size: database.data.database.size,
         region: database.data.database.region,
         window: database.data.database.maintenance_window,
-        users: encryptedUsers,
-        dbs: database.data.database.db_names,
+        // ✅ Fix: Normalize users and dbs to arrays (MongoDB returns undefined/null initially)
+        users: encryptedUsers || [],
+        dbs: database.data.database.db_names || [],
       };
 
 
@@ -130,6 +131,16 @@ export async function POST(req: NextRequest) {
             message: "database creation started",
           },
           { status: 200 }
+        );
+      } else {
+        // ✅ Handle Supabase insertion failure
+        console.error("[createDatabase] Supabase insertion failed:", supabase_data.error);
+        return NextResponse.json(
+          {
+            error: "Failed to save database cluster to database",
+            details: supabase_data.error,
+          },
+          { status: 500 }
         );
       }
     }
@@ -149,4 +160,10 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // ✅ Handle case where DigitalOcean API returns non-201 status without throwing error
+  return NextResponse.json(
+    { error: "Failed to create database cluster in DigitalOcean" },
+    { status: 500 }
+  );
 }

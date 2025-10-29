@@ -54,7 +54,7 @@ export interface Database_Connection{
   port: number;
   user: string;
   database: string;
-  password: string | EncryptedData;
+  password?: string | EncryptedData;
   protocol: string;
 
 }

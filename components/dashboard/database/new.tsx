@@ -281,6 +281,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     }
 
     try {
+      
       setIsLoading(true);
       debugger
       // Validate all required fields

@@ -68,21 +68,33 @@ export async function POST(req: NextRequest) {
         
         if (fullClusterData.status === 200) {
           const dbData = fullClusterData.data.database;
+
+          console.log(dbData, "...........database data from DO...........");
+
+           const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
           
           // Encrypt connection details
           const encryptionKey = process.env.ENCRYPTION_KEY!;
+          let encryptedPublicPassword: string | EncryptedData | undefined = undefined;
+          let encryptedPrivatePassword: string | EncryptedData | undefined = undefined;
           
-          // Encrypt public connection password
-          const encryptedPublicPassword = Encryption.encrypt(
+          if(shouldResolveIP){
+            // Encrypt public connection password
+           encryptedPublicPassword = Encryption.encrypt(
             dbData.connection.password,
             encryptionKey
           );
+
+          console.log("reached here ---83")
           
           // Encrypt private connection password
-          const encryptedPrivatePassword = Encryption.encrypt(
+           encryptedPrivatePassword = Encryption.encrypt(
             dbData.private_connection.password,
             encryptionKey
           );
+
+           console.log("reached here ---84")
+          }
 
           // Get IP addresses for both public and private connection hosts (only for MySQL and PostgreSQL)
           let publicHostIP = dbData.connection.host;
@@ -90,7 +102,7 @@ export async function POST(req: NextRequest) {
           let encryptedPublicURI = dbData.connection.uri;
           
           // Only resolve IP for MySQL and PostgreSQL databases
-          const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
+         
           
           if (shouldResolveIP) {
             try {
@@ -128,6 +140,8 @@ export async function POST(req: NextRequest) {
           } else {
             console.log(`[checkStatus] Skipping IP resolution for engine: ${dbData.engine} (only MySQL and PostgreSQL supported)`);
           }
+
+          console.log("reached here ---138")
           
           // Encrypt the IP addresses
           const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
@@ -136,7 +150,9 @@ export async function POST(req: NextRequest) {
           
           // Get CA certificate
           let caCertificate = "";
-          try {
+
+            if (shouldResolveIP) {
+               try {
             const caResponse = await axios.get(
               `https://api.digitalocean.com/v2/databases/${validatedData.id}/ca`,
               {
@@ -152,12 +168,20 @@ export async function POST(req: NextRequest) {
           } catch (error) {
             console.error("[checkStatus] Failed to fetch CA certificate:", error);
           }
+
+            }
+
+
+            console.log("reached here ---169")
+         
           
           // Encrypt CA certificate
           const encryptedCaCert = caCertificate 
             ? Encryption.encrypt(caCertificate, encryptionKey)
             : "";
           
+
+            console.log("reached here ---178")
           // Update Supabase with online status and connection details
           await Database_Clusters.update_status(
             validatedData.id,

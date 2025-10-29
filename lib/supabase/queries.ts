@@ -1048,7 +1048,7 @@ export const Database_Clusters = {
   return { success: true, data: data };
   },
 
-  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null, public_connection:Database_Connection, private_connection:Database_Connection)=>{
+  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null|undefined, public_connection:Database_Connection, private_connection:Database_Connection)=>{
 
 
     console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
