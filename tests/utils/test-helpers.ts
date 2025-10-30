@@ -22,7 +22,7 @@ export function renderWithProviders(
 export function mockAuthenticatedUser(userId?: string) {
   const mockUser = {
     id: userId || '550e8400-e29b-41d4-a716-446655440000',
-    email: 'test@example.com',
+    email: 'pankaj.soni@ahurasense.com',
     name: 'Test User',
   };
 

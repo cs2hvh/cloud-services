@@ -14,6 +14,7 @@ interface database_error {
 export async function POST(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
+  console.log(auth)
   if (!auth.authenticated) {
     return auth.response;
   }
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 204) {
-      // console.log("[deleteDatabase] Database deleted successfully from DigitalOcean");
+      console.log("[deleteDatabase] Database deleted successfully from DigitalOcean");
 
       // Remove database from Supabase
       const supabase_result = await Database_Clusters.remove_db(
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
             event: "Trash2",
             text: `Database '${validatedData.db_name}' deleted from cluster`
           });
-          // console.log(`[deleteDatabase] ✅ Activity log added for database deletion`);
+          console.log(`[deleteDatabase] ✅ Activity log added for database deletion`);
         }
         
         return NextResponse.json(

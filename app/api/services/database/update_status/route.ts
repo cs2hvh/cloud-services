@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
     const finalPublicHost = host_public || body.public_connection.host;
     const finalPrivateHost = host_private || body.private_connection.host;
     
-    // console.log("Public host - Original:", body.public_connection.host, "| Resolved:", finalPublicHost);
-    // console.log("Private host - Original:", body.private_connection.host, "| Resolved:", finalPrivateHost);
+    console.log("Public host - Original:", body.public_connection.host, "| Resolved:", finalPublicHost);
+    console.log("Private host - Original:", body.private_connection.host, "| Resolved:", finalPrivateHost);
 
     // ✅ UPDATE URIs: Replace hostname with IP address in connection URIs
     // Extract hostname from URI (part after @ and before :port or /)
@@ -44,12 +44,12 @@ export async function POST(req: NextRequest) {
       ? body.private_connection.uri.replace(privateHostnameMatch[1], finalPrivateHost)
       : body.private_connection.uri;
 
-    // console.log("Original public URI:", body.public_connection.uri);
-    // console.log("Extracted public hostname:", publicHostnameMatch?.[1]);
-    // console.log("Updated public URI:", public_uri_with_ip);
-    // console.log("Original private URI:", body.private_connection.uri);
-    // console.log("Extracted private hostname:", privateHostnameMatch?.[1]);
-    // console.log("Updated private URI:", private_uri_with_ip);
+    console.log("Original public URI:", body.public_connection.uri);
+    console.log("Extracted public hostname:", publicHostnameMatch?.[1]);
+    console.log("Updated public URI:", public_uri_with_ip);
+    console.log("Original private URI:", body.private_connection.uri);
+    console.log("Extracted private hostname:", privateHostnameMatch?.[1]);
+    console.log("Updated private URI:", private_uri_with_ip);
 
     //encrypt the host and password here and then store in supabase
     

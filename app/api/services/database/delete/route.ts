@@ -28,14 +28,14 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    // console.log(database.status,"............database delete response...........");
+    console.log(database.status,"............database delete response...........");
 
     const sendData = {
       cluster_id: body.id,
     };
     const supabase_delete = await Database_Clusters.delete(sendData.cluster_id);
 
-    // console.log(supabase_delete,"...........supabase delete response........");
+    console.log(supabase_delete,"...........supabase delete response........");
     
     if (supabase_delete.success) {
       // Add activity log for database cluster deletion
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
           event: "Trash2",
           text: `Database cluster '${clusterName}' deleted`
         });
-        // console.log(`[deleteDatabase] ✅ Activity log added for cluster deletion`);
+        console.log(`[deleteDatabase] ✅ Activity log added for cluster deletion`);
       }
       
       return NextResponse.json(

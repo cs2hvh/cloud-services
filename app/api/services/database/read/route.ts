@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       if (database.status === 200) {
         doStatus = database.data.database.status;
         status = doStatus === "online" ? true : false;
-        // console.log(`[checkStatus] DO Status: ${doStatus}, Supabase will be checked/updated if needed`);
+        console.log(`[checkStatus] DO Status: ${doStatus}, Supabase will be checked/updated if needed`);
       }
     }
 
@@ -50,10 +50,10 @@ export async function POST(req: NextRequest) {
     
     // ✅ UPDATE SUPABASE IF STATUS CHANGED TO ONLINE
     if (status && supabase_read.success && supabase_read.data.status !== doStatus) {
-      // console.log(`[checkStatus] ⚠️ Status mismatch! Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
+      console.log(`[checkStatus] ⚠️ Status mismatch! Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
       
       if (doStatus === "online") {
-        // console.log(`[checkStatus] 🔄 Cluster is now online, updating Supabase...`);
+        console.log(`[checkStatus] 🔄 Cluster is now online, updating Supabase...`);
         
         // Get full cluster details to update Supabase with connection info
         const fullClusterData = await axios.get(
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
         if (fullClusterData.status === 200) {
           const dbData = fullClusterData.data.database;
 
-          // console.log(dbData, "...........database data from DO...........");
+          console.log(dbData, "...........database data from DO...........");
 
            const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
           
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
             encryptionKey
           );
 
-          // console.log("reached here ---83")
+          console.log("reached here ---83")
           
           // Encrypt private connection password
            encryptedPrivatePassword = Encryption.encrypt(
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
             encryptionKey
           );
 
-           // console.log("reached here ---84")
+           console.log("reached here ---84")
           }
 
           // Get IP addresses for both public and private connection hosts (only for MySQL and PostgreSQL)
@@ -112,14 +112,14 @@ export async function POST(req: NextRequest) {
                 const aRecord = publicHostResult.records.find(r => r.type === "A");
                 if (aRecord && aRecord.records.length > 0) {
                   publicHostIP = aRecord.records[0] as string;
-                  // console.log(`[checkStatus] Resolved public host ${dbData.connection.host} to IP: ${publicHostIP}`);
+                  console.log(`[checkStatus] Resolved public host ${dbData.connection.host} to IP: ${publicHostIP}`);
                   
                   // Replace hostname in URI with IP address
                   // URI format: protocol://user:password@hostname:port/database
                   const uriMatch = dbData.connection.uri.match(/^(.+@)([^:\/]+)(.+)$/);
                   if (uriMatch) {
                     encryptedPublicURI = `${uriMatch[1]}${publicHostIP}${uriMatch[3]}`;
-                    // console.log(`[checkStatus] Updated URI with IP address`);
+                    console.log(`[checkStatus] Updated URI with IP address`);
                   }
                 }
               }
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
                 const aRecord = privateHostResult.records.find(r => r.type === "A");
                 if (aRecord && aRecord.records.length > 0) {
                   privateHostIP = aRecord.records[0] as string;
-                  // console.log(`[checkStatus] Resolved private host ${dbData.private_connection.host} to IP: ${privateHostIP}`);
+                  console.log(`[checkStatus] Resolved private host ${dbData.private_connection.host} to IP: ${privateHostIP}`);
                 }
               }
             } catch (error) {
@@ -138,10 +138,10 @@ export async function POST(req: NextRequest) {
               // Continue with original hostnames if resolution fails
             }
           } else {
-            // console.log(`[checkStatus] Skipping IP resolution for engine: ${dbData.engine} (only MySQL and PostgreSQL supported)`);
+            console.log(`[checkStatus] Skipping IP resolution for engine: ${dbData.engine} (only MySQL and PostgreSQL supported)`);
           }
 
-          // console.log("reached here ---138")
+          console.log("reached here ---138")
           
           // Encrypt the IP addresses
           const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
             }
 
 
-            // console.log("reached here ---169")
+            console.log("reached here ---169")
          
           
           // Encrypt CA certificate
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
             : "";
           
 
-            // console.log("reached here ---178")
+            console.log("reached here ---178")
           // Update Supabase with online status and connection details
           await Database_Clusters.update_status(
             validatedData.id,
@@ -200,13 +200,13 @@ export async function POST(req: NextRequest) {
             }
           );
           
-          // console.log(`[checkStatus] ✅ Supabase updated with online status`);
+          console.log(`[checkStatus] ✅ Supabase updated with online status`);
           
           // Re-read from Supabase to get updated data
           const updatedRead = await Database_Clusters.read(validatedData.id);
           if (updatedRead.success) {
             supabase_read.data = updatedRead.data;
-            // console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
+            console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
             
             // Add activity log for database cluster going online
             if (updatedRead.data.project_id) {
@@ -215,13 +215,13 @@ export async function POST(req: NextRequest) {
                 event: "Database",
                 text: `Database cluster '${updatedRead.data.name}' is now online`
               });
-              // console.log(`[checkStatus] ✅ Activity log added for cluster going online`);
+              console.log(`[checkStatus] ✅ Activity log added for cluster going online`);
             }
           }
         }
       }
     } else if (doStatus && supabase_read.success) {
-      // console.log(`[checkStatus] ℹ️ Status matches - Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
+      console.log(`[checkStatus] ℹ️ Status matches - Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
     }
       //decrypt the host , password , caCertificate here before sending response
       if (supabase_read.success) {

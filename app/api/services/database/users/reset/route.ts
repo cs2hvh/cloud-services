@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      // console.log("[resetDatabaseUserPassword] Password reset successfully:", response.data.user);
+      console.log("[resetDatabaseUserPassword] Password reset successfully:", response.data.user);
 
       const user = response.data.user;
       const encryptionKey = process.env.ENCRYPTION_KEY!;

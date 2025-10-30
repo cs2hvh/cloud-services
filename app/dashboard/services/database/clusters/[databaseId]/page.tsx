@@ -21,10 +21,10 @@ const SingleDbPage = async ({
     //console.log(params,".............params...........");
 
     const { databaseId } = await params;
-    // console.log(databaseId,".............databaseId...........");
+    console.log(databaseId,".............databaseId...........");
    const databaseStatus =(await Database_Clusters.read(databaseId))?.data?.status ?? "failed";
 
-    // console.log(databaseStatus,".............database status...........");
+    console.log(databaseStatus,".............database status...........");
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
       <div className="mb-8">

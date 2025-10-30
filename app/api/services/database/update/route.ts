@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
         event: "FolderKanban",
         text: `Database cluster '${clusterData.data.name}' moved to this project`
       });
-      // console.log(`[updateProject] ✅ Activity log added for project assignment`);
+      console.log(`[updateProject] ✅ Activity log added for project assignment`);
     }
 
     return NextResponse.json(

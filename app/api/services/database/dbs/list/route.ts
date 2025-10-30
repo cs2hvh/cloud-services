@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      // console.log("[listDatabases] Databases fetched successfully:", response.data.dbs);
+      console.log("[listDatabases] Databases fetched successfully:", response.data.dbs);
 
       const databases = response.data.dbs;
 

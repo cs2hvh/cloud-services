@@ -344,7 +344,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
         );
       }
     } catch (error) {
-      // console.log(error);
+      console.log(error);
       toast.error("Failed to create database. Please try again later.");
     } finally {
       setIsLoading(false);

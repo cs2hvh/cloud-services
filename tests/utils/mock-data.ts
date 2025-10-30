@@ -5,8 +5,8 @@ import { Tables } from '@/lib/supabase/types';
  */
 
 export const mockUser = {
-  id: '550e8400-e29b-41d4-a716-446655440000',
-  email: 'test@example.com',
+  id: 'pankaj.soni@ahurasense.com',
+  email: 'pankaj.soni@ahurasense.com',
   name: 'Test User',
 };
 
