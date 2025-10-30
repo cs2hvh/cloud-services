@@ -4,6 +4,7 @@ import { Database_Clusters } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { listDbsSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { DatabaseInstance } from "@/lib/supabase/types";
 
 interface database_error {
   response: {
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
       const databases = response.data.dbs;
 
       // Format databases for Supabase
-      const formattedDbs = databases.map((db: any) => ({
+      const formattedDbs = databases.map((db: DatabaseInstance) => ({
         id: db.name,
         name: db.name,
         created_at: new Date().toISOString(),

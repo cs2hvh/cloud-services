@@ -1,7 +1,7 @@
 // import { Encryption } from "@/config/functions";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
-import { network_rules, Tables, TablesInsert, TablesUpdate, EncryptedData, Database_Connection } from "./types";
+import { network_rules, Tables, TablesInsert, TablesUpdate, EncryptedData, Database_Connection, DatabaseUser, DatabaseInstance } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
@@ -1150,7 +1150,7 @@ export const Database_Clusters = {
 },
 
   // Database user management functions
-  add_user: async(cluster_id: string, user: any) => {
+  add_user: async(cluster_id: string, user: DatabaseUser) => {
     console.log(user, "...........in addDatabaseUser........");
     const supabase = await createWorkerClient();
     
@@ -1202,7 +1202,7 @@ export const Database_Clusters = {
     }
 
     const currentUsers = currentData?.users || [];
-    const updatedUsers = currentUsers.filter((u: any) => u.name !== username);
+    const updatedUsers = currentUsers.filter((u: DatabaseUser) => u.name !== username);
 
     // Update with user removed
     const { data, error } = await supabase
@@ -1220,7 +1220,7 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  update_users: async(cluster_id: string, users: any[]) => {
+  update_users: async(cluster_id: string, users: DatabaseUser[]) => {
     console.log(users, "...........in updateDatabaseUsers........");
     const supabase = await createWorkerClient();
     
@@ -1257,7 +1257,7 @@ export const Database_Clusters = {
   },
 
   // Database instance management functions
-  add_db: async(cluster_id: string, database: any) => {
+  add_db: async(cluster_id: string, database: DatabaseInstance) => {
     console.log(database, "...........in addDatabase........");
     const supabase = await createWorkerClient();
     
@@ -1301,7 +1301,7 @@ export const Database_Clusters = {
       .from("database_cluster")
       .select("dbs")
       .eq("cluster_id", cluster_id)
-      .single();
+      .single(); 
 
     if (readError) {
       console.error("[removeDatabase] read failed:", readError.message);
@@ -1309,7 +1309,7 @@ export const Database_Clusters = {
     }
 
     const currentDbs = currentData?.dbs || [];
-    const updatedDbs = currentDbs.filter((db: any) => db.name !== db_name);
+    const updatedDbs = currentDbs.filter((db: DatabaseInstance) => db.name !== db_name);
 
     // Update with database removed
     const { data, error } = await supabase
@@ -1327,7 +1327,7 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  update_dbs: async(cluster_id: string, databases: any[]) => {
+  update_dbs: async(cluster_id: string, databases: DatabaseInstance[]) => {
     console.log(databases, "...........in updateDatabases........");
     const supabase = await createWorkerClient();
     
@@ -1576,7 +1576,7 @@ export const storeFile=async(clusterId:string, file:File)=>{
 
   const path = `clusters/${clusterId}/${Date.now()}-${file.name}`;
   const supabase = await createSSRClient();
-  const { data, error: uploadError } = await supabase
+  const { error: uploadError } = await supabase
     .storage
     .from('kubeconfigs')   // bucket name
     .upload(path, file, {

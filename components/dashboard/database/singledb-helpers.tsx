@@ -136,7 +136,7 @@ export const extractRegion = (region: string | undefined): string => {
   }
 
   // If it's an object (shouldn't happen based on types, but handle it)
-  return (region as any)?.address || (region as any)?.family || "N/A";
+  return (region as {address:string,family:string})?.address || (region as any)?.family || "N/A";
 };
 
 export const calculateMonthlyCost = (size: string): string => {
@@ -164,7 +164,7 @@ export const downloadCACertificate = async (databaseId: UUID | undefined, ca_cer
     console.log("Certificate type:", typeof ca_certificate);
     
     // Convert to string if it's an encrypted object
-    let certString = typeof ca_certificate === 'string' ? ca_certificate : String(ca_certificate);
+    const certString = typeof ca_certificate === 'string' ? ca_certificate : String(ca_certificate);
     
     console.log("Certificate length:", certString?.length);
     

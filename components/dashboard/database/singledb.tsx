@@ -3,14 +3,14 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Database,
+  // Database,
   Loader2,
   Trash2,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
-import { Database_Connection, Tables } from "@/lib/supabase/types";
+import { Tables } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
@@ -47,7 +47,7 @@ interface SingleDbProps {
   status: string;
 }
 
-const Singledb = ({ databaseId, status }: SingleDbProps) => {
+const Singledb = ({ databaseId }: SingleDbProps) => {
   const [database, setDatabase] = useState<Tables<"database_clusters"> | null>(
     null
   );

@@ -7,6 +7,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { DatabaseUser } from "@/lib/supabase/types";
 
 interface database_error {
   response: {
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest) {
       console.log(encryptedPrivatePassword,"...........encrypted private password in create database api...........");
 
       // Encrypt user passwords
-      const encryptedUsers = database.data.database.users?.map((user: any) => ({
+      const encryptedUsers = database.data.database.users?.map((user: DatabaseUser) => ({
         ...user,
         password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
       }));

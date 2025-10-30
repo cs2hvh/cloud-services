@@ -2,7 +2,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from "@/lib/supabase/types";
 import ProjectResourcesPage from "./tabs/resources/page";
 import ProjectActivityPage from "./tabs/activity";
-import ProjectSettingsPage from "./tabs/settings";
+// import ProjectSettingsPage from "./tabs/settings";
 
 interface PageProps {
   project: Tables<"projects">;

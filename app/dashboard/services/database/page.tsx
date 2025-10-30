@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Database, Loader2, Plus, Search } from "lucide-react";
+import { Database, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -43,11 +43,11 @@ const getLocationName = (regionCode: string): string => {
 
 const DatabasePage = () => {
   // Dummy data for now, replace with actual data from your backend
-  const databases = [
-    {
-      name: "production-db-1",
-    },
-  ];
+  // const databases = [
+  //   {
+  //     name: "production-db-1",
+  //   },
+  // ];
 
   const user = useSession();
   const router = useRouter();

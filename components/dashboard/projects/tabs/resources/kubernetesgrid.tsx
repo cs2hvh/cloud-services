@@ -17,10 +17,8 @@ import Link from "next/link";
 
 const KubernetesGrid = ({
   data,
-  type,
 }: {
   data: Tables<"clusters_get">[];
-  type: string;
 }) => {
   if (!data || data.length === 0) {
     return (

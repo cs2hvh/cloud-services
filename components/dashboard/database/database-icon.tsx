@@ -1,5 +1,5 @@
 import React from "react";
-import { Database, CircleDot, Box, Server } from "lucide-react";
+import { Database } from "lucide-react";
 import Image from "next/image";
 
 interface DatabaseIconProps {

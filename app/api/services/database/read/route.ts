@@ -3,7 +3,7 @@ import axios from "axios";
 import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
-import { EncryptedData } from "@/lib/supabase/types";
+import { DatabaseUser, EncryptedData } from "@/lib/supabase/types";
 import { readDatabaseSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { resolveHost } from "@/config/hosttoip";
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     const supabase_read = await Database_Clusters.read(validatedData.id);
     
     // ✅ UPDATE SUPABASE IF STATUS CHANGED TO ONLINE
-    if (doStatus && supabase_read.success && supabase_read.data.status !== doStatus) {
+    if (status && supabase_read.success && supabase_read.data.status !== doStatus) {
       console.log(`[checkStatus] ⚠️ Status mismatch! Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
       
       if (doStatus === "online") {
@@ -270,7 +270,7 @@ export async function POST(req: NextRequest) {
               : data.private_connection.password,
           } : undefined,
           // Decrypt user passwords
-          users: data.users?.map((user: any) => ({
+          users: data.users?.map((user: DatabaseUser) => ({
             ...user,
             password: user.password && isEncrypted(user.password)
               ? Encryption.decrypt(user.password, encryptionKey)

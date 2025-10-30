@@ -1,5 +1,4 @@
 import { UUID } from "crypto";
-import { boolean } from "zod";
 import type { EncryptedData } from "@/config/functions";
 
 // Re-export EncryptedData for convenience
@@ -21,7 +20,7 @@ interface NodeConfig {
 
 
 
-type Rule = {
+export type Rule = {
   uuid: string;
   cluster_uuid: string;
   type: string; // e.g. "ip_addr"

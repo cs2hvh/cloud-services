@@ -1,6 +1,6 @@
 ﻿"use client";
 import React from "react";
-import { Database, ExternalLink, Server, Cpu, MapIcon, MapPin } from "lucide-react";
+import { Database, ExternalLink, Cpu, MapPin } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,
@@ -19,10 +19,8 @@ import { DatabaseIcon } from "@/components/dashboard/database/database-icon";
 
 const DbClusterGrid = ({
   data,
-  type,
 }: {
   data: Tables<"database_clusters">[];
-  type: string;
 }) => {
   if (!data || data.length === 0) {
     return (
@@ -53,15 +51,15 @@ const DbClusterGrid = ({
     }
   };
 
-  const getEngineIcon = (engine: string) => {
-    const icons: Record<string, string> = {
-      postgresql: "P",
-      mysql: "M",
-      mongodb: "Mo",
-      redis: "R",
-    };
-    return icons[engine?.toLowerCase()] || "DB";
-  };
+  // const getEngineIcon = (engine: string) => {
+  //   const icons: Record<string, string> = {
+  //     postgresql: "P",
+  //     mysql: "M",
+  //     mongodb: "Mo",
+  //     redis: "R",
+  //   };
+  //   return icons[engine?.toLowerCase()] || "DB";
+  // };
 
   const parseSize = (size: string) => {
     if (!size) return { vcpu: "N/A", ram: "N/A" };

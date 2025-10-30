@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from "react";
+// import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { 
   Server, 
   Database, 
-  Globe, 
+  // Globe, 
   Activity,
   // ArrowUp,
   MoreVertical,
@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+// import { createClient } from "@/lib/supabase/client";
 import { Tables } from "@/lib/supabase/types";
 import { KubernetesIcon } from "@/components/ui/kubernetes";
 import { DatabaseIcon } from "../database/database-icon";

@@ -48,12 +48,12 @@ export const createDatabaseSchema = z.object({
       RESOURCE_LIMITS.MAX_NODES_PER_CLUSTER,
       `Maximum ${RESOURCE_LIMITS.MAX_NODES_PER_CLUSTER} nodes allowed per cluster`
     ),
-  size: z.enum(VALID_DATABASE_SIZES as any, {
+  size: z.enum(VALID_DATABASE_SIZES, {
     errorMap: () => ({
       message: `Size must be one of the allowed tiers: ${VALID_DATABASE_SIZES.join(", ")}`,
     }),
   }),
-  region: z.enum(VALID_DATABASE_REGIONS as any, {
+  region: z.enum(VALID_DATABASE_REGIONS, {
     errorMap: () => ({
       message: `Region must be one of: ${VALID_DATABASE_REGIONS.join(", ")}`,
     }),
@@ -108,7 +108,7 @@ export type DeleteNetworkPayload = z.infer<typeof deleteNetworkSchema>;
  */
 export const updateMaintenanceSchema = z.object({
   database_id: z.string().uuid("Database ID must be a valid UUID"),
-  day: z.enum(VALID_MAINTENANCE_DAYS as any, {
+  day: z.enum(VALID_MAINTENANCE_DAYS, {
     errorMap: () => ({
       message: `Day must be one of: ${VALID_MAINTENANCE_DAYS.join(", ")}`,
     }),
@@ -125,7 +125,7 @@ export type UpdateMaintenancePayload = z.infer<typeof updateMaintenanceSchema>;
  */
 export const migrateRegionSchema = z.object({
   database_id: z.string().uuid("Database ID must be a valid UUID"),
-  region: z.enum(VALID_DATABASE_REGIONS as any, {
+  region: z.enum(VALID_DATABASE_REGIONS, {
     errorMap: () => ({
       message: `Region must be one of: ${VALID_DATABASE_REGIONS.join(", ")}`,
     }),
@@ -278,15 +278,15 @@ export type UpdateStatusPayload = z.infer<typeof updateStatusSchema>;
 export function validateEngineVersion(engine: string, version: string): boolean {
   switch (engine) {
     case "pg":
-      return VALID_PG_VERSIONS.includes(version as any);
+      return (VALID_PG_VERSIONS as readonly string[]).includes(version);
     case "mysql":
-      return VALID_MYSQL_VERSIONS.includes(version as any);
+      return (VALID_MYSQL_VERSIONS as readonly string[]).includes(version);
     case "redis":
-      return VALID_REDIS_VERSIONS.includes(version as any);
+      return (VALID_REDIS_VERSIONS as readonly string[]).includes(version);
     case "mongodb":
-      return VALID_MONGODB_VERSIONS.includes(version as any);
+      return (VALID_MONGODB_VERSIONS as readonly string[]).includes(version);
     case "kafka":
-      return VALID_KAFKA_VERSIONS.includes(version as any);
+      return (VALID_KAFKA_VERSIONS as readonly string[]).includes(version);
     default:
       return false;
   }

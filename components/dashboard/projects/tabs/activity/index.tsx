@@ -2,7 +2,7 @@ import { Projects } from "@/lib/supabase/queries";
 import { ProjectActivityTable } from "./table";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Tables } from "@/lib/supabase/types";
+// import { Tables } from "@/lib/supabase/types";
 
 const ProjectActivitySuspense = async ({
   projectId,

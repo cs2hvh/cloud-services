@@ -24,10 +24,8 @@ import { getDaysRemaining } from "@/lib/utils";
 
 const GameServerGrid = ({
   data,
-  type,
 }: {
   data: Tables<"game_servers">[];
-  type: string;
 }) => {
   if (!data || data.length === 0) {
     return (

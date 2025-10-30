@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
-  Settings,
+  // Settings,
   Save,
   X,
   Calendar,
-  Clock,
+  // Clock,
   MapPin,
   Trash2,
   AlertTriangle,
@@ -159,8 +159,8 @@ export const SettingsTab = ({
     return `${hour}:00`;
   };
 
-  const currentDay = getCurrentDay();
-  const currentHour = getCurrentHour();
+  // const currentDay = getCurrentDay();
+  // const currentHour = getCurrentHour();
 
   // Update Project
   const handleUpdateProject = async () => {

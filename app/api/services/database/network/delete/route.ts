@@ -4,6 +4,7 @@ import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { Rule } from "@/lib/supabase/types";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -46,14 +47,14 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Filter out the rule to delete
     const remainingRules = currentRules.filter(
-      (rule: any) => rule.uuid !== validatedData.rule_uuid
+      (rule: Rule) => rule.uuid !== validatedData.rule_uuid
     );
 
     console.log("Remaining rules after deletion:", remainingRules);
 
     // Find the deleted rule for logging
     const deletedRule = currentRules.find(
-      (rule: any) => rule.uuid === validatedData.rule_uuid
+      (rule: Rule) => rule.uuid === validatedData.rule_uuid
     );
     const deletedRuleValue = deletedRule?.value || 'unknown IP';
 

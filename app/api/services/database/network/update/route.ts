@@ -4,6 +4,7 @@ import { Database_Clusters, Projects } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { updateNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { Rule } from "@/lib/supabase/types";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
 
     // ✅ STEP 2: Check if the IP already exists (prevent duplicates)
     const ipExists = existingRules.some(
-      (rule: any) =>
+      (rule: Rule) =>
         rule.type === "ip_addr" && rule.value === validatedData.ip_address
     );
 
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
     console.log("Updated rules array:", updatedRules);
 
     // ✅ STEP 4: Update firewall with ALL rules (existing + new)
-    let payload = {
+    const payload = {
       rules: updatedRules,
     };
 

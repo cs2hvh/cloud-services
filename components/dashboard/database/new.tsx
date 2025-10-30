@@ -40,9 +40,9 @@ import { Badge } from "@/components/ui/badge";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
-import { NAMING_RULES, VALID_DATABASE_REGIONS } from "@/lib/validation/constants";
+import { NAMING_RULES,  } from "@/lib/validation/constants";
 import { z } from "zod";
-import { de } from "zod/v4/locales";
+// import { de } from "zod/v4/locales";
 
 interface PageProps {
   products: Tables<"products">[];
