@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      console.log("[retrieveDatabase] Database retrieved successfully:", response.data.db);
+      // console.log("[retrieveDatabase] Database retrieved successfully:", response.data.db);
 
       return NextResponse.json(
         {

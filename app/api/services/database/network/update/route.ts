@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const existingRules = read_existing_firewall.data?.rules || [];
-    console.log("Existing firewall rules:", existingRules);
+    // console.log("Existing firewall rules:", existingRules);
 
     // ✅ STEP 2: Check if the IP already exists (prevent duplicates)
     const ipExists = existingRules.some(
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     };
 
     const updatedRules = [...existingRules, newRule];
-    console.log("Updated rules array:", updatedRules);
+    // console.log("Updated rules array:", updatedRules);
 
     // ✅ STEP 4: Update firewall with ALL rules (existing + new)
     const payload = {
@@ -83,10 +83,10 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log(
-      update_firewall.status,
-      "...........update firewall response status..........."
-    );
+    // console.log(
+    //   update_firewall.status,
+    //   "...........update firewall response status..........."
+    // );
 
     if (update_firewall.status === 204) {
       // ✅ STEP 5: Read back the updated firewall rules to confirm
@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
     );
 
     if (read_firewall.status === 200) {
-      console.log(
-        read_firewall.data,
-        "...........read firewall response after update..........."
-      );
+      // console.log(
+      //   read_firewall.data,
+      //   "...........read firewall response after update..........."
+      // );
 
       // ✅ Update Supabase with the new rules
       const supabase_read = await Database_Clusters.update_network_rules(
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
             event: "Shield",
             text: `Added firewall rule: ${validatedData.ip_address}`
           });
-          console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
+          // console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
         }
         
         return NextResponse.json(

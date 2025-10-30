@@ -39,11 +39,11 @@ export async function PUT(req: NextRequest) {
       }
     );
 
-    console.log(
-      "Database region migration response:",
-      response.status,
-      response.statusText
-    );
+    // console.log(
+    //   "Database region migration response:",
+    //   response.status,
+    //   response.statusText
+    // );
 
     if (response.status === 202) {
       // Update Supabase with new region and status='migrating'
@@ -66,7 +66,7 @@ export async function PUT(req: NextRequest) {
           event: "Globe",
           text: `Database cluster migrating to region: ${validatedData.region}`
         });
-        console.log(`[migrateRegion] ✅ Activity log added for region migration`);
+        // console.log(`[migrateRegion] ✅ Activity log added for region migration`);
       }
 
       return NextResponse.json(

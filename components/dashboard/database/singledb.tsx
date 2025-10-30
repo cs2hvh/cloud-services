@@ -67,14 +67,14 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
   const fetchDatabaseCluster = useCallback(async () => {
     // Prevent concurrent fetches
     if (isFetchingRef.current) {
-      console.log("⚠️ Fetch already in progress, skipping...");
+      // console.log("⚠️ Fetch already in progress, skipping...");
       return;
     }
 
     try {
       debugger
       isFetchingRef.current = true;
-      console.log("🔄 Fetching database cluster...");
+      // console.log("🔄 Fetching database cluster...");
       
       const response = await api.post(`/services/database/read/`, {
         id: databaseId,
@@ -85,9 +85,9 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
         const dbData = response.data.data;
 
         // Debug: Log the structure to identify object issues
-        console.log("📊 [Frontend] Database Data received:", dbData);
-        console.log("📊 [Frontend] Status from API:", dbData.status, "Type:", typeof dbData.status);
-        console.log("📊 [Frontend] Previous status:", previousStatus.current);
+        // console.log("📊 [Frontend] Database Data received:", dbData);
+        // console.log("📊 [Frontend] Status from API:", dbData.status, "Type:", typeof dbData.status);
+        // console.log("📊 [Frontend] Previous status:", previousStatus.current);
 
         setDatabase(dbData);
         setLoading(false);
@@ -96,19 +96,19 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
         const wasCreating = previousStatus.current === "creating";
         const isNowOnline = dbData.status === "online";
 
-        console.log(`📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`);
+        // console.log(`📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`);
 
         // If database is now online, stop polling and show toast
         if (isNowOnline) {
-          console.log("✅ [Frontend] Database is online, stopping polling");
+          // console.log("✅ [Frontend] Database is online, stopping polling");
           
           // Stop polling
           if (intervalRef.current) {
-            console.log("🛑 [Frontend] Clearing polling interval");
+            // console.log("🛑 [Frontend] Clearing polling interval");
             clearInterval(intervalRef.current);
             intervalRef.current = null;
           } else {
-            console.log("⚠️ [Frontend] No interval to clear (already stopped)");
+            // console.log("⚠️ [Frontend] No interval to clear (already stopped)");
           }
 
           // Show toast only if status changed from creating to online
@@ -117,12 +117,12 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
             hasShownOnlineToast.current = true;
           }
         } else {
-          console.log(`ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`);
+          // console.log(`ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`);
         }
         
         // Update previous status
         previousStatus.current = dbData.status;
-        console.log(`📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`);
+        // console.log(`📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`);
 
         return dbData.status; // Return status for use in useEffect
       }
@@ -141,20 +141,20 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
   useEffect(() => {
     // Initial fetch
     const initializePolling = async () => {
-      console.log("🚀 [Frontend] Initializing polling...");
+      // console.log("🚀 [Frontend] Initializing polling...");
       const currentStatus = await fetchDatabaseCluster();
       
-      console.log(`📊 [Frontend] Initial status after fetch: "${currentStatus}"`);
+      // console.log(`📊 [Frontend] Initial status after fetch: "${currentStatus}"`);
       
       // Only set up polling if the database is not already online
       if (currentStatus !== "online") {
-        console.log("⏱️ [Frontend] Database is not online, starting polling every 60s...");
+        // console.log("⏱️ [Frontend] Database is not online, starting polling every 60s...");
         intervalRef.current = setInterval(() => {
-          console.log("🔄 [Frontend] Polling interval fired, fetching database status...");
+          // console.log("🔄 [Frontend] Polling interval fired, fetching database status...");
           fetchDatabaseCluster();
         }, 60000); // 1 minute
       } else {
-        console.log("✅ [Frontend] Database is already online, skipping polling setup");
+        // console.log("✅ [Frontend] Database is already online, skipping polling setup");
       }
     };
 
@@ -163,7 +163,7 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
     // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
-        console.log("🧹 [Frontend] Component unmounting, clearing interval");
+        // console.log("🧹 [Frontend] Component unmounting, clearing interval");
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
-    console.log("Creating database with data:", validatedData);
+    // console.log("Creating database with data:", validatedData);
     const database = await axios.post(
       "https://api.digitalocean.com/v2/databases",
       validatedData,
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
 
       // Encrypt sensitive data before storing
       const encryptionKey = process.env.ENCRYPTION_KEY!;
-      console.log(encryptionKey,"...........encryption key in create database api...........");
+      // console.log(encryptionKey,"...........encryption key in create database api...........");
 
       // Encrypt main password
       // const encryptedPassword = Encryption.encrypt(
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         database.data.database.connection.password,
         encryptionKey
       );
-      console.log(encryptedPublicPassword,"...........encrypted public password in create database api...........");
+      // console.log(encryptedPublicPassword,"...........encrypted public password in create database api...........");
 
       // Encrypt private connection password
       const encryptedPrivatePassword = Encryption.encrypt(
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
         encryptionKey
       );
 
-      console.log(encryptedPrivatePassword,"...........encrypted private password in create database api...........");
+      // console.log(encryptedPrivatePassword,"...........encrypted private password in create database api...........");
 
       // Encrypt user passwords
       const encryptedUsers = database.data.database.users?.map((user: DatabaseUser) => ({
@@ -119,11 +119,11 @@ export async function POST(req: NextRequest) {
       };
 
 
-      console.log("[createDatabase] Database created successfully:", sendData);
+      // console.log("[createDatabase] Database created successfully:", sendData);
 
       const supabase_data = await Database_Clusters.create(sendData);
 
-      console.log(supabase_data, "...........supabase create database response...........");
+      // console.log(supabase_data, "...........supabase create database response...........");
 
       if (supabase_data.success) {
         return NextResponse.json(
@@ -148,13 +148,13 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;
-      console.log(message,"..............error...........");
+      // console.log(message,"..............error...........");
       return NextResponse.json(
         { error: message ?? "Invalid request" },
         { status: 400 }
       );
     } else {
-      console.log("unknown error occurred","..............error...........");
+      // console.log("unknown error occurred","..............error...........");
       return NextResponse.json(
         { error: "Unknown error occurred" },
         { status: 400 }

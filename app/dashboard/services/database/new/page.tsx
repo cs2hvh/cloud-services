@@ -20,7 +20,7 @@ const DatabaseNewSuspense = async () => {
      }
      const projects = await Projects.get_all_by_user(user.id);
 
-  console.log(products,"...........database products...........");
+  // console.log(products,"...........database products...........");
   return <DatabaseSelect products={products} locations={location} projects={projects} userId={user.id} />;
 };
 

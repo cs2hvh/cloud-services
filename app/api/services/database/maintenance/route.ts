@@ -40,11 +40,11 @@ export async function PUT(req: NextRequest) {
       }
     );
 
-    console.log(
-      "Maintenance window update response:",
-      response.status,
-      response.statusText
-    );
+    // console.log(
+    //   "Maintenance window update response:",
+    //   response.status,
+    //   response.statusText
+    // );
 
     if (response.status === 204) {
       // Update Supabase with new maintenance window
@@ -69,7 +69,7 @@ export async function PUT(req: NextRequest) {
           event: "Settings",
           text: `Maintenance window updated: ${validatedData.day} at ${validatedData.hour}`
         });
-        console.log(`[updateMaintenanceWindow] ✅ Activity log added for maintenance window update`);
+        // console.log(`[updateMaintenanceWindow] ✅ Activity log added for maintenance window update`);
       }
 
       return NextResponse.json(

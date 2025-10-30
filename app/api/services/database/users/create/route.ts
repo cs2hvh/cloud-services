@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 201) {
-      console.log("[createDatabaseUser] User created successfully:", response.data.user);
+      // console.log("[createDatabaseUser] User created successfully:", response.data.user);
 
       const user = response.data.user;
       
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
             event: "UserPlus",
             text: `Database user '${validatedData.name}' created`
           });
-          console.log(`[createDatabaseUser] ✅ Activity log added for user creation`);
+          // console.log(`[createDatabaseUser] ✅ Activity log added for user creation`);
         }
         
         return NextResponse.json(

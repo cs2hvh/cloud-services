@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 204) {
-      console.log("[deleteDatabaseUser] User deleted successfully from DigitalOcean");
+      // console.log("[deleteDatabaseUser] User deleted successfully from DigitalOcean");
 
       // Remove user from Supabase
       const supabase_result = await Database_Clusters.remove_user(
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
             event: "UserMinus",
             text: `Database user '${validatedData.username}' deleted`
           });
-          console.log(`[deleteDatabaseUser] ✅ Activity log added for user deletion`);
+          // console.log(`[deleteDatabaseUser] ✅ Activity log added for user deletion`);
         }
         
         return NextResponse.json(

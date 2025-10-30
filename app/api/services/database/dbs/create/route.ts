@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
             event: "Database",
             text: `Database '${validatedData.name}' created in cluster`
           });
-          console.log(`[createDatabase] ✅ Activity log added for database creation`);
+          // console.log(`[createDatabase] ✅ Activity log added for database creation`);
         }
         
         return NextResponse.json(
