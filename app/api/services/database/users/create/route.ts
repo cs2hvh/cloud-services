@@ -5,6 +5,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
 import { createDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { DatabaseUser } from "@/lib/supabase/types";
 
 interface database_error {
   response: {
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       // Add user to Supabase
       const supabase_result = await Database_Clusters.add_user(
         validatedData.cluster_id,
-        userData
+        userData as DatabaseUser
       );
 
       if (supabase_result.success) {
