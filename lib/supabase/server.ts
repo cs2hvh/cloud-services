@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { createClient as clientWorker } from "@supabase/supabase-js";
 
-import "dotenv/config";
 import { Database } from "./types";
 
 export async function createClient() {
@@ -61,9 +60,19 @@ export async function createSSRClient() {
 }
 
 export async function createServiceClient() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url) throw new Error("Missing SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL");
+  if (!serviceKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
+
+  console.log('[createServiceClient] URL:', url);
+  console.log('[createServiceClient] Service key exists:', !!serviceKey);
+  console.log('[createServiceClient] Service key length:', serviceKey?.length);
+
   return createServerClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    url,
+    serviceKey,
     {
       cookies: {
         getAll() {
@@ -91,4 +100,36 @@ export async function createWorkerClient() {
         autoRefreshToken: false,
         detectSessionInUrl: false } }
 );
+}
+
+/**
+ * Server-side Supabase client for API routes
+ * Uses anon key with disabled cookies (like the original proxmox-vm)
+ */
+export function createServerSupabase(token?: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
+  if (!anon) throw new Error("Missing NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const options: any = {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  };
+
+  // When we have a user token, use anon key with the user's JWT
+  if (token) {
+    options.global = {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    };
+  }
+
+  return clientWorker<Database>(url, anon, options);
 }

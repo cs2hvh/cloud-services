@@ -1,12 +1,6 @@
-import VPSSelect from "@/components/dashboard/compute/vps/new";
-import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { serviceLocations } from "@/config/locations";
+import VPSFormLoader from "@/components/dashboard/compute/vps/form-loader";
 import { Suspense } from "react";
-
-const VPSNewSuspense = async () => {
-  // For now, we'll use static VPS plans. Later this can be fetched from backend
-  return <VPSSelect locations={serviceLocations} />;
-};
+import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 
 const VPSNewPage = () => {
   return (
@@ -22,7 +16,7 @@ const VPSNewPage = () => {
             <LoadingSpinner />
           </div>
         }>
-          <VPSNewSuspense />
+          <VPSFormLoader />
         </Suspense>
       </div>
     </div>

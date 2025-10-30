@@ -1,0 +1,112 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Server, Network, Users } from 'lucide-react';
+
+export default function AdminPage() {
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAdmin = async () => {
+      try {
+        // Try to fetch from admin endpoint to check if user is admin
+        const res = await fetch('/api/admin/proxmox/hosts', {
+          cache: 'no-store',
+        });
+        setIsAdmin(res.ok);
+      } catch {
+        setIsAdmin(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAdmin();
+  }, []);
+
+  const getAccessToken = async () => {
+    // In a real app, this would get the auth token from session/context
+    // For now, the API will use the session directly
+    return null;
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-black p-6 sm:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-white/60">Checking permissions...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-black p-6 sm:p-8">
+        <div className="max-w-7xl mx-auto">
+          <h1 className="text-2xl font-bold text-white mb-4">Access Denied</h1>
+          <p className="text-white/60">You do not have permission to access the admin panel.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 sm:p-8">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-white mb-2">Admin Panel</h1>
+          <p className="text-white/60">Platform administration and management</p>
+        </div>
+
+        {/* Quick Links */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/hosts" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-blue-500/10 rounded-lg">
+                  <Network className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Proxmox Hosts</h3>
+                  <p className="text-white/60 text-sm mt-1">Configure infrastructure</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/servers" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-green-500/10 rounded-lg">
+                  <Server className="h-6 w-6 text-green-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">All Servers</h3>
+                  <p className="text-white/60 text-sm mt-1">Manage VPS instances</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/users" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-purple-500/10 rounded-lg">
+                  <Users className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Users</h3>
+                  <p className="text-white/60 text-sm mt-1">Manage user accounts</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
