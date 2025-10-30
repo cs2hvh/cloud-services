@@ -50,9 +50,9 @@ export const Users = {
         await supabase.auth.admin.listUsers();
 
       if (authError) {
-        console.log(
-          `[Supabase] Error while getting user by email: ${authError.message}`,
-        );
+        // console.log(
+        //   `[Supabase] Error while getting user by email: ${authError.message}`,
+        // );
         return null;
       }
 
@@ -1000,7 +1000,7 @@ export const Clusters = {
 
    get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
     try {
-      console.log(cluster_id,"..................933..id");
+      //console.log(cluster_id,"..................933..id");
        const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
@@ -1030,7 +1030,7 @@ export const Database_Clusters = {
   
 
 
-    console.log(payload, "...........in createDatabaseClusterWorker........");
+    //console.log(payload, "...........in createDatabaseClusterWorker........");
    const supabase = await createWorkerClient();
    const { data, error } = await supabase
      .from("database_cluster")
@@ -1043,7 +1043,7 @@ export const Database_Clusters = {
     return { success: false, error: error.message };
   } 
 
-  console.log(data, "...........in createDatabaseClusterWorker........");
+ // console.log(data, "...........in createDatabaseClusterWorker........");
 
   return { success: true, data: data };
   },
@@ -1051,7 +1051,7 @@ export const Database_Clusters = {
   update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null|undefined, public_connection:Database_Connection, private_connection:Database_Connection)=>{
 
 
-    console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
+   // console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
   const supabase = await createWorkerClient();
    const { data, error } = await supabase
      .from("database_cluster")
@@ -1059,7 +1059,7 @@ export const Database_Clusters = {
      .eq("cluster_id", cluster_id)
      .select("*")
      .single();
-     console.log(data, "...........in updateDatabaseClusterWorker........");
+     //console.log(data, "...........in updateDatabaseClusterWorker........");
 
    if (error) {
      console.error("[updateClusterWorker] update failed:", error.message);
@@ -1114,7 +1114,7 @@ export const Database_Clusters = {
    }
  },
   delete: async(cluster_id:string)=>{
-    console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
+   // console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
    const supabase = await createWorkerClient();
    const { data, error } = await supabase
      .from("database_cluster")
@@ -1132,7 +1132,7 @@ export const Database_Clusters = {
   update_network_rules: async(cluster_id:string, network_rules:network_rules)=>{
 
 
-    console.log(network_rules, "...........in updateDatabaseClusterWorker........");
+   // console.log(network_rules, "...........in updateDatabaseClusterWorker........");
   const supabase = await createWorkerClient();
    const { data, error } = await supabase
      .from("database_cluster")
@@ -1140,7 +1140,7 @@ export const Database_Clusters = {
      .eq("cluster_id", cluster_id)
      .select("*")
      .single();
-     console.log(data, "...........in updateDatabaseClusterWorker........");
+    // console.log(data, "...........in updateDatabaseClusterWorker........");
 
    if (error) {
      console.error("[updateClusterWorker] update failed:", error.message);
@@ -1151,7 +1151,7 @@ export const Database_Clusters = {
 
   // Database user management functions
   add_user: async(cluster_id: string, user: DatabaseUser) => {
-    console.log(user, "...........in addDatabaseUser........");
+    //console.log(user, "...........in addDatabaseUser........");
     const supabase = await createWorkerClient();
     
     // First, get current users
@@ -1186,7 +1186,7 @@ export const Database_Clusters = {
   },
 
   remove_user: async(cluster_id: string, username: string) => {
-    console.log(username, "...........in removeDatabaseUser........");
+   // console.log(username, "...........in removeDatabaseUser........");
     const supabase = await createWorkerClient();
     
     // Get current users
@@ -1221,7 +1221,7 @@ export const Database_Clusters = {
   },
 
   update_users: async(cluster_id: string, users: DatabaseUser[]) => {
-    console.log(users, "...........in updateDatabaseUsers........");
+   // console.log(users, "...........in updateDatabaseUsers........");
     const supabase = await createWorkerClient();
     
     const { data, error } = await supabase
@@ -1232,7 +1232,7 @@ export const Database_Clusters = {
       .single();
 
     if (error) {
-      console.error("[updateDatabaseUsers] update failed:", error.message);
+     // console.error("[updateDatabaseUsers] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
@@ -1258,7 +1258,7 @@ export const Database_Clusters = {
 
   // Database instance management functions
   add_db: async(cluster_id: string, database: DatabaseInstance) => {
-    console.log(database, "...........in addDatabase........");
+    //console.log(database, "...........in addDatabase........");
     const supabase = await createWorkerClient();
     
     // First, get current databases
@@ -1293,7 +1293,7 @@ export const Database_Clusters = {
   },
 
   remove_db: async(cluster_id: string, db_name: string) => {
-    console.log(db_name, "...........in removeDatabase........");
+    //console.log(db_name, "...........in removeDatabase........");
     const supabase = await createWorkerClient();
     
     // Get current databases
@@ -1328,7 +1328,7 @@ export const Database_Clusters = {
   },
 
   update_dbs: async(cluster_id: string, databases: DatabaseInstance[]) => {
-    console.log(databases, "...........in updateDatabases........");
+   // console.log(databases, "...........in updateDatabases........");
     const supabase = await createWorkerClient();
     
     const { data, error } = await supabase
@@ -1339,7 +1339,7 @@ export const Database_Clusters = {
       .single();
 
     if (error) {
-      console.error("[updateDatabases] update failed:", error.message);
+      //console.error("[updateDatabases] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
@@ -1365,7 +1365,7 @@ export const Database_Clusters = {
 
   // Update project assignment for database cluster
   update_project: async(cluster_id: string, project_id: string) => {
-    console.log(`[updateProject] cluster_id: ${cluster_id}, project_id: ${project_id}`);
+    //console.log(`[updateProject] cluster_id: ${cluster_id}, project_id: ${project_id}`);
     const supabase = await createWorkerClient();
     
     const { data, error } = await supabase
@@ -1385,7 +1385,7 @@ export const Database_Clusters = {
 
   // Update region and status for migration
   update_region: async(cluster_id: string, region: string, status: string = "migrating") => {
-    console.log(`[updateRegion] cluster_id: ${cluster_id}, region: ${region}, status: ${status}`);
+    //console.log(`[updateRegion] cluster_id: ${cluster_id}, region: ${region}, status: ${status}`);
     const supabase = await createWorkerClient();
     
     const { data, error } = await supabase
@@ -1405,7 +1405,7 @@ export const Database_Clusters = {
 
   // Update maintenance window
   update_maintenance_window: async(cluster_id: string, window: { day: string, hour: string }) => {
-    console.log(`[updateMaintenanceWindow] cluster_id: ${cluster_id}, window:`, window);
+    //console.log(`[updateMaintenanceWindow] cluster_id: ${cluster_id}, window:`, window);
     const supabase = await createWorkerClient();
     
     const { data, error } = await supabase
@@ -1448,15 +1448,15 @@ export const Database_Clusters = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project by id: ${error.message}`,
-        );
+        // console.log(
+        //   `[Supabase] Error while getting project by id: ${error.message}`,
+        // );
         return [];
       }
-      console.log(data, "...........data in database cluster by project id........");
+     // console.log(data, "...........data in database cluster by project id........");
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      //console.log(`[Supabase] Error while getting project by id: ${err}`);
       return [];
     }
   },
