@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      console.log("[listDatabaseUsers] Users fetched successfully:", response.data.users);
+      //console.log("[listDatabaseUsers] Users fetched successfully:", response.data.users);
 
       const users = response.data.users;
       const encryptionKey = process.env.ENCRYPTION_KEY!;

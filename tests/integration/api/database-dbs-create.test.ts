@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/database/dbs/create/route';
 import { NextRequest } from 'next/server';
@@ -10,26 +13,29 @@ vi.mock('@/lib/supabase/queries');
 vi.mock('axios');
 
 describe('POST /api/services/database/dbs/create', () => {
-  beforeEach(async () => {
-    vi.clearAllMocks();
+  // beforeEach(async () => {
+  //   vi.clearAllMocks();
     
-    // Setup default authentication mock
-    const authModule = await import('@/lib/auth/server-auth');
-    vi.mocked(authModule.authenticateUser).mockImplementation(async () => ({
-      authenticated: true,
-      user: {
-        id:'ab6bf954-1f16-4d41-94a9-c2410d55a0e4',
-        email:'pankaj.soni@ahurasense.com',
-      },
-      response: null,
-    } as any));
-  });
+  //   // Setup default authentication mock
+  //   const authModule = await import('@/lib/auth/server-auth');
+  //  // console.log("Setting up authentication mock...");
+  //   // vi.mocked(authModule.authenticateUser).mockImplementation(async () => ({
+  //   //   authenticated: true,
+  //   //   user: {
+  //   //     id:'ab6bf954-1f16-4d41-94a9-c2410d55a0e4',
+  //   //     email:'pankaj.soni@ahurasense.com',
+  //   //   },
+  //   //   response: null,
+  //   // } as any));
+  // });
+
+  console.log("Starting test suite for database dbs create API...");
 
   describe('Success Cases', () => {
     it('TC-DB-046: should create new database in cluster', async () => {
       // Mock cluster ownership verification
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -63,7 +69,7 @@ describe('POST /api/services/database/dbs/create', () => {
 
     it('should create database with valid naming conventions', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -94,7 +100,7 @@ describe('POST /api/services/database/dbs/create', () => {
 
     it('should sync database creation to Supabase', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -125,7 +131,7 @@ describe('POST /api/services/database/dbs/create', () => {
   describe('Reserved Names Validation', () => {
     it('TC-DB-047: should reject reserved database names', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -164,7 +170,7 @@ describe('POST /api/services/database/dbs/create', () => {
   describe('Duplicate Detection', () => {
     it('TC-DB-048: should return 409 for duplicate database name', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -279,7 +285,7 @@ describe('POST /api/services/database/dbs/create', () => {
   describe('Error Cases', () => {
     it('should return 404 for non-existent cluster', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: false,
         error: 'Cluster not found',
       });
@@ -300,7 +306,7 @@ describe('POST /api/services/database/dbs/create', () => {
 
     it('should handle DigitalOcean API errors', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: mockDatabaseCluster,
       });
@@ -326,7 +332,7 @@ describe('POST /api/services/database/dbs/create', () => {
 
     it('should handle database query errors', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockRejectedValue(
+      vi.mocked(Database_Clusters.get_dbs).mockRejectedValue(
         new Error('Database connection failed')
       );
 
@@ -353,7 +359,7 @@ describe('POST /api/services/database/dbs/create', () => {
       };
 
       const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
+      vi.mocked(Database_Clusters.get_dbs).mockResolvedValue({
         success: true,
         data: differentUserCluster,
       });

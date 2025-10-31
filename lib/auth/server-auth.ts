@@ -15,6 +15,8 @@ export async function authenticateUser() {
     error: userError,
   } = await supabase.auth.getUser();
 
+
+
   if (userError || !user) {
     return {
       authenticated: false as const,
