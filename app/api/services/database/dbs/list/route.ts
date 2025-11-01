@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { listDbsSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
+import { DatabaseInstance } from "@/lib/supabase/types";
 
 interface database_error {
   response: {
@@ -9,20 +13,25 @@ interface database_error {
 }
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
-    const { cluster_id } = body;
-
-    if (!cluster_id) {
-      return NextResponse.json(
-        { error: "cluster_id is required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(listDbsSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Get databases from DigitalOcean
     const response = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/dbs`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/dbs`,
       {
         headers: {
           Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -32,12 +41,12 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      console.log("[listDatabases] Databases fetched successfully:", response.data.dbs);
+      //console.log("[listDatabases] Databases fetched successfully:", response.data.dbs);
 
       const databases = response.data.dbs;
 
       // Format databases for Supabase
-      const formattedDbs = databases.map((db: any) => ({
+      const formattedDbs = databases.map((db: DatabaseInstance) => ({
         id: db.name,
         name: db.name,
         created_at: new Date().toISOString(),
@@ -45,7 +54,7 @@ export async function POST(req: NextRequest) {
 
       // Sync databases with Supabase
       const supabase_result = await Database_Clusters.update_dbs(
-        cluster_id,
+        validatedData.cluster_id,
         formattedDbs
       );
 

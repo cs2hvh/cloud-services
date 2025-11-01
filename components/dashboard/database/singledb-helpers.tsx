@@ -2,6 +2,8 @@ import React from "react";
 import { Copy, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { UUID } from "crypto";
+import { EncryptedData } from "@/lib/supabase/types";
+import { dbLocations } from "@/config/locations";
 
 // Helper Components
 
@@ -129,12 +131,12 @@ export const extractRegion = (region: string | undefined): string => {
       return parsed?.address || parsed?.family || region;
     } catch {
       // Not JSON, return as is
-      return region;
+      return dbLocations.find((loc) => loc.short === region)?.city || "N/A";
     }
   }
 
   // If it's an object (shouldn't happen based on types, but handle it)
-  return (region as any)?.address || (region as any)?.family || "N/A";
+  return (region as {address:string,family:string})?.address || (region as any)?.family || "N/A";
 };
 
 export const calculateMonthlyCost = (size: string): string => {
@@ -150,55 +152,62 @@ export const calculateMonthlyCost = (size: string): string => {
   return (priceMap[size] || 0).toFixed(2);
 };
 
-export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | undefined) => {
+export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | EncryptedData | undefined) => {
   try {
+    debugger
     if (!ca_certificate) {
       toast.error("CA Certificate not available");
       return;
     }
 
-    console.log("=== CA Certificate Download Debug ===");
-    console.log("Original certificate (first 100 chars):", ca_certificate.substring(0, 100));
-    console.log("Certificate length:", ca_certificate.length);
+    // console.log("=== CA Certificate Download Debug ===");
+    // console.log("Certificate type:", typeof ca_certificate);
     
-    let formattedCert = ca_certificate;
+    // Convert to string if it's an encrypted object
+    const certString = typeof ca_certificate === 'string' ? ca_certificate : String(ca_certificate);
+    
+    // console.log("Certificate length:", certString?.length);
+    
+    // console.log("Original certificate (first 100 chars):", certString.substring(0, 100));
+    
+    let formattedCert = certString;
     
     // Check if the certificate is Base64 encoded (no PEM headers, only base64 characters)
-    const isBase64Only = !ca_certificate.includes('-----BEGIN CERTIFICATE-----') && 
-                         /^[A-Za-z0-9+/=\s]+$/.test(ca_certificate.trim());
+    const isBase64Only = !certString.includes('-----BEGIN CERTIFICATE-----') && 
+                         /^[A-Za-z0-9+/=\s]+$/.test(certString.trim());
     
     if (isBase64Only) {
-      console.log("✓ Detected Base64-encoded certificate, decoding...");
+      // console.log("✓ Detected Base64-encoded certificate, decoding...");
       try {
         // Decode Base64 to get the actual PEM certificate
-        const decodedCert = atob(ca_certificate.trim());
+        const decodedCert = atob(certString.trim());
         formattedCert = decodedCert;
-        console.log("✓ Successfully decoded Base64 certificate");
-        console.log("Decoded certificate (first 200 chars):", decodedCert.substring(0, 200));
+        // console.log("✓ Successfully decoded Base64 certificate");
+        // console.log("Decoded certificate (first 200 chars):", decodedCert.substring(0, 200));
       } catch (decodeError) {
         console.error("❌ Failed to decode Base64:", decodeError);
         toast.error("Failed to decode certificate");
         return;
       }
     } else {
-      console.log("Certificate is not Base64-only, checking for other encodings...");
+      // console.log("Certificate is not Base64-only, checking for other encodings...");
       
       // Handle escaped newlines
-      if (ca_certificate.includes('\\n')) {
-        formattedCert = ca_certificate.replace(/\\n/g, '\n');
-        console.log("✓ Replaced escaped \\n with actual newlines");
+      if (certString.includes('\\n')) {
+        formattedCert = certString.replace(/\\n/g, '\n');
+        // console.log("✓ Replaced escaped \\n with actual newlines");
       }
       
       // Handle double-escaped newlines
-      if (ca_certificate.includes('\\\\n')) {
+      if (certString.includes('\\\\n')) {
         formattedCert = formattedCert.replace(/\\\\n/g, '\n');
-        console.log("✓ Replaced double-escaped \\\\n with actual newlines");
+        // console.log("✓ Replaced double-escaped \\\\n with actual newlines");
       }
       
       // Handle URL-encoded newlines
-      if (ca_certificate.includes('%0A')) {
+      if (certString.includes('%0A')) {
         formattedCert = formattedCert.replace(/%0A/g, '\n');
-        console.log("✓ Replaced URL-encoded newlines");
+        // console.log("✓ Replaced URL-encoded newlines");
       }
     }
     
@@ -208,25 +217,25 @@ export const downloadCACertificate = async (databaseId: UUID | undefined, ca_cer
     
     if (!hasPEMHeaders) {
       console.error("❌ Certificate does not have proper PEM format headers");
-      console.log("Certificate content (first 500 chars):", formattedCert.substring(0, 500));
+      // console.log("Certificate content (first 500 chars):", formattedCert.substring(0, 500));
       toast.error("Invalid certificate format - missing PEM headers");
       return;
     }
     
-    console.log("✓ Certificate has valid PEM headers");
-    console.log("Final certificate length:", formattedCert.length);
-    console.log("Has actual newlines:", formattedCert.includes('\n'));
-    console.log("Number of newlines:", (formattedCert.match(/\n/g) || []).length);
+    // console.log("✓ Certificate has valid PEM headers");
+    // console.log("Final certificate length:", formattedCert.length);
+    // console.log("Has actual newlines:", formattedCert.includes('\n'));
+    // console.log("Number of newlines:", (formattedCert.match(/\n/g) || []).length);
     
     // Ensure the certificate ends with a newline (PEM standard)
     if (!formattedCert.endsWith('\n')) {
       formattedCert += '\n';
-      console.log("✓ Added trailing newline");
+      // console.log("✓ Added trailing newline");
     }
     
     // Create blob with UTF-8 encoding for proper text handling
     const blob = new Blob([formattedCert], { type: 'application/x-pem-file' });
-    console.log("✓ Blob created, size:", blob.size, "bytes");
+    // console.log("✓ Blob created, size:", blob.size, "bytes");
     
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -239,11 +248,11 @@ export const downloadCACertificate = async (databaseId: UUID | undefined, ca_cer
     setTimeout(() => {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      console.log("✓ Download cleanup completed");
+      // console.log("✓ Download cleanup completed");
     }, 100);
 
     toast.success("CA Certificate downloaded successfully!");
-    console.log("=== Download Complete ===");
+    // console.log("=== Download Complete ===");
   } catch (error) {
     console.error("[downloadCACertificate] Error:", error);
     toast.error("Failed to download CA certificate");

@@ -1,4 +1,5 @@
 // app/api/clusters/[id]/kubeconfig/route.ts
+import { authenticateUser } from "@/lib/auth/server-auth";
 import { NextResponse } from "next/server";
 // import { readFile } from "node:fs/promises";
 // import path from "node:path";
@@ -8,6 +9,12 @@ import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   const body = await req.json();
+
+
+  const auth = await authenticateUser();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
   
   try {
 

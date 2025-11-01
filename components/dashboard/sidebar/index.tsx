@@ -758,6 +758,19 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       <Users className="w-4 h-4 mr-2" />
                       <span className="text-sm">Users</span>
                     </Link>
+                     <Link
+                      href="/dashboard/admin/databases"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${pathname === "/dashboard/admin/users"
+                          ? "bg-slate-700 text-white font-medium"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Database className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Databases</span>
+                    </Link>
                   </div>
                 )}
               </div>

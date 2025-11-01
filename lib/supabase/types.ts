@@ -1,4 +1,8 @@
+import { UUID } from "crypto";
+import type { EncryptedData } from "@/config/functions";
 
+// Re-export EncryptedData for convenience
+export type { EncryptedData };
 
 export type Json =
   | string
@@ -16,7 +20,31 @@ interface NodeConfig {
 
 
 
-type Rule = {
+
+export type Admin_User={
+  
+  avatar: string | null;
+          background: string | null;
+          bio: string | null;
+          created_at: string | null;
+          discord: string | null;
+          display_name: string | null;
+          id: string;
+          roles: Database["public"]["Enums"]["user_role"][] | null;
+          steam: string | null;
+          suspend: boolean | null;
+          updated_at: string | null;
+          username: string | null;
+          db_counts:number|null;
+          kc_counts:number|null;
+          server_counts:number|null;
+          email:string | null;
+
+}
+
+
+
+export type Rule = {
   uuid: string;
   cluster_uuid: string;
   type: string; // e.g. "ip_addr"
@@ -45,11 +73,11 @@ export interface DatabaseInstance {
 export interface Database_Connection{
   ssl: boolean;
   uri: string;
-  host: string;
+  host: string | EncryptedData;
   port: number;
   user: string;
   database: string;
-  password: string;
+  password?: string | EncryptedData;
   protocol: string;
 
 }
@@ -322,6 +350,51 @@ export type Database = {
           },
         ];
       };
+      activities: {
+        Row: {
+          id: string;
+          cluster_name: string;
+          cluster_type: string;
+          action: string;
+          created_at: string | null;
+          owner_id: string | null;
+          project_id: string | null;
+        };
+        Insert: {
+          id?: string;
+          cluster_name: string;
+          cluster_type: string;
+          action: string;
+          created_at?: string | null;
+          owner_id?: string | null;
+          project_id?: string | null;
+        };
+        Update: {
+          id?: string;
+          cluster_name?: string;
+          cluster_type?: string;
+          action?: string;
+          created_at?: string | null;
+          owner_id?: string | null;
+          project_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activities_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "activities_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       projects: {
         Row: {
           created_at: string | null;
@@ -370,6 +443,8 @@ export type Database = {
           display_name: string | null;
           id: string;
           roles: Database["public"]["Enums"]["user_role"][] | null;
+          email:string | null;
+          cluster_stats:{game_servers:number; db_clusters:number; kubernetes_clusters:number} | null;
           steam: string | null;
           suspend: boolean | null;
           updated_at: string | null;
@@ -384,6 +459,8 @@ export type Database = {
           display_name?: string | null;
           id: string;
           roles?: Database["public"]["Enums"]["user_role"][] | null;
+          email:string | null;
+          cluster_stats:{game_servers:number; db_clusters:number; kubernetes_clusters:number} | null;
           steam?: string | null;
           suspend?: boolean | null;
           updated_at?: string | null;
@@ -633,72 +710,115 @@ export type Database = {
           },
         ];
       };
+       database_clusters: {
+        Row: {
+          id?:string
+          name: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" | "migrating" ;
+          password: string | EncryptedData;
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+          size:string;
+          region?:string;
+          ca_certificate?: string | EncryptedData;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
+          window?: { day: string; hour: string };
+
+        };
+        Insert: {
+          name: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" ;
+          password: string | EncryptedData;
+          ca_certificate?: string | EncryptedData;
+          region?:string;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+
+        };
+         Relationships: [
+           {
+            foreignKeyName: "database_owner_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+           {
+            foreignKeyName: "database_project_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+         ];
+      };
       servers: {
         Row: {
           id: number;
           vmid: number | null;
           node: string | null;
           name: string;
-          ip: string;
-          os: string | null;
-          location: string;
-          cpu_cores: number;
-          memory_mb: number;
-          disk_gb: number;
-          status: string;
-          owner_id: string | null;
-          owner_email: string | null;
-          hourly_cost: number;
-          monthly_cost: number;
-          billing_start: string | null;
-          billing_end: string | null;
-          details: Json | null;
-          created_at: string;
-          updated_at: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" | "migrating" ;
+          password: string | EncryptedData;
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+          size:string;
+          region?:string;
+          ca_certificate?: string | EncryptedData;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
+          window?: { day: string; hour: string };
+
         };
         Insert: {
           id?: number;
           vmid?: number | null;
           node?: string | null;
           name: string;
-          ip: string;
-          os?: string | null;
-          location: string;
-          cpu_cores: number;
-          memory_mb: number;
-          disk_gb: number;
-          status?: string;
-          owner_id?: string | null;
-          owner_email?: string | null;
-          hourly_cost?: number;
-          monthly_cost?: number;
-          billing_start?: string | null;
-          billing_end?: string | null;
-          details?: Json | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: number;
-          vmid?: number | null;
-          node?: string | null;
-          name?: string;
-          ip?: string;
-          os?: string | null;
-          location?: string;
-          cpu_cores?: number;
-          memory_mb?: number;
-          disk_gb?: number;
-          status?: string;
-          owner_id?: string | null;
-          owner_email?: string | null;
-          hourly_cost?: number;
-          monthly_cost?: number;
-          billing_start?: string | null;
-          billing_end?: string | null;
-          details?: Json | null;
-          created_at?: string;
-          updated_at?: string;
+          engine: string;
+          project_id:string;
+          owner_id:string;
+          version?: string | null; // e.g., API VIP or CP-1 IP
+          num_nodes?: number; // list of worker IPs/hosts
+          cluster_id?: UUID;
+          public_connection?: Database_Connection;
+          private_connection?: Database_Connection;
+          status: "pending" | "online" | "creating" ;
+          password: string | EncryptedData;
+          ca_certificate?: string | EncryptedData;
+          region?:string;
+          network_rules?:network_rules;
+          users?: DatabaseUser[];
+          dbs?: DatabaseInstance[];
+          // resource_config?:{ cpu: number; ram: number; storage: number }
+
         };
         Relationships: [
           {

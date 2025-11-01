@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { Projects } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
+
+
+  const auth = await authenticateUser();
+    if (!auth.authenticated) {
+      return auth.response;
+    }
   try {
     const json = await req.json();
 
@@ -10,7 +18,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createServiceClient();
     const { data,error } = await supabase
       .from("clusters")
-      .select('workers')
+      .select('workers, cluster_name, project_id')
   .eq('cluster_id', json.cluster_id)
   .single();
 
@@ -40,6 +48,16 @@ const { error: updErr } = await supabase
     if (updErr)
         //console.log(updErr,"..............error in update delete node api...........");
       return NextResponse.json({ error: updErr.message}, { status: 400 });
+
+    // Add activity log for node deletion
+    if (data.project_id) {
+      await Projects.add_log({
+        project_id: data.project_id,
+        event: "Server",
+        text: `Worker node removed from Kubernetes cluster '${data.cluster_name}'`
+      });
+      console.log(`[deleteKubernetesNode] ✅ Activity log added for node deletion`);
+    }
 
     return NextResponse.json(
       {

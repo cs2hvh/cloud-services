@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { Projects } from "@/lib/supabase/queries";
 
 
 
@@ -46,6 +48,12 @@ const Payload = z.object({
 });
 
 export async function POST(req: Request) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   const body = await req.json().catch(() => null);
   //console.log(body,".........................41")
 
@@ -65,14 +73,24 @@ export async function POST(req: Request) {
    let decryptedPassword=undefined;
    if(parsed.data?.auth?.password){
 
-      console.log(parsed.data.auth.password,".........................57")
-      decryptedPassword=Encryption.decrypt(parsed.data.auth.password,"secret");
-      console.log(decryptedPassword,".........................60");
+     // console.log(parsed.data.auth.password,".........................57")
+      decryptedPassword=Encryption.decrypt(parsed.data.auth.password,process.env.ENCRYPTION_KEY!);
+      //console.log(decryptedPassword,".........................60");
   }
 
   const clusterId = crypto.randomUUID();
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data,decryptedPassword });
   console.log(job,"...............job")
+
+  // Add activity log for Kubernetes cluster creation
+  if (parsed.data.projectId) {
+    await Projects.add_log({
+      project_id: parsed.data.projectId,
+      event: "Box",
+      text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`
+    });
+    console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
+  }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

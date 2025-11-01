@@ -14,10 +14,14 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    debugger
+   // debugger
     const status = error.response?.status;
     const serverMessage = (error.response?.data as { message?: string })
       ?.message;
+
+      console.log(error.response?.data,".............axios error interceptors...........");
+      console.log(error.response,".............axios error interceptors...........");
+       console.log(error,".............axios error interceptors...........");
 
     if (status === 400) {
       toast.error(serverMessage || "Bad request - invalid input.");

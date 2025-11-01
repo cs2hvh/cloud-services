@@ -171,7 +171,7 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const supabase = await createClient();
+    const supabase = await createSSRClient();
     const updates: {
       roles?: string[];
       suspend?: boolean;
@@ -185,11 +185,12 @@ export async function PATCH(request: Request) {
       updates.suspend = suspend;
     }
 
+   // console.log(userId,"...............",updates,"...............");
     const { data, error } = await supabase
       .from("user_profiles")
       .update(updates)
       .eq("id", userId)
-      .select()
+      .select("*")
       .single();
 
     if (error) {

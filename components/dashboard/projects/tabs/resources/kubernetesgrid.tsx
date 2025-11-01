@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
-import { Cpu, Database, HardDrive, ExternalLink, } from "lucide-react";
-import {  Tables } from "@/lib/supabase/types";
+import { Cpu, Database, HardDrive, ExternalLink, Box } from "lucide-react";
+import { Tables } from "@/lib/supabase/types";
 import {
   Card,
   CardContent,
@@ -13,171 +13,124 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-// import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-// type TableTypes = 'clusters' | 'game_servers';  // Add more types as needed
-
-// interface GameServerGridProps {
-//   // data: Tables<`${TableTypes}`>[];  // This will use the `Tables` type dynamically
-//   data:{          cluster_id: string;
-//           id: string;
-//           clusterName: string;
-//           project_id:string;
-//           owner_id:string;
-//            control_plane?: string | null; // e.g., API VIP or CP-1 IP
-//           workers?: string[]; // list of worker IPs/hosts
-//           createStatus?: boolean;
-//           connectStatus?: boolean;
-//           verifyStatus?: boolean;
-//           kubeConfig?: string | null; // kubeconfig YAML
-//           node_config?:  null; // {region, plan, cpu, ram, disk ...}
-//           cniPlugin?: "flannel" | "calico" | "cilium" | string | null;
-//            k8s_version?: string | null;
-//           status?: string | null;
-//                     allocation: number;
-//                     created_at: string | null;
-//                     ends_at: string | null;
-//                     game_type: string;
-//                     //id: number;
-//                     identifier: string;
-//                     ip: string;
-//                     location_id: number | null;
-//                     name: string;
-//                     node: number;
-//                     plan: string | null;
-//                     port: number;
-//                    // project_id: string | null;
-//                     resources: Json;
-//                     //status: string | null;
-//                     user_id: string | null;
-//         }[]
-//   type: TableTypes;  // `type` can be 'server' | 'game', etc.
-// }
-
-const KubernetesGrid = ({ data,type }:{
+const KubernetesGrid = ({
+  data,
+}: {
   data: Tables<"clusters_get">[];
-  type: string;
 }) => {
-
-    //console.log(data,"...................64");
-  // const router=useRouter();
   if (!data || data.length === 0) {
     return (
-      <>
-       <h1 className="text-xs ms-2 text-white font-semibold mb-2 uppercase">
-        {type} ({data.length})
-      </h1> 
-      <div className="text-center p-8 text-gray-500">No {type} found</div>
-      </>
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Box className="h-5 w-5 text-blue-400" />
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+            Kubernetes Clusters ({data.length})
+          </h2>
+        </div>
+        <div className="text-center py-12 text-muted-foreground border border-dashed border-border rounded-lg bg-card/50">
+          No kubernetes clusters found
+        </div>
+      </div>
     );
   }
 
-  // Function to get a nice icon for game type
-  // const getGameIcon = (gameType: string) => {
-  //   switch (gameType?.toLowerCase()) {
-  //     case "minecraft":
-  //       return "🧱";
-  //     case "valheim":
-  //       return "⚔️";
-  //     case "rust":
-  //       return "🔧";
-  //     case "ark":
-  //       return "🦖";
-  //     case "csgo":
-  //       return "🔫";
-  //     default:
-  //       return "🎮";
-  //   }
-  // };
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "ready":
+        return "bg-green-500/20 text-green-400 border-green-500/30";
+      case "creating":
+        return "bg-blue-500/20 text-blue-400 border-blue-500/30";
+      case "error":
+        return "bg-red-500/20 text-red-400 border-red-500/30";
+      default:
+        return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+    }
+  };
 
   return (
-   <div className="mx-6">
-    <div >
-      <h1 className="text-xs text-white font-semibold mb-2 uppercase">
-        {type} ({data.length})
-      </h1> 
-    </div>
-    
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">   
-      
-        
-          {data.map((server) => (
-        <Card
-          key={server?.cluster_id}
-          className="overflow-hidden transition-all duration-300 hover:shadow-md"
-        >
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">{server?.k8s_version}</span>
-                <CardTitle>{server.cluster_name}</CardTitle>
-              </div>
-              {server.status ==="ready" ? (
-                <div className="relative">
-                  <Badge
-                    variant="outline"
-                    className="bg-green-100 text-green-800 border-green-300"
-                  >
-                    Ready
-                  </Badge>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Box className="h-5 w-5 text-blue-400" />
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-foreground">
+          Kubernetes Clusters ({data.length})
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {data.map((cluster) => (
+          <Card
+            key={cluster?.cluster_id}
+            className="group overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-500/50 bg-card border-border"
+          >
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl mt-1">☸️</div>
+                  <div className="space-y-1">
+                    <CardTitle className="text-base line-clamp-1 text-foreground">
+                      {cluster.cluster_name}
+                    </CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground">
+                      {cluster.k8s_version} • {(cluster.workers && Array.isArray(cluster.workers) ? cluster.workers.length : 0) + 1} Nodes
+                    </CardDescription>
+                  </div>
                 </div>
-              ) : (
                 <Badge
                   variant="outline"
-                  className="bg-gray-100 text-gray-800 border-gray-300"
+                  className={`${getStatusColor(cluster.status || "pending")} text-xs font-medium`}
                 >
-                  {server.status}
+                  {cluster.status}
                 </Badge>
-              )}
-            </div>
-            <CardDescription className="capitalize">
-              {server.k8s_version} version
-            </CardDescription>
-          </CardHeader>
-          <Separator />
-          <CardContent>
-            {/* Resources */}
-            <div className="space-y-4">
+              </div>
+            </CardHeader>
+
+            <Separator className="bg-border" />
+
+            <CardContent className="pt-4 space-y-4">
+              {/* Resources */}
               <div>
-                <h3 className="text-sm font-medium mb-2">Resources</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="flex items-center">
-                    <Cpu className="w-4 h-4 mr-2 text-blue-500" />
+                <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                  Node Resources
+                </h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 text-foreground">
+                    <Cpu className="w-3.5 h-3.5 text-blue-400" />
                     <span>
                       {
                         (
-                          server.node_config as {
+                          cluster.node_config as {
                             cpu: number;
                             ram: number;
                             storage: number;
                           } | null
                         )?.cpu
                       }{" "}
-                      CPU
+                      vCPU
                     </span>
                   </div>
-                  <div className="flex items-center">
-                    <Database className="w-4 h-4 mr-2 text-green-500" />
+                  <div className="flex items-center gap-1.5 text-foreground">
+                    <Database className="w-3.5 h-3.5 text-green-400" />
                     <span>
                       {
                         (
-                          server.node_config as {
+                          cluster.node_config as {
                             cpu: number;
                             ram: number;
                             storage: number;
                           } | null
                         )?.ram
                       }{" "}
-                      MB RAM
+                      MB
                     </span>
                   </div>
-                  <div className="flex items-center">
-                    <HardDrive className="w-4 h-4 mr-2 text-purple-500" />
+                  <div className="flex items-center gap-1.5 col-span-2 text-foreground">
+                    <HardDrive className="w-3.5 h-3.5 text-purple-400" />
                     <span>
                       {
                         (
-                          server.node_config as {
+                          cluster.node_config as {
                             cpu: number;
                             ram: number;
                             storage: number;
@@ -187,58 +140,45 @@ const KubernetesGrid = ({ data,type }:{
                       GB Storage
                     </span>
                   </div>
-                  {/* <div className="flex items-center">
-                    <Wifi className="w-4 h-4 mr-2 text-orange-500" />
-                    <span>
-                      {
-                        (server.resources as { bandwith?: number } | null)
-                          ?.bandwith
-                      }{" "}
-                      Mbps
-                    </span>
-                  </div> */}
                 </div>
               </div>
 
               {/* Connection Info */}
-              <div>
-                <h3 className="text-sm font-medium mb-2">Connection Info</h3>
-                <div className="bg-muted p-2 rounded-md font-mono text-sm">
-                  {server.control_plane?.public_ip}:{6443}
+              {cluster.control_plane?.public_ip && (
+                <div>
+                  <h3 className="text-xs font-medium text-muted-foreground mb-2">
+                    API Endpoint
+                  </h3>
+                  <div className="bg-muted/50 p-2 rounded-md border border-border">
+                    <code className="text-xs text-foreground">
+                      {cluster.control_plane?.public_ip}:6443
+                    </code>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
+              )}
+            </CardContent>
 
-          <CardFooter className="pt-2 flex gap-2">
-            <Link
-              className="w-1/2"
-               href={{
-                            pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(server.cluster_id)}`,
-                            query: { clusterStatus: server.status},
-                          }}
-            >
-              Open Control Panel
-            </Link>
-            <Button
-              className="w-1/2"
-              onClick={() =>
-                window.open(
-                  `https://panel.hav0k.dev/server/${server.cluster_id}`,
-                  "_blank",
-                )
-              }
-            >
-              Renew Subscription
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          </CardFooter>
-        </Card>
-      ))}
-        
-      
+            <CardFooter className="pt-2 gap-2">
+              <Button
+                asChild
+                className="flex-1 group-hover:bg-blue-600 group-hover:text-white transition-colors"
+                size="sm"
+              >
+                <Link
+                  href={{
+                    pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(cluster.cluster_id)}`,
+                    query: { clusterStatus: cluster.status },
+                  }}
+                >
+                  Open Dashboard
+                  <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
     </div>
-   </div>
   );
 };
 

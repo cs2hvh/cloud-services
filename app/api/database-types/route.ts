@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function GET() {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const supabase = await createClient();
 

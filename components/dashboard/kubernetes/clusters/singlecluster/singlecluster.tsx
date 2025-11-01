@@ -52,10 +52,10 @@ type NodeInfo =
   | null;
 
 // Add these types at the top of your file
-interface MetricValue {
-  timestamp: number;
-  value: string | number;
-}
+// interface MetricValue {
+//   timestamp: number;
+//   value: string | number;
+// }
 
 interface CpuMetric {
   metric: {
@@ -304,7 +304,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     hrs: number,
     type: string,
     nodeIp: string,
-    index: number
+    //index: number
   ) => {
     try {
       setLoading(true);
@@ -602,7 +602,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                                 1,
                                 "cpu",
                                 n.public_ip,
-                                index
+                                //index
                               )
                             }
                             disabled={loading}
@@ -629,7 +629,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                                 1,
                                 "memory_free",
                                 n.public_ip,
-                                index
+                                //index
                               )
                             }
                             disabled={loading}
@@ -649,7 +649,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
                                 1,
                                 "filesystem_free",
                                 n.public_ip,
-                                index
+                               // index
                               )
                             }
                             disabled={loading}

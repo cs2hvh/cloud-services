@@ -224,6 +224,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   // Delete database
   const handleDeleteDatabase = async () => {
+    debugger
     if (deleteDbModal.confirmText !== deleteDbModal.dbName) {
       toast.error("Database name does not match!");
       return;

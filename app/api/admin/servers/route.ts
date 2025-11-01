@@ -31,12 +31,13 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
   if (tokenId && tokenSecret) {
     const tokenAuth = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } as HeadersInit };
     try {
+      
       const verify = await withTimeout(
         fetch(`${apiBase}/api2/json/nodes`, {
           cache: "no-store",
           redirect: "follow",
           ...(tokenAuth as any),
-          // @ts-expect-error undici dispatcher
+         
           dispatcher,
         })
       );

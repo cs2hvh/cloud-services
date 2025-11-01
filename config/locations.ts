@@ -152,6 +152,78 @@ export const vmLocations: Tables<"locations">[] = [
 
 ];
 
+
+
+export const dbLocations: Tables<"locations">[] = [
+ {
+  id: 2,
+  short: "fra1",
+  city: "Frankfurt",
+  country: "Germany",
+  country_code: "DE",
+  available: true,
+  cluster_type:"kubernetes"
+},
+
+{
+  id: 3,
+  short: "tor1",
+  city: "Toronto",
+  country: "Canada",
+  country_code: "CA",
+  available: true,
+   cluster_type:"kubernetes"
+},
+
+{
+  id: 4,
+  short: "blr1",
+  city: "Banglore",
+  country: "India",
+  country_code: "IN",
+  available: true,
+   cluster_type:"kubernetes"
+},
+{
+  id: 5,
+  short: "ams3",
+  city: "Amsterdam",
+  country: "Netherlands",
+  country_code: "NL",
+  available: true,
+   cluster_type:"kubernetes"
+},
+{
+  id: 7,
+  short: "nyc1",
+  city: "New York",
+  country: "United States",
+  country_code: "US",
+  available: true,
+   cluster_type:"kubernetes"
+},
+{
+  id: 8,
+  short: "sfo3",
+  city: "San Francisco",
+  country: "United States",
+  country_code: "US",
+  available: true,
+   cluster_type:"kubernetes"
+},
+{
+  id: 9,
+  short: "sgp1",
+  city: "Singapore",
+  country: "Singapore",
+  country_code: "SG",
+  available: true,
+   cluster_type:"kubernetes"
+},
+
+
+];
+
 // "ams3",
 //           "blr1",
 //           "fra1",

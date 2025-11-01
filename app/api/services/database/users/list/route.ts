@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { Encryption } from "@/config/functions";
+import { listUsersSchema } from "@/lib/validation/database";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 interface database_error {
   response: {
@@ -9,20 +13,25 @@ interface database_error {
 }
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
     const body = await req.json();
-    const { cluster_id } = body;
-
-    if (!cluster_id) {
-      return NextResponse.json(
-        { error: "cluster_id is required" },
-        { status: 400 }
-      );
+    
+    // Validate request body
+    const validation = validateRequest(listUsersSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
+    const validatedData = validation.data;
 
     // Get users from DigitalOcean
     const response = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${cluster_id}/users`,
+      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/users`,
       {
         headers: {
           Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -32,22 +41,23 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      console.log("[listDatabaseUsers] Users fetched successfully:", response.data.users);
+      //console.log("[listDatabaseUsers] Users fetched successfully:", response.data.users);
 
       const users = response.data.users;
+      const encryptionKey = process.env.ENCRYPTION_KEY!;
 
-      // Format users for Supabase
+      // Format users for Supabase with encrypted passwords
       const formattedUsers = users.map((user: any) => ({
         id: user.name,
         name: user.name,
         role: user.role || "normal",
-        password: user.password,
+        password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
         created_at: new Date().toISOString(),
       }));
 
       // Sync users with Supabase
       const supabase_result = await Database_Clusters.update_users(
-        cluster_id,
+        validatedData.cluster_id,
         formattedUsers
       );
 

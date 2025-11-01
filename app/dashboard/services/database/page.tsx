@@ -1,16 +1,15 @@
-'use client';
+"use client";
 
 import { motion } from "motion/react";
-import { Database, Loader2, Plus,  Search } from "lucide-react";
+import { Database, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { useSession } from "../../provider";
-
-
-
+import { DatabaseIcon } from "@/components/dashboard/database/database-icon";
+import { serviceLocations, vmLocations } from "@/config/locations";
 
 type DbCluster = {
   id: string;
@@ -21,55 +20,71 @@ type DbCluster = {
   created_at: string; // ISO
   version: string;
   cluster_id: string;
+  region: string;
 };
 
-const DatabasePage =  () => {
+// Helper function to get location name from region code
+const getLocationName = (regionCode: string): string => {
+  // Combine both location arrays
+  const allLocations = [...serviceLocations, ...vmLocations];
+  
+  // Find location by matching the region code with the short code
+  const location = allLocations.find(
+    (loc) => loc.short.toLowerCase() === regionCode.toLowerCase()
+  );
+  
+  if (location) {
+    return `${location.city}`;
+  }
+  
+  // If not found, return the region code in a more readable format
+  return regionCode || "Unknown";
+};
+
+const DatabasePage = () => {
   // Dummy data for now, replace with actual data from your backend
-  const databases = [
-    {
-      name:"production-db-1",
-    }
-  ];
+  // const databases = [
+  //   {
+  //     name: "production-db-1",
+  //   },
+  // ];
 
-  const user= useSession();
-  const router=useRouter();
+  const user = useSession();
+  const router = useRouter();
 
-  if(!user) {
+  if (!user) {
     router.push("/login");
     toast.error("You must be logged in to access the dashboard.");
   }
 
-   const [clusters, setClusters] = useState([] as DbCluster[]);
-    const [loading, setLoading] = useState(true);
+  const [clusters, setClusters] = useState([] as DbCluster[]);
+  const [loading, setLoading] = useState(true);
 
-
-     useEffect(() => {
-        //fetch clusters from backend.
-        async function fetchClusters() {
-          try {
-            //debugger;
-            setLoading(true);
-            const res = await api.post("/services/database/read_all_owner", {
-              id: user?.user?.id,
-            });
-            if (res.status === 200) {
-                setClusters(
-                  // res.data.data.filter((item: DbCluster) => item.status === "online")
-                   res.data.data
-                );
-              
-            }
-          } catch (error) {
-            console.error("Error fetching dashboard data:", error);
-          } finally {
-            setLoading(false);
-          }
+  useEffect(() => {
+    //fetch clusters from backend.
+    async function fetchClusters() {
+      try {
+        //debugger;
+        setLoading(true);
+        const res = await api.post("/services/database/read_all_owner", {
+          id: user?.user?.id,
+        });
+        if (res.status === 200) {
+          setClusters(
+            // res.data.data.filter((item: DbCluster) => item.status === "online")
+            res.data.data
+          );
         }
-        fetchClusters();
-      }, []);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchClusters();
+  }, []);
 
-
-       if (loading) {
+  if (loading) {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
         <div className="text-center">
@@ -82,14 +97,16 @@ const DatabasePage =  () => {
 
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-8"
       >
         <div>
           <h1 className="text-3xl font-bold">Databases</h1>
-          <p className="text-white/60">Manage and provision your database clusters.</p>
+          <p className="text-white/60">
+            Manage and provision your database clusters.
+          </p>
         </div>
         <Link
           href="/dashboard/services/database/new"
@@ -100,46 +117,70 @@ const DatabasePage =  () => {
         </Link>
       </motion.div>
 
-      {clusters.length > 0 ?(
+      {clusters.length > 0 ? (
         <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-700">
               <thead className="bg-slate-700/50 text-white">
                 <tr>
                   <Th>Cluster</Th>
-                  <Th>Engine</Th>
-                  <Th>Nodes</Th>
+                  <Th>DB_Type</Th>
+                  <Th>Location</Th>
+                  <Th>Date</Th>
                   <Th>Version</Th>
                   <Th>Status</Th>
                   <Th>Actions</Th>
-                  
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/60 bg-white/5">
                 {clusters.map((c) => (
-                  
                   <tr
                     key={c.id}
                     className="hover:bg-slate-700/30 transition-colors duration-150"
                   >
                     <Td>
-                      <div className="font-medium text-white">
-                        {c.name}
-                      </div>
+                      <div className="font-medium text-white">{c.name}</div>
                       <div className="text-xs text-slate-400 font-mono mt-1">
                         {c.id}
                       </div>
                     </Td>
                     <Td>
-                      <span className="text-slate-200">
-                        {c.num_nodes}
+                      <DatabaseIcon engine={c.engine} className="h-8 w-8" />
+                    </Td>
+
+                    <Td>
+                      <span className="text-slate-300">
+                        {getLocationName(c.region)}
                       </span>
                     </Td>
                     <Td>
-                      <time dateTime={c.created_at} className="text-slate-300">
-                        {new Date(c.created_at).toLocaleString()}
-                      </time>
+                      <div className="flex flex-col leading-tight text-xs text-slate-300">
+                        <time
+                          dateTime={c.created_at}
+                          className="font-medium text-slate-100"
+                          title={new Date(c.created_at).toLocaleString()}
+                        >
+                          {new Date(c.created_at).toLocaleDateString(
+                            undefined,
+                            {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            }
+                          )}
+                        </time>
+                        <span className="text-slate-400 text-[11px]">
+                          {new Date(c.created_at).toLocaleTimeString(
+                            undefined,
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
+                        </span>
+                      </div>
                     </Td>
+
                     <Td>
                       <span className="text-slate-300">{c.version}</span>
                     </Td>
@@ -150,26 +191,56 @@ const DatabasePage =  () => {
                             ? "bg-green-500/20 text-green-400"
                             : c.status === "creating"
                               ? "bg-yellow-500/20 text-yellow-400"
-                              : c.status === "failed"
-                                ? "bg-red-500/20 text-red-400"
-                                : "bg-slate-500/20 text-slate-400"
+                              : c.status === "migrating"
+                                ? "bg-orange-500/20 text-orange-400"
+                                : c.status === "failed"
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "bg-slate-500/20 text-slate-400"
                         }`}
                       >
                         {c.status}
                       </span>
                     </Td>
 
-                     <Td>
-                     
+                    <Td>
+                      {c.status === "migrating" ? (
+                        <div className="relative group">
+                          <button
+                            disabled
+                            className="
+                              inline-flex items-center justify-center
+                              rounded-md border border-slate-600
+                              px-3 py-1.5 text-sm font-medium
+                              text-slate-500 cursor-not-allowed
+                              w-full sm:w-auto
+                            "
+                          >
+                            View Cluster
+                          </button>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                            Cluster is currently migrating
+                          </div>
+                        </div>
+                      ) : (
                         <Link
                           href={{
                             pathname: `/dashboard/services/database/clusters/${encodeURIComponent(c.cluster_id)}`,
                             query: { clusterStatus: c.status },
                           }}
-                          className="rounded-lg border border-blue-600 px-3 py-1.5 text-sm text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors duration-200"
+                          className="
+                            inline-flex items-center justify-center
+                            rounded-md border border-blue-500
+                            px-3 py-1.5 text-sm font-medium
+                            text-blue-400
+                            hover:bg-blue-500/15 hover:text-blue-300
+                            active:scale-[0.97]
+                            transition-all duration-200
+                            w-full sm:w-auto
+                          "
                         >
                           View Cluster
                         </Link>
+                      )}
                     </Td>
                   </tr>
                 ))}
@@ -178,7 +249,7 @@ const DatabasePage =  () => {
           </div>
         </div>
       ) : (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
@@ -186,9 +257,11 @@ const DatabasePage =  () => {
         >
           <Database className="mx-auto h-16 w-16 text-white/20" />
           <h3 className="mt-4 text-xl font-semibold">No Databases Found</h3>
-          <p className="mt-2 text-sm text-white/50">Get started by provisioning a new database cluster.</p>
+          <p className="mt-2 text-sm text-white/50">
+            Get started by provisioning a new database cluster.
+          </p>
           <div className="mt-6">
-            <Link 
+            <Link
               href="/dashboard/services/database/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >
@@ -201,8 +274,6 @@ const DatabasePage =  () => {
     </div>
   );
 };
-
-
 
 function Th({ children }: { children: React.ReactNode }) {
   return (

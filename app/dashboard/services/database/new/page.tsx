@@ -1,6 +1,6 @@
 import DatabaseSelect from "@/components/dashboard/database/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { serviceLocations } from "@/config/locations";
+// import { serviceLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
 import { Locations, Products, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";

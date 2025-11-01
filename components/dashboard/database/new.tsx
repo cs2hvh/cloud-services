@@ -19,6 +19,7 @@ import {
   Loader2,
   // MapPin,
   Server,
+  AlertCircle,
 } from "lucide-react";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
@@ -37,8 +38,11 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import api from "@/lib/axios/axios";
-import { send } from "process";
 import { useRouter } from "next/navigation";
+import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
+import { NAMING_RULES,  } from "@/lib/validation/constants";
+import { z } from "zod";
+// import { de } from "zod/v4/locales";
 
 interface PageProps {
   products: Tables<"products">[];
@@ -78,7 +82,72 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     selectedProject: "",
   });
 
+  // Validation errors state
+  const [errors, setErrors] = useState({
+    name: "",
+    location: "",
+    dbType: "",
+    plan: "",
+    version: "",
+    project: "",
+  });
+
   const router = useRouter();
+
+  // Validation functions
+  const validateClusterName = (name: string): string => {
+    if (!name) {
+      return "Cluster name is required";
+    }
+    if (name.length < NAMING_RULES.MIN_CLUSTER_NAME_LENGTH) {
+      return `Cluster name must be at least ${NAMING_RULES.MIN_CLUSTER_NAME_LENGTH} characters`;
+    }
+    if (name.length > NAMING_RULES.MAX_CLUSTER_NAME_LENGTH) {
+      return `Cluster name must be at most ${NAMING_RULES.MAX_CLUSTER_NAME_LENGTH} characters`;
+    }
+    if (!NAMING_RULES.CLUSTER_NAME_PATTERN.test(name)) {
+      return "Cluster name must start and end with alphanumeric, contain only lowercase letters, numbers, and hyphens";
+    }
+    return "";
+  };
+
+  const validateLocation = (location: string): string => {
+    if (!location) {
+      return "Location is required";
+    }
+    return "";
+  };
+
+  const validateDbType = (dbType: string): string => {
+    if (!dbType) {
+      return "Database type is required";
+    }
+    return "";
+  };
+
+  const validatePlan = (planId: string): string => {
+    if (!planId) {
+      return "Database plan is required";
+    }
+    return "";
+  };
+
+  const validateVersion = (version: string, dbType: string): string => {
+    if (!version) {
+      return "Version is required";
+    }
+    if (dbType && !validateEngineVersion(dbType, version)) {
+      return "Invalid version for selected database engine";
+    }
+    return "";
+  };
+
+  const validateProject = (projectId: string): string => {
+    if (!projectId) {
+      return "Project is required";
+    }
+    return "";
+  };
 
   // Fetch database types on mount
   useEffect(() => {
@@ -125,37 +194,76 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
   }, [state.selectedDbType, products, databaseTypes]);
 
   const handleNextStep = () => {
-    if (currentStep === 1 && !state.selectedName) {
-      toast.error("Please enter a database cluster name");
-      return;
+    let hasError = false;
+
+    // Step 1: Validate cluster name
+    if (currentStep === 1) {
+      const nameError = validateClusterName(state.selectedName);
+      if (nameError) {
+        setErrors((prev) => ({ ...prev, name: nameError }));
+        toast.error(nameError);
+        hasError = true;
+      } else {
+        setErrors((prev) => ({ ...prev, name: "" }));
+      }
     }
 
-    if (currentStep === 2 && !state.selectedLocation) {
-      toast.error("Please select a location");
-      return;
+    // Step 2: Validate location
+    if (currentStep === 2) {
+      const locationError = validateLocation(state.selectedLocation);
+      if (locationError) {
+        setErrors((prev) => ({ ...prev, location: locationError }));
+        toast.error(locationError);
+        hasError = true;
+      } else {
+        setErrors((prev) => ({ ...prev, location: "" }));
+      }
     }
 
-    if (currentStep === 3 && !state.selectedDbType) {
-      toast.error("Please select a database type");
-      return;
+    // Step 3: Validate database type
+    if (currentStep === 3) {
+      const dbTypeError = validateDbType(state.selectedDbType);
+      if (dbTypeError) {
+        setErrors((prev) => ({ ...prev, dbType: dbTypeError }));
+        toast.error(dbTypeError);
+        hasError = true;
+      } else {
+        setErrors((prev) => ({ ...prev, dbType: "" }));
+      }
     }
 
-    if (currentStep === 4 && !state.selectedDb) {
-      toast.error("Please select a database plan");
-      return;
+    // Step 4: Validate plan and version
+    if (currentStep === 4) {
+      const planError = validatePlan(state.selectedDb);
+      const versionError = validateVersion(state.selectedVersion, state.selectedDbType);
+      
+      if (planError) {
+        setErrors((prev) => ({ ...prev, plan: planError }));
+        toast.error(planError);
+        hasError = true;
+      } else if (versionError) {
+        setErrors((prev) => ({ ...prev, version: versionError }));
+        toast.error(versionError);
+        hasError = true;
+      } else {
+        setErrors((prev) => ({ ...prev, plan: "", version: "" }));
+      }
     }
 
-    if (currentStep === 4 && !state.selectedVersion) {
-      toast.error("Please select a database version");
-      return;
+    // Step 5: Validate project
+    if (currentStep === 5) {
+      const projectError = validateProject(state.selectedProject);
+      if (projectError) {
+        setErrors((prev) => ({ ...prev, project: projectError }));
+        toast.error(projectError);
+        hasError = true;
+      } else {
+        setErrors((prev) => ({ ...prev, project: "" }));
+      }
     }
 
-    if (currentStep === 5 && !state.selectedProject) {
-      toast.error("Please select a project");
-      return;
-    }
-
-    if (currentStep < 6) {
+    // Only proceed if no validation errors
+    if (!hasError && currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -173,35 +281,63 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     }
 
     try {
-       debugger
+      
       setIsLoading(true);
+      debugger
+      // Validate all required fields
       if (
         !state.selectedDb ||
         !state.selectedName ||
         !state.selectedVersion ||
         !state.selectedLocation ||
         !state.selectedDbType ||
-       // !state.selectedNode||
         !state.selectedProject
       ) {
         toast.error("Please fill in all the required fields");
         return;
       }
 
-      const sendPayload = {
+      // Get the selected plan resources
+      const selectedPlan = availablePlans.find(plan => plan.id === state.selectedDb);
+      if (!selectedPlan) {
+        toast.error("Invalid plan selected");
+        return;
+      }
+
+      // Prepare payload matching the schema
+      const payload = {
         name: state.selectedName,
         engine: state.selectedDbType,
         version: state.selectedVersion,
         num_nodes: 1,
-        size: `db-s-${availablePlans.find(plan => plan.id === state.selectedDb)?.resources?.cpu || 1}vcpu-${availablePlans.find(plan => plan.id === state.selectedDb)?.resources?.ram || 1}gb`,
+        size: `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`,
         region: state.selectedLocation,
-        project_id: selectedProject,
+        project_id: state.selectedProject,
         owner_id: userId,
       };
-      const response = await api.post("/services/database/create", sendPayload);
+
+      // Validate payload with Zod schema
+      try {
+        createDatabaseSchema.parse(payload);
+      } catch (validationError) {
+        if (validationError instanceof z.ZodError) {
+          const firstError = validationError.errors[0];
+          toast.error(firstError.message);
+          return;
+        }
+        throw validationError;
+      }
+
+      // Validate engine version compatibility
+      if (!validateEngineVersion(payload.engine, payload.version)) {
+        toast.error(`Version ${payload.version} is not valid for ${payload.engine}`);
+        return;
+      }
+
+      const response = await api.post("/services/database/create", payload);
       if (response.status === 200) {
         toast.success(
-          response.data.message || "Database created successfully!"
+          response.data.message || "Database creation started!"
         );
         router.push(
           `/dashboard/services/database/clusters/${response.data.data.cluster_id}`
@@ -335,15 +471,39 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Input
-                  value={selectedName}
-                  onChange={(e) =>
-                    setState({ ...state, selectedName: e.target.value })
-                  }
-                  type="text"
-                  placeholder="my-production-db"
-                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
-                />
+                <div className="space-y-2">
+                  <Input
+                    value={selectedName}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setState({ ...state, selectedName: value });
+                      // Clear error on change
+                      if (errors.name) {
+                        setErrors({ ...errors, name: "" });
+                      }
+                    }}
+                    onBlur={() => {
+                      // Validate on blur
+                      const error = validateClusterName(selectedName);
+                      setErrors({ ...errors, name: error });
+                    }}
+                    type="text"
+                    placeholder="my-production-db"
+                    className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
+                      errors.name ? "border-red-500 focus:border-red-500" : ""
+                    }`}
+                  />
+                  {errors.name && (
+                    <div className="flex items-center gap-2 text-red-500 text-sm">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{errors.name}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-white/50">
+                    Must be 3-63 characters, lowercase letters, numbers, and hyphens only. 
+                    Must start and end with alphanumeric.
+                  </p>
+                </div>
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button
@@ -364,9 +524,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
               <CardContent>
                 <RadioGroup
                   value={selectedLocation}
-                  onValueChange={(value) =>
-                    setState({ ...state, selectedLocation: value })
-                  }
+                  onValueChange={(value) => {
+                    setState({ ...state, selectedLocation: value });
+                    // Clear error on change
+                    if (errors.location) {
+                      setErrors({ ...errors, location: "" });
+                    }
+                  }}
                   className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
                 >
                   {locations.map((region) => (
@@ -408,6 +572,12 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                     </div>
                   ))}
                 </RadioGroup>
+                {errors.location && (
+                  <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.location}</span>
+                  </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -472,57 +642,71 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                     <Loader2 className="w-8 h-8 animate-spin text-white" />
                   </div>
                 ) : (
-                  <RadioGroup
-                    value={selectedDbType}
-                    onValueChange={handleDbTypeChange}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                  >
-                    {databaseTypes.map((dbType) => {
-                      const planCount = products.filter(
-                        (p) => p.sub === dbType.code
-                      ).length;
-                      
-                      return (
-                        <div key={dbType.code}>
-                          <RadioGroupItem
-                            value={dbType.code}
-                            id={`type-${dbType.code}`}
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor={`type-${dbType.code}`}
-                            className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                          >
-                            <div className="w-10 h-10 relative flex-shrink-0">
-                              <Image
-                                src={dbType.icon_url}
-                                alt={dbType.name}
-                                width={40}
-                                height={40}
-                                className="object-contain"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <p className="font-semibold text-white">
-                                {dbType.name}
-                              </p>
-                              <p className="text-xs text-white/60 mt-1">
-                                {dbType.description}
-                              </p>
-                            </div>
-                            {planCount > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="ml-auto text-white/70"
-                              >
-                                {planCount} plans
-                              </Badge>
-                            )}
-                          </Label>
-                        </div>
-                      );
-                    })}
-                  </RadioGroup>
+                  <>
+                    <RadioGroup
+                      value={selectedDbType}
+                      onValueChange={(value) => {
+                        handleDbTypeChange(value);
+                        // Clear error on change
+                        if (errors.dbType) {
+                          setErrors({ ...errors, dbType: "" });
+                        }
+                      }}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                    >
+                      {databaseTypes.map((dbType) => {
+                        const planCount = products.filter(
+                          (p) => p.sub === dbType.code
+                        ).length;
+                        
+                        return (
+                          <div key={dbType.code}>
+                            <RadioGroupItem
+                              value={dbType.code}
+                              id={`type-${dbType.code}`}
+                              className="peer sr-only"
+                            />
+                            <Label
+                              htmlFor={`type-${dbType.code}`}
+                              className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                            >
+                              <div className="w-10 h-10 relative flex-shrink-0">
+                                <Image
+                                  src={dbType.icon_url}
+                                  alt={dbType.name}
+                                  width={40}
+                                  height={40}
+                                  className="object-contain"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <p className="font-semibold text-white">
+                                  {dbType.name}
+                                </p>
+                                <p className="text-xs text-white/60 mt-1">
+                                  {dbType.description}
+                                </p>
+                              </div>
+                              {planCount > 0 && (
+                                <Badge
+                                  variant="outline"
+                                  className="ml-auto text-white/70"
+                                >
+                                  {planCount} plans
+                                </Badge>
+                              )}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </RadioGroup>
+                    {errors.dbType && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>{errors.dbType}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
               <CardFooter className="flex justify-between">
@@ -686,13 +870,19 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                               </Label>
                               <Select
                                 value={selectedVersion}
-                                onValueChange={(value) =>
-                                  setState({ ...state, selectedVersion: value })
-                                }
+                                onValueChange={(value) => {
+                                  setState({ ...state, selectedVersion: value });
+                                  // Clear error on change
+                                  if (errors.version) {
+                                    setErrors({ ...errors, version: "" });
+                                  }
+                                }}
                               >
                                 <SelectTrigger
                                   id="version"
-                                  className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                                  className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                                    errors.version ? "border-red-500" : ""
+                                  }`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <SelectValue placeholder="Select version" />
@@ -705,11 +895,23 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                                   ))}
                                 </SelectContent>
                               </Select>
+                              {errors.version && (
+                                <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                                  <AlertCircle className="w-4 h-4" />
+                                  <span>{errors.version}</span>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
                       </div>
                     ))}
+                    {errors.plan && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>{errors.plan}</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
@@ -743,13 +945,19 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                   </Label>
                   <Select
                     value={selectedProject}
-                    onValueChange={(value) =>
-                      setState({ ...state, selectedProject: value })
-                    }
+                    onValueChange={(value) => {
+                      setState({ ...state, selectedProject: value });
+                      // Clear error on change
+                      if (errors.project) {
+                        setErrors({ ...errors, project: "" });
+                      }
+                    }}
                   >
                     <SelectTrigger
                       id="project"
-                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                      className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                        errors.project ? "border-red-500" : ""
+                      }`}
                     >
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
@@ -761,6 +969,12 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.project && (
+                    <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{errors.project}</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
