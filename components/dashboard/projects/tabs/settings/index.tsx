@@ -1,5 +1,5 @@
 import { Tables } from "@/lib/supabase/types";
-import axios from "axios";
+// import axios from "axios";
 // import ProjectUsers from "./users";
 // import EditProjectForm from "./edit";
 
@@ -15,7 +15,7 @@ const ProjectSettingsPage = async ({ project }: PageProps) => {
     Array.isArray(project.users) &&
     project.users.length > 0
   ) {
-    const userIds = project.users.join(",");
+    //const userIds = project.users.join(",");
     // const response = await axios.get(
     //   `${process.env.DOMAIN}/api/users?ids=${userIds}`
     // );

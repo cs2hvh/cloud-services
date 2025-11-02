@@ -1,18 +1,34 @@
-'use client';
+import { Suspense } from "react";
+import { LoadingSpinner } from "@/components/dashboard/utils/loading";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { notFound } from "next/navigation";
+import AdminDatabases from "@/components/admin/databases/admin-databases";
+import { Database_Clusters } from "@/lib/supabase/queries";
 
-import { ServersManager } from '@/components/admin/proxmox/servers-manager';
+const AdminDatabasesSuspense = async () => {
+  const checkAdmin = await requireAdmin();
 
-export default function AdminDatabasePage() {
+  if (!checkAdmin.ok) {
+    notFound();
+  }
+
+  const databases = await Database_Clusters.get_all_for_admin();
+
+  return <AdminDatabases all_databases={databases} />;
+};
+
+const AdminDatabasesPage = async () => {
   return (
-    <div className="p-6 sm:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Database Management</h1>
-          <p className="text-white/60">View and manage all VPS instances across all users</p>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <LoadingSpinner />
         </div>
-
-        <ServersManager />
-      </div>
-    </div>
+      }
+    >
+      <AdminDatabasesSuspense />
+    </Suspense>
   );
-}
+};
+
+export default AdminDatabasesPage;

@@ -11,6 +11,7 @@ import { resolveHost } from "@/config/hosttoip";
 export async function POST(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
+  console.log(auth.authenticated,"....................");
   if (!auth.authenticated) {
     return auth.response;
   }
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
     let doStatus: string | null = null;
     
     if (validatedData.checkStatus) {
+      console.log("reached here ---47")
       const database = await axios.get(
         `https://api.digitalocean.com/v2/databases/${validatedData.id}`,
         {
@@ -38,6 +40,8 @@ export async function POST(req: NextRequest) {
           },
         }
       );
+
+      console.log(database.data,"...........database data from DO...........");
 
       if (database.status === 200) {
         doStatus = database.data.database.status;

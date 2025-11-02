@@ -42,6 +42,21 @@ export type Admin_User={
 
 }
 
+export type Admin_Database = {
+  id: string;
+  name: string;
+  engine: string;
+  version: string | null;
+  region: string | null;
+  cluster_id: string;
+  status: "pending" | "online" | "creating" | "migrating";
+  owner_id: string;
+  owner_email: string | null;
+  owner_username: string | null;
+  created_at: string | null;
+  project_id: string;
+}
+
 
 
 export type Rule = {

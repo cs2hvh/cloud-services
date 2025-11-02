@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Server, Network, Users } from 'lucide-react';
+import { Server, Network, Users, Database } from 'lucide-react';
 
 export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) {
 //   const [isAdmin, setIsAdmin] = useState(false);
@@ -101,6 +101,19 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
                 <div>
                   <h3 className="text-xl font-semibold text-white">Users</h3>
                   <p className="text-white/60 text-sm mt-1">Manage user accounts</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+           <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/databases" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-purple-500/10 rounded-lg">
+                  <Database className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Databases</h3>
+                  <p className="text-white/60 text-sm mt-1">Manage database instances</p>
                 </div>
               </div>
             </a>

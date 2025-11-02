@@ -1,7 +1,18 @@
 // import { Encryption } from "@/config/functions";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
-import { network_rules, Tables, TablesInsert, TablesUpdate, EncryptedData, Database_Connection, DatabaseUser, DatabaseInstance, Admin_User } from "./types";
+import {
+  network_rules,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+  EncryptedData,
+  Database_Connection,
+  DatabaseUser,
+  DatabaseInstance,
+  Admin_User,
+  Admin_Database,
+} from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
@@ -1484,6 +1495,65 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
+  // Get all databases for admin panel
+  get_all_for_admin: async (): Promise<Admin_Database[]> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Get all database clusters with user profile data
+      const { data: clusters, error } = await supabase
+        .from("database_cluster")
+        .select(`
+          id,
+          name,
+          engine,
+          version,
+          region,
+          cluster_id,
+          status,
+          owner_id,
+          created_at,
+          project_id,
+          user_profiles!owner_id(username)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(`[Database_Clusters] Error while getting all databases: ${error.message}`);
+        return [];
+      }
+
+      if (!clusters) return [];
+
+      
+      
+      // Get auth users for emails
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+      const emailMap = new Map(authUsers?.users?.map(u => [u.id, u.email]) || []);
+
+      // Map and merge data
+      const merged: Admin_Database[] = clusters.map((c: any) => ({
+        id: c.id || "",
+        name: c.name,
+        engine: c.engine,
+        version: c.version,
+        region: c.region || null,
+        cluster_id: c.cluster_id || "",
+        status: c.status,
+        owner_id: c.owner_id,
+        owner_email: emailMap.get(c.owner_id) || null,
+        owner_username: c.user_profiles?.username || null,
+        created_at: c.created_at,
+        project_id: c.project_id,
+      }));
+
+      return merged;
+    } catch (err) {
+      console.log(`[Database_Clusters] Error while getting all databases: ${err}`);
+      return [];
+    }
+  },
+
    get_by_project_id: async (projectId: string): Promise<Database[]>=> {
     try {
       //console.log(projectId,"..................933..id");
@@ -1517,7 +1587,7 @@ export const Database_Clusters = {
      // console.log(data, "...........data in database cluster by project id........");
       return data;
     } catch (err) {
-      //console.log(`[Supabase] Error while getting project by id: ${err}`);
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
       return [];
     }
   },
