@@ -9,6 +9,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 import api from "@/lib/axios/axios";
 import { Tables } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -16,31 +17,6 @@ import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { UsersDbsTab } from "./tabs/users-dbs-tab";
 import { SettingsTab } from "./tabs/settings-tab";
-// import api from "@/lib/axios";
-
-// interface DatabaseCluster {
-//   id: string;
-//   do_database_id: string;
-//   name: string;
-//   engine: string;
-//   version: string;
-//   status: "online" | "creating" | "failed";
-//   num_nodes: number;
-//   size: string;
-//   region: string;
-//   connection_host: string;
-//   connection_port: number;
-//   connection_database: string;
-//   connection_username: string;
-//   connection_password: string;
-//   connection_uri: string;
-//   connection_ssl: boolean;
-//   private_connection_host?: string;
-//   private_connection_port?: number;
-//   private_connection_uri?: string;
-//   created_at: string;
-//   monthly_cost?: number;
-// }
 
 interface SingleDbProps {
   databaseId: string;
@@ -48,13 +24,16 @@ interface SingleDbProps {
 }
 
 const Singledb = ({ databaseId }: SingleDbProps) => {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  
   const [database, setDatabase] = useState<Tables<"database_clusters"> | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [connectionTab, setConnectionTab] = useState<"public" | "private">("public");
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [activeTab, setActiveTab] = useState<string>(tabParam || "overview");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
@@ -250,7 +229,10 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 >
                   Overview
                 </TabsTrigger>
-                <TabsTrigger 
+                {
+                  database.status==='online' &&
+                  <>
+                  <TabsTrigger 
                   value="network" 
                   className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
@@ -268,6 +250,8 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
                 >
                   Settings
                 </TabsTrigger>
+                  </>
+                }
               </TabsList>
             </div>
 

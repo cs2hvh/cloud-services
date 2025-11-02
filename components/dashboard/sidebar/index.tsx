@@ -762,7 +762,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       href="/dashboard/admin/databases"
                       className={`
                         flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/users"
+                        ${pathname === "/dashboard/admin/databases"
                           ? "bg-slate-700 text-white font-medium"
                           : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                         }

@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Admin_Database } from "@/lib/supabase/types";
@@ -23,6 +25,18 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { dbLocations } from "@/config/locations";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import api from "@/lib/axios/axios";
 
 interface PageProps {
   all_databases: Admin_Database[];
@@ -41,6 +55,12 @@ export default function AdminDatabases({ all_databases }: PageProps) {
     Math.ceil(all_databases.length / DATABASES_PER_PAGE)
   );
   const [totalDatabases, setTotalDatabases] = useState(all_databases.length);
+  
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedClusterId, setSelectedClusterId] = useState<string>("");
+  const [selectedClusterName, setSelectedClusterName] = useState<string>("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter and sort databases
   const getFilteredAndSortedDatabases = () => {
@@ -97,6 +117,40 @@ export default function AdminDatabases({ all_databases }: PageProps) {
 
   const handleViewDatabase = (clusterId: string) => {
     router.push(`/dashboard/services/database/clusters/${clusterId}`);
+  };
+
+  const handleEditDatabase = (clusterId: string) => {
+    router.push(`/dashboard/services/database/clusters/${clusterId}?tab=settings`);
+  };
+
+  const handleDeleteDatabase = (clusterId: string, clusterName: string) => {
+    setSelectedClusterId(clusterId);
+    setSelectedClusterName(clusterName);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!selectedClusterId) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await api.post("/services/database/delete", {
+        id: selectedClusterId,
+      });
+
+      if (response.status === 200) {
+        toast.success("Database cluster deleted successfully");
+        setDeleteDialogOpen(false);
+        
+        // Refresh the page to get updated data
+        router.refresh();
+      }
+    } catch (error: any) {
+      console.error("Error deleting database:", error);
+      toast.error(error.response?.data?.error || "Failed to delete database cluster");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Apply filters and pagination whenever search or sort changes
@@ -315,15 +369,35 @@ export default function AdminDatabases({ all_databases }: PageProps) {
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleViewDatabase(db.cluster_id)}
-                          className="h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                          View
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleViewDatabase(db.cluster_id)}
+                            className="h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                            View
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditDatabase(db.cluster_id)}
+                            className="h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteDatabase(db.cluster_id, db.name)}
+                            className="h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                            Delete
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -364,6 +438,52 @@ export default function AdminDatabases({ all_databases }: PageProps) {
           )}
         </div>
       </motion.div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-neutral-900 border-neutral-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-400" />
+              Delete Database Cluster
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-neutral-300">
+              Do you want to permanently delete this cluster?
+              <div className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700">
+                <div className="text-sm text-neutral-400">Cluster Name:</div>
+                <div className="text-base font-semibold text-white mt-1">
+                  {selectedClusterName}
+                </div>
+              </div>
+              <div className="mt-3 text-red-400 text-sm font-medium">
+                ⚠️ This action cannot be undone.
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+            >
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <span className="animate-spin mr-2">⏳</span>
+                  Deleting...
+                </>
+              ) : (
+                "Yes, Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
