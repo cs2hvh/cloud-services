@@ -705,6 +705,97 @@ export const Products = {
       return [];
     }
   },
+
+  create: async (
+    props: TablesInsert<"products">,
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("products")
+        .insert(props)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while creating product: ${error.message}`,
+        );
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err) {
+      console.log(`[Supabase] Error while creating product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update: async (
+    id: string,
+    props: TablesUpdate<"products">,
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("products")
+        .update(props)
+        .eq("id", id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.log(`[Supabase] Error while updating product: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err) {
+      console.log(`[Supabase] Error while updating product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  delete: async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase.from("products").delete().eq("id", id);
+
+      if (error) {
+        console.log(`[Supabase] Error while deleting product: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.log(`[Supabase] Error while deleting product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  check_usage: async (
+    id: string,
+  ): Promise<{ inUse: boolean; count: number }> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Check if any database cluster is using this product's size
+      // The size field in database_clusters matches the product id pattern
+      const { count, error } = await supabase
+        .from("database_clusters")
+        .select("*", { count: "exact", head: true })
+        .eq("size", id);
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while checking product usage: ${error.message}`,
+        );
+        return { inUse: false, count: 0 };
+      }
+
+      return { inUse: (count || 0) > 0, count: count || 0 };
+    } catch (err) {
+      console.log(`[Supabase] Error while checking product usage: ${err}`);
+      return { inUse: false, count: 0 };
+    }
+  },
 };
 
 export const Locations = {

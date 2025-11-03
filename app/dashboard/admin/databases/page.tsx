@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminDatabases from "@/components/admin/databases/admin-databases";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Products } from "@/lib/supabase/queries";
 
 const AdminDatabasesSuspense = async () => {
   const checkAdmin = await requireAdmin();
@@ -12,9 +12,13 @@ const AdminDatabasesSuspense = async () => {
     notFound();
   }
 
-  const databases = await Database_Clusters.get_all_for_admin();
+  // Fetch both databases and products in parallel
+  const [databases, databaseProducts] = await Promise.all([
+    Database_Clusters.get_all_for_admin(),
+    Products.get_by_type("database"),
+  ]);
 
-  return <AdminDatabases all_databases={databases} />;
+  return <AdminDatabases all_databases={databases} all_products={databaseProducts} />;
 };
 
 const AdminDatabasesPage = async () => {
