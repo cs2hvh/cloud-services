@@ -135,6 +135,20 @@ export const migrateRegionSchema = z.object({
 export type MigrateRegionPayload = z.infer<typeof migrateRegionSchema>;
 
 /**
+ * Storage Tier Upgrade Schema
+ */
+export const updateStorageSchema = z.object({
+  database_id: z.string().uuid("Database ID must be a valid UUID"),
+  size: z.enum(VALID_DATABASE_SIZES, {
+    errorMap: () => ({
+      message: `Size must be one of the allowed tiers: ${VALID_DATABASE_SIZES.join(", ")}`,
+    }),
+  }),
+});
+
+export type UpdateStoragePayload = z.infer<typeof updateStorageSchema>;
+
+/**
  * Database User Management Schemas
  */
 export const createDatabaseUserSchema = z.object({

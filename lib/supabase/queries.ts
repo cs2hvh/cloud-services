@@ -682,6 +682,29 @@ export const Products = {
       return [];
     }
   },
+
+  get_by_type_and_subtype: async (type: string, subtype: string): Promise<Product[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("type", type)
+        .eq("sub", subtype)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting products by type and subtype: ${error.message}`,
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting products by type and subtype: ${err}`);
+      return [];
+    }
+  },
 };
 
 export const Locations = {
@@ -1489,6 +1512,26 @@ export const Database_Clusters = {
 
     if (error) {
       console.error("[updateMaintenanceWindow] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update storage tier (size)
+  update_storage: async(cluster_id: string, size: string) => {
+    //console.log(`[updateStorage] cluster_id: ${cluster_id}, size: ${size}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ size })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateStorage] update failed:", error.message);
       return { success: false, error: error.message };
     }
 

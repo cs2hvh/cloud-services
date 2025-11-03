@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
         }
       );
 
-      console.log(database.data,"...........database data from DO...........");
+     // console.log(database.data,"...........database data from DO...........");
 
       if (database.status === 200) {
         doStatus = database.data.database.status;
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         if (fullClusterData.status === 200) {
           const dbData = fullClusterData.data.database;
 
-          console.log(dbData, "...........database data from DO...........");
+          //console.log(dbData, "...........database data from DO...........");
 
            const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
           

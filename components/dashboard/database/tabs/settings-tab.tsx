@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   Loader2,
   FolderKanban,
+  HardDrive,
+  Info,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
@@ -23,6 +25,7 @@ import { useRouter } from "next/navigation";
 interface SettingsTabProps {
   database: Tables<"database_clusters">;
   onDatabaseUpdate?: () => void;
+  products: Tables<"products">[];
 }
 
 // Days of the week
@@ -61,6 +64,7 @@ const REGIONS = [
 export const SettingsTab = ({
   database,
   onDatabaseUpdate,
+  products,
 }: SettingsTabProps) => {
   const { projects } = useProjects();
   const [loading, setLoading] = useState<string | null>(null);
@@ -84,6 +88,34 @@ export const SettingsTab = ({
 
   // Region State
   const [selectedRegion, setSelectedRegion] = useState(database.region || "");
+
+  // Storage State
+  const [selectedSize, setSelectedSize] = useState(database.size || "");
+
+  // Transform products into storage tiers format
+  const storageTiers = products.map((product) => ({
+    slug: `db-s-${product.resources.cpu}vcpu-${product.resources.ram}gb`,
+    storage: `${product.resources.storage} GB`,
+    vcpu: `${product.resources.cpu}`,
+    ram: `${product.resources.ram} GB`,
+    diskGB: product.resources.storage,
+  }));
+
+  // Helper function to get current storage info
+  const getCurrentStorageInfo = (currentSize: string) => {
+    const tier = storageTiers.find((t) => t.slug === currentSize);
+    return tier
+      ? `${tier.storage} Storage (${tier.vcpu} vCPU, ${tier.ram} RAM)`
+      : currentSize;
+  };
+
+  // Helper function to get only tiers with MORE storage than current
+  const getUpgradeTiers = (currentSize: string) => {
+    const current = storageTiers.find((t) => t.slug === currentSize);
+    if (!current) return storageTiers;
+
+    return storageTiers.filter((t) => t.diskGB > current.diskGB);
+  };
 
   // Fetch current maintenance window on mount
   useEffect(() => {
@@ -245,6 +277,39 @@ export const SettingsTab = ({
       console.error("Error migrating database:", error);
       toast.error(
         error.response?.data?.error || "Failed to initiate database migration"
+      );
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  // Upgrade Plan Tier
+  const handleUpdateStorage = async () => {
+    if (!selectedSize) {
+      toast.error("Please select a storage tier");
+      return;
+    }
+
+    if (selectedSize === database.size) {
+      toast.info("Database is already using this storage tier");
+      return;
+    }
+
+    setLoading("storage");
+    try {
+      const response = await axios.put("/api/services/database/storage", {
+        database_id: database.cluster_id,
+        size: selectedSize,
+      });
+
+      if (response.status === 200) {
+        toast.success("Storage tier upgrade initiated successfully");
+        onDatabaseUpdate?.();
+      }
+    } catch (error: any) {
+      console.error("Error upgrading storage:", error);
+      toast.error(
+        error.response?.data?.error || "Failed to upgrade storage tier"
       );
     } finally {
       setLoading(null);
@@ -581,6 +646,131 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedRegion(database.region || "")}
                   disabled={loading === "region" || isMigrating}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Upgrade Plan Tier */}
+          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+                <HardDrive className="h-5 w-5 text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-white">
+                  Upgrade Plan Tier
+                </h3>
+                <p className="text-sm text-slate-400">
+                  Increase storage capacity by upgrading database tier
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Current Storage Info */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <div className="text-xs text-slate-300">
+                  <p className="font-semibold text-blue-400 mb-1">
+                    Current Tier
+                  </p>
+                  <p className="text-white font-medium">
+                    {getCurrentStorageInfo(database.size || "")}
+                  </p>
+                  <p className="text-slate-400 text-xs mt-1">{database.size}</p>
+                </div>
+              </div>
+
+              {/* Plan Tier Selector */}
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2">
+                  Select New Plan Tier
+                </label>
+                <select
+                  value={selectedSize}
+                  onChange={(e) => setSelectedSize(e.target.value)}
+                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  disabled={loading === "storage"}
+                >
+                  <option value="" className="bg-slate-900">
+                    Select a tier
+                  </option>
+                  {getUpgradeTiers(database.size || "").map((tier) => (
+                    <option
+                      key={tier.slug}
+                      value={tier.slug}
+                      className="bg-slate-900"
+                    >
+                      {tier.storage} Storage - {tier.vcpu} vCPU, {tier.ram} RAM
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Info Notice */}
+              {/* <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-xs text-slate-300">
+                    <p className="font-semibold text-blue-400 mb-1">
+                      About Storage Upgrades
+                    </p>
+                    <p>
+                      DigitalOcean ties storage to database tiers. Upgrading
+                      storage will also increase CPU and RAM resources.
+                    </p>
+                  </div>
+                </div>
+              </div> */}
+
+              {/* Warning Notice */}
+              {selectedSize && selectedSize !== database.size && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-300">
+                      <p className="font-semibold text-yellow-400 mb-1">
+                        Upgrade Notice
+                      </p>
+                      <p>
+                        Tier upgrades are permanent (cannot be downgraded).
+                        Brief performance impact may occur during the upgrade.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={handleUpdateStorage}
+                  disabled={
+                    loading === "storage" ||
+                    !selectedSize ||
+                    selectedSize === database.size
+                  }
+                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                >
+                  {loading === "storage" ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Upgrading...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Upgrade Tier
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setSelectedSize(database.size || "")}
+                  disabled={loading === "storage"}
                   className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />

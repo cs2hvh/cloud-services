@@ -1,14 +1,15 @@
 "use server"
 import Singledb from "@/components/dashboard/database/singledb";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Products } from "@/lib/supabase/queries";
 import { Suspense } from "react";
+import { Tables } from "@/lib/supabase/types";
 
 type Params = { databaseId: string };
 
 
-const SingleDbSuspense = async ({databaseId,status}:{ databaseId: string, status: string }) => {
-  return <Singledb databaseId={databaseId} status={status} />
+const SingleDbSuspense = async ({databaseId,status, products}:{ databaseId: string, status: string, products: Tables<"products">[] }) => {
+  return <Singledb databaseId={databaseId} status={status} products={products} />
 };
 
 const SingleDbPage = async ({
@@ -22,7 +23,14 @@ const SingleDbPage = async ({
 
     const { databaseId } = await params;
     console.log(databaseId,".............databaseId...........");
-   const databaseStatus =(await Database_Clusters.read(databaseId))?.data?.status ?? "failed";
+   
+   // Fetch database cluster details
+   const databaseCluster = await Database_Clusters.read(databaseId);
+   const databaseStatus = databaseCluster?.data?.status ?? "failed";
+   const databaseEngine = databaseCluster?.data?.engine ?? "";
+   
+   // Fetch database products for storage tier options based on database engine type
+   const databaseProducts = await Products.get_by_type_and_subtype("database", databaseEngine);
 
     console.log(databaseStatus,".............database status...........");
   return (
@@ -38,7 +46,7 @@ const SingleDbPage = async ({
             <LoadingSpinner  />
           </div>
         }>
-          <SingleDbSuspense status={databaseStatus} databaseId={decodeURIComponent(databaseId)} />
+          <SingleDbSuspense status={databaseStatus} databaseId={decodeURIComponent(databaseId)} products={databaseProducts} />
         </Suspense>
       </div>
     </div>

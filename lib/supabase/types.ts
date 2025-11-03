@@ -303,7 +303,7 @@ export type Database = {
           image: string | null;
           name: string | null;
           price: number | null;
-          resources: { cpu: number; ram: number };
+          resources: { cpu: number; ram: number; storage: number };
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
@@ -315,7 +315,7 @@ export type Database = {
           image?: string | null;
           name: string;
           price: number;
-         resources: { cpu: number; ram: number };
+          resources: { cpu: number; ram: number; storage: number };
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
         };
@@ -737,7 +737,7 @@ export type Database = {
           cluster_id?: UUID;
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
-          status: "pending" | "online" | "creating" | "migrating" ;
+          status: "pending" | "online" | "creating" | "migrating" | "resizing" ;
           password: string | EncryptedData;
           // resource_config?:{ cpu: number; ram: number; storage: number }
           size:string;

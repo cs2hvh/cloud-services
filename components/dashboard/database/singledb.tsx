@@ -21,9 +21,10 @@ import { SettingsTab } from "./tabs/settings-tab";
 interface SingleDbProps {
   databaseId: string;
   status: string;
+  products: Tables<"products">[];
 }
 
-const Singledb = ({ databaseId }: SingleDbProps) => {
+const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   
@@ -284,6 +285,7 @@ const Singledb = ({ databaseId }: SingleDbProps) => {
               <SettingsTab 
                 database={database}
                 onDatabaseUpdate={fetchDatabaseCluster}
+                products={products}
               />
             </TabsContent>
           </Tabs>
