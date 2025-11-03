@@ -209,14 +209,14 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           </div>
           <Button
             onClick={handleSearch}
-            className="bg-neutral-800 hover:bg-neutral-700 text-white border-0"
+            className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-0"
           >
             Search
           </Button>
         </div>
 
         <Select value={sortBy} onValueChange={handleSortChange}>
-          <SelectTrigger className="w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+          <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
             <Filter className="h-4 w-4 mr-2" />
             <SelectValue placeholder="Sort by" />
           </SelectTrigger>
@@ -359,7 +359,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleViewDatabase(db.cluster_id)}
-                            className="h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
+                            className="cursor-pointer h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
                           >
                             <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
                             View
@@ -368,7 +368,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleEditDatabase(db.cluster_id)}
-                            className="h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
+                            className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
                           >
                             <Pencil className="h-3.5 w-3.5 mr-1.5" />
                             Edit
@@ -379,7 +379,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                             onClick={() =>
                               handleDeleteDatabase(db.cluster_id, db.name)
                             }
-                            className="h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"
+                            className="cursor-pointer h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"
                           >
                             <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                             Delete
@@ -405,7 +405,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                   variant="ghost"
                   onClick={() => updatePagination(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className=" cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
@@ -415,7 +415,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                   variant="ghost"
                   onClick={() => updatePagination(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   Next
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -450,14 +450,14 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           <AlertDialogFooter>
             <AlertDialogCancel
               disabled={isDeleting}
-              className="bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+              className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
             >
               No
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>

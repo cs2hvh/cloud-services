@@ -338,7 +338,7 @@ export default function EditPlanDialog({
                 onClick={onClose}
                 disabled={isLoading}
                 variant="outline"
-                className="flex-1 bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+                className="cursor-pointer flex-1 bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
               >
                 <X className="h-4 w-4 mr-2" />
                 Cancel
@@ -346,7 +346,7 @@ export default function EditPlanDialog({
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                className="cursor-pointer flex-1 bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isLoading ? (
                   <>

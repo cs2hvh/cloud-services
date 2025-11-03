@@ -246,7 +246,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
           </div>
           <Button
             onClick={handleSearch}
-            className="bg-neutral-800 hover:bg-neutral-700 text-white border-0"
+            className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-0"
           >
             Search
           </Button>
@@ -254,16 +254,16 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
 
         <div className="flex gap-2">
           <Select value={filterType} onValueChange={handleFilterChange}>
-            <SelectTrigger className="w-[200px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+            <SelectTrigger className="cursor-pointer w-[200px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
               <Filter className="h-4 w-4 mr-2" />
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
-            <SelectContent className="bg-neutral-900 border-neutral-800">
+            <SelectContent className="cursor-pointer bg-neutral-900 border-neutral-800">
               {DB_TYPES.map((type) => (
                 <SelectItem
                   key={type.value}
                   value={type.value}
-                  className="text-white focus:bg-neutral-800 focus:text-white"
+                  className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
                 >
                   {type.label}
                 </SelectItem>
@@ -273,7 +273,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
 
           <Button
             onClick={() => setAddDialogOpen(true)}
-            className="bg-green-600 hover:bg-green-700 text-white border-0"
+            className="cursor-pointer bg-green-600 hover:bg-green-700 text-white border-0"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Plan
@@ -400,7 +400,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
                             variant="ghost"
                             onClick={() => handleEditProduct(product)}
                             disabled={isEditing === product.id}
-                            className="h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {isEditing === product.id ? (
                               <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
@@ -419,7 +419,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
                               )
                             }
                             disabled={isDeleting}
-                            className="h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="cursor-pointer h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                             Delete
@@ -445,7 +445,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
                   variant="ghost"
                   onClick={() => updatePagination(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
@@ -455,7 +455,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
                   variant="ghost"
                   onClick={() => updatePagination(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   Next
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -492,14 +492,14 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
           <AlertDialogFooter>
             <AlertDialogCancel
               disabled={isDeleting}
-              className="bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+              className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>
