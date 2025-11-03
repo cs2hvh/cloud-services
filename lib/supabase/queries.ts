@@ -147,7 +147,7 @@ export const Users = {
       const { data: authUsers } = await supabase.auth.admin.listUsers();
 
       // Merge user profiles with auth data to include emails and extract counts
-      const merged: Admin_User[] = data.map((u: any) => ({
+      const merged: Admin_User[] = data.map((u) => ({
         id: u.id,
         username: u.username,
         display_name: u.display_name,
@@ -1657,29 +1657,43 @@ export const Database_Clusters = {
         return [];
       }
 
-      if (!clusters) return [];
+      if (!clusters || clusters.length === 0) return [];
 
-      
-      
       // Get auth users for emails
-      const { data: authUsers } = await supabase.auth.admin.listUsers();
-      const emailMap = new Map(authUsers?.users?.map(u => [u.id, u.email]) || []);
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.log(`[Database_Clusters] Error while getting auth users: ${authError.message}`);
+      }
 
-      // Map and merge data
-      const merged: Admin_Database[] = clusters.map((c: any) => ({
-        id: c.id || "",
-        name: c.name,
-        engine: c.engine,
-        version: c.version,
-        region: c.region || null,
-        cluster_id: c.cluster_id || "",
-        status: c.status,
-        owner_id: c.owner_id,
-        owner_email: emailMap.get(c.owner_id) || null,
-        owner_username: c.user_profiles?.username || null,
-        created_at: c.created_at,
-        project_id: c.project_id,
-      }));
+      const emailMap = new Map(
+        authUsers?.users?.map(u => [u.id, u.email]) || []
+      );
+
+      // Map and merge data with proper typing
+      const merged: Admin_Database[] = clusters
+        .map((cluster) => {
+          // Safely access nested user_profiles
+          const userProfile = Array.isArray(cluster.user_profiles)
+            ? cluster.user_profiles[0]
+            : cluster.user_profiles;
+
+          return {
+            id: cluster.id ?? "",
+            name: cluster.name ?? "",
+            engine: cluster.engine ?? "",
+            version: cluster.version ?? null,
+            region: cluster.region ?? null,
+            cluster_id: cluster.cluster_id ?? "",
+            status: cluster.status ?? "pending",
+            owner_id: cluster.owner_id ?? "",
+            owner_email: emailMap.get(cluster.owner_id ?? "") ?? null,
+            owner_username: (userProfile)?.username ?? null,
+            created_at: cluster.created_at ?? null,
+            project_id: cluster.project_id ?? "",
+          } as Admin_Database;
+        })
+        .filter((item): item is Admin_Database => Boolean(item));
 
       return merged;
     } catch (err) {

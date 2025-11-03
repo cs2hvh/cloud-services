@@ -11,7 +11,8 @@ import {
   CartesianGrid, 
   Tooltip, 
   Label,
-  Legend 
+  Legend,
+  TooltipProps 
 } from "recharts";
 import { X } from "lucide-react";
 
@@ -32,14 +33,27 @@ interface GraphMetadata {
   timeRange?: number;
 }
 
+interface TooltipPayloadEntry {
+  name: string;
+  value: number | string;
+  color: string;
+  dataKey: string;
+}
+
+type CustomTooltipProps = TooltipProps<number, string> & {
+  active?: boolean;
+  payload?: TooltipPayloadEntry[];
+  label?: string;
+};
+
 type GraphProps = {
   open?: boolean;
-  setGraphOpen: (open: boolean) => void;
+  setGraphOpenAction: (open: boolean) => void;
   data: GraphData;
   metadata?: GraphMetadata;
 };
 
-export default function Graph({ open, setGraphOpen, data, metadata }: GraphProps) {
+export default function Graph({ open, setGraphOpenAction, data, metadata }: GraphProps) {
   // Transform data to recharts format
   const chartData = React.useMemo(() => {
     if (!data || !data.labels || !data.datasets) {
@@ -95,7 +109,7 @@ export default function Graph({ open, setGraphOpen, data, metadata }: GraphProps
   };
 
   // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
     if (!active || !payload || !payload.length) return null;
 
     return (
@@ -104,7 +118,7 @@ export default function Graph({ open, setGraphOpen, data, metadata }: GraphProps
           Time: {label}
         </p>
         <div className="space-y-1">
-          {payload.map((entry: any, index: number) => (
+          {payload.map((entry: TooltipPayloadEntry, index: number) => (
             <div key={index} className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <div 
@@ -125,7 +139,7 @@ export default function Graph({ open, setGraphOpen, data, metadata }: GraphProps
   };
 
   return (
-    <Dialog open={open} onOpenChange={setGraphOpen}>
+    <Dialog open={open} onOpenChange={setGraphOpenAction}>
       <DialogContent className="bg-slate-50 max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center justify-between">
@@ -140,7 +154,7 @@ export default function Graph({ open, setGraphOpen, data, metadata }: GraphProps
               )}
             </div>
             <button
-              onClick={() => setGraphOpen(false)}
+              onClick={() => setGraphOpenAction(false)}
               className="rounded-lg p-2 hover:bg-slate-200 transition-colors"
             >
               <X className="h-5 w-5 text-slate-600" />

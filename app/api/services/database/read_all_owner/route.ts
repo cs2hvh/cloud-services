@@ -32,14 +32,14 @@ export async function POST(req: NextRequest) {
             const encryptionKey = process.env.ENCRYPTION_KEY!;
             
             // Helper function to check if value is encrypted
-            const isEncrypted = (value: any): value is EncryptedData => {
+            const isEncrypted = (value: Encryption): value is EncryptedData => {
               return value && typeof value === 'object' && 
                      'encrypted' in value && 'iv' in value && 
                      'tag' in value && 'salt' in value;
             };
             
             // Decrypt all database clusters
-            const decryptedData = supabase_read.data?.map((cluster: any) => ({
+            const decryptedData = supabase_read.data?.map((cluster) => ({
               ...cluster,
               // Decrypt main password
               password: isEncrypted(cluster.password)
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
                   : cluster.private_connection.password,
               } : undefined,
               // Decrypt user passwords
-              users: cluster.users?.map((user: any) => ({
+              users: cluster.users?.map((user: { password: Encryption }) => ({
                 ...user,
                 password: user.password && isEncrypted(user.password)
                   ? Encryption.decrypt(user.password, encryptionKey)

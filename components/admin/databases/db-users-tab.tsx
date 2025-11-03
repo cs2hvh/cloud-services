@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
+import { getErrorMessage } from "@/config/functions";
 
 interface DbUsersTabProps {
   all_databases: Admin_Database[];
@@ -56,7 +57,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   const [totalPages, setTotalPages] = useState(
     Math.ceil(all_databases.length / DATABASES_PER_PAGE)
   );
-  const [totalDatabases, setTotalDatabases] = useState(all_databases.length);
+//   const [totalDatabases, setTotalDatabases] = useState(all_databases.length);
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -109,7 +110,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     setDatabases(paginatedDatabases);
     setCurrentPage(page);
     setTotalPages(Math.ceil(filtered.length / DATABASES_PER_PAGE));
-    setTotalDatabases(filtered.length);
+   // setTotalDatabases(filtered.length);
   };
 
   const handleSearch = () => {
@@ -152,11 +153,8 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
         // Refresh the page to get updated data
         router.refresh();
       }
-    } catch (error: any) {
-      console.error("Error deleting database:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to delete database cluster"
-      );
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
     } finally {
       setIsDeleting(false);
     }

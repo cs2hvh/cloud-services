@@ -14,6 +14,21 @@ type HostConfig = {
   password: string | null;
 };
 
+interface ProxmoxResponse<T = unknown> {
+  data?: T;
+  [key: string]: unknown;
+}
+
+interface TaskData {
+  status?: string;
+  exitstatus?: string;
+  [key: string]: unknown;
+}
+
+interface ProxmoxAuthHeaders {
+  headers: Record<string, string>;
+}
+
 function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
   return new Promise((resolve, reject) => {
     const id = setTimeout(() => reject(new Error("Request timed out")), ms);
@@ -22,22 +37,23 @@ function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
   });
 }
 
-async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostConfig) {
+async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig): Promise<ProxmoxAuthHeaders> {
   const tokenId = host.token_id || undefined;
   const tokenSecret = host.token_secret || undefined;
   const username = host.username || undefined;
   const password = host.password || undefined;
 
   if (tokenId && tokenSecret) {
-    const tokenAuth = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } as HeadersInit };
+    const tokenAuth: ProxmoxAuthHeaders = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } };
     try {
       
       const verify = await withTimeout(
         fetch(`${apiBase}/api2/json/nodes`, {
           cache: "no-store",
           redirect: "follow",
-          ...(tokenAuth as any),
+          headers: tokenAuth.headers,
          
+          // @ts-expect-error undici dispatcher
           dispatcher,
         })
       );
@@ -62,21 +78,21 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
     const t = await ticketRes.text();
     throw new Error(`login failed (${ticketRes.status}): ${t}`);
   }
-  const ticketJson = (await ticketRes.json()) as any;
+  const ticketJson = (await ticketRes.json()) as ProxmoxResponse<{ ticket?: string; CSRFPreventionToken?: string }>;
   const ticket = ticketJson?.data?.ticket as string | undefined;
   const csrf = ticketJson?.data?.CSRFPreventionToken as string | undefined;
   if (!ticket) throw new Error("Missing PVE ticket in response");
   if (!csrf) throw new Error("Missing CSRFPreventionToken in response");
-  return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } as HeadersInit };
+  return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } };
 }
 
-async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: RequestInit, dispatcher?: any) {
+async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
   const body = new URLSearchParams();
   Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
   const res = await withTimeout(
     fetch(`${apiBase}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...(auth.headers as any) },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
       body,
       redirect: "follow",
       // @ts-expect-error undici dispatcher
@@ -90,21 +106,21 @@ async function postForm(apiBase: string, path: string, form: Record<string, stri
   return res.json();
 }
 
-async function waitTask(apiBase: string, node: string, upid: string, auth: RequestInit, dispatcher?: any, timeoutMs = 120000) {
+async function waitTask(apiBase: string, node: string, upid: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent, timeoutMs = 120000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const res = await withTimeout(
       fetch(`${apiBase}/api2/json/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/status`, {
         cache: "no-store",
         redirect: "follow",
-        headers: auth.headers as any,
+        headers: auth.headers,
         // @ts-expect-error undici dispatcher
         dispatcher,
       })
     );
     if (res.ok) {
-      const json = await res.json();
-      const data = (json as any)?.data ?? json;
+      const json = (await res.json()) as ProxmoxResponse<TaskData>;
+      const data: TaskData = json?.data ?? json;
       if (data?.status === "stopped" && data?.exitstatus) {
         if (String(data.exitstatus).toUpperCase() === "OK") return true;
         throw new Error(`task failed: ${data.exitstatus}`);
@@ -219,9 +235,9 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const vmid = (server as any).vmid;
-    const node = (server as any).node;
-    const location = (server as any).location;
+    const vmid = (server as Record<string, unknown>).vmid;
+    const node = (server as Record<string, unknown>).node;
+    const location = (server as Record<string, unknown>).location;
 
     // Get Proxmox host config
     if (vmid && node && location) {
@@ -248,14 +264,14 @@ export async function DELETE(req: NextRequest) {
               console.log(`[Admin Delete] Stopping VM ${vmid}...`);
               const stopRes = await postForm(
                 apiBase,
-                `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/stop`,
+                `/api2/json/nodes/${encodeURIComponent(node as string)}/qemu/${vmid}/status/stop`,
                 { timeout: 60 },
                 auth,
                 dispatcher
               );
-              const upid = (stopRes as any)?.data;
+              const upid = (stopRes as ProxmoxResponse)?.data;
               if (upid) {
-                await waitTask(apiBase, node, upid, auth, dispatcher, 120000).catch(() => {});
+                await waitTask(apiBase, node as string, upid as string, auth, dispatcher, 120000).catch(() => {});
               }
               console.log(`[Admin Delete] VM ${vmid} stopped`);
             } catch (stopErr) {
@@ -265,9 +281,9 @@ export async function DELETE(req: NextRequest) {
             // Delete VM with purge query parameter
             console.log(`[Admin Delete] Deleting VM ${vmid}...`);
             const delRes = await withTimeout(
-              fetch(`${apiBase}/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}?purge=1`, {
+              fetch(`${apiBase}/api2/json/nodes/${encodeURIComponent(node as string)}/qemu/${vmid}?purge=1`, {
                 method: "DELETE",
-                headers: auth.headers as any,
+                headers: auth.headers,
                 redirect: "follow",
                 // @ts-expect-error undici dispatcher
                 dispatcher,
@@ -286,17 +302,18 @@ export async function DELETE(req: NextRequest) {
                 throw new Error(`delete failed (${delRes.status}): ${text}`);
               }
             } else {
-              const delJson = await delRes.json().catch(() => ({} as any));
-              const delUpid = (delJson as any)?.data;
+              const delJson = (await delRes.json().catch(() => ({}))) as ProxmoxResponse;
+              const delUpid = delJson?.data;
               if (delUpid) {
                 console.log(`[Admin Delete] Waiting for delete task ${delUpid}...`);
-                await waitTask(apiBase, node, delUpid, auth, dispatcher, 180000);
+                await waitTask(apiBase, node as string, delUpid as string, auth, dispatcher, 180000);
               }
               console.log(`[Admin Delete] VM ${vmid} deleted from Proxmox successfully`);
             }
-          } catch (proxmoxErr: any) {
-            console.error(`[Admin Delete] Failed to delete VM from Proxmox:`, proxmoxErr?.message || proxmoxErr);
-            throw new Error(`Proxmox delete failed: ${proxmoxErr?.message || proxmoxErr}`);
+          } catch (proxmoxErr) {
+            const error = proxmoxErr instanceof Error ? proxmoxErr : new Error(String(proxmoxErr));
+            console.error(`[Admin Delete] Failed to delete VM from Proxmox:`, error?.message || proxmoxErr);
+            throw new Error(`Proxmox delete failed: ${error?.message || proxmoxErr}`);
           }
         }
       } catch (hostErr) {

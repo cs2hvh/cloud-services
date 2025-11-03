@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { Agent as UndiciAgent } from "undici";
 import { createWorkerClient } from "@/lib/supabase/server";
 
+
 export const dynamic = "force-dynamic";
 
 type HostConfig = {
@@ -36,7 +37,7 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
           cache: "no-store",
           redirect: "follow",
           ...(tokenAuth as any),
-          // @ts-expect-error undici dispatcher
+         
           dispatcher,
         })
       );

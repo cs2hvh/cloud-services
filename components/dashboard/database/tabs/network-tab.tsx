@@ -18,6 +18,7 @@ import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { network_rules } from "@/lib/supabase/types";
+import { AxiosError } from "axios";
 
 interface NetworkTabProps {
   clusterId: string;
@@ -74,11 +75,9 @@ export const NetworkTab = ({
       if (response.status === 200) {
         setRules(response.data.data || []);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[fetchNetworkRules] Error:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to fetch network rules"
-      );
+      toast.error(getErrorMessage(error, "Failed to fetch network rules"));
     } finally {
       setLoading(false);
     }
@@ -132,11 +131,9 @@ export const NetworkTab = ({
           onRulesUpdate();
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleAddRule] Error:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to add IP address to firewall"
-      );
+      toast.error(getErrorMessage(error, "Failed to add IP address to firewall"));
     } finally {
       setAddingRule(false);
     }
@@ -173,15 +170,28 @@ export const NetworkTab = ({
         // Close modal
         setDeleteModal({ show: false, rule: null, confirmText: "" });
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleDeleteRule] Error:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to delete firewall rule"
-      );
+      toast.error(getErrorMessage(error, "Failed to delete firewall rule"));
     } finally {
       setDeletingRule(false);
     }
   };
+
+
+
+  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+    if (error instanceof AxiosError) {
+      return error.response?.data?.error || defaultMessage;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return defaultMessage;
+  };
+
+
+
 
   // Initial load
   useEffect(() => {

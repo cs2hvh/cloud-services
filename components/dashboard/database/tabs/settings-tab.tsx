@@ -14,11 +14,11 @@ import {
   Loader2,
   FolderKanban,
   HardDrive,
-  Info,
+  // Info,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { useProjects } from "@/app/dashboard/provider";
 import { useRouter } from "next/navigation";
 
@@ -60,6 +60,8 @@ const REGIONS = [
   { slug: "syd1", name: "Sydney 1" },
   { slug: "tor1", name: "Toronto 1" },
 ];
+
+
 
 export const SettingsTab = ({
   database,
@@ -117,6 +119,16 @@ export const SettingsTab = ({
     return storageTiers.filter((t) => t.diskGB > current.diskGB);
   };
 
+  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error instanceof AxiosError) {
+    return error.response?.data?.error || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
+
   // Fetch current maintenance window on mount
   useEffect(() => {
     const fetchMaintenanceWindow = async () => {
@@ -173,23 +185,23 @@ export const SettingsTab = ({
   }, [isMigrating, targetRegion, database.cluster_id, onDatabaseUpdate]);
 
   // Get current day and time for highlighting
-  const getCurrentDay = () => {
-    const days = [
-      "sunday",
-      "monday",
-      "tuesday",
-      "wednesday",
-      "thursday",
-      "friday",
-      "saturday",
-    ];
-    return days[new Date().getDay()];
-  };
+  // const getCurrentDay = () => {
+  //   const days = [
+  //     "sunday",
+  //     "monday",
+  //     "tuesday",
+  //     "wednesday",
+  //     "thursday",
+  //     "friday",
+  //     "saturday",
+  //   ];
+  //   return days[new Date().getDay()];
+  // };
 
-  const getCurrentHour = () => {
-    const hour = new Date().getHours().toString().padStart(2, "0");
-    return `${hour}:00`;
-  };
+  // const getCurrentHour = () => {
+  //   const hour = new Date().getHours().toString().padStart(2, "0");
+  //   return `${hour}:00`;
+  // };
 
   // const currentDay = getCurrentDay();
   // const currentHour = getCurrentHour();
@@ -213,9 +225,9 @@ export const SettingsTab = ({
         onDatabaseUpdate?.();
         router.push('/dashboard/services/database/');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error updating project:", error);
-      toast.error(error.response?.data?.error || "Failed to update project");
+      toast.error(getErrorMessage(error, "Failed to update project"));
     } finally {
       setLoading(null);
     }
@@ -235,11 +247,9 @@ export const SettingsTab = ({
         toast.success("Maintenance window configured successfully");
         onDatabaseUpdate?.();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error updating maintenance window:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to update maintenance window"
-      );
+      toast.error(getErrorMessage(error, "Failed to update maintenance window"));
     } finally {
       setLoading(null);
     }
@@ -273,10 +283,10 @@ export const SettingsTab = ({
         onDatabaseUpdate?.();
         router.push('/dashboard/services/database/');
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error migrating database:", error);
       toast.error(
-        error.response?.data?.error || "Failed to initiate database migration"
+       getErrorMessage(error, "Failed to migrate database region")
       );
     } finally {
       setLoading(null);
@@ -306,11 +316,9 @@ export const SettingsTab = ({
         toast.success("Storage tier upgrade initiated successfully");
         onDatabaseUpdate?.();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error upgrading storage:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to upgrade storage tier"
-      );
+      toast.error(getErrorMessage(error, "Failed to upgrade storage tier"));
     } finally {
       setLoading(null);
     }
@@ -329,11 +337,9 @@ export const SettingsTab = ({
         // Redirect to database list
         window.location.href = "/dashboard/services/database";
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error deleting database:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to delete database cluster"
-      );
+      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
     } finally {
       setLoading(null);
       setShowDeleteConfirm(false);
@@ -613,7 +619,7 @@ export const SettingsTab = ({
                         Migration Notice
                       </p>
                       <p>
-                        Migrating will cause temporary unavailability. The cluster will transition back to "online" when complete.
+                        Migrating will cause temporary unavailability. The cluster will transition back to online when complete.
                       </p>
                     </div>
                   </div>

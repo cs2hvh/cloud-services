@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+// import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Server, Network, Users, Database } from 'lucide-react';
 
@@ -26,11 +26,11 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
 //     checkAdmin();
 //   }, []);
 
-  const getAccessToken = async () => {
-    // In a real app, this would get the auth token from session/context
-    // For now, the API will use the session directly
-    return null;
-  };
+  // const getAccessToken = async () => {
+  //   // In a real app, this would get the auth token from session/context
+  //   // For now, the API will use the session directly
+  //   return null;
+  // };
 
 //   if (checkAdmin) {
 //     return (

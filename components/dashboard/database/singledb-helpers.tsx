@@ -86,7 +86,7 @@ export const ConfigCard = ({ icon: Icon, label, value, color }: ConfigCardProps)
 
 // Helper Functions
 
-export const safeStringValue = (value: any): string => {
+export const safeStringValue = (value:string|number|{address:string,family:string}): string => {
   if (!value) return "N/A";
   if (typeof value === "string") return value;
   if (typeof value === "number") return value.toString();
@@ -136,7 +136,7 @@ export const extractRegion = (region: string | undefined): string => {
   }
 
   // If it's an object (shouldn't happen based on types, but handle it)
-  return (region as {address:string,family:string})?.address || (region as any)?.family || "N/A";
+  return (region as {address:string,family:string})?.address  || "N/A";
 };
 
 export const calculateMonthlyCost = (size: string): string => {

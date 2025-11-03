@@ -4,8 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Trash2, RefreshCw, Power, Play, RotateCw } from 'lucide-react';
-import { Agent as UndiciAgent } from 'undici';
+import { Trash2, RefreshCw, } from 'lucide-react';
+// import { Agent as UndiciAgent } from 'undici';
 
 interface Server {
   id: number;
@@ -23,23 +23,23 @@ interface Server {
   created_at: string;
 }
 
-type HostConfig = {
-  id: string;
-  host_url: string;
-  allow_insecure_tls: boolean;
-  token_id: string | null;
-  token_secret: string | null;
-  username: string | null;
-  password: string | null;
-};
+// type HostConfig = {
+//   id: string;
+//   host_url: string;
+//   allow_insecure_tls: boolean;
+//   token_id: string | null;
+//   token_secret: string | null;
+//   username: string | null;
+//   password: string | null;
+// };
 
-function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error("Request timed out")), ms);
-    p.then((v) => { clearTimeout(id); resolve(v); })
-     .catch((e) => { clearTimeout(id); reject(e); });
-  });
-}
+// function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
+//   return new Promise((resolve, reject) => {
+//     const id = setTimeout(() => reject(new Error("Request timed out")), ms);
+//     p.then((v) => { clearTimeout(id); resolve(v); })
+//      .catch((e) => { clearTimeout(id); reject(e); });
+//   });
+// }
 
 export function ServersManager() {
   const [servers, setServers] = useState<Server[]>([]);

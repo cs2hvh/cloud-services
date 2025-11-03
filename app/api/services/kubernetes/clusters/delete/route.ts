@@ -21,7 +21,9 @@ export async function POST(req: NextRequest) {
       .select("cluster_name, project_id")
       .eq("cluster_id", json.cluster_id)
       .single();
-    
+      if (readError)
+      return NextResponse.json({ error: readError.message }, { status: 400 });
+
     const clusterName = clusterData?.cluster_name || 'Unknown';
     const projectId = clusterData?.project_id || null;
     

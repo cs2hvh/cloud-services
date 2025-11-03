@@ -353,7 +353,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Check for existing servers
-    const { data: servers, count } = await supabase
+    const {  count } = await supabase
       .from("servers")
       .select("id, name", { count: 'exact' })
       .eq("location", hostId);

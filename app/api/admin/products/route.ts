@@ -8,6 +8,17 @@ import {
 } from "@/lib/validation/products";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
+// Error handler utility
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "An unexpected error occurred";
+}
+
 // GET - Fetch all products or filter by type
 export async function GET(req: NextRequest) {
   // Check admin authentication
@@ -34,10 +45,10 @@ export async function GET(req: NextRequest) {
       { products, count: products.length },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Products API] GET error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch products" },
+      { error: getErrorMessage(error) || "Failed to fetch products" },
       { status: 500 }
     );
   }
@@ -79,10 +90,10 @@ export async function POST(req: NextRequest) {
       { product: result.data, message: "Product created successfully" },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Products API] POST error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create product" },
+      { error: getErrorMessage(error) || "Failed to create product" },
       { status: 500 }
     );
   }
@@ -134,10 +145,10 @@ export async function PUT(req: NextRequest) {
       { product: result.data, message: "Product updated successfully" },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Products API] PUT error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update product" },
+      { error: getErrorMessage(error) || "Failed to update product" },
       { status: 500 }
     );
   }
@@ -201,10 +212,10 @@ export async function DELETE(req: NextRequest) {
       { message: "Product deleted successfully" },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Products API] DELETE error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete product" },
+      { error: getErrorMessage(error) || "Failed to delete product" },
       { status: 500 }
     );
   }

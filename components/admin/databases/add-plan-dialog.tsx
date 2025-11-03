@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Plus, Loader2, Package } from "lucide-react";
+import { X, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getErrorMessage } from "@/config/functions";
 
 interface AddPlanDialogProps {
   isOpen: boolean;
@@ -106,9 +107,9 @@ export default function AddPlanDialog({
         onSuccess();
         onClose();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error creating plan:", error);
-      toast.error(error.response?.data?.error || "Failed to create plan");
+      toast.error(getErrorMessage(error, "Failed to create plan"));
     } finally {
       setIsLoading(false);
     }

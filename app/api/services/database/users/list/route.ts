@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
       const encryptionKey = process.env.ENCRYPTION_KEY!;
 
       // Format users for Supabase with encrypted passwords
-      const formattedUsers = users.map((user: any) => ({
+      const formattedUsers = users.map((user: { name: string; role?: string; password?: string }) => ({
         id: user.name,
         name: user.name,
         role: user.role || "normal",

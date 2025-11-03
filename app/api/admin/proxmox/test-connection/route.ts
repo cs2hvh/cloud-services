@@ -4,6 +4,51 @@ import { Agent as UndiciAgent } from "undici";
 
 export const dynamic = "force-dynamic";
 
+// Type definitions
+interface TestResult {
+  name: string;
+  url: string;
+  [key: string]: unknown;
+}
+
+interface HostInfo {
+  id: string;
+  name: string;
+  url: string;
+  allow_insecure_tls: boolean;
+  node: string;
+}
+
+interface AuthInfo {
+  method: string | null;
+  hasTokenId: boolean;
+  hasTokenSecret: boolean;
+  hasUsername: boolean;
+  hasPassword: boolean;
+  tokenId: string | null;
+}
+
+interface ConnectionTestResponse {
+  ok: boolean;
+  host: HostInfo;
+  auth: AuthInfo;
+  tests: TestResult[];
+  error?: string;
+  stack?: string;
+}
+
+// interface ProxmoxHost {
+//   id: string;
+//   name: string;
+//   host_url: string;
+//   allow_insecure_tls: boolean;
+//   token_id?: string;
+//   token_secret?: string;
+//   username?: string;
+//   password?: string;
+//   node?: string;
+// }
+
 function withTimeout<T>(p: Promise<T>, ms = 10000): Promise<T> {
   return Promise.race([
     p,
@@ -47,30 +92,30 @@ export async function GET(req: NextRequest) {
       ? new UndiciAgent({ connect: { rejectUnauthorized: false } })
       : undefined;
 
-    const result: any = {
+    const result: ConnectionTestResponse = {
       ok: false,
       host: {
         id: host.id,
         name: host.name,
         url: apiBase,
         allow_insecure_tls: allowInsecure,
-        node: host.node,
+        node: host.node || '',
       },
       auth: {
-        method: null as string | null,
+        method: null,
         hasTokenId: !!(host.token_id),
         hasTokenSecret: !!(host.token_secret),
         hasUsername: !!(host.username),
         hasPassword: !!(host.password),
         tokenId: host.token_id || null,
       },
-      tests: [] as any[],
+      tests: [],
     };
 
     // Test 1: Token Authentication
     if (host.token_id && host.token_secret) {
       result.auth.method = 'token';
-      const testResult: any = {
+      const testResult: TestResult = {
         name: 'Token Authentication',
         url: `${apiBase}/api2/json/version`,
         authHeader: `PVEAPIToken=${host.token_id}=${(host.token_secret as string).substring(0, 10)}...`,
@@ -84,7 +129,7 @@ export async function GET(req: NextRequest) {
               Authorization: `PVEAPIToken=${host.token_id}=${host.token_secret}`,
             },
             dispatcher,
-          } as any)
+          } as RequestInit)
         );
 
         testResult.status = res.status;
@@ -99,16 +144,17 @@ export async function GET(req: NextRequest) {
           const errorText = await res.text().catch(() => res.statusText);
           testResult.errorText = errorText;
         }
-      } catch (err: any) {
-        testResult.error = err.message;
-        testResult.stack = err.stack;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        testResult.error = error.message;
+        testResult.stack = error.stack;
       }
 
       result.tests.push(testResult);
 
       // Test 2: List nodes
       if (testResult.ok) {
-        const nodesTest: any = {
+        const nodesTest: TestResult = {
           name: 'List Nodes',
           url: `${apiBase}/api2/json/nodes`,
         };
@@ -121,20 +167,21 @@ export async function GET(req: NextRequest) {
                 Authorization: `PVEAPIToken=${host.token_id}=${host.token_secret}`,
               },
               dispatcher,
-            } as any)
+            } as RequestInit)
           );
 
           nodesTest.status = res.status;
           nodesTest.ok = res.ok;
 
           if (res.ok) {
-            const data = await res.json();
+            const data = await res.json() as Record<string, unknown>;
             nodesTest.nodes = data?.data || data;
           } else {
             nodesTest.errorText = await res.text().catch(() => res.statusText);
           }
-        } catch (err: any) {
-          nodesTest.error = err.message;
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          nodesTest.error = error.message;
         }
 
         result.tests.push(nodesTest);
@@ -144,7 +191,7 @@ export async function GET(req: NextRequest) {
     // Test 3: Password Authentication (fallback)
     if ((!result.ok) && host.username && host.password) {
       result.auth.method = 'password';
-      const testResult: any = {
+      const testResult: TestResult = {
         name: 'Password Authentication',
         url: `${apiBase}/api2/json/access/ticket`,
         username: host.username,
@@ -163,22 +210,24 @@ export async function GET(req: NextRequest) {
             },
             body: formData,
             dispatcher,
-          } as any)
+          } as RequestInit)
         );
 
         testResult.status = res.status;
         testResult.ok = res.ok;
 
         if (res.ok) {
-          const data = await res.json();
-          testResult.hasTicket = !!(data?.data?.ticket);
-          testResult.hasCSRF = !!(data?.data?.CSRFPreventionToken);
+          const data = await res.json() as Record<string, unknown>;
+          const responseData = data?.data as Record<string, unknown> | undefined;
+          testResult.hasTicket = !!(responseData?.ticket);
+          testResult.hasCSRF = !!(responseData?.CSRFPreventionToken);
           result.ok = true;
         } else {
           testResult.errorText = await res.text().catch(() => res.statusText);
         }
-      } catch (err: any) {
-        testResult.error = err.message;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        testResult.error = error.message;
       }
 
       result.tests.push(testResult);
@@ -186,7 +235,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(result);
 
-  } catch (error: unknown) {
+  } catch (error) {
     const err = error instanceof Error ? error : new Error(String(error));
     return NextResponse.json(
       {

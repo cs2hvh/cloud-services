@@ -17,6 +17,7 @@ import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { UsersDbsTab } from "./tabs/users-dbs-tab";
 import { SettingsTab } from "./tabs/settings-tab";
+import { AxiosError } from "axios";
 
 interface SingleDbProps {
   databaseId: string;
@@ -106,16 +107,25 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
         return dbData.status; // Return status for use in useEffect
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[fetchDatabaseCluster] Error:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to fetch database details"
-      );
+      toast.error(getErrorMessage(error, "Failed to fetch database details"));
       setLoading(false);
     } finally {
       isFetchingRef.current = false;
     }
   }, [databaseId]); // ✅ Only databaseId needed
+
+
+  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error instanceof AxiosError) {
+    return error.response?.data?.error || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
   // Initial load and status polling
   useEffect(() => {
@@ -177,11 +187,9 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
           window.location.href = "/dashboard/services/database";
         }, 1500);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleDeleteCluster] Error:", error);
-      toast.error(
-        error.response?.data?.error || "Failed to delete database cluster"
-      );
+      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
     } finally {
       setIsDeleting(false);
     }

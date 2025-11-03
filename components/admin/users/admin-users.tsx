@@ -43,87 +43,87 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useRouter } from "next/navigation";
-import { Admin_User, Tables } from "@/lib/supabase/types";
+import { Admin_User } from "@/lib/supabase/types";
 // import { useSession } from '@/app/dashboard/provider';
 
-interface UserProfile {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  email: string | null;
-  avatar: string | null;
-  bio: string | null;
-  roles: string[] | null;
-  suspend: boolean | null;
-  created_at: string | null;
-  updated_at: string | null;
-  discord: string | null;
-  steam: string | null;
-  stats?: {
-    servers: number;
-    gameServers: number;
-    clusters: number;
-  };
-}
+// interface UserProfile {
+//   id: string;
+//   username: string | null;
+//   display_name: string | null;
+//   email: string | null;
+//   avatar: string | null;
+//   bio: string | null;
+//   roles: string[] | null;
+//   suspend: boolean | null;
+//   created_at: string | null;
+//   updated_at: string | null;
+//   discord: string | null;
+//   steam: string | null;
+//   stats?: {
+//     servers: number;
+//     gameServers: number;
+//     clusters: number;
+//   };
+// }
 
-interface ServerResource {
-  id: string;
-  hostname: string;
-  os: string;
-  status: string;
-  created_at: string;
-}
+// interface ServerResource {
+//   id: string;
+//   hostname: string;
+//   os: string;
+//   status: string;
+//   created_at: string;
+// }
 
-interface GameServerResource {
-  id: number;
-  name: string;
-  game_type: string;
-  status: string;
-  ip: string;
-  port: number;
-}
+// interface GameServerResource {
+//   id: number;
+//   name: string;
+//   game_type: string;
+//   status: string;
+//   ip: string;
+//   port: number;
+// }
 
-interface ClusterResource {
-  id: string;
-  clusterId: string;
-  clusterName: string;
-  status: string;
-  k8sVersion: string;
-  created_at: string;
-}
+// interface ClusterResource {
+//   id: string;
+//   clusterId: string;
+//   clusterName: string;
+//   status: string;
+//   k8sVersion: string;
+//   created_at: string;
+// }
 
-interface ProjectResource {
-  id: string;
-  name: string;
-  description: string;
-  created_at: string;
-}
+// interface ProjectResource {
+//   id: string;
+//   name: string;
+//   description: string;
+//   created_at: string;
+// }
 
-interface AppResource {
-  id: string;
-  name: string;
-  github_url: string;
-  status: string;
-  created_at: string;
-}
+// interface AppResource {
+//   id: string;
+//   name: string;
+//   github_url: string;
+//   status: string;
+//   created_at: string;
+// }
 
-interface UserDetails {
-  profile: UserProfile & { email: string | null };
-  resources: {
-    servers: ServerResource[];
-    gameServers: GameServerResource[];
-    clusters: ClusterResource[];
-    projects: ProjectResource[];
-    apps: AppResource[];
-  };
-  stats: {
-    totalServers: number;
-    totalGameServers: number;
-    totalClusters: number;
-    totalProjects: number;
-    totalApps: number;
-  };
-}
+// interface UserDetails {
+//   profile: UserProfile & { email: string | null };
+//   resources: {
+//     servers: ServerResource[];
+//     gameServers: GameServerResource[];
+//     clusters: ClusterResource[];
+//     projects: ProjectResource[];
+//     apps: AppResource[];
+//   };
+//   stats: {
+//     totalServers: number;
+//     totalGameServers: number;
+//     totalClusters: number;
+//     totalProjects: number;
+//     totalApps: number;
+//   };
+// }
 
 interface PageProps {
   all_users: Admin_User[];
@@ -149,7 +149,7 @@ export default function AdminUsers({ all_users }: PageProps) {
   );
   const [totalUsers, setTotalUsers] = useState(all_users.length);
   const [selectedUser, setSelectedUser] = useState<Admin_User | null>(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsLoading] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [editingUser, setEditingUser] =useState<Admin_User | null>(null);
@@ -195,18 +195,18 @@ export default function AdminUsers({ all_users }: PageProps) {
     setTotalUsers(filtered.length);
   };
 
-  const fetchUserDetails = async (userId: string) => {
-    try {
-      setDetailsLoading(true);
-      const response = await api.get(`/admin/users/${userId}`);
-      setSelectedUser(response.data);
-    } catch (error) {
-      console.error("Error fetching user details:", error);
-      toast.error("Failed to fetch user details");
-    } finally {
-      setDetailsLoading(false);
-    }
-  };
+  // const fetchUserDetails = async (userId: string) => {
+  //   try {
+  //     setDetailsLoading(true);
+  //     const response = await api.get(`/admin/users/${userId}`);
+  //     setSelectedUser(response.data);
+  //   } catch (error) {
+  //     console.error("Error fetching user details:", error);
+  //     toast.error("Failed to fetch user details");
+  //   } finally {
+  //     setDetailsLoading(false);
+  //   }
+  // };
 
   const handleSearch = () => {
     updatePagination(1);
@@ -220,7 +220,7 @@ export default function AdminUsers({ all_users }: PageProps) {
 
   const handleViewDetails = (user: Admin_User) => {
     setIsDetailsOpen(true);
-    let selecteduser=all_users.find((u) => u.id === user.id);
+    const selecteduser=all_users.find((u) => u.id === user.id);
     setSelectedUser(selecteduser||null);
    // fetchUserDetails(user.id);
   };
@@ -263,10 +263,14 @@ export default function AdminUsers({ all_users }: PageProps) {
         updates.roles = selectedRoles;
       }
 
+      setLoading(true);
+
       const response = await api.patch("/admin/users", {
         userId: editingUser.id,
         ...updates,
       });
+
+      setLoading(false)
 
       console.log("Update response:", response.data);
       toast.success("User updated successfully");
@@ -905,33 +909,33 @@ function StatCard({
   );
 }
 
-function ResourceSection<T extends { id: string | number }>({
-  title,
-  icon: Icon,
-  items,
-  renderItem,
-}: {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  items: T[];
-  renderItem: (item: T) => React.ReactNode;
-}) {
-  return (
-    <div className="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
-      <h4 className="font-medium flex items-center gap-2 mb-3 text-neutral-200 text-sm">
-        <Icon className="h-4 w-4 text-neutral-400" />
-        {title} ({items.length})
-      </h4>
-      <div className="space-y-2 max-h-48 overflow-y-auto">
-        {items.map((item, idx) => (
-          <div
-            key={item.id || idx}
-            className="p-3 bg-neutral-900 rounded border border-neutral-800"
-          >
-            {renderItem(item)}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// function ResourceSection<T extends { id: string | number }>({
+//   title,
+//   icon: Icon,
+//   items,
+//   renderItem,
+// }: {
+//   title: string;
+//   icon: React.ComponentType<{ className?: string }>;
+//   items: T[];
+//   renderItem: (item: T) => React.ReactNode;
+// }) {
+//   return (
+//     <div className="bg-neutral-800 rounded-lg p-4 border border-neutral-700">
+//       <h4 className="font-medium flex items-center gap-2 mb-3 text-neutral-200 text-sm">
+//         <Icon className="h-4 w-4 text-neutral-400" />
+//         {title} ({items.length})
+//       </h4>
+//       <div className="space-y-2 max-h-48 overflow-y-auto">
+//         {items.map((item, idx) => (
+//           <div
+//             key={item.id || idx}
+//             className="p-3 bg-neutral-900 rounded border border-neutral-800"
+//           >
+//             {renderItem(item)}
+//           </div>
+//         ))}
+//       </div>
+//     </div>
+//   );
+// }

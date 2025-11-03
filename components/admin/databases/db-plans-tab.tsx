@@ -67,7 +67,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
   const [totalPages, setTotalPages] = useState(
     Math.ceil(all_products.length / PRODUCTS_PER_PAGE)
   );
-  const [totalProducts, setTotalProducts] = useState(all_products.length);
+//   const [totalProducts, setTotalProducts] = useState(all_products.length);
 
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -130,7 +130,7 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     setProducts(paginatedProducts);
     setCurrentPage(page);
     setTotalPages(Math.ceil(filtered.length / PRODUCTS_PER_PAGE));
-    setTotalProducts(filtered.length);
+    // setTotalProducts(filtered.length);
   };
 
   const handleSearch = () => {

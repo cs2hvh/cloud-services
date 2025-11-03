@@ -163,7 +163,7 @@ const EditProjectForm = ({ project }: Props) => {
                     <p>
                       This action cannot be undone. This will permanently delete
                       the project{" "}
-                      <span className="font-semibold">"{project.name}"</span>{" "}
+                      <span className="font-semibold">{project.name}</span>{" "}
                       and remove all associated data from our servers.
                     </p>
                     <p className="text-red-600 dark:text-red-400 font-medium">

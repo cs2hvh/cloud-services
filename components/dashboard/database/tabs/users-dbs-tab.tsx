@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
+import { AxiosError } from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -73,6 +74,17 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     newPassword: string;
   }>({ show: false, username: "", newPassword: "" });
 
+  // Error handler utility
+  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+    if (error instanceof AxiosError) {
+      return error.response?.data?.error || defaultMessage;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return defaultMessage;
+  };
+
   // Fetch users
   const fetchUsers = async () => {
     try {
@@ -84,9 +96,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       if (response.status === 200) {
         setUsers(response.data.data || []);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[fetchUsers] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to fetch users");
+      toast.error(getErrorMessage(error, "Failed to fetch users"));
     } finally {
       setLoadingUsers(false);
     }
@@ -103,9 +115,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       if (response.status === 200) {
         setDatabases(response.data.data || []);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[fetchDatabases] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to fetch databases");
+      toast.error(getErrorMessage(error, "Failed to fetch databases"));
     } finally {
       setLoadingDatabases(false);
     }
@@ -136,9 +148,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setNewUserName("");
         await fetchUsers();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleCreateUser] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to create user");
+      toast.error(getErrorMessage(error, "Failed to create user"));
     } finally {
       setCreatingUser(false);
     }
@@ -163,9 +175,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setDeleteUserModal({ show: false, username: "", confirmText: "" });
         await fetchUsers();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleDeleteUser] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to delete user");
+      toast.error(getErrorMessage(error, "Failed to delete user"));
     } finally {
       setDeletingUser(false);
     }
@@ -189,9 +201,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         toast.success("Password reset successfully!");
         await fetchUsers();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleResetPassword] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to reset password");
+      toast.error(getErrorMessage(error, "Failed to reset password"));
     }
   };
 
@@ -214,9 +226,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setNewDbName("");
         await fetchDatabases();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleCreateDatabase] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to create database");
+      toast.error(getErrorMessage(error, "Failed to create database"));
     } finally {
       setCreatingDb(false);
     }
@@ -242,9 +254,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setDeleteDbModal({ show: false, dbName: "", confirmText: "" });
         await fetchDatabases();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("[handleDeleteDatabase] Error:", error);
-      toast.error(error.response?.data?.error || "Failed to delete database");
+      toast.error(getErrorMessage(error, "Failed to delete database"));
     } finally {
       setDeletingDb(false);
     }

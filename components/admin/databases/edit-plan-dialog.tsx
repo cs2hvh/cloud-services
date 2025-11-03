@@ -8,14 +8,15 @@ import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { getErrorMessage } from "@/config/functions";
 
 interface EditPlanDialogProps {
   product: Tables<"products"> | null;
@@ -107,9 +108,9 @@ export default function EditPlanDialog({
         onSuccess();
         onClose();
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error updating plan:", error);
-      toast.error(error.response?.data?.error || "Failed to update plan");
+      toast.error(getErrorMessage(error, "Failed to update plan"));
     } finally {
       setIsLoading(false);
     }

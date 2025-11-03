@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     if (err as database_error) {
       const axiosError = err as database_error;
       const message = axiosError?.response?.data?.message;
-      const status = (err as any)?.response?.status || 500;
+      const status = (err as { response?: { status?: number } })?.response?.status || 500;
       
       console.error("[createDatabase] Error:", message);
       

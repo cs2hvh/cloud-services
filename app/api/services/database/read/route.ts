@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
         const encryptionKey = process.env.ENCRYPTION_KEY!;
         
         // Helper function to check if value is encrypted
-        const isEncrypted = (value: any): value is EncryptedData => {
+        const isEncrypted = (value: Encryption): value is EncryptedData => {
           return value && typeof value === 'object' && 
                  'encrypted' in value && 'iv' in value && 
                  'tag' in value && 'salt' in value;

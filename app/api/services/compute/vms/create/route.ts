@@ -5,14 +5,56 @@ import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
-function serializeError(err: unknown) {
-  const e = err as any;
+// Type definitions
+interface ErrorObject {
+  name?: string;
+  message?: string;
+  stack?: string;
+  code?: string | number;
+  cause?: string;
+}
+
+interface ProxmoxResponse<T = unknown> {
+  data?: T;
+  [key: string]: unknown;
+}
+
+interface ProxmoxAuthHeaders {
+  headers: Record<string, string>;
+}
+
+interface DbReservation {
+  saved: boolean;
+  id: number | null;
+  error: string | null;
+}
+
+interface PoolItem {
+  ip: string;
+  mac?: string;
+  poolId: number;
+}
+
+interface ProxmoxVM {
+  vmid?: number;
+  name?: string;
+  [key: string]: unknown;
+}
+
+interface ProxmoxTemplate {
+  vmid?: number;
+  name?: string;
+  is_active?: boolean;
+}
+
+function serializeError(err: unknown): ErrorObject {
+  const e = err as Record<string, unknown>;
   return {
-    name: e?.name,
-    message: e?.message ?? String(e),
-    stack: e?.stack,
-    code: e?.code,
-    cause: e?.cause ? (e.cause.message || String(e.cause)) : undefined,
+    name: e?.name as string | undefined,
+    message: (e?.message ?? String(e)) as string,
+    stack: e?.stack as string | undefined,
+    code: e?.code as string | number | undefined,
+    cause: e?.cause ? ((e.cause as Record<string, unknown>).message as string | undefined || String(e.cause)) : undefined,
   };
 }
 
@@ -42,20 +84,20 @@ type HostConfig = {
   dns_secondary: string | null;
 };
 
-async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostConfig) {
+async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig): Promise<ProxmoxAuthHeaders> {
   const tokenId = host.token_id || undefined;
   const tokenSecret = host.token_secret || undefined;
   const username = host.username || undefined;
   const password = host.password || undefined;
 
   if (tokenId && tokenSecret) {
-    const tokenAuth = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } as HeadersInit };
+    const tokenAuth: ProxmoxAuthHeaders = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } };
     try {
       const verify = await withTimeout(
         fetch(`${apiBase}/api2/json/nodes`, {
           cache: "no-store",
           redirect: "follow",
-          ...(tokenAuth as any),
+          headers: tokenAuth.headers,
           // @ts-expect-error undici dispatcher
           dispatcher,
         })
@@ -81,20 +123,20 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
     const t = await ticketRes.text();
     throw new Error(`login failed (${ticketRes.status}): ${t}`);
   }
-  const ticketJson = (await ticketRes.json()) as any;
+  const ticketJson = (await ticketRes.json()) as ProxmoxResponse<{ ticket?: string; CSRFPreventionToken?: string }>;
   const ticket = ticketJson?.data?.ticket as string | undefined;
   const csrf = ticketJson?.data?.CSRFPreventionToken as string | undefined;
   if (!ticket) throw new Error("Missing PVE ticket in response");
   if (!csrf) throw new Error("Missing CSRFPreventionToken in response");
-  return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } as HeadersInit };
+  return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } };
 }
 
-async function fetchJson(apiBase: string, path: string, init?: RequestInit, dispatcher?: any) {
+async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
   const res = await withTimeout(
     fetch(`${apiBase}${path}`, {
       cache: "no-store",
       redirect: "follow",
-      ...(init || {}),
+      headers: init?.headers || {},
       // @ts-expect-error undici dispatcher
       dispatcher,
     })
@@ -106,13 +148,13 @@ async function fetchJson(apiBase: string, path: string, init?: RequestInit, disp
   return res.json();
 }
 
-async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: RequestInit, dispatcher?: any) {
+async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
   const body = new URLSearchParams();
   Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
   const res = await withTimeout(
     fetch(`${apiBase}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...(auth.headers as any) },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", ...auth.headers },
       body,
       redirect: "follow",
       // @ts-expect-error undici dispatcher
@@ -126,14 +168,15 @@ async function postForm(apiBase: string, path: string, form: Record<string, stri
   return res.json();
 }
 
-async function waitTask(apiBase: string, node: string, upid: string, auth: RequestInit, dispatcher?: any, timeoutMs = 180000) {
+async function waitTask(apiBase: string, node: string, upid: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent, timeoutMs = 180000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const json = await fetchJson(apiBase, `/api2/json/nodes/${encodeURIComponent(node)}/tasks/${encodeURIComponent(upid)}/status`, auth, dispatcher);
-    const data = (json as any)?.data ?? json;
-    if (data?.status === "stopped" && data?.exitstatus) {
-      if (String(data.exitstatus).toUpperCase() === "OK") return true;
-      throw new Error(`task failed: ${data.exitstatus}`);
+    const data = (json as ProxmoxResponse)?.data ?? json;
+    const taskData = data as Record<string, unknown>;
+    if (taskData?.status === "stopped" && taskData?.exitstatus) {
+      if (String(taskData.exitstatus).toUpperCase() === "OK") return true;
+      throw new Error(`task failed: ${taskData.exitstatus}`);
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
@@ -141,7 +184,7 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Reque
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as any;
+  const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   console.log(`[VM Create Request] Full Request Body:`, JSON.stringify(body, null, 2));
 
@@ -201,24 +244,24 @@ export async function POST(req: NextRequest) {
 
   try {
     const { data: usedRows } = await supabase.from("servers").select("ip");
-    const usedSet = new Set<string>((usedRows || []).map((r: any) => String(r.ip)));
+    const usedSet = new Set<string>((usedRows || []).map((r: Record<string, unknown>) => String(r.ip)));
 
     const { data: pools } = await supabase
       .from("public_ip_pools")
       .select("id, mac")
       .eq("host_id", cfg.id);
-    const poolIds = (pools || []).map((p: any) => Number(p.id));
-    const macByPool = new Map<number, string | undefined>((pools || []).map((p: any) => [Number(p.id), p.mac as string | undefined]));
+    const poolIds = (pools || []).map((p: Record<string, unknown>) => Number(p.id));
+    const macByPool = new Map<number, string | undefined>((pools || []).map((p: Record<string, unknown>) => [Number(p.id), p.mac as string | undefined]));
 
-    let candidates: Array<{ ip: string; mac?: string; poolId: number }> = [];
+    const candidates: PoolItem[] = [];
     if (poolIds.length > 0) {
       const { data: ipRows } = await supabase
         .from("public_ip_pool_ips")
         .select("pool_id, ip")
         .in("pool_id", poolIds);
       for (const r of ipRows || []) {
-        const poolId = Number((r as any).pool_id);
-        const ip = String((r as any).ip);
+        const poolId = Number((r as Record<string, unknown>).pool_id);
+        const ip = String((r as Record<string, unknown>).ip);
         const mac = macByPool.get(poolId);
         if (!usedSet.has(ip)) candidates.push({ ip, mac, poolId });
       }
@@ -258,7 +301,7 @@ export async function POST(req: NextRequest) {
 
   // Reserve DB record to avoid reuse
   let reservationId: number | null = null;
-  let db = { saved: false as boolean, id: null as null | number, error: null as null | string };
+  const db: DbReservation = { saved: false, id: null, error: null };
 
   try {
     const { data: existing } = await supabase
@@ -316,7 +359,7 @@ export async function POST(req: NextRequest) {
         details: insertErr.details,
         hint: insertErr.hint,
       });
-      if (insertErr.message?.toLowerCase().includes("duplicate") || (insertErr as any).code === "23505") {
+      if (insertErr.message?.toLowerCase().includes("duplicate") || (insertErr as unknown as Record<string, unknown>).code === "23505") {
         return Response.json({ ok: false, error: "IP already in use" }, { status: 409 });
       }
       return Response.json({
@@ -327,11 +370,12 @@ export async function POST(req: NextRequest) {
         db
       }, { status: 500 });
     }
-    reservationId = (inserted as any)?.id ?? null;
+    reservationId = (inserted as Record<string, unknown>)?.id as number ?? null;
     db.saved = true;
     db.id = reservationId;
-  } catch (e: any) {
-    db.error = e?.message || String(e);
+  } catch (e) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    db.error = error?.message || String(e);
     return Response.json({ ok: false, error: "DB reservation failed", db }, { status: 500 });
   }
 
@@ -347,17 +391,17 @@ export async function POST(req: NextRequest) {
         .from('proxmox_templates')
         .select('vmid, name, is_active')
         .eq('host_id', cfg.id)
-        .ilike('name', os)
+        .ilike('name', String(os))
         .maybeSingle();
 
       console.log(`[VM Create] ILIKE query result:`, t);
-      if (t?.vmid) templateVmid = Number(t.vmid);
+      if (t && typeof t === 'object' && 'vmid' in t) templateVmid = Number((t as Record<string, unknown>).vmid);
     }
 
     if (!templateVmid) {
       // Fallback guessing
       const listJson = await fetchJson(apiBase, `/api2/json/nodes/${encodeURIComponent(node)}/qemu`, auth, dispatcher);
-      const vms = ((listJson as any)?.data ?? listJson) as any[];
+      const vms = ((listJson as ProxmoxResponse)?.data ?? listJson) as ProxmoxVM[];
       const guess = vms.find((v) => String(v?.name || "").toLowerCase().includes("ubuntu"));
       if (guess?.vmid) templateVmid = Number(guess.vmid);
     }
@@ -367,24 +411,24 @@ export async function POST(req: NextRequest) {
 
     // Next VMID
     const nextIdJson = await fetchJson(apiBase, "/api2/json/cluster/nextid", auth, dispatcher);
-    const newid = Number(((nextIdJson as any)?.data ?? nextIdJson) as string);
+    const newid = Number(((nextIdJson as ProxmoxResponse)?.data ?? nextIdJson) as string);
 
     console.log(`[Proxmox Clone] New VMID allocated: ${newid}`);
 
     // Clone
-    const clonePayload = { newid, name: hostname, full: 1, target: node, storage };
+    const clonePayload: Record<string, string | number | boolean> = { newid, name: String(hostname), full: 1, target: String(node), storage: String(storage) };
     console.log(`[Proxmox Clone] Cloning from template VMID ${templateVmid} to new VMID ${newid}`);
 
     const cloneRes = await postForm(
       apiBase,
-      `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${templateVmid}/clone`,
+      `/api2/json/nodes/${encodeURIComponent(String(node))}/qemu/${templateVmid}/clone`,
       clonePayload,
       auth,
       dispatcher
     );
-    const upid = (cloneRes as any)?.data;
+    const upid = (cloneRes as ProxmoxResponse)?.data;
     if (!upid) throw new Error("clone did not return task id");
-    await waitTask(apiBase, node, upid, auth, dispatcher);
+    await waitTask(apiBase, String(node), String(upid), auth, dispatcher);
 
     // Configure
     const ipConfig0 = `ip=${ipPrimary}/32,gw=${gateway}`;

@@ -1,3 +1,4 @@
+import { AxiosError } from "axios";
 import * as crypto from "crypto";
 // import { lookup, resolve4, resolve6, resolveCname, resolveMx } from "dns/promises";
 import type { MxRecord } from "dns";
@@ -262,6 +263,18 @@ export function transformDiskData(metrics: CpuMetric[]): GraphData {
     ]
   };
 }
+
+
+
+export const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+  if (error instanceof AxiosError) {
+    return error.response?.data?.error || defaultMessage;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return defaultMessage;
+};
 
 
 
