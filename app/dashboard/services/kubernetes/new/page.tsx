@@ -21,7 +21,7 @@ const KubernetesNewSuspense = async () => {
     }
     const projects = await Projects.get_all_by_user(user.id);
     const clusters = await Clusters.get_by_user_id(user.id);
-    console.log("Projects in Kube new page",projects);
+   // console.log("Projects in Kube new page",projects);
   return <NewClusterForm locations={vmLocations} projects={projects} userId={user.id} clusters={clusters} />;
 };
 
