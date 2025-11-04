@@ -66,9 +66,9 @@ export async function createServiceClient() {
   if (!url) throw new Error("Missing SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL");
   if (!serviceKey) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
-  console.log('[createServiceClient] URL:', url);
-  console.log('[createServiceClient] Service key exists:', !!serviceKey);
-  console.log('[createServiceClient] Service key length:', serviceKey?.length);
+  // console.log('[createServiceClient] URL:', url);
+  // console.log('[createServiceClient] Service key exists:', !!serviceKey);
+  // console.log('[createServiceClient] Service key length:', serviceKey?.length);
 
   return createServerClient(
     url,

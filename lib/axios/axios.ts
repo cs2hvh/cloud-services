@@ -19,9 +19,9 @@ api.interceptors.response.use(
     const serverMessage = (error.response?.data as { message?: string })
       ?.message;
 
-      console.log(error.response?.data,".............axios error interceptors...........");
-      console.log(error.response,".............axios error interceptors...........");
-       console.log(error,".............axios error interceptors...........");
+      // console.log(error.response?.data,".............axios error interceptors...........");
+      // console.log(error.response,".............axios error interceptors...........");
+      //  console.log(error,".............axios error interceptors...........");
 
     if (status === 400) {
       toast.error(serverMessage || "Bad request - invalid input.");

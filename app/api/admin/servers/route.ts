@@ -256,12 +256,12 @@ export async function DELETE(req: NextRequest) {
 
           // Try to delete from Proxmox
           try {
-            console.log(`[Admin Delete] Attempting to delete VM ${vmid} from Proxmox node ${node}`);
+            //console.log(`[Admin Delete] Attempting to delete VM ${vmid} from Proxmox node ${node}`);
             const auth = await proxmoxAuthCookie(apiBase, dispatcher, cfg);
 
             // First, stop the VM
             try {
-              console.log(`[Admin Delete] Stopping VM ${vmid}...`);
+             // console.log(`[Admin Delete] Stopping VM ${vmid}...`);
               const stopRes = await postForm(
                 apiBase,
                 `/api2/json/nodes/${encodeURIComponent(node as string)}/qemu/${vmid}/status/stop`,
@@ -273,13 +273,13 @@ export async function DELETE(req: NextRequest) {
               if (upid) {
                 await waitTask(apiBase, node as string, upid as string, auth, dispatcher, 120000).catch(() => {});
               }
-              console.log(`[Admin Delete] VM ${vmid} stopped`);
+             // console.log(`[Admin Delete] VM ${vmid} stopped`);
             } catch (stopErr) {
               console.warn(`[Admin Delete] Failed to stop VM (continuing):`, stopErr);
             }
 
             // Delete VM with purge query parameter
-            console.log(`[Admin Delete] Deleting VM ${vmid}...`);
+            //console.log(`[Admin Delete] Deleting VM ${vmid}...`);
             const delRes = await withTimeout(
               fetch(`${apiBase}/api2/json/nodes/${encodeURIComponent(node as string)}/qemu/${vmid}?purge=1`, {
                 method: "DELETE",
@@ -291,24 +291,24 @@ export async function DELETE(req: NextRequest) {
               30000
             );
 
-            console.log(`[Admin Delete] Proxmox delete response status: ${delRes.status}`);
+           // console.log(`[Admin Delete] Proxmox delete response status: ${delRes.status}`);
 
             if (!delRes.ok) {
               if (delRes.status === 404) {
-                console.log(`[Admin Delete] VM ${vmid} already deleted from Proxmox`);
+               // console.log(`[Admin Delete] VM ${vmid} already deleted from Proxmox`);
               } else {
                 const text = await delRes.text().catch(() => "");
-                console.error(`[Admin Delete] Delete failed (${delRes.status}): ${text}`);
+                //console.error(`[Admin Delete] Delete failed (${delRes.status}): ${text}`);
                 throw new Error(`delete failed (${delRes.status}): ${text}`);
               }
             } else {
               const delJson = (await delRes.json().catch(() => ({}))) as ProxmoxResponse;
               const delUpid = delJson?.data;
               if (delUpid) {
-                console.log(`[Admin Delete] Waiting for delete task ${delUpid}...`);
+                //console.log(`[Admin Delete] Waiting for delete task ${delUpid}...`);
                 await waitTask(apiBase, node as string, delUpid as string, auth, dispatcher, 180000);
               }
-              console.log(`[Admin Delete] VM ${vmid} deleted from Proxmox successfully`);
+              //console.log(`[Admin Delete] VM ${vmid} deleted from Proxmox successfully`);
             }
           } catch (proxmoxErr) {
             const error = proxmoxErr instanceof Error ? proxmoxErr : new Error(String(proxmoxErr));
