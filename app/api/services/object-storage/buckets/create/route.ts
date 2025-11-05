@@ -5,6 +5,8 @@ import { createBucketSchema, getBucketUrl } from "@/lib/validation/object-storag
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { createS3Client } from "@/lib/aws/s3-client";
 import { createBucket as s3CreateBucket } from "@/lib/aws/s3-operations";
+import { resolveHost } from "@/config/hosttoip";
+import { Encryption } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -67,7 +69,55 @@ export async function POST(req: NextRequest) {
     console.log("✅ Bucket created in DigitalOcean Spaces");
 
     // Generate endpoint URL
-    const endpoint = getBucketUrl(validatedData.name, validatedData.region as any);
+    const originalEndpoint = getBucketUrl(validatedData.name, validatedData.region as any);
+    console.log("Original endpoint:", originalEndpoint);
+
+    // Convert host to IP and encrypt
+    let encryptedEndpoint = originalEndpoint;
+    try {
+      // Extract host from URL (e.g., "bucket-name.ams3.digitaloceanspaces.com")
+      const hostMatch = originalEndpoint.match(/https?:\/\/([^\/]+)/);
+      if (hostMatch && hostMatch[1]) {
+        const host = hostMatch[1];
+        console.log("Extracting host:", host);
+
+        // Resolve the DigitalOcean Spaces domain to IP
+        const doSpacesDomain = `${validatedData.region}.digitaloceanspaces.com`;
+        console.log("Resolving DO Spaces domain:", doSpacesDomain);
+        
+        const resolveResult = await resolveHost(doSpacesDomain);
+        
+        if (resolveResult.records.length > 0) {
+          // Get the first A record (IPv4)
+          const aRecord = resolveResult.records.find((r) => r.type === "A");
+          if (aRecord && aRecord.records.length > 0) {
+            const ip = aRecord.records[0] as string;
+            console.log("Resolved IP:", ip);
+            
+            // Replace the domain with IP in the endpoint
+            const endpointWithIp = originalEndpoint.replace(doSpacesDomain, ip);
+            console.log("Endpoint with IP:", endpointWithIp);
+            
+            // Encrypt the endpoint
+            const encryptionKey = process.env.ENCRYPTION_KEY;
+            if (encryptionKey) {
+              encryptedEndpoint = JSON.stringify(Encryption.encrypt(endpointWithIp, encryptionKey));
+              console.log("✅ Endpoint encrypted successfully");
+            } else {
+              console.warn("⚠️ ENCRYPTION_KEY not found, storing unencrypted");
+              encryptedEndpoint = endpointWithIp;
+            }
+          } else {
+            console.warn("⚠️ No A record found, using original endpoint");
+          }
+        } else {
+          console.warn("⚠️ DNS resolution failed, using original endpoint");
+        }
+      }
+    } catch (error) {
+      console.error("Error processing endpoint:", error);
+      console.warn("⚠️ Using original endpoint due to error");
+    }
 
     // Store in database
     const dbResult = await ObjectSpaces.create_bucket({
@@ -75,7 +125,7 @@ export async function POST(req: NextRequest) {
       name: validatedData.name,
       bucket_id: validatedData.name, // Use bucket name as ID
       region: validatedData.region,
-      endpoint: endpoint,
+      endpoint: encryptedEndpoint, // Store encrypted endpoint with IP
       acl: validatedData.acl || 'private',
       cors_enabled: validatedData.cors_enabled || false,
       versioning_enabled: validatedData.versioning_enabled || false,

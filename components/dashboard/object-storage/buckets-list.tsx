@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { HardDrive, Trash2, MoreVertical, MapPin, Lock, Unlock, Archive, Plus } from "lucide-react";
+import { HardDrive, Trash2, MoreVertical, MapPin, Lock, Unlock, Archive, Plus, Loader2 } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { formatDistanceToNow } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -47,11 +47,13 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
 
     setIsDeleting(true);
     try {
+      const toastId = toast.loading("Deleting bucket...");
+      
       await axios.post("/api/services/object-storage/buckets/delete", {
         bucket_id: selectedBucketId,
       });
 
-      toast.success("Bucket deleted successfully");
+      toast.success("Bucket deleted successfully", { id: toastId });
       router.refresh();
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to delete bucket");
@@ -62,21 +64,6 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
     }
   };
 
-//   if (!hasAccessKeys) {
-//     return (
-//       <motion.div
-//         initial={{ opacity: 0, y: 20 }}
-//         animate={{ opacity: 1, y: 0 }}
-//         className="text-center py-12 border border-white/10 rounded-lg bg-white/5"
-//       >
-//         <HardDrive className="mx-auto h-12 w-12 text-white/20" />
-//         <h3 className="mt-4 text-lg font-semibold">Create an access key first</h3>
-//         <p className="mt-2 text-sm text-white/60">
-//           You need to create an access key before you can create buckets.
-//         </p>
-//       </motion.div>
-//     );
-//   }
 
   if (buckets.length === 0) {
     return (
@@ -154,6 +141,44 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
               </div>
 
               <div className="space-y-3">
+                {/* ID & Status Row */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-white/40">ID:</span>
+                    <p className="text-white/80 truncate font-mono">{bucket.id}</p>
+                  </div>
+                  <div>
+                    <span className="text-white/40">Status:</span>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Badge 
+                        variant="secondary" 
+                        className={`text-xs ${
+                          bucket.status === 'active' ? 'bg-green-500/20 text-green-400' : 
+                          bucket.status === 'creating' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}
+                      >
+                        {bucket.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Usage Stats Row */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-white/40">Objects:</span>
+                    <p className="text-white/80 font-semibold">{bucket.object_count || 0}</p>
+                  </div>
+                  <div>
+                    <span className="text-white/40">Usage:</span>
+                    <p className="text-white/80 font-semibold">
+                      {((bucket.size_bytes || 0) / 1024).toFixed(2)} KB
+                    </p>
+                  </div>
+                </div>
+
+                {/* Access Control */}
                 <div className="flex items-center gap-2 text-sm">
                   {bucket.acl === "public-read" ? (
                     <>
@@ -168,6 +193,7 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
                   )}
                 </div>
 
+                {/* Features Badges */}
                 <div className="flex flex-wrap gap-2">
                   {bucket.cors_enabled && (
                     <Badge variant="secondary" className="bg-blue-500/20 text-blue-400">
@@ -180,6 +206,16 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
                     </Badge>
                   )}
                 </div>
+
+                {/* Endpoint URL */}
+                {bucket.endpoint && (
+                  <div className="text-xs">
+                    <span className="text-white/40">Endpoint:</span>
+                    <p className="text-white/60 truncate font-mono text-[10px] mt-1">
+                      {bucket.endpoint}
+                    </p>
+                  </div>
+                )}
 
                 <div className="pt-3 border-t border-white/10 text-xs text-white/60">
                   Created {formatDistanceToNow(new Date(bucket.created_at), { addSuffix: true })}
@@ -206,7 +242,14 @@ const BucketsList = ({ buckets }: BucketsListProps) => {
               disabled={isDeleting}
               className="bg-red-500 hover:bg-red-600"
             >
-              {isDeleting ? "Deleting..." : "Delete"}
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

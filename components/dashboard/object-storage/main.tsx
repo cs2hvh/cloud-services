@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "motion/react";
-import { HardDrive, Plus } from "lucide-react";
+import { HardDrive, Plus, BookOpen, Database } from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
-import BucketsList from "./buckets-list";
+import BucketsTable from "./buckets-table";
+import ApiDocumentation from "./api-documentation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ObjectStorageMainProps {
   buckets: ObjectSpaceBucket[];
@@ -27,7 +29,7 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
             Manage your Spaces buckets for storing files and objects.
           </p>
         </div>
-          <Link
+        <Link
           href="/dashboard/services/object-storage/new"
           className="group relative inline-flex items-center justify-center px-6 py-2.5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
         >
@@ -36,9 +38,32 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
         </Link>
       </motion.div>
 
-      
-      
-      <BucketsList buckets={buckets} />
+      <Tabs defaultValue="buckets" className="space-y-6">
+        <TabsList className="bg-white/5 border border-white/10">
+          <TabsTrigger 
+            value="buckets" 
+            className="data-[state=active]:bg-white/10"
+          >
+            <Database className="h-4 w-4 mr-2" />
+            My Buckets ({buckets.length})
+          </TabsTrigger>
+          <TabsTrigger 
+            value="api-docs" 
+            className="data-[state=active]:bg-white/10"
+          >
+            <BookOpen className="h-4 w-4 mr-2" />
+            API Documentation
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="buckets">
+          <BucketsTable buckets={buckets} />
+        </TabsContent>
+
+        <TabsContent value="api-docs">
+          <ApiDocumentation />
+        </TabsContent>
+      </Tabs>
     </>
   );
 };

@@ -7,7 +7,8 @@ export const DO_SPACES_REGIONS = [
   'sfo3',
   'sgp1',
   'ams3',
-  'fra1'
+  'fra1',
+  'blr1'
 ] as const;
 
 export type DOSpacesRegion = typeof DO_SPACES_REGIONS[number];

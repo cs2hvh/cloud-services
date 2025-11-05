@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { Encryption } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -40,11 +41,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Return bucket details
+    // Decrypt endpoint if encrypted
+    let decryptedBucket = { ...bucket };
+    if (bucket.endpoint) {
+      try {
+        const encryptionKey = process.env.ENCRYPTION_KEY;
+        if (encryptionKey && bucket.endpoint.startsWith('{')) {
+          // Endpoint is encrypted (JSON stringified)
+          const encryptedData = JSON.parse(bucket.endpoint);
+          decryptedBucket.endpoint = Encryption.decrypt(encryptedData, encryptionKey);
+          console.log("✅ Endpoint decrypted for client");
+        }
+      } catch (error) {
+        console.error("Error decrypting endpoint:", error);
+        // Keep original endpoint if decryption fails
+      }
+    }
+
+    // Return bucket details with decrypted endpoint
     return NextResponse.json(
       {
         success: true,
-        data: bucket,
+        data: decryptedBucket,
       },
       { status: 200 }
     );

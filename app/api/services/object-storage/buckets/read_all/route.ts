@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { Encryption } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -26,11 +27,32 @@ export async function POST(req: NextRequest) {
     // Get all buckets for user
     const buckets = await ObjectSpaces.get_buckets(owner_id);
 
+    // Decrypt endpoints for all buckets
+    const decryptedBuckets = buckets.map(bucket => {
+      const decryptedBucket = { ...bucket };
+      if (bucket.endpoint) {
+        try {
+          const encryptionKey = process.env.ENCRYPTION_KEY;
+          if (encryptionKey && bucket.endpoint.startsWith('{')) {
+            // Endpoint is encrypted (JSON stringified)
+            const encryptedData = JSON.parse(bucket.endpoint);
+            decryptedBucket.endpoint = Encryption.decrypt(encryptedData, encryptionKey);
+          }
+        } catch (error) {
+          console.error(`Error decrypting endpoint for bucket ${bucket.id}:`, error);
+          // Keep original endpoint if decryption fails
+        }
+      }
+      return decryptedBucket;
+    });
+
+    console.log("✅ Decrypted endpoints for all buckets");
+
     return NextResponse.json(
       {
         success: true,
-        data: buckets,
-        count: buckets.length,
+        data: decryptedBuckets,
+        count: decryptedBuckets.length,
       },
       { status: 200 }
     );
