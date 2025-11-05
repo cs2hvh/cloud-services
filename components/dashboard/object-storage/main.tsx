@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
-import { HardDrive, Plus, BookOpen, Database } from "lucide-react";
+import { HardDrive, Plus, BookOpen, Database, Archive } from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
@@ -44,7 +44,7 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
             value="buckets" 
             className="data-[state=active]:bg-white/10"
           >
-            <Database className="h-4 w-4 mr-2" />
+            <Archive className="h-4 w-4 mr-2" />
             My Buckets ({buckets.length})
           </TabsTrigger>
           <TabsTrigger 

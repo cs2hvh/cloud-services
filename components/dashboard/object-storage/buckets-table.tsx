@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Trash2, Lock, Unlock, Loader2, ExternalLink, Copy, Check } from "lucide-react";
+import { Trash2, Lock, Unlock, Loader2, ExternalLink, Copy, Check, Archive, Plus } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -76,17 +76,27 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (buckets.length === 0) {
+    if (buckets.length === 0) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center py-12 border border-white/10 rounded-lg bg-white/5"
       >
+        <Archive className="mx-auto h-12 w-12 text-white/20" />
         <h3 className="mt-4 text-lg font-semibold">No buckets</h3>
         <p className="mt-2 text-sm text-white/60">
           Get started by creating your first bucket.
         </p>
+        <div className="mt-6">
+            <Link
+              href="/dashboard/services/object-storage/new"
+              className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+            >
+              <Plus className="-ml-1 mr-2 h-5 w-5" />
+              Create Bucket
+            </Link>
+          </div>
       </motion.div>
     );
   }
@@ -109,7 +119,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
                 <TableHead className="text-white/80 font-semibold">Status</TableHead>
               
                 <TableHead className="text-white/80 font-semibold text-right">Objects</TableHead>
-                <TableHead className="text-white/80 font-semibold text-right">Size</TableHead>
+                <TableHead className="text-white/80 font-semibold text-right">Usage</TableHead>
                 
                 <TableHead className="text-white/80 font-semibold">Created</TableHead>
                 <TableHead className="text-white/80 font-semibold text-right">Actions</TableHead>

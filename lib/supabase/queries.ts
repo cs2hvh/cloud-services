@@ -1996,7 +1996,7 @@ export const ObjectSpaces = {
 
   get_bucket_by_bucket_id: async (id: string): Promise<ObjectSpaceBucket | null> => {
     try {
-      console.log(id, "...........bucket_id in get_bucket_by_bucket_id........");
+     // console.log(id, "...........bucket_id in get_bucket_by_bucket_id........");
       const supabase = await createSSRClient();
       const { data, error } = await supabase
         .from("object_spaces")

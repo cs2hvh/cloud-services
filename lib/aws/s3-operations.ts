@@ -47,7 +47,7 @@ export async function createBucket(
   acl: 'private' | 'public-read' = 'private'
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log(S3Client,"......................S3Client");
+   // console.log(S3Client,"......................S3Client");
     await client.send(
       new CreateBucketCommand({
         Bucket: bucketName,

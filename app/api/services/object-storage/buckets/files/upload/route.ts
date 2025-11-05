@@ -13,12 +13,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const formData = await req.formData();
-    console.log("Form Data received:", formData);
+    //console.log("Form Data received:", formData);
     const bucket_id = formData.get('bucket_id') as string;
     const file = formData.get('file') as File;
     const folder_path = formData.get('folder_path') as string || '';
 
-    console.log("📤 Uploading file:", file?.name, "to bucket:", bucket_id);
+    //console.log("📤 Uploading file:", file?.name, "to bucket:", bucket_id);
 
     // if (!bucket_id) {
     //   return NextResponse.json(
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("📤 Uploading file:", file.name, "to bucket:", bucket_id);
+    //console.log("📤 Uploading file:", file.name, "to bucket:", bucket_id);
 
     // Get bucket from database
     const bucket = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id);

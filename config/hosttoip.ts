@@ -34,11 +34,11 @@ export function getHostFromUrl(urlOrHost: string): string | null {
 
 
 export async function resolveHost(hostOrUrl: string): Promise<ResolveResult> {
-    console.log(hostOrUrl,".............resolving host.............");
+   // console.log(hostOrUrl,".............resolving host.............");
   const parsedHost = getHostFromUrl(hostOrUrl);
-  console.log(parsedHost,".............parsed host.............");
+ //console.log(parsedHost,".............parsed host.............");
   const result: ResolveResult = { host: parsedHost ?? hostOrUrl, records: [], error: null };
-  console.log(result,".............initial resolve result.............");
+ // console.log(result,".............initial resolve result.............");
 
   if (!parsedHost) {
     result.error = "Could not parse hostname from input";

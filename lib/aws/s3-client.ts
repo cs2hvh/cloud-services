@@ -33,7 +33,7 @@ export function createS3Client(
     forcePathStyle: false, // Use virtual-hosted-style URLs (bucket.region.digitaloceanspaces.com)
   };
 
-  console.log(`S3 Client configured for region: ${region}, endpoint: https://${region}.digitaloceanspaces.com`);
+  //console.log(`S3 Client configured for region: ${region}, endpoint: https://${region}.digitaloceanspaces.com`);
 
   return new S3Client(config);
 }

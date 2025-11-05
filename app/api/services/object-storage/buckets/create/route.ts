@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    console.log("Creating bucket with data:", validatedData);
+  //  console.log("Creating bucket with data:", validatedData);
 
     // Get access key and secret from environment
     const accessKeyId = process.env.SPACES_ACCESS_KEY;
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("Using access key:", accessKeyId?.substring(0, 8) + "...");  // Log first 8 chars for debugging
+   // console.log("Using access key:", accessKeyId?.substring(0, 8) + "...");  // Log first 8 chars for debugging
 
     // Create S3 client using env credentials
     let s3Client;
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
 
     // Generate endpoint URL
     const originalEndpoint = getBucketUrl(validatedData.name, validatedData.region as any);
-    console.log("Original endpoint:", originalEndpoint);
+   // console.log("Original endpoint:", originalEndpoint);
 
     // Convert host to IP and encrypt
     let encryptedEndpoint = originalEndpoint;
@@ -79,11 +79,11 @@ export async function POST(req: NextRequest) {
       const hostMatch = originalEndpoint.match(/https?:\/\/([^\/]+)/);
       if (hostMatch && hostMatch[1]) {
         const host = hostMatch[1];
-        console.log("Extracting host:", host);
+       //console.log("Extracting host:", host);
 
         // Resolve the DigitalOcean Spaces domain to IP
-        const doSpacesDomain = `${validatedData.region}.digitaloceanspaces.com`;
-        console.log("Resolving DO Spaces domain:", doSpacesDomain);
+        const doSpacesDomain = `${validatedData.name}.${validatedData.region}.digitaloceanspaces.com`;
+       // console.log("Resolving DO Spaces domain:", doSpacesDomain);
         
         const resolveResult = await resolveHost(doSpacesDomain);
         
@@ -92,11 +92,11 @@ export async function POST(req: NextRequest) {
           const aRecord = resolveResult.records.find((r) => r.type === "A");
           if (aRecord && aRecord.records.length > 0) {
             const ip = aRecord.records[0] as string;
-            console.log("Resolved IP:", ip);
+            //console.log("Resolved IP:", ip);
             
             // Replace the domain with IP in the endpoint
             const endpointWithIp = originalEndpoint.replace(doSpacesDomain, ip);
-            console.log("Endpoint with IP:", endpointWithIp);
+            //console.log("Endpoint with IP:", endpointWithIp);
             
             // Encrypt the endpoint
             const encryptionKey = process.env.ENCRYPTION_KEY;
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
               encryptedEndpoint = JSON.stringify(Encryption.encrypt(endpointWithIp, encryptionKey));
               console.log("✅ Endpoint encrypted successfully");
             } else {
-              console.warn("⚠️ ENCRYPTION_KEY not found, storing unencrypted");
+             console.warn("⚠️ ENCRYPTION_KEY not found, storing unencrypted");
               encryptedEndpoint = endpointWithIp;
             }
           } else {
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("✅ Bucket saved to database");
+    //console.log("✅ Bucket saved to database");
 
     return NextResponse.json(
       {
