@@ -12,6 +12,7 @@ import {
   DatabaseInstance,
   Admin_User,
   Admin_Database,
+  ObjectSpaceBucket,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
@@ -807,6 +808,28 @@ export const Locations = {
         .select("*")
         .eq("available", true)
         .eq("cluster_type", "database")
+        .order("city");
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting locations: ${error.message}`
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting locations: ${err}`);
+      return [];
+    }
+  },
+  get_by_type: async (type: string): Promise<Location[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("available", true)
+        .eq("cluster_type", type)
         .order("city");
 
       if (error) {
@@ -1887,6 +1910,178 @@ export const storeFile=async(clusterId:string, file:File)=>{
 
 
 
+export const ObjectSpaces = {
+  // Bucket operations only (access keys from .env)
+  delete: async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error deleting: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error deleting: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_status: async (id: string, status: ObjectSpaceBucket['status']): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update({ status })
+        .eq("id", id);
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error updating status: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating status: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  create_bucket: async (payload: Omit<ObjectSpaceBucket, 'id' | 'created_at' | 'updated_at'>): Promise<{ success: boolean; data?: ObjectSpaceBucket; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .insert({
+          ...payload,
+          type: 'bucket',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error creating bucket: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data: data as ObjectSpaceBucket };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error creating bucket: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_buckets: async (owner_id: string): Promise<ObjectSpaceBucket[]> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("owner_id", owner_id)
+        .eq("type", "bucket")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting buckets: ${error.message}`);
+        return [];
+      }
+      return (data as ObjectSpaceBucket[]) || [];
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting buckets: ${err}`);
+      return [];
+    }
+  },
+
+  get_bucket_by_bucket_id: async (id: string): Promise<ObjectSpaceBucket | null> => {
+    try {
+      console.log(id, "...........bucket_id in get_bucket_by_bucket_id........");
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("id", id)
+        .eq("type", "bucket")
+        .single();
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting bucket by bucket_id: ${error.message}`);
+        return null;
+      }
+      return data as ObjectSpaceBucket;
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting bucket by bucket_id: ${err}`);
+      return null;
+    }
+  },
+
+  get_bucket_by_id: async (id: string): Promise<ObjectSpaceBucket | null> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("id", id)
+        .eq("type", "bucket")
+        .single();
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting bucket by id: ${error.message}`);
+        return null;
+      }
+      return data as ObjectSpaceBucket;
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting bucket by id: ${err}`);
+      return null;
+    }
+  },
+
+  update_bucket_stats: async (id: string, size_bytes: number, object_count: number): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update({ size_bytes, object_count })
+        .eq("id", id)
+        .eq("type", "bucket");
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error updating bucket stats: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating bucket stats: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_bucket_settings: async (
+    id: string,
+    settings: Partial<Pick<ObjectSpaceBucket, 'acl' | 'cors_enabled' | 'versioning_enabled'>>
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update(settings)
+        .eq("id", id)
+        .eq("type", "bucket");
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error updating bucket settings: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating bucket settings: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+};
+
 // Export the queries object for backward compatibility
 const api = {
   users: Users,
@@ -1899,6 +2094,7 @@ const api = {
   clusters:Clusters,
   database_clusters:Database_Clusters,
   activities: Activities,
+  object_spaces: ObjectSpaces,
 };
 
 export default api;

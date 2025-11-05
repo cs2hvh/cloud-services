@@ -97,6 +97,28 @@ export interface Database_Connection{
 
 }
 
+// Object Storage Types - Buckets only (access keys from .env)
+export interface ObjectSpaceBucket {
+  id: string;
+  type: 'bucket';
+  name: string;
+  owner_id: string;
+  project_id: string;
+  region: string;
+  status: 'active' | 'creating' | 'deleting' | 'failed';
+  created_at: string;
+  updated_at: string;
+  
+  // Bucket fields
+  bucket_id: string;
+  endpoint: string;
+  acl: 'private' | 'public-read';
+  cors_enabled: boolean;
+  versioning_enabled: boolean;
+  size_bytes: number;
+  object_count: number;
+}
+
 export type Database = {
   public: {
     Tables: {
