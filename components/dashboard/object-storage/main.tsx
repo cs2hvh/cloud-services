@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "motion/react";
-import { HardDrive, Plus, BookOpen, Database, Archive } from "lucide-react";
+import { HardDrive, Plus, BookOpen, Database, Archive, Key } from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
 import BucketsTable from "./buckets-table";
 import ApiDocumentation from "./api-documentation";
+import AccessKeysTable from "./access-keys-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ObjectStorageMainProps {
@@ -48,21 +49,32 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
             My Buckets ({buckets.length})
           </TabsTrigger>
           <TabsTrigger 
+            value="access-keys" 
+            className="data-[state=active]:bg-white/10"
+          >
+            <Key className="h-4 w-4 mr-2" />
+            Access Keys
+          </TabsTrigger>
+          {/* <TabsTrigger 
             value="api-docs" 
             className="data-[state=active]:bg-white/10"
           >
             <BookOpen className="h-4 w-4 mr-2" />
             API Documentation
-          </TabsTrigger>
+          </TabsTrigger> */}
         </TabsList>
 
         <TabsContent value="buckets">
           <BucketsTable buckets={buckets} />
         </TabsContent>
 
-        <TabsContent value="api-docs">
-          <ApiDocumentation />
+        <TabsContent value="access-keys">
+          <AccessKeysTable buckets={buckets} />
         </TabsContent>
+
+        {/* <TabsContent value="api-docs">
+          <ApiDocumentation />
+        </TabsContent> */}
       </Tabs>
     </>
   );

@@ -117,6 +117,10 @@ export interface ObjectSpaceBucket {
   versioning_enabled: boolean;
   size_bytes: number;
   object_count: number;
+  
+  // Optional: Bucket-specific encrypted access keys (stored directly with bucket)
+  key_id?: string;
+  secret_key?: string;
 }
 
 export type Database = {

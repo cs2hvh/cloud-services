@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createS3Client } from "@/lib/aws/s3-client";
-import { emptyBucket, deleteBucket as s3DeleteBucket } from "@/lib/aws/s3-operations";
+import {
+  emptyBucket,
+  deleteBucket as s3DeleteBucket,
+} from "@/lib/aws/s3-operations";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -15,29 +18,29 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { bucket_id, force = true } = body;
 
-    if (!bucket_id || typeof bucket_id !== 'string') {
+    if (!bucket_id || typeof bucket_id !== "string") {
       return NextResponse.json(
         { error: "Invalid request", message: "Bucket ID is required" },
         { status: 400 }
       );
     }
 
-    console.log("🗑️ Deleting bucket:", bucket_id, "Force:", force);
+    //console.log("🗑️ Deleting bucket:", bucket_id, "Force:", force);
 
     // Get bucket from database
     const bucket = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id);
 
     if (!bucket) {
-      return NextResponse.json(
-        { error: "Bucket not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Bucket not found" }, { status: 404 });
     }
 
     // Verify ownership
     if (bucket.owner_id !== auth.user!.id) {
       return NextResponse.json(
-        { error: "Unauthorized", message: "You don't have access to this bucket" },
+        {
+          error: "Unauthorized",
+          message: "You don't have access to this bucket",
+        },
         { status: 403 }
       );
     }
@@ -47,9 +50,14 @@ export async function POST(req: NextRequest) {
     const secretAccessKey = process.env.SPACES_SECRET_KEY;
 
     if (!accessKeyId || !secretAccessKey) {
-      console.error("Missing SPACES_ACCESS_KEY or SPACES_SECRET_KEY environment variables");
+      console.error(
+        "Missing SPACES_ACCESS_KEY or SPACES_SECRET_KEY environment variables"
+      );
       return NextResponse.json(
-        { error: "Server configuration error", message: "Object storage credentials not configured" },
+        {
+          error: "Server configuration error",
+          message: "Object storage credentials not configured",
+        },
         { status: 500 }
       );
     }
@@ -59,7 +67,8 @@ export async function POST(req: NextRequest) {
     try {
       s3Client = createS3Client(bucket.region, accessKeyId, secretAccessKey);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       console.error("Failed to create S3 client:", errorMessage);
       return NextResponse.json(
         { error: "Failed to create S3 client", message: errorMessage },

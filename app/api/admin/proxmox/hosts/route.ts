@@ -59,7 +59,7 @@ async function requireAdmin(): Promise<{ ok: boolean; email?: string; userId?: s
 
         const isAdmin = profile?.roles?.includes("admin");
         if (!isAdmin) {
-          console.warn(`User ${email} attempted admin access but is not an admin`);
+         // console.warn(`User ${email} attempted admin access but is not an admin`);
           return { ok: false };
         }
       } catch (profileError) {
