@@ -1,4 +1,3 @@
-"use server";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
 import { ObjectSpaces, Projects } from "@/lib/supabase/queries";

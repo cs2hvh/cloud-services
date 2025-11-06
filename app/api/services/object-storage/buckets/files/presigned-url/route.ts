@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectSpaces } from "@/lib/supabase/queries";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { authenticateUserFromHeader } from "@/lib/auth/server-auth";
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
 import { generatePresignedUrl } from "@/lib/aws/s3-operations";
 import { presignedUrlSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
-  // Check authentication
-  const auth = await authenticateUser();
+  // Check authentication (supports both cookie and Authorization header)
+  const auth = await authenticateUserFromHeader(req);
   if (!auth.authenticated) {
     return auth.response;
   }
