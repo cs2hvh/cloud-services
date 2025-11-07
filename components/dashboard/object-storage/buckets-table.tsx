@@ -109,37 +109,49 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
         className="border border-white/10 rounded-lg bg-white/5 overflow-hidden"
       >
         <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-white/10 hover:bg-white/5">
-                <TableHead className="text-white/80 font-semibold">Name</TableHead>
-                <TableHead className="text-white/80 font-semibold">Bucket ID</TableHead>
-                {/* <TableHead className="text-white/80 font-semibold">Region</TableHead> */}
-                <TableHead className="text-white/80 font-semibold">Endpoint</TableHead>
-                <TableHead className="text-white/80 font-semibold">Status</TableHead>
-              
-                <TableHead className="text-white/80 font-semibold text-right">Objects</TableHead>
-                <TableHead className="text-white/80 font-semibold text-right">Usage</TableHead>
-                
-                <TableHead className="text-white/80 font-semibold">Created</TableHead>
-                <TableHead className="text-white/80 font-semibold text-right">Actions</TableHead>
+          <Table className="w-full border border-white/10 rounded-xl overflow-hidden">
+            <TableHeader className="bg-white/5 backdrop-blur-md">
+              <TableRow>
+                <TableHead className="text-white/90 font-semibold py-3 px-4">
+                  Name
+                </TableHead>
+                <TableHead className="text-white/90 font-semibold py-3 px-4">
+                  Bucket ID
+                </TableHead>
+                <TableHead className="text-white/90 font-semibold py-3 px-4">
+                  Status
+                </TableHead>
+                <TableHead className="text-white/90 font-semibold py-3 px-4">
+                  Created
+                </TableHead>
+                <TableHead className="text-white/90 font-semibold py-3 px-4 text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
+
             <TableBody>
-              {buckets.map((bucket, index) => (
+              {buckets.map((bucket) => (
                 <TableRow
                   key={bucket.id}
-                  className="border-white/10 hover:bg-white/10 cursor-pointer transition-colors"
-                  onClick={() => router.push(`/dashboard/services/object-storage/buckets/${bucket.id}`)}
+                  className="group border-t border-white/10 hover:bg-white/10 transition-all duration-150 cursor-pointer"
+                  onClick={() =>
+                    router.push(
+                      `/dashboard/services/object-storage/buckets/${bucket.id}`
+                    )
+                  }
                 >
-                  <TableCell className="font-medium">
+                  {/* Name */}
+                  <TableCell className="py-3 px-4 font-medium text-white flex items-center gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="text-white">{bucket.name}</span>
+                      <div className="h-2.5 w-2.5 rounded-full bg-white/30 group-hover:bg-white/50 transition" />
+                      <span>{bucket.name}</span>
                     </div>
                   </TableCell>
-                  
-                  <TableCell>
-                    <div className="flex items-center gap-2">
+
+                  {/* Bucket ID with Copy */}
+                  <TableCell className="py-3 px-4">
+                    <div className="flex items-center">
                       <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
                         {bucket.id}
                       </code>
@@ -148,101 +160,54 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
                           e.stopPropagation();
                           copyToClipboard(bucket.id, "Bucket ID");
                         }}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                        className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
                       >
                         {copiedId === bucket.id ? (
-                          <Check className="h-3 w-3 text-green-400" />
+                          <Check className="h-3.5 w-3.5 text-green-400" />
                         ) : (
-                          <Copy className="h-3 w-3 text-white/40" />
+                          <Copy className="h-3.5 w-3.5 text-white/50" />
                         )}
                       </button>
                     </div>
                   </TableCell>
 
-                  {/* <TableCell>
-                    <Badge variant="secondary" className="bg-blue-500/20 text-blue-400">
-                      {bucket.region}
-                    </Badge>
-                  </TableCell> */}
-
-                  <TableCell>
-                    {bucket.endpoint ? (
-                      <div className="flex items-center gap-2 max-w-md">
-                        <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10 truncate">
-                          {bucket.endpoint}
-                        </code>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(bucket.endpoint, "Endpoint");
-                          }}
-                          className="p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
-                        >
-                          {copiedId === bucket.endpoint ? (
-                            <Check className="h-3 w-3 text-green-400" />
-                          ) : (
-                            <Copy className="h-3 w-3 text-white/40" />
-                          )}
-                        </button>
-                        <a
-                          href={bucket.endpoint}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
-                        >
-                          <ExternalLink className="h-3 w-3 text-white/40" />
-                        </a>
-                      </div>
-                    ) : (
-                      <span className="text-white/40 text-xs">-</span>
-                    )}
-                  </TableCell>
-
-                  <TableCell>
-                    <Badge 
-                      variant="secondary" 
-                      className={`text-xs ${
-                        bucket.status === 'active' ? 'bg-green-500/20 text-green-400' : 
-                        bucket.status === 'creating' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}
+                  {/* Status Badge */}
+                  <TableCell className="py-3 px-4">
+                    <Badge
+                      variant="secondary"
+                      className={`text-xs capitalize px-2.5 py-1.5 rounded-full font-medium tracking-wide
+              ${
+                bucket.status === "active"
+                  ? "bg-green-500/20 text-green-400"
+                  : bucket.status === "creating"
+                    ? "bg-yellow-500/20 text-yellow-400"
+                    : "bg-red-500/20 text-red-400"
+              }
+            `}
                     >
                       {bucket.status}
                     </Badge>
                   </TableCell>
 
-                 
-
-                  <TableCell className="text-right">
-                    <span className="text-white/80 font-mono text-sm">
-                      {bucket.object_count || 0}
-                    </span>
-                  </TableCell>
-
-                  <TableCell className="text-right">
-                    <span className="text-white/80 font-mono text-sm">
-                      {((bucket.size_bytes || 0) / 1024).toFixed(2)} KB
-                    </span>
-                  </TableCell>
-
-                
-
-                  <TableCell>
-                    <span className="text-white/70 text-sm">
-                      {format(new Date(bucket.created_at), "MMM d, yyyy")}
-                    </span>
-                    <div className="text-xs text-white/40">
-                      {format(new Date(bucket.created_at), "HH:mm:ss")}
+                  {/* Created Date */}
+                  <TableCell className="py-3 px-4">
+                    <div className="flex flex-col">
+                      <span className="text-white/80 text-sm">
+                        {format(new Date(bucket.created_at), "MMM d, yyyy")}
+                      </span>
+                      <span className="text-white/40 text-xs">
+                        {format(new Date(bucket.created_at), "HH:mm:ss")}
+                      </span>
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-right">
+                  {/* Actions */}
+                  <TableCell className="py-3 px-4 text-right">
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size="icon"
                       onClick={(e) => handleDeleteClick(bucket.id, e)}
-                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      className="text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-150"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

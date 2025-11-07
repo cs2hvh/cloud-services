@@ -1,12 +1,19 @@
 "use client";
 
 import { motion } from "motion/react";
-import { HardDrive, Plus, BookOpen, Database, Archive, Key } from "lucide-react";
+import {
+  // HardDrive,
+  Plus,
+  // BookOpen,
+  // Database,
+  Archive,
+  Key,
+} from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
 import BucketsTable from "./buckets-table";
-import ApiDocumentation from "./api-documentation";
+// import ApiDocumentation from "./api-documentation";
 import AccessKeysTable from "./access-keys-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -16,7 +23,11 @@ interface ObjectStorageMainProps {
   userId: string;
 }
 
-const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps) => {
+const ObjectStorageMain = ({
+  buckets,
+  projects,
+  userId,
+}: ObjectStorageMainProps) => {
   return (
     <>
       <motion.div
@@ -24,12 +35,22 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-8"
       >
-        <div>
-          <h1 className="text-3xl font-bold">Object Storage</h1>
-          <p className="text-white/60">
-            Manage your Spaces buckets for storing files and objects.
-          </p>
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-neutral-800 rounded-lg">
+              <Archive className="h-6 w-6 text-neutral-300" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-semibold text-white">
+                Object Storage
+              </h1>
+              <p className="text-sm text-neutral-400 mt-0.5">
+                Manage your Spaces buckets for storing files and objects.
+              </p>
+            </div>
+          </div>
         </div>
+
         <Link
           href="/dashboard/services/object-storage/new"
           className="group relative inline-flex items-center justify-center px-6 py-2.5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
@@ -41,15 +62,15 @@ const ObjectStorageMain = ({ buckets, projects, userId }: ObjectStorageMainProps
 
       <Tabs defaultValue="buckets" className="space-y-6">
         <TabsList className="bg-white/5 border border-white/10">
-          <TabsTrigger 
-            value="buckets" 
+          <TabsTrigger
+            value="buckets"
             className="data-[state=active]:bg-white/10"
           >
             <Archive className="h-4 w-4 mr-2" />
             My Buckets ({buckets.length})
           </TabsTrigger>
-          <TabsTrigger 
-            value="access-keys" 
+          <TabsTrigger
+            value="access-keys"
             className="data-[state=active]:bg-white/10"
           >
             <Key className="h-4 w-4 mr-2" />
