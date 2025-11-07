@@ -681,7 +681,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
       {graphOpen && graphData && graphMetadata && (
         <Graph
           open={graphOpen}
-          setGraphOpen={setGraphOpen}
+          setGraphOpenAction={setGraphOpen}
           data={graphData}
           metadata={{
             title: `${graphMetadata.metricType.toUpperCase()} Metrics`,

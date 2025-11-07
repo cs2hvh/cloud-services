@@ -7,15 +7,14 @@ import {
   // BookOpen,
   // Database,
   Archive,
-  Key,
+  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
 import BucketsTable from "./buckets-table";
-// import ApiDocumentation from "./api-documentation";
-import AccessKeysTable from "./access-keys-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Documentation from "./api-docs";
 
 interface ObjectStorageMainProps {
   buckets: ObjectSpaceBucket[];
@@ -33,7 +32,7 @@ const ObjectStorageMain = ({
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center mb-8"
+        className="flex justify-between items-center mb-2"
       >
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -69,13 +68,7 @@ const ObjectStorageMain = ({
             <Archive className="h-4 w-4 mr-2" />
             My Buckets ({buckets.length})
           </TabsTrigger>
-          <TabsTrigger
-            value="access-keys"
-            className="data-[state=active]:bg-white/10"
-          >
-            <Key className="h-4 w-4 mr-2" />
-            Access Keys
-          </TabsTrigger>
+        
           {/* <TabsTrigger 
             value="api-docs" 
             className="data-[state=active]:bg-white/10"
@@ -89,8 +82,8 @@ const ObjectStorageMain = ({
           <BucketsTable buckets={buckets} />
         </TabsContent>
 
-        <TabsContent value="access-keys">
-          <AccessKeysTable buckets={buckets} />
+        <TabsContent value="api-docs">
+          <Documentation />
         </TabsContent>
 
         {/* <TabsContent value="api-docs">

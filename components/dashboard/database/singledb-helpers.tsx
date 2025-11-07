@@ -86,13 +86,23 @@ export const ConfigCard = ({ icon: Icon, label, value, color }: ConfigCardProps)
 
 // Helper Functions
 
-export const safeStringValue = (value:string|number|{address:string,family:string}): string => {
+export const safeStringValue = (
+  value: string | number | { address: string; family: string } | EncryptedData | undefined
+): string => {
   if (!value) return "N/A";
   if (typeof value === "string") return value;
   if (typeof value === "number") return value.toString();
   // Handle objects with address or family properties
   if (typeof value === "object") {
-    return value.address || value.family || JSON.stringify(value);
+    // Handle EncryptedData type
+    if ("encrypted" in value) {
+      return value.encrypted || "N/A";
+    }
+    // Handle address/family object
+    if ("address" in value || "family" in value) {
+      return value.address || value.family || JSON.stringify(value);
+    }
+    return JSON.stringify(value);
   }
   return String(value);
 };
