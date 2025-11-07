@@ -6,6 +6,8 @@ import {
   emptyBucket,
   deleteBucket as s3DeleteBucket,
 } from "@/lib/aws/s3-operations";
+import { deleteSpacesKey } from "@/lib/digitalocean/api/bucket";
+import { Encryption } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     // If force=true, empty the bucket first
     if (force) {
-      console.log("🗑️ Force delete: emptying bucket first...");
+     // console.log("🗑️ Force delete: emptying bucket first...");
       const emptyResult = await emptyBucket(s3Client, bucket.name);
       if (!emptyResult.success) {
         console.error("Failed to empty bucket:", emptyResult.error);
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
           { status: 500 }
         );
       }
-      console.log(`✅ Deleted ${emptyResult.deletedCount} objects from bucket`);
+     // console.log(`✅ Deleted ${emptyResult.deletedCount} objects from bucket`);
     }
 
     // Delete bucket from DigitalOcean Spaces
@@ -108,7 +110,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("✅ Bucket deleted from DigitalOcean Spaces");
+   // console.log("✅ Bucket deleted from DigitalOcean Spaces");
+
+    // Delete the access key from DigitalOcean
+    if (bucket.key_id) {
+     // console.log("🔑 Deleting Spaces access key:", bucket.key_id);
+      const decryptedBucketKey=Encryption.decrypt(JSON.parse(bucket.key_id), process.env.ENCRYPTION_KEY!);
+      const deleteKeyResult = await deleteSpacesKey(decryptedBucketKey);
+      
+      if (!deleteKeyResult.success) {
+        console.error("Failed to delete Spaces access key:", deleteKeyResult.error);
+        // Continue with bucket deletion even if key deletion fails
+        // The key might have already been deleted or doesn't exist
+      } else {
+        console.log("✅ Spaces access key deleted successfully");
+      }
+    } else {
+      console.log("⚠️ No access key ID found for bucket, skipping key deletion");
+    }
 
     // Delete from database
     const dbResult = await ObjectSpaces.delete(bucket.id);

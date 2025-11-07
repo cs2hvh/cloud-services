@@ -119,8 +119,8 @@ export interface ObjectSpaceBucket {
   object_count: number;
   
   // Optional: Bucket-specific encrypted access keys (stored directly with bucket)
-  key_id?: string;
-  secret_key?: string;
+  key_id: string;
+  secret_key: string;
 }
 
 export type Database = {

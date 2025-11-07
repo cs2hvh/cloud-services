@@ -39,7 +39,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
         <div className="mt-6">
           <Link
             href="/dashboard/services/object-storage/new"
-            className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+            className="cursor-pointer group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
           >
             <Plus className="-ml-1 mr-2 h-5 w-5" />
             Create Bucket
@@ -136,7 +136,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
                     <div className="flex flex-wrap gap-2">
                       <Link
                         href={`/dashboard/services/object-storage/${bucket.id}`}
-                        className="inline-flex items-center justify-center
+                        className="cursor-pointer inline-flex items-center justify-center
                             rounded-md border border-blue-500
                             px-3 py-1.5 text-sm font-medium
                             text-blue-400

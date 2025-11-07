@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 1: Create bucket using environment credentials
-    console.log("🪣 Creating bucket in DigitalOcean Spaces");
+   // console.log("🪣 Creating bucket in DigitalOcean Spaces");
     const s3Client = createS3Client(validatedData.region, envAccessKey, envSecretKey);
     const bucketResult = await s3CreateBucket(s3Client, validatedData.name, validatedData.acl);
 
@@ -61,10 +61,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log("✅ Bucket created in DigitalOcean Spaces");
+    //console.log("✅ Bucket created in DigitalOcean Spaces");
 
     // Step 2: Create dedicated Spaces access key for this bucket via DigitalOcean API
-    console.log("🔑 Creating dedicated Spaces access key for bucket:", validatedData.name);
+    //console.log("🔑 Creating dedicated Spaces access key for bucket:", validatedData.name);
     const keyResult = await createSpacesKey(validatedData.name, [
       {
         bucket: validatedData.name,
@@ -85,8 +85,8 @@ export async function POST(req: NextRequest) {
     const { access_key: accessKeyId, secret_key: secretAccessKey } = keyResult.data;
     
     // Debug: Check if credentials are present
-    console.log("Access Key ID:", accessKeyId ? "Present" : "MISSING");
-    console.log("Secret Access Key:", secretAccessKey ? "Present" : "MISSING");
+    //console.log("Access Key ID:", accessKeyId ? "Present" : "MISSING");
+    //console.log("Secret Access Key:", secretAccessKey ? "Present" : "MISSING");
     
     if (!accessKeyId || !secretAccessKey) {
       console.error("Credentials missing from API response:", keyResult.data);
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    console.log("✅ Dedicated Spaces access key created");
+    //console.log("✅ Dedicated Spaces access key created");
 
     // Step 3: Generate and encrypt endpoint URL
     const originalEndpoint = getBucketUrl(validatedData.name, validatedData.region as any);
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
           const ip = aRecord.records[0] as string;
           const endpointWithIp = originalEndpoint.replace(doSpacesDomain, ip);
           encryptedEndpoint = JSON.stringify(Encryption.encrypt(endpointWithIp, encryptionKey));
-          console.log("✅ Endpoint encrypted with IP resolution");
+          //console.log("✅ Endpoint encrypted with IP resolution");
         } else {
           console.warn("⚠️ No A record found, encrypting original endpoint");
           encryptedEndpoint = JSON.stringify(Encryption.encrypt(originalEndpoint, encryptionKey));
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
       Encryption.encrypt(secretAccessKey, encryptionKey)
     );
 
-    console.log("🔐 Credentials encrypted successfully");
+    //console.log("🔐 Credentials encrypted successfully");
 
     // Step 5: Store bucket with encrypted credentials in database
     const dbResult = await ObjectSpaces.create_bucket({

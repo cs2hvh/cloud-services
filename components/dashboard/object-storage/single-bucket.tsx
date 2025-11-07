@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Copy, Check, Database, HardDrive, Eye, EyeOff, Key, Link as LinkIcon, Archive, MapPin, Shield, GitBranch, Activity, Trash2, Loader2 } from "lucide-react";
+import { Copy, Check, Database, HardDrive, Eye, EyeOff, Key, Link as LinkIcon, Archive,  Trash2, Loader2 } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,6 +41,31 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [bucketData, setBucketData] = useState<ObjectSpaceBucket>(bucket);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
+  // Fetch live bucket stats on mount
+  useEffect(() => {
+    const fetchBucketStats = async () => {
+      try {
+        setIsLoadingStats(true);
+        const response = await axios.post("/api/services/object-storage/buckets/read", {
+          bucket_id: bucket.id,
+        });
+        
+        if (response.data.success && response.data.data) {
+          setBucketData(response.data.data);
+        }
+      } catch (error) {
+        console.error("Error fetching bucket stats:", error);
+        // Keep using the initial bucket data if fetch fails
+      } finally {
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchBucketStats();
+  }, [bucket.id]);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -96,10 +121,10 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
             <Archive className="h-6 w-6 text-white/80" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold">{bucket.name}</h1>
+            <h1 className="text-3xl font-bold">{bucketData.name}</h1>
             <p className="text-slate-400 text-sm mt-1">
-              {bucket.object_count} items / {formatBytes(bucket.size_bytes)} /{" "}
-              {bucket.acl} / {bucket.region} region
+              {bucketData.object_count} items / {formatBytes(bucketData.size_bytes)} /{" "}
+              {bucketData.acl} / {bucketData.region} region
             </p>
           </div>
         </div>
@@ -116,7 +141,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           >
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                <Button className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20">
                   <Key className="h-4 w-4 mr-2" />
                   Show Access Keys
                 </Button>
@@ -140,12 +165,12 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                       <div className="flex-1 relative">
                         <code className="block w-full text-sm text-white/80 bg-white/5 px-4 py-3 rounded border border-white/10 font-mono pr-12">
                           {showKeyId
-                            ? bucket.key_id || "Not available"
+                            ? bucketData.key_id || "Not available"
                             : "••••••••••••••••"}
                         </code>
                         <button
                           onClick={() => setShowKeyId(!showKeyId)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
                         >
                           {showKeyId ? (
                             <EyeOff className="h-4 w-4 text-white/50" />
@@ -158,10 +183,10 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                         variant="ghost"
                         size="icon"
                         onClick={() =>
-                          copyToClipboard(bucket.key_id || "", "Access Key ID")
+                          copyToClipboard(bucketData.key_id || "", "Access Key ID")
                         }
-                        disabled={!bucket.key_id}
-                        className="hover:bg-white/10 transition-colors"
+                        disabled={!bucketData.key_id}
+                        className="cursor-pointer hover:bg-white/10 transition-colors"
                       >
                         {copiedItem === "Access Key ID" ? (
                           <Check className="h-4 w-4 text-green-400" />
@@ -181,12 +206,12 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                       <div className="flex-1 relative">
                         <code className="block w-full text-sm text-white/80 bg-white/5 px-4 py-3 rounded border border-white/10 font-mono pr-12">
                           {showSecretKey
-                            ? bucket.secret_key || "Not available"
+                            ? bucketData.secret_key || "Not available"
                             : "••••••••••••••••••••••••••••••••"}
                         </code>
                         <button
                           onClick={() => setShowSecretKey(!showSecretKey)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
                         >
                           {showSecretKey ? (
                             <EyeOff className="h-4 w-4 text-white/50" />
@@ -200,12 +225,12 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                         size="icon"
                         onClick={() =>
                           copyToClipboard(
-                            bucket.secret_key || "",
+                            bucketData.secret_key || "",
                             "Secret Access Key"
                           )
                         }
-                        disabled={!bucket.secret_key}
-                        className="hover:bg-white/10 transition-colors"
+                        disabled={!bucketData.secret_key}
+                        className="cursor-pointer hover:bg-white/10 transition-colors"
                       >
                         {copiedItem === "Secret Access Key" ? (
                           <Check className="h-4 w-4 text-green-400" />
@@ -228,14 +253,14 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           </motion.div>
         </div>
         <div className="flex justify-end gap-2">
-          <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
-            {bucket.endpoint}
+          <Button className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20">
+            {bucketData.endpoint}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => copyToClipboard(bucket.endpoint, "Endpoint")}
-            className="hover:bg-white/10 transition-colors flex-shrink-0"
+            onClick={() => copyToClipboard(bucketData.endpoint, "Endpoint")}
+            className="cursor-pointer hover:bg-white/10 transition-colors flex-shrink-0"
           >
             {copiedItem === "Endpoint" ? (
               <Check className="h-4 w-4 text-green-400" />
@@ -247,9 +272,9 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
             variant="ghost"
             size="icon"
             onClick={handleDeleteClick}
-            className="text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-150 flex-shrink-0"
+            className="cursor-pointer text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-150 flex-shrink-0"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="cursor-pointer h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -268,7 +293,11 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
               <div>
                 <p className="text-white/60 text-sm mb-1">Storage Usage</p>
                 <p className="text-3xl font-bold text-white">
-                  {formatBytes(bucket.size_bytes)}
+                  {isLoadingStats ? (
+                    <Loader2 className="h-8 w-8 animate-spin inline" />
+                  ) : (
+                    formatBytes(bucketData.size_bytes)
+                  )}
                 </p>
               </div>
               <div className="h-16 w-16 bg-blue-500/20 rounded-full flex items-center justify-center">
@@ -285,7 +314,11 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
               <div>
                 <p className="text-white/60 text-sm mb-1">Total Objects</p>
                 <p className="text-3xl font-bold text-white">
-                  {bucket.object_count.toLocaleString()}
+                  {isLoadingStats ? (
+                    <Loader2 className="h-8 w-8 animate-spin inline" />
+                  ) : (
+                    bucketData.object_count.toLocaleString()
+                  )}
                 </p>
               </div>
               <div className="h-16 w-16 bg-purple-500/20 rounded-full flex items-center justify-center">
@@ -304,7 +337,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Bucket?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the bucket "{bucket.name}" and all files inside it.
+              This will permanently delete the bucket "{bucketData.name}" and all files inside it.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -313,7 +346,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-600"
+              className="cursor-pointer bg-red-500 hover:bg-red-600"
             >
               {isDeleting ? (
                 <>
