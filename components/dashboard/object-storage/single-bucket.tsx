@@ -110,25 +110,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
 
   return (
     <>
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <div className="flex items-center gap-3">
-          <div className="h-12 w-12 bg-white/10 rounded-lg flex items-center justify-center">
-            <Archive className="h-6 w-6 text-white/80" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold">{bucketData.name}</h1>
-            <p className="text-slate-400 text-sm mt-1">
-              {bucketData.object_count} items / {formatBytes(bucketData.size_bytes)} /{" "}
-              {bucketData.acl} / {bucketData.region} region
-            </p>
-          </div>
-        </div>
-      </motion.div>
+     
 
       {/* Show Access Keys Button */}
       <div className="flex items-center justify-between ">

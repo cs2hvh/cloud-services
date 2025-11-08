@@ -2078,7 +2078,7 @@ export const ObjectSpaces = {
 
   update_bucket_settings: async (
     id: string,
-    settings: Partial<Pick<ObjectSpaceBucket, 'acl' | 'cors_enabled' | 'versioning_enabled'>>
+    settings: Partial<Pick<ObjectSpaceBucket, 'acl' | 'cors_enabled' | 'versioning_enabled' | 'project_id'>>
   ): Promise<{ success: boolean; error?: string }> => {
     try {
       const supabase = await createWorkerClient();

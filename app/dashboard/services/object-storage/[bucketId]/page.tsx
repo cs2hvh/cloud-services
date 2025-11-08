@@ -3,7 +3,7 @@ import { getUser } from "@/lib/supabase/auth";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import SingleBucket from "@/components/dashboard/object-storage/single-bucket";
+import BucketTabs from "@/components/dashboard/object-storage/bucket-tabs";
 import { Encryption } from "@/config/functions";
 
 interface PageProps {
@@ -64,7 +64,7 @@ const SingleBucketSuspense = async ({ bucketId }: { bucketId: string }) => {
     }
   }
 
-  return <SingleBucket bucket={decryptedBucket} />;
+  return <BucketTabs bucket={decryptedBucket} />;
 };
 
 export default async function BucketPage({ params }: PageProps) {
