@@ -1993,6 +1993,25 @@ export const ObjectSpaces = {
       return [];
     }
   },
+   get_all_buckets: async (): Promise<ObjectSpaceBucket[]> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("name")
+        .eq("type", "bucket")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting buckets: ${error.message}`);
+        return [];
+      }
+      return (data as ObjectSpaceBucket[]) || [];
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting buckets: ${err}`);
+      return [];
+    }
+  },
 
   get_bucket_by_bucket_id: async (id: string): Promise<ObjectSpaceBucket | null> => {
     try {

@@ -93,7 +93,7 @@ const Documentation = () => {
                 code={`import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
-  endpoint: "https://nyc3.digitaloceanspaces.com",
+  endpoint: "https://YOUR_URL",
   forcePathStyle: false,
   region: "us-east-1",
   credentials: {
@@ -139,7 +139,7 @@ import botocore.config
 session = boto3.session.Session()
 client = session.client(
     's3',
-    endpoint_url='https://nyc3.digitaloceanspaces.com',
+    endpoint_url='https://YOUR_URL',
     config=botocore.config.Config(s3={'addressing_style': 'virtual'}),
     region_name='nyc3',
     aws_access_key_id=os.getenv('SPACES_KEY'),
@@ -172,7 +172,7 @@ print("Upload successful")`}
 client = Aws::S3::Client.new(
   access_key_id: ENV['SPACES_KEY'],
   secret_access_key: ENV['SPACES_SECRET'],
-  endpoint: 'https://nyc3.digitaloceanspaces.com',
+  endpoint: 'https://YOUR_URL',
   force_path_style: false,
   region: 'us-east-1'
 )

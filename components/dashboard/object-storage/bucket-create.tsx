@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "motion/react";
 import { 
   HardDrive, 
   Loader2, 
@@ -50,9 +49,10 @@ interface BucketCreateProps {
   projects: Tables<"projects">[];
   locations: Tables<"locations">[];
   userId: string;
+  buckets: { name: string }[];
 }
 
-const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
+const BucketCreate = ({ projects, locations, userId, buckets }: BucketCreateProps) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
@@ -103,6 +103,9 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
     if (name.endsWith("-s3alias")) {
       return 'Bucket name cannot end with "-s3alias"';
     }
+    if (buckets.some((bucket) => bucket.name === name)) {
+      return "Bucket name is already taken. Please choose a different name.";
+    }
     return "";
   };
 
@@ -124,6 +127,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
     let hasError = false;
 
     if (currentStep === 1) {
+      //debugger
       const nameError = validateBucketName(formData.name);
       if (nameError) {
         setErrors((prev) => ({ ...prev, name: nameError }));
@@ -225,7 +229,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
                     className={`shrink-0 rounded-full flex items-center justify-center transition-colors duration-300
                       w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${
                         currentStep > step.id
-                          ? "bg-blue-600 text-white"
+                          ? "bg-green-600 text-white-1000 border border-green-500"
                           : currentStep === step.id
                             ? "bg-blue-500 text-white"
                             : "bg-white/10 text-white/50"
@@ -307,7 +311,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
               <CardFooter className="flex justify-end">
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -388,7 +392,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -490,7 +494,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -578,7 +582,7 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
                   onClick={handleNextStep}
                   disabled={isLoading || !termsAccepted}
                   size="lg"
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   {isLoading ? (
                     <>
@@ -628,12 +632,6 @@ const BucketCreate = ({ projects, locations, userId }: BucketCreateProps) => {
                       {selectedLocation.city}
                     </span>
                   </div>
-                </div>
-              )}
-              {formData.region && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Region:</span>
-                  <span className="font-medium text-white">{formData.region}</span>
                 </div>
               )}
               <div className="flex justify-between items-center">

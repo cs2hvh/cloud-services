@@ -1,6 +1,6 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { Locations, Projects } from "@/lib/supabase/queries";
+import { Locations, ObjectSpaces, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import BucketCreate from "@/components/dashboard/object-storage/bucket-create";
@@ -14,8 +14,9 @@ const BucketNewSuspense = async () => {
 
   const projects = await Projects.get_all_by_user(user.id);
   const locations = await Locations.get_by_type("object");
+  const buckets = await ObjectSpaces.get_all_buckets();
 
-  return <BucketCreate projects={projects} locations={locations} userId={user.id} />;
+  return <BucketCreate projects={projects} locations={locations} userId={user.id} buckets={buckets} />;
 };
 
 const BucketNewPage = () => {
