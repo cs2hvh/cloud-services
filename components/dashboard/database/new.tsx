@@ -632,99 +632,111 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
           )} */}
 
           {currentStep === 3 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Database Type</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {loadingTypes ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-8 h-8 animate-spin text-white" />
+           <Card className="bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl shadow-lg backdrop-blur-md transition-all duration-300">
+  <CardHeader className="pb-2">
+    <CardTitle className="text-lg font-semibold text-white tracking-wide">
+      Database Type
+    </CardTitle>
+  </CardHeader>
+
+  <CardContent>
+    {loadingTypes ? (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-white/80" />
+      </div>
+    ) : (
+      <>
+        <RadioGroup
+          value={selectedDbType}
+          onValueChange={(value) => {
+            handleDbTypeChange(value);
+            if (errors.dbType) {
+              setErrors({ ...errors, dbType: "" });
+            }
+          }}
+          className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-2"
+        >
+          {databaseTypes.map((dbType) => {
+            const planCount = products.filter(
+              (p) => p.sub === dbType.code
+            ).length;
+
+            return (
+              <div key={dbType.code} className="relative">
+                <RadioGroupItem
+                  value={dbType.code}
+                  id={`type-${dbType.code}`}
+                  className="peer sr-only"
+                />
+
+                <Label
+                  htmlFor={`type-${dbType.code}`}
+                  className="flex items-start gap-3 bg-white/10 rounded-xl border border-white/10 cursor-pointer p-4 transition-all duration-200 hover:bg-white/15 peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-500/10"
+                >
+                  {/* Icon */}
+                  <div className="w-12 h-12 flex items-center justify-center rounded-md bg-white/10 flex-shrink-0">
+                    <Image
+                      src={dbType.icon_url}
+                      alt={dbType.name}
+                      width={40}
+                      height={40}
+                      className="object-contain"
+                    />
                   </div>
-                ) : (
-                  <>
-                    <RadioGroup
-                      value={selectedDbType}
-                      onValueChange={(value) => {
-                        handleDbTypeChange(value);
-                        // Clear error on change
-                        if (errors.dbType) {
-                          setErrors({ ...errors, dbType: "" });
-                        }
-                      }}
-                      className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+
+                  {/* Text */}
+                  <div className="flex-1">
+                    <p className="font-semibold text-white text-sm sm:text-base">
+                      {dbType.name}
+                    </p>
+                    <p className="text-xs text-white/60 mt-1 leading-snug">
+                      {dbType.description}
+                    </p>
+                  </div>
+
+                  {/* Badge */}
+                  {planCount > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="ml-auto text-white/80 border-white/20 bg-white/5 px-2 py-0.5 text-xs rounded-md"
                     >
-                      {databaseTypes.map((dbType) => {
-                        const planCount = products.filter(
-                          (p) => p.sub === dbType.code
-                        ).length;
-                        
-                        return (
-                          <div key={dbType.code}>
-                            <RadioGroupItem
-                              value={dbType.code}
-                              id={`type-${dbType.code}`}
-                              className="peer sr-only"
-                            />
-                            <Label
-                              htmlFor={`type-${dbType.code}`}
-                              className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                            >
-                              <div className="w-10 h-10 relative flex-shrink-0">
-                                <Image
-                                  src={dbType.icon_url}
-                                  alt={dbType.name}
-                                  width={40}
-                                  height={40}
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="flex-1">
-                                <p className="font-semibold text-white">
-                                  {dbType.name}
-                                </p>
-                                <p className="text-xs text-white/60 mt-1">
-                                  {dbType.description}
-                                </p>
-                              </div>
-                              {planCount > 0 && (
-                                <Badge
-                                  variant="outline"
-                                  className="ml-auto text-white/70"
-                                >
-                                  {planCount} plans
-                                </Badge>
-                              )}
-                            </Label>
-                          </div>
-                        );
-                      })}
-                    </RadioGroup>
-                    {errors.dbType && (
-                      <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
-                        <AlertCircle className="w-4 h-4" />
-                        <span>{errors.dbType}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </CardContent>
-              <CardFooter className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
-                >
-                  Next <ChevronRight size={16} className="ml-2" />
-                </Button>
-              </CardFooter>
-            </Card>
+                      {planCount} plans
+                    </Badge>
+                  )}
+                </Label>
+              </div>
+            );
+          })}
+        </RadioGroup>
+
+        {/* Error message */}
+        {errors.dbType && (
+          <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
+            <AlertCircle className="w-4 h-4" />
+            <span>{errors.dbType}</span>
+          </div>
+        )}
+      </>
+    )}
+  </CardContent>
+
+  <CardFooter className="flex justify-between mt-4 pt-4 border-t border-white/10">
+    <Button
+      variant="outline"
+      onClick={handlePrevStep}
+      className="rounded-lg border-white/20 text-white hover:bg-white/10 hover:text-white transition-all"
+    >
+      Back
+    </Button>
+    <Button
+      onClick={handleNextStep}
+      className="bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-all"
+    >
+      Next <ChevronRight size={16} className="ml-2" />
+    </Button>
+  </CardFooter>
+</Card>
+
           )}
 
           {currentStep === 4 && (

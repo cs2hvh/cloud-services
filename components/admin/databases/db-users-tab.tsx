@@ -11,6 +11,7 @@ import {
   Filter,
   Pencil,
   Trash2,
+  Plus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Admin_Database } from "@/lib/supabase/types";
@@ -213,32 +214,43 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           </Button>
         </div>
 
-        <Select value={sortBy} onValueChange={handleSortChange}>
-          <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent className="bg-neutral-900 border-neutral-800">
-            <SelectItem
-              value="email"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Email
-            </SelectItem>
-            <SelectItem
-              value="engine"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Db_type
-            </SelectItem>
-            <SelectItem
-              value="region"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Region
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-3">
+          <Select value={sortBy} onValueChange={handleSortChange}>
+            <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="bg-neutral-900 border-neutral-800">
+              <SelectItem
+                value="email"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Email
+              </SelectItem>
+              <SelectItem
+                value="engine"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Db_type
+              </SelectItem>
+              <SelectItem
+                value="region"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Region
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            onClick={() => router.push('/dashboard/admin/databases/assign')}
+            className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Assign Db</span>
+            <span className="sm:hidden">Assign</span>
+          </Button>
+        </div>
       </div>
 
       {/* Databases Table */}

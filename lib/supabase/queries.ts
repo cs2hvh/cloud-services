@@ -334,11 +334,11 @@ export const Projects = {
       const { data, error } = await supabase
         .from("projects")
         .select("*")
-        .or(`owner.eq.${userId},users.cs.["${userId}"]`);
+        .eq("owner", userId)
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting projects by userId: ${error.message}`,
+          `[Supabase] Error............. while getting projects by userId: ${error.message}`,
         );
         return [];
       }
