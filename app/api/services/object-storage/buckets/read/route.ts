@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Encryption } from "@/config/functions";
-import { createS3Client } from "@/lib/aws/s3-client";
-import { getBucketStats } from "@/lib/aws/s3-operations";
+import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -16,6 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { bucket_id } = body;
 
+    // ✅ VALIDATE REQUEST PAYLOAD
     if (!bucket_id || typeof bucket_id !== 'string') {
       return NextResponse.json(
         { error: "Invalid request", message: "Bucket ID is required" },
@@ -23,86 +21,42 @@ export async function POST(req: NextRequest) {
       );
     }
 
-   // console.log("📖 Reading bucket:", bucket_id);
+    // � SECURE: Use centralized function for bucket reading
+    // All sensitive operations are handled securely in the config layer
+    const result = await ObjectStorageFunctions.readBucket({
+      bucket_id,
+      user_id: auth.user!.id,
+    });
 
-    // Get bucket from database
-    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id);
-
-    if (!bucket) {
+    // Handle result based on success/failure
+    if (!result.success) {
+      const statusCode = result.error === "Bucket not found" ? 404 : 
+                        result.error === "Unauthorized" ? 403 : 500;
+      
       return NextResponse.json(
-        { error: "Bucket not found" },
-        { status: 404 }
+        {
+          error: result.error,
+          message: result.message,
+        },
+        { status: statusCode }
       );
     }
 
-    // Verify ownership
-    if (bucket.owner_id !== auth.user!.id) {
-      return NextResponse.json(
-        { error: "Unauthorized", message: "You don't have access to this bucket" },
-        { status: 403 }
-      );
-    }
-
-    // Decrypt endpoint if encrypted
-    let decryptedBucket = { ...bucket };
-    if (bucket.endpoint) {
-      try {
-        const encryptionKey = process.env.ENCRYPTION_KEY;
-        if (encryptionKey && bucket.endpoint.startsWith('{')) {
-          // Endpoint is encrypted (JSON stringified)
-          const encryptedEndpoint = JSON.parse(bucket.endpoint);
-          const encryptedAccessKey = JSON.parse(bucket.key_id);
-          const encryptedSecretKey = JSON.parse(bucket.secret_key);
-          decryptedBucket.endpoint = Encryption.decrypt(encryptedEndpoint, encryptionKey);
-          decryptedBucket.key_id = Encryption.decrypt(encryptedAccessKey, encryptionKey);
-          decryptedBucket.secret_key = Encryption.decrypt(encryptedSecretKey, encryptionKey);
-          //console.log("✅ Endpoint, access key, and secret key decrypted for client");
-        }
-      } catch (error) {
-        console.error("Error decrypting endpoint:", error);
-        // Keep original endpoint if decryption fails
-      }
-    }
-
-    // Get live bucket stats from S3
-    try {
-      const accessKeyId = process.env.SPACES_ACCESS_KEY;
-      const secretAccessKey = process.env.SPACES_SECRET_KEY;
-
-      if (accessKeyId && secretAccessKey) {
-        const s3Client = createS3Client(bucket.region, accessKeyId, secretAccessKey);
-        const stats = await getBucketStats(s3Client, bucket.name);
-        
-        if (stats.success) {
-          // Update bucket with live stats
-          decryptedBucket.size_bytes = stats.size;
-          decryptedBucket.object_count = stats.count;
-          //console.log(`✅ Live stats fetched - Objects: ${stats.count}, Size: ${stats.size} bytes`);
-        } else {
-          console.warn("Failed to fetch live stats, using DB values:", stats.error);
-        }
-      } else {
-        console.warn("S3 credentials not available, using DB values");
-      }
-    } catch (error) {
-      console.error("Error fetching live bucket stats:", error);
-      // Continue with DB values if live stats fail
-    }
-
-    // Return bucket details with decrypted endpoint
+    // ✅ SUCCESS RESPONSE
     return NextResponse.json(
       {
         success: true,
-        data: decryptedBucket,
+        data: result.data,
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error reading bucket:", error);
+  } catch (error) {
+    // Generic error handling - no sensitive details exposed
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
     return NextResponse.json(
       {
-        error: "Failed to read bucket",
-        message: error.message,
+        error: "Request processing failed",
+        message: errorMessage,
       },
       { status: 500 }
     );

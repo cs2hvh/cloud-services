@@ -6,7 +6,7 @@ export async function createSpacesKey(
   name: string,
   grants: Array<{ bucket: string; permission: string }>
 ) {
-  console.log("Creating Spaces key with name:", name, "and grants:", grants);
+  //console.log("Creating Spaces key with name:", name, "and grants:", grants);
   try {
     const doClient = createDOClient();
     const response = await doClient.client.post("/v2/spaces/keys", {
@@ -14,7 +14,7 @@ export async function createSpacesKey(
       grants: grants,
     });
 
-    console.log("DO API Response:", JSON.stringify(response.data, null, 2));
+    //console.log("DO API Response:", JSON.stringify(response.data, null, 2));
 
     // Extract credentials from response - try multiple possible paths
     const accessKey = 
@@ -26,8 +26,8 @@ export async function createSpacesKey(
     const keyName = 
       response?.data?.key?.name;
 
-    console.log("Extracted - Access Key:", accessKey ? "Present" : "MISSING");
-    console.log("Extracted - Secret Key:", secretKey ? "Present" : "MISSING");
+    // console.log("Extracted - Access Key:", accessKey ? "Present" : "MISSING");
+    // console.log("Extracted - Secret Key:", secretKey ? "Present" : "MISSING");
 
     return {
       success: true,

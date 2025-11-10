@@ -59,37 +59,7 @@ const ObjectStorageMain = ({
         </Link>
       </motion.div>
 
-      <Tabs defaultValue="buckets" className="space-y-6">
-        <TabsList className="bg-white/5 border border-white/10">
-          <TabsTrigger
-            value="buckets"
-            className="data-[state=active]:bg-white/10"
-          >
-            <Archive className="h-4 w-4 mr-2" />
-            My Buckets ({buckets.length})
-          </TabsTrigger>
-        
-          {/* <TabsTrigger 
-            value="api-docs" 
-            className="data-[state=active]:bg-white/10"
-          >
-            <BookOpen className="h-4 w-4 mr-2" />
-            API Documentation
-          </TabsTrigger> */}
-        </TabsList>
-
-        <TabsContent value="buckets">
-          <BucketsTable buckets={buckets} />
-        </TabsContent>
-
-        <TabsContent value="api-docs">
-          <Documentation />
-        </TabsContent>
-
-        {/* <TabsContent value="api-docs">
-          <ApiDocumentation />
-        </TabsContent> */}
-      </Tabs>
+     <BucketsTable buckets={buckets} />
     </>
   );
 };
