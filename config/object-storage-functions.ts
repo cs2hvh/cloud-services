@@ -443,7 +443,7 @@ export async function handleReadBucket(config: ReadBucketConfig): Promise<ReadBu
  * @returns Deletion result
  */
 async function deleteBucketFromProvider(
-  bucket: any, 
+  bucket: { name: string; region: string }, 
   envConfig: EnvironmentConfig, 
   force: boolean
 ): Promise<{ success: boolean; error?: string }> {
@@ -476,12 +476,6 @@ async function deleteBucketFromProvider(
   }
 }
 
-/**
- * Deletes the bucket's access key from the provider
- * @param bucket Bucket information
- * @param encryptionKey Encryption key for decryption
- * @returns Deletion result
- */
 async function deleteBucketAccessKey(bucket: any, encryptionKey: string): Promise<void> {
   if (!bucket.key_id) {
     return; // No key to delete

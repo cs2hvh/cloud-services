@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { bucket_id, force = true, isadmin } = body;
+    const { bucket_id, force = true, is_admin } = body;
 
     // ✅ VALIDATE REQUEST PAYLOAD
     if (!bucket_id || typeof bucket_id !== "string") {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       bucket_id,
       user_id: auth.user!.id,
       force,
-      is_admin: isadmin,
+      is_admin: is_admin,
     });
 
     // Handle result based on success/failure
