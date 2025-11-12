@@ -5,14 +5,15 @@ import { motion } from "motion/react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import SingleBucket from "@/components/dashboard/object-storage/bucket-info";
 import BucketSettings from "@/components/dashboard/object-storage/bucket-settings";
-import { ObjectSpaceBucket } from "@/lib/supabase/types";
+import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
 import { Archive } from "lucide-react";
 
 interface BucketTabsProps {
   bucket: ObjectSpaceBucket;
+  locations: Tables<"locations">[];
 }
 
-const BucketTabs = ({ bucket }: BucketTabsProps) => {
+const BucketTabs = ({ bucket,locations }: BucketTabsProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -35,24 +36,24 @@ const BucketTabs = ({ bucket }: BucketTabsProps) => {
               </h1>
               <p className="text-slate-400 text-xs sm:text-sm mt-1 break-words">
                 <span className="inline-block">
-                  {bucket.object_count} items
+                  {bucket.object_count || 0} items
                 </span>
                 <span className="mx-1 hidden sm:inline">/</span>
                 <span className="inline-block">
-                  {bucket.size_bytes === 0
+                  {(bucket.size_bytes || 0) === 0
                     ? "0 KB"
-                    : bucket.size_bytes < 1024
-                      ? `${bucket.size_bytes} B`
-                      : bucket.size_bytes < 1024 * 1024
-                        ? `${(bucket.size_bytes / 1024).toFixed(2)} KB`
-                        : bucket.size_bytes < 1024 * 1024 * 1024
-                          ? `${(bucket.size_bytes / (1024 * 1024)).toFixed(2)} MB`
-                          : `${(bucket.size_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`}
+                    : (bucket.size_bytes || 0) < 1024
+                      ? `${bucket.size_bytes || 0} B`
+                      : (bucket.size_bytes || 0) < 1024 * 1024
+                        ? `${((bucket.size_bytes || 0) / 1024).toFixed(2)} KB`
+                        : (bucket.size_bytes || 0) < 1024 * 1024 * 1024
+                          ? `${((bucket.size_bytes || 0) / (1024 * 1024)).toFixed(2)} MB`
+                          : `${((bucket.size_bytes || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB`}
                 </span>
                 <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">{bucket.acl}</span>
+                <span className="inline-block">{bucket.acl || "private"}</span>
                 <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">{bucket.region} region</span>
+                <span className="inline-block">{locations.find(location => location.short === bucket.region)?.city || "unknown"} </span>
               </p>
             </div>
           </div>

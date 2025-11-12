@@ -57,7 +57,20 @@ export type Admin_Database = {
   project_id: string;
 }
 
+export type Admin_Bucket =  {
+  id: string;
+  name: string;
+  size:number;
+  object_count:number;
+  region: string | null;
+  owner_id: string;
+  owner_email: string | null;
+  owner_username: string | null;
+  status:"active",
+  created_at: string | null;
+  project_id: string;
 
+}
 
 export type Rule = {
   uuid: string;
@@ -99,28 +112,31 @@ export interface Database_Connection{
 
 // Object Storage Types - Buckets only (access keys from .env)
 export interface ObjectSpaceBucket {
-  id: string;
+  id?: string;
   type: 'bucket';
   name: string;
   owner_id: string;
-  project_id: string;
+  project_id: string | null;
   region: string;
-  status: 'active' | 'creating' | 'deleting' | 'failed';
+  status: 'active' | 'creating' | 'deleting' | 'failed' | 'revoked';
   created_at: string;
   updated_at: string;
   
   // Bucket fields
-  bucket_id: string;
-  endpoint: string;
-  acl: 'private' | 'public-read';
-  cors_enabled: boolean;
-  versioning_enabled: boolean;
-  size_bytes: number;
-  object_count: number;
+  bucket_id: string | null;
+  endpoint: string | null;
+  acl: 'private' | 'public-read' | null;
+  cors_enabled: boolean | null;
+  versioning_enabled: boolean | null;
+  size_bytes: number | null;
+  object_count: number | null;
   
   // Optional: Bucket-specific encrypted access keys (stored directly with bucket)
-  key_id: string;
-  secret_key: string;
+  key_id: string | null;
+  secret_key: string | null;
+  
+  // Self-referencing parent key (optional for buckets)
+  //parent_access_key_id?: string | null;
 }
 
 export type Database = {
@@ -885,6 +901,94 @@ export type Database = {
           },
         ];
       };
+      object_spaces: {
+        Row: {
+          id: string;
+          type: "access_key" | "bucket";
+          name: string;
+          owner_id: string;
+          project_id: string | null;
+          region: string;
+          status: "active" | "creating" | "deleting" | "revoked" | "failed";
+          created_at: string;
+          updated_at: string;
+          key_id: string | null;
+          secret_key: string | null;
+          bucket_id: string | null;
+          parent_access_key_id: string | null;
+          endpoint: string | null;
+          acl: "private" | "public-read" | null;
+          cors_enabled: boolean | null;
+          versioning_enabled: boolean | null;
+          size_bytes: number | null;
+          object_count: number | null;
+        };
+        Insert: {
+          id?: string;
+          type: "access_key" | "bucket";
+          name: string;
+          owner_id: string;
+          project_id?: string | null;
+          region: string;
+          status?: "active" | "creating" | "deleting" | "revoked" | "failed";
+          created_at?: string;
+          updated_at?: string;
+          key_id?: string | null;
+          secret_key?: string | null;
+          bucket_id?: string | null;
+          parent_access_key_id?: string | null;
+          endpoint?: string | null;
+          acl?: "private" | "public-read" | null;
+          cors_enabled?: boolean | null;
+          versioning_enabled?: boolean | null;
+          size_bytes?: number | null;
+          object_count?: number | null;
+        };
+        Update: {
+          id?: string;
+          type?: "access_key" | "bucket";
+          name?: string;
+          owner_id?: string;
+          project_id?: string | null;
+          region?: string;
+          status?: "active" | "creating" | "deleting" | "revoked" | "failed";
+          created_at?: string;
+          updated_at?: string;
+          key_id?: string | null;
+          secret_key?: string | null;
+          bucket_id?: string | null;
+          parent_access_key_id?: string | null;
+          endpoint?: string | null;
+          acl?: "private" | "public-read" | null;
+          cors_enabled?: boolean | null;
+          versioning_enabled?: boolean | null;
+          size_bytes?: number | null;
+          object_count?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "object_spaces_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "object_spaces_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "object_spaces_parent_access_key_id_fkey";
+            columns: ["parent_access_key_id"];
+            isOneToOne: false;
+            referencedRelation: "object_spaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -893,7 +997,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
-      product_type: "vps" | "vds" | "game" | "database";
+      product_type: "vps" | "vds" | "game" | "database" | "object-storage";
       user_role:
         | "member"
         | "admin"

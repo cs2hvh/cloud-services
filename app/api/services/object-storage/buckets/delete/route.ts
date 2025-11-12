@@ -5,13 +5,14 @@ import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 export async function POST(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
+  //console.log(auth.user, "...........auth in bucket delete route........");
   if (!auth.authenticated) {
     return auth.response;
   }
 
   try {
     const body = await req.json();
-    const { bucket_id, force = true } = body;
+    const { bucket_id, force = true, isadmin } = body;
 
     // ✅ VALIDATE REQUEST PAYLOAD
     if (!bucket_id || typeof bucket_id !== "string") {
@@ -23,17 +24,25 @@ export async function POST(req: NextRequest) {
 
     // 🔒 SECURE: Use centralized function for bucket deletion
     // All sensitive operations are handled securely in the config layer
+
+
     const result = await ObjectStorageFunctions.deleteBucket({
       bucket_id,
       user_id: auth.user!.id,
       force,
+      is_admin: isadmin,
     });
 
     // Handle result based on success/failure
+    
     if (!result.success) {
-      const statusCode = result.error === "Bucket not found" ? 404 : 
-                        result.error === "Unauthorized" ? 403 : 500;
-      
+      const statusCode =
+        result.error === "Bucket not found"
+          ? 404
+          : result.error === "Unauthorized"
+            ? 403
+            : 500;
+
       return NextResponse.json(
         {
           error: result.error,
@@ -53,7 +62,8 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     // Generic error handling - no sensitive details exposed
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    const errorMessage =
+      error instanceof Error ? error.message : "An unexpected error occurred";
     return NextResponse.json(
       {
         error: "Request processing failed",
@@ -62,6 +72,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-
-
 }

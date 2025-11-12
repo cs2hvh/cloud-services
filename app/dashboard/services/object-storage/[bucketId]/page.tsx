@@ -1,6 +1,6 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { Locations, ObjectSpaces } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import BucketTabs from "@/components/dashboard/object-storage/bucket-tabs";
@@ -18,6 +18,7 @@ const SingleBucketSuspense = async ({ bucketId }: { bucketId: string }) => {
   }
 
   const rawBucket = await ObjectSpaces.get_bucket_by_id(bucketId);
+  const locations = await Locations.get_by_type("object");
 
   if (!rawBucket || rawBucket.owner_id !== user.id) {
     notFound();
@@ -64,7 +65,7 @@ const SingleBucketSuspense = async ({ bucketId }: { bucketId: string }) => {
     }
   }
 
-  return <BucketTabs bucket={decryptedBucket} />;
+  return <BucketTabs bucket={decryptedBucket} locations={locations} />;
 };
 
 export default async function BucketPage({ params }: PageProps) {

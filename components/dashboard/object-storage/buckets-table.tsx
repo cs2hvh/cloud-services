@@ -107,7 +107,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                copyToClipboard(bucket.id, "Bucket ID");
+                copyToClipboard(bucket?.id || "", "Bucket ID");
               }}
               className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
             >

@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create custom types
 CREATE TYPE user_role AS ENUM ('member', 'admin', 'users', 'events', 'giveaways', 'application-forms', 'form-submissions');
-CREATE TYPE product_type AS ENUM ('vps', 'vds', 'game', 'database');
+CREATE TYPE product_type AS ENUM ('vps', 'vds', 'game', 'database', 'object-storage');
 
 -- Projects table
 CREATE TABLE projects (

@@ -213,6 +213,7 @@ async function storeBucketInDatabase(
       object_count: 0,
       key_id: encryptedCredentials.encryptedAccessKey,
       secret_key: encryptedCredentials.encryptedSecretKey,
+      //parent_access_key_id: null,
     });
 
     if (!dbResult.success) {
@@ -306,6 +307,7 @@ import { deleteSpacesKey } from "@/lib/digitalocean/api/bucket";
 export interface ReadBucketConfig {
   bucket_id: string;
   user_id: string;
+  is_admin?: boolean;
 }
 
 export interface ReadBucketResult {
@@ -320,6 +322,7 @@ export interface DeleteBucketConfig {
   bucket_id: string;
   user_id: string;
   force?: boolean;
+  is_admin?: boolean;
 }
 
 export interface DeleteBucketResult {
@@ -398,14 +401,14 @@ export async function handleReadBucket(config: ReadBucketConfig): Promise<ReadBu
 
   try {
     // Get bucket from database
-    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(config.bucket_id);
+    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(config.bucket_id, config.is_admin);
 
     if (!bucket) {
       return { success: false, error: "Bucket not found" };
     }
 
-    // Verify ownership
-    if (bucket.owner_id !== config.user_id) {
+    // Verify ownership (skip for admin users)
+    if (!config.is_admin && bucket.owner_id !== config.user_id) {
       return { 
         success: false, 
         error: "Unauthorized", 
@@ -510,14 +513,15 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
 
   try {
     // Get bucket from database
-    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(config.bucket_id);
+    console.log("Fetching bucket for deletion:", config.bucket_id);
+    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(config.bucket_id, config.is_admin);
 
     if (!bucket) {
       return { success: false, error: "Bucket not found" };
     }
 
-    // Verify ownership
-    if (bucket.owner_id !== config.user_id) {
+    // Verify ownership (skip for admin users)
+    if (!config.is_admin && bucket.owner_id !== config.user_id) {
       return { 
         success: false, 
         error: "Unauthorized", 
@@ -544,6 +548,14 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
     await deleteBucketAccessKey(bucket, envResult.config.encryptionKey);
 
     // Delete from database
+    if (!bucket.id) {
+      return {
+        success: false,
+        error: "Invalid bucket data",
+        message: "Bucket ID is missing"
+      };
+    }
+
     const dbResult = await ObjectSpaces.delete(bucket.id);
     if (!dbResult.success) {
       return {

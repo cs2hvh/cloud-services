@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import Documentation from "./api-docs";
+import { getErrorMessage } from "@/config/functions";
 
 interface SingleBucketProps {
   bucket: ObjectSpaceBucket;
@@ -100,8 +101,8 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
       toast.success("Bucket deleted successfully", { id: toastId });
       router.push("/dashboard/services/object-storage");
       router.refresh();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || "Failed to delete bucket");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Failed to delete bucket"));
     } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
@@ -241,7 +242,8 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => copyToClipboard(bucketData.endpoint, "Endpoint")}
+            onClick={() => copyToClipboard(bucketData.endpoint || "", "Endpoint")}
+            disabled={!bucketData.endpoint}
             className="cursor-pointer hover:bg-white/10 transition-colors flex-shrink-0"
           >
             {copiedItem === "Endpoint" ? (
@@ -278,7 +280,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                   {isLoadingStats ? (
                     <Loader2 className="h-8 w-8 animate-spin inline" />
                   ) : (
-                    formatBytes(bucketData.size_bytes)
+                    formatBytes(bucketData.size_bytes || 0)
                   )}
                 </p>
               </div>
@@ -299,7 +301,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                   {isLoadingStats ? (
                     <Loader2 className="h-8 w-8 animate-spin inline" />
                   ) : (
-                    bucketData.object_count.toLocaleString()
+                    (bucketData.object_count || 0).toLocaleString()
                   )}
                 </p>
               </div>

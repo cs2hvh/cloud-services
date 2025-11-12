@@ -171,9 +171,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       {/* Logo Header */}
       <div className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-slate-800/50 bg-slate-900/20">
         <Link href="/dashboard" className="flex items-center">
-          <span className="text-xl font-bold text-white">
-            AhuraSense
-          </span>
+          <span className="text-xl font-bold text-white">AhuraSense</span>
         </Link>
         {isMobile && (
           <button
@@ -195,9 +193,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               href={item.href}
               className={`
                 block px-3 sm:px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
-                ${item.current
-                  ? "bg-white text-black shadow-sm"
-                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                ${
+                  item.current
+                    ? "bg-white text-black shadow-sm"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                 }
               `}
             >
@@ -214,7 +213,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               className="flex items-center text-xs font-bold text-white/70 uppercase tracking-widest hover:text-white transition-colors"
             >
               Projects
-              <ChevronDown className={`ml-1 h-3 w-3 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`} />
+              <ChevronDown
+                className={`ml-1 h-3 w-3 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`}
+              />
             </button>
             <Link
               href="/dashboard/projects/new"
@@ -224,7 +225,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               <Plus className="h-4 w-4" />
             </Link>
           </div>
-          
+
           {projectsExpanded && (
             <div className="space-y-1">
               {projects.length > 0 ? (
@@ -235,9 +236,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       href={`/dashboard/projects/${project.id}`}
                       className={`
                         flex items-center px-3 sm:px-4 py-2 text-sm rounded-lg transition-all duration-200
-                        ${pathname.includes(`/projects/${project.id}`)
-                          ? "bg-white text-black font-medium"
-                          : "text-white/60 hover:text-white hover:bg-slate-800/30"
+                        ${
+                          pathname.includes(`/projects/${project.id}`)
+                            ? "bg-white text-black font-medium"
+                            : "text-white/60 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
@@ -275,9 +277,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 onClick={() => setComputeExpanded(!computeExpanded)}
                 className={`
                   w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                  ${pathname.includes("/services/compute")
-                    ? "bg-white text-black"
-                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                  ${
+                    pathname.includes("/services/compute")
+                      ? "bg-white text-black"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                   }
                 `}
               >
@@ -285,9 +288,11 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                   <Cpu className="w-4 h-4 mr-3" />
                   <span className="text-sm">Compute</span>
                 </div>
-                <ChevronDown className={`h-4 w-4 transition-transform ${computeExpanded ? "" : "-rotate-90"}`} />
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${computeExpanded ? "" : "-rotate-90"}`}
+                />
               </button>
-              
+
               {computeExpanded && (
                 <div className="mt-1 ml-3 sm:ml-4 space-y-1">
                   {computeServices.map((service) => {
@@ -298,9 +303,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                         href={service.href}
                         className={`
                           flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                          ${service.current
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                          ${
+                            service.current
+                              ? "bg-slate-700 text-white font-medium"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                           }
                         `}
                       >
@@ -322,9 +328,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                   href={service.href}
                   className={`
                     flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                    ${service.current
-                      ? "bg-white text-black"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                    ${
+                      service.current
+                        ? "bg-white text-black"
+                        : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                     }
                   `}
                 >
@@ -348,9 +355,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                   onClick={() => setAdminExpanded(!adminExpanded)}
                   className={`
                     w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                    ${pathname.includes("/dashboard/admin")
-                      ? "bg-white text-black"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                    ${
+                      pathname.includes("/dashboard/admin")
+                        ? "bg-white text-black"
+                        : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                     }
                   `}
                 >
@@ -358,7 +366,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     <Settings className="w-4 h-4 mr-3" />
                     <span className="text-sm">Administration</span>
                   </div>
-                  <ChevronDown className={`h-4 w-4 transition-transform ${adminExpanded ? "" : "-rotate-90"}`} />
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${adminExpanded ? "" : "-rotate-90"}`}
+                  />
                 </button>
 
                 {adminExpanded && (
@@ -367,9 +377,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       href="/dashboard/admin/hosts"
                       className={`
                         flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/hosts"
-                          ? "bg-slate-700 text-white font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        ${
+                          pathname === "/dashboard/admin/hosts"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
@@ -380,9 +391,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       href="/dashboard/admin/servers"
                       className={`
                         flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/servers"
-                          ? "bg-slate-700 text-white font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        ${
+                          pathname === "/dashboard/admin/servers"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
@@ -393,37 +405,40 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       href="/dashboard/admin/users"
                       className={`
                         flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/users"
-                          ? "bg-slate-700 text-white font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        ${
+                          pathname === "/dashboard/admin/users"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
                       <Users className="w-4 h-4 mr-2" />
                       <span className="text-sm">Users</span>
                     </Link>
-                     <Link
+                    <Link
                       href="/dashboard/admin/databases"
                       className={`
                         flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/databases"
-                          ? "bg-slate-700 text-white font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        ${
+                          pathname === "/dashboard/admin/databases"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
                         }
                       `}
                     >
                       <Database className="w-4 h-4 mr-2" />
                       <span className="text-sm">Databases</span>
                     </Link>
-                     <Link
+                    <Link
                       href="/dashboard/admin/object-storage"
                       className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${pathname === "/dashboard/admin/object-storage"
-                          ? "bg-slate-700 text-white font-medium"
-                          : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
+    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+    ${
+      pathname.startsWith("/dashboard/admin/object-storage")
+        ? "bg-slate-700 text-white font-medium"
+        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+    }
+  `}
                     >
                       <Archive className="w-4 h-4 mr-2" />
                       <span className="text-sm">Object Storage</span>
@@ -445,9 +460,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               href="/dashboard/settings"
               className={`
                 block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                ${pathname.includes("/settings")
-                  ? "bg-white text-black"
-                  : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                ${
+                  pathname.includes("/settings")
+                    ? "bg-white text-black"
+                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
                 }
               `}
             >

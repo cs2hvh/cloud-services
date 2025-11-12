@@ -15,8 +15,9 @@ const BucketNewSuspense = async () => {
   const projects = await Projects.get_all_by_user(user.id);
   const locations = await Locations.get_by_type("object");
   const buckets = await ObjectSpaces.get_all_buckets();
+  console.log("buckets:::::::::::::::::::::::::::", buckets);
 
-  return <BucketCreate projects={projects} locations={locations} userId={user.id} buckets={buckets} />;
+  return <BucketCreate projects={projects} locations={locations} userId={user.id} buckets={buckets} role="user" />;
 };
 
 const BucketNewPage = () => {

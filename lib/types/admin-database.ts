@@ -42,6 +42,7 @@ export interface AdminDatabaseAssignProps {
   products: Tables<"products">[];
   locations: Tables<"locations">[];
   allUsers: any[];
+  allProjects: Tables<"projects">[];
 }
 
 export const initialState: AdminDatabaseState = {

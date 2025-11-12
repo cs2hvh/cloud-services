@@ -54,7 +54,7 @@ import Link from "next/link";
 import { formatPrice } from "@/lib/utils";
 import { Tables } from "@/lib/supabase/types";
 
-const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAssignProps) => {
+const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: AdminDatabaseAssignProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -62,7 +62,6 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
   const [databaseTypes, setDatabaseTypes] = useState<DatabaseType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [userProjects, setUserProjects] = useState<UserProject[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(false);
 
   const [state, setState] = useState(initialState);
   const [errors, setErrors] = useState(initialErrors);
@@ -105,35 +104,33 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
     fetchDatabaseTypes();
   }, []);
 
-  // Fetch user projects when user is selected
+  // Filter user projects when user is selected
   useEffect(() => {
-    const fetchUserProjects = async () => {
-      if (!state.selectedUser) {
-        setUserProjects([]);
-        return;
-      }
+    if (!state.selectedUser) {
+      setUserProjects([]);
+      setState(prev => ({ ...prev, selectedProject: "" }));
+      return;
+    }
 
-      try {
-        setLoadingProjects(true);
-        const response = await api.get(`/users/projects/${state.selectedUser}`);
-        if (response.data.success) {
-          setUserProjects(response.data.data.projects);
-          // Auto-select first project if available
-          if (response.data.data.projects.length > 0) {
-            setState(prev => ({ ...prev, selectedProject: response.data.data.projects[0].id }));
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching user projects:", error);
-        toast.error("Failed to load user projects");
-        setUserProjects([]);
-      } finally {
-        setLoadingProjects(false);
-      }
-    };
+    // Filter projects where the selected user is the owner
+    const filteredProjects = allProjects
+      .filter(project => project.owner === state.selectedUser)
+      .map(project => ({
+        id: project.id,
+        name: project.name,
+        description: project.description || undefined,
+        created_at: project.created_at || new Date().toISOString(),
+      }));
 
-    fetchUserProjects();
-  }, [state.selectedUser]);
+    setUserProjects(filteredProjects);
+
+    // Auto-select first project if available
+    if (filteredProjects.length > 0) {
+      setState(prev => ({ ...prev, selectedProject: filteredProjects[0].id }));
+    } else {
+      setState(prev => ({ ...prev, selectedProject: "" }));
+    }
+  }, [state.selectedUser, allProjects]);
 
   // Filter products when database type changes
   useEffect(() => {
@@ -206,7 +203,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
       setIsLoading(true);
       const response = await submitDatabaseAssignment(state, availablePlans, termsAccepted);
       if (response.status === 200) {
-        toast.success(response.data.message || "Database successfully assigned!");
+        toast.success(response.data.message || "creating database for user");
         router.push("/dashboard/admin/databases");
       }
     } catch (error: any) {
@@ -280,78 +277,106 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
 
           {/* Step 4: Database Type */}
           {currentStep === 4 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Database Type</CardTitle>
+            <Card className="bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl shadow-lg backdrop-blur-md transition-all duration-300">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg font-semibold text-white tracking-wide">
+                  Database Type
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingTypes ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-white/80" />
                   </div>
                 ) : (
-                  <RadioGroup
-                    value={state.selectedDbType}
-                    onValueChange={handleDbTypeChange}
-                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-                  >
-                    {databaseTypes
-                      .filter((type) => type.available)
-                      .map((dbType) => (
-                        <div key={dbType.id}>
-                          <RadioGroupItem
-                            value={dbType.code}
-                            id={dbType.code}
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor={dbType.code}
-                            className="flex flex-col items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-6 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                          >
-                            <Image
-                              src={dbType.icon_url}
-                              alt={dbType.name}
-                              width={48}
-                              height={48}
-                              className="rounded-lg"
-                            />
-                            <div className="text-center">
-                              <div className="font-medium text-white">
-                                {dbType.name}
-                              </div>
-                              <div className="text-xs text-white/60 mt-1">
-                                {dbType.description}
-                              </div>
-                              <div className="text-xs text-blue-400 mt-2">
-                                {dbType.versions.length > 0 && 
-                                  `${dbType.versions.length} version${dbType.versions.length !== 1 ? 's' : ''} available`
-                                }
-                              </div>
+                  <>
+                    <RadioGroup
+                      value={state.selectedDbType}
+                      onValueChange={(value) => {
+                        handleDbTypeChange(value);
+                        if (errors.dbType) {
+                          setErrors({ ...errors, dbType: "" });
+                        }
+                      }}
+                      className="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-2"
+                    >
+                      {databaseTypes
+                        .filter((type) => type.available)
+                        .map((dbType) => {
+                          const planCount = products.filter(
+                            (p) => p.sub === dbType.code
+                          ).length;
+
+                          return (
+                            <div key={dbType.code} className="relative">
+                              <RadioGroupItem
+                                value={dbType.code}
+                                id={`type-${dbType.code}`}
+                                className="peer sr-only"
+                              />
+
+                              <Label
+                                htmlFor={`type-${dbType.code}`}
+                                className="flex items-start gap-3 bg-white/10 rounded-xl border border-white/10 cursor-pointer p-4 transition-all duration-200 hover:bg-white/15 peer-data-[state=checked]:border-blue-500 peer-data-[state=checked]:bg-blue-500/10"
+                              >
+                                {/* Icon */}
+                                <div className="w-12 h-12 flex items-center justify-center rounded-md bg-white/10 flex-shrink-0">
+                                  <Image
+                                    src={dbType.icon_url}
+                                    alt={dbType.name}
+                                    width={40}
+                                    height={40}
+                                    className="object-contain"
+                                  />
+                                </div>
+
+                                {/* Text */}
+                                <div className="flex-1">
+                                  <p className="font-semibold text-white text-sm sm:text-base">
+                                    {dbType.name}
+                                  </p>
+                                  <p className="text-xs text-white/60 mt-1 leading-snug">
+                                    {dbType.description}
+                                  </p>
+                                </div>
+
+                                {/* Badge */}
+                                {planCount > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-auto text-white/80 border-white/20 bg-white/5 px-2 py-0.5 text-xs rounded-md"
+                                  >
+                                    {planCount} plans
+                                  </Badge>
+                                )}
+                              </Label>
                             </div>
-                          </Label>
-                        </div>
-                      ))}
-                  </RadioGroup>
-                )}
-                {errors.dbType && (
-                  <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.dbType}</span>
-                  </div>
+                          );
+                        })}
+                    </RadioGroup>
+
+                    {/* Error message */}
+                    {errors.dbType && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>{errors.dbType}</span>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
-              <CardFooter className="flex justify-between">
+              <CardFooter className="flex justify-between mt-4 pt-4 border-t border-white/10">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="rounded-lg border-white/20 text-white hover:bg-white/10 hover:text-white transition-all"
                 >
                   <ChevronLeft size={16} className="mr-2" /> Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
                   disabled={loadingTypes}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-all"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -363,105 +388,196 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
           {currentStep === 5 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">
-                  Choose Plan for {selectedDbTypeInfo?.name}
-                </CardTitle>
+                <CardTitle className="text-white">Database Plan & Version</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {/* Version Selection */}
-                  <div>
-                    <Label className="text-white mb-2 block">Version</Label>
-                    <Select
-                      value={state.selectedVersion}
-                      onValueChange={(value) => {
-                        setState({ ...state, selectedVersion: value });
-                        if (errors.version) {
-                          setErrors({ ...errors, version: "" });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-neutral-900 border-neutral-800 text-white focus:ring-0">
-                        <SelectValue placeholder="Select version" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-neutral-900 border-neutral-800">
-                        {state.versions.map((version) => (
-                          <SelectItem
-                            key={version}
-                            value={version}
-                            className="text-white focus:bg-neutral-800 focus:text-white"
-                          >
-                            {version}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                {availablePlans.length === 0 ? (
+                  <div className="text-center py-8 text-white/60">
+                    No plans available for this database type
                   </div>
-
-                  {/* Plan Selection */}
-                  <div>
-                    <Label className="text-white mb-4 block">Plan</Label>
-                    <RadioGroup
-                      value={state.selectedDb}
-                      onValueChange={handleDbPlanChange}
-                      className="grid gap-4"
-                    >
-                      {availablePlans.map((plan) => (
-                        <div key={plan.id}>
-                          <RadioGroupItem
-                            value={plan.id}
-                            id={plan.id}
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor={plan.id}
-                            className="flex items-center justify-between rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                <Cpu className="h-4 w-4 text-blue-400" />
-                                <span className="text-white font-medium">
-                                  {plan.resources?.cpu || 1} vCPU
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <HardDrive className="h-4 w-4 text-green-400" />
-                                <span className="text-white font-medium">
-                                  {plan.resources?.ram || 1}GB RAM
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Server className="h-4 w-4 text-purple-400" />
-                                <span className="text-white font-medium">
-                                  {plan.resources?.storage || 10}GB Storage
-                                </span>
-                              </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {availablePlans.map((database) => (
+                      <div key={database.id}>
+                        <div
+                          onClick={() => handleDbPlanChange(database.id)}
+                          className={`block bg-white/10 rounded-lg border-2 cursor-pointer p-5 transition-all hover:bg-white/15 ${
+                            state.selectedDb === database.id
+                              ? "border-blue-500"
+                              : "border-transparent"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <p className="font-bold text-lg text-white">
+                                {database.name}
+                              </p>
+                              {database.discount &&
+                                Number(database.discount) > 0 && (
+                                  <Badge
+                                    variant="outline"
+                                    className="text-green-400 bg-green-500/10 border-green-500/30 mt-2"
+                                  >
+                                    Save {database.discount}%
+                                  </Badge>
+                                )}
                             </div>
                             <div className="text-right">
-                              <div className="text-white font-bold">
-                                {formatPrice(plan.price || 0)}
-                              </div>
-                              <div className="text-xs text-white/60">per month</div>
+                              {database.price === 0 || database.price === null ? (
+                                <div>
+                                  <span className="text-2xl font-bold text-white">
+                                    Free
+                                  </span>
+                                </div>
+                              ) : database.discount ? (
+                                <div>
+                                  <span className="line-through text-sm text-white/40">
+                                    ${database.price}
+                                  </span>
+                                  <div className="text-2xl font-bold text-white">
+                                    $
+                                    {(
+                                      database.price! *
+                                      (1 - Number(database.discount) / 100)
+                                    ).toFixed(0)}
+                                    <span className="text-sm font-normal text-white/60">
+                                      /mo
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-2xl font-bold text-white">
+                                  ${database.price}
+                                  <span className="text-sm font-normal text-white/60">
+                                    /mo
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                          </Label>
+                          </div>
+                          {database.resources && (
+                            <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Cpu className="w-4 h-4 text-blue-400" />
+                                  <span className="text-xs text-white/60">
+                                    CPU
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).cpu
+                                  }{" "}
+                                  vCPU
+                                </p>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Server className="w-4 h-4 text-green-400" />
+                                  <span className="text-xs text-white/60">
+                                    RAM
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).ram
+                                  }{" "}
+                                  GB
+                                </p>
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <HardDrive className="w-4 h-4 text-purple-400" />
+                                  <span className="text-xs text-white/60">
+                                    Storage
+                                  </span>
+                                </div>
+                                <p className="font-semibold text-white">
+                                  {
+                                    (
+                                      database.resources as {
+                                        cpu: number;
+                                        ram: number;
+                                        storage: number;
+                                      }
+                                    ).storage
+                                  }{" "}
+                                  GB
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Version Selection - Show only when this plan is selected */}
+                          {state.selectedDb === database.id && state.versions.length > 0 && (
+                            <div className="mt-4 pt-4 border-t border-white/10">
+                              <Label htmlFor="version" className="mb-2 block text-white text-sm">
+                                Select Version
+                              </Label>
+                              <Select
+                                value={state.selectedVersion}
+                                onValueChange={(value) => {
+                                  setState({ ...state, selectedVersion: value });
+                                  // Clear error on change
+                                  if (errors.version) {
+                                    setErrors({ ...errors, version: "" });
+                                  }
+                                }}
+                              >
+                                <SelectTrigger
+                                  id="version"
+                                  className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                                    errors.version ? "border-red-500" : ""
+                                  }`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <SelectValue placeholder="Select version" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-black border-white/20 text-white">
+                                  {state.versions.map((version) => (
+                                    <SelectItem key={version} value={version}>
+                                      v{version}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              {errors.version && (
+                                <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                                  <AlertCircle className="w-4 h-4" />
+                                  <span>{errors.version}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </RadioGroup>
+                      </div>
+                    ))}
+                    {errors.plan && (
+                      <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                        <AlertCircle className="w-4 h-4" />
+                        <span>{errors.plan}</span>
+                      </div>
+                    )}
                   </div>
-
-                  {(errors.plan || errors.version) && (
-                    <div className="flex items-center gap-2 text-red-500 text-sm">
-                      <AlertCircle className="w-4 h-4" />
-                      <span>{errors.plan || errors.version}</span>
-                    </div>
-                  )}
-                </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   <ChevronLeft size={16} className="mr-2" /> Back
                 </Button>
@@ -479,81 +595,69 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
           {currentStep === 6 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">
-                  Select Project for {selectedUserData?.email}
-                </CardTitle>
+                <CardTitle className="text-white">Project</CardTitle>
               </CardHeader>
-              <CardContent>
-                {loadingProjects ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                  </div>
-                ) : userProjects.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-white/60">This user has no projects available.</p>
-                    <p className="text-white/40 text-sm mt-2">
-                      The user needs to create a project first.
-                    </p>
-                  </div>
-                ) : (
-                  <RadioGroup
-                    value={state.selectedProject}
-                    onValueChange={(value) => {
-                      setState({ ...state, selectedProject: value });
-                      if (errors.project) {
-                        setErrors({ ...errors, project: "" });
-                      }
-                    }}
-                    className="grid gap-4"
-                  >
-                    {userProjects.map((project) => (
-                      <div key={project.id}>
-                        <RadioGroupItem
-                          value={project.id}
-                          id={project.id}
-                          className="peer sr-only"
-                        />
-                        <Label
-                          htmlFor={project.id}
-                          className="flex flex-col gap-2 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
+              <CardContent className="space-y-6">
+                <div>
+                  <Label htmlFor="project" className="mb-2 block text-white">
+                    Select Project
+                  </Label>
+                  {userProjects.length === 0 ? (
+                    <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
+                      <p className="text-white/60">This user has no projects available.</p>
+                      <p className="text-white/40 text-sm mt-2">
+                        The user needs to create a project first.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <Select
+                        value={state.selectedProject}
+                        onValueChange={(value) => {
+                          setState({ ...state, selectedProject: value });
+                          // Clear error on change
+                          if (errors.project) {
+                            setErrors({ ...errors, project: "" });
+                          }
+                        }}
+                      >
+                        <SelectTrigger
+                          id="project"
+                          className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                            errors.project ? "border-red-500" : ""
+                          }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <span className="text-white font-medium">{project.name}</span>
-                            <CheckCircle2
-                              className={`h-4 w-4 ${
-                                state.selectedProject === project.id ? "text-blue-500" : "text-transparent"
-                              }`}
-                            />
-                          </div>
-                          {project.description && (
-                            <p className="text-white/60 text-sm">{project.description}</p>
-                          )}
-                          <p className="text-white/40 text-xs">
-                            Created: {new Date(project.created_at).toLocaleDateString()}
-                          </p>
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                )}
-                {errors.project && (
-                  <div className="flex items-center gap-2 text-red-500 text-sm mt-4">
-                    <AlertCircle className="w-4 h-4" />
-                    <span>{errors.project}</span>
-                  </div>
-                )}
+                          <SelectValue placeholder="Select project" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-black border-white/20 text-white">
+                          {userProjects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.project && (
+                        <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>{errors.project}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   <ChevronLeft size={16} className="mr-2" /> Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  disabled={loadingProjects || userProjects.length === 0}
+                  disabled={userProjects.length === 0}
                   className="bg-white text-black rounded-md hover:bg-gray-200 disabled:opacity-50"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
@@ -564,108 +668,64 @@ const AdminDatabaseAssign = ({ products, locations, allUsers }: AdminDatabaseAss
 
           {/* Step 7: Review */}
           {currentStep === 7 && (
-            <Card className="bg-white/5 border-white/10">
+           <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Review Database Assignment</CardTitle>
+                <CardTitle className="text-white">Review & Payment</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {/* Assignment Summary */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-white font-medium mb-2">User Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-white/80">Email: {selectedUserData?.email}</p>
-                          <p className="text-white/80">Username: {selectedUserData?.username || 'Not set'}</p>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-white font-medium mb-2">Database Details</h3>
-                        <div className="space-y-1 text-sm">
-                          <p className="text-white/80">Name: {state.selectedName}</p>
-                          <p className="text-white/80">Type: {selectedDbTypeInfo?.name}</p>
-                          <p className="text-white/80">Version: {state.selectedVersion}</p>
-                          <p className="text-white/80">Location: {selectedLocationData?.city}, {selectedLocationData?.country}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-white font-medium mb-2">Plan Details</h3>
-                        {selectedDatabase && (
-                          <div className="space-y-1 text-sm">
-                            <p className="text-white/80">CPU: {selectedDatabase.resources?.cpu || 1} vCPU</p>
-                            <p className="text-white/80">RAM: {selectedDatabase.resources?.ram || 1}GB</p>
-                            <p className="text-white/80">Storage: {selectedDatabase.resources?.storage || 10}GB</p>
-                            <p className="text-white/80">Price: {formatPrice(selectedDatabase.price || 0)}/month</p>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <h3 className="text-white font-medium mb-2">Project</h3>
-                        {userProjects.find(p => p.id === state.selectedProject) && (
-                          <div className="text-sm">
-                            <p className="text-white/80">
-                              {userProjects.find(p => p.id === state.selectedProject)?.name}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <Separator className="bg-white/10" />
-
-                  {/* Terms and Conditions */}
-                  <div className="flex items-start space-x-2">
-                    <Checkbox
-                      id="terms"
-                      checked={termsAccepted}
-                      onCheckedChange={(checked) => setTermsAccepted(checked as boolean)}
-                      className="border-white/30 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                    />
-                    <div className="grid gap-1.5 leading-none">
-                      <label
-                        htmlFor="terms"
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-white cursor-pointer"
-                      >
-                        I accept the terms and conditions for database assignment
-                      </label>
-                      <p className="text-xs text-white/60">
-                        By assigning this database, you agree to our{" "}
-                        <Link href="#" className="text-blue-400 hover:underline">
-                          Terms of Service
-                        </Link>{" "}
-                        and{" "}
-                        <Link href="#" className="text-blue-400 hover:underline">
-                          Privacy Policy
-                        </Link>
-                        .
-                      </p>
-                    </div>
-                  </div>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="terms"
+                    checked={termsAccepted}
+                    onCheckedChange={(checked) =>
+                      setTermsAccepted(checked === true)
+                    }
+                    className="rounded-sm"
+                  />
+                  <label
+                    htmlFor="terms"
+                    className="text-sm leading-none text-white"
+                  >
+                    I accept the{" "}
+                    <Link
+                      href="/terms"
+                      className="text-blue-400 hover:underline"
+                    >
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      href="/privacy"
+                      className="text-blue-400 hover:underline"
+                    >
+                      Privacy Policy
+                    </Link>
+                  </label>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
                   disabled={isLoading}
+                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
-                  <ChevronLeft size={16} className="mr-2" /> Back
+                  Back
                 </Button>
                 <Button
                   onClick={onSubmit}
-                  disabled={!termsAccepted || isLoading}
-                  className="bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  size="lg"
+                  disabled={isLoading || !termsAccepted}
+                  className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
                 >
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {isLoading ? "Assigning..." : "Assign Database"}
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>Pay and Deploy</>
+                  )}
                 </Button>
               </CardFooter>
             </Card>

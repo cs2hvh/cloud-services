@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import {
   Search,
-  Database as DatabaseIcon,
+  Archive,
   ChevronLeft,
   ChevronRight,
   Filter,
@@ -13,7 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Admin_Database } from "@/lib/supabase/types";
+import { Admin_Bucket } from "@/lib/supabase/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,51 +36,52 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import api from "@/lib/axios/axios";
 import { getErrorMessage } from "@/config/functions";
+import axios from "axios";
 
-interface DbUsersTabProps {
-  all_databases: Admin_Database[];
+interface StorageUsersTabProps {
+  all_buckets: Admin_Bucket[];
 }
 
-const DATABASES_PER_PAGE = 10;
+const BUCKETS_PER_PAGE = 10;
 
-export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
+export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
   const router = useRouter();
-  const [allDatabasesLocal, setAllDatabasesLocal] = useState(all_databases);
-  const [databases, setDatabases] = useState(
-    all_databases.slice(0, DATABASES_PER_PAGE)
+
+  const [allBucketLocal, setAllBucketLocal] = useState(all_buckets);
+  const [buckets, setBuckets] = useState(
+    all_buckets.slice(0, BUCKETS_PER_PAGE)
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"email" | "engine" | "region">("email");
+  const [sortBy, setSortBy] = useState<"email" | "region" | "created">("email");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
-    Math.ceil(all_databases.length / DATABASES_PER_PAGE)
+    Math.ceil(all_buckets.length / BUCKETS_PER_PAGE)
   );
+
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedClusterId, setSelectedClusterId] = useState<string>("");
-  const [selectedClusterName, setSelectedClusterName] = useState<string>("");
+  const [selectedBucketId, setSelectedBucketId] = useState<string>("");
+  const [selectedBucketName, setSelectedBucketName] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Filter and sort databases
-  const getFilteredAndSortedDatabases = () => {
-    let filtered = [...allDatabasesLocal];
+  // Filter and sort buckets
+  const getFilteredAndSortedBuckets = () => {
+    let filtered = [...all_buckets];
 
     // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
-        (db) =>
-          db.name?.toLowerCase().includes(query) ||
+        (bucket) =>
+          bucket.name?.toLowerCase().includes(query) ||
           dbLocations
-            ?.find((location) => location.short === db.region)
+            ?.find((location) => location.short === bucket.region)
             ?.city.toLowerCase()
             .includes(query) ||
-          db.cluster_id?.toLowerCase().includes(query) ||
-          db.owner_email?.toLowerCase().includes(query) ||
-          db.owner_username?.toLowerCase().includes(query) ||
-          getEngineDisplay(db.engine)?.toLowerCase().includes(query)
+          bucket.id?.toLowerCase().includes(query) ||
+          bucket.owner_email?.toLowerCase().includes(query) ||
+          bucket.owner_username?.toLowerCase().includes(query)
       );
     }
 
@@ -88,8 +89,6 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     filtered.sort((a, b) => {
       if (sortBy === "email") {
         return (a.owner_email || "").localeCompare(b.owner_email || "");
-      } else if (sortBy === "engine") {
-        return (a.engine || "").localeCompare(b.engine || "");
       } else if (sortBy === "region") {
         return (a.region || "").localeCompare(b.region || "");
       }
@@ -100,115 +99,113 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   };
 
   const updatePagination = (page: number) => {
-    const filtered = getFilteredAndSortedDatabases();
-    const startIndex = (page - 1) * DATABASES_PER_PAGE;
-    const endIndex = startIndex + DATABASES_PER_PAGE;
-    const paginatedDatabases = filtered.slice(startIndex, endIndex);
+    const filtered = getFilteredAndSortedBuckets();
+    const startIndex = (page - 1) * BUCKETS_PER_PAGE;
+    const endIndex = startIndex + BUCKETS_PER_PAGE;
+    const paginatedBuckets = filtered.slice(startIndex, endIndex);
 
-    setDatabases(paginatedDatabases);
+    setBuckets(paginatedBuckets);
     setCurrentPage(page);
-    setTotalPages(Math.ceil(filtered.length / DATABASES_PER_PAGE));
-    // setTotalDatabases(filtered.length);
+    setTotalPages(Math.ceil(filtered.length / BUCKETS_PER_PAGE));
   };
 
   const handleSearch = () => {
     updatePagination(1);
   };
 
-  const handleSortChange = (value: "email" | "engine" | "region") => {
+  const handleSortChange = (value: "email" | "region" | "created") => {
     setSortBy(value);
   };
 
-  const handleDeleteDatabase = (clusterId: string, clusterName: string) => {
-    setSelectedClusterId(clusterId);
-    setSelectedClusterName(clusterName);
+  // const handleViewBucket = (bucketId: string) => {
+  //   router.push(`/dashboard/services/object-storage/${bucketId}`);
+  // };
+
+  const handleDeleteBucket = (bucketId: string, bucketName: string, bucketOwnerId: string) => {
+    setSelectedBucketId(bucketId);
+    setSelectedBucketName(bucketName);
     setDeleteDialogOpen(true);
+    //setSelectedBucketOwnerId(bucketOwnerId);
   };
 
   const confirmDelete = async () => {
-    if (!selectedClusterId) return;
+    if (!selectedBucketId) return;
 
-    setIsDeleting(true);
+    
 
     try {
-      // debugger
-      const response = await api.post("/services/database/delete", {
-        id: selectedClusterId,
+      setIsDeleting(true);
+      await axios.post("/api/services/object-storage/buckets/delete", {
+        bucket_id: selectedBucketId,
+        isadmin: true,
       });
 
-      if (response.status === 200) {
-        toast.success("Database cluster deleted successfully");
+      toast.success("Bucket deleted successfully");
 
-        // Remove the deleted database from the local state
-        const updatedDatabases = allDatabasesLocal.filter(
-          (db) => db.cluster_id !== selectedClusterId
+      // Remove the deleted bucket from local state
+      const updatedBuckets = allBucketLocal.filter(
+        (bucket) => bucket.id !== selectedBucketId
+      );
+
+      // Update local state
+      setAllBucketLocal(updatedBuckets);
+      //setDeleteDialogOpen(false);
+
+      // Apply search filter
+      let filtered = [...updatedBuckets];
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter(
+          (bucket) =>
+            bucket.name?.toLowerCase().includes(query) ||
+            bucket.region?.toLowerCase().includes(query) ||
+            bucket.id?.toLowerCase().includes(query) ||
+            bucket.owner_email?.toLowerCase().includes(query) ||
+            bucket.owner_username?.toLowerCase().includes(query)
         );
-
-        // Update the local databases state
-        setAllDatabasesLocal(updatedDatabases);
-        setDeleteDialogOpen(false);
-
-        // Manually update the filtered and paginated data
-        let filtered = [...updatedDatabases];
-
-        // Apply search filter
-        if (searchQuery.trim()) {
-          const query = searchQuery.toLowerCase();
-          filtered = filtered.filter(
-            (db) =>
-              db.name?.toLowerCase().includes(query) ||
-              dbLocations
-                ?.find((location) => location.short === db.region)
-                ?.city.toLowerCase()
-                .includes(query) ||
-              db.cluster_id?.toLowerCase().includes(query) ||
-              db.owner_email?.toLowerCase().includes(query) ||
-              db.owner_username?.toLowerCase().includes(query) ||
-              getEngineDisplay(db.engine)?.toLowerCase().includes(query)
-          );
-        }
-
-        // Apply sorting
-        filtered.sort((a, b) => {
-          if (sortBy === "email") {
-            return (a.owner_email || "").localeCompare(b.owner_email || "");
-          } else if (sortBy === "engine") {
-            return (a.engine || "").localeCompare(b.engine || "");
-          } else if (sortBy === "region") {
-            return (a.region || "").localeCompare(b.region || "");
-          }
-          return 0;
-        });
-
-        // Calculate new pagination
-        const newTotalPages = Math.ceil(filtered.length / DATABASES_PER_PAGE);
-        let pageToShow = currentPage;
-
-        // If current page is empty, go to previous page
-        if (currentPage > newTotalPages && newTotalPages > 0) {
-          pageToShow = newTotalPages;
-        } else if (newTotalPages === 0) {
-          pageToShow = 1;
-        }
-
-        // Update pagination state
-        const startIndex = (pageToShow - 1) * DATABASES_PER_PAGE;
-        const endIndex = startIndex + DATABASES_PER_PAGE;
-        const paginatedDatabases = filtered.slice(startIndex, endIndex);
-
-        setDatabases(paginatedDatabases);
-        setCurrentPage(pageToShow);
-        setTotalPages(Math.max(1, newTotalPages));
-
-        // Also refresh server data for persistence
-        router.refresh();
       }
+
+      // Apply sorting
+      filtered.sort((a, b) => {
+        if (sortBy === "email") {
+          return (a.owner_email || "").localeCompare(b.owner_email || "");
+        } else if (sortBy === "region") {
+          return (a.region || "").localeCompare(b.region || "");
+        }
+        return 0;
+      });
+
+      // Pagination recalculation
+      const newTotalPages = Math.ceil(filtered.length / BUCKETS_PER_PAGE);
+      let pageToShow = currentPage;
+
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        pageToShow = newTotalPages;
+      } else if (newTotalPages === 0) {
+        pageToShow = 1;
+      }
+
+      const startIndex = (pageToShow - 1) * BUCKETS_PER_PAGE;
+      const endIndex = startIndex + BUCKETS_PER_PAGE;
+      const paginatedBuckets = filtered.slice(startIndex, endIndex);
+
+      setBuckets(paginatedBuckets);
+      setCurrentPage(pageToShow);
+      setTotalPages(Math.max(1, newTotalPages));
+
+      // Refresh server data for persistence
+      router.refresh();
+      setIsDeleting(false);
+      
+      // Close dialog after successful deletion
+      setDeleteDialogOpen(false);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
+      toast.error(getErrorMessage(error, "Failed to delete bucket"));
     } finally {
       setIsDeleting(false);
     }
   };
+
 
   // Apply filters and pagination whenever search or sort changes
   useEffect(() => {
@@ -217,43 +214,28 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "online":
+      case "active":
         return "bg-emerald-950/50 text-emerald-400 border-emerald-900";
       case "creating":
         return "bg-yellow-950/50 text-yellow-400 border-yellow-900";
-      case "pending":
-        return "bg-blue-950/50 text-blue-400 border-blue-900";
-      case "migrating":
-        return "bg-purple-950/50 text-purple-400 border-purple-900";
+      case "deleting":
+        return "bg-red-950/50 text-red-400 border-red-900";
+      case "failed":
+        return "bg-red-950/50 text-red-400 border-red-900";
       default:
         return "bg-neutral-800 text-neutral-400 border-neutral-700";
     }
   };
 
-  const getEngineDisplay = (engine: string) => {
-    const engineMap: { [key: string]: string } = {
-      pg: "PostgreSQL",
-      mysql: "MySQL",
-      mongodb: "MongoDB",
-      redis: "Redis",
-    };
-    return engineMap[engine.toLowerCase()] || engine;
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 KB";
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(2)} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(2)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(2)} GB`;
   };
-
-  if (isDeleting) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 flex items-center justify-center"
-      >
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Loading network rules...</p>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <>
@@ -263,7 +245,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
             <Input
-              placeholder="Search by name, cluster ID, owner email..."
+              placeholder="Search by name, bucket ID, owner email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -292,32 +274,38 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                 Sort by Email
               </SelectItem>
               <SelectItem
-                value="engine"
-                className="text-white focus:bg-neutral-800 focus:text-white"
-              >
-                Sort by Db_type
-              </SelectItem>
-              <SelectItem
                 value="region"
                 className="text-white focus:bg-neutral-800 focus:text-white"
               >
                 Sort by Region
               </SelectItem>
+              {/* <SelectItem
+                value="created"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Created
+              </SelectItem> */}
             </SelectContent>
           </Select>
-
           <Button
-            onClick={() => router.push("/dashboard/admin/databases/assign")}
+            onClick={() =>
+              router.push("/dashboard/admin/object-storage/assign")
+            }
             className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Assign Db</span>
+            <span className="hidden sm:inline">Assign Storage</span>
             <span className="sm:hidden">Assign</span>
           </Button>
         </div>
       </div>
 
-      {/* Databases Table */}
+      {/* Buckets Table */}
+     {
+      isDeleting?       <div className="flex justify-center items-center h-48">
+        <Loader2 className="h-8 w-8 text-white animate-spin" />
+      </div>:
+      ( <>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -332,13 +320,13 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Db_Name
+                    Bucket Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    DB_type
+                    Size
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Version
+                    Objects
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                     Region
@@ -352,66 +340,63 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800">
-                {databases.length === 0 ? (
+                {buckets.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-6 py-12 text-center">
-                      <DatabaseIcon className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
+                      <Archive className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
                       <p className="text-neutral-400 text-sm">
-                        No databases found
+                        No buckets found
                       </p>
                     </td>
                   </tr>
                 ) : (
-                  databases.map((db) => (
+                  buckets.map((bucket) => (
                     <tr
-                      key={db.id}
+                      key={bucket.id}
                       className="hover:bg-neutral-800/30 transition-colors"
                     >
                       <td className="px-6 py-4">
                         <div className="text-sm text-neutral-300">
-                          {db.owner_email || (
+                          {bucket.owner_email || (
                             <span className="text-neutral-600">No email</span>
                           )}
                         </div>
-                        {db.owner_username && (
+                        {bucket.owner_username && (
                           <div className="text-xs text-neutral-500">
-                            @{db.owner_username}
+                            @{bucket.owner_username}
                           </div>
                         )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <DatabaseIcon className="h-4 w-4 text-neutral-500" />
+                          <Archive className="h-4 w-4 text-neutral-500" />
                           <div>
                             <div className="font-medium text-white text-sm">
-                              {db.name}
+                              {bucket.name}
                             </div>
                             <div className="text-xs text-neutral-500 truncate max-w-[150px]">
-                              {db.id}
+                              {bucket.id}
                             </div>
                           </div>
                         </div>
                       </td>
 
                       <td className="px-6 py-4">
-                        <Badge
-                          variant="outline"
-                          className="bg-neutral-800 text-neutral-300 border-neutral-700"
-                        >
-                          {getEngineDisplay(db.engine)}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
                         <div className="text-sm text-neutral-300">
-                          {db.version || (
-                            <span className="text-neutral-600">N/A</span>
-                          )}
+                          {formatBytes(bucket.size || 0)}
                         </div>
                       </td>
+
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-neutral-300">
+                          {(bucket.object_count || 0).toLocaleString()}
+                        </div>
+                      </td>
+
                       <td className="px-6 py-4">
                         <div className="text-sm text-neutral-300">
                           {dbLocations.find(
-                            (location) => location.short === db.region
+                            (location) => location.short === bucket.region
                           )?.city || (
                             <span className="text-neutral-600">N/A</span>
                           )}
@@ -421,37 +406,23 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                       <td className="px-6 py-4">
                         <Badge
                           className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${getStatusColor(
-                            db.status
+                            bucket.status
                           )}`}
                         >
-                          {db.status}
+                          {bucket.status}
                         </Badge>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          {/* <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleViewDatabase(db.cluster_id)}
-                            className="cursor-pointer h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEditDatabase(db.cluster_id)}
-                            className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
-                          >
-                            <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                            Edit
-                          </Button> */}
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() =>
-                              handleDeleteDatabase(db.cluster_id, db.name)
+                              handleDeleteBucket(
+                                bucket.id,
+                                bucket.name,
+                                bucket.owner_id
+                              )
                             }
                             className="cursor-pointer h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"
                           >
@@ -479,7 +450,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                   variant="ghost"
                   onClick={() => updatePagination(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className=" cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
@@ -499,6 +470,9 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           )}
         </div>
       </motion.div>
+      </>
+      )
+     }
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -506,19 +480,22 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-400" />
-              Delete Database Cluster
+              Delete Storage Bucket
             </AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-300">
-              Do you want to permanently delete this cluster?
-              <div className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700">
-                <div className="text-sm text-neutral-400">Cluster Name:</div>
-                <div className="text-base font-semibold text-white mt-1">
-                  {selectedClusterName}
-                </div>
-              </div>
-              <div className="mt-3 text-red-400 text-sm font-medium">
-                ⚠️ This action cannot be undone.
-              </div>
+              Do you want to permanently delete this bucket?
+              <span className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700 block">
+                <span className="text-sm text-neutral-400 block">
+                  Bucket Name:
+                </span>
+                <span className="text-base font-semibold text-white mt-1 block">
+                  {selectedBucketName}
+                </span>
+              </span>
+              <span className="mt-3 text-red-400 text-sm font-medium block">
+                ⚠️ This action cannot be undone. Buckets in use cannot be
+                deleted.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -531,11 +508,11 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <span className="animate-spin mr-2">⏳</span>
                   Deleting...
                 </>
               ) : (
