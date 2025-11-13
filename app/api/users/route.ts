@@ -1,7 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function GET(request: Request) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const usersParam = searchParams.get("ids");
 

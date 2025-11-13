@@ -46,6 +46,9 @@ export async function POST(request: NextRequest) {
     const { data: authUsers } = await supabase.auth.admin.listUsers();
     const user = authUsers.users.find((u) => u.email === email);
 
+
+    console.log(user,".............user12345");
+
     if (!user) {
       return Response.json({ message: "User not found." }, { status: 404 });
     }

@@ -1,5 +1,31 @@
-import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+
+interface GitHubRepository {
+  id: number;
+  name: string;
+  full_name: string;
+  description: string | null;
+  private: boolean;
+  default_branch: string;
+  language: string | null;
+  updated_at: string;
+  clone_url: string;
+  html_url: string;
+}
+
+// interface TransformedRepo {
+//   id: string;
+//   name: string;
+//   fullName: string;
+//   description: string;
+//   private: boolean;
+//   defaultBranch: string;
+//   language: string;
+//   updatedAt: string;
+//   provider: 'github';
+//   cloneUrl: string;
+//   htmlUrl: string;
+// }
 
 export async function GET() {
   try {
@@ -15,7 +41,7 @@ export async function GET() {
       );
     }
 
-    console.log('Fetching GitHub repositories for user:', user.id);
+   // console.log('Fetching GitHub repositories for user:', user.id);
 
     // Get the current session to check for provider tokens
     const { data: { session } } = await supabase.auth.getSession();
@@ -44,15 +70,15 @@ export async function GET() {
                           githubIdentity.identity_data?.login || 
                           githubIdentity.identity_data?.preferred_username;
 
-    console.log('GitHub username:', githubUsername);
-    console.log('Provider token available:', !!session.provider_token);
-    console.log('Session keys:', Object.keys(session));
+    // console.log('GitHub username:', githubUsername);
+    // console.log('Provider token available:', !!session.provider_token);
+    // console.log('Session keys:', Object.keys(session));
 
     // Try to use provider token if available
-    let accessToken = session.provider_token;
+    const accessToken = null;
 
     if (accessToken) {
-      console.log('Using provider token for GitHub API access');
+      // console.log('Using provider token for GitHub API access');
       
       // Test the token first
       const userResponse = await fetch('https://api.github.com/user', {
@@ -74,11 +100,11 @@ export async function GET() {
         });
 
         if (response.ok) {
-          const repos = await response.json();
-          const privateCount = repos.filter((repo: any) => repo.private).length;
+          const repos: GitHubRepository[] = await response.json();
+          const privateCount = repos.filter((repo: GitHubRepository) => repo.private).length;
           console.log(`Successfully fetched ${repos.length} repositories (${privateCount} private) from GitHub`);
           
-          const transformedRepos = repos.map((repo: any) => ({
+          const transformedRepos = repos.map((repo: GitHubRepository) => ({
             id: repo.id.toString(),
             name: repo.name,
             fullName: repo.full_name,
@@ -98,13 +124,13 @@ export async function GET() {
           }, { status: 200 });
         }
       } else {
-        console.log('Provider token is invalid, falling back to public repos');
+        // console.log('Provider token is invalid, falling back to public repos');
       }
     }
 
     // Fallback to public repositories if no valid token
     if (githubUsername) {
-      console.log('Fetching public repositories for:', githubUsername);
+      // console.log('Fetching public repositories for:', githubUsername);
       
       const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=100`, {
         headers: {
@@ -115,7 +141,7 @@ export async function GET() {
 
       if (response.ok) {
         const repos = await response.json();
-        const transformedRepos = repos.map((repo: any) => ({
+        const transformedRepos = repos.map((repo: GitHubRepository) => ({
           id: repo.id.toString(),
           name: repo.name,
           fullName: repo.full_name,

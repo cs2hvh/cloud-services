@@ -19,9 +19,9 @@ import {
   Network,
   Plus,
   Trash2,
-  Lock,
-  Server,
-  Gamepad2,
+  // Lock,
+  // Server,
+  // Gamepad2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -130,7 +130,7 @@ const DDoSProtectionSelect = () => {
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-  const [geoBlockCountries, setGeoBlockCountries] = useState<string[]>([]);
+  // const [geoBlockCountries, setGeoBlockCountries] = useState<string[]>([]);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Calculate total price

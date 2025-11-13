@@ -17,6 +17,60 @@ export async function getUser() {
   return user;
 }
 
+
+
+export async function requireAdmin(): Promise<{ ok: boolean; email?: string; userId?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: userData } = await supabase.auth.getUser();
+    const email = userData?.user?.email || "";
+    const userId = userData?.user?.id || "";
+
+    if (!email || !userId) {
+      return { ok: false };
+    }
+
+    // Check ADMIN_EMAILS environment variable first (simple and reliable)
+    const adminEmails = (process.env.ADMIN_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (adminEmails.length > 0 && !adminEmails.includes(email.toLowerCase())) {
+      console.warn(`User ${email} attempted admin access but is not in ADMIN_EMAILS`);
+      return { ok: false };
+    }
+
+    // If ADMIN_EMAILS is not set, fall back to user_profiles check
+    if (adminEmails.length === 0) {
+      try {
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("roles")
+          .eq("id", userId)
+          .single();
+
+        const isAdmin = profile?.roles?.includes("admin");
+        if (!isAdmin) {
+          console.warn(`User ${email} attempted admin access but is not an admin`);
+          return { ok: false };
+        }
+      } catch (profileError) {
+        console.error(`Failed to check admin status for ${email}:`, profileError);
+        return { ok: false };
+      }
+    }
+
+    return { ok: true, email, userId };
+  } catch (error) {
+    console.error("Admin check error:", error);
+    return { ok: false };
+  }
+}
+
+
+
+
 export async function getUserProfile() {
   const supabase = await createClient();
   const {

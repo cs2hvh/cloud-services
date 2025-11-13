@@ -1,166 +1,270 @@
-'use client';
+"use client";
 
 import { motion } from "motion/react";
-import { Box, Clock, Bell, Layers } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { DockIcon, Plus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+// import fs from "node:fs/promises";
+// import { useRouter } from "next/navigation";
+// import { Button } from "@/components/ui/button";
+
+type Cluster = {
+  id: string;
+  cluster_name: string;
+  cluster_id: string;
+  status: string;
+  workers: { id: string }[] | null;
+  created_at: string; // ISO
+  k8s_version: string;
+  kubeconfig: string;
+};
 
 const KubernetesPage = () => {
+  // Dummy data for now, replace with actual data from your backend
+  const [clusters, setClusters] = useState([] as Cluster[]);
+  const [loading, setLoading] = useState(true);
+  // const router = useRouter();
+
+  // const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
+  //   const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
+  //     method: "POST",
+  //     headers: { "Content-Type": "application/json" },
+  //     body: JSON.stringify({ kubeconfig: kubeconfig }),
+  //   });
+  //   if (res.ok) {
+  //     const data = await res.json();
+  //     const blob = new Blob([data.data], { type: "text/plain" });
+  //     const url = URL.createObjectURL(blob);
+
+  //     const a = document.createElement("a");
+  //     a.href = url;
+  //     a.download = `${clusterId}.txt`;
+  //     a.click();
+  //   }
+
+  //   // console.log(await res.json(),".............res from download api...........");
+  // };
+
+  const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
+    const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kubeconfig }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+
+      // Ensure the data is stringified as JSON
+      const jsonString = JSON.stringify(data.data, null, 2); // nicely formatted JSON
+
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${clusterId}.json`; // Change extension to .json
+      a.click();
+
+      // Optional: revoke the URL after some time
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } else {
+      console.error("Failed to download kubeconfig");
+    }
+  };
+
+  useEffect(() => {
+    //fetch clusters from backend.
+    async function fetchClusters() {
+      try {
+        //debugger;
+        setLoading(true);
+        const res = await fetch("/api/services/kubernetes/clusters/read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const response = await res.json();
+          console.log(
+            response,
+            ".............response from clusters read api..........."
+          );
+          if (response.success) {
+            //set clusters
+            setClusters(
+              //response.data.filter((item: Cluster) => item.status === "ready")
+               response.data
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchClusters();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex-1 bg-black min-h-screen flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-between items-center mb-8"
       >
         <div>
           <h1 className="text-3xl font-bold">Kubernetes</h1>
-          <p className="text-white/60">Managed Kubernetes clusters for container orchestration and microservices deployment.</p>
+          <p className="text-white/60">
+            Manage and provision your Kubernetes clusters.
+          </p>
         </div>
+        <Link
+          href="/dashboard/services/kubernetes/new"
+          className="group relative inline-flex items-center justify-center px-6 py-2.5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+        >
+          <Plus className="-ml-1 mr-2 h-5 w-5" />
+          New Kubernetes
+        </Link>
       </motion.div>
 
-      {/* Under Development Card */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay: 0.1 }}
-        className="max-w-2xl mx-auto"
-      >
-        <Card className="bg-white/5 border-white/10 text-center">
-          <CardContent className="py-16">
-            <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Box className="h-10 w-10 text-blue-400" />
-            </div>
-            
-            <h2 className="text-2xl font-bold text-white mb-4">Under Development</h2>
-            
-            <p className="text-white/60 mb-8 max-w-md mx-auto leading-relaxed">
-              We&apos;re actively developing a comprehensive Kubernetes platform to help you deploy, 
-              manage, and scale containerized applications with ease. Our managed K8s service will provide 
-              enterprise-grade orchestration capabilities.
-            </p>
-
-            <div className="flex items-center justify-center gap-2 text-white/50 mb-8">
-              <Clock className="h-4 w-4" />
-              <span className="text-sm"></span>
-            </div>
-
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-white">What&apos;s Coming:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-white/70">
-                <div className="text-left">
-                  <ul className="space-y-2">
-                    <li>• Managed K8s clusters</li>
-                    <li>• Auto-scaling capabilities</li>
-                    <li>• Helm chart repository</li>
-                    <li>• CI/CD integration</li>
-                  </ul>
-                </div>
-                <div className="text-left">
-                  <ul className="space-y-2">
-                    <li>• Multi-zone deployment</li>
-                    <li>• Load balancer integration</li>
-                    <li>• Monitoring & logging</li>
-                    <li>• Security policies</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8">
-              <Button 
-                className="bg-white text-black hover:bg-gray-200"
-                onClick={() => {
-                  // You can implement a notification signup here
-                  alert('We\'ll notify you when Kubernetes is available!');
-                }}
-              >
-                <Bell className="h-4 w-4 mr-2" />
-                Notify Me When Available
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Feature Preview */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }} 
-        transition={{ delay: 0.3 }}
-        className="mt-12"
-      >
-        <h2 className="text-2xl font-bold text-white mb-6 text-center">Planned Kubernetes Features</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Managed Clusters</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Fully managed Kubernetes clusters with automatic updates, patching, and maintenance handled for you.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Auto-scaling</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Horizontal and vertical pod auto-scaling based on CPU, memory, and custom metrics to handle traffic spikes.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Enterprise Security</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Built-in security policies, RBAC, network policies, and compliance features for enterprise workloads.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">CI/CD Integration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Seamless integration with popular CI/CD tools for automated deployment pipelines and GitOps workflows.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Monitoring & Logging</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Comprehensive monitoring, logging, and observability tools with Prometheus, Grafana, and centralized logging.
-              </CardDescription>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white">Multi-zone Deployment</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <CardDescription className="text-white/60">
-                Deploy across multiple availability zones for high availability and disaster recovery capabilities.
-              </CardDescription>
-            </CardContent>
-          </Card>
+      {clusters.length > 0 ? (
+        <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-700">
+              <thead className="bg-slate-700/50 text-white">
+                <tr>
+                  <Th>Cluster</Th>
+                  <Th>Nodes</Th>
+                  <Th>Created</Th>
+                  <Th>Version</Th>
+                  <Th>Status</Th>
+                  <Th>Actions</Th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/60 bg-white/5">
+                {clusters.map((c) => (
+                  
+                  <tr
+                    key={c.id}
+                    className="hover:bg-slate-700/30 transition-colors duration-150"
+                  >
+                    <Td>
+                      <div className="font-medium text-white">
+                        {c.cluster_name}
+                      </div>
+                      <div className="text-xs text-slate-400 font-mono mt-1">
+                        {c.id}
+                      </div>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-200">
+                        {c.workers?.length}
+                      </span>
+                    </Td>
+                    <Td>
+                      <time dateTime={c.created_at} className="text-slate-300">
+                        {new Date(c.created_at).toLocaleString()}
+                      </time>
+                    </Td>
+                    <Td>
+                      <span className="text-slate-300">{c.k8s_version}</span>
+                    </Td>
+                    <Td>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          c.status === "ready"
+                            ? "bg-green-500/20 text-green-400"
+                            : c.status === "pending"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : c.status === "error"
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-slate-500/20 text-slate-400"
+                        }`}
+                      >
+                        {c.status}
+                      </span>
+                    </Td>
+                    <Td>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => {
+                            downloadKubeconfig(c.cluster_id, c.kubeconfig);
+                          }}
+                          className="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors duration-200"
+                        >
+                          Download kubeconfig
+                        </button>
+                        <Link
+                          href={{
+                            pathname: `/dashboard/services/kubernetes/clusters/${encodeURIComponent(c.cluster_id)}`,
+                            query: { clusterStatus: c.status },
+                          }}
+                          className="rounded-lg border border-blue-600 px-3 py-1.5 text-sm text-blue-400 hover:bg-blue-600/20 hover:text-blue-300 transition-colors duration-200"
+                        >
+                          View Cluster
+                        </Link>
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-center py-20 border-2 border-dashed border-white/10 rounded-lg"
+        >
+          <DockIcon className="mx-auto h-16 w-16 text-white/20" />
+          <h3 className="mt-4 text-xl font-semibold">No Kubernetes Found</h3>
+          <p className="mt-2 text-sm text-white/50">
+            Get started by provisioning a new Kubernetes cluster.
+          </p>
+          <div className="mt-6">
+            <Link
+              //want to send clusters through link
+              
+              href="/dashboard/services/kubernetes/new"
+              className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+            >
+              <Plus className="-ml-1 mr-2 h-5 w-5" />
+              Create Cluster
+            </Link>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };
+
+function Th({ children }: { children: React.ReactNode }) {
+  return (
+    <th
+      scope="col"
+      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600"
+    >
+      {children}
+    </th>
+  );
+}
+function Td({ children }: { children: React.ReactNode }) {
+  return (
+    <td className="px-6 py-4 text-sm text-slate-800 align-middle">
+      {children}
+    </td>
+  );
+}
 
 export default KubernetesPage;

@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Code, Plus, Search, Github, GitBranch, Globe } from "lucide-react";
+import { Code, Plus, Search, GitBranch, Globe } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import Image from "next/image";
 
 const ApplicationDeploymentPage = () => {
   // No dummy data - will be replaced with actual deployed applications from backend
-  const deployedApps: any[] = [];
+  const deployedApps = [];
 
   // Mock stats for demonstration
   const stats = {

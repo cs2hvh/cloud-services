@@ -16,10 +16,10 @@ import {
   Shield,
   Loader2,
   Server,
-  Network,
+  // Network,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
+// import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Card,
@@ -40,8 +40,17 @@ interface FirewallRule {
   description: string;
 }
 
+
+interface userServers {
+  id: string;
+  name: string;
+  ip: string;
+  type: 'TCP' | 'UDP' | 'BOTH';
+  
+}
+
 // Mock servers - in real app, this would come from API
-const userServers: any[] = [
+const userServers: userServers[] = [
   // This will be populated from actual user servers (VPS/Dedicated) from the backend
   // Only show servers if user actually has them
 ];

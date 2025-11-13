@@ -29,8 +29,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
+export interface ComputeOptions {
+  locations?: Array<{ id: string; name: string; node: string }>;
+  osTemplates?: Array<{ id: string; name: string; type: string }>;
+  specs?: Array<{ id: string; name: string; cpuCores: number; memoryMB: number; diskGB: number; hourlyRate: number; monthlyRate: number }>;
+}
+
 interface PageProps {
   locations: Tables<"locations">[];
+  computeOptions?: ComputeOptions;
 }
 
 // VPS Plans
@@ -134,7 +141,7 @@ const addons = [
   },
 ];
 
-const VPSSelect = ({ locations }: PageProps) => {
+const VPSSelect = ({ locations, computeOptions }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -144,16 +151,41 @@ const VPSSelect = ({ locations }: PageProps) => {
   const [selectedPlan, setSelectedPlan] = useState<string>('');
   const [selectedOS, setSelectedOS] = useState<string>('');
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [sshPassword, setSshPassword] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Use computed options if provided, otherwise use hardcoded defaults
+  const effectiveSpecs = computeOptions?.specs && computeOptions.specs.length > 0 
+    ? computeOptions.specs 
+    : vpsPlans;
+  
+  const effectiveOSList = computeOptions?.osTemplates && computeOptions.osTemplates.length > 0
+    ? computeOptions.osTemplates.map(os => ({
+        id: os.id,
+        name: os.name,
+        description: `Template: ${os.type}`,
+        icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/linux/linux-original.svg'
+      }))
+    : operatingSystems;
 
   // Calculate total price
   const calculateTotalPrice = () => {
-    const plan = vpsPlans.find(p => p.id === selectedPlan);
-    let planPrice = plan ? plan.price : 0;
+    const plan = effectiveSpecs.find(p => 
+      typeof p.id === 'string' ? p.id === selectedPlan : p.id == selectedPlan
+    );
     
-    // Apply discount if available
-    if (plan?.discount) {
-      planPrice = planPrice * (1 - plan.discount / 100);
+    // Handle both old format (price, discount) and new format (monthlyRate)
+    let planPrice = 0;
+    if (plan) {
+      if ('monthlyRate' in plan) {
+        planPrice = plan.monthlyRate;
+      } else if ('price' in plan) {
+        planPrice = plan.price as number;
+        const discount = plan.discount as number | undefined;
+        if (discount) {
+          planPrice = planPrice * (1 - discount / 100);
+        }
+      }
     }
     
     const addonsPrice = selectedAddons.reduce((total, addonId) => {
@@ -172,9 +204,24 @@ const VPSSelect = ({ locations }: PageProps) => {
   };
 
   const handleNextStep = () => {
-    if (currentStep === 1 && !vpsName.trim()) {
-      toast.error('Please enter a VPS name');
-      return;
+    if (currentStep === 1) {
+      if (!vpsName.trim()) {
+        toast.error('Please enter a VPS name');
+        return;
+      }
+      if (!sshPassword || sshPassword.length < 12) {
+        toast.error('SSH password must be at least 12 characters');
+        return;
+      }
+      const hasUpperCase = /[A-Z]/.test(sshPassword);
+      const hasLowerCase = /[a-z]/.test(sshPassword);
+      const hasNumbers = /[0-9]/.test(sshPassword);
+      const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(sshPassword);
+      
+      if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+        toast.error('Password must contain uppercase, lowercase, numbers, and special characters');
+        return;
+      }
     }
     if (currentStep === 2 && !selectedLocation) {
       toast.error('Please select a location');
@@ -208,12 +255,67 @@ const VPSSelect = ({ locations }: PageProps) => {
 
     setIsLoading(true);
     try {
-      // Here you would make the API call to create the VPS
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API call
+      // Get the selected plan details
+      const plan = effectiveSpecs.find(p => 
+        typeof p.id === 'string' ? p.id === selectedPlan : p.id == selectedPlan
+      );
+      
+      if (!plan) {
+        throw new Error("Invalid plan selected");
+      }
+
+      // Extract specs from plan (handle both old and new formats)
+      let cpuCores = 1;
+      let memoryMB = 2048;
+      let diskGB = 50;
+
+      if ('cpuCores' in plan) {
+        // New format from Proxmox specs
+        cpuCores = plan.cpuCores as number;
+        memoryMB = plan.memoryMB as number;
+        diskGB = plan.diskGB as number;
+      } else if ('resources' in plan) {
+        // Old format from hardcoded plans
+        cpuCores = plan.resources.cpu;
+        memoryMB = plan.resources.ram * 1024; // Convert GB to MB
+        diskGB = plan.resources.storage;
+      }
+
+      // Prepare the payload for VM creation
+      const createPayload = {
+        hostname: vpsName,
+        location: selectedLocation,
+        os: selectedOS,
+        cpuCores,
+        memoryMB,
+        diskGB,
+        sshPassword,
+      };
+
+      // Call the VM creation API
+      const response = await fetch('/api/services/compute/vms/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(createPayload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create VPS');
+      }
+
+      const result = await response.json();
       toast.success('VPS deployment initiated successfully!');
-      // Redirect to VPS list or details page
-    } catch {
-      toast.error('Failed to deploy VPS. Please try again.');
+      
+      // Optionally redirect or show VM details
+      console.log('VM created:', result.data);
+      // You could redirect to the new VPS details page here
+      // router.push(`/dashboard/compute/vms/${result.data.id}`);
+    } catch (error) {
+      console.error('VPS creation error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to deploy VPS. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -262,20 +364,36 @@ const VPSSelect = ({ locations }: PageProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Step 1: Name */}
+          {/* Step 1: Name & SSH Password */}
           {currentStep === 1 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">VPS Instance Name</CardTitle>
+                <CardTitle className="text-white">VPS Configuration</CardTitle>
               </CardHeader>
-              <CardContent>
-                <Input
-                  value={vpsName}
-                  onChange={(e) => setVpsName(e.target.value)}
-                  type="text"
-                  placeholder="web-server-01"
-                  className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
-                />
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-white mb-2 block">Instance Name</Label>
+                  <Input
+                    value={vpsName}
+                    onChange={(e) => setVpsName(e.target.value)}
+                    type="text"
+                    placeholder="web-server-01"
+                    className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Alphanumeric and hyphens only</p>
+                </div>
+
+                <div>
+                  <Label className="text-white mb-2 block">SSH Root Password</Label>
+                  <Input
+                    value={sshPassword}
+                    onChange={(e) => setSshPassword(e.target.value)}
+                    type="password"
+                    placeholder="••••••••••••"
+                    className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Minimum 12 characters with uppercase, lowercase, numbers, and special characters</p>
+                </div>
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-white/90">
@@ -423,7 +541,7 @@ const VPSSelect = ({ locations }: PageProps) => {
               </CardHeader>
               <CardContent>
                 <RadioGroup value={selectedOS} onValueChange={setSelectedOS} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {operatingSystems.map((os) => (
+                  {effectiveOSList.map((os) => (
                     <div key={os.id}>
                       <RadioGroupItem value={os.id} id={`os-${os.id}`} className="peer sr-only" />
                       <Label htmlFor={`os-${os.id}`} className="flex items-start gap-3 bg-white/10 rounded-md border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">

@@ -4,7 +4,7 @@ import { Navbar } from "@/components/navbar";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
 import { WorldMap } from "@/components/world-map";
 import { motion } from "motion/react";
-import { ArrowRight, Server, Database, Globe, Shield, Zap, Cloud, HardDrive } from "lucide-react";
+import { ArrowRight, Server, Database, Shield, Zap, Cloud, HardDrive } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -81,7 +81,7 @@ export default function Home() {
             </h1>
             
             <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
-              Power your applications with our high-performance, secure, and scalable cloud infrastructure. From dedicated servers to managed databases, we've got you covered.
+              Power your applications with our high-performance, secure, and scalable cloud infrastructure. From dedicated servers to managed databases, we have got you covered.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">

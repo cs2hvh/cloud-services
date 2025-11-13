@@ -1,6 +1,21 @@
-import { createClient } from "./server";
+// import { Encryption } from "@/config/functions";
+import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
-import { Tables, TablesInsert, TablesUpdate } from "./types";
+import {
+  network_rules,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+  EncryptedData,
+  Database_Connection,
+  DatabaseUser,
+  DatabaseInstance,
+  Admin_User,
+  Admin_Database,
+  Admin_Bucket,
+  ObjectSpaceBucket,
+} from "./types";
+// import { createClient as clientWorker } from "@supabase/supabase-js";
 
 type UserProfile = Tables<"user_profiles">;
 type Project = Tables<"projects">;
@@ -9,6 +24,11 @@ type GameServer = Tables<"game_servers">;
 type Product = Tables<"products">;
 type Location = Tables<"locations">;
 type OTP = Tables<"otps">;
+type  Clusters = Tables<"clusters">;
+type  ClustersGet = Tables<"clusters_get">;
+type Database = Tables<"database_clusters">;
+type Activity = Tables<"activities">;
+
 
 export const Users = {
   // Get a user by ID
@@ -43,9 +63,9 @@ export const Users = {
         await supabase.auth.admin.listUsers();
 
       if (authError) {
-        console.log(
-          `[Supabase] Error while getting user by email: ${authError.message}`,
-        );
+        // console.log(
+        //   `[Supabase] Error while getting user by email: ${authError.message}`,
+        // );
         return null;
       }
 
@@ -88,6 +108,67 @@ export const Users = {
         return [];
       }
       return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting all users: ${err}`);
+      return [];
+    }
+  },
+  get_all_profiles: async (): Promise<Admin_User[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("user_profiles")
+        .select(`
+          id,
+          username, 
+          display_name, 
+          avatar,
+          steam, 
+          discord,
+          background,
+          bio,
+          roles,
+          created_at,
+          updated_at,
+          suspend,
+          db_counts:database_cluster!owner_id(count),
+          kc_counts:clusters!owner_id(count),
+          server_counts:game_servers!user_id(count)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting all users: ${error.message}`,
+        );
+        return [];
+      }
+
+      if (!data) return [];
+      
+      const { data: authUsers } = await supabase.auth.admin.listUsers();
+
+      // Merge user profiles with auth data to include emails and extract counts
+      const merged: Admin_User[] = data.map((u) => ({
+        id: u.id,
+        username: u.username,
+        display_name: u.display_name,
+        avatar: u.avatar,
+        steam: u.steam,
+        discord: u.discord,
+        background: u.background,
+        bio: u.bio,
+        roles: u.roles,
+        created_at: u.created_at,
+        updated_at: u.updated_at,
+        suspend: u.suspend,
+        email: authUsers?.users.find(a => a.id === u.id)?.email || null,
+        db_counts: u.db_counts?.[0]?.count || 0,
+        kc_counts: u.kc_counts?.[0]?.count || 0,
+        server_counts: u.server_counts?.[0]?.count || 0,
+      }));
+
+      return merged;
     } catch (err) {
       console.log(`[Supabase] Error while getting all users: ${err}`);
       return [];
@@ -254,11 +335,31 @@ export const Projects = {
       const { data, error } = await supabase
         .from("projects")
         .select("*")
-        .or(`owner.eq.${userId},users.cs.["${userId}"]`);
+        .eq("owner", userId)
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting projects by userId: ${error.message}`,
+          `[Supabase] Error............. while getting projects by userId: ${error.message}`,
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting projects by userId: ${err}`);
+      return [];
+    }
+  },
+  // Get all projects where user is involved
+  get_all_for_admin: async (): Promise<Project[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+
+      if (error) {
+        console.log(
+          `[Supabase] Error............. while getting projects by userId: ${error.message}`,
         );
         return [];
       }
@@ -603,6 +704,120 @@ export const Products = {
       return [];
     }
   },
+
+  get_by_type_and_subtype: async (type: string, subtype: string): Promise<Product[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("type", type)
+        .eq("sub", subtype)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting products by type and subtype: ${error.message}`,
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting products by type and subtype: ${err}`);
+      return [];
+    }
+  },
+
+  create: async (
+    props: TablesInsert<"products">,
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("products")
+        .insert(props)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while creating product: ${error.message}`,
+        );
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err) {
+      console.log(`[Supabase] Error while creating product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update: async (
+    id: string,
+    props: TablesUpdate<"products">,
+  ): Promise<{ success: boolean; data?: Product; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("products")
+        .update(props)
+        .eq("id", id)
+        .select("*")
+        .single();
+
+      if (error) {
+        console.log(`[Supabase] Error while updating product: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err) {
+      console.log(`[Supabase] Error while updating product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  delete: async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase.from("products").delete().eq("id", id);
+
+      if (error) {
+        console.log(`[Supabase] Error while deleting product: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.log(`[Supabase] Error while deleting product: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  check_usage: async (
+    id: string,
+  ): Promise<{ inUse: boolean; count: number }> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Check if any database cluster is using this product's size
+      // The size field in database_clusters matches the product id pattern
+      const { count, error } = await supabase
+        .from("database_clusters")
+        .select("*", { count: "exact", head: true })
+        .eq("size", id);
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while checking product usage: ${error.message}`,
+        );
+        return { inUse: false, count: 0 };
+      }
+
+      return { inUse: (count || 0) > 0, count: count || 0 };
+    } catch (err) {
+      console.log(`[Supabase] Error while checking product usage: ${err}`);
+      return { inUse: false, count: 0 };
+    }
+  },
 };
 
 export const Locations = {
@@ -613,11 +828,12 @@ export const Locations = {
         .from("locations")
         .select("*")
         .eq("available", true)
+        .eq("cluster_type", "database")
         .order("city");
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting locations: ${error.message}`,
+          `[Supabase] Error while getting locations: ${error.message}`
         );
         return [];
       }
@@ -627,12 +843,51 @@ export const Locations = {
       return [];
     }
   },
+  get_by_type: async (type: string): Promise<Location[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("locations")
+        .select("*")
+        .eq("available", true)
+        .eq("cluster_type", type)
+        .order("city");
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting locations: ${error.message}`
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.log(`[Supabase] Error while getting locations: ${err}`);
+      return [];
+    }
+  },
+  create: async (payload: Location) => {
+    const supabase = await createSSRClient();
+    const { data, error } = await supabase
+      .from("locations")
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[Locations] insert failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
 };
+
+        
 
 export const OTPs = {
   create: async (props: TablesInsert<"otps">): Promise<number | null> => {
     try {
-      const supabase = await createClient();
+      const supabase = await createSSRClient();
       const { data, error } = await supabase
         .from("otps")
         .insert(props)
@@ -694,6 +949,1290 @@ export const OTPs = {
   },
 };
 
+
+// export const Vms = {
+//   // Get a project by ID
+//   get_by_specs: async (payloads: {
+//     name: string;
+//     location: string;
+//     version: string;
+//     planDetails: Plan;
+//     nodes: number;
+//   }) => {
+//    // console.log(payloads, "...........in buildPayloadWithFreeIps........");
+//     const nodeKeys = makeNodeKeys(payloads.nodes);
+//     console.log(nodeKeys, "...........nodeKeys........");
+
+//     const supabase = await createSSRClient()
+
+//     const { data, error } = await supabase
+//       .from("vms")
+//       .select(
+//         "id, ip_address, username, location,ram,cpu,storage, status, created_at"
+//       )
+//       .eq("location", payloads.location)
+//       .eq("status", "free")
+//       .eq("ram", payloads.planDetails.ram)
+//       .eq("cpu", payloads.planDetails.cpu)
+//       .eq("storage", payloads.planDetails.storage)
+//       .order("created_at", { ascending: true })
+//       .limit(payloads.nodes + 1);
+
+//     //console.log(res.status, "...........res.status........");
+
+//     if (error) {
+//       // const msg = await res.text().catch(() => "Failed to fetch free IPs");
+//       console.log(error.message, "...............error.message");
+//       return { success: false, error: error.message };
+//     }
+//     console.log(data, "...............data");
+
+//     const ips = data.slice(0, payloads.nodes + 1).map((v) => v.ip_address);
+
+//     //3) Build node map with attached IPs
+//     const nodes: Record<
+//       string,
+//       {
+//         host: string;
+//         role: "control-plane" | "worker";
+//         hostname: string;
+//         cpu: number;
+//         memory_mb: number;
+//       }
+//     > = {};
+
+//     nodeKeys.forEach((key, i) => {
+//       nodes[key] = {
+//         host: ips[i],
+//         role: key.startsWith("cp-") ? "control-plane" : "worker",
+//         hostname: key,
+//         cpu: payloads.planDetails.cpu,
+//         memory_mb: payloads.planDetails.ram,
+//       };
+//     });
+
+//     // 4) Final payload (IPs included; no passwords in ips array)
+//     const payload = {
+//       provider: "existing",
+//       cluster: {
+//         name: payloads.name,
+//         location: payloads.location,
+//         pod_cidr: "10.244.0.0/16",
+//         k8s_minor: payloads.version,
+//       },
+//       auth: { method: "password", user: "root", password: "luV5DivOV98g" }, // <-- replace with your real secret handling
+//       nodes,
+//       ips, // only IPs, as requested
+//     };
+
+//     return { success: true, payload };
+//   },
+
+//   update_vm_by_ip: async (ips: string[]) => {
+//     console.log(ips, "...............ips");
+
+
+//     const { data, error } = await supabase
+//       .from("vms")
+//       .update({ status: "used" })
+//       .in("ip_address", ips) // <- match multiple rows by IP
+//       .eq("status", "free") // optional guard: only free -> used
+//       .select("id, ip_address, username, location, status, created_at");
+//     if (error?.message) {
+//       console.log(error?.message, "...............error.message");
+//       throw new Error(error.message);
+//     }
+
+//     return {
+//       success: true,
+//       message: "IP status updated successfully",
+//       data: data,
+//     };
+//   },
+// };
+
+
+export const Clusters = {
+  // Get a project by ID
+//   create:async(payload:Clusters )=>{
+
+//     const encryptedKubeconfig = payload.kubeConfig
+//         ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
+//         : null;
+//       const row = {
+//     cluster_id: payload.clusterId,
+//     cluster_name: payload.clusterName,
+
+//     control_plane: payload.controlPlane ?? null,
+//     workers: payload.workers ?? [],
+
+//     create_status: payload.createStatus ?? false,
+//     connect_status: payload.connectStatus ?? false,
+//     verify_status: payload.verifyStatus ?? false,
+
+//     kubeconfig: encryptedKubeconfig ?? null,
+//     node_config: payload.nodeConfig ?? null,
+
+//     cni_plugin: payload.cniPlugin ?? null,
+//     k8s_version: payload.k8sVersion ?? null,
+
+//     status: payload.status ?? "pending",
+//     password: payload.password ?? null,
+//    // owner_id: payload.ownerId ?? null,
+//   };
+
+
+  
+
+//   const { data, error } = await supabase
+//     .from("clusters")
+//     .insert(row)
+//     .select()
+//     .single();
+
+//   if (error) {
+//     console.error("[createClusterWorker] insert failed:", error.message);
+//     return { success: false, error: error.message };
+//   }
+//   return { 
+//     success: true, 
+//     cluster: data 
+//   };
+//   },
+
+//   update: async (params: {
+//   clusterId: string;
+//   phase: Phase;
+//   value?: boolean;
+//   status?: Status;
+//   extras?: Partial<{
+//     control_plane: string | null;
+//     workers: string[];
+//     kubeconfig: string | null;
+//     node_config: NodeConfig | null;
+//     cni_plugin: string | null;
+//     k8s_version: string | null;
+//   }>;
+// }) => {
+//   const { clusterId, phase, value = true, status, extras = {} } = params;
+
+//   const fieldMap: Record<
+//     Phase,
+//     "create_status" | "connect_status" | "verify_status"
+//   > = {
+//     create: "create_status",
+//     connect: "connect_status",
+//     verify: "verify_status",
+//   };
+
+//   const patch:Patch  = {
+//     [fieldMap[phase]]: value,
+//     ...extras,
+//   };
+//    if (status) patch.status = status;
+
+
+//   const supabase = clientWorker(
+//   process.env.SUPABASE_URL!, // or SUPABASE_URL
+//   process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+//   { auth: { persistSession: false } }
+// );
+
+//   const { data, error } = await supabase
+//     .from("clusters")
+//     .update(patch)
+//     .eq("cluster_id", clusterId)
+//     .select()
+//     .single();
+
+//   if (error) {
+//     console.error("[updateClusterPhaseWorker] failed:", error.message);
+//     return { success: false, error: error.message };
+//   }
+//   return { success: true, cluster: data };
+//   },
+  
+   get_by_project_id: async (projectId: string): Promise<ClustersGet[]>=> {
+    try {
+      //console.log(projectId,"..................933..id");
+
+
+       if (!projectId || typeof projectId !== 'string') {
+      console.error('[Clusters.get_by_project_id] Invalid project ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      console.error('[Clusters.get_by_project_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return [];
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return [];
+    }
+  },
+
+
+
+   get_by_user_id: async (userId: string): Promise<ClustersGet[]>=> {
+    try {
+      //console.log(projectId,"..................933..id");
+
+
+       if (!userId || typeof userId !== 'string') {
+      console.error('[Clusters.get_by_user_id] Invalid user ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(userId)) {
+      console.error('[Clusters.get_by_user_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("owner_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return [];
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return [];
+    }
+  },
+
+   get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
+    try {
+      //console.log(cluster_id,"..................933..id");
+       const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("clusters")
+        .select("*")
+        .eq("cluster_id", cluster_id)
+        .single();
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project by id: ${error.message}`,
+        );
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return null;
+    }
+  },
+};
+
+
+
+export const Database_Clusters = {
+ 
+  create:async(payload:Database )=>{
+  
+
+
+    //console.log(payload, "...........in createDatabaseClusterWorker........");
+   const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .insert(payload)
+     .select()
+     .single();
+
+       if (error) {
+    console.error("[createClusterWorker] insert failed:", error.message);
+    return { success: false, error: error.message };
+  } 
+
+ // console.log(data, "...........in createDatabaseClusterWorker........");
+
+  return { success: true, data: data };
+  },
+
+  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null|undefined, public_connection:Database_Connection, private_connection:Database_Connection)=>{
+
+
+   // console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
+  const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .update({ status, ca_certificate: caCertificate, public_connection, private_connection })
+     .eq("cluster_id", cluster_id)
+     .select("*")
+     .single();
+     //console.log(data, "...........in updateDatabaseClusterWorker........");
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+},
+
+  read: async(id:string)=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("cluster_id", id)
+     .single();
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+ },
+  read_all_owner: async(owner_id:string)=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("owner_id", owner_id);
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+ },
+
+ read_all_owner_id: async(owner_id:string):Promise<Database[]>=>{
+   const supabase = await createSSRClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .select("*")
+     .eq("owner_id", owner_id);
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return [];
+   }
+   return data;
+
+   if (error) {
+     return [];
+   }
+ },
+  delete: async(cluster_id:string)=>{
+   // console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
+   const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .delete()
+     .eq("cluster_id", cluster_id)
+     .select();
+    if (error) {
+      console.error("[deleteClusterWorker] delete failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, cluster: data };
+ },
+
+  update_network_rules: async(cluster_id:string, network_rules:network_rules)=>{
+
+
+   // console.log(network_rules, "...........in updateDatabaseClusterWorker........");
+  const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .update({ network_rules })
+     .eq("cluster_id", cluster_id)
+     .select("*")
+     .single();
+    // console.log(data, "...........in updateDatabaseClusterWorker........");
+
+   if (error) {
+     console.error("[updateClusterWorker] update failed:", error.message);
+     return { success: false, error: error.message };
+   }
+   return { success: true, data: data };
+},
+
+  // Database user management functions
+  add_user: async(cluster_id: string, user: DatabaseUser) => {
+    //console.log(user, "...........in addDatabaseUser........");
+    const supabase = await createWorkerClient();
+    
+    // First, get current users
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[addDatabaseUser] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentUsers = currentData?.users || [];
+    const updatedUsers = [...currentUsers, user];
+
+    // Update with new user added
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users: updatedUsers })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[addDatabaseUser] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  remove_user: async(cluster_id: string, username: string) => {
+   // console.log(username, "...........in removeDatabaseUser........");
+    const supabase = await createWorkerClient();
+    
+    // Get current users
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[removeDatabaseUser] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentUsers = currentData?.users || [];
+    const updatedUsers = currentUsers.filter((u: DatabaseUser) => u.name !== username);
+
+    // Update with user removed
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users: updatedUsers })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[removeDatabaseUser] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  update_users: async(cluster_id: string, users: DatabaseUser[]) => {
+   // console.log(users, "...........in updateDatabaseUsers........");
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ users })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+     // console.error("[updateDatabaseUsers] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  get_users: async(cluster_id: string) => {
+    const supabase = await createSSRClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("users")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (error) {
+      console.error("[getDatabaseUsers] read failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data?.users || [] };
+  },
+
+  // Database instance management functions
+  add_db: async(cluster_id: string, database: DatabaseInstance) => {
+    //console.log(database, "...........in addDatabase........");
+    const supabase = await createWorkerClient();
+    
+    // First, get current databases
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (readError) {
+      console.error("[addDatabase] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentDbs = currentData?.dbs || [];
+    const updatedDbs = [...currentDbs, database];
+
+    // Update with new database added
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: updatedDbs })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[addDatabase] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  remove_db: async(cluster_id: string, db_name: string) => {
+    //console.log(db_name, "...........in removeDatabase........");
+    const supabase = await createWorkerClient();
+    
+    // Get current databases
+    const { data: currentData, error: readError } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single(); 
+
+    if (readError) {
+      console.error("[removeDatabase] read failed:", readError.message);
+      return { success: false, error: readError.message };
+    }
+
+    const currentDbs = currentData?.dbs || [];
+    const updatedDbs = currentDbs.filter((db: DatabaseInstance) => db.name !== db_name);
+
+    // Update with database removed
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: updatedDbs })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[removeDatabase] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  update_dbs: async(cluster_id: string, databases: DatabaseInstance[]) => {
+   // console.log(databases, "...........in updateDatabases........");
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ dbs: databases })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      //console.error("[updateDatabases] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  get_dbs: async(cluster_id: string) => {
+    const supabase = await createSSRClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("dbs")
+      .eq("cluster_id", cluster_id)
+      .single();
+
+    if (error) {
+      console.error("[getDatabases] read failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data?.dbs || [] };
+  },
+
+  // Update project assignment for database cluster
+  update_project: async(cluster_id: string, project_id: string) => {
+    //console.log(`[updateProject] cluster_id: ${cluster_id}, project_id: ${project_id}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ project_id })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateProject] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update region and status for migration
+  update_region: async(cluster_id: string, region: string, status: string = "migrating") => {
+    //console.log(`[updateRegion] cluster_id: ${cluster_id}, region: ${region}, status: ${status}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ region, status })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateRegion] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update maintenance window
+  update_maintenance_window: async(cluster_id: string, window: { day: string, hour: string }) => {
+    //console.log(`[updateMaintenanceWindow] cluster_id: ${cluster_id}, window:`, window);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ window })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateMaintenanceWindow] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Update storage tier (size)
+  update_storage: async(cluster_id: string, size: string) => {
+    //console.log(`[updateStorage] cluster_id: ${cluster_id}, size: ${size}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ size })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateStorage] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
+  // Get all databases for admin panel
+  get_all_for_admin: async (): Promise<Admin_Database[]> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Get all database clusters with user profile data
+      const { data: clusters, error } = await supabase
+        .from("database_cluster")
+        .select(`
+          id,
+          name,
+          engine,
+          version,
+          region,
+          cluster_id,
+          status,
+          owner_id,
+          created_at,
+          project_id,
+          user_profiles!owner_id(username)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(`[Database_Clusters] Error while getting all databases: ${error.message}`);
+        return [];
+      }
+
+      if (!clusters || clusters.length === 0) return [];
+
+      // Get auth users for emails
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) {
+        console.log(`[Database_Clusters] Error while getting auth users: ${authError.message}`);
+      }
+
+      const emailMap = new Map(
+        authUsers?.users?.map(u => [u.id, u.email]) || []
+      );
+
+      // Map and merge data with proper typing
+      const merged: Admin_Database[] = clusters
+        .map((cluster) => {
+          // Safely access nested user_profiles
+          const userProfile = Array.isArray(cluster.user_profiles)
+            ? cluster.user_profiles[0]
+            : cluster.user_profiles;
+
+          return {
+            id: cluster.id ?? "",
+            name: cluster.name ?? "",
+            engine: cluster.engine ?? "",
+            version: cluster.version ?? null,
+            region: cluster.region ?? null,
+            cluster_id: cluster.cluster_id ?? "",
+            status: cluster.status ?? "pending",
+            owner_id: cluster.owner_id ?? "",
+            owner_email: emailMap.get(cluster.owner_id ?? "") ?? null,
+            owner_username: (userProfile)?.username ?? null,
+            created_at: cluster.created_at ?? null,
+            project_id: cluster.project_id ?? "",
+          } as Admin_Database;
+        })
+        .filter((item): item is Admin_Database => Boolean(item));
+
+      return merged;
+    } catch (err) {
+      console.log(`[Database_Clusters] Error while getting all databases: ${err}`);
+      return [];
+    }
+  },
+
+   get_by_project_id: async (projectId: string): Promise<Database[]>=> {
+    try {
+      //console.log(projectId,"..................933..id");
+
+
+       if (!projectId || typeof projectId !== 'string') {
+      console.error('[Clusters.get_by_project_id] Invalid project ID');
+      return [];
+    }
+
+
+     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(projectId)) {
+      console.error('[Clusters.get_by_project_id] Invalid UUID format');
+      return [];
+    }
+
+   const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("database_cluster")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        // console.log(
+        //   `[Supabase] Error while getting project by id: ${error.message}`,
+        // );
+        return [];
+      }
+     // console.log(data, "...........data in database cluster by project id........");
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      return [];
+    }
+  },
+ 
+
+}
+
+// Activities queries
+export const Activities = {
+  // Add a new activity
+  add: async (
+    props: TablesInsert<"activities">,
+  ): Promise<{ success: boolean; id?: string; error?: string }> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .insert(props)
+        .select("id")
+        .single();
+
+      if (error) {
+        console.error(`[Activities.add] Error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, id: data.id };
+    } catch (err) {
+      console.error(`[Activities.add] Error: ${err}`);
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Unknown error",
+      };
+    }
+  },
+
+  // Get all activities for a project
+  get_by_project_id: async (
+    projectId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<Activity[]> => {
+    try {
+      if (!projectId || typeof projectId !== "string") {
+        console.error("[Activities.get_by_project_id] Invalid project ID");
+        return [];
+      }
+
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(projectId)) {
+        console.error("[Activities.get_by_project_id] Invalid UUID format");
+        return [];
+      }
+
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error(
+          `[Activities.get_by_project_id] Error: ${error.message}`,
+        );
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error(`[Activities.get_by_project_id] Error: ${err}`);
+      return [];
+    }
+  },
+
+  // Get activities by owner
+  get_by_owner_id: async (
+    ownerId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<Activity[]> => {
+    try {
+      if (!ownerId || typeof ownerId !== "string") {
+        console.error("[Activities.get_by_owner_id] Invalid owner ID");
+        return [];
+      }
+
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error(`[Activities.get_by_owner_id] Error: ${error.message}`);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error(`[Activities.get_by_owner_id] Error: ${err}`);
+      return [];
+    }
+  },
+};
+
+
+
+
+//All storage of files in s3 bucket and recieve the url to store in database
+
+export const storeFile=async(clusterId:string, file:File)=>{
+
+  const path = `clusters/${clusterId}/${Date.now()}-${file.name}`;
+  const supabase = await createSSRClient();
+  const { error: uploadError } = await supabase
+    .storage
+    .from('kubeconfigs')   // bucket name
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type
+    });
+
+    if (uploadError) throw uploadError;
+
+  return { path }; 
+}
+
+
+
+
+// function makeNodeKeys(workers: number): string[] {
+//   const n = Math.max(0, Math.floor(workers)); // sanitize
+//   const keys = ["cp-1"];
+//   for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
+//   return keys;
+// }
+
+
+
+
+
+
+
+
+
+export const ObjectSpaces = {
+  // Bucket operations only (access keys from .env)
+  delete: async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      console.log(id, "...........id in delete object space........");
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .delete()
+        .eq("id", id);
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error deleting: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error deleting: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_status: async (
+    id: string,
+    status: ObjectSpaceBucket["status"]
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update({ status })
+        .eq("id", id);
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error updating status: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating status: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  create_bucket: async (
+    payload: Omit<ObjectSpaceBucket, "id" | "created_at" | "updated_at">
+  ): Promise<{
+    success: boolean;
+    data?: ObjectSpaceBucket;
+    error?: string;
+  }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .insert({
+          ...payload,
+          type: "bucket",
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error creating bucket: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true, data: data as ObjectSpaceBucket };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error creating bucket: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_buckets: async (owner_id: string): Promise<ObjectSpaceBucket[]> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("owner_id", owner_id)
+        .eq("type", "bucket")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting buckets: ${error.message}`);
+        return [];
+      }
+      return (data as ObjectSpaceBucket[]) || [];
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting buckets: ${err}`);
+      return [];
+    }
+  },
+  get_all_buckets: async (): Promise<ObjectSpaceBucket[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("name")
+        .eq("type", "bucket")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting buckets: ${error.message}`);
+        return [];
+      }
+      return (data as ObjectSpaceBucket[]) || [];
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting buckets: ${err}`);
+      return [];
+    }
+  },
+
+  get_bucket_by_bucket_id: async (
+    id: string,
+    is_admin: boolean = false
+  ): Promise<ObjectSpaceBucket | null> => {
+    try {
+      // console.log(id, "...........bucket_id in get_bucket_by_bucket_id........");
+      const supabase = is_admin ? await createWorkerClient() : await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("id", id)
+        .eq("type", "bucket")
+        .single();
+
+      if (error) {
+        console.error(
+          `[ObjectSpaces] 
+          : ${error.message}`
+        );
+        return null;
+      }
+      return data as ObjectSpaceBucket;
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting bucket by bucket_id: ${err}`);
+      return null;
+    }
+  },
+
+  get_bucket_by_id: async (id: string): Promise<ObjectSpaceBucket | null> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("id", id)
+        .eq("type", "bucket")
+        .single();
+
+      if (error) {
+        console.error(
+          `[ObjectSpaces] Error getting bucket by id: ${error.message}`
+        );
+        return null;
+      }
+      return data as ObjectSpaceBucket;
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting bucket by id: ${err}`);
+      return null;
+    }
+  },
+
+  update_bucket_stats: async (
+    id: string,
+    size_bytes: number,
+    object_count: number
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update({ size_bytes, object_count })
+        .eq("id", id)
+        .eq("type", "bucket");
+
+      if (error) {
+        console.error(
+          `[ObjectSpaces] Error updating bucket stats: ${error.message}`
+        );
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating bucket stats: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_bucket_settings: async (
+    id: string,
+    settings: Partial<
+      Pick<
+        ObjectSpaceBucket,
+        "acl" | "cors_enabled" | "versioning_enabled" | "project_id"
+      >
+    >
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update(settings)
+        .eq("id", id)
+        .eq("type", "bucket");
+
+      if (error) {
+        console.error(
+          `[ObjectSpaces] Error updating bucket settings: ${error.message}`
+        );
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error updating bucket settings: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  // Admin methods
+  get_all_for_admin: async (): Promise<Admin_Bucket[]> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Get all object storage buckets
+      const { data: buckets, error } = await supabase
+        .from("object_spaces")
+        .select(`
+          id,
+          name,
+          size_bytes,
+          object_count,
+          region,
+          status,
+          created_at,
+          project_id,
+          owner_id,
+          user_profiles(username)
+        `)
+        .eq("type", "bucket")
+        .order("created_at", { ascending: false });
+
+      console.log(buckets, "...........data in get_all_for_admin........");
+
+      if (error) {
+        console.error(
+          `[ObjectSpaces] Error getting all buckets for admin: ${error.message}`
+        );
+        return [];
+      }
+
+      if (!buckets || buckets.length === 0) return [];
+
+      // Get auth users for emails
+      const { data: authUsers, error: authError } =
+        await supabase.auth.admin.listUsers();
+
+      if (authError) {
+        console.log(
+          `[ObjectSpaces] Error while getting auth users: ${authError.message}`
+        );
+      }
+
+      const emailMap = new Map(
+        authUsers?.users?.map((u) => [u.id, u.email]) || []
+      );
+
+      // Map and merge data with proper typing
+      const merged: Admin_Bucket[] = buckets
+        .map((bucket) => {
+          // Safely access nested user_profiles
+          const userProfile = Array.isArray(bucket.user_profiles)
+            ? bucket.user_profiles[0]
+            : bucket.user_profiles;
+
+          return {
+            id: bucket.id ?? "",
+            name: bucket.name ?? "",
+            size: bucket.size_bytes ?? 0,
+            object_count: bucket.object_count ?? 0,
+            region: bucket.region ?? null,
+            status: bucket.status ?? "pending",
+            owner_id: bucket.owner_id ?? "",
+            owner_email: emailMap.get(bucket.owner_id ?? "") ?? null,
+            owner_username: userProfile?.username ?? null,
+            created_at: bucket.created_at ?? null,
+            project_id: bucket.project_id ?? "",
+          } as Admin_Bucket;
+        })
+        .filter((item): item is Admin_Bucket => Boolean(item));
+
+      return merged;
+    } catch (err) {
+      console.error(
+        `[ObjectSpaces] Error getting all buckets for admin: ${err}`
+      );
+      return [];
+    }
+  },
+};
+
 // Export the queries object for backward compatibility
 const api = {
   users: Users,
@@ -702,6 +2241,11 @@ const api = {
   products: Products,
   locations: Locations,
   otps: OTPs,
+  // vms:Vms,
+  clusters:Clusters,
+  database_clusters:Database_Clusters,
+  activities: Activities,
+  object_spaces: ObjectSpaces,
 };
 
 export default api;

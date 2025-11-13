@@ -2,7 +2,7 @@ import { GameServers } from "@/lib/supabase/queries";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import GameServerGrid from "@/components/dashboard/projects/tabs/resources/grid";
-import { Separator } from "@/components/ui/separator";
+// import { Separator } from "@/components/ui/separator";
 import { getUser } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
@@ -25,7 +25,7 @@ const GameServiceSuspense = async () => {
     );
   }
 
-  return <GameServerGrid data={gameservers} />;
+  return <GameServerGrid data={gameservers} type="game_servers" />;
 };
 
 const GameServicePage = () => {

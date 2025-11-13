@@ -3,7 +3,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Create custom types
 CREATE TYPE user_role AS ENUM ('member', 'admin', 'users', 'events', 'giveaways', 'application-forms', 'form-submissions');
-CREATE TYPE product_type AS ENUM ('vps', 'vds', 'game', 'database');
+CREATE TYPE product_type AS ENUM ('vps', 'vds', 'game', 'database', 'object-storage');
 
 -- Projects table
 CREATE TABLE projects (
@@ -22,6 +22,17 @@ CREATE TABLE project_logs (
     event TEXT NOT NULL,
     text TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    project_id UUID REFERENCES projects(id) ON DELETE CASCADE
+);
+
+-- Activities table
+CREATE TABLE activities (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    cluster_name TEXT NOT NULL,
+    cluster_type TEXT NOT NULL,
+    action TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    owner_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     project_id UUID REFERENCES projects(id) ON DELETE CASCADE
 );
 
@@ -108,11 +119,75 @@ CREATE TABLE game_servers (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+
+
+
+
+
+
+
+-- Kubernetes cluster table
+create table clusters (
+  id uuid primary key default gen_random_uuid(),
+
+  cluster_id text not null,
+  cluster_name text not null,
+
+  control_plane text,
+  workers jsonb default '[]'::jsonb,
+
+  create_status boolean default false,
+  connect_status boolean default false,
+  verify_status boolean default false,
+
+  kubeconfig text,
+  node_config jsonb,
+
+  cni_plugin text,
+  k8s_version text,
+
+  status text default 'pending' check (status in ('pending','creating','ready','failed','deleted')),
+
+  owner_id uuid references auth.users (id) on delete cascade,
+
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+
+
+-- All VMs table
+create table if not exists public.vms (
+  id          uuid primary key default gen_random_uuid(),
+  ip_address  inet    not null unique,           -- e.g. '172.105.52.85'
+  username    text    not null,
+  password    text    not null,                  -- consider encrypting / storing elsewhere
+  location    text    not null,
+  ram         integer not null check (ram >= 1),
+  storage     integer not null check (storage >= 1),
+  cpu         integer not null check (cpu >= 1),
+  status      public.vm_status not null default 'free',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+
+
+
+
+
+
+
+
+
+
+
 -- Row Level Security (RLS) Policies
 
 -- Enable RLS on all tables
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE otps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
@@ -154,6 +229,31 @@ CREATE POLICY "Users can insert logs for their projects" ON project_logs
         EXISTS (
             SELECT 1 FROM projects 
             WHERE projects.id = project_logs.project_id 
+            AND (
+                auth.uid() = projects.owner OR 
+                auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))
+            )
+        )
+    );
+
+-- Activities policies
+CREATE POLICY "Users can view activities for their projects" ON activities
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM projects 
+            WHERE projects.id = activities.project_id 
+            AND (
+                auth.uid() = projects.owner OR 
+                auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))
+            )
+        )
+    );
+
+CREATE POLICY "Users can insert activities for their projects" ON activities
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM projects 
+            WHERE projects.id = activities.project_id 
             AND (
                 auth.uid() = projects.owner OR 
                 auth.uid()::text = ANY(SELECT jsonb_array_elements_text(projects.users))

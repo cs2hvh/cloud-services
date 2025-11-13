@@ -1,5 +1,21 @@
-import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+// import { boolean } from "zod";
+
+
+interface transformedRepos {
+  uuid: string;
+  name: string;
+  full_name: string;
+  description: string | null;
+  is_private: boolean;
+  mainbranch?: { name: string };  // Optional field for main branch
+  language: string | null;
+  updated_on: string;  // Assuming `updated_on` is a string (ISO date)
+  links?: {
+    clone?: { name: string; href: string }[];  // `clone` is an array of link objects
+    html?: { href: string };  // HTML URL for the repo
+  };
+}
 
 export async function GET() {
   try {
@@ -15,8 +31,8 @@ export async function GET() {
       );
     }
 
-    console.log('=== DEBUGGING BITBUCKET TOKEN ACCESS ===');
-    console.log('Session user ID:', session.user.id);
+    //console.log('=== DEBUGGING BITBUCKET TOKEN ACCESS ===');
+   // console.log('Session user ID:', session.user.id);
 
     // Check if user has Bitbucket provider linked
     const bitbucketIdentity = session.user.identities?.find(
@@ -30,7 +46,7 @@ export async function GET() {
       );
     }
 
-    console.log('Bitbucket Identity Data:', JSON.stringify(bitbucketIdentity.identity_data, null, 2));
+   // console.log('Bitbucket Identity Data:', JSON.stringify(bitbucketIdentity.identity_data, null, 2));
 
     // Try to get access token from multiple locations
     let accessToken = null;
@@ -38,19 +54,19 @@ export async function GET() {
     // Method 1: Session provider token
     if (session.provider_token) {
       accessToken = session.provider_token;
-      console.log('Found token in session.provider_token');
+     // console.log('Found token in session.provider_token');
     }
     
     // Method 2: Identity data provider token
     else if (bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
-      console.log('Found token in identity_data.provider_token');
+      //console.log('Found token in identity_data.provider_token');
     }
     
     // Method 3: Identity data access token
     else if (bitbucketIdentity.identity_data?.access_token) {
       accessToken = bitbucketIdentity.identity_data.access_token;
-      console.log('Found token in identity_data.access_token');
+      //console.log('Found token in identity_data.access_token');
     }
 
     if (!accessToken) {
@@ -66,7 +82,7 @@ export async function GET() {
       );
     }
 
-    console.log('Using Bitbucket token for repo access');
+    //console.log('Using Bitbucket token for repo access');
 
     // Fetch all repositories using access token
     const response = await fetch('https://api.bitbucket.org/2.0/repositories?role=member&sort=-updated_on&pagelen=100', {
@@ -93,10 +109,10 @@ export async function GET() {
 
     const data = await response.json();
     const repos = data.values || [];
-    console.log(`Fetched ${repos.length} repositories from Bitbucket`);
+   // console.log(`Fetched ${repos.length} repositories from Bitbucket`);
     
     // Transform Bitbucket API response to our format
-    const transformedRepos = repos.map((repo: any) => ({
+    const transformedRepos = repos.map((repo: transformedRepos) => ({
       id: repo.uuid,
       name: repo.name,
       fullName: repo.full_name,
@@ -106,7 +122,7 @@ export async function GET() {
       language: repo.language || 'Unknown',
       updatedAt: repo.updated_on,
       provider: 'bitbucket',
-      cloneUrl: repo.links?.clone?.find((link: any) => link.name === 'https')?.href,
+      cloneUrl: repo.links?.clone?.find((link) => link.name === 'https')?.href,
       htmlUrl: repo.links?.html?.href
     }));
 
