@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     let doStatus: string | null = null;
     
     if (validatedData.checkStatus) {
-      console.log("reached here ---47")
+      //console.log("reached here ---47")
       const database = await axios.get(
         `https://api.digitalocean.com/v2/databases/${validatedData.id}`,
         {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       if (database.status === 200) {
         doStatus = database.data.database.status;
         status = doStatus === "online" ? true : false;
-        console.log(`[checkStatus] DO Status: ${doStatus}, Supabase will be checked/updated if needed`);
+        //console.log(`[checkStatus] DO Status: ${doStatus}, Supabase will be checked/updated if needed`);
       }
     }
 

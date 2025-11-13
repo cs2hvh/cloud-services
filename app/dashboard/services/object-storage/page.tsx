@@ -4,7 +4,9 @@ import { ObjectSpaces, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import ObjectStorageMain from "@/components/dashboard/object-storage/main";
-import { Encryption } from "@/config/functions";
+// NOTE: We deliberately avoid decrypting sensitive credentials in the SSR layer.
+// Only bucket endpoints (non-secret) are lightly processed here; access/secret keys
+// are retrieved via an explicit client action to reduce exposure in initial payload.
 
 const ObjectStorageSuspense = async () => {
   const user = await getUser();
@@ -14,55 +16,12 @@ const ObjectStorageSuspense = async () => {
   }
 
   const projects = await Projects.get_all_by_user(user.id);
-  const rawBuckets = await ObjectSpaces.get_buckets(user.id);
-  const encryptionKey = process.env.ENCRYPTION_KEY;
+  const buckets = await ObjectSpaces.get_buckets(user.id);
+  // Sensitive fields remain encrypted; UI will request decrypted credentials on demand.
 
-  // Decrypt endpoints and credentials for all buckets
-  const buckets = rawBuckets.map(bucket => {
-    const decryptedBucket = { ...bucket };
-    
-    // Decrypt endpoint
-    if (bucket.endpoint && encryptionKey) {
-      try {
-        if (bucket.endpoint.startsWith('{')) {
-          // Endpoint is encrypted (JSON stringified)
-          const encryptedData = JSON.parse(bucket.endpoint);
-          decryptedBucket.endpoint = Encryption.decrypt(encryptedData, encryptionKey);
-        }
-      } catch (error) {
-        console.error(`Error decrypting endpoint for bucket ${bucket.id}:`, error);
-        // Keep original endpoint if decryption fails
-      }
-    }
-
-    // Decrypt access key
-    if (bucket.key_id && encryptionKey) {
-      try {
-        if (bucket.key_id.startsWith('{')) {
-          const encryptedData = JSON.parse(bucket.key_id);
-          decryptedBucket.key_id = Encryption.decrypt(encryptedData, encryptionKey);
-        }
-      } catch (error) {
-        console.error(`Error decrypting key_id for bucket ${bucket.id}:`, error);
-      }
-    }
-
-    // Decrypt secret key
-    if (bucket.secret_key && encryptionKey) {
-      try {
-        if (bucket.secret_key.startsWith('{')) {
-          const encryptedData = JSON.parse(bucket.secret_key);
-          decryptedBucket.secret_key = Encryption.decrypt(encryptedData, encryptionKey);
-        }
-      } catch (error) {
-        console.error(`Error decrypting secret_key for bucket ${bucket.id}:`, error);
-      }
-    }
-
-    return decryptedBucket;
-  });
-
-  return <ObjectStorageMain buckets={buckets} projects={projects} userId={user.id} />;
+  return (
+    <ObjectStorageMain buckets={buckets} projects={projects} userId={user.id} />
+  );
 };
 
 const ObjectStoragePage = () => {

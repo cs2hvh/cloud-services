@@ -22,7 +22,7 @@ const SingleDbPage = async ({
     //console.log(params,".............params...........");
 
     const { databaseId } = await params;
-    console.log(databaseId,".............databaseId...........");
+    //console.log(databaseId,".............databaseId...........");
    
    // Fetch database cluster details
    const databaseCluster = await Database_Clusters.read(databaseId);
@@ -32,7 +32,7 @@ const SingleDbPage = async ({
    // Fetch database products for storage tier options based on database engine type
    const databaseProducts = await Products.get_by_type_and_subtype("database", databaseEngine);
 
-    console.log(databaseStatus,".............database status...........");
+    //console.log(databaseStatus,".............database status...........");
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
       <div className="mb-8">

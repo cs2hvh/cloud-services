@@ -1,10 +1,10 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { Locations, ObjectSpaces } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import BucketTabs from "@/components/dashboard/object-storage/bucket-tabs";
-import { Encryption } from "@/config/functions";
+// We avoid decrypting sensitive credentials in SSR; only basic bucket data is shown.
 
 interface PageProps {
   params: Promise<{ bucketId: string }>;
@@ -18,53 +18,14 @@ const SingleBucketSuspense = async ({ bucketId }: { bucketId: string }) => {
   }
 
   const rawBucket = await ObjectSpaces.get_bucket_by_id(bucketId);
+  const locations = await Locations.get_by_type("object");
 
   if (!rawBucket || rawBucket.owner_id !== user.id) {
     notFound();
   }
 
-  const encryptionKey = process.env.ENCRYPTION_KEY;
-  const decryptedBucket = { ...rawBucket };
-
-  // Decrypt endpoint
-  if (rawBucket.endpoint && encryptionKey) {
-    try {
-      if (rawBucket.endpoint.startsWith('{')) {
-        // Endpoint is encrypted (JSON stringified)
-        const encryptedData = JSON.parse(rawBucket.endpoint);
-        decryptedBucket.endpoint = Encryption.decrypt(encryptedData, encryptionKey);
-      }
-    } catch (error) {
-      console.error(`Error decrypting endpoint for bucket ${rawBucket.id}:`, error);
-      // Keep original endpoint if decryption fails
-    }
-  }
-
-  // Decrypt access key
-  if (rawBucket.key_id && encryptionKey) {
-    try {
-      if (rawBucket.key_id.startsWith('{')) {
-        const encryptedData = JSON.parse(rawBucket.key_id);
-        decryptedBucket.key_id = Encryption.decrypt(encryptedData, encryptionKey);
-      }
-    } catch (error) {
-      console.error(`Error decrypting key_id for bucket ${rawBucket.id}:`, error);
-    }
-  }
-
-  // Decrypt secret key
-  if (rawBucket.secret_key && encryptionKey) {
-    try {
-      if (rawBucket.secret_key.startsWith('{')) {
-        const encryptedData = JSON.parse(rawBucket.secret_key);
-        decryptedBucket.secret_key = Encryption.decrypt(encryptedData, encryptionKey);
-      }
-    } catch (error) {
-      console.error(`Error decrypting secret_key for bucket ${rawBucket.id}:`, error);
-    }
-  }
-
-  return <BucketTabs bucket={decryptedBucket} />;
+  // Pass encrypted bucket; client will fetch decrypted credentials via secure endpoint.
+  return <BucketTabs bucket={rawBucket} locations={locations} />;
 };
 
 export default async function BucketPage({ params }: PageProps) {

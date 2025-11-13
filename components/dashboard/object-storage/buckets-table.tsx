@@ -107,7 +107,7 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                copyToClipboard(bucket.id, "Bucket ID");
+                copyToClipboard(bucket?.id || "", "Bucket ID");
               }}
               className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
             >
@@ -166,16 +166,6 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
               className="cursor-pointer h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
             >
               View
-            </Button>
-
-            <Button
-              size="sm"
-              variant="ghost"
-             // onClick={(e) => }
-              className="cursor-pointer h-8 w-8 p-0 bg-red-900/30 hover:bg-red-900/50 text-red-400 border-0"
-              title="Delete Bucket"
-            >
-              <Trash className="h-3.5 w-3.5" />
             </Button>
           </div>
         </td>

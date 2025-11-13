@@ -5,12 +5,12 @@ import { motion } from "motion/react";
 import {
   Search,
   Database as DatabaseIcon,
-  ExternalLink,
   ChevronLeft,
   ChevronRight,
   Filter,
-  Pencil,
   Trash2,
+  Plus,
+  Loader2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Admin_Database } from "@/lib/supabase/types";
@@ -47,7 +47,7 @@ const DATABASES_PER_PAGE = 10;
 
 export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   const router = useRouter();
-
+  const [allDatabasesLocal, setAllDatabasesLocal] = useState(all_databases);
   const [databases, setDatabases] = useState(
     all_databases.slice(0, DATABASES_PER_PAGE)
   );
@@ -57,8 +57,6 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   const [totalPages, setTotalPages] = useState(
     Math.ceil(all_databases.length / DATABASES_PER_PAGE)
   );
-//   const [totalDatabases, setTotalDatabases] = useState(all_databases.length);
-
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedClusterId, setSelectedClusterId] = useState<string>("");
@@ -67,7 +65,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
 
   // Filter and sort databases
   const getFilteredAndSortedDatabases = () => {
-    let filtered = [...all_databases];
+    let filtered = [...allDatabasesLocal];
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -110,7 +108,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     setDatabases(paginatedDatabases);
     setCurrentPage(page);
     setTotalPages(Math.ceil(filtered.length / DATABASES_PER_PAGE));
-   // setTotalDatabases(filtered.length);
+    // setTotalDatabases(filtered.length);
   };
 
   const handleSearch = () => {
@@ -119,16 +117,6 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
 
   const handleSortChange = (value: "email" | "engine" | "region") => {
     setSortBy(value);
-  };
-
-  const handleViewDatabase = (clusterId: string) => {
-    router.push(`/dashboard/services/database/clusters/${clusterId}`);
-  };
-
-  const handleEditDatabase = (clusterId: string) => {
-    router.push(
-      `/dashboard/services/database/clusters/${clusterId}?tab=settings`
-    );
   };
 
   const handleDeleteDatabase = (clusterId: string, clusterName: string) => {
@@ -141,16 +129,78 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     if (!selectedClusterId) return;
 
     setIsDeleting(true);
+
     try {
+      // debugger
       const response = await api.post("/services/database/delete", {
         id: selectedClusterId,
       });
 
       if (response.status === 200) {
         toast.success("Database cluster deleted successfully");
+
+        // Remove the deleted database from the local state
+        const updatedDatabases = allDatabasesLocal.filter(
+          (db) => db.cluster_id !== selectedClusterId
+        );
+
+        // Update the local databases state
+        setAllDatabasesLocal(updatedDatabases);
         setDeleteDialogOpen(false);
 
-        // Refresh the page to get updated data
+        // Manually update the filtered and paginated data
+        let filtered = [...updatedDatabases];
+
+        // Apply search filter
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase();
+          filtered = filtered.filter(
+            (db) =>
+              db.name?.toLowerCase().includes(query) ||
+              dbLocations
+                ?.find((location) => location.short === db.region)
+                ?.city.toLowerCase()
+                .includes(query) ||
+              db.cluster_id?.toLowerCase().includes(query) ||
+              db.owner_email?.toLowerCase().includes(query) ||
+              db.owner_username?.toLowerCase().includes(query) ||
+              getEngineDisplay(db.engine)?.toLowerCase().includes(query)
+          );
+        }
+
+        // Apply sorting
+        filtered.sort((a, b) => {
+          if (sortBy === "email") {
+            return (a.owner_email || "").localeCompare(b.owner_email || "");
+          } else if (sortBy === "engine") {
+            return (a.engine || "").localeCompare(b.engine || "");
+          } else if (sortBy === "region") {
+            return (a.region || "").localeCompare(b.region || "");
+          }
+          return 0;
+        });
+
+        // Calculate new pagination
+        const newTotalPages = Math.ceil(filtered.length / DATABASES_PER_PAGE);
+        let pageToShow = currentPage;
+
+        // If current page is empty, go to previous page
+        if (currentPage > newTotalPages && newTotalPages > 0) {
+          pageToShow = newTotalPages;
+        } else if (newTotalPages === 0) {
+          pageToShow = 1;
+        }
+
+        // Update pagination state
+        const startIndex = (pageToShow - 1) * DATABASES_PER_PAGE;
+        const endIndex = startIndex + DATABASES_PER_PAGE;
+        const paginatedDatabases = filtered.slice(startIndex, endIndex);
+
+        setDatabases(paginatedDatabases);
+        setCurrentPage(pageToShow);
+        setTotalPages(Math.max(1, newTotalPages));
+
+        // Also refresh server data for persistence
         router.refresh();
       }
     } catch (error) {
@@ -190,6 +240,21 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     return engineMap[engine.toLowerCase()] || engine;
   };
 
+  if (isDeleting) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 flex items-center justify-center"
+      >
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-white text-lg">Loading network rules...</p>
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <>
       {/* Search and Filters */}
@@ -213,32 +278,43 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           </Button>
         </div>
 
-        <Select value={sortBy} onValueChange={handleSortChange}>
-          <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Sort by" />
-          </SelectTrigger>
-          <SelectContent className="bg-neutral-900 border-neutral-800">
-            <SelectItem
-              value="email"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Email
-            </SelectItem>
-            <SelectItem
-              value="engine"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Db_type
-            </SelectItem>
-            <SelectItem
-              value="region"
-              className="text-white focus:bg-neutral-800 focus:text-white"
-            >
-              Sort by Region
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex gap-3">
+          <Select value={sortBy} onValueChange={handleSortChange}>
+            <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="bg-neutral-900 border-neutral-800">
+              <SelectItem
+                value="email"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Email
+              </SelectItem>
+              <SelectItem
+                value="engine"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Db_type
+              </SelectItem>
+              <SelectItem
+                value="region"
+                className="text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Sort by Region
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            onClick={() => router.push("/dashboard/admin/databases/assign")}
+            className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Assign Db</span>
+            <span className="sm:hidden">Assign</span>
+          </Button>
+        </div>
       </div>
 
       {/* Databases Table */}
@@ -353,7 +429,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <Button
+                          {/* <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleViewDatabase(db.cluster_id)}
@@ -370,7 +446,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
                           >
                             <Pencil className="h-3.5 w-3.5 mr-1.5" />
                             Edit
-                          </Button>
+                          </Button> */}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -455,11 +531,11 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeleting ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Deleting...
                 </>
               ) : (

@@ -3,6 +3,9 @@ import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
 import { updateBucketACL } from "@/lib/aws/s3-operations";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { updateBucketAclSchema } from "@/lib/validation/object-storage";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -12,22 +15,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Per-user rate limit for settings updates (small burst allowed)
+    const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-settings", limit: 20, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
-    const { bucket_id, acl } = body;
-
-    if (!bucket_id || !acl) {
-      return NextResponse.json(
-        { error: "Invalid request", message: "Bucket ID and ACL are required" },
-        { status: 400 }
-      );
-    }
-
-    if (acl !== 'private' && acl !== 'public-read') {
-      return NextResponse.json(
-        { error: "Invalid ACL", message: "ACL must be 'private' or 'public-read'" },
-        { status: 400 }
-      );
-    }
+    const parsed = validateRequest(updateBucketAclSchema, body);
+    if (!parsed.success) return parsed.response;
+    const { bucket_id, acl } = parsed.data as any;
 
     console.log("🔒 Updating bucket ACL:", bucket_id, "to", acl);
 
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update in database
-    const dbResult = await ObjectSpaces.update_bucket_settings(bucket.id, { acl });
+  const dbResult = await ObjectSpaces.update_bucket_settings(bucket.id as string, { acl });
 
     if (!dbResult.success) {
       console.error("Failed to update ACL in database:", dbResult.error);

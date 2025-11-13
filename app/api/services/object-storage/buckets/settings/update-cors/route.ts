@@ -3,6 +3,9 @@ import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
 import { updateBucketCORS } from "@/lib/aws/s3-operations";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { updateBucketCorsSchema } from "@/lib/validation/object-storage";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -12,15 +15,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { bucket_id, enabled } = body;
-
-    if (!bucket_id || typeof enabled !== 'boolean') {
+    const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-settings", limit: 20, windowMs: 60_000 });
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: "Invalid request", message: "Bucket ID and enabled flag are required" },
-        { status: 400 }
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
       );
     }
+    const body = await req.json();
+  const parsed = validateRequest(updateBucketCorsSchema, body);
+  if (!parsed.success) return parsed.response;
+  const { bucket_id, enabled } = parsed.data ;
 
     console.log("🌐 Updating bucket CORS:", bucket_id, "enabled:", enabled);
 
@@ -60,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Update in database
-    const dbResult = await ObjectSpaces.update_bucket_settings(bucket.id, { cors_enabled: enabled });
+  const dbResult = await ObjectSpaces.update_bucket_settings(bucket.id as string, { cors_enabled: enabled });
 
     if (!dbResult.success) {
       console.error("Failed to update CORS in database:", dbResult.error);
