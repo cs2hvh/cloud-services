@@ -152,7 +152,7 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: any  ) {
     console.error("❌ Error deleting bucket:", error);
     return NextResponse.json(
       {
