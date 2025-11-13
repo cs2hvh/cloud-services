@@ -137,7 +137,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
       setIsDeleting(true);
       await axios.post("/api/services/object-storage/buckets/delete", {
         bucket_id: selectedBucketId,
-        isadmin: true,
+        is_admin: true,
       });
 
       toast.success("Bucket deleted successfully");

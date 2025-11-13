@@ -167,16 +167,6 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
             >
               View
             </Button>
-
-            <Button
-              size="sm"
-              variant="ghost"
-             // onClick={(e) => }
-              className="cursor-pointer h-8 w-8 p-0 bg-red-900/30 hover:bg-red-900/50 text-red-400 border-0"
-              title="Delete Bucket"
-            >
-              <Trash className="h-3.5 w-3.5" />
-            </Button>
           </div>
         </td>
       </tr>

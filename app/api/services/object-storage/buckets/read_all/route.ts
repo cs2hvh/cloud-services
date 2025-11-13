@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
+import { limitByUser } from "@/lib/cooldown/userbased";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -11,6 +12,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Per-user rate limit for listing buckets (moderate)
+    const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-read-all", limit: 120, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { owner_id } = body;
 

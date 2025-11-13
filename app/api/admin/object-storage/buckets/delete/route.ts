@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticateUser } from "@/lib/auth/server-auth";
-import { ObjectSpaces } from "@/lib/supabase/queries";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -85,13 +83,6 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
 
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Bucket deleted successfully",
-      },
-      { status: 200 }
-    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
     console.error("Admin bucket delete error:", errorMessage);

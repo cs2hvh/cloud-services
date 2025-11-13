@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
+import { limitByUser } from "@/lib/cooldown/userbased";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -10,6 +11,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Higher limit for read (used by UI), still protect from abuse
+    const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-read", limit: 60, windowMs: 60_000 });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
+    }
+
     const body = await req.json();
     const { bucket_id } = body;
 

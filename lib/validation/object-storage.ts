@@ -70,6 +70,33 @@ export const updateBucketSettingsSchema = z.object({
 
 export type UpdateBucketSettingsInput = z.infer<typeof updateBucketSettingsSchema>;
 
+// Route-specific mutation schemas
+export const deleteBucketSchema = z.object({
+  bucket_id: z.string().min(1, 'Bucket ID is required'),
+  force: z.boolean().optional(),
+  is_admin: z.boolean().optional(),
+});
+
+export const updateBucketAclSchema = z.object({
+  bucket_id: z.string().min(1, 'Bucket ID is required'),
+  acl: z.enum(['private', 'public-read']),
+});
+
+export const updateBucketCorsSchema = z.object({
+  bucket_id: z.string().min(1, 'Bucket ID is required'),
+  enabled: z.boolean(),
+});
+
+export const updateBucketVersioningSchema = z.object({
+  bucket_id: z.string().min(1, 'Bucket ID is required'),
+  enabled: z.boolean(),
+});
+
+export const updateBucketProjectSchema = z.object({
+  bucket_id: z.string().min(1, 'Bucket ID is required'),
+  project_id: z.string().uuid('Invalid project ID').nullable().optional(),
+});
+
 // File upload validation
 export const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
 export const ALLOWED_FILE_TYPES = [

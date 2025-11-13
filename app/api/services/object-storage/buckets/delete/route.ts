@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { deleteBucketSchema } from "@/lib/validation/object-storage";
+import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -11,16 +14,19 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { bucket_id, force = true, is_admin } = body;
-
-    // ✅ VALIDATE REQUEST PAYLOAD
-    if (!bucket_id || typeof bucket_id !== "string") {
+    // Per-user rate limit for deletion (destructive operation)
+    const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-delete", limit: 5, windowMs: 60_000 });
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: "Invalid request", message: "Bucket ID is required" },
-        { status: 400 }
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
       );
     }
+
+    const body = await req.json();
+    const parsed = validateRequest(deleteBucketSchema, body);
+    if (!parsed.success) return parsed.response;
+    const { bucket_id, force = true, is_admin } = parsed.data as any;
 
     // 🔒 SECURE: Use centralized function for bucket deletion
     // All sensitive operations are handled securely in the config layer

@@ -525,9 +525,10 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
 
     // Delete bucket from storage provider
     const providerResult = await deleteBucketFromProvider(
-      bucket, 
-      envResult.config, 
-      config.force || true
+      bucket,
+      envResult.config,
+      // Respect explicit false; default to true only when undefined
+      config.force ?? true
     );
     
     if (!providerResult.success) {

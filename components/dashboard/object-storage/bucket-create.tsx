@@ -672,12 +672,13 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                       </p>
                     </div>
                     <Select
+                     
                       value={formData.acl}
                       onValueChange={(value: "private" | "public-read") =>
                         setFormData({ ...formData, acl: value })
                       }
                     >
-                      <SelectTrigger className="w-[180px] bg-white/10 border-white/20">
+                      <SelectTrigger className="cursor-pointer w-[180px] bg-white/10 border-white/20">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -702,6 +703,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                       </p>
                     </div>
                     <Switch
+                    className="cursor-pointer"
                       id="cors"
                       checked={formData.cors_enabled}
                       onCheckedChange={(checked) =>
@@ -723,6 +725,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                       </p>
                     </div>
                     <Switch
+                       className="cursor-pointer"
                       id="versioning"
                       checked={formData.versioning_enabled}
                       onCheckedChange={(checked) =>
