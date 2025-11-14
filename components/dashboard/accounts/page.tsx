@@ -122,7 +122,7 @@ function ProviderRow({
     <div
       className={twMerge(
         "flex items-center justify-between rounded-2xl border p-4",
-        "bg-white shadow-sm hover:shadow transition",
+        "bg-black shadow-sm hover:shadow transition",
       )}
     >
       <div className="flex items-center gap-3">

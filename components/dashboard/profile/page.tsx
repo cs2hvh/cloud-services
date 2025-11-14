@@ -77,7 +77,7 @@ const ProfileSettings: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-md space-y-6">
+    <div className="max-w-xl mx-auto p-6 bg-black rounded-lg shadow-md space-y-6">
       <h2 className="text-2xl font-semibold">Profile Settings</h2>
 
       {/* Profile Picture */}

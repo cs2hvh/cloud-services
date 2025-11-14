@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
-import Image from "next/image";
 
 export default function EnableTotp() {
   const supabase = createClient();
@@ -198,13 +197,12 @@ export default function EnableTotp() {
           <div>
             <Label>Scan this QR in your Authenticator app</Label>
             {qrSvg ? (
-              <Image
+              <img
                 alt="TOTP QR"
                 src={qrSvg}
                 width={200}
                 height={200}
                 className="mt-2 border rounded-md"
-                unoptimized={true} // Important for data URLs
               />
             ) : (
               <div className="text-sm text-muted-foreground mt-2">
@@ -212,7 +210,7 @@ export default function EnableTotp() {
               </div>
             )}
           </div>
-
+        
           <div>
             <Label htmlFor="totp">Enter the 6-digit code</Label>
             <Input
