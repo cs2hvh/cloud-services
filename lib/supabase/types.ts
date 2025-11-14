@@ -989,6 +989,69 @@ export type Database = {
           },
         ];
       };
+      spectrum_apps: {
+        Row: {
+          id: string; // surrogate uuid
+          spectrum_id: string; // cloudflare id
+          zone_id: string;
+          name: string; // original hostname (kept for uniqueness)
+          dns_type: "A" | "CNAME";
+          protocol: string;
+          owner_id: string;
+            project_id: string | null;
+          status: string | null;
+          cf_app: Json | null;
+          hostname_enc: Json | null; // EncryptedData JSON of resolved IP
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          spectrum_id: string;
+          zone_id: string;
+          name: string;
+          dns_type: "A" | "CNAME";
+          protocol: string;
+          owner_id: string;
+          project_id?: string | null;
+          status?: string | null;
+          cf_app?: Json | null;
+          hostname_enc: Json | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          spectrum_id?: string;
+          zone_id?: string;
+          name?: string;
+          dns_type?: "A" | "CNAME";
+          protocol?: string;
+          owner_id?: string;
+          project_id?: string | null;
+          status?: string | null;
+          cf_app?: Json | null;
+          hostname_enc?: Json | null;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "spectrum_apps_owner_id_fkey";
+            columns: ["owner_id"];
+            isOneToOne: false;
+            referencedRelation: "user_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "spectrum_apps_project_id_fkey";
+            columns: ["project_id"];
+            isOneToOne: false;
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

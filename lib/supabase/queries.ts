@@ -1890,6 +1890,85 @@ export const Activities = {
   },
 };
 
+// Spectrum Apps query helpers
+type SpectrumAppRow = Tables<"spectrum_apps">;
+
+export const Spectrum_Apps = {
+  create: async (payload: TablesInsert<"spectrum_apps">) => {
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Unknown error" };
+    }
+  },
+  update: async (spectrum_id: string, patch: TablesUpdate<"spectrum_apps">) => {
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("spectrum_id", spectrum_id)
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Unknown error" };
+    }
+  },
+  get: async (spectrum_id: string) => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .select("*")
+        .eq("spectrum_id", spectrum_id)
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Unknown error" };
+    }
+  },
+  list_by_owner: async (owner_id: string): Promise<SpectrumAppRow[]> => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .select("*")
+        .eq("owner_id", owner_id)
+        .order("created_at", { ascending: false });
+      if (error) return [];
+      return data || [];
+    } catch {
+      return [];
+    }
+  },
+  delete: async (spectrum_id: string) => {
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .delete()
+        .eq("spectrum_id", spectrum_id)
+        .select();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err: any) {
+      return { success: false, error: err?.message || "Unknown error" };
+    }
+  },
+};
+
 
 
 
