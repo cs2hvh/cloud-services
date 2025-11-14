@@ -18,6 +18,11 @@ export interface SpectrumFormData {
   tls: 'off' | 'full';
   ipAccessRule: boolean;
   proxyProtocol: 'off' | 'v1' | 'v2';
+  
+  // Additional fields for new schema
+  edgeIpType: string;
+  edgeIpConnectivity: string;
+  trafficType: string;
 }
 
 export interface StepProps {

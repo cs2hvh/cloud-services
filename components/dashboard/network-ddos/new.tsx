@@ -38,6 +38,9 @@ const SpectrumAppCreate = () => {
     tls: 'off',
     ipAccessRule: false,
     proxyProtocol: 'off',
+    edgeIpType: 'dynamic',
+    edgeIpConnectivity: 'all',
+    trafficType: 'direct',
   });
 
   const updateFormData = (data: Partial<SpectrumFormData>) => {

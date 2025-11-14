@@ -993,45 +993,51 @@ export type Database = {
         Row: {
           id: string; // surrogate uuid
           spectrum_id: string; // cloudflare id
-          zone_id: string;
-          name: string; // original hostname (kept for uniqueness)
-          dns_type: "A" | "CNAME";
+          dns: Json; // {name: string (encrypted), type: "A" | "CNAME"}
+          tls: "off" | "full";
+          edge_ips: Json; // {type: string, connectivity: string}
+          ip_firewall: boolean;
+          traffic_type: string;
+          origin_direct: string[]; // array of origin IPs/hostnames
+          proxy_protocol: string;
           protocol: string;
           owner_id: string;
-            project_id: string | null;
+          project_id: string | null;
           status: string | null;
-          cf_app: Json | null;
-          hostname_enc: Json | null; // EncryptedData JSON of resolved IP
           created_at: string | null;
           updated_at: string | null;
         };
         Insert: {
           id?: string;
           spectrum_id: string;
-          zone_id: string;
-          name: string;
-          dns_type: "A" | "CNAME";
+          dns: Json; // {name: string (encrypted), type: "A" | "CNAME"}
+          tls?: "off" | "full";
+          edge_ips?: Json; // {type: string, connectivity: string}
+          ip_firewall?: boolean;
+          traffic_type?: string;
+          origin_direct?: string[]; // array of origin IPs/hostnames
+          proxy_protocol?: string;
           protocol: string;
           owner_id: string;
           project_id?: string | null;
           status?: string | null;
-          cf_app?: Json | null;
-          hostname_enc: Json | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
         Update: {
           id?: string;
           spectrum_id?: string;
-          zone_id?: string;
-          name?: string;
-          dns_type?: "A" | "CNAME";
+          dns?: Json; // {name: string (encrypted), type: "A" | "CNAME"}
+          tls?: "off" | "full";
+          edge_ips?: Json; // {type: string, connectivity: string}
+          ip_firewall?: boolean;
+          traffic_type?: string;
+          origin_direct?: string[]; // array of origin IPs/hostnames
+          proxy_protocol?: string;
           protocol?: string;
           owner_id?: string;
           project_id?: string | null;
           status?: string | null;
-          cf_app?: Json | null;
-          hostname_enc?: Json | null;
           created_at?: string | null;
           updated_at?: string | null;
         };
