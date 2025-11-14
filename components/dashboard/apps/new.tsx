@@ -397,7 +397,7 @@ const AppDeploymentSelect = () => {
                 <Button 
                   onClick={handleNextStep} 
                   disabled={loadingProviders || !selectedProvider}
-                  className="bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -503,8 +503,8 @@ const AppDeploymentSelect = () => {
                 )}
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} disabled={loadingRepos} className="bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} disabled={loadingRepos} className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
               </CardFooter>
             </Card>
           )}
@@ -621,8 +621,8 @@ const AppDeploymentSelect = () => {
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button onClick={handleNextStep} className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
               </CardFooter>
             </Card>
           )}
@@ -698,11 +698,11 @@ const AppDeploymentSelect = () => {
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
                 <Button
                   onClick={onSubmit}
                   disabled={isLoading}
-                  className="bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
                 >
                   {isLoading ? (
                     <>

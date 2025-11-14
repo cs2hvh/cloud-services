@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     // Build Cloudflare payload
     const cfPayload: Record<string, any> = {
-      dns: { name: data.dns.name, type: data.dns.type },
+      dns: { name: `${data.dns.name}.hostguardian.net`, type: data.dns.type },
       protocol: data.protocol,
       ip_firewall: data.ip_firewall ?? false,
       tls: data.tls ?? "off",
@@ -62,11 +62,14 @@ export async function POST(req: NextRequest) {
 
     const result = cfResp.data.result;
 
+    console.log("Cloudflare Spectrum creation result:", result);
+
     // Resolve host to IP then encrypt
     const hostToResolve = result.dns?.name || data.dns.name;
     let resolvedIp = hostToResolve;
     try {
       const dnsRes = await resolveHost(hostToResolve);
+      console.log("DNS resolution result:", dnsRes);
       const aRecord = dnsRes.records.find(r => r.type === "A");
       if (aRecord && aRecord.records.length) {
         resolvedIp = String(aRecord.records[0]);

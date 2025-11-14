@@ -100,7 +100,7 @@ export const LocationStep = ({
         <Button
           variant="outline"
           onClick={onPrev}
-          className="rounded-md border-white/20 text-white hover:bg-white/10"
+          className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
         >
           <ChevronLeft size={16} className="mr-2" /> Back
         </Button>
