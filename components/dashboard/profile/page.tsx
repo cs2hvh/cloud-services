@@ -4,15 +4,16 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, User, Phone, Image as ImageIcon } from "lucide-react";
+import { Mail, User, Phone, Image as ImageIcon, KeyRound } from "lucide-react";
 import Image from "next/image";
 import api from "@/lib/axios/axios";
 import { toast } from "sonner";
+import { PasswordInput } from "@/components/ui/password-input";
+import { ChangePasswordDialog } from "@/components/dashboard/profile/change-password-dialog";
 
 // Types for user profile
 interface UserProfile {
   email: string;
-  password: string;
   profilePic: string;
   phone: string;
   userName: string;
@@ -22,7 +23,6 @@ interface UserProfile {
 const ProfileSettings: React.FC = () => {
   const [profile, setProfile] = useState<UserProfile>({
     email: "",
-    password: "",
     profilePic: "",
     phone: "",
     userName: "",
@@ -30,6 +30,7 @@ const ProfileSettings: React.FC = () => {
   });
 
   const [loading, setLoading] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
 
   // ✅ Fetch user data (example API call)
   useEffect(() => {
@@ -67,13 +68,17 @@ const ProfileSettings: React.FC = () => {
         body: JSON.stringify(profile),
       });
       if (!res.ok) throw new Error("Failed to update profile");
-      alert("Profile updated successfully!");
+      toast.success("Profile updated successfully!");
     } catch (err) {
       console.error("Update error:", err);
-      alert("Failed to update profile.");
+      toast.error("Failed to update profile.");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasswordChangeSuccess = () => {
+    // Any additional logic after password change success
   };
 
   return (
@@ -99,6 +104,8 @@ const ProfileSettings: React.FC = () => {
             src={profile.profilePic}
             alt="Profile Preview"
             className="h-16 w-16 rounded-full border object-cover mt-2"
+            width={64}
+            height={64}
           />
         )}
       </div>
@@ -167,10 +174,26 @@ const ProfileSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Password Change Dialog */}
+      <Button 
+        variant="outline" 
+        className="w-full" 
+        type="button" 
+        onClick={() => setPasswordDialogOpen(true)}
+      >
+        <KeyRound className="mr-2 h-4 w-4" />
+        Change Password
+      </Button>
+      <ChangePasswordDialog 
+        open={passwordDialogOpen} 
+        onOpenChange={setPasswordDialogOpen}
+        onSuccess={handlePasswordChangeSuccess}
+      />
+
       {/* Submit */}
       <div className="pt-4">
         <Button onClick={handleUpdate} disabled={loading} className="w-full">
-          {loading ? "Updating..." : "Update"}
+          {loading ? "Updating..." : "Update Profile"}
         </Button>
       </div>
     </div>
