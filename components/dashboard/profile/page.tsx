@@ -4,8 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, User, Phone, Image as ImageIcon, KeyRound } from "lucide-react";
-import Image from "next/image";
+import { Mail, User, Phone, KeyRound } from "lucide-react";
 import api from "@/lib/axios/axios";
 import { toast } from "sonner";
 import { ChangePasswordDialog } from "@/components/dashboard/profile/change-password-dialog";
@@ -14,7 +13,6 @@ import { useRouter } from "next/navigation";
 // Types for user profile
 interface UserProfile {
   email: string;
-  profilePic: string;
   phone: string;
   userName: string;
   displayName: string;
@@ -24,7 +22,6 @@ const ProfileSettings: React.FC = () => {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile>({
     email: "",
-    profilePic: "",
     phone: "",
     userName: "",
     displayName: "",
@@ -101,31 +98,6 @@ const ProfileSettings: React.FC = () => {
   return (
     <div className="max-w-xl mx-auto p-6 bg-black rounded-lg shadow-md space-y-6">
       <h2 className="text-2xl font-semibold">Profile Settings</h2>
-
-      {/* Profile Picture */}
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="profilePic">Profile Picture</Label>
-        <div className="relative">
-          <Input
-            id="profilePic"
-            name="profilePic"
-            value={profile.profilePic}
-            onChange={handleChange}
-            placeholder="Enter image URL"
-            className="pl-9"
-          />
-          <ImageIcon className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-        </div>
-        {profile.profilePic && (
-          <Image
-            src={profile.profilePic}
-            alt="Profile Preview"
-            className="h-16 w-16 rounded-full border object-cover mt-2"
-            width={64}
-            height={64}
-          />
-        )}
-      </div>
 
       {/* Email */}
       <div className="flex flex-col gap-2">
