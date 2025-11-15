@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Shield, Plus, Search, Network, Globe, CheckCircle, Activity } from "lucide-react";
+import { Shield, Plus, Network, Globe, CheckCircle, Activity } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tables } from "@/lib/supabase/types";

@@ -1,9 +1,20 @@
 import DDoSProtectionSelect from "@/components/dashboard/network-ddos/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
+import { getUser } from "@/lib/supabase/auth";
+import { Projects } from "@/lib/supabase/queries";
+import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 const DDoSProtectionNewSuspense = async () => {
-  return <DDoSProtectionSelect />;
+  const user = await getUser();
+
+  if (!user) {
+    notFound();
+  }
+
+  const projects = await Projects.get_all_by_user(user.id);
+
+  return <DDoSProtectionSelect projects={projects} userId={user.id} />;
 };
 
 const DDoSProtectionNewPage = () => {

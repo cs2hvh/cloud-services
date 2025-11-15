@@ -93,7 +93,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
 
   // Build Cloudflare payload
   const cfPayload: Record<string, unknown> = {
-    dns: { name: `${payload.dns.name}.hostguardian.net`, type: payload.dns.type },
+    dns: { name: `${payload.dns.name}${process.env.PARENT_DOMAIN}`, type: payload.dns.type,original_name: payload.dns.name },
     protocol: payload.protocol,
     origin_direct: payload.origin_direct,
     ip_firewall,
@@ -182,21 +182,26 @@ export async function getSpectrumApp(appId: string) {
 
   // Fetch local metadata
   const local = await Spectrum_Apps.get(appId);
-  let decryptedIp: string | null = null;
+  let decryptedDnsName: string | null = null;
 
-  if (local.success && local.data?.hostname_enc) {
+  if (local.success && local.data?.dns) {
     try {
-      decryptedIp = Encryption.decrypt(local.data.hostname_enc as unknown as EncryptedData, encryptionKey);
+      if (typeof local.data.dns === "object" && "name" in local.data.dns) {
+        const encryptedData = local.data.dns.name as unknown as EncryptedData;
+        console.log(encryptedData,".......................191")
+        decryptedDnsName = Encryption.decrypt(encryptedData, encryptionKey);
+        console.log(decryptedDnsName,".......................193")
+      }
     } catch (error) {
       // Decryption failed, keep as null
-      console.error("Failed to decrypt hostname:", error);
+      console.error("Failed to decrypt DNS name:", error);
     }
   }
 
   return {
     cloudflare: cfResp.data.result,
     local: local.success ? local.data : null,
-    decryptedIp,
+    decryptedIp: decryptedDnsName,
   };
 }
 
@@ -254,21 +259,38 @@ export async function listSpectrumApps(ownerId?: string) {
 export async function updateSpectrumApp(data: UpdateSpectrumAppPayload) {
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
-  // Build update payload for Cloudflare
-  const patch: Record<string, unknown> = {};
-  if (data.dns) patch.dns = data.dns;
-  if (data.protocol) patch.protocol = data.protocol;
-  if (data.ip_firewall !== undefined) patch.ip_firewall = data.ip_firewall;
-  if (data.tls) patch.tls = data.tls;
-  if (data.traffic_type) patch.traffic_type = data.traffic_type;
-  if (data.edge_ips) patch.edge_ips = data.edge_ips;
-  if (data.proxy_protocol) patch.proxy_protocol = data.proxy_protocol;
-  if (data.origin_direct) patch.origin_direct = data.origin_direct;
+  console.log(data,"........................273");
 
-  // Update in Cloudflare
+  // Get the current Cloudflare app
+  const cfAppResp = await axios.get<CloudflareResponse<CloudflareSpectrumApp>>(
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${data.app_id}`,
+    { headers: getCloudflareHeaders(token) }
+  );
+
+  if (!cfAppResp.data?.success || !cfAppResp.data.result) {
+    throw new Error(
+      cfAppResp.data?.errors?.[0]?.message || "Failed to fetch current Spectrum app"
+    );
+  }
+
+  const currentApp = cfAppResp.data.result;
+
+  // Merge current app with updated fields to create complete payload
+  const completePayload: Record<string, unknown> = {
+    dns: data.dns ?? currentApp.dns,
+    protocol: data.protocol ?? currentApp.protocol,
+    origin_direct: data.origin_direct ?? currentApp.origin_direct,
+    ip_firewall: data.ip_firewall !== undefined ? data.ip_firewall : currentApp.ip_firewall,
+    tls: data.tls ?? currentApp.tls,
+    traffic_type: data.traffic_type ?? currentApp.traffic_type,
+    edge_ips: data.edge_ips ?? currentApp.edge_ips,
+    proxy_protocol: data.proxy_protocol ?? currentApp.proxy_protocol,
+  };
+
+  // Update in Cloudflare with complete payload
   const cfResp = await axios.put<CloudflareResponse<CloudflareSpectrumApp>>(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${data.app_id}`,
-    patch,
+    completePayload,
     { headers: getCloudflareHeaders(token) }
   );
 
@@ -301,19 +323,39 @@ export async function updateSpectrumApp(data: UpdateSpectrumAppPayload) {
   if (result.proxy_protocol) updatePayload.proxy_protocol = result.proxy_protocol;
 
   // Update in database
-  await Spectrum_Apps.update(data.app_id, updatePayload);
+  const dbUpdate = await Spectrum_Apps.update(data.app_id, updatePayload);
+
+  // Decrypt DNS name for response
+  let decryptedDnsName: string | null = null;
+  if (dbUpdate.success && dbUpdate.data?.dns) {
+    try {
+      if (typeof dbUpdate.data.dns === "object" && "name" in dbUpdate.data.dns) {
+        const encryptedData = dbUpdate.data.dns.name as unknown as EncryptedData;
+        decryptedDnsName = Encryption.decrypt(encryptedData, encryptionKey);
+      }
+    } catch (error) {
+      console.error("Failed to decrypt DNS name:", error);
+    }
+  }
 
   // Add project log if applicable
   if (result?.project_id) {
     await Projects.add_log?.({
       project_id: result.project_id,
       event: "SpectrumUpdate",
-      text: `Spectrum app '${result.dns?.name}' updated`,
+      text: `Spectrum app '${decryptedDnsName || result.dns?.name}' updated`,
     });
   }
 
+  // Return complete spectrum app with decrypted DNS
   return {
     cloudflare: result,
+    app: dbUpdate.success ? {
+      ...dbUpdate.data,
+      dns: dbUpdate.data?.dns && typeof dbUpdate.data.dns === "object" 
+        ? { ...(dbUpdate.data.dns as Record<string, unknown>), name: decryptedDnsName, decrypted_name: decryptedDnsName }
+        : { name: decryptedDnsName, decrypted_name: decryptedDnsName }
+    } : null,
   };
 }
 

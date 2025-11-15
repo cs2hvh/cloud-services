@@ -23,6 +23,9 @@ export interface SpectrumFormData {
   edgeIpType: string;
   edgeIpConnectivity: string;
   trafficType: string;
+
+  // Step 6: Project
+  project_id: string;
 }
 
 export interface StepProps {

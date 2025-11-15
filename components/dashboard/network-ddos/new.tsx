@@ -1,6 +1,6 @@
 'use client';
 import { useState } from "react";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, FolderTree, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -8,6 +8,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import {
   AppTypeStep,
   DomainStep,
@@ -18,13 +26,19 @@ import {
 } from "./steps";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
+import { Tables } from "@/lib/supabase/types";
+import { Button } from "@/components/ui/button";
 
+interface SpectrumAppCreateProps {
+  projects: Tables<"projects">[];
+  userId: string;
+}
 
-const SpectrumAppCreate = () => {
+const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  const router=useRouter()
+  const router = useRouter();
   
   // Form state
   const [formData, setFormData] = useState<SpectrumFormData>({
@@ -41,6 +55,11 @@ const SpectrumAppCreate = () => {
     edgeIpType: 'dynamic',
     edgeIpConnectivity: 'all',
     trafficType: 'direct',
+    project_id: projects[0]?.id || '',
+  });
+
+  const [errors, setErrors] = useState({
+    project: "",
   });
 
   const updateFormData = (data: Partial<SpectrumFormData>) => {
@@ -48,7 +67,18 @@ const SpectrumAppCreate = () => {
   };
 
   const handleNextStep = () => {
-    if (currentStep < 5) {
+    // Validate project on step 6
+    if (currentStep === 6) {
+      if (!formData.project_id) {
+        setErrors({ ...errors, project: "Project is required" });
+        toast.error("Please select a project");
+        return;
+      } else {
+        setErrors({ ...errors, project: "" });
+      }
+    }
+
+    if (currentStep < 6) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -60,38 +90,32 @@ const SpectrumAppCreate = () => {
   };
 
   const onSubmit = async () => {
+    if (!formData.project_id) {
+      toast.error("Please select a project");
+      return;
+    }
+
     setIsLoading(true);
     try {
       // Log the form data
       console.log('Spectrum App Configuration:', formData);
       
-      // Here you would make the API call to create the Spectrum app
-      // Example: await createSpectrumApp(formData);
-
-      const response=await api.post('/services/spectrum/apps/create',{
-        dns:{name:formData.domain,type:'CNAME'},
-        protocol:`${formData.appType}/${formData.originPort}`,
-        argo_smart_routing:formData.argoSmartRouting,
+      const response = await api.post('/services/spectrum/apps/create', {
+        dns: { name: formData.domain, type: 'CNAME' },
+        protocol: `${formData.appType}/${formData.originPort}`,
+        argo_smart_routing: formData.argoSmartRouting,
         proxy_protocol: formData.proxyProtocol,
         tls: formData.tls,
         origin_direct: [`${formData.appType}://${formData.originIP}:${formData.originPort}`],
-        project_id:'5da02d16-9dad-4139-bd46-ebbff91de08d',
-        owner_id:'ab6bf954-1f16-4d41-94a9-c2410d55a0e4'
+        project_id: formData.project_id,
+        owner_id: userId,
       });
 
-      if(response.status==200){
+      if (response.status === 201) {
         toast.success('Spectrum application created successfully!');
-        // You can redirect or reset form here
-         router.push('/dashboard/network-ddos');
+        router.push('/dashboard/services/network-ddos');
+        router.refresh();
       }
-      
-      // Simulate API call
-    //  await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.success('Spectrum application created successfully!');
-      
-      // You can redirect or reset form here
-      // router.push('/dashboard/network-ddos');
     } catch (error) {
       console.error('Failed to create Spectrum app:', error);
       toast.error('Failed to create Spectrum application. Please try again.');
@@ -105,9 +129,11 @@ const SpectrumAppCreate = () => {
     { id: 2, name: "Domain" },
     { id: 3, name: "Edge Port" },
     { id: 4, name: "Origin" },
-    { id: 5, name: "Settings" } ,
-    {id:6,name:"Project"}
+    { id: 5, name: "Settings" },
+    { id: 6, name: "Project" }
   ];
+
+  const selectedProject = projects.find((proj) => proj.id === formData.project_id);
 
   return (
     <div className="py-4">
@@ -212,6 +238,80 @@ const SpectrumAppCreate = () => {
               isLoading={isLoading}
             />
           )}
+
+          {/* Step 6: Project Selection */}
+          {currentStep === 6 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <FolderTree className="h-5 w-5" />
+                  Project
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label htmlFor="project" className="mb-2 block text-white">
+                    Select Project
+                  </Label>
+                  <Select
+                    value={formData.project_id}
+                    onValueChange={(value) => {
+                      updateFormData({ project_id: value });
+                      if (errors.project) {
+                        setErrors({ ...errors, project: "" });
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      id="project"
+                      className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                        errors.project ? "border-red-500" : ""
+                      }`}
+                    >
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-black border-white/20 text-white">
+                      {projects.length === 0 ? (
+                        <div className="px-2 py-6 text-center text-white/60">
+                          No projects available
+                        </div>
+                      ) : (
+                        projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  {errors.project && (
+                    <div className="flex items-center gap-2 text-red-500 text-sm mt-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>{errors.project}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-white/50 mt-2">
+                    This Spectrum app will be associated with the selected project
+                  </p>
+                </div>
+              </CardContent>
+              <CardContent className="flex justify-between pt-0">
+                <button
+                  onClick={handlePrevStep}
+                  className="px-4 py-2 bg-white/10 text-white rounded-md hover:bg-white/20 transition-colors"
+                >
+                  Back
+                </button>
+                <Button
+                  onClick={onSubmit}
+                  disabled={isLoading || !formData.project_id}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                >
+                  {isLoading ? "Creating..." : "Create"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Summary Sidebar */}
@@ -295,6 +395,19 @@ const SpectrumAppCreate = () => {
                           {formData.proxyProtocol}
                         </span>
                       </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Project Section */}
+              {currentStep === 6 && selectedProject && (
+                <>
+                  <div className="h-px bg-white/10 my-3" />
+                  <div className="flex justify-between items-start">
+                    <div className="text-sm text-white/60">Project</div>
+                    <div className="text-white text-sm text-right max-w-[60%] break-words">
+                      {selectedProject.name}
                     </div>
                   </div>
                 </>

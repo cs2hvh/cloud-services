@@ -7,13 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Zap, Lock, Shield, Network, Key } from "lucide-react";
 import { StepProps } from "./types";
 import { Separator } from "@/components/ui/separator";
+import { on } from "events";
 
 interface SettingsStepProps extends StepProps {
   onSubmit: () => void;
   isLoading: boolean;
 }
 
-export const SettingsStep = ({ formData, onUpdate, onBack, onSubmit, isLoading }: SettingsStepProps) => {
+export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: SettingsStepProps) => {
   return (
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
@@ -36,8 +37,7 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onSubmit, isLoading }
                 Argo Smart Routing
               </Label>
               <p className="text-sm text-white/60 mt-1">
-                Enables Argo Smart Routing to optimize routing and reduce latency.Argo smart routing
-                is available for both TCP and UDP applications.
+                Enables Argo Smart Routing to optimize routing and reduce latency.
 
               </p>
             </div>
@@ -201,18 +201,11 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onSubmit, isLoading }
           Back
         </Button>
         <Button
-          onClick={onSubmit}
+          onClick={onNext}
           disabled={isLoading}
           className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Creating...
-            </>
-          ) : (
-            'Create'
-          )}
+          Next
         </Button>
       </CardFooter>
     </Card>

@@ -143,7 +143,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
             <thead className="bg-neutral-800/50 border-b border-neutral-800">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  DNS Name
+                  Origin IP
                 </th>
                 <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                   Protocol
@@ -169,13 +169,13 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                   key={app.id}
                   className="hover:bg-neutral-800/30 transition-colors"
                 >
-                  {/* DNS Name */}
+                  {/* Origin IP */}
                   <td className="px-4 sm:px-6 py-4">
                     <div className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-blue-400 flex-shrink-0" />
                       <div className="min-w-0">
                         <div className="font-medium text-white text-sm truncate">
-                          {getDnsName(app.dns)}
+                          {app.origin_direct[0]}
                         </div>
                         <div className="text-xs text-neutral-500 truncate">
                           {app.spectrum_id}
@@ -198,7 +198,9 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
 
                   {/* Traffic Type - Hidden on tablet and below */}
                   <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-neutral-400">
-                    <span className="capitalize">{app.traffic_type || "direct"}</span>
+                    <span className="capitalize">
+                      {app.traffic_type || "direct"}
+                    </span>
                   </td>
 
                   {/* IP Firewall - Hidden on large and below */}
@@ -219,23 +221,29 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                       <Button
                         size="sm"
                         variant="ghost"
-                        className="h-8 px-2 sm:px-3 hover:bg-neutral-700"
+                        className="cursor-pointer h-8 px-2 sm:px-3 hover:bg-neutral-700"
                         asChild
                       >
-                        <Link href={`/dashboard/services/network-ddos/${app.spectrum_id}`}>
+                        <Link
+                          href={`/dashboard/services/network-ddos/${app.spectrum_id}`}
+                        >
                           <Eye className="h-4 w-4" />
                           <span className="hidden sm:inline ml-1">View</span>
                         </Link>
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 sm:px-3 text-red-400 hover:text-red-300 hover:bg-red-950/30"
-                        onClick={() => handleDeleteClick(app.spectrum_id)}
-                      >
-                        <Trash className="h-4 w-4" />
-                        <span className="hidden sm:inline ml-1">Delete</span>
-                      </Button>
+                      {isDeleting ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-neutral-500" />
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="cursor-pointer h-8 px-2 sm:px-3 text-red-400 hover:text-red-300 hover:bg-red-950/30"
+                          onClick={() => handleDeleteClick(app.spectrum_id)}
+                        >
+                          <Trash className="h-4 w-4" />
+                          <span className="hidden sm:inline ml-1">Delete</span>
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -246,7 +254,9 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
 
         {/* Mobile-friendly info cards for hidden columns */}
         <div className="md:hidden border-t border-neutral-800 p-4 bg-neutral-800/20">
-          <p className="text-xs text-neutral-500 mb-2">View full details on larger screens</p>
+          <p className="text-xs text-neutral-500 mb-2">
+            View full details on larger screens
+          </p>
           <div className="flex flex-wrap gap-2">
             <span className="text-xs text-neutral-400">Protocol</span>
             <span className="text-xs text-neutral-400">•</span>
@@ -263,18 +273,19 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Spectrum Application?</AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-400">
-              This action cannot be undone. This will permanently delete the spectrum application
-              and remove all associated protection rules from Cloudflare.
+              This action cannot be undone. This will permanently delete the
+              spectrum application and remove all associated protection rules
+              from Cloudflare.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700">
+            <AlertDialogCancel className="cursor-pointer bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>
