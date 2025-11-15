@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createServiceClient } from "@/lib/supabase/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { reset_password_schema } from "@/types/zod/password-reset";
+import { OTPs, Users } from "@/lib/supabase/queries";
 
 /**
  * POST /api/auth/reset-password
@@ -37,57 +37,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServiceClient();
 
-    // Verify OTP
-    const { data: otpRecord, error: otpError } = await supabase
-      .from("otps")
-      .select("id, verified, expires_at")
-      .eq("email", email)
-      .eq("otp_code", otp)
-      .eq("verified", false)
-      .gt("expires_at", new Date().toISOString())
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (otpError || !otpRecord) {
+    // Verify OTP using abstraction
+    const otpRecord = await OTPs.verify_otp(email, otp);
+    if (!otpRecord) {
       return NextResponse.json(
         { message: "Invalid or expired OTP code. Please request a new one." },
         { status: 400 }
       );
     }
 
-    // Get user by email
-    const { data: authUsers } = await supabase.auth.admin.listUsers();
-    const user = authUsers.users.find((u) => u.email === email);
-
-    if (!user) {
+    // Get user by email using abstraction
+    const userProfile = await Users.get_by_email(email);
+    if (!userProfile) {
       return NextResponse.json(
         { message: "User not found." },
         { status: 404 }
       );
     }
 
-    // Update user password
-    const { error: updateError } = await supabase.auth.admin.updateUserById(
-      user.id,
-      { password: newPassword }
-    );
-
-    if (updateError) {
-      console.error("[ResetPassword] Error updating password:", updateError.message);
+    // Update user password using abstraction
+    const passwordUpdated = await Users.update_password(userProfile.id, newPassword);
+    if (!passwordUpdated) {
       return NextResponse.json(
         { message: "Failed to reset password. Please try again." },
         { status: 500 }
       );
     }
 
-    // Mark OTP as verified
-    await supabase
-      .from("otps")
-      .update({ verified: true })
-      .eq("id", otpRecord.id);
+    // Mark OTP as verified using abstraction
+    await OTPs.verify(otpRecord.id);
 
     return NextResponse.json({
       message: "Password reset successfully. You can now sign in with your new password.",

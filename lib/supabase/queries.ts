@@ -219,6 +219,25 @@ export const Users = {
     }
   },
 
+  update_password: async (userId: string, newPassword: string): Promise<boolean> => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase.auth.admin.updateUserById(
+        userId,
+        { password: newPassword }
+      );
+
+      if (error) {
+        console.log(`[Supabase] Error while updating user password: ${error.message}`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.log(`[Supabase] Error while updating user password: ${err}`);
+      return false;
+    }
+  },
+
   // Create a new user profile (called automatically by trigger)
   create: async (
     props: TablesInsert<"user_profiles">,
@@ -945,6 +964,31 @@ export const OTPs = {
     } catch (err) {
       console.log(`[Supabase] Error while verifying OTP: ${err}`);
       return false;
+    }
+  },
+
+  verify_otp: async (email: string, otp_code: string): Promise<{ id: number; verified: boolean; expires_at: string } | null> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("otps")
+        .select("id, verified, expires_at")
+        .eq("email", email)
+        .eq("otp_code", otp_code)
+        .eq("verified", false)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.log(`[Supabase] Error while verifying OTP: ${error?.message || 'No data found'}`);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while verifying OTP: ${err}`);
+      return null;
     }
   },
 };

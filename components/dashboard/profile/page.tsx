@@ -8,8 +8,8 @@ import { Mail, User, Phone, Image as ImageIcon, KeyRound } from "lucide-react";
 import Image from "next/image";
 import api from "@/lib/axios/axios";
 import { toast } from "sonner";
-import { PasswordInput } from "@/components/ui/password-input";
 import { ChangePasswordDialog } from "@/components/dashboard/profile/change-password-dialog";
+import { useRouter } from "next/navigation";
 
 // Types for user profile
 interface UserProfile {
@@ -21,6 +21,7 @@ interface UserProfile {
 }
 
 const ProfileSettings: React.FC = () => {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile>({
     email: "",
     profilePic: "",
@@ -79,6 +80,22 @@ const ProfileSettings: React.FC = () => {
 
   const handlePasswordChangeSuccess = () => {
     // Any additional logic after password change success
+  };
+
+  const handleResetPasswordByEmail = async () => {
+    // First, sign out the user using the API route
+    try {
+      await fetch("/api/auth/signout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      // Then redirect to the reset password page with the user's email
+      router.push(`/reset-password?email=${encodeURIComponent(profile.email)}`);
+    } catch (error) {
+      toast.error("Failed to sign out. Please try again.");
+      console.error("Sign out error:", error);
+    }
   };
 
   return (
@@ -184,6 +201,18 @@ const ProfileSettings: React.FC = () => {
         <KeyRound className="mr-2 h-4 w-4" />
         Change Password
       </Button>
+      
+      {/* Reset Password by Email */}
+      <Button 
+        variant="outline" 
+        className="w-full" 
+        type="button" 
+        onClick={handleResetPasswordByEmail}
+      >
+        <Mail className="mr-2 h-4 w-4" />
+        Reset Password by Email
+      </Button>
+      
       <ChangePasswordDialog 
         open={passwordDialogOpen} 
         onOpenChange={setPasswordDialogOpen}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateSixDigitOtp } from "@/lib/utils";
 import { send_forgot_password_email } from "@/lib/resend/send_forgot";
 import { createServiceClient } from "@/lib/supabase/server";
-import { OTPs } from "@/lib/supabase/queries";
+import { OTPs, Users } from "@/lib/supabase/queries";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { forgot_password_schema } from "@/types/zod/password-reset";
 
@@ -40,11 +40,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServiceClient();
-
-    // Check if user exists with this email
-    const { data: authUsers } = await supabase.auth.admin.listUsers();
-    const user = authUsers.users.find((u) => u.email === email);
+    // Check if user exists with this email using the abstraction
+    const user = await Users.get_by_email(email);
 
     // Security: Always return success even if user doesn't exist (prevents email enumeration)
     if (!user) {
@@ -54,7 +51,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user is verified
-    if (!user.email_confirmed_at) {
+    // Note: We need to access the email_confirmed_at from the auth user data
+    // Since Users.get_by_email doesn't provide this, we need to check it differently
+    const supabase = await createServiceClient();
+    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    const authUser = authUsers.users.find((u) => u.email === email);
+    
+    if (!authUser?.email_confirmed_at) {
       return NextResponse.json(
         { message: "Please verify your email before resetting your password." },
         { status: 403 }
@@ -81,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send OTP via email
-    const username = user.user_metadata?.username || user.email?.split("@")[0] || "User";
+    const username = user.username || user.email?.split("@")[0] || "User";
     const emailResult = await send_forgot_password_email(email, username, generatedOtp);
 
     if (!emailResult.success) {
