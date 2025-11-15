@@ -37,7 +37,7 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
         <div >
           <Select
             value={formData.appType}
-            onValueChange={(value: "tcp" | "udp") =>
+            onValueChange={(value: "tcp" | "udp" | "ssh" |"rdp") =>
               onUpdate({ appType: value })
             }
           >
@@ -50,6 +50,8 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
             <SelectContent>
               <SelectItem value="tcp">TCP</SelectItem>
               <SelectItem value="udp">UDP</SelectItem>
+               <SelectItem value="ssh">SSH</SelectItem>
+               <SelectItem value="rdp">RDP</SelectItem>
             </SelectContent>
           </Select>
         </div>

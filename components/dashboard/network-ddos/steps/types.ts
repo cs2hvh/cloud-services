@@ -1,6 +1,6 @@
 export interface SpectrumFormData {
   // Step 1: App Type
-  appType: 'tcp' | 'udp' | '';
+  appType: 'tcp' | 'udp' | 'ssh' | 'rdp' | '';
 
   // Step 2: Domain
   domain: string;
@@ -17,7 +17,7 @@ export interface SpectrumFormData {
   argoSmartRouting: boolean;
   tls: 'off' | 'full';
   ipAccessRule: boolean;
-  proxyProtocol: 'off' | 'v1' | 'v2';
+  proxyProtocol: 'off' | 'v1' | 'v2' | 'simple';
   
   // Additional fields for new schema
   edgeIpType: string;

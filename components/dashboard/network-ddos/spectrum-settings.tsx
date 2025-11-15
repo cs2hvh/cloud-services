@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Shield,
-  Server,
   Lock,
   Network,
   Edit2,

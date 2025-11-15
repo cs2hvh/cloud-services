@@ -99,14 +99,14 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
     try {
       // Log the form data
       console.log('Spectrum App Configuration:', formData);
-      
+      //debugger
       const response = await api.post('/services/spectrum/apps/create', {
         dns: { name: formData.domain, type: 'CNAME' },
-        protocol: `${formData.appType}/${formData.originPort}`,
-        argo_smart_routing: formData.argoSmartRouting,
+        protocol: `${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}/${formData.originPort}`,
+        argo_smart_routing: true,
         proxy_protocol: formData.proxyProtocol,
-        tls: formData.tls,
-        origin_direct: [`${formData.appType}://${formData.originIP}:${formData.originPort}`],
+        tls: 'off',
+        origin_direct: [`${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}://${formData.originIP}:${formData.originPort}`],
         project_id: formData.project_id,
         owner_id: userId,
       });
@@ -371,18 +371,18 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
                   <div>
                     <div className="text-sm text-white/60 mb-3">Settings</div>
                     <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
+                      {/* <div className="flex justify-between">
                         <span className="text-white/60">Argo Routing:</span>
                         <span className="text-white">
                           {formData.argoSmartRouting ? "On" : "Off"}
                         </span>
-                      </div>
-                      <div className="flex justify-between">
+                      </div> */}
+                      {/* <div className="flex justify-between">
                         <span className="text-white/60">TLS:</span>
                         <span className="text-white capitalize">
                           {formData.tls}
                         </span>
-                      </div>
+                      </div> */}
                       <div className="flex justify-between">
                         <span className="text-white/60">IP Rules:</span>
                         <span className="text-white">

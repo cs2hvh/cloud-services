@@ -7,6 +7,7 @@ import type {
 } from "@/lib/validation/spectrum";
 import type { Json } from "@/lib/supabase/types";
 import type { EncryptedData } from "@/config/functions";
+import { resolveHost } from "@/config/hosttoip";
 
 /**
  * Spectrum Configuration
@@ -118,8 +119,44 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
 
   const result = cfResp.data.result;
 
-  // Encrypt DNS name for database storage
-  const encryptedDnsName = Encryption.encrypt(payload.dns.name, encryptionKey);
+  // Convert DNS to IP and Encrypt it for database storage
+  let ipAddress = payload.dns.name; // fallback to original DNS name
+  
+  // Helper function to delay execution
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  
+  // Retry logic with exponential backoff
+  const maxRetries = 3;
+  let retryCount = 0;
+  let resolved = false;
+  
+  while (retryCount < maxRetries && !resolved) {
+    try {
+      // Wait before attempting DNS resolution (increases with each retry)
+      const waitTime = retryCount === 0 ? 5000 : 3000 * Math.pow(2, retryCount - 1);
+      await delay(waitTime);
+      
+      const checkIp = await axios.get(
+        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN}`,
+        { timeout: 5000 } // 5 second timeout
+      );
+
+      if (checkIp.status === 200 && checkIp.data?.query) {
+        ipAddress = checkIp.data.query;
+        console.log("Resolved IP Address:", ipAddress);
+        resolved = true;
+      }
+    } catch (error) {
+      retryCount++;
+      console.log(`DNS resolution attempt ${retryCount} failed, retrying...`);
+      
+      if (retryCount === maxRetries) {
+        console.warn("Failed to resolve DNS after max retries, using original DNS name");
+      }
+    }
+  }
+
+  const encryptedDnsName = Encryption.encrypt(ipAddress, encryptionKey);
 
   // Persist to database
   const persist = await Spectrum_Apps.create({

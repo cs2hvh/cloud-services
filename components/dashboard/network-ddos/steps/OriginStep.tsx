@@ -35,12 +35,16 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
   const handleOriginTypeChange = (value: 'ip-dns' | 'load-balancer') => {
     onUpdate({ 
       originType: value,
-      originPort: formData.edgePort // Set origin port to edge port
+     // originPort: formData.edgePort // Set origin port to edge port
     });
   };
 
   const handleIPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onUpdate({ originIP: e.target.value });
+  };
+
+  const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdate({ originPort: Number(e.target.value) });
   };
 
   return (
@@ -117,10 +121,13 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
                   <div className="space-y-1.5">
                     <Input
                       id="origin-port"
-                      value={formData.originPort || formData.edgePort}
+                      value={formData.originPort||''}
+                      onChange={handlePortChange}
+                       min={1}
+                      max={65535}
                       type="number"
-                      disabled
-                      className="bg-white/5 border-white/15 rounded-lg text-white/40 h-11 px-4 cursor-not-allowed transition-colors duration-200"
+                     // disabled
+                      className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
                     />
                     <div className="flex items-center gap-2 text-xs text-white/50 mt-1">
                       <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
@@ -136,7 +143,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
           </div>
 
           {/* Load Balancer Option */}
-          <div>
+          {/* <div>
             <RadioGroupItem
               value="load-balancer"
               id="load-balancer"
@@ -174,7 +181,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
                 </p>
               </div>
             )}
-          </div>
+          </div> */}
         </RadioGroup>
       </CardContent>
       <CardFooter className="flex justify-between">

@@ -206,7 +206,7 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
             value={
               dnsName === "Not available"
                 ? "Encrypted"
-                : `${dnsName}.hostguardian.net`
+                : `${dnsName}`
             }
             copyable={dnsName !== "Not available"}
           />

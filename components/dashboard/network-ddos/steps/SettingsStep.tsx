@@ -1,9 +1,21 @@
-'use client';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2, Zap, Lock, Shield, Network, Key } from "lucide-react";
 import { StepProps } from "./types";
 import { Separator } from "@/components/ui/separator";
@@ -14,14 +26,19 @@ interface SettingsStepProps extends StepProps {
   isLoading: boolean;
 }
 
-export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: SettingsStepProps) => {
+export const SettingsStep = ({
+  formData,
+  onUpdate,
+  onBack,
+  onNext,
+  isLoading,
+}: SettingsStepProps) => {
   return (
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
         <div className="flex gap-2">
-             <Key className="w-5 h-5 text-blue-400"/>
-            <CardTitle className="text-white">Advanced Settings</CardTitle>
-
+          <Key className="w-5 h-5 text-blue-400" />
+          <CardTitle className="text-white">Advanced Settings</CardTitle>
         </div>
         <p className="text-sm text-white/60">
           Configure optional features for your Spectrum application
@@ -29,7 +46,7 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Argo Smart Routing */}
-        <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
+        {/* <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
           <div className="flex items-start gap-3 flex-1">
             <Zap className="w-5 h-5 text-orange-400 mt-0.5" />
             <div className="flex-1">
@@ -47,10 +64,10 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
             checked={formData.argoSmartRouting}
             onCheckedChange={(checked) => onUpdate({ argoSmartRouting: checked })}
           />
-        </div>
+        </div> */}
 
         {/* TLS */}
-        <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+        {/* <div className="p-4 bg-white/5 rounded-lg border border-white/10">
           <div className="flex items-start gap-3 mb-4">
             <Lock className="w-5 h-5 text-green-400 mt-0.5" />
             <div className="flex-1">
@@ -75,6 +92,8 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
             <SelectContent>
               <SelectItem value="off">Off - No encryption</SelectItem>
               <SelectItem value="full">Full - End-to-end encryption</SelectItem>
+               <SelectItem value="strict">Strict </SelectItem>
+                <SelectItem value="flexible">Flexible</SelectItem>
             </SelectContent>
           </Select>
           {formData.tls === 'full' && (
@@ -84,14 +103,17 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
               </p>
             </div>
           )}
-        </div>
+        </div> */}
 
         {/* IP Access Rule */}
         <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10">
           <div className="flex items-start gap-3 flex-1">
             <Shield className="w-5 h-5 text-blue-400 mt-0.5" />
             <div className="flex-1">
-              <Label htmlFor="ip-access-rule" className="text-white font-medium cursor-pointer">
+              <Label
+                htmlFor="ip-access-rule"
+                className="text-white font-medium cursor-pointer"
+              >
                 IP Access Rules
               </Label>
               <p className="text-sm text-white/60 mt-1">
@@ -111,18 +133,24 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
           <div className="flex items-start gap-3 mb-4">
             <Network className="w-5 h-5 text-purple-400 mt-0.5" />
             <div className="flex-1">
-              <Label htmlFor="proxy-protocol" className="text-white font-medium">
+              <Label
+                htmlFor="proxy-protocol"
+                className="text-white font-medium"
+              >
                 Proxy Protocol
               </Label>
               <p className="text-sm text-white/60 mt-1">
-                Enable the protocol version that your origin supports, if any. This relays the client's original connection information.
-                It is only supported for TCP and UDP applications.
+                Enable the protocol version that your origin supports, if any.
+                This relays the client's original connection information. It is
+                only supported for TCP and UDP applications.
               </p>
             </div>
           </div>
           <Select
             value={formData.proxyProtocol}
-            onValueChange={(value: 'off' | 'v1' | 'v2') => onUpdate({ proxyProtocol: value })}
+            onValueChange={(value: "off" | "v1" | "v2" | "simple") =>
+              onUpdate({ proxyProtocol: value })
+            }
           >
             <SelectTrigger
               id="proxy-protocol"
@@ -130,16 +158,29 @@ export const SettingsStep = ({ formData, onUpdate, onBack, onNext, isLoading }: 
             >
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">Off </SelectItem>
-              <SelectItem value="v1">V1</SelectItem>
-              <SelectItem value="v2">V2 </SelectItem>
-            </SelectContent>
+            {formData.appType === "udp" ? (
+              <>
+                <SelectContent>
+                  <SelectItem value="off">Off </SelectItem>
+                  <SelectItem value="simple">Simple</SelectItem>
+                  <SelectItem value="v2">V2 </SelectItem>
+                </SelectContent>
+              </>
+            ) : (
+              <>
+                <SelectContent>
+                  <SelectItem value="off">Off </SelectItem>
+                  <SelectItem value="v1">V1</SelectItem>
+                  <SelectItem value="v2">V2 </SelectItem>
+                </SelectContent>
+              </>
+            )}
           </Select>
-          {formData.proxyProtocol !== 'off' && (
+          {formData.proxyProtocol !== "off" && (
             <div className="mt-3 p-3 bg-purple-500/10 border border-purple-500/30 rounded-md">
               <p className="text-xs text-purple-400">
-                ℹ Ensure your origin server supports Proxy Protocol {formData.proxyProtocol.toUpperCase()}
+                ℹ Ensure your origin server supports Proxy Protocol{" "}
+                {formData.proxyProtocol.toUpperCase()}
               </p>
             </div>
           )}
