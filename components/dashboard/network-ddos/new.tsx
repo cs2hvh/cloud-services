@@ -102,7 +102,7 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
       //debugger
       const response = await api.post('/services/spectrum/apps/create', {
         dns: { name: formData.domain, type: 'CNAME' },
-        protocol: `${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}/${formData.originPort}`,
+        protocol: `${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}/${formData.edgePort}`,
         argo_smart_routing: true,
         proxy_protocol: formData.proxyProtocol,
         tls: 'off',

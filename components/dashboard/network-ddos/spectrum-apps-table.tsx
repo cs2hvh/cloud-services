@@ -139,7 +139,13 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
         className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden"
       >
         <div className="overflow-x-auto">
-          <table className="w-full">
+         {
+          isDeleting?
+          <div className="flex justify-center items-center h-48">
+          <Loader2 className="h-8 w-8 text-white animate-spin" />
+        </div>
+          :
+           <table className="w-full">
             <thead className="bg-neutral-800/50 border-b border-neutral-800">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
@@ -231,9 +237,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                           <span className="hidden sm:inline ml-1">View</span>
                         </Link>
                       </Button>
-                      {isDeleting ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin text-neutral-500" />
-                      ) : (
+                     
                         <Button
                           size="sm"
                           variant="ghost"
@@ -243,13 +247,16 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                           <Trash className="h-4 w-4" />
                           <span className="hidden sm:inline ml-1">Delete</span>
                         </Button>
-                      )}
+                    
                     </div>
                   </td>
                 </tr>
               ))}
             </tbody>
+
+             
           </table>
+         }
         </div>
 
         {/* Mobile-friendly info cards for hidden columns */}

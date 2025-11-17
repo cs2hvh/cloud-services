@@ -72,6 +72,24 @@ export type Admin_Bucket =  {
 
 }
 
+export type Admin_SpectrumApp = {
+  id: string;
+  spectrum_id: string;
+  protocol: string;
+  origin_direct: string[];
+  status: string | null;
+  tls: string;
+  traffic_type: string;
+  ip_firewall: boolean;
+  proxy_protocol: string;
+  owner_id: string;
+  owner_email: string | null;
+  owner_username: string | null;
+  created_at: string | null;
+  project_id: string | null;
+  edge_ips: Json | null;
+}
+
 export type Rule = {
   uuid: string;
   cluster_uuid: string;
@@ -1066,7 +1084,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
-      product_type: "vps" | "vds" | "game" | "database" | "object-storage";
+      product_type: "vps" | "vds" | "game" | "database" | "object-storage"|"network-ddos";
       user_role:
         | "member"
         | "admin"

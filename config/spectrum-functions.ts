@@ -126,7 +126,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
   // Retry logic with exponential backoff
-  const maxRetries = 3;
+  const maxRetries = 10;
   let retryCount = 0;
   let resolved = false;
   

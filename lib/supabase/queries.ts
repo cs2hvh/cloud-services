@@ -13,6 +13,7 @@ import {
   Admin_User,
   Admin_Database,
   Admin_Bucket,
+  Admin_SpectrumApp,
   ObjectSpaceBucket,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
@@ -1965,6 +1966,90 @@ export const Spectrum_Apps = {
       return { success: true, data };
     } catch (err: any) {
       return { success: false, error: err?.message || "Unknown error" };
+    }
+  },
+
+  // Admin methods
+  get_all_for_admin: async (): Promise<Admin_SpectrumApp[]> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Get all spectrum apps
+      const { data: apps, error } = await supabase
+        .from("spectrum_apps")
+        .select(`
+          id,
+          spectrum_id,
+          protocol,
+          origin_direct,
+          status,
+          tls,
+          traffic_type,
+          ip_firewall,
+          proxy_protocol,
+          edge_ips,
+          created_at,
+          project_id,
+          owner_id,
+          user_profiles(username)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(
+          `[Spectrum_Apps] Error getting all apps for admin: ${error.message}`
+        );
+        return [];
+      }
+
+      if (!apps || apps.length === 0) return [];
+
+      // Get auth users for emails
+      const { data: authUsers, error: authError } =
+        await supabase.auth.admin.listUsers();
+
+      if (authError) {
+        console.log(
+          `[Spectrum_Apps] Error while getting auth users: ${authError.message}`
+        );
+      }
+
+      const emailMap = new Map(
+        authUsers?.users?.map((u) => [u.id, u.email]) || []
+      );
+
+      // Map and merge data with proper typing
+      const merged: Admin_SpectrumApp[] = apps
+        .map((app) => {
+          // Safely access nested user_profiles
+          const userProfile = Array.isArray(app.user_profiles)
+            ? app.user_profiles[0]
+            : app.user_profiles;
+
+          return {
+            id: app.id ?? "",
+            spectrum_id: app.spectrum_id ?? "",
+            protocol: app.protocol ?? "",
+            origin_direct: app.origin_direct ?? [],
+            status: app.status ?? null,
+            tls: app.tls ?? "off",
+            traffic_type: app.traffic_type ?? "direct",
+            ip_firewall: app.ip_firewall ?? false,
+            proxy_protocol: app.proxy_protocol ?? "off",
+            owner_id: app.owner_id ?? "",
+            owner_email: emailMap.get(app.owner_id ?? "") ?? null,
+            owner_username: userProfile?.username ?? null,
+            created_at: app.created_at ?? null,
+            project_id: app.project_id ?? null,
+            edge_ips: app.edge_ips ?? null,
+          };
+        })
+        .filter((app) => app.id !== ""); // Filter out invalid entries
+
+      return merged;
+    } catch (err) {
+      console.error(`[Spectrum_Apps] Error in get_all_for_admin: ${err}`);
+      return [];
     }
   },
 };
