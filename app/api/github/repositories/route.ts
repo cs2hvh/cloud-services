@@ -75,7 +75,31 @@ export async function GET() {
     // console.log('Session keys:', Object.keys(session));
 
     // Try to use provider token if available
-    const accessToken = null;
+    let accessToken = null;
+    
+    // Check for token in session first
+    if (session.provider_token) {
+      accessToken = session.provider_token;
+      // console.log('Found token in session.provider_token');
+    }
+    // Fallback to identity data
+    else if (githubIdentity.identity_data?.provider_token) {
+      accessToken = githubIdentity.identity_data.provider_token;
+      // console.log('Found token in identity_data.provider_token');
+    }
+    // Last resort: check the github_tokens table (for linked accounts)
+    else {
+      const { data: tokenData } = await supabase
+        .from('github_tokens')
+        .select('access_token')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (tokenData?.access_token) {
+        accessToken = tokenData.access_token;
+        // console.log('Found token in github_tokens table');
+      }
+    }
 
     if (accessToken) {
       // console.log('Using provider token for GitHub API access');
