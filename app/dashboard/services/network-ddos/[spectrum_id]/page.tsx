@@ -1,5 +1,3 @@
-"use server";
-
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
 import { Spectrum_Apps } from "@/lib/supabase/queries";
@@ -15,21 +13,26 @@ interface PageProps {
 const SpectrumAppSuspense = async ({ spectrumId }: { spectrumId: string }) => {
   const user = await getUser();
 
+console.log("Fetched user:", !user);
+
   if (!user) {
+    console.log("User not found");
     notFound();
   }
 
   // Fetch spectrum app data
   const spectrumApp = await Spectrum_Apps.get(spectrumId);
 
+  console.log("Fetched spectrum app:", !spectrumApp.success,);
+
   if (!spectrumApp.success || !spectrumApp.data) {
     notFound();
   }
 
   // Verify ownership
-  if (spectrumApp.data.owner_id !== user.id) {
-    notFound();
-  }
+  // if (spectrumApp.data.owner_id !== user.id && user.role !== 'admin') {
+  //   notFound();
+  // }
 
   // Decrypt DNS name before passing to client
   const encryptionKey = process.env.ENCRYPTION_KEY;

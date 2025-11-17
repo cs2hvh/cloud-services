@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -16,10 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Zap, Lock, Shield, Network, Key } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Zap, Lock, Shield, Network, Key, AlertCircle } from "lucide-react";
 import { StepProps } from "./types";
 import { Separator } from "@/components/ui/separator";
-import { on } from "events";
 
 interface SettingsStepProps extends StepProps {
   onSubmit: () => void;
@@ -33,7 +43,20 @@ export const SettingsStep = ({
   onNext,
   isLoading,
 }: SettingsStepProps) => {
+  const [paidFeatureDialogOpen, setPaidFeatureDialogOpen] = useState(false);
+
+  const handleIPAccessRuleClick = (checked: boolean) => {
+    if (checked) {
+      // Show paid feature dialog
+      setPaidFeatureDialogOpen(true);
+    } else {
+      // Allow disabling
+      onUpdate({ ipAccessRule: false });
+    }
+  };
+
   return (
+    <>
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
         <div className="flex gap-2">
@@ -124,7 +147,7 @@ export const SettingsStep = ({
           <Switch
             id="ip-access-rule"
             checked={formData.ipAccessRule}
-            onCheckedChange={(checked) => onUpdate({ ipAccessRule: checked })}
+            onCheckedChange={handleIPAccessRuleClick}
           />
         </div>
 
@@ -250,5 +273,25 @@ export const SettingsStep = ({
         </Button>
       </CardFooter>
     </Card>
+
+    <AlertDialog open={paidFeatureDialogOpen} onOpenChange={setPaidFeatureDialogOpen}>
+      <AlertDialogContent className="bg-[#0f0f23] border-white/10">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="text-white">Paid Feature</AlertDialogTitle>
+          <AlertDialogDescription className="text-white/60">
+            This is a paid feature. Contact Admin to avail it.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogAction
+            onClick={() => setPaidFeatureDialogOpen(false)}
+            className="bg-white text-black hover:bg-white/90"
+          >
+            OK
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 };

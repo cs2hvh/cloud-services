@@ -52,6 +52,7 @@ export const updateSpectrumAppSchema = z.object({
   ip_firewall: z.boolean().optional(),
   traffic_type: z.string().optional(),
   proxy_protocol: z.string().optional(),
+  argo_smart_routing: z.boolean().optional().default(true),
 });
 
 export type UpdateSpectrumAppPayload = z.infer<typeof updateSpectrumAppSchema>;

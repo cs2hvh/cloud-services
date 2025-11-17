@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tables } from "@/lib/supabase/types";
@@ -9,6 +9,7 @@ import SpectrumAppInfo from "./spectrum-info";
 import SpectrumAppSettings from "./spectrum-settings";
 import axios from "axios";
 import { toast } from "sonner";
+import { useSearchParams } from "next/navigation";
 
 interface SpectrumAppTabsProps {
   spectrumApp: Tables<"spectrum_apps">;
@@ -17,6 +18,18 @@ interface SpectrumAppTabsProps {
 const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
   const [spectrumApp, setSpectrumApp] = useState(initialApp);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const searchParams = useSearchParams();
+  
+  // Get tab from query params, default to "info"
+  const tabParam = searchParams.get("tab");
+  const [activeTab, setActiveTab] = useState(tabParam === "settings" ? "settings" : "info");
+
+  // Update active tab when query param changes
+  useEffect(() => {
+    if (tabParam === "settings") {
+      setActiveTab("settings");
+    }
+  }, [tabParam]);
 
   // Function to refresh spectrum app data
   const refreshAppData = async () => {
@@ -83,7 +96,7 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
         </div>
       </motion.div>
 
-      <Tabs defaultValue="info" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-white/5 border border-white/10 p-1 w-fit">
           <TabsTrigger
             value="info"

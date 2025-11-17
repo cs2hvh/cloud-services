@@ -1,10 +1,11 @@
 'use client';
-import { useState } from "react";
-import { CheckCircle2, FolderTree, AlertCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
   CardContent,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -16,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   AppTypeStep,
   DomainStep,
@@ -28,20 +30,31 @@ import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
 import { Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
+import axios from "axios";
 
 interface SpectrumAppCreateProps {
   projects: Tables<"projects">[];
   userId: string;
+  role?: "user" | "admin";
+  allUsers?: Array<{
+    id: string;
+    email: string;
+    username?: string;
+  }>;
 }
 
-const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
-  const [currentStep, setCurrentStep] = useState(1);
+const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: SpectrumAppCreateProps) => {
+  const [currentStep, setCurrentStep] = useState(role === "admin" ? 0 : 1);
   const [isLoading, setIsLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState("");
+  const [spectrumPrice, setSpectrumPrice] = useState<number>(0);
+  const [loadingPrice, setLoadingPrice] = useState(true);
 
   const router = useRouter();
   
   // Form state
   const [formData, setFormData] = useState<SpectrumFormData>({
+    selectedUser: role === "admin" ? "" : userId,
     appType: '',
     domain: '',
     edgePort: 0,
@@ -59,14 +72,76 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
   });
 
   const [errors, setErrors] = useState({
+    user: "",
     project: "",
   });
+
+  // Fetch DDoS protection pricing
+  useEffect(() => {
+    const fetchPrice = async () => {
+      try {
+        const response = await axios.get("/api/admin/products?type=network-ddos");
+        const products = response.data.products;
+        
+        if (products && products.length > 0) {
+          setSpectrumPrice(parseFloat(products[0].price) || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching spectrum price:", error);
+        setSpectrumPrice(0);
+      } finally {
+        setLoadingPrice(false);
+      }
+    };
+
+    fetchPrice();
+  }, []);
+
+  // Filter users based on search query
+  const filteredUsers = allUsers.filter(
+    (user) =>
+      !userSearchQuery ||
+      user.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      (user.username &&
+        user.username.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
+      user.id.toLowerCase().includes(userSearchQuery.toLowerCase())
+  );
+
+  // Handle user selection
+  const handleUserSelect = (selectedUserId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      selectedUser: selectedUserId,
+    }));
+    if (errors.user) {
+      setErrors({ ...errors, user: "" });
+    }
+  };
+
+  const validateUser = (selectedUser: string): string => {
+    if (role === "admin" && !selectedUser) {
+      return "User selection is required";
+    }
+    return "";
+  };
 
   const updateFormData = (data: Partial<SpectrumFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
   };
 
   const handleNextStep = () => {
+    // Validate user on step 0 (admin only)
+    if (currentStep === 0 && role === "admin") {
+      const userError = validateUser(formData.selectedUser || "");
+      if (userError) {
+        setErrors({ ...errors, user: userError });
+        toast.error(userError);
+        return;
+      } else {
+        setErrors({ ...errors, user: "" });
+      }
+    }
+
     // Validate project on step 6
     if (currentStep === 6) {
       if (!formData.project_id) {
@@ -84,7 +159,8 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
   };
 
   const handlePrevStep = () => {
-    if (currentStep > 1) {
+    const minStep = role === "admin" ? 0 : 1;
+    if (currentStep > minStep) {
       setCurrentStep(currentStep - 1);
     }
   };
@@ -92,6 +168,12 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
   const onSubmit = async () => {
     if (!formData.project_id) {
       toast.error("Please select a project");
+      return;
+    }
+
+    const targetUserId = role === "admin" ? formData.selectedUser : userId;
+    if (!targetUserId) {
+      toast.error("Invalid user selection");
       return;
     }
 
@@ -108,12 +190,16 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
         tls: 'off',
         origin_direct: [`${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}://${formData.originIP}:${formData.originPort}`],
         project_id: formData.project_id,
-        owner_id: userId,
+        owner_id: targetUserId,
       });
 
       if (response.status === 201) {
         toast.success('Spectrum application created successfully!');
-        router.push('/dashboard/services/network-ddos');
+        if (role === "admin") {
+          router.push('/dashboard/admin/network-ddos');
+        } else {
+          router.push('/dashboard/services/network-ddos');
+        }
         router.refresh();
       }
     } catch (error) {
@@ -124,16 +210,37 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
     }
   };
 
-  const steps = [
-    { id: 1, name: "AppType" },
-    { id: 2, name: "Domain" },
-    { id: 3, name: "Edge Port" },
-    { id: 4, name: "Origin" },
-    { id: 5, name: "Settings" },
-    { id: 6, name: "Project" }
-  ];
+  const steps = role === "admin"
+    ? [
+        { id: 0, name: "User" },
+        { id: 1, name: "AppType" },
+        { id: 2, name: "Domain" },
+        { id: 3, name: "Edge Port" },
+        { id: 4, name: "Origin" },
+        { id: 5, name: "Settings" },
+        { id: 6, name: "Project" }
+      ]
+    : [
+        { id: 1, name: "AppType" },
+        { id: 2, name: "Domain" },
+        { id: 3, name: "Edge Port" },
+        { id: 4, name: "Origin" },
+        { id: 5, name: "Settings" },
+        { id: 6, name: "Project" }
+      ];
 
-  const selectedProject = projects.find((proj) => proj.id === formData.project_id);
+  // Filter projects based on selected user (admin mode) or current user
+  const filteredProjects = role === "admin" && formData.selectedUser
+    ? projects.filter(
+        (project) =>
+          project.owner === formData.selectedUser ||
+          (project.users &&
+            Array.isArray(project.users) &&
+            (project.users as string[]).includes(formData.selectedUser!))
+      )
+    : projects;
+
+  const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
 
   return (
     <div className="py-4">
@@ -187,6 +294,91 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Step 0: User Selection (Admin Only) */}
+          {currentStep === 0 && role === "admin" && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Select User
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label htmlFor="user-search" className="mb-2 block text-white">
+                    Search User
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-white/50" />
+                    <Input
+                      id="user-search"
+                      type="text"
+                      placeholder="Search by email, username, or ID..."
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-white">Available Users</Label>
+                  <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
+                    {filteredUsers.length === 0 ? (
+                      <div className="p-4 text-center text-white/60">
+                        No users found
+                      </div>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <div
+                          key={user.id}
+                          onClick={() => handleUserSelect(user.id)}
+                          className={`p-4 cursor-pointer transition-colors border-b border-white/5 last:border-b-0 ${
+                            formData.selectedUser === user.id
+                              ? "bg-blue-500/20 border-l-4 border-l-blue-500"
+                              : "hover:bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-white font-medium">
+                                {user.email}
+                              </div>
+                              {user.username && (
+                                <div className="text-xs text-white/60">
+                                  @{user.username}
+                                </div>
+                              )}
+                            </div>
+                            {formData.selectedUser === user.id && (
+                              <CheckCircle2 className="h-5 w-5 text-blue-400" />
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {errors.user && (
+                  <div className="flex items-center gap-2 text-red-500 text-sm">
+                    <AlertCircle className="w-4 h-4" />
+                    <span>{errors.user}</span>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button
+                  onClick={handleNextStep}
+                  disabled={!formData.selectedUser}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                >
+                  Next
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+
           {/* Step 1: App Type */}
           {currentStep === 1 && (
             <AppTypeStep
@@ -271,12 +463,14 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent className="bg-black border-white/20 text-white">
-                      {projects.length === 0 ? (
+                      {filteredProjects.length === 0 ? (
                         <div className="px-2 py-6 text-center text-white/60">
-                          No projects available
+                          {role === "admin" && formData.selectedUser
+                            ? "No projects available for selected user"
+                            : "No projects available"}
                         </div>
                       ) : (
-                        projects.map((project) => (
+                        filteredProjects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.name}
                           </SelectItem>
@@ -365,9 +559,9 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
               )}
 
               {/* Settings Section */}
-              {currentStep === 5 && (
+              {formData.ipAccessRule ||formData.proxyProtocol && (
                 <>
-                  <div className="h-px bg-white/10 my-3" />
+                 
                   <div>
                     <div className="text-sm text-white/60 mb-3">Settings</div>
                     <div className="space-y-2 text-sm">
@@ -403,12 +597,32 @@ const SpectrumAppCreate = ({ projects, userId }: SpectrumAppCreateProps) => {
               {/* Project Section */}
               {currentStep === 6 && selectedProject && (
                 <>
-                  <div className="h-px bg-white/10 my-3" />
+                 
                   <div className="flex justify-between items-start">
                     <div className="text-sm text-white/60">Project</div>
                     <div className="text-white text-sm text-right max-w-[60%] break-words">
                       {selectedProject.name}
                     </div>
+                  </div>
+                </>
+              )}
+
+              {/* Pricing Section */}
+              {!loadingPrice && spectrumPrice > 0 && (
+                <>
+                  <div className="border-t border-white/10 pt-4 mt-4">
+                    <div className="flex justify-between items-center">
+                      <div className="text-sm text-white/60 flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        Price
+                      </div>
+                      <div className="text-white text-lg font-semibold">
+                        ${spectrumPrice.toFixed(2)}/mo
+                      </div>
+                    </div>
+                    <p className="text-xs text-white/50 mt-2">
+                      Monthly subscription for DDoS protection
+                    </p>
                   </div>
                 </>
               )}

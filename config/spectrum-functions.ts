@@ -102,6 +102,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
     traffic_type,
     proxy_protocol,
     edge_ips,
+    argo_smart_routing: true,
   };
 
   // Create in Cloudflare

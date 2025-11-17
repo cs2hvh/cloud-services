@@ -1,4 +1,7 @@
 export interface SpectrumFormData {
+  // Step 0: User (admin only)
+  selectedUser?: string;
+
   // Step 1: App Type
   appType: 'tcp' | 'udp' | 'ssh' | 'rdp' | '';
 

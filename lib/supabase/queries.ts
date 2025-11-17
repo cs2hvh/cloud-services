@@ -1928,7 +1928,7 @@ export const Spectrum_Apps = {
   },
   get: async (spectrum_id: string) => {
     try {
-      const supabase = await createSSRClient();
+      const supabase = await createServiceClient();
       const { data, error } = await supabase
         .from("spectrum_apps")
         .select("*")

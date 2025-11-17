@@ -12,6 +12,7 @@ import {
   Eye,
   Edit,
   Loader2,
+  Plus,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Admin_SpectrumApp } from "@/lib/supabase/types";
@@ -120,7 +121,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
   };
 
   const handleEditApp = (spectrumId: string) => {
-    router.push(`/dashboard/services/network-ddos/${spectrumId}`);
+    router.push(`/dashboard/services/network-ddos/${spectrumId}?tab=settings`);
   };
 
   const handleDeleteApp = (spectrumId: string, origin: string) => {
@@ -274,6 +275,16 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
               </SelectItem>
             </SelectContent>
           </Select>
+          <Button
+            onClick={() =>
+              router.push("/dashboard/admin/network-ddos/assign")
+            }
+            className="cursor-pointer h-10 px-4 text-sm bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            <span className="hidden sm:inline">Assign DDoS Protection</span>
+            <span className="sm:hidden">Assign</span>
+          </Button>
         </div>
       </div>
 
