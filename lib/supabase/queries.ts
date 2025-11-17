@@ -131,6 +131,7 @@ export const Users = {
           created_at,
           updated_at,
           suspend,
+          two_factor_enabled,
           db_counts:database_cluster!owner_id(count),
           kc_counts:clusters!owner_id(count),
           server_counts:game_servers!user_id(count)
@@ -162,6 +163,7 @@ export const Users = {
         created_at: u.created_at,
         updated_at: u.updated_at,
         suspend: u.suspend,
+        two_factor_enabled: u.two_factor_enabled,
         email: authUsers?.users.find(a => a.id === u.id)?.email || null,
         db_counts: u.db_counts?.[0]?.count || 0,
         kc_counts: u.kc_counts?.[0]?.count || 0,

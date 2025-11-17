@@ -1,146 +1,126 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  enrollMFA,
+  verifyMFA,
+  unenrollMFA,
+  getMFAStatus,
+  update2FAStatus,
+} from "@/lib/api/mfa";
 
 export default function EnableTotp() {
-  const supabase = createClient();
-
   const [factorId, setFactorId] = useState<string>("");
   const [qrSvg, setQrSvg] = useState<string>("");
+  const [totpSecret, setTotpSecret] = useState<string>("");
   const [code, setCode] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [has2FA, setHas2FA] = useState<boolean>(false);
-  // const [enrollmentStep, setEnrollmentStep] = useState<"start" | "verify">(
-  //   "start",
-  // );
 
-  // ✅ Updated enrollment: always provide a non-empty friendlyName, and retry once if name conflict occurs
-  const startEnrollment = useCallback(async () => {
-    // Give each attempt a unique friendly name to avoid collisions
-    const friendlyName = `totp-${Date.now()}`;
+  // Dialog states
+  const [showEnableSuccessDialog, setShowEnableSuccessDialog] = useState(false);
+  const [showDisableConfirmDialog, setShowDisableConfirmDialog] = useState(false);
+  const [showDisableSuccessDialog, setShowDisableSuccessDialog] = useState(false);
 
-    const tryEnroll = async () =>
-      supabase.auth.mfa.enroll({
-        factorType: "totp",
-        friendlyName, // avoid empty-string collision
-      });
-
-    // First attempt
-    let { data, error: enrollError } = await tryEnroll();
-
-    if (enrollError?.message?.includes("already exists")) {
-      const factors = await supabase.auth.mfa.listFactors();
-      if (!factors.error) {
-        const pending = factors.data.totp.find(
-          (f) => f.status === "unverified",
-        );
-        if (pending) {
-          await supabase.auth.mfa.unenroll({ factorId: pending.id });
-          ({ data, error: enrollError } = await tryEnroll());
-        }
-      }
-    }
-
-    if (enrollError) {
-      setError(enrollError.message);
-      return;
-    }
-
-    if (data) {
-      setFactorId(data.id);
-      // If your API returns raw SVG markup, convert to data URL. If it's already a data URL, just set it.
-      const qr = data.totp.qr_code;
-      setQrSvg(
-        qr.startsWith("<svg")
-          ? `data:image/svg+xml;utf8,${encodeURIComponent(qr)}`
-          : qr,
-      );
-    }
-  }, [supabase]);
-
-  // On mount: detect if user already has a verified TOTP. If yes, show "Disable".
-  // If not, begin enrollment to get the QR.
+  // Check MFA status on mount
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const factors = await supabase.auth.mfa.listFactors();
-      if (cancelled) return;
 
-      if (factors.error) {
-        setError(factors.error.message);
-        return;
-      }
+    const checkStatus = async () => {
+      try {
+        const status = await getMFAStatus();
 
-      const verifiedTotp = factors.data.totp.find(
-        (f) => f.status === "verified",
-      );
-      if (verifiedTotp) {
-        // Already enabled → no QR
-        setHas2FA(true);
-        setFactorId(verifiedTotp.id);
-        setQrSvg("");
-        return;
-      }
+        if (cancelled) return;
 
-      // If an unverified TOTP exists, remove it so we can re-enroll and get a fresh QR
-      const pendingTotp = factors.data.totp.find(
-        (f) => f.status === "unverified",
-      );
-      if (pendingTotp) {
-        const unenroll = await supabase.auth.mfa.unenroll({
-          factorId: pendingTotp.id,
-        });
-        if (unenroll.error) {
-          setError(unenroll.error.message);
-          return;
+        if (status.hasVerifiedFactor) {
+          // User already has 2FA enabled
+          setHas2FA(true);
+          setFactorId(status.factorId || "");
+          setQrSvg("");
+        } else {
+          // User doesn't have 2FA, start enrollment
+          setHas2FA(false);
+          await startEnrollment();
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message =
+          err instanceof Error ? err.message : "Failed to check 2FA status";
+        setError(message);
+        toast.error(message);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
+    };
 
-      setHas2FA(false);
-      await startEnrollment(); // will set factorId + qrSvg
-    })();
+    checkStatus();
 
     return () => {
       cancelled = true;
     };
-  }, [supabase, startEnrollment]);
+  }, []);
+
+  const startEnrollment = async () => {
+    try {
+      const result = await enrollMFA();
+
+      setFactorId(result.factorId);
+      setQrSvg(result.qrCode);
+      setTotpSecret(result.secret);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start enrollment";
+      setError(message);
+      toast.error(message);
+    }
+  };
 
   const onVerify = async () => {
     setError("");
     setBusy(true);
+
     try {
-      const challenge = await supabase.auth.mfa.challenge({ factorId });
-      if (challenge.error) throw new Error(challenge.error.message);
+      // Verify the TOTP code
+      await verifyMFA(factorId, code.trim());
 
-      const verify = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId: challenge.data.id,
-        code: code.trim(),
-      });
-      if (verify.error) throw new Error(verify.error.message);
-
-      // Reflect in your profile table for UI purposes (optional)
-      await fetch("/api/profile/twofa", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ two_factor_enabled: true }),
-      });
+      // Update user profile
+      await update2FAStatus(true);
 
       setHas2FA(true);
       setQrSvg("");
       setCode("");
-      alert("2FA enabled!");
-    } catch (e) {
+      setShowEnableSuccessDialog(true);
+    } catch (err) {
       const message =
-        e instanceof Error
-          ? e.message
-          : "Failed to enable 2FA. Please try again.";
+        err instanceof Error ? err.message : "Failed to enable 2FA";
       setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
@@ -149,46 +129,41 @@ export default function EnableTotp() {
   const onDisable = async () => {
     setError("");
     setBusy(true);
+
     try {
-      // Re-list to get the current verified factor ID (safer)
-      const factors = await supabase.auth.mfa.listFactors();
-      if (factors.error) throw new Error(factors.error.message);
+      // Unenroll the factor
+      await unenrollMFA();
 
-      const verifiedTotp = factors.data.totp.find(
-        (f) => f.status === "verified",
-      );
-      if (!verifiedTotp) {
-        setError("No verified 2FA factor found to disable.");
-        return;
-      }
-
-      const unenroll = await supabase.auth.mfa.unenroll({
-        factorId: verifiedTotp.id,
-      });
-      if (unenroll.error) throw new Error(unenroll.error.message);
-
-      // Reflect in your profile table (optional)
-      await fetch("/api/profile/twofa", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ two_factor_enabled: false }),
-      });
+      // Update user profile
+      await update2FAStatus(false);
 
       setHas2FA(false);
       setCode("");
-      // Prepare a fresh enrollment QR in case user wants to re-enable
+
+      // Prepare fresh enrollment for re-enabling
       await startEnrollment();
-      alert("2FA disabled.");
-    } catch (e) {
+
+      setShowDisableConfirmDialog(false);
+      setShowDisableSuccessDialog(true);
+    } catch (err) {
       const message =
-        e instanceof Error
-          ? e.message
-          : "Failed to disable 2FA. Please try again.";
+        err instanceof Error ? err.message : "Failed to disable 2FA";
       setError(message);
+      toast.error(message);
     } finally {
       setBusy(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-md space-y-4">
+        <div className="text-sm text-muted-foreground">
+          Loading 2FA settings...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md space-y-4">
@@ -198,19 +173,38 @@ export default function EnableTotp() {
             <Label>Scan this QR in your Authenticator app</Label>
             {qrSvg ? (
               <img
-                alt="TOTP QR"
+                alt="TOTP QR Code"
                 src={qrSvg}
-                width={200}
-                height={200}
-                className="mt-2 border rounded-md"
+                className="mt-2 border rounded-md w-48 h-48 object-contain bg-white"
+                onError={(e) => {
+                  console.error("QR Code failed to load:", qrSvg);
+                  setError(
+                    "Failed to load QR code. Please use manual entry instead."
+                  );
+                  toast.error(
+                    "Failed to load QR code. Please use manual entry instead."
+                  );
+                }}
               />
             ) : (
               <div className="text-sm text-muted-foreground mt-2">
                 Generating QR…
               </div>
             )}
+            {totpSecret && (
+              <div className="mt-2">
+                <Label className="text-xs">Secret Key (for manual entry):</Label>
+                <div className="text-xs font-mono bg-black/20 p-2 rounded mt-1 break-all">
+                  {totpSecret}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Enter this key manually in your authenticator app if you
+                  can&apos;t scan the QR code.
+                </p>
+              </div>
+            )}
           </div>
-        
+
           <div>
             <Label htmlFor="totp">Enter the 6-digit code</Label>
             <Input
@@ -219,8 +213,17 @@ export default function EnableTotp() {
               autoComplete="one-time-code"
               placeholder="123456"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => {
+                // Only allow digits, max 6 characters
+                const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                setCode(value);
+              }}
+              maxLength={6}
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Make sure your device&apos;s clock is synchronized for the code to
+              work properly.
+            </p>
             {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
           </div>
 
@@ -240,11 +243,85 @@ export default function EnableTotp() {
             </Label>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </div>
-          <Button variant="destructive" onClick={onDisable} disabled={busy}>
+          <Button
+            variant="destructive"
+            onClick={() => setShowDisableConfirmDialog(true)}
+            disabled={busy}
+          >
             {busy ? "Disabling…" : "Disable 2FA"}
           </Button>
         </>
       )}
+
+      {/* Enable Success Dialog */}
+      <Dialog
+        open={showEnableSuccessDialog}
+        onOpenChange={setShowEnableSuccessDialog}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>2FA Enabled Successfully</DialogTitle>
+            <DialogDescription>
+              Two-factor authentication has been enabled on your account.
+              You&apos;ll now be asked for a code each time you sign in.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowEnableSuccessDialog(false)}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Disable Confirmation Dialog */}
+      <AlertDialog
+        open={showDisableConfirmDialog}
+        onOpenChange={setShowDisableConfirmDialog}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Are you sure you want to disable 2FA?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Disabling two-factor authentication will reduce the security of
+              your account. You will no longer be required to enter a code when
+              signing in.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={onDisable}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Disable 2FA
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Disable Success Dialog */}
+      <Dialog
+        open={showDisableSuccessDialog}
+        onOpenChange={setShowDisableSuccessDialog}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>2FA Disabled Successfully</DialogTitle>
+            <DialogDescription>
+              Two-factor authentication has been disabled on your account. You
+              can re-enable it at any time.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setShowDisableSuccessDialog(false)}>
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
