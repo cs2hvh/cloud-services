@@ -89,6 +89,8 @@ const AppDeploymentSelect = () => {
   const [outputDir, setOutputDir] = useState<string>('');
   const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
   const [customDomain, setCustomDomain] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const reposPerPage = 3;
 
   // Fetch real provider connection status
   const fetchProviderStatus = useCallback(async () => {
@@ -172,6 +174,7 @@ const AppDeploymentSelect = () => {
   useEffect(() => {
     if (selectedProvider) {
       fetchRepositories(selectedProvider);
+      setCurrentPage(1);
     } else {
       setRepositories([]);
     }
@@ -429,44 +432,68 @@ const AppDeploymentSelect = () => {
                         }}
                       />
                     </div>
-                    <RadioGroup value={selectedRepo} onValueChange={setSelectedRepo} className="grid grid-cols-1 gap-4 max-h-96 overflow-y-auto custom-scrollbar">
-                      {repositories.map((repo) => (
-                        <div key={repo.id}>
-                          <RadioGroupItem value={repo.id} id={repo.id} className="peer sr-only" />
-                          <Label htmlFor={repo.id} className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
-                              selectedRepo === repo.id 
-                                ? 'border-blue-500 bg-blue-500' 
-                                : 'border-white/30'
-                            }`}>
-                              {selectedRepo === repo.id && (
-                                <div className="w-2 h-2 rounded-full bg-white"></div>
-                              )}
-                            </div>
-                            <Code className="w-6 h-6 text-blue-400 mt-1" />
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <div className="font-semibold text-white">{repo.name}</div>
-                                {repo.private && (
-                                  <Badge variant="outline" className="text-xs text-white/70 border-white/30">
-                                    Private
-                                  </Badge>
+                    <div>
+                      <RadioGroup value={selectedRepo} onValueChange={setSelectedRepo} className="grid grid-cols-1 gap-4">
+                        {repositories
+                          .slice((currentPage - 1) * reposPerPage, currentPage * reposPerPage)
+                          .map((repo) => (
+                          <div key={repo.id}>
+                            <RadioGroupItem value={repo.id} id={repo.id} className="peer sr-only" />
+                            <Label htmlFor={repo.id} className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
+                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
+                                selectedRepo === repo.id 
+                                  ? 'border-blue-500 bg-blue-500' 
+                                  : 'border-white/30'
+                              }`}>
+                                {selectedRepo === repo.id && (
+                                  <div className="w-2 h-2 rounded-full bg-white"></div>
                                 )}
                               </div>
-                              <div className="text-sm text-white/60 mt-1">{repo.fullName}</div>
-                              {repo.description && (
-                                <div className="text-xs text-white/50 mt-1">{repo.description}</div>
-                              )}
-                              <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
-                                <span>{repo.language}</span>
-                                <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
-                                <span>Default: {repo.defaultBranch}</span>
+                              <Code className="w-6 h-6 text-blue-400 mt-1" />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-white">{repo.name}</div>
+                                  {repo.private && (
+                                    <Badge variant="outline" className="text-xs text-white/70 border-white/30">
+                                      Private
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="text-sm text-white/60 mt-1">{repo.fullName}</div>
+                                {repo.description && (
+                                  <div className="text-xs text-white/50 mt-1">{repo.description}</div>
+                                )}
+                                <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
+                                  <span>{repo.language}</span>
+                                  <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
+                                  <span>Default: {repo.defaultBranch}</span>
+                                </div>
                               </div>
-                            </div>
-                          </Label>
+                            </Label>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                      
+                      {/* Pagination Controls */}
+                      {repositories.length > reposPerPage && (
+                        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-white/10">
+                          {Array.from({ length: Math.ceil(repositories.length / reposPerPage) }, (_, i) => i + 1).map((pageNum) => (
+                            <Button
+                              key={pageNum}
+                              onClick={() => setCurrentPage(pageNum)}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              className={currentPage === pageNum 
+                                ? "bg-white/90 text-black hover:bg-white/90" 
+                                : "border-white/20 text-white hover:bg-white/10"
+                              }
+                            >
+                              {pageNum}
+                            </Button>
+                          ))}
                         </div>
-                      ))}
-                    </RadioGroup>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8">
