@@ -16,6 +16,25 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
     onNext();
   };
 
+  const handleAppTypeChange = (value: "tcp" | "udp" | "ssh" | "rdp") => {
+    // Set default ports for SSH and RDP
+    if (value === 'ssh') {
+      onUpdate({ 
+        appType: value, 
+        originPort: 22,
+        edgePort: 22 
+      });
+    } else if (value === 'rdp') {
+      onUpdate({ 
+        appType: value, 
+        originPort: 3389,
+        edgePort: 3389 
+      });
+    } else {
+      onUpdate({ appType: value });
+    }
+  };
+
   return (
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
@@ -37,9 +56,7 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
         <div >
           <Select
             value={formData.appType}
-            onValueChange={(value: "tcp" | "udp" | "ssh" |"rdp") =>
-              onUpdate({ appType: value })
-            }
+            onValueChange={handleAppTypeChange}
           >
             <SelectTrigger
               id="app-type"

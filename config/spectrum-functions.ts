@@ -83,6 +83,8 @@ function getCloudflareHeaders(token: string) {
  * Create a new Spectrum app in Cloudflare and persist to database
  */
 export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
+
+  //console.log(payload,"............................105");
   
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
@@ -114,6 +116,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   );
 
   if (!cfResp.data?.success || !cfResp.data.result) {
+    console.log(cfResp.data,"............................153");
     throw new Error(
       cfResp.data?.errors?.[0]?.message || "Failed to create Spectrum app"
     );
@@ -128,7 +131,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
   // Retry logic with exponential backoff
-  const maxRetries = 100;
+  const maxRetries = 1000;
   let retryCount = 0;
   let resolved = false;
   
@@ -145,7 +148,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
 
       if (checkIp.status === 200 && checkIp.data?.query) {
         ipAddress = checkIp.data.query;
-        console.log("Resolved IP Address:", ipAddress);
+       // console.log("Resolved IP Address:", ipAddress);
         resolved = true;
       }
     } catch (error) {

@@ -129,6 +129,9 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
     setFormData(prev => ({ ...prev, ...data }));
   };
 
+  // Check if the selected app type is SSH or RDP
+  const isSSHorRDP = formData.appType === 'ssh' || formData.appType === 'rdp';
+
   const handleNextStep = () => {
     // Validate user on step 0 (admin only)
     if (currentStep === 0 && role === "admin") {
@@ -139,6 +142,19 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
         return;
       } else {
         setErrors({ ...errors, user: "" });
+      }
+    }
+
+    // For SSH/RDP: skip step 3 (Edge Port) and step 5 (Settings)
+    if (isSSHorRDP) {
+      if (currentStep === 2) {
+        // Skip step 3 (Edge Port) and go to step 4 (Origin)
+        setCurrentStep(4);
+        return;
+      } else if (currentStep === 4) {
+        // Skip step 5 (Settings) and go to step 6 (Project)
+        setCurrentStep(6);
+        return;
       }
     }
 
@@ -160,6 +176,20 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
 
   const handlePrevStep = () => {
     const minStep = role === "admin" ? 0 : 1;
+    
+    // For SSH/RDP: skip step 3 (Edge Port) and step 5 (Settings) when going back
+    if (isSSHorRDP) {
+      if (currentStep === 4) {
+        // Skip step 3 (Edge Port) and go to step 2 (Domain)
+        setCurrentStep(2);
+        return;
+      } else if (currentStep === 6) {
+        // Skip step 5 (Settings) and go to step 4 (Origin)
+        setCurrentStep(4);
+        return;
+      }
+    }
+    
     if (currentStep > minStep) {
       setCurrentStep(currentStep - 1);
     }
@@ -211,23 +241,38 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
   };
 
   const steps = role === "admin"
-    ? [
-        { id: 0, name: "User" },
-        { id: 1, name: "AppType" },
-        { id: 2, name: "Domain" },
-        { id: 3, name: "Edge Port" },
-        { id: 4, name: "Origin" },
-        { id: 5, name: "Settings" },
-        { id: 6, name: "Project" }
-      ]
-    : [
-        { id: 1, name: "AppType" },
-        { id: 2, name: "Domain" },
-        { id: 3, name: "Edge Port" },
-        { id: 4, name: "Origin" },
-        { id: 5, name: "Settings" },
-        { id: 6, name: "Project" }
-      ];
+    ? (isSSHorRDP
+        ? [
+            { id: 0, name: "User", displayId: 1 },
+            { id: 1, name: "AppType", displayId: 2 },
+            { id: 2, name: "Domain", displayId: 3 },
+            { id: 4, name: "Origin", displayId: 4 },
+            { id: 6, name: "Project", displayId: 5 }
+          ]
+        : [
+            { id: 0, name: "User" },
+            { id: 1, name: "AppType" },
+            { id: 2, name: "Domain" },
+            { id: 3, name: "Edge Port" },
+            { id: 4, name: "Origin" },
+            { id: 5, name: "Settings" },
+            { id: 6, name: "Project" }
+          ])
+    : (isSSHorRDP
+        ? [
+            { id: 1, name: "AppType", displayId: 1 },
+            { id: 2, name: "Domain", displayId: 2 },
+            { id: 4, name: "Origin", displayId: 3 },
+            { id: 6, name: "Project", displayId: 4 }
+          ]
+        : [
+            { id: 1, name: "AppType" },
+            { id: 2, name: "Domain" },
+            { id: 3, name: "Edge Port" },
+            { id: 4, name: "Origin" },
+            { id: 5, name: "Settings" },
+            { id: 6, name: "Project" }
+          ]);
 
   // Filter projects based on selected user (admin mode) or current user
   const filteredProjects = role === "admin" && formData.selectedUser
@@ -264,7 +309,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
                     {currentStep > step.id ? (
                       <CheckCircle2 size={16} />
                     ) : (
-                      step.id
+                      ('displayId' in step ? step.displayId : step.id)
                     )}
                   </div>
                   {/* Step name positioned directly below the circle */}

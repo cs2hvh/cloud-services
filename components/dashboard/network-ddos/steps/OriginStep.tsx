@@ -9,6 +9,9 @@ import { StepProps } from "./types";
 import { toast } from "sonner";
 
 export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) => {
+  // Check if app type is SSH or RDP for simplified flow
+  const isSSHorRDP = formData.appType === 'ssh' || formData.appType === 'rdp';
+  
   const handleNext = () => {
     if (!formData.originType) {
       toast.error('Please select an origin type');
@@ -123,17 +126,23 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
                       id="origin-port"
                       value={formData.originPort||''}
                       onChange={handlePortChange}
-                       min={1}
+                      min={1}
                       max={65535}
                       type="number"
-                     // disabled
-                      className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                      disabled={isSSHorRDP}
+                      className={`border-white/20 rounded-md text-white placeholder:text-white/50 ${
+                        isSSHorRDP 
+                          ? 'bg-white/5 cursor-not-allowed opacity-70' 
+                          : 'bg-white/10'
+                      }`}
                     />
                     <div className="flex items-center gap-2 text-xs text-white/50 mt-1">
                       <div className="w-1.5 h-1.5 bg-blue-400 rounded-full"></div>
                       <span>
-                        Port is automatically set to match the edge port (
-                        {formData.edgePort})
+                        {isSSHorRDP
+                          ? `Port is fixed to ${formData.originPort} for ${formData.appType?.toUpperCase()} and matches the edge port`
+                          : `Enter the port number on your origin server (1-65535)`
+                        }
                       </span>
                     </div>
                   </div>

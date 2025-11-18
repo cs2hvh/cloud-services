@@ -484,8 +484,8 @@ const AppDeploymentSelect = () => {
                               variant={currentPage === pageNum ? "default" : "outline"}
                               size="sm"
                               className={currentPage === pageNum 
-                                ? "bg-white/90 text-black hover:bg-white/90" 
-                                : "border-white/20 text-white hover:bg-white/10"
+                                ? "cursor-pointer bg-white/90 text-black hover:bg-white/90" 
+                                : "cursor-pointer border-white/20 text-white hover:bg-white/10"
                               }
                             >
                               {pageNum}
