@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Eye, Trash, Network, Plus, Shield, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
+import { Eye, Trash, Network, Plus, Shield, CheckCircle, Loader2, AlertTriangle, Globe } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { format } from "date-fns";
 import Link from "next/link";
@@ -48,6 +48,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
         },
         body: JSON.stringify({
           app_id: selectedAppId,
+          owner_id: userId,
         }),
       });
 
@@ -149,7 +150,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
             <thead className="bg-neutral-800/50 border-b border-neutral-800">
               <tr>
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Origin IP
+                 Name
                 </th>
                 <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                   Protocol
@@ -178,10 +179,10 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                   {/* Origin IP */}
                   <td className="px-4 sm:px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                      <Globe className="h-4 w-4 text-blue-400 flex-shrink-0" />
                       <div className="min-w-0">
                         <div className="font-medium text-white text-sm truncate">
-                          {app.origin_direct[0]}
+                          {app.dns.original_name}
                         </div>
                         <div className="text-xs text-neutral-500 truncate">
                           {app.spectrum_id}

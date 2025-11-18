@@ -1,5 +1,5 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { getUser } from "@/lib/supabase/auth";
+import { getUser, requireAdmin } from "@/lib/supabase/auth";
 import { Spectrum_Apps } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -12,8 +12,7 @@ interface PageProps {
 
 const SpectrumAppSuspense = async ({ spectrumId }: { spectrumId: string }) => {
   const user = await getUser();
-
-console.log("Fetched user:", !user);
+  const checkAdmin = await requireAdmin();
 
   if (!user) {
     console.log("User not found");
@@ -23,16 +22,19 @@ console.log("Fetched user:", !user);
   // Fetch spectrum app data
   const spectrumApp = await Spectrum_Apps.get(spectrumId);
 
-  console.log("Fetched spectrum app:", !spectrumApp.success,);
+  console.log("Fetched spectrum app:", !spectrumApp.success);
 
   if (!spectrumApp.success || !spectrumApp.data) {
     notFound();
   }
 
+  console.log(spectrumApp.data.owner_id !== user.id ,".......1" )
+  console.log(checkAdmin,".........2")
+
   // Verify ownership
-  // if (spectrumApp.data.owner_id !== user.id && user.role !== 'admin') {
-  //   notFound();
-  // }
+  if (spectrumApp.data.owner_id !== user.id && !checkAdmin.ok) {
+    notFound();
+  }
 
   // Decrypt DNS name before passing to client
   const encryptionKey = process.env.ENCRYPTION_KEY;
@@ -41,8 +43,11 @@ console.log("Fetched user:", !user);
   }
 
   let decryptedSpectrumApp = { ...spectrumApp.data };
-  
-  if (decryptedSpectrumApp.dns && typeof decryptedSpectrumApp.dns === 'object') {
+
+  if (
+    decryptedSpectrumApp.dns &&
+    typeof decryptedSpectrumApp.dns === "object"
+  ) {
     const dns = decryptedSpectrumApp.dns as { name: unknown; type: string };
     try {
       const encryptedData = dns.name as EncryptedData;
@@ -50,7 +55,7 @@ console.log("Fetched user:", !user);
       decryptedSpectrumApp.dns = {
         ...dns,
         name: decryptedName,
-        decrypted_name: decryptedName
+        decrypted_name: decryptedName,
       };
     } catch (error) {
       console.error("Failed to decrypt DNS name:", error);

@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { getErrorMessage } from "@/config/functions";
 import axios from "axios";
 import { format } from "date-fns";
+import Link from "next/link";
 
 interface DDoSUsersTabProps {
   all_apps: Admin_SpectrumApp[];
@@ -63,6 +64,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
   const [selectedAppOrigin, setSelectedAppOrigin] = useState<string>("");
+  const [selectedAppName, setSelectedAppName] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Filter and sort apps
@@ -124,10 +126,11 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
     router.push(`/dashboard/services/network-ddos/${spectrumId}?tab=settings`);
   };
 
-  const handleDeleteApp = (spectrumId: string, origin: string) => {
+  const handleDeleteApp = (spectrumId: string, origin: string, appName: string) => {
     setSelectedAppId(spectrumId);
     setSelectedAppOrigin(origin);
     setDeleteDialogOpen(true);
+    setSelectedAppName(appName);
   };
 
   const confirmDelete = async () => {
@@ -275,16 +278,15 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
               </SelectItem>
             </SelectContent>
           </Select>
+          <Link href="/dashboard/admin/network-ddos/assign">
           <Button
-            onClick={() =>
-              router.push("/dashboard/admin/network-ddos/assign")
-            }
             className="cursor-pointer h-10 px-4 text-sm bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
           >
             <Plus className="h-4 w-4 mr-2" />
             <span className="hidden sm:inline">Assign DDoS Protection</span>
             <span className="sm:hidden">Assign</span>
           </Button>
+          </Link>
         </div>
       </div>
 
@@ -309,7 +311,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
                         Email
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                        Origin IP
+                        App name
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                         Protocol
@@ -364,7 +366,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
                               <Shield className="h-4 w-4 text-blue-400" />
                               <div>
                                 <div className="font-medium text-white text-sm">
-                                  {app.origin_direct[0] || "N/A"}
+                                  {app.dns.original_name || "N/A"}
                                 </div>
                                 <div className="text-xs text-neutral-500 truncate max-w-[150px]">
                                   {app.spectrum_id}
@@ -439,7 +441,8 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
                                 onClick={() =>
                                   handleDeleteApp(
                                     app.spectrum_id,
-                                    app.origin_direct[0] || "Unknown"
+                                    app.origin_direct[0] || "Unknown",
+                                    app.dns?.original_name || "Unknown"
                                   )
                                 }
                                 className="cursor-pointer h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"
@@ -503,10 +506,10 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
               Do you want to permanently delete this spectrum app?
               <span className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700 block">
                 <span className="text-sm text-neutral-400 block">
-                  Origin IP:
+                  App Name:
                 </span>
                 <span className="text-base font-semibold text-white mt-1 block">
-                  {selectedAppOrigin}
+                  {selectedAppName}
                 </span>
               </span>
               <span className="mt-3 text-red-400 text-sm font-medium block">

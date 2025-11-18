@@ -83,6 +83,7 @@ function getCloudflareHeaders(token: string) {
  * Create a new Spectrum app in Cloudflare and persist to database
  */
 export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
+  
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
   // Normalize data with defaults (in case validation doesn't apply them)
@@ -127,7 +128,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
   // Retry logic with exponential backoff
-  const maxRetries = 10;
+  const maxRetries = 100;
   let retryCount = 0;
   let resolved = false;
   
@@ -165,6 +166,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
     dns: {
       name: encryptedDnsName,
       type: result.dns?.type || payload.dns.type,
+      original_name: payload.dns.name,
     } as unknown as Json,
     protocol: result.protocol || payload.protocol,
     origin_direct: payload.origin_direct,

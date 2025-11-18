@@ -37,6 +37,7 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
     try {
       const response = await axios.post("/api/services/spectrum/apps/get", {
         app_id: spectrumApp.spectrum_id,
+        owner_id: spectrumApp.owner_id,
       });
 
       if (response.data.local) {

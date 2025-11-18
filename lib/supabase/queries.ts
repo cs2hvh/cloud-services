@@ -1,4 +1,5 @@
 // import { Encryption } from "@/config/functions";
+import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
 import {
@@ -1812,7 +1813,7 @@ export const Activities = {
       console.error(`[Activities.add] Error: ${err}`);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: String(err),
       };
     }
   },
@@ -1907,8 +1908,8 @@ export const Spectrum_Apps = {
         return { success: false, error: error.message };
       }
       return { success: true, data };
-    } catch (err: any) {
-      return { success: false, error: err?.message || "Unknown error" };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   },
   update: async (spectrum_id: string, patch: TablesUpdate<"spectrum_apps">) => {
@@ -1922,8 +1923,8 @@ export const Spectrum_Apps = {
         .single();
       if (error) return { success: false, error: error.message };
       return { success: true, data };
-    } catch (err: any) {
-      return { success: false, error: err?.message || "Unknown error" };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   },
   get: async (spectrum_id: string) => {
@@ -1936,13 +1937,13 @@ export const Spectrum_Apps = {
         .single();
       if (error) return { success: false, error: error.message };
       return { success: true, data };
-    } catch (err: any) {
-      return { success: false, error: err?.message || "Unknown error" };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   },
   list_by_owner: async (owner_id: string): Promise<SpectrumAppRow[]> => {
     try {
-      const supabase = await createSSRClient();
+      const supabase = await createClient();
       const { data, error } = await supabase
         .from("spectrum_apps")
         .select("*")
@@ -1964,8 +1965,8 @@ export const Spectrum_Apps = {
         .select();
       if (error) return { success: false, error: error.message };
       return { success: true, data };
-    } catch (err: any) {
-      return { success: false, error: err?.message || "Unknown error" };
+    } catch (err) {
+      return { success: false, error: String(err) };
     }
   },
 
@@ -1991,6 +1992,7 @@ export const Spectrum_Apps = {
           created_at,
           project_id,
           owner_id,
+          dns,
           user_profiles(username)
         `)
         .order("created_at", { ascending: false });
@@ -2042,6 +2044,7 @@ export const Spectrum_Apps = {
             created_at: app.created_at ?? null,
             project_id: app.project_id ?? null,
             edge_ips: app.edge_ips ?? null,
+            dns: app.dns ?? null,
           };
         })
         .filter((app) => app.id !== ""); // Filter out invalid entries

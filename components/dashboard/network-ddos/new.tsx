@@ -549,14 +549,22 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
                     <div className="text-white text-sm break-words">
                       {formData.originIP}
                     </div>
-                    {formData.originPort > 0 && (
-                      <div className="text-xs text-white/60 mt-1">
-                        Port: {formData.originPort}
-                      </div>
-                    )}
+                   
                   </div>
                 </div>
               )}
+              {formData.originPort>0 && (
+                <div className="flex justify-between items-start">
+                  <div className="text-sm text-white/60">Port</div>
+                  <div className="text-right max-w-[60%]">
+                    <div className="text-white text-sm break-words">
+                      {formData.originPort}
+                    </div>
+                   
+                  </div>
+                </div>
+              )}
+
 
               {/* Settings Section */}
               {formData.ipAccessRule ||formData.proxyProtocol && (

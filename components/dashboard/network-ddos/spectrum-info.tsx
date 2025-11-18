@@ -210,6 +210,7 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
             }
             copyable={dnsName !== "Not available"}
           />
+           <InfoRow label="App name" value={spectrumApp.dns.original_name} />
           <InfoRow label="Created" value={formatDate(spectrumApp.created_at)} />
           <InfoRow label="Updated" value={formatDate(spectrumApp.updated_at)} />
         </InfoCard>
