@@ -70,6 +70,7 @@ export async function POST(request: Request) {
       provider,
       options: {
         redirectTo: `${origin}/api/auth/callback`,
+        scopes: provider === 'github' ? 'repo user:email' : undefined,
       },
     });
     if (error) {

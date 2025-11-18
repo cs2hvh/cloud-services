@@ -48,6 +48,7 @@ CREATE TABLE user_profiles (
     bio TEXT,
     suspend BOOLEAN DEFAULT FALSE,
     roles user_role[] DEFAULT ARRAY['member']::user_role[],
+    two_factor_enabled BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

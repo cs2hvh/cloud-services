@@ -502,7 +502,11 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       {/* User Section */}
       <div className="border-t border-slate-800/50 p-3 sm:p-4 bg-slate-900/20">
         <div className="flex items-center justify-between">
-          <div className="flex items-center min-w-0 flex-1">
+          <Link
+            href="/dashboard/nav/profile"
+            className="flex items-center min-w-0 flex-1 hover:bg-slate-800/30 rounded-lg p-1 -ml-1 transition-all duration-150"
+            title="View profile"
+          >
             <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center text-sm font-medium text-white">
               {user?.email?.charAt(0).toUpperCase() || "U"}
             </div>
@@ -514,7 +518,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 {user?.email}
               </p>
             </div>
-          </div>
+          </Link>
           <button
             onClick={handleSignOut}
             className="ml-2 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded transition-all duration-150"

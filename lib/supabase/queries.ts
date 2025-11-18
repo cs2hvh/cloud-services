@@ -133,6 +133,7 @@ export const Users = {
           created_at,
           updated_at,
           suspend,
+          two_factor_enabled,
           db_counts:database_cluster!owner_id(count),
           kc_counts:clusters!owner_id(count),
           server_counts:game_servers!user_id(count)
@@ -164,6 +165,7 @@ export const Users = {
         created_at: u.created_at,
         updated_at: u.updated_at,
         suspend: u.suspend,
+        two_factor_enabled: u.two_factor_enabled,
         email: authUsers?.users.find(a => a.id === u.id)?.email || null,
         db_counts: u.db_counts?.[0]?.count || 0,
         kc_counts: u.kc_counts?.[0]?.count || 0,
@@ -218,6 +220,25 @@ export const Users = {
     } catch (err) {
       console.log(`[Supabase] Error while getting user by steam: ${err}`);
       return null;
+    }
+  },
+
+  update_password: async (userId: string, newPassword: string): Promise<boolean> => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase.auth.admin.updateUserById(
+        userId,
+        { password: newPassword }
+      );
+
+      if (error) {
+        console.log(`[Supabase] Error while updating user password: ${error.message}`);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.log(`[Supabase] Error while updating user password: ${err}`);
+      return false;
     }
   },
 
@@ -947,6 +968,31 @@ export const OTPs = {
     } catch (err) {
       console.log(`[Supabase] Error while verifying OTP: ${err}`);
       return false;
+    }
+  },
+
+  verify_otp: async (email: string, otp_code: string): Promise<{ id: number; verified: boolean; expires_at: string } | null> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("otps")
+        .select("id, verified, expires_at")
+        .eq("email", email)
+        .eq("otp_code", otp_code)
+        .eq("verified", false)
+        .gt("expires_at", new Date().toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.log(`[Supabase] Error while verifying OTP: ${error?.message || 'No data found'}`);
+        return null;
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while verifying OTP: ${err}`);
+      return null;
     }
   },
 };

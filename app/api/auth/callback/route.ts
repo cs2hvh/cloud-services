@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             const githubUser = await userResponse.json();
 
             // Store the GitHub token for repository access
-            await supabase
+            const { error: upsertError } = await supabase
               .from("github_tokens")
               .upsert({
                 user_id: user.id,
@@ -42,10 +42,14 @@ export async function GET(request: NextRequest) {
                 updated_at: new Date().toISOString(),
               });
 
-            console.log(
-              "Stored GitHub token for repository access:",
-              githubUser.login
-            );
+            if (upsertError) {
+              console.error("Failed to upsert GitHub token:", upsertError);
+            } else {
+              console.log(
+                "Stored GitHub token for repository access:",
+                githubUser.login
+              );
+            }
           }
         } catch (error) {
           console.error("Failed to store GitHub token:", error);

@@ -64,7 +64,6 @@ export function SignInForm() {
   // ---- email/password sign-in
   async function onSubmit(values: InputType) {
     setIsLoading(true);
-    //debugger
     const res = await api.post("/auth/signin/email", {
       email: values.email,
       password: values.password,
@@ -159,7 +158,13 @@ export function SignInForm() {
         challengeId: challenge.data.id,
         code: otpCode.trim(),
       });
-      if (verify.error) throw new Error(verify.error.message);
+      if (verify.error) {
+        // Handle specific TOTP errors
+        if (verify.error.message.includes("Invalid TOTP code")) {
+          throw new Error("Invalid code. Make sure your device's clock is synchronized and try again.");
+        }
+        throw new Error(verify.error.message);
+      }
 
       router.replace(nextPath);
     } catch (err) {

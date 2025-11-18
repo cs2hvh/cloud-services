@@ -523,6 +523,7 @@ export type Database = {
           cluster_stats:{game_servers:number; db_clusters:number; kubernetes_clusters:number} | null;
           steam: string | null;
           suspend: boolean | null;
+          two_factor_enabled: boolean | null;
           updated_at: string | null;
           username: string | null;
         };
@@ -539,6 +540,7 @@ export type Database = {
           cluster_stats:{game_servers:number; db_clusters:number; kubernetes_clusters:number} | null;
           steam?: string | null;
           suspend?: boolean | null;
+          two_factor_enabled?: boolean | null;
           updated_at?: string | null;
           username?: string | null;
         };
@@ -552,6 +554,7 @@ export type Database = {
           id?: string;
           roles?: Database["public"]["Enums"]["user_role"][] | null;
           steam?: string | null;
+          two_factor_enabled?: boolean | null;
           suspend?: boolean | null;
           updated_at?: string | null;
           username?: string | null;

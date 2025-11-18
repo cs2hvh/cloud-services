@@ -4,32 +4,31 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, User, Phone, Image as ImageIcon } from "lucide-react";
-import Image from "next/image";
+import { Mail, User, Phone, KeyRound } from "lucide-react";
 import api from "@/lib/axios/axios";
 import { toast } from "sonner";
+import { ChangePasswordDialog } from "@/components/dashboard/profile/change-password-dialog";
+import { useRouter } from "next/navigation";
 
 // Types for user profile
 interface UserProfile {
   email: string;
-  password: string;
-  profilePic: string;
   phone: string;
   userName: string;
   displayName: string;
 }
 
 const ProfileSettings: React.FC = () => {
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile>({
     email: "",
-    password: "",
-    profilePic: "",
     phone: "",
     userName: "",
     displayName: "",
   });
 
   const [loading, setLoading] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
 
   // ✅ Fetch user data (example API call)
   useEffect(() => {
@@ -67,41 +66,38 @@ const ProfileSettings: React.FC = () => {
         body: JSON.stringify(profile),
       });
       if (!res.ok) throw new Error("Failed to update profile");
-      alert("Profile updated successfully!");
+      toast.success("Profile updated successfully!");
     } catch (err) {
       console.error("Update error:", err);
-      alert("Failed to update profile.");
+      toast.error("Failed to update profile.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="max-w-xl mx-auto p-6 bg-white rounded-lg shadow-md space-y-6">
-      <h2 className="text-2xl font-semibold">Profile Settings</h2>
+  const handlePasswordChangeSuccess = () => {
+    // Any additional logic after password change success
+  };
 
-      {/* Profile Picture */}
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="profilePic">Profile Picture</Label>
-        <div className="relative">
-          <Input
-            id="profilePic"
-            name="profilePic"
-            value={profile.profilePic}
-            onChange={handleChange}
-            placeholder="Enter image URL"
-            className="pl-9"
-          />
-          <ImageIcon className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
-        </div>
-        {profile.profilePic && (
-          <Image
-            src={profile.profilePic}
-            alt="Profile Preview"
-            className="h-16 w-16 rounded-full border object-cover mt-2"
-          />
-        )}
-      </div>
+  const handleResetPasswordByEmail = async () => {
+    // First, sign out the user using the API route
+    try {
+      await fetch("/api/auth/signout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      // Then redirect to the reset password page with the user's email
+      router.push(`/reset-password?email=${encodeURIComponent(profile.email)}`);
+    } catch (error) {
+      toast.error("Failed to sign out. Please try again.");
+      console.error("Sign out error:", error);
+    }
+  };
+
+  return (
+    <div className="max-w-xl mx-auto p-6 bg-black rounded-lg shadow-md space-y-6">
+      <h2 className="text-2xl font-semibold">Profile Settings</h2>
 
       {/* Email */}
       <div className="flex flex-col gap-2">
@@ -167,10 +163,38 @@ const ProfileSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Password Change Dialog */}
+      <Button 
+        variant="outline" 
+        className="w-full" 
+        type="button" 
+        onClick={() => setPasswordDialogOpen(true)}
+      >
+        <KeyRound className="mr-2 h-4 w-4" />
+        Change Password
+      </Button>
+      
+      {/* Reset Password by Email */}
+      <Button 
+        variant="outline" 
+        className="w-full" 
+        type="button" 
+        onClick={handleResetPasswordByEmail}
+      >
+        <Mail className="mr-2 h-4 w-4" />
+        Reset Password by Email
+      </Button>
+      
+      <ChangePasswordDialog 
+        open={passwordDialogOpen} 
+        onOpenChange={setPasswordDialogOpen}
+        onSuccess={handlePasswordChangeSuccess}
+      />
+
       {/* Submit */}
       <div className="pt-4">
         <Button onClick={handleUpdate} disabled={loading} className="w-full">
-          {loading ? "Updating..." : "Update"}
+          {loading ? "Updating..." : "Update Profile"}
         </Button>
       </div>
     </div>

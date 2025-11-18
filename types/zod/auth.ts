@@ -37,3 +37,10 @@ export const otp_schema = z.object({
     .min(6, "Your one-time password must be exactly 6 characters.")
     .max(6, "Your one-time password must be exactly 6 characters."),
 });
+
+// Export password reset schemas from password-reset.ts for convenience
+export { 
+  forgot_password_schema, 
+  reset_password_schema, 
+  change_password_schema 
+} from "./password-reset";
