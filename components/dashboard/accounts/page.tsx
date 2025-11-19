@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import EnableTotp from "../2fa/page";
@@ -103,11 +104,13 @@ function ProviderRow({
   loading,
   onConnect,
   onDisconnect,
+  index,
 }: {
   item: ProviderItem;
   loading: boolean;
   onConnect: (p: OAuthProvider) => void;
   onDisconnect: (p: OAuthProvider) => void;
+  index: number;
 }) {
   //if (item.provider === "email") return null; // not shown in the 4 requested
 
@@ -119,7 +122,10 @@ function ProviderRow({
   const btnAction = isLinked ? onDisconnect : onConnect;
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.1 }}
       className={twMerge(
         "flex items-center justify-between rounded-2xl border p-4",
         "bg-black shadow-sm hover:shadow transition",
@@ -157,7 +163,7 @@ function ProviderRow({
       >
         {loading ? "Please wait..." : btnText}
       </button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -209,24 +215,50 @@ const Accounts = () => {
   }, [hitprovider]);
 
   return (
+    // Updated class to remove max-width constraint to match dashboard spacing
     <div className={twMerge("space-y-4")}>
-      <h2 className="text-xl font-semibold">Connected Accounts</h2>
-      <p className="text-sm text-neutral-600">
+      <motion.h2 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-xl font-semibold"
+      >
+        Connected Accounts
+      </motion.h2>
+      
+      <motion.p 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="text-sm text-neutral-600"
+      >
         Link your accounts to sign in quickly and securely.
-      </p>
+      </motion.p>
 
-      <div className="grid gap-3">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="grid gap-3"
+      >
         {providers?.map((item, index) => (
           <ProviderRow
             key={index}
+            index={index}
             item={item}
             loading={loading}
             onConnect={() => handleConnect(item?.provider, "connect")}
             onDisconnect={() => handleConnect(item?.provider, "disconnect")}
           />
         ))}
-      </div>
-      <EnableTotp />
+      </motion.div>
+      
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <EnableTotp />
+      </motion.div>
     </div>
   );
 };

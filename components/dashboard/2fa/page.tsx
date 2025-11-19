@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ export default function EnableTotp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
   const [has2FA, setHas2FA] = useState<boolean>(false);
+  const [showSetup, setShowSetup] = useState<boolean>(false);
 
   // Dialog states
   const [showEnableSuccessDialog, setShowEnableSuccessDialog] = useState(false);
@@ -62,9 +64,9 @@ export default function EnableTotp() {
           setFactorId(status.factorId || "");
           setQrSvg("");
         } else {
-          // User doesn't have 2FA, start enrollment
+          // User doesn't have 2FA enabled
           setHas2FA(false);
-          await startEnrollment();
+          // Don't automatically start enrollment, wait for user action
         }
       } catch (err) {
         if (cancelled) return;
@@ -88,16 +90,20 @@ export default function EnableTotp() {
 
   const startEnrollment = async () => {
     try {
+      setLoading(true);
       const result = await enrollMFA();
 
       setFactorId(result.factorId);
       setQrSvg(result.qrCode);
       setTotpSecret(result.secret);
+      setShowSetup(true);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to start enrollment";
       setError(message);
       toast.error(message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,6 +121,7 @@ export default function EnableTotp() {
       setHas2FA(true);
       setQrSvg("");
       setCode("");
+      setShowSetup(false);
       setShowEnableSuccessDialog(true);
     } catch (err) {
       const message =
@@ -139,9 +146,7 @@ export default function EnableTotp() {
 
       setHas2FA(false);
       setCode("");
-
-      // Prepare fresh enrollment for re-enabling
-      await startEnrollment();
+      setShowSetup(false);
 
       setShowDisableConfirmDialog(false);
       setShowDisableSuccessDialog(true);
@@ -157,99 +162,161 @@ export default function EnableTotp() {
 
   if (loading) {
     return (
-      <div className="max-w-md space-y-4">
-        <div className="text-sm text-muted-foreground">
+      // Updated class to match dashboard spacing pattern
+      <div className="space-y-4">
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-sm text-muted-foreground"
+        >
           Loading 2FA settings...
-        </div>
+        </motion.div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md space-y-4">
+    // Updated class to remove max-width constraint to match dashboard spacing
+    <div className="space-y-4">
       {!has2FA ? (
-        <>
-          <div>
-            <Label>Scan this QR in your Authenticator app</Label>
-            {qrSvg ? (
-              <img
-                alt="TOTP QR Code"
-                src={qrSvg}
-                className="mt-2 border rounded-md w-48 h-48 object-contain bg-white"
-                onError={(e) => {
-                  console.error("QR Code failed to load:", qrSvg);
-                  setError(
-                    "Failed to load QR code. Please use manual entry instead."
-                  );
-                  toast.error(
-                    "Failed to load QR code. Please use manual entry instead."
-                  );
-                }}
-              />
-            ) : (
-              <div className="text-sm text-muted-foreground mt-2">
-                Generating QR…
-              </div>
-            )}
-            {totpSecret && (
-              <div className="mt-2">
-                <Label className="text-xs">Secret Key (for manual entry):</Label>
-                <div className="text-xs font-mono bg-black/20 p-2 rounded mt-1 break-all">
-                  {totpSecret}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Enter this key manually in your authenticator app if you
-                  can&apos;t scan the QR code.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div>
-            <Label htmlFor="totp">Enter the 6-digit code</Label>
-            <Input
-              id="totp"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              value={code}
-              onChange={(e) => {
-                // Only allow digits, max 6 characters
-                const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                setCode(value);
-              }}
-              maxLength={6}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Make sure your device&apos;s clock is synchronized for the code to
-              work properly.
-            </p>
-            {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-          </div>
-
-          <Button
-            onClick={onVerify}
-            disabled={busy || !factorId || code.length < 6}
+        !showSetup ? (
+          // Show enable button when 2FA is not set up
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
           >
-            {busy ? "Enabling…" : "Enable 2FA"}
-          </Button>
-        </>
+            <p className="text-sm text-muted-foreground mb-4">
+              Two-factor authentication adds an extra layer of security to your account by requiring more than just a password to sign in.
+            </p>
+            <Button onClick={startEnrollment}>
+              Enable Two-Factor Authentication
+            </Button>
+          </motion.div>
+        ) : (
+          // Show setup flow when user has clicked enable
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <Label>Scan this QR in your Authenticator app</Label>
+              {qrSvg ? (
+                <motion.img
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.2 }}
+                  alt="TOTP QR Code"
+                  src={qrSvg}
+                  className="mt-2 border rounded-md w-48 h-48 object-contain bg-white"
+                  onError={(e) => {
+                    console.error("QR Code failed to load:", qrSvg);
+                    setError(
+                      "Failed to load QR code. Please use manual entry instead."
+                    );
+                    toast.error(
+                      "Failed to load QR code. Please use manual entry instead."
+                    );
+                  }}
+                />
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-sm text-muted-foreground mt-2"
+                >
+                  Generating QR…
+                </motion.div>
+              )}
+              {totpSecret && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="mt-2"
+                >
+                  <Label className="text-xs">Secret Key (for manual entry):</Label>
+                  <div className="text-xs font-mono bg-black/20 p-2 rounded mt-1 break-all">
+                    {totpSecret}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Enter this key manually in your authenticator app if you
+                    can&apos;t scan the QR code.
+                  </p>
+                </motion.div>
+              )}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Label htmlFor="totp">Enter the 6-digit code</Label>
+              <Input
+                id="totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={code}
+                onChange={(e) => {
+                  // Only allow digits, max 6 characters
+                  const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setCode(value);
+                }}
+                maxLength={6}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Make sure your device&apos;s clock is synchronized for the code to
+                work properly.
+              </p>
+              {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Button
+                onClick={onVerify}
+                disabled={busy || !factorId || code.length < 6}
+              >
+                {busy ? "Enabling…" : "Enable 2FA"}
+              </Button>
+            </motion.div>
+          </>
+        )
       ) : (
         <>
-          <div className="space-y-2">
+          <motion.div 
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-2"
+          >
             <Label>
               Two-factor authentication is currently{" "}
               <span className="font-semibold">Enabled</span>.
             </Label>
+            <p className="text-sm text-muted-foreground">
+              You&apos;ll be asked for a code each time you sign in.
+            </p>
             {error && <p className="text-sm text-red-600">{error}</p>}
-          </div>
-          <Button
-            variant="destructive"
-            onClick={() => setShowDisableConfirmDialog(true)}
-            disabled={busy}
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
           >
-            {busy ? "Disabling…" : "Disable 2FA"}
-          </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setShowDisableConfirmDialog(true)}
+              disabled={busy}
+            >
+              {busy ? "Disabling…" : "Disable 2FA"}
+            </Button>
+          </motion.div>
         </>
       )}
 
