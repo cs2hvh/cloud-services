@@ -32,9 +32,11 @@ const ProfileSuspense = async () => {
 const ProfilePage = async () => {
   return (
     <SidebarLayout>
-      <Suspense fallback={<LoadingSpinner />}>
-        <ProfileSuspense />
-      </Suspense>
+      <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
+        <Suspense fallback={<LoadingSpinner />}>
+          <ProfileSuspense />
+        </Suspense>
+      </div>
     </SidebarLayout>
   );
 };

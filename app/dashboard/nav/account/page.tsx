@@ -24,9 +24,11 @@ const AccountSuspense = async () => {
 const NavAccount = async () => {
   return (
     <SidebarLayout>
-      <Suspense fallback={<LoadingSpinner />}>
-        <AccountSuspense />
-      </Suspense>
+      <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
+        <Suspense fallback={<LoadingSpinner />}>
+          <AccountSuspense />
+        </Suspense>
+      </div>
     </SidebarLayout>
   );
 };
