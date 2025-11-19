@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { motion } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,11 +97,23 @@ const ProfileSettings: React.FC = () => {
   };
 
   return (
-    <div className="max-w-xl mx-auto p-6 bg-black rounded-lg shadow-md space-y-6">
-      <h2 className="text-2xl font-semibold">Profile Settings</h2>
+    // Updated class to remove fixed max-width and centering to match dashboard spacing
+    <div className="space-y-6">
+      <motion.h2 
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-2xl font-semibold"
+      >
+        Profile Settings
+      </motion.h2>
 
       {/* Email */}
-      <div className="flex flex-col gap-2">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        className="flex flex-col gap-2"
+      >
         <Label htmlFor="email">Email</Label>
         <div className="relative">
           <Input
@@ -114,10 +127,15 @@ const ProfileSettings: React.FC = () => {
           />
           <Mail className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
         </div>
-      </div>
+      </motion.div>
 
       {/* Username */}
-      <div className="flex flex-col gap-2">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="flex flex-col gap-2"
+      >
         <Label htmlFor="username">Username</Label>
         <div className="relative">
           <Input
@@ -131,10 +149,15 @@ const ProfileSettings: React.FC = () => {
           />
           <User className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
         </div>
-      </div>
+      </motion.div>
 
       {/* Display Name */}
-      <div className="flex flex-col gap-2">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="flex flex-col gap-2"
+      >
         <Label htmlFor="displayName">Display Name</Label>
         <Input
           id="displayName"
@@ -144,10 +167,15 @@ const ProfileSettings: React.FC = () => {
           onChange={handleChange}
           placeholder="Display name"
         />
-      </div>
+      </motion.div>
 
       {/* Phone */}
-      <div className="flex flex-col gap-2">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="flex flex-col gap-2"
+      >
         <Label htmlFor="phone">Phone</Label>
         <div className="relative">
           <Input
@@ -161,42 +189,65 @@ const ProfileSettings: React.FC = () => {
           />
           <Phone className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
         </div>
-      </div>
+      </motion.div>
 
       {/* Password Change Dialog */}
-      <Button 
-        variant="outline" 
-        className="w-full" 
-        type="button" 
-        onClick={() => setPasswordDialogOpen(true)}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
       >
-        <KeyRound className="mr-2 h-4 w-4" />
-        Change Password
-      </Button>
+        <Button 
+          variant="outline" 
+          className="w-full" 
+          type="button" 
+          onClick={() => setPasswordDialogOpen(true)}
+        >
+          <KeyRound className="mr-2 h-4 w-4" />
+          Change Password
+        </Button>
+      </motion.div>
       
       {/* Reset Password by Email */}
-      <Button 
-        variant="outline" 
-        className="w-full" 
-        type="button" 
-        onClick={handleResetPasswordByEmail}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.6 }}
       >
-        <Mail className="mr-2 h-4 w-4" />
-        Reset Password by Email
-      </Button>
+        <Button 
+          variant="outline" 
+          className="w-full" 
+          type="button" 
+          onClick={handleResetPasswordByEmail}
+        >
+          <Mail className="mr-2 h-4 w-4" />
+          Reset Password by Email
+        </Button>
+      </motion.div>
       
-      <ChangePasswordDialog 
-        open={passwordDialogOpen} 
-        onOpenChange={setPasswordDialogOpen}
-        onSuccess={handlePasswordChangeSuccess}
-      />
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.7 }}
+      >
+        <ChangePasswordDialog 
+          open={passwordDialogOpen} 
+          onOpenChange={setPasswordDialogOpen}
+          onSuccess={handlePasswordChangeSuccess}
+        />
+      </motion.div>
 
       {/* Submit */}
-      <div className="pt-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.8 }}
+        className="pt-4"
+      >
         <Button onClick={handleUpdate} disabled={loading} className="w-full">
           {loading ? "Updating..." : "Update Profile"}
         </Button>
-      </div>
+      </motion.div>
     </div>
   );
 };
