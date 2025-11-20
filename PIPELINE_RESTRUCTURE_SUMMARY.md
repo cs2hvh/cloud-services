@@ -53,8 +53,8 @@ lib/jenkins/
 **Stages**:
 1. Clone Repository
 2. Validate Dockerfile (fails if missing)
-3. Build Docker Image
-4. Push to Docker Hub
+3. Build Image with Kaniko
+4. Push to Container Registry
 5. Deploy to Kubernetes
 6. Verify Deployment
 
@@ -211,25 +211,28 @@ import { createNodeJsPipeline, createExpressPipeline } from '@/lib/jenkins/pipel
 ### Service Layer
 Already updated to use new pipelines automatically.
 
-## Current Error & Solution
+## Current Implementation
 
-### Error from Jenkins:
+### Build System:
 ```
-docker: not found
+Kaniko in Kubernetes Pods
 ```
 
-### Why?
-The Express pipeline (and all production pipelines) need Docker to build images.
+### Why Kaniko?
+- No Docker daemon needed on Jenkins
+- More secure (no privileged containers)
+- Builds run in ephemeral K8s pods
+- Better resource isolation
 
-### Solution:
-Manager must install Docker on Jenkins server:
+### Setup:
+Configure Jenkins with Kubernetes plugin and credentials:
 
 ```bash
-# On Jenkins server
-sudo apt-get update
-sudo apt-get install docker.io -y
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
+# Jenkins requirements:
+# 1. Kubernetes plugin installed
+# 2. dockerhublogin credential (container registry auth)
+# 3. kubeconfig_file credential (K8s access)
+# 4. No Docker installation needed!
 ```
 
 ### Test Now:
@@ -258,7 +261,7 @@ Branch: main
 
 ---
 
-### Phase 2: Test Docker Build (After Installation)
+### Phase 2: Test Image Build (After K8s Setup)
 ```bash
 Framework: express
 GitHub: https://github.com/deep-aghera-001/simple-express
@@ -267,9 +270,9 @@ Port: 31001
 ```
 
 **Expected**: 
-- ✅ Auto-creates Dockerfile
-- ✅ Builds image
-- ✅ Pushes to Docker Hub
+- ✅ Creates Kaniko pod in K8s
+- ✅ Builds image with Kaniko
+- ✅ Pushes to registry
 - ✅ Deploys to K8s
 
 ---
@@ -313,15 +316,14 @@ Use appropriate framework:
    - Verifies Jenkins connectivity
    - Validates Git access
 
-### Manager Tasks
-2. Install Docker on Jenkins server (see commands above)
-3. Verify Docker installation:
+### Setup Tasks
+2. Configure Kubernetes plugin in Jenkins
+3. Verify Jenkins can access K8s:
    ```bash
-   docker --version
-   docker ps
+   kubectl --kubeconfig=/path/to/config get nodes
    ```
 
-### After Docker Install (You)
+### After K8s Setup (You)
 4. Test Express Pipeline:
    ```bash
    Framework: express
@@ -347,6 +349,6 @@ Use appropriate framework:
 ✅ **Documented**: Full README + Quick Start guide  
 ✅ **Backward Compatible**: Old functions still work  
 
-🔧 **Blocked on**: Docker installation on Jenkins server  
-🧪 **Can test now**: Simple test pipeline (no Docker needed)  
-🚀 **Ready for**: Full deployment once Docker installed
+🔧 **Requires**: Kubernetes plugin and credentials in Jenkins  
+🧪 **Can test now**: Simple test pipeline (no builds needed)  
+🚀 **Ready for**: Full deployment with Kaniko builds in K8s

@@ -1,13 +1,13 @@
-# Test Simple Pipeline NOW (No Docker Required)
+# Test Simple Pipeline NOW
 
 ## Current Situation
-- ❌ Docker not installed on Jenkins server
-- ❌ Cannot build or deploy apps yet
+- ✅ Kaniko builds run in Kubernetes pods
+- ✅ No installation needed on Jenkins server
 - ✅ Can test Jenkins connectivity and Git access
 
 ## Solution: Simple Test Pipeline
 
-I created a **simple test pipeline** that only needs Git (already installed on Jenkins).
+A **simple test pipeline** that validates repository access without building or deploying.
 
 ---
 
@@ -172,24 +172,21 @@ If this test succeeds, you've verified:
 
 ## After Test Succeeds
 
-### Next: Ask Manager to Install Docker
+### Next: Configure Kubernetes Plugin
 
-Once the simple test works, ask your manager to install Docker:
+Ensure Jenkins has the Kubernetes plugin configured:
 
 ```bash
-# On Jenkins server (manager runs this)
-sudo apt-get update
-sudo apt-get install docker.io -y
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
-
-# Verify
-docker --version
+# In Jenkins UI:
+# 1. Manage Jenkins → Plugin Manager → Install "Kubernetes" plugin
+# 2. Configure credentials:
+#    - dockerhublogin (Docker Hub username/password)
+#    - kubeconfig_file (Kubernetes config file)
 ```
 
 ### Then: Test Express Pipeline
 
-After Docker is installed, test actual deployment:
+Test actual deployment with Kaniko builds:
 
 ```
 App Name: apptree
@@ -201,8 +198,8 @@ Port: 31001
 
 This will:
 - ✅ Auto-create Dockerfile
-- ✅ Build Docker image
-- ✅ Push to Docker Hub
+- ✅ Build image with Kaniko in K8s pod
+- ✅ Push to registry
 - ✅ Deploy to Kubernetes
 - ✅ Create Ingress with SSL
 - ✅ Make app accessible at https://apptree.uizb210.xyz
@@ -262,6 +259,6 @@ http://your-jenkins-url/job/test-app-job/
 🎯 **Try This Now**: Create a deployment with `framework: 'simple-test'`  
 ⏱️ **Takes**: ~30 seconds  
 📋 **Proves**: Jenkins and Git are working  
-🚫 **No Need**: Docker, Kubernetes, or any deployment  
+🚫 **No Builds**: Simple validation only  
 ✅ **Success**: Confirms pipeline system is working  
-➡️ **Next**: Wait for Docker install, then deploy for real
+➡️ **Next**: Configure Kubernetes plugin, then deploy with Kaniko builds

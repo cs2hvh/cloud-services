@@ -58,11 +58,11 @@ Full production pipeline with Docker build and Kubernetes deployment.
 - Node.js apps with existing Dockerfile
 
 **Requirements:**
-- Docker installed on Jenkins
-- kubectl installed on Jenkins
+- Kubernetes cluster with Kaniko support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - **Repository must have Dockerfile**
+- **No Docker needed on Jenkins** - builds run in K8s pods
 
 **Example Usage:**
 ```typescript
@@ -98,11 +98,11 @@ Simplified pipeline that auto-generates Dockerfile for Express apps.
 - Quick Express deployments
 
 **Requirements:**
-- Docker installed on Jenkins
-- kubectl installed on Jenkins
+- Kubernetes cluster with Kaniko support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - Repository must have `package.json` with `start` script
+- **No Docker needed on Jenkins** - builds run in K8s pods
 
 **Auto-Generated Dockerfile:**
 ```dockerfile
@@ -150,11 +150,11 @@ Pipeline for Python web applications with auto-Dockerfile.
 - Python web apps
 
 **Requirements:**
-- Docker installed on Jenkins
-- kubectl installed on Jenkins
+- Kubernetes cluster with Kaniko support
 - Jenkins credentials: `dockerhublogin`, `kubeconfig_file`
 - Kubernetes cluster with cert-manager, nginx-ingress
 - Repository must have `requirements.txt`
+- **No Docker needed on Jenkins** - builds run in K8s pods
 
 **Auto-Generated Dockerfile:**
 ```dockerfile
@@ -217,16 +217,13 @@ await JenkinsService.createJob('my-django', 'https://...', 'main', 31003, 'djang
 
 **Jenkins Server:**
 ```bash
-# Install Docker
-sudo apt-get install docker.io -y
-sudo usermod -aG docker jenkins
+# No Docker installation needed!
+# Kaniko runs in Kubernetes pods on the control-plane node
 
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-
-# Restart Jenkins
-sudo systemctl restart jenkins
+# Jenkins only needs:
+# 1. Kubernetes plugin installed
+# 2. Access to Kubernetes cluster
+# 3. Docker Hub credentials configured
 ```
 
 **Jenkins Credentials:**
@@ -297,19 +294,14 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 
 ## Troubleshooting
 
-### "docker: not found"
-- Docker not installed on Jenkins server
-- Jenkins user not in docker group
-- Solution: Follow "Jenkins Server" setup above
+### "Cannot connect to Kubernetes cluster"
+- Kubeconfig credentials not configured
+- Jenkins Kubernetes plugin not installed
+- Solution: Install plugin, configure kubeconfig credential
 
-### "kubectl: not found"
-- kubectl not installed on Jenkins server
-- Solution: Install kubectl (see above)
-
-### "Invalid agent type 'docker'"
-- Docker Pipeline plugin not installed
-- Not needed - we use direct Docker commands
-- Pipelines already fixed to use `agent any`
+### "kubectl: not found in container"in container"
+- bitnami/kubectl image not pulled
+- Solution: Ensure Kubernetes cluster can pull public images
 
 ### "Dockerfile not found" (Node.js pipeline)
 - Repository missing Dockerfile

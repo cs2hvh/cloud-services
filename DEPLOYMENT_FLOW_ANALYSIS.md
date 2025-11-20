@@ -308,12 +308,11 @@ Stage 2: Prepare Dockerfile
       │ CMD ["npm", "start"]                │
       └─────────────────────────────────────┘
 
-Stage 3: Build Docker Image
-  → docker build -t hav0ky/myapp-app:latest .
+Stage 3: Build & Push Image
+  → Kaniko builds image in Kubernetes pod
+  → /kaniko/executor --context=$PWD --destination=hav0ky/myapp-app:latest
 
-Stage 4: Push to Docker Hub
-  → docker login (using credentials)
-  → docker push hav0ky/myapp-app:latest
+Stage 4: Deploy to Kubernetes
 
 Stage 5: Deploy to Kubernetes
   → Create Certificate (SSL via cert-manager)
@@ -601,7 +600,7 @@ describe('POST /api/services/platform-apps/create', () => {
 | Service Layer Architecture | ✅ Complete |
 | API Routes (create/delete) | ✅ Clean (30-50 lines) |
 | Cloudflare Direct SDK | ✅ Integrated |
-| Express Framework Support | ✅ Auto-Dockerfile |
+| Express Framework Support | ✅ Auto-container build |
 | SUPABASE_SERVICE_ROLE_KEY | ✅ Configured |
 | Synchronous Deployment Flow | ✅ Implemented |
 | Kubernetes Resource Cleanup | ✅ In DeploymentService |
@@ -623,7 +622,7 @@ The implementation is **production-ready** with:
 - ✅ Modular, testable service layer
 - ✅ Clean API routes following best practices
 - ✅ Comprehensive error handling
-- ✅ Express framework support with auto-Dockerfile
+- ✅ Express framework support with auto-build
 - ✅ Kubernetes resource cleanup
 - ✅ No duplicate/unused code
 - ✅ Complete documentation

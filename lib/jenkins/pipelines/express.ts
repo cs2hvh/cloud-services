@@ -1,6 +1,6 @@
 /**
  * Express.js Pipeline with Auto-Dockerfile
- * Creates Dockerfile if missing, builds and deploys
+ * Creates Dockerfile if missing, builds with Kaniko and deploys
  */
 export function createExpressPipeline(
   name: string,
@@ -18,7 +18,7 @@ export function createExpressPipeline(
   <actions/>
   <description>
     Express.js deployment pipeline for ${name}
-    Auto-creates Dockerfile if missing
+    Auto-creates Dockerfile if missing, builds with Kaniko
     Accessible at https://${domain} (port ${nodePort})
   </description>
   <keepDependencies>false</keepDependencies>
@@ -42,31 +42,66 @@ export function createExpressPipeline(
     <script>
 <![CDATA[
 pipeline {
-  agent any
+  agent {
+    kubernetes {
+      yaml """
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: agent
+spec:
+  containers:
+  - name: git
+    image: alpine/git:latest
+    command:
+    - cat
+    tty: true
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command:
+    - /busybox/cat
+    tty: true
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko/.docker
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+  volumes:
+  - name: docker-config
+    secret:
+      secretName: docker-config
+      optional: true
+"""
+    }
+  }
 
   environment {
     KUBECONFIG = credentials('kubeconfig_file')
-    DOCKER_REGISTRY = 'hav0ky'
-    APP_NAME = '${appName}'
-    IMAGE_TAG = "\${DOCKER_REGISTRY}/\${APP_NAME}:latest"
   }
 
   stages {
 
     stage('Clone Repository') {
       steps {
-        echo 'Cloning repository...'
-        git branch: '${branch}', url: '${gitUrl}'
+        container('git') {
+          echo 'Cloning repository...'
+          git branch: '${branch}', url: '${gitUrl}'
+        }
       }
     }
 
     stage('Prepare Dockerfile') {
       steps {
-        echo 'Checking for Dockerfile...'
-        sh '''
-          if [ ! -f Dockerfile ]; then
-            echo "No Dockerfile found, creating default Express Dockerfile..."
-            cat > Dockerfile << 'DOCKER_EOF'
+        container('git') {
+          echo 'Checking for Dockerfile...'
+          sh '''
+            if [ ! -f Dockerfile ]; then
+              echo "No Dockerfile found, creating default Express Dockerfile..."
+              cat > Dockerfile << 'DOCKER_EOF'
 FROM node:18-alpine
 
 WORKDIR /app
@@ -86,46 +121,43 @@ EXPOSE ${nodePort}
 # Start command
 CMD ["npm", "start"]
 DOCKER_EOF
-            echo "✓ Dockerfile created"
-          else
-            echo "✓ Using existing Dockerfile"
-          fi
-          
-          echo ""
-          echo "=== Dockerfile Content ==="
-          cat Dockerfile
-        '''
-      }
-    }
-
-    stage('Build Docker Image') {
-      steps {
-        echo 'Building Docker image...'
-        sh 'docker build -t \${IMAGE_TAG} .'
-      }
-    }
-
-    stage('Push to Docker Hub') {
-      steps {
-        echo 'Pushing to Docker Hub...'
-        withCredentials([usernamePassword(
-          credentialsId: 'dockerhublogin',
-          usernameVariable: 'DOCKER_USER',
-          passwordVariable: 'DOCKER_PASS'
-        )]) {
-          sh '''
-            echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-            docker push \${IMAGE_TAG}
-            docker logout
+              echo "✓ Dockerfile created"
+            else
+              echo "✓ Using existing Dockerfile"
+            fi
+            
+            echo ""
+            echo "=== Dockerfile Content ==="
+            cat Dockerfile
           '''
+        }
+      }
+    }
+
+    stage('Build & Push Image') {
+      steps {
+        container('kaniko') {
+          echo 'Building and pushing image with Kaniko...'
+          withCredentials([usernamePassword(
+            credentialsId: 'dockerhublogin',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS'
+          )]) {
+            sh '''
+              mkdir -p /kaniko/.docker
+              echo "{\\"auths\\":{\\"https://index.docker.io/v1/\\":{\\"auth\\":\\"$(echo -n $DOCKER_USER:$DOCKER_PASS | base64)\\"}}" > /kaniko/.docker/config.json
+              /kaniko/executor --context=\\$PWD --dockerfile=Dockerfile --destination=hav0ky/${appName}:latest
+            '''
+          }
         }
       }
     }
 
     stage('Deploy to Kubernetes') {
       steps {
-        echo 'Deploying to Kubernetes...'
-        sh '''
+        container('kubectl') {
+          echo 'Deploying to Kubernetes...'
+          sh '''
           # Apply Deployment
           cat <<EOF | kubectl apply -f - --kubeconfig=\$KUBECONFIG
 apiVersion: apps/v1
@@ -243,17 +275,20 @@ EOF
 
           echo "✓ Express deployment completed!"
         '''
+        }
       }
     }
 
     stage('Verify Deployment') {
       steps {
-        echo 'Verifying deployment...'
-        sh '''
-          kubectl get deployment,service,ingress -l app=${appName} --kubeconfig=\$KUBECONFIG
-          echo ""
-          kubectl get pods -l app=${appName} --kubeconfig=\$KUBECONFIG
-        '''
+        container('kubectl') {
+          echo 'Verifying deployment...'
+          sh '''
+            kubectl get deployment,service,ingress -l app=${appName} --kubeconfig=\$KUBECONFIG
+            echo ""
+            kubectl get pods -l app=${appName} --kubeconfig=\$KUBECONFIG
+          '''
+        }
       }
     }
 

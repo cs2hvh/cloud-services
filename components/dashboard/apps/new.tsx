@@ -62,15 +62,15 @@ interface ProviderConnection {
 // Framework detection and build settings
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Requires Dockerfile' },
-  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Requires Dockerfile' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Requires Dockerfile' },
-  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Requires Dockerfile' },
-  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-creates Dockerfile' },
-  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-creates Dockerfile' },
-  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-creates Dockerfile' },
-  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-creates Dockerfile' },
-  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-creates Dockerfile' },
+  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
+  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
   'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
 };
 
@@ -663,24 +663,24 @@ const AppDeploymentSelect = () => {
                     <SelectContent>
                       {/* Test Pipeline */}
                       <SelectItem value="simple-test">
-                        🧪 Simple Test (No Docker/K8s)
+                        🧪 Simple Test (No Build/Deploy)
                       </SelectItem>
                       
                       {/* Node.js Frameworks */}
-                      <SelectItem value="Next.js"> Next.js (requires Dockerfile)</SelectItem>
-                      <SelectItem value="React"> React (requires Dockerfile)</SelectItem>
-                      <SelectItem value="Vue.js"> Vue.js (requires Dockerfile)</SelectItem>
-                      <SelectItem value="Node.js"> Node.js (requires Dockerfile)</SelectItem>
-                      <SelectItem value="express"> Express.js (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="Next.js">🚀 Next.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="React">⚛️ React (bring Dockerfile)</SelectItem>
+                      <SelectItem value="Vue.js">💚 Vue.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="Node.js">📦 Node.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="express">🔥 Express.js (auto-Dockerfile)</SelectItem>
                       
                       {/* Python Frameworks */}
-                      <SelectItem value="python"> Python (auto-Dockerfile)</SelectItem>
-                      <SelectItem value="django"> Django (auto-Dockerfile)</SelectItem>
-                      <SelectItem value="flask"> Flask (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="python">🐍 Python (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="django">🎸 Django (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="flask">🌶️ Flask (auto-Dockerfile)</SelectItem>
                       <SelectItem value="fastapi">⚡ FastAPI (auto-Dockerfile)</SelectItem>
                       
                       {/* Static */}
-                      <SelectItem value="Static">📄 Static Site</SelectItem>
+                      <SelectItem value="Static">Static Site</SelectItem>
                     </SelectContent>
                   </Select>
                   
@@ -689,25 +689,25 @@ const AppDeploymentSelect = () => {
                     <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
                       <p className="text-xs text-blue-400 font-medium">🧪 Test Pipeline</p>
                       <p className="text-xs text-blue-300 mt-1">
-                        Only clones repo and validates files. No Docker or Kubernetes needed. Perfect for testing Jenkins setup.
+                        Only clones repo and validates files. No builds or deployment. Perfect for testing Jenkins setup.
                       </p>
                     </div>
                   )}
                   
                   {(framework === 'express' || framework === 'python' || framework === 'django' || framework === 'flask' || framework === 'fastapi') && (
                     <div className="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <p className="text-xs text-green-400 font-medium">✨ Auto-Dockerfile</p>
+                      <p className="text-xs text-green-400 font-medium">✨ Auto-Dockerfile Generation</p>
                       <p className="text-xs text-green-300 mt-1">
-                        Dockerfile will be auto-generated if not found in your repository.
+                        Dockerfile auto-created if missing, then built by Kaniko in Kubernetes. Zero config needed!
                       </p>
                     </div>
                   )}
                   
                   {(framework === 'Next.js' || framework === 'React' || framework === 'Vue.js' || framework === 'Node.js') && (
                     <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                      <p className="text-xs text-yellow-400 font-medium">Dockerfile Required</p>
+                      <p className="text-xs text-yellow-400 font-medium">⚠️ Dockerfile Required</p>
                       <p className="text-xs text-yellow-300 mt-1">
-                        Your repository must include a Dockerfile. Build will fail if not found.
+                        Add a Dockerfile to your repo root. Will be built by Kaniko in Kubernetes cluster.
                       </p>
                     </div>
                   )}

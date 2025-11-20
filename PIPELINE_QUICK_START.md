@@ -21,7 +21,7 @@ Port: 31000 (any port, not used)
 - ✅ Lists files
 - ✅ Detects project type
 - ✅ Shows basic info
-- ❌ No Docker build
+- ❌ No image build
 - ❌ No deployment
 
 **Jenkins Requirements:**
@@ -55,27 +55,26 @@ Port: 31001
 **What it does:**
 - ✅ Clones repository
 - ✅ Creates Dockerfile automatically if missing
-- ✅ Builds Docker image
-- ✅ Pushes to Docker Hub
+- ✅ Builds image with Kaniko
+- ✅ Pushes to registry
 - ✅ Deploys to Kubernetes
 - ✅ Creates SSL certificate
 - ✅ Sets up Ingress
 
 **Jenkins Requirements:**
-- Docker installed
-- kubectl installed
+- Kubernetes plugin installed
 - Credentials: `dockerhublogin`, `kubeconfig_file`
+- Access to Kubernetes cluster
 
-**Your Manager Must Install:**
+**Setup Required:**
 ```bash
 # On Jenkins server
-sudo apt-get install docker.io -y
-sudo usermod -aG docker jenkins
-sudo systemctl restart jenkins
+# 1. Install Kubernetes plugin in Jenkins UI
+# 2. Configure kubeconfig credential
+# 3. Configure Docker Hub credential (dockerhublogin)
 
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+# No Docker installation needed on Jenkins!
+# Builds run in Kubernetes pods using Kaniko
 ```
 
 ---
@@ -98,7 +97,7 @@ Port: 31002
 
 **What it does:**
 - ✅ Validates Dockerfile exists
-- ✅ Builds Docker image
+- ✅ Builds image with Kaniko
 - ✅ Deploys to Kubernetes
 - ❌ Does NOT create Dockerfile (must exist)
 
@@ -143,29 +142,25 @@ Port: 31003
 3. Simple test pipeline (no Docker needed)
 4. Auto-Dockerfile for Express and Python
 
-### ❌ Current Error
-```
-docker: not found
-```
+### ✅ No Installation Required
 
-**Cause**: Docker not installed on Jenkins server
+**Builds run in Kubernetes:**
+- Images built with Kaniko in K8s pods
+- No Docker daemon needed on Jenkins
+- Cleaner and more secure
 
-### 🔧 Fix Required (Manager Task)
+### 🔧 Setup Required
 
-**On Jenkins Server:**
+**Jenkins Configuration:**
 ```bash
-# 1. Install Docker
-sudo apt-get update
-sudo apt-get install docker.io -y
+# 1. Install Kubernetes plugin
+# Jenkins UI → Manage Jenkins → Plugin Manager → Kubernetes
 
-# 2. Add jenkins user to docker group
-sudo usermod -aG docker jenkins
+# 2. Add credentials:
+# - dockerhublogin (username/password)
+# - kubeconfig_file (secret file)
 
-# 3. Restart Jenkins
-sudo systemctl restart jenkins
-
-# 4. Verify
-docker --version
+# 3. Ensure Jenkins can access K8s cluster
 ```
 
 ---
@@ -178,14 +173,14 @@ Framework: simple-test
 ```
 **Expected**: Should work ✅ (only needs Git)
 
-### Phase 2: Test After Docker Install
+### Phase 2: Test Image Build
 ```bash
 Framework: express
 Repo: https://github.com/deep-aghera-001/simple-express
 ```
 **Expected**: 
-- Dockerfile auto-created ✅
-- Docker build succeeds ✅
+- Kaniko pod created ✅
+- Image built in K8s ✅
 - Push to Docker Hub ✅
 - Deploy to K8s ✅
 
@@ -203,16 +198,16 @@ Use appropriate framework:
 **Do you just want to test Jenkins?**
 → Use `simple-test` (no Docker needed)
 
-**Do you have an Express.js app without Dockerfile?**
-→ Use `express` (auto-creates Dockerfile)
+**Do you have an Express.js app?**
+→ Use `express` (auto-builds image)
 
 **Do you have a Next.js/React app with Dockerfile?**
 → Use `nextjs` or `react`
 
 **Do you have a Python app?**
-→ Use `python` (auto-creates Dockerfile)
+→ Use `python` (auto-builds image)
 
-**Is Docker installed on Jenkins?**
+**Is Kubernetes configured?**
 - ❌ No → Can only use `simple-test`
 - ✅ Yes → Can use any pipeline
 
@@ -220,8 +215,8 @@ Use appropriate framework:
 
 ## 📝 Common Issues
 
-### Issue: "docker: not found"
-**Solution**: Ask manager to install Docker (see above)
+### Issue: "Cannot connect to Kubernetes"
+**Solution**: Configure kubeconfig credential and install Kubernetes plugin
 
 ### Issue: "Dockerfile not found" (Node.js pipeline)
 **Solution**: Either:
