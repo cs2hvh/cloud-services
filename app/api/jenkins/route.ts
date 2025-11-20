@@ -2,7 +2,7 @@ import { getUser } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import cloudflare from "@/lib/cloudflare";
 import getJenkinsClient from "@/lib/jenkins";
-import { createPipelineXml } from "@/lib/jenkins/pipeline";
+import { createNodeJsPipeline } from "@/lib/jenkins/pipelines";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
@@ -38,7 +38,7 @@ async function createJob(
 ) {
   try {
     const jobName = `${name}-job`;
-    const pipeline = createPipelineXml(name, github, branch, port);
+    const pipeline = createNodeJsPipeline(name, github, branch, port);
     // Create job in Jenkins
     await getJenkinsClient().job.create(jobName, pipeline);
     setTimeout(async () => {

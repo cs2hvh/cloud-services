@@ -3,11 +3,33 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { DeploymentService, type DeploymentConfig } from "@/lib/services";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
+
+  // Validate required environment variables
+  const requiredEnvVars = [
+    'JENKINS_URL',
+    'CLOUDFLARE_API_TOKEN',
+    'CLOUDFLARE_ZONE_ID',
+    'KUBE_IP',
+    'SUPABASE_SERVICE_ROLE_KEY'
+  ];
+  
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.error('[platform-apps/create] Missing environment variables:', missingVars);
+    return NextResponse.json(
+      { 
+        error: 'Server configuration error',
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        details: 'Please configure all required environment variables in .env.local'
+      },
+      { status: 500 }
+    );
+  }
 
   try {
     const rl = await limitByUser(auth.user!.id, {
@@ -31,31 +53,41 @@ export async function POST(req: NextRequest) {
 
     const { env_vars, ...appData } = validation.data;
 
-    // Generate slug from name
-    const slug = `${appData.name}-${Math.random().toString(36).substring(2, 8)}`;
-
-    // Create app record
-    const appPayload = {
-      ...appData,
-      slug,
+    // Prepare deployment configuration
+    const deploymentConfig: DeploymentConfig = {
+      name: appData.name,
+      repository_url: appData.repository_url,
+      branch: appData.branch || "main",
+      framework: appData.framework,
+      git_provider: appData.git_provider,
+      repository_id: appData.repository_id,
+      repository_name: appData.repository_name,
       user_id: auth.user!.id,
-      status: "pending" as const,
+      build_command: appData.build_command,
+      output_directory: appData.output_directory,
+      env_vars: env_vars || [],
     };
 
-    const result = await Platform_Apps.create(appPayload);
-    
+    // Deploy using the deployment service
+    const result = await DeploymentService.deploy(deploymentConfig);
+
     if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json(
+        { error: result.error || "Deployment failed" },
+        { status: 500 }
+      );
     }
 
-    // Add environment variables if provided
-    if (env_vars && env_vars.length > 0) {
-      await Platform_Apps.set_env_vars(result.data.id, env_vars);
-    }
-
-    return NextResponse.json(result.data, { status: 201 });
+    return NextResponse.json({
+      message: 'Created App Successfully!',
+      app_id: result.app_id,
+      deployment_url: result.deployment_url,
+      port: result.port,
+    }, { status: 201 });
   } catch (err: any) {
-    const msg = err?.message || "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    console.error('[platform-apps/create] Error:', err);
+    return NextResponse.json({ 
+      error: err?.message || 'Something went wrong.'
+    }, { status: 500 });
   }
 }

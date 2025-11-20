@@ -3,7 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { deletePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { DeploymentService } from "@/lib/services";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -29,13 +29,15 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(deletePlatformAppSchema, body);
     if (!validation.success) return validation.response;
 
-    const result = await Platform_Apps.delete(validation.data.app_id, auth.user!.id);
-    
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    // Delete using deployment service
+    try {
+      await DeploymentService.delete(validation.data.app_id, auth.user!.id);
+      return NextResponse.json({ message: "App deleted successfully" });
+    } catch (error: any) {
+      const statusCode = error.message === "App not found" ? 404 :
+                        error.message === "Unauthorized" ? 403 : 400;
+      return NextResponse.json({ error: error.message }, { status: statusCode });
     }
-
-    return NextResponse.json({ message: "App deleted successfully" });
   } catch (err: any) {
     const msg = err?.message || "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });

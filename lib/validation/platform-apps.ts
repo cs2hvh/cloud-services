@@ -20,8 +20,20 @@ export const createPlatformAppSchema = z.object({
   
   branch: z.string().min(1, "Branch name is required").default("main"),
   
-  framework: z.enum(["Next.js", "React", "Vue.js", "Node.js", "Static"], {
-    errorMap: () => ({ message: "Framework must be Next.js, React, Vue.js, Node.js, or Static" }),
+  framework: z.enum([
+    "simple-test",
+    "Next.js", 
+    "React", 
+    "Vue.js", 
+    "Node.js", 
+    "express", 
+    "python",
+    "django",
+    "flask",
+    "fastapi",
+    "Static"
+  ], {
+    errorMap: () => ({ message: "Invalid framework selection" }),
   }),
   
   build_command: z.string().optional(),
@@ -44,7 +56,19 @@ export const updatePlatformAppSchema = z.object({
   
   name: z.string().min(NAMING_RULES.MIN_CLUSTER_NAME_LENGTH).max(NAMING_RULES.MAX_CLUSTER_NAME_LENGTH).optional(),
   branch: z.string().min(1).optional(),
-  framework: z.enum(["Next.js", "React", "Vue.js", "Node.js", "Static"]).optional(),
+  framework: z.enum([
+    "simple-test",
+    "Next.js", 
+    "React", 
+    "Vue.js", 
+    "Node.js", 
+    "express", 
+    "python",
+    "django",
+    "flask",
+    "fastapi",
+    "Static"
+  ]).optional(),
   build_command: z.string().optional(),
   output_directory: z.string().optional(),
   status: z.enum(["pending", "building", "running", "failed", "stopped"]).optional(),
