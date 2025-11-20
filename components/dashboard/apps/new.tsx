@@ -33,6 +33,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 interface Repository {
   id: string;
@@ -251,9 +252,25 @@ const AppDeploymentSelect = () => {
       toast.error('Please select a repository');
       return;
     }
-    if (currentStep === 3 && (!appName.trim() || !framework)) {
-      toast.error('Please enter app name and select framework');
-      return;
+    if (currentStep === 3) {
+      if (!appName.trim()) {
+        toast.error('Please enter an app name');
+        return;
+      }
+      if (!framework) {
+        toast.error('Please select a framework');
+        return;
+      }
+      // Validate app name format
+      const normalizedName = appName.toLowerCase().trim();
+      if (normalizedName.length < 3) {
+        toast.error('App name must be at least 3 characters long');
+        return;
+      }
+      if (normalizedName.length > 63) {
+        toast.error('App name must be at most 63 characters long');
+        return;
+      }
     }
     
     if (currentStep < 4) {
@@ -267,15 +284,82 @@ const AppDeploymentSelect = () => {
     }
   };
 
+  const router = useRouter();
+
   const onSubmit = async () => {
+    if (!selectedRepo || !selectedProvider || !appName || !framework) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Here you would make the API call to deploy the application
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate deployment
+      const selectedRepoData = repositories.find(r => r.id === selectedRepo);
+      if (!selectedRepoData) {
+        toast.error('Selected repository not found');
+        setIsLoading(false);
+        return;
+      }
+
+      // Normalize app name to meet validation requirements
+      const normalizedName = appName
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
+
+      // Ensure name starts and ends with alphanumeric
+      const validName = normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/) 
+        ? normalizedName 
+        : `app-${normalizedName}`.replace(/^-+|-+$/g, '');
+
+      if (validName.length < 3) {
+        toast.error('App name must be at least 3 characters long');
+        setIsLoading(false);
+        return;
+      }
+
+      // Construct proper repository URL based on provider
+      const repoUrlMap: Record<string, string> = {
+        github: `https://github.com/${selectedRepoData.fullName}`,
+        gitlab: `https://gitlab.com/${selectedRepoData.fullName}`,
+        bitbucket: `https://bitbucket.org/${selectedRepoData.fullName}`,
+      };
+
+      const payload = {
+        name: validName,
+        git_provider: selectedProvider as 'github' | 'gitlab' | 'bitbucket',
+        repository_id: selectedRepoData.id,
+        repository_name: selectedRepoData.fullName,
+        repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+        branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
+        framework: framework as 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'Static',
+        build_command: buildCommand || undefined,
+        output_directory: outputDir || undefined,
+        env_vars: envVars.filter(ev => ev.key && ev.value),
+      };
+
+      const response = await fetch('/api/services/platform-apps/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create application');
+      }
+
       toast.success('Application deployment started successfully!');
-      // Redirect to deployment status page
-    } catch {
-      toast.error('Failed to start deployment. Please try again.');
+      
+      // Redirect to apps list page after a short delay
+      setTimeout(() => {
+        router.push('/dashboard/services/apps');
+      }, 1500);
+    } catch (error: any) {
+      console.error('Deployment error:', error);
+      toast.error(error.message || 'Failed to start deployment. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -608,8 +692,9 @@ const AppDeploymentSelect = () => {
                       Add Variable
                     </Button>
                   </div>
-                  {envVars.map((env, index) => (
-                    <div key={index} className="flex gap-2">
+                  <div className="space-y-2">
+                    {envVars.map((env, index) => (
+                      <div key={index} className="flex gap-2">
                       <Input
                         value={env.key}
                         onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
@@ -631,7 +716,8 @@ const AppDeploymentSelect = () => {
                         Remove
                       </Button>
                     </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 <div>
