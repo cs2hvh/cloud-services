@@ -342,9 +342,9 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         projectId: state.selectedProject,
       });
       if (response4.status == 200) {
-        alert(
-          "your cluster is being created. please wait for some time......."
-        );
+        // alert(
+        //   "your cluster is being created. please wait for some time......."
+        // );
         //debugger
         toast.success("Cluster request captured");
         //navigate to status page.

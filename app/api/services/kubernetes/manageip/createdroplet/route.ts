@@ -6,14 +6,14 @@ export async function POST(req: NextRequest) {
   try {
     //debugger
     const json = await req.json();
-    console.log(json,"...............................25")
+    //console.log(json,"...............................25")
 
     const vmPassword=generateStrongPassword();
-  console.log(vmPassword,".................generateStrongPassword..............28")
+  //console.log(vmPassword,".................generateStrongPassword..............28")
     const payload={...json,
      user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
     }
-    console.log(payload,"...............................28")
+    //console.log(payload,"...............................28")
     const droplets=await axios.post(
         "https://api.digitalocean.com/v2/droplets",
        payload,
@@ -27,8 +27,7 @@ export async function POST(req: NextRequest) {
       );
         const hashedPassword=Encryption.encrypt(vmPassword,process.env.ENCRYPTION_KEY!);
 
-        console.log(hashedPassword,"...............hashedPassword................39")
-
+        //console.log(hashedPassword,"...............hashedPassword................39")
 
 
     if (droplets.status === 202) {

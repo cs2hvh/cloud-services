@@ -27,7 +27,7 @@ export async function requireAdmin(): Promise<{ ok: boolean; email?: string; use
     const userId = userData?.user?.id || "";
 
 
-    console.log("Checking admin for user:", email, userId);
+  //  console.log("Checking admin for user:", email, userId);
     if (!email || !userId) {
       return { ok: false };
     }

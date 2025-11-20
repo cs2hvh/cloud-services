@@ -196,6 +196,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
   };
 
   const onSubmit = async () => {
+    //debugger
     if (!formData.project_id) {
       toast.error("Please select a project");
       return;
@@ -211,16 +212,32 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
     try {
       // Log the form data
       console.log('Spectrum App Configuration:', formData);
-      //debugger
-      const response = await api.post('/services/spectrum/apps/create', {
-        dns: { name: formData.domain, type: 'CNAME' },
-        protocol: `${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}/${formData.edgePort}`,
-        argo_smart_routing: true,
-        proxy_protocol: formData.proxyProtocol,
-        tls: 'off',
-        origin_direct: [`${formData.appType==='rdp'||formData.appType==='ssh'?"tcp":formData.appType}://${formData.originIP}:${formData.originPort}`],
-        project_id: formData.project_id,
-        owner_id: targetUserId,
+      debugger
+      const response = await fetch("/api/services/spectrum/apps/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          dns: { name: formData.domain, type: "CNAME" },
+          protocol: `${
+            formData.appType === "rdp" || formData.appType === "ssh"
+              ? "tcp"
+              : formData.appType
+          }/${formData.edgePort}`,
+          argo_smart_routing: true,
+          proxy_protocol: formData.proxyProtocol,
+          tls: "off",
+          origin_direct: [
+            `${
+              formData.appType === "rdp" || formData.appType === "ssh"
+                ? "tcp"
+                : formData.appType
+            }://${formData.originIP}:${formData.originPort}`,
+          ],
+          project_id: formData.project_id,
+          owner_id: targetUserId,
+        }),
       });
 
       if (response.status === 201) {
@@ -232,7 +249,13 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
         }
         router.refresh();
       }
-    } catch (error) {
+      else {
+         toast.error('Sorry , we are temporarily unable to process your request. Please try again later.');
+        return;
+      }
+       
+      }
+     catch (error) {
       console.error('Failed to create Spectrum app:', error);
       toast.error('Failed to create Spectrum application. Please try again.');
     } finally {

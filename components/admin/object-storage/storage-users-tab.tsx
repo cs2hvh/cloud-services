@@ -121,7 +121,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
   //   router.push(`/dashboard/services/object-storage/${bucketId}`);
   // };
 
-  const handleDeleteBucket = (bucketId: string, bucketName: string, bucketOwnerId: string) => {
+  const handleDeleteBucket = (bucketId: string, bucketName: string) => {
     setSelectedBucketId(bucketId);
     setSelectedBucketName(bucketName);
     setDeleteDialogOpen(true);
@@ -420,8 +420,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
                             onClick={() =>
                               handleDeleteBucket(
                                 bucket.id,
-                                bucket.name,
-                                bucket.owner_id
+                                bucket.name
                               )
                             }
                             className="cursor-pointer h-8 px-3 text-xs bg-red-900/50 hover:bg-red-800 text-red-300 border-0"

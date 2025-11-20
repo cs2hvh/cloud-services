@@ -1,6 +1,6 @@
 import DDoSProtectionSelect from "@/components/dashboard/network-ddos/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { getUser, requireAdmin } from "@/lib/supabase/auth";
+import { getUser } from "@/lib/supabase/auth";
 import { Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";

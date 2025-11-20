@@ -21,19 +21,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import axios from "axios";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 
 interface SpectrumAppSettingsProps {
   spectrumApp: Tables<"spectrum_apps">;
   onUpdate?: () => void;
 }
 
-const SpectrumAppSettings = ({ spectrumApp, onUpdate }: SpectrumAppSettingsProps) => {
-  const router = useRouter();
+const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
+ 
   const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
   
@@ -92,7 +91,7 @@ const SpectrumAppSettings = ({ spectrumApp, onUpdate }: SpectrumAppSettingsProps
 
     try {
       const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
-      let payload: any = { app_id: spectrumApp.spectrum_id };
+      let payload:any= { app_id: spectrumApp.spectrum_id };
 
       switch (setting) {
         case "dns":
@@ -401,7 +400,7 @@ const SpectrumAppSettings = ({ spectrumApp, onUpdate }: SpectrumAppSettingsProps
         </SettingCard>
 
         {/* IP Firewall */}
-        <SettingCard
+        {/* <SettingCard
           icon={Shield}
           title="IP Firewall"
           settingKey="ipFirewall"
@@ -426,7 +425,7 @@ const SpectrumAppSettings = ({ spectrumApp, onUpdate }: SpectrumAppSettingsProps
               className="data-[state=checked]:bg-green-500"
             />
           </div>
-        </SettingCard>
+        </SettingCard> */}
 
         {/* Traffic Type */}
         <SettingCard

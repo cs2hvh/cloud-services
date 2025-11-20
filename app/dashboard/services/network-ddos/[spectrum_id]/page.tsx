@@ -42,7 +42,7 @@ const SpectrumAppSuspense = async ({ spectrumId }: { spectrumId: string }) => {
     throw new Error("ENCRYPTION_KEY is missing");
   }
 
-  let decryptedSpectrumApp = { ...spectrumApp.data };
+  const decryptedSpectrumApp = { ...spectrumApp.data };
 
   if (
     decryptedSpectrumApp.dns &&

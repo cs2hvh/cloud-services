@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { Archive, Package } from "lucide-react";
-import { Admin_Bucket, Tables } from "@/lib/supabase/types";
+import { Admin_Bucket} from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import StorageUsersTab from "@/components/admin/object-storage/storage-users-tab";
 import StoragePlansTab from "@/components/admin/object-storage/storage-plans-tab";

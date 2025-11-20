@@ -8,15 +8,15 @@ import { Separator } from "@/components/ui/separator";
 import { formatPrice } from "@/lib/utils";
 import Image from "next/image";
 import { Tables } from "@/lib/supabase/types";
-import { DatabaseType, AdminDatabaseState } from "@/lib/types/admin-database";
+import { DatabaseType, AdminDatabaseState, UserProject } from "@/lib/types/admin-database";
 
 interface SummaryCardProps {
   state: AdminDatabaseState;
   selectedDatabase?: Tables<"products">;
   selectedLocationData?: Tables<"locations">;
   selectedDbTypeInfo?: DatabaseType;
-  selectedUserData?: any;
-  userProjects: any[];
+  selectedUserData:{ email: string } | null;
+  userProjects: UserProject[];
 }
 
 export const SummaryCard = ({

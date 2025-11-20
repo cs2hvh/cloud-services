@@ -66,12 +66,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error reading buckets:", error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Admin bucket delete error:", errorMessage);
+    
     return NextResponse.json(
       {
-        error: "Failed to read buckets",
-        message: error.message,
+        error: "Request processing failed",
+        message: errorMessage,
       },
       { status: 500 }
     );

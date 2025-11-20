@@ -43,7 +43,7 @@ export async function PUT(req: NextRequest) {
     // This is the most reliable way to verify a password without affecting the user's session
     const supabaseService = await createServiceClient();
     
-    const { data: signInData, error: signInError } = await supabaseService.auth.signInWithPassword({
+    const { error: signInError } = await supabaseService.auth.signInWithPassword({
       email: user.email!,
       password: currentPassword
     });

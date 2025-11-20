@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Package, Loader2, DollarSign } from "lucide-react";
+import { Loader2, DollarSign } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import axios from "axios";
 
-interface StoragePlansTabProps {
-  all_products?: Tables<"products">[];
-}
+// interface StoragePlansTabProps {
+//   all_products?: Tables<"products">[];
+// }
 
 export default function StoragePlansTab() {
   const [price, setPrice] = useState<string>("");

@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = validateRequest(updateBucketVersioningSchema, body);
     if (!parsed.success) return parsed.response;
-    const { bucket_id, enabled } = parsed.data as any;
+    const { bucket_id, enabled } = parsed.data;
 
     console.log("📦 Updating bucket versioning:", bucket_id, "enabled:", enabled);
 
@@ -80,12 +80,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error updating bucket versioning:", error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Admin bucket delete error:", errorMessage);
+    
     return NextResponse.json(
       {
-        error: "Failed to update bucket versioning",
-        message: error.message,
+        error: "Request processing failed",
+        message: errorMessage,
       },
       { status: 500 }
     );

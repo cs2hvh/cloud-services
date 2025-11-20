@@ -4,7 +4,7 @@ import { toast } from "sonner";
 
 const api = axios.create({
   baseURL: "/api",
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     "Content-Type": "application/json",
     "x-client-secret": process.env.NEXT_PUBLIC_CLIENT_SECRET,

@@ -40,8 +40,16 @@ export async function POST(req: NextRequest) {
 
     const result = await deleteSpectrumApp(validation.data.app_id);
     return NextResponse.json(result, { status: 200 });
-  } catch (err: any) {
-    const msg = err?.response?.data?.errors?.[0]?.message || err?.message || "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Spectrum app delete error:", errorMessage);
+    
+    return NextResponse.json(
+      {
+        error: "Request processing failed",
+        message: errorMessage,
+      },
+      { status: 500 }
+    );
   }
 }

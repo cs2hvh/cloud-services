@@ -24,8 +24,16 @@ export async function GET() {
      }
     const result = await listSpectrumApps(auth.user?.id);
     return NextResponse.json(result);
-  } catch (err: any) {
-    const msg = err?.response?.data?.errors?.[0]?.message || err?.message || "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Spectrum app list error:", errorMessage);
+    
+    return NextResponse.json(
+      {
+        error: "Request processing failed",
+        message: errorMessage,
+      },
+      { status: 500 }
+    );
   }
 }

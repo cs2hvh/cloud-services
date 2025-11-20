@@ -20,7 +20,7 @@ export async function POST(
 ) {
   const supabase = await createSSRClient();
 
-  console.log("...............18.......params")
+ // console.log("...............18.......params")
   const body = await req.json().catch(() => null);
   console.log(body,"...............params 22222")
   const { data, error } = await supabase

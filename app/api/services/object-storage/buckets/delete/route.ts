@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = validateRequest(deleteBucketSchema, body);
     if (!parsed.success) return parsed.response;
-    const { bucket_id, force = true, is_admin } = parsed.data as any;
+    const { bucket_id, force = true, is_admin } = parsed.data;
 
     // 🔒 SECURE: Use centralized function for bucket deletion
     // All sensitive operations are handled securely in the config layer

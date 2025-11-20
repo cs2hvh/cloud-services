@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = validateRequest(updateBucketAclSchema, body);
     if (!parsed.success) return parsed.response;
-    const { bucket_id, acl } = parsed.data as any;
+    const { bucket_id, acl } = parsed.data;
 
     console.log("🔒 Updating bucket ACL:", bucket_id, "to", acl);
 
@@ -82,12 +82,14 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error updating bucket ACL:", error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Admin bucket delete error:", errorMessage);
+    
     return NextResponse.json(
       {
-        error: "Failed to update bucket ACL",
-        message: error.message,
+        error: "Request processing failed",
+        message: errorMessage,
       },
       { status: 500 }
     );

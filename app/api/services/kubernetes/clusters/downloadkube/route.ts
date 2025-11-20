@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
 
     const bufferData=JSON.parse(body.kubeconfig);
-    console.log(bufferData,".............bufferData...........");
+   // console.log(bufferData,".............bufferData...........");
    // const file
 
    const str = String.fromCharCode(...bufferData.data);

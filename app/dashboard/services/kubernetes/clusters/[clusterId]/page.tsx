@@ -20,7 +20,7 @@ const ClusterNewPage = async ({
     //console.log(params,".............params...........");
 
     const { clusterId } = await params;   
-    console.log(clusterId,".............clusterId...........");
+   // console.log(clusterId,".............clusterId...........");
   //const clusterId =  decodeURIComponent(clusterId);
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">

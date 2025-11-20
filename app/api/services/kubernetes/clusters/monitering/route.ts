@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       }
     //debugger
     const json = await req.json();
-    console.log(json,"...............................25")
+    //console.log(json,"...............................25")
 
     const {start,end}=timeRange(json.hrs || 1);
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       {
         data:droplets.data,
         matrix:droplets.data?.data?.result || [],
-        message:'droplet get success'
+        message:'data get success'
       },
       { status: 200 }
     );

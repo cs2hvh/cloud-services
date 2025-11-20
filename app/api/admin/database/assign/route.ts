@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate that the target user exists and the project belongs to them
-    const supabase = await createClient();
+   // const supabase = await createClient();
     
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)

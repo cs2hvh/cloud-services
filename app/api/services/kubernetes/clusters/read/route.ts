@@ -20,8 +20,10 @@ export async function POST(
 
   const { data, error } = await supabase
     .from("clusters")
-    .select("*");
-    console.log(data,"...............data 22222");
+    .select("*")
+    .match({ owner_id: auth.user.id })
+    ;
+    console.log({ owner_id: auth.user.id });
    
 
   if (error) {

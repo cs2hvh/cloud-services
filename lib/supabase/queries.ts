@@ -2387,7 +2387,7 @@ export const ObjectSpaces = {
         .eq("type", "bucket")
         .order("created_at", { ascending: false });
 
-      console.log(buckets, "...........data in get_all_for_admin........");
+      //console.log(buckets, "...........data in get_all_for_admin........");
 
       if (error) {
         console.error(

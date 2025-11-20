@@ -145,6 +145,8 @@ export function transformCpuData(metrics: CpuMetric[]): GraphData {
   const idleMetric = metrics.find(m => m.metric.mode === 'idle');
   const userMetric = metrics.find(m => m.metric.mode === 'user');
   const systemMetric = metrics.find(m => m.metric.mode === 'system');
+
+  console.log(idleMetric, userMetric, systemMetric, "...........metrics...........");
   
   if (!idleMetric || !userMetric || !systemMetric) {
     throw new Error('Missing required CPU metrics');
@@ -219,8 +221,10 @@ export function transformMemoryData(metrics: CpuMetric[]): GraphData {
 
   const memoryData = memoryMetric.values.map(([, value]) => {
     // Convert to GB if needed
-    return parseFloat((parseFloat(value) / 1024).toFixed(2));
+    return parseFloat((parseFloat(value) / (1024*1024)).toFixed(2));
   });
+
+  console.log(memoryData, "...........memoryData...........");
 
   return {
     labels,
@@ -248,7 +252,7 @@ export function transformDiskData(metrics: CpuMetric[]): GraphData {
   });
 
   const diskData = diskMetric.values.map(([, value]) => {
-    return parseFloat((parseFloat(value) / 1024).toFixed(2)); // Convert to GB
+    return parseFloat((parseFloat(value) / (1024*1024*1000)).toFixed(2)); // Convert to GB
   });
 
   return {

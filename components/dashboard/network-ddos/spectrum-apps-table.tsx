@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion } from "motion/react";
 import { Eye, Trash, Network, Plus, Shield, CheckCircle, Loader2, AlertTriangle, Globe } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
-import { format } from "date-fns";
+// import { format } from "date-fns";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -70,13 +70,13 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
   };
 
   // Helper function to get DNS name from Json
-  const getDnsName = (dns: unknown): string => {
-    if (dns && typeof dns === "object" && "name" in dns) {
-      // DNS name is encrypted, we'll show a placeholder or spectrum_id
-      return "[Encrypted]";
-    }
-    return "N/A";
-  };
+  // const getDnsName = (dns: unknown): string => {
+  //   if (dns && typeof dns === "object" && "name" in dns) {
+  //     // DNS name is encrypted, we'll show a placeholder or spectrum_id
+  //     return "[Encrypted]";
+  //   }
+  //   return "N/A";
+  // };
 
   // Helper function to get status badge
   const getStatusBadge = (status: string | null) => {

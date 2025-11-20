@@ -2,34 +2,11 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import {
-  Copy,
-  Check,
-  Shield,
-  Server,
-  Globe,
-  Lock,
-  Network,
-  AlertCircle,
-  Trash2,
-  Loader2,
-} from "lucide-react";
+import { Copy, Check, Shield, Lock, AlertCircle } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import axios from "axios";
-import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 
 interface SpectrumAppInfoProps {
@@ -37,11 +14,8 @@ interface SpectrumAppInfoProps {
   isRefreshing?: boolean;
 }
 
-const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) => {
-  const router = useRouter();
+const SpectrumAppInfo = ({ spectrumApp }: SpectrumAppInfoProps) => {
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -50,44 +24,25 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
     setTimeout(() => setCopiedItem(null), 2000);
   };
 
-  const handleDeleteClick = () => {
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteConfirm = async () => {
-    setIsDeleting(true);
-    try {
-      const toastId = toast.loading("Deleting Spectrum app...");
-
-      await axios.post("/api/services/spectrum/apps/delete", {
-        app_id: spectrumApp.spectrum_id,
-      });
-
-      toast.success("Spectrum app deleted successfully", { id: toastId });
-      router.push("/dashboard/services/network-ddos");
-      router.refresh();
-    } catch (error: any) {
-      const errorMsg =
-        error.response?.data?.error || "Failed to delete Spectrum app";
-      toast.error(errorMsg);
-      console.error("Delete error:", error);
-    } finally {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-    }
-  };
-
   // Parse DNS data
-  const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
+  const dns = spectrumApp.dns as {
+    name: unknown;
+    type: string;
+    decrypted_name?: string;
+  } | null;
   const dnsName =
-    dns && dns.decrypted_name ? dns.decrypted_name :
-    dns && typeof dns.name === "string" ? dns.name : "Not available";
+    dns && dns.decrypted_name
+      ? dns.decrypted_name
+      : dns && typeof dns.name === "string"
+        ? dns.name
+        : "Not available";
   const dnsType = dns?.type || "Unknown";
 
   // Parse edge IPs
-  const edgeIps = spectrumApp.edge_ips as
-    | { type: string; connectivity: string }
-    | null;
+  const edgeIps = spectrumApp.edge_ips as {
+    type: string;
+    connectivity: string;
+  } | null;
 
   // Format date
   const formatDate = (dateString: string | null) => {
@@ -173,8 +128,8 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
       >
         <AlertCircle className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-100">
-          This page displays your Cloudflare Spectrum application
-          configuration. Use the Settings tab to modify editable properties.
+          This page displays your Cloudflare Spectrum application configuration.
+          Use the Settings tab to modify editable properties.
         </p>
       </motion.div>
 
@@ -188,33 +143,32 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
             copyable
           />
           <InfoRow label="Protocol" value={spectrumApp.protocol} copyable />
-          <InfoRow label="Status" value={
-            <Badge
-              variant="outline"
-              className={`capitalize text-xs ${
-                spectrumApp.status === "created" || spectrumApp.status === "updated"
-                  ? "bg-green-500/10 text-green-400 border-green-500/20"
-                  : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
-              }`}
-            >
-              {spectrumApp.status || "active"}
-            </Badge>
-          } />
-           <InfoRow label="DNS Type" value={dnsType} />
+          <InfoRow
+            label="Status"
+            value={
+              <Badge
+                variant="outline"
+                className={`capitalize text-xs ${
+                  spectrumApp.status === "created" ||
+                  spectrumApp.status === "updated"
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : "bg-yellow-500/10 text-yellow-400 border-yellow-500/20"
+                }`}
+              >
+                {spectrumApp.status || "active"}
+              </Badge>
+            }
+          />
+          <InfoRow label="DNS Type" value={dnsType} />
           <InfoRow
             label="Hostname"
-            value={
-              dnsName === "Not available"
-                ? "Encrypted"
-                : `${dnsName}`
-            }
+            value={dnsName === "Not available" ? "Encrypted" : `${dnsName}`}
             copyable={dnsName !== "Not available"}
           />
-           <InfoRow label="App name" value={spectrumApp.dns.original_name} />
+          <InfoRow label="App name" value={spectrumApp.dns.original_name} />
           <InfoRow label="Created" value={formatDate(spectrumApp.created_at)} />
           <InfoRow label="Updated" value={formatDate(spectrumApp.updated_at)} />
         </InfoCard>
-
 
         {/* Security & Network */}
         <InfoCard icon={Lock} title="Security & Network">
@@ -248,32 +202,29 @@ const SpectrumAppInfo = ({ spectrumApp, isRefreshing }: SpectrumAppInfoProps) =>
               </Badge>
             }
           />
-           <InfoRow label="Type" value={edgeIps?.type || "Not configured"} />
+          <InfoRow label="Type" value={edgeIps?.type || "Not configured"} />
           <InfoRow
             label="Connectivity"
             value={edgeIps?.connectivity || "Not configured"}
           />
           <InfoRow label="Traffic Type" value={spectrumApp.traffic_type} />
           <InfoRow label="Proxy Protocol" value={spectrumApp.proxy_protocol} />
-           {spectrumApp.origin_direct && spectrumApp.origin_direct.length > 0 ? (
-          spectrumApp.origin_direct.map((origin, index) => (
-            <InfoRow
-              key={index}
-              label={`Origin ${index + 1}`}
-              value={origin}
-              copyable
-            />
-          ))
-        ) : (
-          <p className="text-xs text-white/40 italic py-2">No origins configured</p>
-        )}
+          {spectrumApp.origin_direct && spectrumApp.origin_direct.length > 0 ? (
+            spectrumApp.origin_direct.map((origin, index) => (
+              <InfoRow
+                key={index}
+                label={`Origin ${index + 1}`}
+                value={origin}
+                copyable
+              />
+            ))
+          ) : (
+            <p className="text-xs text-white/40 italic py-2">
+              No origins configured
+            </p>
+          )}
         </InfoCard>
-
-       
-       
       </div>
-
-     
     </div>
   );
 };

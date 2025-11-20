@@ -41,11 +41,11 @@ interface ProxmoxVM {
   [key: string]: unknown;
 }
 
-interface ProxmoxTemplate {
-  vmid?: number;
-  name?: string;
-  is_active?: boolean;
-}
+// interface ProxmoxTemplate {
+//   vmid?: number;
+//   name?: string;
+//   is_active?: boolean;
+// }
 
 function serializeError(err: unknown): ErrorObject {
   const e = err as Record<string, unknown>;
@@ -462,7 +462,7 @@ export async function POST(req: NextRequest) {
         await postForm(
           apiBase,
           `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${newid}/resize`,
-          resizePayload as any,
+          resizePayload,
           auth,
           dispatcher
         );

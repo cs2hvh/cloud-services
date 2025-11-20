@@ -37,7 +37,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { 
   ChevronLeft, 
@@ -47,11 +46,9 @@ import {
   Cpu, 
   HardDrive, 
   Server,
-  CheckCircle2 
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { formatPrice } from "@/lib/utils";
 import { Tables } from "@/lib/supabase/types";
 
 const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: AdminDatabaseAssignProps) => {

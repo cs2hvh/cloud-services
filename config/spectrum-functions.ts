@@ -129,6 +129,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   
   // Helper function to delay execution
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+   //await delay(10000); // Initial wait before starting retries
   
   // Retry logic with exponential backoff
   const maxRetries = 1000;
@@ -138,17 +139,16 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   while (retryCount < maxRetries && !resolved) {
     try {
       // Wait before attempting DNS resolution (increases with each retry)
-      const waitTime = retryCount === 0 ? 5000 : 3000 * Math.pow(2, retryCount - 1);
+      const waitTime = 10000;
       await delay(waitTime);
       
       const checkIp = await axios.get(
-        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN}`,
-        { timeout: 5000 } // 5 second timeout
+        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN}`
       );
 
       if (checkIp.status === 200 && checkIp.data?.query) {
         ipAddress = checkIp.data.query;
-       // console.log("Resolved IP Address:", ipAddress);
+        console.log("Resolved IP Address:", ipAddress);
         resolved = true;
       }
     } catch (error) {
@@ -191,13 +191,13 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   }
 
   // Add project log if applicable
-  if (payload.project_id) {
-    await Projects.add_log?.({
-      project_id: payload.project_id,
-      event: "SpectrumCreate",
-      text: `Spectrum app '${payload.dns.name}' created`,
-    });
-  }
+  // if (payload.project_id) {
+  //   await Projects.add_log?.({
+  //     project_id: payload.project_id,
+  //     event: "SpectrumCreate",
+  //     text: `Spectrum app '${payload.dns.name}' created`,
+  //   });
+  // }
 
   return {
     app: persist.data,

@@ -63,7 +63,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
   // Delete dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string>("");
-  const [selectedAppOrigin, setSelectedAppOrigin] = useState<string>("");
+  // const [selectedAppOrigin, setSelectedAppOrigin] = useState<string>("");
   const [selectedAppName, setSelectedAppName] = useState<string>("");
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -128,7 +128,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
 
   const handleDeleteApp = (spectrumId: string, origin: string, appName: string) => {
     setSelectedAppId(spectrumId);
-    setSelectedAppOrigin(origin);
+   // setSelectedAppOrigin(origin);
     setDeleteDialogOpen(true);
     setSelectedAppName(appName);
   };

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
@@ -33,12 +33,14 @@ export async function GET(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error reading buckets for admin:", error);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+    console.error("Admin bucket delete error:", errorMessage);
+    
     return NextResponse.json(
       {
-        error: "Failed to read buckets",
-        message: error.message,
+        error: "Request processing failed",
+        message: errorMessage,
       },
       { status: 500 }
     );
