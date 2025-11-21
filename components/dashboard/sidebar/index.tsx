@@ -454,7 +454,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     }
   `}
                     >
-                      <Archive className="w-4 h-4 mr-2" />
+                      <Shield className="w-4 h-4 mr-2" />
                       <span className="text-sm">Network DDoS</span>
                     </Link>
                   </div>

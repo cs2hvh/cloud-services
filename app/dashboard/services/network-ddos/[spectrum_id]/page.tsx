@@ -22,14 +22,14 @@ const SpectrumAppSuspense = async ({ spectrumId }: { spectrumId: string }) => {
   // Fetch spectrum app data
   const spectrumApp = await Spectrum_Apps.get(spectrumId);
 
-  console.log("Fetched spectrum app:", !spectrumApp.success);
+  //console.log("Fetched spectrum app:", !spectrumApp.success);
 
   if (!spectrumApp.success || !spectrumApp.data) {
     notFound();
   }
 
-  console.log(spectrumApp.data.owner_id !== user.id ,".......1" )
-  console.log(checkAdmin,".........2")
+ // console.log(spectrumApp.data.owner_id !== user.id ,".......1" )
+  //console.log(checkAdmin,".........2")
 
   // Verify ownership
   if (spectrumApp.data.owner_id !== user.id && !checkAdmin.ok) {

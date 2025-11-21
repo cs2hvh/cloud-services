@@ -2,18 +2,17 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Shield,
   Lock,
   Network,
   Edit2,
   Save,
   X,
   Loader2,
+  Server,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -24,7 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import axios from "axios";
-// import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
 
 interface SpectrumAppSettingsProps {
   spectrumApp: Tables<"spectrum_apps">;
@@ -63,28 +62,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
   // Only update settings when spectrumApp actually changes (different app)
   // NOT when it's just refreshed with the same data
-  useEffect(() => {
-    if (lastSpectrumIdRef.current !== spectrumApp.spectrum_id) {
-      // Different app, update everything
-      lastSpectrumIdRef.current = spectrumApp.spectrum_id;
-      const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
-      const edgeIps = spectrumApp.edge_ips as { type: string; connectivity: string } | null;
-      
-      setSettings({
-        dnsType: dns?.type || "CNAME",
-        protocol: spectrumApp.protocol || "",
-        tls: spectrumApp.tls || "off",
-        ipFirewall: spectrumApp.ip_firewall || false,
-        trafficType: spectrumApp.traffic_type || "direct",
-        proxyProtocol: spectrumApp.proxy_protocol || "off",
-        origins: spectrumApp.origin_direct || [],
-        edgeIpType: edgeIps?.type || "dynamic",
-        edgeIpConnectivity: edgeIps?.connectivity || "all",
-      });
-      setEditMode({});
-      setNewOrigin("");
-    }
-  }, [spectrumApp]);
+
 
   const handleSave = async (setting: string) => {
     setIsLoading((prev) => ({ ...prev, [setting]: true }));
@@ -231,6 +209,12 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
     setNewOrigin("");
   };
 
+  const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    //debugger
+   
+    setNewOrigin(e.target.value);
+  };
+
   const removeOrigin = (origin: string) => {
     if (settings.origins.length <= 1) {
       toast.error("At least one origin is required");
@@ -241,6 +225,9 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
       origins: prev.origins.filter((o) => o !== origin),
     }));
   };
+
+
+    
 
   const SettingCard = ({
     icon: Icon,
@@ -323,6 +310,31 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
     </div>
   );
 
+
+  useEffect(() => {
+      //debugger
+    if (lastSpectrumIdRef.current !== spectrumApp.spectrum_id) {
+      // Different app, update everything
+      lastSpectrumIdRef.current = spectrumApp.spectrum_id;
+      const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
+      const edgeIps = spectrumApp.edge_ips as { type: string; connectivity: string } | null;
+      
+      setSettings({
+        dnsType: dns?.type || "CNAME",
+        protocol: spectrumApp.protocol || "",
+        tls: spectrumApp.tls || "off",
+        ipFirewall: spectrumApp.ip_firewall || false,
+        trafficType: spectrumApp.traffic_type || "direct",
+        proxyProtocol: spectrumApp.proxy_protocol || "off",
+        origins: spectrumApp.origin_direct || [],
+        edgeIpType: edgeIps?.type || "dynamic",
+        edgeIpConnectivity: edgeIps?.connectivity || "all",
+      });
+      setEditMode({});
+      setNewOrigin("");
+    }
+  }, [spectrumApp]);
+
   return (
     <div className="space-y-4">
     
@@ -332,7 +344,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
 
         {/* Protocol Configuration */}
-        {/* <SettingCard
+        <SettingCard
           icon={Network}
           title="Protocol Configuration"
           settingKey="protocol"
@@ -343,6 +355,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
               Protocol
             </Label>
             <Input
+              autoFocus={editMode.protocol}
               id="protocol"
               value={settings.protocol}
               onChange={(e) =>
@@ -356,7 +369,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
               Format: tcp/22 or tcp/8000-9000
             </p>
           </div>
-        </SettingCard> */}
+        </SettingCard>
 
         {/* TLS Configuration */}
         <SettingCard
@@ -507,7 +520,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
             </Select>
           </div>
         </SettingCard>
-          {/* <SettingCard
+          <SettingCard
           icon={Server}
           title="Origin Servers"
           settingKey="origins"
@@ -545,17 +558,18 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
                 </Label>
                 <div className="flex gap-2">
                   <Input
+                   autoFocus
                     id="new-origin"
                     value={newOrigin}
-                    onChange={(e) => setNewOrigin(e.target.value)}
+                    onChange={handleOriginChange}
                     placeholder="192.168.1.1 or example.com"
                     className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addOrigin();
-                      }
-                    }}
+                    // onKeyDown={(e) => {
+                    //   if (e.key === "Enter") {
+                    //     e.preventDefault();
+                    //     addOrigin();
+                    //   }
+                    // }}
                   />
                   <Button
                     onClick={addOrigin}
@@ -567,7 +581,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
               </div>
             )}
           </div>
-        </SettingCard> */}
+        </SettingCard>
 
         {/* Edge IPs */}
         <SettingCard

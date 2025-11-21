@@ -114,22 +114,21 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
      
 
       {/* Show Access Keys Button */}
-      <div className="flex items-center justify-between ">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
         <div className="flex gap-2 justify-start">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="mb-6"
           >
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20">
+                <Button className="text-xs sm:text-sm lg:text-base cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20 w-full sm:w-auto">
                   <Key className="h-4 w-4 mr-2" />
                   Show Access Keys
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-black border-white/20 text-white">
+              <DialogContent className="bg-black border-white/20 text-white max-w-[95vw] sm:max-w-[425px]">
                 <DialogHeader>
                   <DialogTitle className="text-white">Access Keys</DialogTitle>
                   <DialogDescription className="text-white/60">
@@ -144,21 +143,21 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                     <label className="text-sm text-white/70 font-medium">
                       Access Key ID
                     </label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 relative">
-                        <code className="block w-full text-sm text-white/80 bg-white/5 px-4 py-3 rounded border border-white/10 font-mono pr-12">
+                    <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
+                      <div className="flex-1 relative min-w-0">
+                        <code className="block w-full text-xs sm:text-sm text-white/80 bg-white/5 px-3 sm:px-4 py-2 sm:py-3 rounded border border-white/10 font-mono pr-10 sm:pr-12 break-all">
                           {showKeyId
                             ? bucketData.key_id || "Not available"
                             : "••••••••••••••••"}
                         </code>
                         <button
                           onClick={() => setShowKeyId(!showKeyId)}
-                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                          className="cursor-pointer absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
                         >
                           {showKeyId ? (
-                            <EyeOff className="h-4 w-4 text-white/50" />
+                            <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/50" />
                           ) : (
-                            <Eye className="h-4 w-4 text-white/50" />
+                            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/50" />
                           )}
                         </button>
                       </div>
@@ -169,7 +168,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                           copyToClipboard(bucketData.key_id || "", "Access Key ID")
                         }
                         disabled={!bucketData.key_id}
-                        className="cursor-pointer hover:bg-white/10 transition-colors"
+                        className="cursor-pointer hover:bg-white/10 transition-colors flex-shrink-0"
                       >
                         {copiedItem === "Access Key ID" ? (
                           <Check className="h-4 w-4 text-green-400" />
@@ -185,21 +184,21 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                     <label className="text-sm text-white/70 font-medium">
                       Secret Access Key
                     </label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 relative">
-                        <code className="block w-full text-sm text-white/80 bg-white/5 px-4 py-3 rounded border border-white/10 font-mono pr-12">
+                    <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-2">
+                      <div className="flex-1 relative min-w-0">
+                        <code className="block w-full text-xs sm:text-sm text-white/80 bg-white/5 px-3 sm:px-4 py-2 sm:py-3 rounded border border-white/10 font-mono pr-10 sm:pr-12 break-all">
                           {showSecretKey
                             ? bucketData.secret_key || "Not available"
                             : "••••••••••••••••••••••••••••••••"}
                         </code>
                         <button
                           onClick={() => setShowSecretKey(!showSecretKey)}
-                          className="cursor-pointer absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
+                          className="cursor-pointer absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-white/10 rounded transition-colors"
                         >
                           {showSecretKey ? (
-                            <EyeOff className="h-4 w-4 text-white/50" />
+                            <EyeOff className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/50" />
                           ) : (
-                            <Eye className="h-4 w-4 text-white/50" />
+                            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/50" />
                           )}
                         </button>
                       </div>
@@ -213,7 +212,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                           )
                         }
                         disabled={!bucketData.secret_key}
-                        className="cursor-pointer hover:bg-white/10 transition-colors"
+                        className="cursor-pointer hover:bg-white/10 transition-colors flex-shrink-0"
                       >
                         {copiedItem === "Secret Access Key" ? (
                           <Check className="h-4 w-4 text-green-400" />
@@ -235,9 +234,12 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
             </Dialog>
           </motion.div>
         </div>
-        <div className="flex justify-end gap-2">
-          <Button className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20">
-            {bucketData.endpoint}
+         {isLoadingStats ? (
+        <Loader2 className="h-6 w-6 text-white/50 animate-spin" />
+      ) : (
+        <div className="flex flex-wrap justify-end gap-2 w-full sm:w-auto">
+          <Button className="cursor-pointer bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs sm:text-sm max-w-full truncate">
+            <span className="truncate block max-w-[200px] sm:max-w-full">{bucketData.endpoint}</span>
           </Button>
           <Button
             variant="ghost"
@@ -261,6 +263,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
             <Trash2 className="cursor-pointer h-4 w-4" />
           </Button>
         </div>
+      )}
       </div>
 
       {/* Stats - Usage and Object Count */}
@@ -268,15 +271,15 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8"
+        className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8"
       >
         {/* Usage Box */}
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-4 sm:px-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-sm mb-1">Storage Usage</p>
-                <p className="text-3xl font-bold text-white">
+              <div className="min-w-0 flex-1">
+                <p className="text-white/60 text-xs sm:text-sm mb-1">Storage Usage</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white truncate">
                   {isLoadingStats ? (
                     <Loader2 className="h-8 w-8 animate-spin inline" />
                   ) : (
@@ -284,8 +287,8 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                   )}
                 </p>
               </div>
-              <div className="h-16 w-16 bg-blue-500/20 rounded-full flex items-center justify-center">
-                <HardDrive className="h-8 w-8 text-blue-400" />
+              <div className="h-12 w-12 sm:h-16 sm:w-16 bg-blue-500/20 rounded-full flex items-center justify-center flex-shrink-0 ml-3">
+                <HardDrive className="h-6 w-6 sm:h-8 sm:w-8 text-blue-400" />
               </div>
             </div>
           </CardContent>
@@ -293,11 +296,11 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
 
         {/* Object Count Box */}
         <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-4 sm:px-6">
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-white/60 text-sm mb-1">Total Objects</p>
-                <p className="text-3xl font-bold text-white">
+              <div className="min-w-0 flex-1">
+                <p className="text-white/60 text-xs sm:text-sm mb-1">Total Objects</p>
+                <p className="text-2xl sm:text-3xl font-bold text-white truncate">
                   {isLoadingStats ? (
                     <Loader2 className="h-8 w-8 animate-spin inline" />
                   ) : (
@@ -305,8 +308,8 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                   )}
                 </p>
               </div>
-              <div className="h-16 w-16 bg-purple-500/20 rounded-full flex items-center justify-center">
-                <Database className="h-8 w-8 text-purple-400" />
+              <div className="h-12 w-12 sm:h-16 sm:w-16 bg-purple-500/20 rounded-full flex items-center justify-center flex-shrink-0 ml-3">
+                <Database className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400" />
               </div>
             </div>
           </CardContent>

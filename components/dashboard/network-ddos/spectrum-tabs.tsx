@@ -19,10 +19,12 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
   const [spectrumApp, setSpectrumApp] = useState(initialApp);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const searchParams = useSearchParams();
-  
+
   // Get tab from query params, default to "info"
   const tabParam = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState(tabParam === "settings" ? "settings" : "info");
+  const [activeTab, setActiveTab] = useState(
+    tabParam === "settings" ? "settings" : "info"
+  );
 
   // Update active tab when query param changes
   useEffect(() => {
@@ -52,9 +54,13 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
   };
 
   // Extract DNS info
-  const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
+  const dns = spectrumApp.dns as {
+    name: unknown;
+    type: string;
+    decrypted_name?: string;
+  } | null;
   const dnsType = dns?.type || "Unknown";
-  
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -76,17 +82,11 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
                 Spectrum App
               </h1>
               <p className="text-slate-400 text-xs sm:text-sm mt-1 break-words">
-                <span className="inline-block">
-                  {spectrumApp.protocol}
-                </span>
+                <span className="inline-block">{spectrumApp.protocol}</span>
                 <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">
-                  {dnsType} Record
-                </span>
+                <span className="inline-block">{dnsType} Record</span>
                 <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">
-                  TLS: {spectrumApp.tls}
-                </span>
+                <span className="inline-block">TLS: {spectrumApp.tls}</span>
                 <span className="mx-1 hidden sm:inline">/</span>
                 <span className="inline-block capitalize">
                   {spectrumApp.status || "active"}
@@ -114,11 +114,17 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
         </TabsList>
 
         <TabsContent value="info" className="mt-4 sm:mt-6">
-          <SpectrumAppInfo spectrumApp={spectrumApp} isRefreshing={isRefreshing} />
+          <SpectrumAppInfo
+            spectrumApp={spectrumApp}
+            isRefreshing={isRefreshing}
+          />
         </TabsContent>
 
         <TabsContent value="settings" className="mt-4 sm:mt-6">
-          <SpectrumAppSettings spectrumApp={spectrumApp} onUpdate={refreshAppData} />
+          <SpectrumAppSettings
+            spectrumApp={spectrumApp}
+            onUpdate={refreshAppData}
+          />
         </TabsContent>
       </Tabs>
     </motion.div>

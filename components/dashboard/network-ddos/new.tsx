@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from "react";
-import { CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign } from "lucide-react";
+import { CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -241,13 +241,15 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
       });
 
       if (response.status === 201) {
-        toast.success('Spectrum application created successfully!');
+       
         if (role === "admin") {
           router.push('/dashboard/admin/network-ddos');
         } else {
           router.push('/dashboard/services/network-ddos');
         }
+         toast.success('Spectrum application created successfully!');
         router.refresh();
+
       }
       else {
          toast.error('Sorry , we are temporarily unable to process your request. Please try again later.');
@@ -569,7 +571,8 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
                   disabled={isLoading || !formData.project_id}
                   className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
                 >
-                  {isLoading ? "Creating..." : "Create"}
+                  {isLoading ? 
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" /> : "Create"}
                 </Button>
               </CardContent>
             </Card>

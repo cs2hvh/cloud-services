@@ -213,12 +213,12 @@ STRING="PUT\n\n$CONTENT_TYPE\n$DATE\n$ACL\n/$SPACE/$FILE"
 SIGNATURE=$(echo -en "STRING" | openssl sha1 -hmac "SECRET" -binary | base64)
 
 curl -X PUT -T "$FILE" \
-  -H "Host: $SPACE.$REGION.digitaloceanspaces.com" \
+  -H "Host: $SPACE.$REGION.ahurasense.com" \
   -H "Date: $DATE" \
   -H "Content-Type: $CONTENT_TYPE" \
   -H "$ACL" \
   -H "Authorization: AWS $KEY:$SIGNATURE" \
-  "https://$SPACE.$REGION.digitaloceanspaces.com/$FILE"`}
+  "https://$SPACE.$REGION.ahurasense.com/$FILE"`}
               />
             </div>
           </div>
