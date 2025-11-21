@@ -4,6 +4,7 @@
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
+import { BuildPollingService } from "./build-polling";
 import { PortAllocator } from "./port-allocator";
 import { randomBytes } from "crypto";
 
@@ -14,7 +15,8 @@ function generateId(length: number = 10): string {
 
 export interface DeploymentConfig {
   name: string;
-  repository_url: string;
+  repository_url: string; // Clean URL without token (stored in DB)
+  authenticated_url?: string; // URL with token (used only for Jenkins, never stored)
   branch: string;
   framework: string;
   git_provider: string;
@@ -31,6 +33,7 @@ export interface DeploymentResult {
   app_id?: string;
   deployment_url?: string;
   port?: number;
+  build_number?: number;
   error?: string;
 }
 
@@ -40,6 +43,9 @@ export class DeploymentService {
    */
   static async deploy(config: DeploymentConfig): Promise<DeploymentResult> {
     console.log(`[DeploymentService] Starting deployment for ${config.name}`);
+    console.log(`[DeploymentService] Framework: ${config.framework || 'not specified'}`);
+    console.log(`[DeploymentService] Repository: ${config.repository_url}`);
+    console.log(`[DeploymentService] Branch: ${config.branch}`);
 
     try {
       // Step 1: Allocate port
@@ -100,20 +106,31 @@ export class DeploymentService {
       //   throw new Error(`DNS creation failed: ${dnsError?.message}`);
       // }
 
-      // Step 5: Create Jenkins job
+      // Step 5: Create Jenkins job and start build monitoring
       try {
         // Update status to 'building' before triggering Jenkins
         await Platform_Apps.update(app.id, { status: "building" });
-        console.log(`[DeploymentService] Status updated to 'building'`);
+        console.log(`[DeploymentService] Step 4/5: Status updated to 'building'`);
+        
+        // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
+        const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
         
         await JenkinsService.createJob(
           config.name,
-          config.repository_url,
+          jenkinsRepoUrl,
           config.branch,
           port,
           config.framework
         );
         console.log(`[DeploymentService] Step 5/5: Jenkins job created and triggered`);
+
+        // Start background polling for build status
+        BuildPollingService.startPolling({
+          appId: app.id,
+          appName: config.name,
+          buildNumber: 1, // First build for new job
+        });
+        
       } catch (jenkinsError: any) {
         console.error(`[DeploymentService] Jenkins job creation failed:`, jenkinsError?.message);
         // Rollback: Delete DNS and DB record on Jenkins failure
@@ -132,6 +149,9 @@ export class DeploymentService {
       const deploymentUrl = `https://${config.name}.uizb210.xyz`;
       await Platform_Apps.update(app.id, { deployment_url: deploymentUrl });
 
+      // Get build number for response
+      const buildNumber = await JenkinsService.getLatestBuildNumber(config.name) || 1;
+
       console.log(`[DeploymentService] ✅ Deployment completed successfully`);
       console.log(`[DeploymentService] App ID: ${app.id}`);
       console.log(`[DeploymentService] URL: ${deploymentUrl}`);
@@ -142,6 +162,7 @@ export class DeploymentService {
         app_id: app.id,
         deployment_url: deploymentUrl,
         port,
+        build_number: buildNumber,
       };
     } catch (error: any) {
       console.error(`[DeploymentService] ❌ Deployment failed:`, error?.message);

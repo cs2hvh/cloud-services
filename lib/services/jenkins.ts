@@ -97,6 +97,92 @@ export class JenkinsService {
   }
 
   /**
+   * Get latest build number for a job
+   */
+  static async getLatestBuildNumber(appName: string): Promise<number | null> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      const jobInfo = await jenkins.job.get(jobName);
+      return jobInfo.lastBuild?.number || null;
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error getting latest build number:`, error?.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get build information
+   */
+  static async getBuildInfo(appName: string, buildNumber: number): Promise<any> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      const buildInfo = await jenkins.build.get(jobName, buildNumber);
+      return {
+        number: buildInfo.number,
+        building: buildInfo.building,
+        result: buildInfo.result, // SUCCESS, FAILURE, ABORTED, UNSTABLE, null (if building)
+        duration: buildInfo.duration,
+        timestamp: buildInfo.timestamp,
+        url: buildInfo.url,
+      };
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error getting build info:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get build logs
+   */
+  static async getBuildLog(appName: string, buildNumber: number, start = 0): Promise<string> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      const log = await jenkins.build.log(jobName, buildNumber, {
+        start,
+        type: 'text'
+      });
+      return log;
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error getting build log:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if build is complete and return final status
+   */
+  static async checkBuildStatus(appName: string, buildNumber: number): Promise<{
+    building: boolean;
+    result: 'SUCCESS' | 'FAILURE' | 'ABORTED' | 'UNSTABLE' | null;
+    status: 'running' | 'failed' | 'building';
+  }> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      const buildInfo = await jenkins.build.get(jobName, buildNumber);
+      
+      let status: 'running' | 'failed' | 'building' = 'building';
+      
+      if (!buildInfo.building) {
+        // Build is complete
+        status = buildInfo.result === 'SUCCESS' ? 'running' : 'failed';
+      }
+      
+      return {
+        building: buildInfo.building,
+        result: buildInfo.result,
+        status,
+      };
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error checking build status:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
    * Select appropriate pipeline based on framework
    */
   private static selectPipeline(

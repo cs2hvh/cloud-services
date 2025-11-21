@@ -7,18 +7,21 @@ export function createSimpleTestPipeline(
   gitUrl: string,
   branch: string,
 ): string {
+  // Remove token from URL for display purposes (keep only clean URL for metadata)
+  const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
+  
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
-    Simple test pipeline for ${name}. 
-    Only clones repository and runs basic tests - no Docker or Kubernetes required.
+    Simple test pipeline for ${name}
+    Only clones and validates repository - no build or deployment
   </description>
   <keepDependencies>false</keepDependencies>
 
   <properties>
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
-      <projectUrl>${gitUrl}</projectUrl>
+      <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
   </properties>
 
@@ -37,73 +40,117 @@ export function createSimpleTestPipeline(
 pipeline {
   agent any
 
+  environment {
+    TEST_NAME = '${name}'
+  }
+
   stages {
 
-    stage('Clone Repository') {
+    stage('Initialize') {
       steps {
-        echo 'Cloning repository...'
-        git branch: '${branch}', url: '${gitUrl}'
+        script {
+          echo 'STAGE: Initialize'
+          echo "Test Name: \${env.TEST_NAME}"
+          echo "Git Repository: ${gitUrl}"
+          echo "Branch: ${branch}"
+          echo "Build Number: \${env.BUILD_NUMBER}"
+          echo 'Initialization completed'
+        }
       }
     }
 
-    stage('Check Files') {
+    stage('Checkout Repository') {
       steps {
-        echo 'Listing repository files...'
-        sh '''
-          echo "=== Repository Contents ==="
-          ls -lah
-          echo ""
-          echo "=== Git Info ==="
-          git log -1 --oneline
-          echo ""
-          echo "=== Branch Info ==="
-          git branch -a
-        '''
+        script {
+          echo 'STAGE: Checkout Repository'
+          echo 'Fetching source code from repository'
+          git branch: '${branch}', url: '${gitUrl}'
+          echo 'Source code checkout completed'
+        }
+      }
+    }
+
+    stage('Inspect Files') {
+      steps {
+        script {
+          echo 'STAGE: Inspect Files'
+          echo 'Listing repository contents'
+          sh '''
+            echo 'Repository Contents:'
+            ls -lah
+            
+            echo 'Git Commit Information:'
+            git config --global --add safe.directory "$(pwd)"
+            git log -1 --oneline
+            
+            echo 'Branch Information:'
+            git branch -a
+            
+            echo 'File inspection completed'
+          '''
+        }
       }
     }
 
     stage('Detect Project Type') {
       steps {
-        echo 'Detecting project type...'
-        sh '''
-          if [ -f package.json ]; then
-            echo "✓ Found package.json - Node.js project"
-            cat package.json | grep -E "(name|version|scripts)" || true
-          fi
-          
-          if [ -f requirements.txt ]; then
-            echo "✓ Found requirements.txt - Python project"
-          fi
-          
-          if [ -f Dockerfile ]; then
-            echo "✓ Found Dockerfile"
-          fi
-          
-          if [ -f docker-compose.yml ]; then
-            echo "✓ Found docker-compose.yml"
-          fi
-        '''
+        script {
+          echo 'STAGE: Detect Project Type'
+          echo 'Analyzing project structure'
+          sh '''
+            echo 'Checking for project configuration files'
+            
+            if [ -f package.json ]; then
+              echo 'Detected: Node.js project (package.json found)'
+              echo 'Package Details:'
+              cat package.json | grep -E "(name|version|scripts)" || true
+            fi
+            
+            if [ -f requirements.txt ]; then
+              echo 'Detected: Python project (requirements.txt found)'
+            fi
+            
+            if [ -f Dockerfile ]; then
+              echo 'Detected: Dockerfile present'
+            fi
+            
+            if [ -f docker-compose.yml ]; then
+              echo 'Detected: Docker Compose configuration present'
+            fi
+            
+            echo 'Project type detection completed'
+          '''
+        }
       }
     }
 
-    stage('Basic Validation') {
+    stage('Validate Structure') {
       steps {
-        echo 'Running basic validation...'
-        sh '''
-          echo "=== File Count ==="
-          find . -type f | wc -l
-          
-          echo ""
-          echo "=== Directory Structure ==="
-          find . -maxdepth 2 -type d | head -20
-          
-          echo ""
-          echo "=== File Types ==="
-          find . -type f -name "*.js" | wc -l | xargs echo "JavaScript files:"
-          find . -type f -name "*.ts" | wc -l | xargs echo "TypeScript files:"
-          find . -type f -name "*.py" | wc -l | xargs echo "Python files:"
-          find . -type f -name "*.java" | wc -l | xargs echo "Java files:"
-        '''
+        script {
+          echo 'STAGE: Validate Structure'
+          echo 'Performing basic project validation'
+          sh '''
+            echo 'File Statistics:'
+            FILE_COUNT=\$(find . -type f | wc -l)
+            echo "Total files: \$FILE_COUNT"
+            
+            echo 'Directory Structure:'
+            find . -maxdepth 2 -type d | head -20
+            
+            echo 'File Type Distribution:'
+            JS_COUNT=\$(find . -type f -name "*.js" | wc -l)
+            TS_COUNT=\$(find . -type f -name "*.ts" | wc -l)
+            PY_COUNT=\$(find . -type f -name "*.py" | wc -l)
+            JAVA_COUNT=\$(find . -type f -name "*.java" | wc -l)
+            
+            echo "JavaScript files: \$JS_COUNT"
+            echo "TypeScript files: \$TS_COUNT"
+            echo "Python files: \$PY_COUNT"
+            echo "Java files: \$JAVA_COUNT"
+            
+            echo 'Structure validation completed'
+          '''
+        }
       }
     }
 
@@ -111,14 +158,26 @@ pipeline {
   
   post {
     success {
-      echo '✓ Test pipeline completed successfully!'
-      echo 'Repository cloned and validated. Ready for actual deployment pipeline.'
+      script {
+        echo 'PIPELINE: Success'
+        echo "Test pipeline completed successfully for \${env.TEST_NAME}"
+        echo 'Repository has been cloned and validated'
+        echo 'Ready for deployment pipeline configuration'
+      }
     }
+    
     failure {
-      echo '✗ Test pipeline failed. Check the logs above.'
+      script {
+        echo 'PIPELINE: Failure'
+        echo "Test pipeline failed for \${env.TEST_NAME}"
+      }
     }
+    
     always {
-      echo "Pipeline finished at \${new Date()}"
+      script {
+        echo 'PIPELINE: Cleanup'
+        echo "Pipeline execution completed at: \${new Date()}"
+      }
     }
   }
 }

@@ -53,10 +53,66 @@ export async function POST(req: NextRequest) {
 
     const { env_vars, ...appData } = validation.data;
 
+    // Store the ORIGINAL URL without token (for database)
+    const original_repository_url = appData.repository_url;
+    
+    // Get GitHub access token for private repository access (same logic as repositories endpoint)
+    let authenticated_repository_url = appData.repository_url;
+    if (appData.git_provider === 'github' && authenticated_repository_url.startsWith('https://github.com/')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const { createServiceClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      const serviceSupabase = await createServiceClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const githubIdentity = session.user.identities.find(id => id.provider === 'github');
+          if (githubIdentity?.identity_data?.provider_token) {
+            accessToken = githubIdentity.identity_data.provider_token;
+          }
+        }
+      }
+      
+      // Last resort: check the github_tokens table
+      if (!accessToken) {
+        const { data: tokenData } = await serviceSupabase
+          .from('github_tokens')
+          .select('access_token')
+          .eq('user_id', auth.user!.id)
+          .single();
+        
+        if (tokenData?.access_token) {
+          accessToken = tokenData.access_token;
+        }
+      }
+      
+      if (accessToken) {
+        // Inject token into URL for private repo access (only for Jenkins, not stored in DB)
+        authenticated_repository_url = authenticated_repository_url.replace(
+          'https://github.com/',
+          `https://${accessToken}@github.com/`
+        );
+        console.log('[platform-apps/create] ✅ Injected GitHub token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No GitHub token found - private repos may fail');
+      }
+    }
+
     // Prepare deployment configuration
     const deploymentConfig: DeploymentConfig = {
       name: appData.name,
-      repository_url: appData.repository_url,
+      repository_url: original_repository_url, // Store clean URL in database
+      authenticated_url: authenticated_repository_url, // Use authenticated URL for Jenkins
       branch: appData.branch || "main",
       framework: appData.framework,
       git_provider: appData.git_provider,
