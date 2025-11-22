@@ -16,6 +16,7 @@ import {
   Admin_Bucket,
   Admin_SpectrumApp,
   ObjectSpaceBucket,
+  Admin_KubernetesCluster,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
@@ -1318,6 +1319,87 @@ export const Clusters = {
     } catch (err) {
       console.log(`[Supabase] Error while getting project by id: ${err}`);
       return null;
+    }
+  },
+
+  get_all_for_admin: async (): Promise<Admin_KubernetesCluster[]> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Get all clusters
+      const { data: clusters, error } = await supabase
+        .from("clusters")
+        .select(`
+          id,
+          cluster_id,
+          cluster_name,
+          project_id,
+          owner_id,
+          status,
+          k8s_version,
+          cni_plugin,
+          node_config,
+          control_plane,
+          workers,
+          created_at,
+          user_profiles(username)
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(
+          `[Clusters] Error getting all for admin: ${error.message}`
+        );
+        return [];
+      }
+
+      if (!clusters || clusters.length === 0) return [];
+
+      // Get auth users for emails
+      const { data: authUsers, error: authError } =
+        await supabase.auth.admin.listUsers();
+
+      if (authError) {
+        console.log(
+          `[Clusters] Error getting auth users: ${authError.message}`
+        );
+      }
+
+      const emailMap = new Map(
+        authUsers?.users?.map((u) => [u.id, u.email]) || []
+      );
+
+      // Map and merge data with proper typing
+      const merged: Admin_KubernetesCluster[] = clusters
+        .map((cluster) => {
+          // Safely access nested user_profiles
+          const userProfile = Array.isArray(cluster.user_profiles)
+            ? cluster.user_profiles[0]
+            : cluster.user_profiles;
+
+          return {
+            id: cluster.id ?? "",
+            cluster_id: cluster.cluster_id ?? "",
+            cluster_name: cluster.cluster_name ?? "",
+            project_id: cluster.project_id ?? "",
+            owner_id: cluster.owner_id ?? "",
+            owner_email: emailMap.get(cluster.owner_id ?? "") ?? null,
+            owner_username: userProfile?.username ?? null,
+            status: cluster.status ?? "pending",
+            k8s_version: cluster.k8s_version ?? null,
+            cni_plugin: cluster.cni_plugin ?? null,
+            node_config: cluster.node_config ?? null,
+            control_plane: cluster.control_plane ?? null,
+            workers: cluster.workers ?? null,
+            created_at: cluster.created_at ?? null,
+          };
+        })
+        .filter((cluster) => cluster.id !== ""); // Filter out invalid entries
+
+      return merged;
+    } catch (err) {
+      console.error(`[Clusters] Error in get_all_for_admin: ${err}`);
+      return [];
     }
   },
 };

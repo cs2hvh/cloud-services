@@ -2,7 +2,7 @@ import NewClusterForm from "@/components/dashboard/kubernetes/new/kubernetesform
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { vmLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
-import { Clusters, Projects } from "@/lib/supabase/queries";
+import { Clusters, Products, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
@@ -19,8 +19,9 @@ const KubernetesNewSuspense = async () => {
     }
     const projects = await Projects.get_all_by_user(user.id);
     const clusters = await Clusters.get_by_user_id(user.id);
+    const products = (await Products.get_by_type("kubernetes"));
    // console.log("Projects in Kube new page",projects);
-  return <NewClusterForm locations={vmLocations} projects={projects} userId={user.id} clusters={clusters} />;
+  return <NewClusterForm locations={vmLocations} projects={projects} userId={user.id} clusters={clusters} products={products} />;
 };
 
 const KubernetesNewPage = () => {

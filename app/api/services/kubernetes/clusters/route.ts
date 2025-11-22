@@ -87,8 +87,9 @@ export async function POST(req: Request) {
     await Projects.add_log({
       project_id: parsed.data.projectId,
       event: "Box",
-      text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`
-    });
+      text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`,
+     
+    }, body.role);
     console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
   }
 

@@ -21,6 +21,7 @@ import {
   Loader2,
   //   MapPin,
   Server,
+  User,
 } from "lucide-react";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,14 @@ interface PageProps {
   locations: Tables<"locations">[];
   projects: Tables<"projects">[];
   userId: string;
-  clusters: Tables<"clusters_get">[];
+  clusters: Tables<"clusters_get">[] | any[];
+  products: Tables<"products">[];
+  role?: "user" | "admin";
+  allUsers?: Array<{
+    id: string;
+    email: string;
+    username?: string;
+  }>;
 }
 
 interface EncryptedData {
@@ -93,19 +101,28 @@ type SendPayload = {
   ips: string[];
 };
 
-
-const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) => {
+const NewClusterPage = ({
+  locations,
+  projects,
+  userId,
+  clusters,
+  products,
+  role = "user",
+  allUsers = [],
+}: PageProps) => {
   const router = useRouter();
   // const planValue: string = "";
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [currentStep, setCurrentStep] = useState<number>(role === "admin" ? 0 : 1);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
   const [validationErrors, setValidationErrors] = useState<{
     name?: string;
     nodes?: string;
+    user?: string;
   }>({
     name: undefined,
     nodes: undefined,
+    user: undefined,
   });
   //we need to make plan dynamic
   const [availablePlans] = useState([
@@ -134,6 +151,8 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
   ]);
 
   const [state, setState] = useState({
+    selectedUser: role === "admin" ? "" : userId,
+    userSearchQuery: "",
     selectedPlan: "", // Selected database product
     selectedName: "", // Cluster name
     selectedNode: 0, // Number of nodes
@@ -144,22 +163,65 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
     versions: ["1.31.1"] as string[], // Available versions
   });
 
+  // Filter users based on search query
+  const filteredUsers = allUsers.filter(
+    (user) =>
+      !state.userSearchQuery ||
+      user.email.toLowerCase().includes(state.userSearchQuery.toLowerCase()) ||
+      (user.username &&
+        user.username.toLowerCase().includes(state.userSearchQuery.toLowerCase())) ||
+      user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
+  );
+
+  // Handle user selection
+  const handleUserSelect = (selectedUserId: string) => {
+    setState((prev) => ({
+      ...prev,
+      selectedUser: selectedUserId,
+    }));
+    if (validationErrors.user) {
+      setValidationErrors({ ...validationErrors, user: "" });
+    }
+  };
+
+  const validateUser = (selectedUser: string): string => {
+    if (role === "admin" && !selectedUser) {
+      return "User selection is required";
+    }
+    return "";
+  };
+
   const handleNextStep = () => {
+    // Validate user on step 0 (admin only)
+    if (currentStep === 0 && role === "admin") {
+      const userError = validateUser(state.selectedUser || "");
+      if (userError) {
+        setValidationErrors({ ...validationErrors, user: userError });
+        toast.error(userError);
+        return;
+      } else {
+        setValidationErrors({ ...validationErrors, user: "" });
+      }
+    }
+
     if (currentStep === 1) {
       try {
-       // debugger
+        // debugger
         //check if cluster name already exists
-         //const clusters = await Clusters.get_by_owner(userId);
-        const clusterExists = clusters?.some((cluster) => cluster.cluster_name === state.selectedName);
+        //const clusters = await Clusters.get_by_owner(userId);
+        const clusterExists = clusters?.some(
+          (cluster) => cluster.cluster_name === state.selectedName
+        );
         if (clusterExists) {
-          setValidationErrors((prev) => ({ ...prev, name: "Cluster name already exists" }));
+          setValidationErrors((prev) => ({
+            ...prev,
+            name: "Cluster name already exists",
+          }));
           return;
         }
 
         kubernetesClusterSchema.shape.name.parse(state.selectedName);
         setValidationErrors((prev) => ({ ...prev, name: undefined }));
-
-
       } catch (error) {
         if (error instanceof z.ZodError) {
           setValidationErrors((prev) => ({
@@ -171,12 +233,12 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
       }
     }
 
-    if(currentStep===2){
+    if (currentStep === 2) {
       if (!state.selectedLocation) {
         toast.error("Please select a location");
         return;
+      }
     }
-  }
 
     if (currentStep === 3) {
       try {
@@ -200,7 +262,8 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
   };
 
   const handlePrevStep = () => {
-    if (currentStep > 1) {
+    const minStep = role === "admin" ? 0 : 1;
+    if (currentStep > minStep) {
       setCurrentStep(currentStep - 1);
     }
   };
@@ -208,6 +271,12 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
   const onSubmit = async () => {
     if (!termsAccepted) {
       toast.error("Please accept the terms of service and privacy policy");
+      return;
+    }
+
+    const targetUserId = role === "admin" ? state.selectedUser : userId;
+    if (!targetUserId) {
+      toast.error("Invalid user selection");
       return;
     }
 
@@ -225,21 +294,25 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         return;
       }
 
-     
-      const nodeNames = makeNodeKeys(state.selectedNode,state.selectedName);
+      const nodeNames = makeNodeKeys(state.selectedNode, state.selectedName);
       console.log(nodeNames, ".....nodeNames.....262");
+
+      const selectedProduct = products.find(
+        (product) => product.name === state.selectedPlan
+      );
 
       //generate vms from digitalOcean apis
       const payload = {
         names: nodeNames,
         region: state.selectedLocation, //form-dependent
-        size: state.selectedPlan, //form-dependent
+        size: `s-${selectedProduct?.resources.cpu}vcpu-${selectedProduct?.resources.ram}gb`, //form-dependent
         image: "ubuntu-25-04-x64",
         backups: false,
         ipv6: true,
         monitoring: true,
         tags: ["env:prod", "web", "ssh-allowed"],
         // user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
+       
       };
 
       console.log(payload, "...............298");
@@ -248,6 +321,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         "/services/kubernetes/manageip/createdroplet",
         payload
       );
+      console.log(createDroplet.data, "...........createDroplet.............");
 
       const sendPayload: SendPayload = {
         provider: "existing",
@@ -267,7 +341,6 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
 
         ips: [],
       };
-
 
       //one more idea clicked my mind , instead check status , call get droplet and see status =active or not.
 
@@ -338,8 +411,9 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
       //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
       const response4 = await api.post("/services/kubernetes/clusters", {
         ...sendPayload,
-        ownerId: userId,
+        ownerId: targetUserId,
         projectId: state.selectedProject,
+         role:role
       });
       if (response4.status == 200) {
         // alert(
@@ -349,9 +423,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
         toast.success("Cluster request captured");
         //navigate to status page.
         // window.location.href=`/dashboard/${response.data.clusterId}/status`;
-        router.push(
-          `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
-        );
+        if (role === "admin") {
+          router.push('/dashboard/admin/kubernetes');
+        } else {
+          router.push(
+            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
+          );
+        }
       }
 
       // toast.success(response.data);
@@ -368,9 +446,9 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
     }
   };
 
-
-
   const {
+    selectedUser,
+    userSearchQuery,
     selectedName,
     selectedNode,
     selectedVersion,
@@ -378,7 +456,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
     // selectedDbType,
     versions,
     selectedProject,
-    selectedPlan
+    selectedPlan,
   } = state;
 
   //const selectedDatabase = products?.find((db) => db.id === selectedDb);
@@ -386,29 +464,39 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
   //   (location) => location.short === selectedLocation
   // );
 
-  const steps = [
-    { id: 1, name: "Name" },
-    { id: 2, name: "Location" },
-    { id: 3, name: "Number" },
-    { id: 4, name: "Plan" },
-    { id: 5, name: "Version" },
-    { id: 6, name: "Project" },
-    { id: 7, name: "Payment" },
-  ];
+  const steps = role === "admin" 
+    ? [
+        { id: 0, name: "User" },
+        { id: 1, name: "Name" },
+        { id: 2, name: "Location" },
+        { id: 3, name: "Number" },
+        { id: 4, name: "Plan" },
+        { id: 5, name: "Version" },
+        { id: 6, name: "Project" },
+        { id: 7, name: "Payment" },
+      ]
+    : [
+        { id: 1, name: "Name" },
+        { id: 2, name: "Location" },
+        { id: 3, name: "Number" },
+        { id: 4, name: "Plan" },
+        { id: 5, name: "Version" },
+        { id: 6, name: "Project" },
+        { id: 7, name: "Payment" },
+      ];
 
   function makeNodeKeys(workers: number, clusterName: string) {
-    
     const nodeNames = [];
-    for(let i=0;i<=workers;i++){
+    for (let i = 0; i <= workers; i++) {
       const uuid = crypto.randomUUID();
-      if(i===0){
+      if (i === 0) {
         nodeNames.push(`${clusterName}-${uuid}-cp-1`);
-      }else{
+      } else {
         nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
       }
-  }
+    }
     return nodeNames;
-}
+  }
 
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -421,7 +509,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
       <div className="mb-8">
         <div className="mb-6 flex items-center">
           <Link
-            href="/dashboard/services/kubernetes"
+            href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
             className="inline-flex items-center text-sm text-white/70 hover:text-white transition-colors duration-200 bg-white/5 hover:bg-white/10 rounded-lg px-4 py-2 border border-white/10 hover:border-white/20"
           >
             <ArrowLeft size={16} className="mr-2" />
@@ -489,6 +577,87 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
+          {currentStep === 0 && (
+            <Card className="bg-white/5 border-white/10">
+              <CardHeader>
+                <CardTitle className="text-white">Select User</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="relative space-y-2">
+                    <Label htmlFor="user-search" className="text-white/80">
+                      Search Users
+                    </Label>
+                    <Input
+                      id="user-search"
+                      value={userSearchQuery}
+                      onChange={(e) =>
+                        setState({ ...state, userSearchQuery: e.target.value })
+                      }
+                      type="text"
+                      placeholder="Search by email or username..."
+                      className="bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                   
+                    <div className="space-y-2">
+                  <Label className="text-white">Available Users</Label>
+                  <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
+                    {filteredUsers.length === 0 ? (
+                      <div className="p-4 text-center text-white/60">
+                        No users found
+                      </div>
+                    ) : (
+                      filteredUsers.map((user) => (
+                        <div
+                          key={user.id}
+                          onClick={() => handleUserSelect(user.id)}
+                          className={`p-4 cursor-pointer transition-colors border-b border-white/5 last:border-b-0 ${
+                            selectedUser === user.id
+                              ? "bg-blue-500/20 border-l-4 border-l-blue-500"
+                              : "hover:bg-white/5"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-white font-medium">
+                                {user.email}
+                              </div>
+                              {user.username && (
+                                <div className="text-xs text-white/60">
+                                  @{user.username}
+                                </div>
+                              )}
+                            </div>
+                            {selectedUser === user.id && (
+                              <CheckCircle2 className="h-5 w-5 text-blue-400" />
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                    {validationErrors.user && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.user}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button
+                  onClick={handleNextStep}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
+              </CardFooter>
+            </Card>
+          )}
+
           {currentStep === 1 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
@@ -519,7 +688,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
               <CardFooter className="flex justify-end">
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -584,13 +753,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -631,13 +800,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -658,18 +827,18 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                   }
                   className="grid grid-cols-1 gap-4"
                 >
-                  {availablePlans.map((plan) => (
-                    <div key={plan.label}>
+                  {products.map((plan) => (
+                    <div key={plan.id}>
                       <RadioGroupItem
-                        value={plan.label}
-                        id={plan.label}
+                        value={plan.name || ""}
+                        id={plan.name || ""}
                         className="peer sr-only"
                       />
                       <Label
-                        htmlFor={plan.label}
+                        htmlFor={plan.name || ""}
                         className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
                       >
-                        {plan.label && (
+                        {plan.name && (
                           <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
@@ -679,7 +848,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                                 </span>
                               </div>
                               <p className="font-semibold text-white">
-                                {plan.cpu} vCPU
+                                {plan.resources.cpu || 0} vCPU
                               </p>
                             </div>
                             <div>
@@ -690,7 +859,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                                 </span>
                               </div>
                               <p className="font-semibold text-white">
-                                {plan.ram} GB
+                                {plan.resources.ram || 0} GB
                               </p>
                             </div>
                             <div>
@@ -701,7 +870,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                                 </span>
                               </div>
                               <p className="font-semibold text-white">
-                                {plan.storage} GB
+                                {plan.resources.storage || 0} GB
                               </p>
                             </div>
                           </div>
@@ -715,13 +884,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -765,13 +934,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -799,10 +968,10 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                       id="version"
                       className="w-full bg-white/10 border-white/20 rounded-md text-white"
                     >
-                      <SelectValue placeholder="Select version" />
+                      <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent className="bg-black border-white/20 text-white">
-                      {projects.map((item) => (
+                      {projects.filter(item=>item.owner===selectedUser).map((item) => (
                         <SelectItem key={item.id} value={item.id}>
                           {item.name}
                         </SelectItem>
@@ -815,13 +984,13 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -870,7 +1039,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                   variant="outline"
                   onClick={handlePrevStep}
                   disabled={isLoading}
-                  className="rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
                 >
                   Back
                 </Button>
@@ -878,7 +1047,7 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                   onClick={onSubmit}
                   size="lg"
                   disabled={isLoading || !termsAccepted}
-                  className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
                 >
                   {isLoading ? (
                     <>
@@ -912,7 +1081,10 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                   <span className="text-sm text-white/60">Location:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white">
-                      {locations.find((loc) => loc.short === selectedLocation)?.city}
+                      {
+                        locations.find((loc) => loc.short === selectedLocation)
+                          ?.city
+                      }
                     </span>
                     <Image
                       src={`https://flagsapi.com/${locations.find((loc) => loc.short === selectedLocation)?.country_code}/flat/64.png`}
@@ -932,40 +1104,61 @@ const NewClusterPage = ({ locations, projects, userId, clusters }: PageProps) =>
                 </div>
               )}
 
+              {selectedPlan && (
+                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-xl p-4 shadow-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-medium text-white/80">
+                      Selected Plan
+                    </span>
+                    <div className="px-2 py-1 bg-white/10 rounded-full">
+                      <span className="text-xs font-semibold text-white">
+                        {selectedPlan}
+                      </span>
+                    </div>
+                  </div>
 
-               {selectedPlan && (
-  <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-xl p-4 shadow-lg">
-    <div className="flex items-center justify-between mb-3">
-      <span className="text-sm font-medium text-white/80">Selected Plan</span>
-      <div className="px-2 py-1 bg-white/10 rounded-full">
-        <span className="text-xs font-semibold text-white">{selectedPlan}</span>
-      </div>
-    </div>
-    
-    <div className="grid grid-cols-3 gap-4">
-      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-        <div className="text-2xl font-bold text-blue-400 mb-1">
-          {availablePlans.find(plan => plan.label === selectedPlan)?.cpu}
-        </div>
-        <div className="text-xs text-white/60 uppercase tracking-wide">vCPU</div>
-      </div>
-      
-      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-        <div className="text-2xl font-bold text-green-400 mb-1">
-          {availablePlans.find(plan => plan.label === selectedPlan)?.ram}
-        </div>
-        <div className="text-xs text-white/60 uppercase tracking-wide">RAM</div>
-      </div>
-      
-      <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-        <div className="text-2xl font-bold text-purple-400 mb-1">
-          {availablePlans.find(plan => plan.label === selectedPlan)?.storage}
-        </div>
-        <div className="text-xs text-white/60 uppercase tracking-wide">Storage</div>
-      </div>
-    </div>
-  </div>
-)}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                      <div className="text-2xl font-bold text-blue-400 mb-1">
+                        {
+                          products.find(
+                            (plan) => plan.name === selectedPlan
+                          )?.resources.cpu
+                        }
+                      </div>
+                      <div className="text-xs text-white/60 uppercase tracking-wide">
+                        vCPU
+                      </div>
+                    </div>
+
+                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                      <div className="text-2xl font-bold text-green-400 mb-1">
+                       {
+                          products.find(
+                            (plan) => plan.name === selectedPlan
+                          )?.resources.ram
+                        }
+                      </div>
+                      <div className="text-xs text-white/60 uppercase tracking-wide">
+                        RAM
+                      </div>
+                    </div>
+
+                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
+                      <div className="text-2xl font-bold text-purple-400 mb-1">
+                        {
+                          products.find(
+                            (plan) => plan.name === selectedPlan
+                          )?.resources.storage
+                        }
+                      </div>
+                      <div className="text-xs text-white/60 uppercase tracking-wide">
+                        Storage
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {selectedVersion && (
                 <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">

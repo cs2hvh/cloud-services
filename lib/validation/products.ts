@@ -3,8 +3,8 @@ import { z } from "zod";
 export const createProductSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  type: z.enum(["database", "object-storage","network-ddos"],),
-  sub: z.enum(["mysql", "pg", "mongodb","object-storage","network-ddos"], {
+  type: z.enum(["database", "object-storage","network-ddos","kubernetes"],),
+  sub: z.enum(["mysql", "pg", "mongodb","object-storage","network-ddos","kubernetes"], {
     errorMap: () => ({ message: "Invalid database type" }),
   }),
   price: z.number().positive("Price must be positive"),

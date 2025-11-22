@@ -91,6 +91,23 @@ export type Admin_SpectrumApp = {
   dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null};
 }
 
+export type Admin_KubernetesCluster = {
+  id: string;
+  cluster_id: string;
+  cluster_name: string;
+  project_id: string;
+  owner_id: string;
+  owner_email: string | null;
+  owner_username: string | null;
+  status: "pending" | "creating" | "ready" | "failed" | "deleted";
+  k8s_version: string | null;
+  cni_plugin: string | null;
+  node_config: NodeConfig | null;
+  created_at: string | null;
+  control_plane: { public_ip: string; private_ip: string; droplet_id: string } | null;
+  workers: { public_ip: string; private_ip: string; droplet_id: string }[] | null;
+}
+
 export type Rule = {
   uuid: string;
   cluster_uuid: string;
