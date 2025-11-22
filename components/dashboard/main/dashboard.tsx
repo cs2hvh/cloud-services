@@ -13,12 +13,15 @@ import {
   ShieldCheck,
   HardDrive,
   Eye,
+  Archive,
+  Network,
+  Shield,
 
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 // import { createClient } from "@/lib/supabase/client";
-import { Tables } from "@/lib/supabase/types";
+import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
 import { KubernetesIcon } from "@/components/ui/kubernetes";
 import { DatabaseIcon } from "../database/database-icon";
 import { dbLocations } from "@/config/locations";
@@ -28,11 +31,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { object } from "zod";
 
 interface PageProps {
     game_servers: Tables<"game_servers">[];
     database_clusters: Tables<"database_clusters">[];
     kubernetes_clusters: Tables<"clusters_get">[];
+    spectrum_apps: Tables<"spectrum_apps">[];
+    object_storage:ObjectSpaceBucket[];
+    project_logs:Tables<"project_logs">[];
 }
 
 // A simple bar chart component
@@ -74,6 +81,8 @@ const Dashboard = ({
   const activeGameServers = data.game_servers.filter(s => s.status === 'active').length;
   const onlineDatabases = data.database_clusters.filter(db => db.status === 'online').length;
   const readyK8sClusters = data.kubernetes_clusters.filter(k8s => k8s.status === 'ready').length;
+  const spectrum_apps = data.spectrum_apps.filter(app => app.status === 'updated'||'created').length;
+  const object_storage = data.object_storage.filter(object=>object.status==='active');
 
   const stats = [
     {
@@ -96,8 +105,20 @@ const Dashboard = ({
     },
     {
       title: "Active Services",
-      value: (activeGameServers + onlineDatabases + readyK8sClusters).toString(),
+      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage.length).toString(),
       icon: ShieldCheck,
+      color: "bg-gradient-to-br from-purple-600 to-blue-600",
+    },
+    {
+      title: "Spectrum Apps",
+      value: data.spectrum_apps.length.toString(),
+      icon: Shield,
+      color: "bg-gradient-to-br from-purple-600 to-blue-600",
+    },
+    {
+      title: "Object Storage",
+        value: data.object_storage.length.toString(),
+      icon: Archive,
       color: "bg-gradient-to-br from-purple-600 to-blue-600",
     },
   ];
@@ -208,16 +229,16 @@ const Dashboard = ({
           >
             <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
             <div className="space-y-4">
-              {activities.map((activity) => (
+              {data.project_logs?.slice(0, 5).map((activity) => (
                 <div key={activity.id} className="flex items-center justify-between text-sm">
                   <div className="flex items-center space-x-3">
                     <Activity className="w-4 h-4 text-blue-400" />
                     <div>
-                      <p>{activity.action}</p>
-                      <p className="text-xs text-white/50">{activity.type}</p>
+                      <p>{activity.event}</p>
+                      <p className="text-xs text-white/50">{activity.text}</p>
                     </div>
                   </div>
-                  <span className="text-white/50">{activity.time}</span>
+                  <span className="text-white/50">{formatTimeAgo(new Date(activity?.created_at||""))}</span>
                 </div>
               ))}
             </div>

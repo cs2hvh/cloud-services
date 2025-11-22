@@ -443,7 +443,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       <Archive className="w-4 h-4 mr-2" />
                       <span className="text-sm">Object Storage</span>
                     </Link>
-                     <Link
+                    <Link
                       href="/dashboard/admin/network-ddos"
                       className={`
     flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
@@ -456,6 +456,20 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     >
                       <Shield className="w-4 h-4 mr-2" />
                       <span className="text-sm">Network DDoS</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/kubernetes"
+                      className={`
+    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+    ${
+      pathname.startsWith("/dashboard/admin/kubernetes")
+        ? "bg-slate-700 text-white font-medium"
+        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+    }
+  `}
+                    >
+                      <Box className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Kubernetes</span>
                     </Link>
                   </div>
                 )}

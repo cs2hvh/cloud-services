@@ -32,6 +32,8 @@ interface SpectrumAppSettingsProps {
 
 const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
  
+
+  let x:string="";
   const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
   
@@ -58,7 +60,8 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
   });
 
   // Origin input state
-  const [newOrigin, setNewOrigin] = useState("");
+  const [newOriginIp, setNewOriginIp] = useState("");
+  const [newOriginPort, setNewOriginPort] = useState("");
 
   // Only update settings when spectrumApp actually changes (different app)
   // NOT when it's just refreshed with the same data
@@ -82,6 +85,13 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           };
           break;
         case "protocol":
+          // Validate protocol format: tcp/22 or tcp/8000-9000 or udp/53
+          const protocolRegex = /^(tcp|udp)\/(\d+|\d+-\d+)$/i;
+          if (!settings.protocol || !protocolRegex.test(settings.protocol.trim())) {
+            toast.error("Invalid protocol format. Use format like: tcp/22 or tcp/8000-9000");
+            setIsLoading((prev) => ({ ...prev, [setting]: false }));
+            return;
+          }
           payload.protocol = settings.protocol;
           break;
         case "tls":
@@ -102,7 +112,56 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
             setIsLoading((prev) => ({ ...prev, [setting]: false }));
             return;
           }
-          payload.origin_direct = settings.origins;
+          
+          // Validate each origin format and construct full origin with protocol
+          const formattedOrigins: string[] = [];
+          const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+          const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+          const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+          const portRegex = /^\d+$/;
+          
+          for (const origin of settings.origins) {
+            // Parse the stored origin (format: "ip:port")
+            const parts = origin.split(':');
+            if (parts.length !== 2) {
+              toast.error(`Invalid origin format: ${origin}`);
+              setIsLoading((prev) => ({ ...prev, [setting]: false }));
+              return;
+            }
+            
+            const [ip, port] = parts;
+            
+            // Validate IP/hostname
+            const isValidIp = ipv4Regex.test(ip) || ipv6Regex.test(ip) || hostnameRegex.test(ip);
+            if (!isValidIp) {
+              toast.error(`Invalid IP address or hostname: ${ip}`);
+              setIsLoading((prev) => ({ ...prev, [setting]: false }));
+              return;
+            }
+            
+            // Validate port
+            if (!portRegex.test(port)) {
+              toast.error(`Invalid port number: ${port}`);
+              setIsLoading((prev) => ({ ...prev, [setting]: false }));
+              return;
+            }
+            
+            const portNum = parseInt(port, 10);
+            if (portNum < 1 || portNum > 65535) {
+              toast.error(`Port number must be between 1 and 65535: ${port}`);
+              setIsLoading((prev) => ({ ...prev, [setting]: false }));
+              return;
+            }
+            
+            // Extract protocol from settings.protocol (e.g., "tcp/22" -> "tcp")
+            const protocolMatch = settings.protocol.match(/^(tcp|udp)/i);
+            const protocol = protocolMatch ? protocolMatch[1].toLowerCase() : 'tcp';
+            
+            // Format as protocol://ip:port
+            formattedOrigins.push(`${protocol}://${ip}:${port}`);
+          }
+          
+          payload.origin_direct = formattedOrigins;
           break;
         case "edgeIps":
           payload.edge_ips = {
@@ -181,7 +240,8 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           ...prev,
           origins: spectrumApp.origin_direct || [],
         }));
-        setNewOrigin("");
+        setNewOriginIp("");
+        setNewOriginPort("");
         break;
       case "edgeIps":
         setSettings((prev) => ({
@@ -194,26 +254,53 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
   };
 
   const addOrigin = () => {
-    if (!newOrigin.trim()) {
-      toast.error("Origin cannot be empty");
+    if (!newOriginIp.trim() || !newOriginPort.trim()) {
+      toast.error("Both IP/hostname and port are required");
       return;
     }
-    if (settings.origins.includes(newOrigin.trim())) {
+    
+    // Validate IP address or hostname
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
+    const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+    
+    const trimmedIp = newOriginIp.trim();
+    if (!ipv4Regex.test(trimmedIp) && !ipv6Regex.test(trimmedIp) && !hostnameRegex.test(trimmedIp)) {
+      toast.error("Invalid IP address or hostname format");
+      return;
+    }
+    
+    // Validate port
+    const portRegex = /^\d+$/;
+    const trimmedPort = newOriginPort.trim();
+    if (!portRegex.test(trimmedPort)) {
+      toast.error("Port must be a number");
+      return;
+    }
+    
+    const portNum = parseInt(trimmedPort, 10);
+    if (portNum < 1 || portNum > 65535) {
+      toast.error("Port number must be between 1 and 65535");
+      return;
+    }
+    
+    // Store as "ip:port" format (without protocol)
+    const newOrigin = `${trimmedIp}:${trimmedPort}`;
+    
+    if (settings.origins.includes(newOrigin)) {
       toast.error("Origin already exists");
       return;
     }
+    
     setSettings((prev) => ({
       ...prev,
-      origins: [...prev.origins, newOrigin.trim()],
+      origins: [...prev.origins, newOrigin],
     }));
-    setNewOrigin("");
+    setNewOriginIp("");
+    setNewOriginPort("");
   };
 
-  const handleOriginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    //debugger
-   
-    setNewOrigin(e.target.value);
-  };
+
 
   const removeOrigin = (origin: string) => {
     if (settings.origins.length <= 1) {
@@ -331,7 +418,8 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         edgeIpConnectivity: edgeIps?.connectivity || "all",
       });
       setEditMode({});
-      setNewOrigin("");
+      setNewOriginIp("");
+      setNewOriginPort("");
     }
   }, [spectrumApp]);
 
@@ -530,12 +618,17 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
             <div className="space-y-2">
               <Label className="text-xs text-white/80">Current Origins</Label>
               <div className="space-y-2">
-                {settings.origins.map((origin, index) => (
+                {settings.origins.map((origin, index) => {
+                  // Extract IP:port from format like "tcp://192.168.1.1:8080" or just "192.168.1.1:8080"
+                  const displayOrigin = origin.includes('://') 
+                    ? origin.split('://')[1] 
+                    : origin;
+                  return (
                   <div
                     key={index}
                     className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/10"
                   >
-                    <span className="text-xs text-white font-mono">{origin}</span>
+                    <span className="text-xs text-white font-mono">{displayOrigin}</span>
                     {editMode.origins && (
                       <Button
                         size="sm"
@@ -547,30 +640,51 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
                       </Button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             {editMode.origins && (
               <div className="space-y-2">
-                <Label htmlFor="new-origin" className="text-xs text-white/80">
+                <Label className="text-xs text-white/80">
                   Add New Origin
                 </Label>
                 <div className="flex gap-2">
-                  <Input
-                   autoFocus
-                    id="new-origin"
-                    value={newOrigin}
-                    onChange={handleOriginChange}
-                    placeholder="192.168.1.1 or example.com"
-                    className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
-                    // onKeyDown={(e) => {
-                    //   if (e.key === "Enter") {
-                    //     e.preventDefault();
-                    //     addOrigin();
-                    //   }
-                    // }}
-                  />
+                  <div className="flex-1 space-y-1">
+                    <Input
+                     onClick={() => { x="ip"; }}
+                      autoFocus
+                      id="new-origin-ip"
+                      value={newOriginIp}
+                      onChange={(e) => setNewOriginIp(e.target.value)}
+                      placeholder="IP or hostname"
+                      className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addOrigin();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="w-24 space-y-1">
+                    <Input
+                     onClick={() => { x="port"; }}
+                     autoFocus={x ==="port"}
+                      id="new-origin-port"
+                      value={newOriginPort}
+                      onChange={(e) => setNewOriginPort(e.target.value)}
+                      placeholder="Port"
+                      className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addOrigin();
+                        }
+                      }}
+                    />
+                  </div>
                   <Button
                     onClick={addOrigin}
                     className="bg-white/10 hover:bg-white/20 text-white h-9"
@@ -578,6 +692,9 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
                     Add
                   </Button>
                 </div>
+                <p className="text-xs text-white/50">
+                  Enter IP address or hostname and port separately
+                </p>
               </div>
             )}
           </div>

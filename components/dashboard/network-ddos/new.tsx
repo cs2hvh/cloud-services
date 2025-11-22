@@ -211,7 +211,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
     setIsLoading(true);
     try {
       // Log the form data
-      console.log('Spectrum App Configuration:', formData);
+      //console.log('Spectrum App Configuration:', formData);
       debugger
       const response = await fetch("/api/services/spectrum/apps/create", {
         method: "POST",
@@ -237,6 +237,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
           ],
           project_id: formData.project_id,
           owner_id: targetUserId,
+          role: role,
         }),
       });
 

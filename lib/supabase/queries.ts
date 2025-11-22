@@ -481,9 +481,31 @@ export const Projects = {
     }
   },
 
-  add_log: async (props: TablesInsert<"project_logs">): Promise<boolean> => {
+  get_logs_by_user: async (userId: string): Promise<ProjectLog[] | null> => {
     try {
       const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("project_logs")
+        .select("* ,projects!inner(*)")
+        .eq("projects.owner", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.log(
+          `[Supabase] Error while getting project logs: ${error.message}`,
+        );
+        return [];
+      }
+      return data;
+    } catch (err) {
+      console.log(`[Supabase] Error while getting project logs: ${err}`);
+      return [];
+    }
+  },
+
+  add_log: async (props: TablesInsert<"project_logs">,role?:string): Promise<boolean> => {
+    try {
+      const supabase =role==='admin' ? await createServiceClient() : await createClient();
       const { error } = await supabase.from("project_logs").insert(props);
 
       if (error) {

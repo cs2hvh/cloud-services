@@ -82,7 +82,7 @@ function getCloudflareHeaders(token: string) {
 /**
  * Create a new Spectrum app in Cloudflare and persist to database
  */
-export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
+export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:string) {
 
   //console.log(payload,"............................105");
   
@@ -191,13 +191,14 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput) {
   }
 
   // Add project log if applicable
-  // if (payload.project_id) {
-  //   await Projects.add_log?.({
-  //     project_id: payload.project_id,
-  //     event: "SpectrumCreate",
-  //     text: `Spectrum app '${payload.dns.name}' created`,
-  //   });
-  // }
+  if (payload.project_id) {
+    await Projects.add_log?.({
+      project_id: payload.project_id,
+      event: "SpectrumCreate",
+      text: `Spectrum app '${payload.dns.name}' created`,
+     
+    }, role);
+  }
 
   return {
     app: persist.data,
@@ -302,7 +303,7 @@ export async function listSpectrumApps(ownerId?: string) {
 export async function updateSpectrumApp(data: UpdateSpectrumAppPayload) {
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
-  console.log(data,"........................273");
+  //console.log(data,"........................273");
 
   // Get the current Cloudflare app
   const cfAppResp = await axios.get<CloudflareResponse<CloudflareSpectrumApp>>(
@@ -350,13 +351,13 @@ export async function updateSpectrumApp(data: UpdateSpectrumAppPayload) {
     status: "updated",
   };
 
-  if (result.dns?.name) {
-    const encryptedDnsName = Encryption.encrypt(result.dns.name, encryptionKey);
-    updatePayload.dns = {
-      name: encryptedDnsName,
-      type: result.dns.type,
-    } as unknown as Json;
-  }
+  // if (result.dns?.name) {
+  //   const encryptedDnsName = Encryption.encrypt(result.dns.name, encryptionKey);
+  //   updatePayload.dns = {
+  //     name: encryptedDnsName,
+  //     type: result.dns.type,
+  //   } as unknown as Json;
+  // }
   if (result.protocol) updatePayload.protocol = result.protocol;
   if (result.origin_direct) updatePayload.origin_direct = result.origin_direct;
   if (result.tls) updatePayload.tls = result.tls;

@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(createSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
-    const result = await createSpectrumApp(validation.data);
+    const result = await createSpectrumApp(validation.data,body.role);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
