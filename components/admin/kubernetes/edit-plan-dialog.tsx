@@ -2,14 +2,34 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Save, Loader2, Package } from "lucide-react";
+import { X, Save, Loader2, Package, Server, Cpu, HardDrive, DollarSign } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getErrorMessage } from "@/config/functions";
+
+interface DropletSize {
+  slug: string;
+  memory: number;
+  vcpus: number;
+  disk: number;
+  transfer: number;
+  price_monthly: number;
+  price_hourly: number;
+  regions: string[];
+  available: boolean;
+  description: string;
+}
 
 interface EditPlanDialogProps {
   product: Tables<"products"> | null;
@@ -25,6 +45,9 @@ export default function EditPlanDialog({
   onSuccess,
 }: EditPlanDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDroplets, setIsLoadingDroplets] = useState(false);
+  const [dropletSizes, setDropletSizes] = useState<DropletSize[]>([]);
+  const [selectedDroplet, setSelectedDroplet] = useState<string>("");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -33,7 +56,46 @@ export default function EditPlanDialog({
     storage: 50,
     price: 25.0,
     discount: 0,
+    slug: "",
   });
+
+  // Fetch droplet sizes when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDropletSizes();
+    }
+  }, [isOpen]);
+
+  const fetchDropletSizes = async () => {
+    setIsLoadingDroplets(true);
+    try {
+      const response = await api.get("/digitalocean/sizes?kubernetes=true");
+      if (response.status === 200 && response.data.sizes) {
+        setDropletSizes(response.data.sizes);
+      }
+    } catch (error) {
+      console.error("Error fetching droplet sizes:", error);
+      toast.error("Failed to load droplet sizes");
+    } finally {
+      setIsLoadingDroplets(false);
+    }
+  };
+
+  const handleDropletChange = (slug: string) => {
+    setSelectedDroplet(slug);
+    const droplet = dropletSizes.find((d) => d.slug === slug);
+    
+    if (droplet) {
+      setFormData({
+        ...formData,
+        cpu: droplet.vcpus,
+        ram: Math.round(droplet.memory / 1024),
+        storage: droplet.disk,
+        price: droplet.price_monthly,
+        slug: droplet.slug,
+      });
+    }
+  };
 
   // Initialize form when product changes
   useEffect(() => {
@@ -46,7 +108,9 @@ export default function EditPlanDialog({
         storage: product.resources?.storage || 50,
         price: product.price || 25.0,
         discount: product.discount || 0,
+        slug: (product as any).slug || "",
       });
+      setSelectedDroplet((product as any).slug || "");
     }
   }, [product]);
 
@@ -84,6 +148,7 @@ export default function EditPlanDialog({
           storage: formData.storage,
         },
         discount: formData.discount > 0 ? formData.discount : null,
+        slug: formData.slug || null,
       });
 
       if (response.status === 200) {
@@ -100,6 +165,8 @@ export default function EditPlanDialog({
   };
 
   if (!isOpen || !product) return null;
+
+  const selectedDropletData = dropletSizes.find((d) => d.slug === selectedDroplet);
 
   return (
     <AnimatePresence>
@@ -175,6 +242,95 @@ export default function EditPlanDialog({
                 className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
               />
             </div>
+
+            {/* Droplet Size Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="droplet" className="text-sm font-medium text-neutral-300">
+                Droplet Size
+              </Label>
+              <Select
+                value={selectedDroplet}
+                onValueChange={handleDropletChange}
+                disabled={isLoading || isLoadingDroplets}
+              >
+                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500">
+                  <SelectValue placeholder={isLoadingDroplets ? "Loading droplets..." : "Select a droplet size (optional)"} />
+                </SelectTrigger>
+                <SelectContent className="bg-neutral-800 border-neutral-700">
+                  {dropletSizes.map((droplet) => (
+                    <SelectItem
+                      key={droplet.slug}
+                      value={droplet.slug}
+                      className="text-white hover:bg-neutral-700 focus:bg-neutral-700"
+                    >
+                      <div className="flex items-center justify-between w-full gap-4">
+                        <span className="font-medium">{droplet.slug}</span>
+                        <span className="text-xs text-neutral-400">
+                          {droplet.vcpus} vCPU • {Math.round(droplet.memory / 1024)}GB RAM • {droplet.disk}GB Disk
+                        </span>
+                        <span className="text-xs text-blue-400 font-semibold">
+                          ${droplet.price_monthly}/mo
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-neutral-500">
+                Change droplet to update resources automatically
+              </p>
+            </div>
+
+            {/* Droplet Details (if selected) */}
+            {selectedDropletData && (
+              <div className="p-4 bg-neutral-800/50 rounded-lg border border-neutral-700 space-y-3">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Server className="h-4 w-4 text-blue-400" />
+                  Current Droplet Details
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <Cpu className="h-3.5 w-3.5" />
+                      <span className="text-xs">CPU</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {selectedDropletData.vcpus} vCPU
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <Server className="h-3.5 w-3.5" />
+                      <span className="text-xs">RAM</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {Math.round(selectedDropletData.memory / 1024)} GB
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      <span className="text-xs">Disk</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {selectedDropletData.disk} GB
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      <span className="text-xs">DO Price</span>
+                    </div>
+                    <span className="text-sm font-semibold text-blue-400">
+                      ${selectedDropletData.price_monthly}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-400 italic">
+                  {selectedDropletData.description}
+                </p>
+              </div>
+            )}
 
             {/* Resources */}
             <div className="space-y-4">

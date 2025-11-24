@@ -74,6 +74,7 @@ CREATE TABLE products (
     resources JSONB NOT NULL,
     discount DECIMAL(5,2),
     price DECIMAL(10,2) NOT NULL,
+    slug TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

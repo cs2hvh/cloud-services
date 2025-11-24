@@ -1,14 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Plus, Loader2, Server, Cpu, HardDrive, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getErrorMessage } from "@/config/functions";
+
+interface DropletSize {
+  slug: string;
+  memory: number;
+  vcpus: number;
+  disk: number;
+  transfer: number;
+  price_monthly: number;
+  price_hourly: number;
+  regions: string[];
+  available: boolean;
+  description: string;
+}
 
 interface AddPlanDialogProps {
   isOpen: boolean;
@@ -22,6 +42,10 @@ export default function AddPlanDialog({
   onSuccess,
 }: AddPlanDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingDroplets, setIsLoadingDroplets] = useState(false);
+  const [dropletSizes, setDropletSizes] = useState<DropletSize[]>([]);
+  const [selectedDroplet, setSelectedDroplet] = useState<string>("");
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -30,7 +54,46 @@ export default function AddPlanDialog({
     storage: 50,
     price: 25.0,
     discount: 0,
+    slug: "",
   });
+
+  // Fetch droplet sizes when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDropletSizes();
+    }
+  }, [isOpen]);
+
+  const fetchDropletSizes = async () => {
+    setIsLoadingDroplets(true);
+    try {
+      const response = await api.get("/digitalocean/sizes?kubernetes=true");
+      if (response.status === 200 && response.data.sizes) {
+        setDropletSizes(response.data.sizes);
+      }
+    } catch (error) {
+      console.error("Error fetching droplet sizes:", error);
+      toast.error("Failed to load droplet sizes");
+    } finally {
+      setIsLoadingDroplets(false);
+    }
+  };
+
+  const handleDropletChange = (slug: string) => {
+    setSelectedDroplet(slug);
+    const droplet = dropletSizes.find((d) => d.slug === slug);
+    
+    if (droplet) {
+      setFormData({
+        ...formData,
+        cpu: droplet.vcpus,
+        ram: Math.round(droplet.memory / 1024), // Convert MB to GB
+        storage: droplet.disk,
+        price: droplet.price_monthly,
+        slug: droplet.slug,
+      });
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -41,7 +104,9 @@ export default function AddPlanDialog({
       storage: 50,
       price: 25.0,
       discount: 0,
+      slug: "",
     });
+    setSelectedDroplet("");
   };
 
   const handleClose = () => {
@@ -60,13 +125,13 @@ export default function AddPlanDialog({
       return;
     }
 
-    if (formData.price <= 0) {
-      toast.error("Price must be greater than 0");
+    if (!selectedDroplet) {
+      toast.error("Please select a droplet size");
       return;
     }
 
-    if (formData.cpu <= 0 || formData.ram <= 0 || formData.storage <= 0) {
-      toast.error("Resources must be greater than 0");
+    if (formData.price <= 0) {
+      toast.error("Price must be greater than 0");
       return;
     }
 
@@ -84,6 +149,7 @@ export default function AddPlanDialog({
           storage: formData.storage,
         },
         discount: formData.discount > 0 ? formData.discount : null,
+        slug: formData.slug,
       });
 
       if (response.status === 201) {
@@ -101,6 +167,8 @@ export default function AddPlanDialog({
   };
 
   if (!isOpen) return null;
+
+  const selectedDropletData = dropletSizes.find((d) => d.slug === selectedDroplet);
 
   return (
     <AnimatePresence>
@@ -179,78 +247,91 @@ export default function AddPlanDialog({
               />
             </div>
 
-            {/* Resources */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Resources</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* CPU */}
-                <div className="space-y-2">
-                  <Label htmlFor="cpu" className="text-sm font-medium text-neutral-300">
-                    CPU (vCPU) *
-                  </Label>
-                  <Input
-                    id="cpu"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.cpu}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        cpu: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-
-                {/* RAM */}
-                <div className="space-y-2">
-                  <Label htmlFor="ram" className="text-sm font-medium text-neutral-300">
-                    RAM (GB) *
-                  </Label>
-                  <Input
-                    id="ram"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.ram}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        ram: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-
-                {/* Storage */}
-                <div className="space-y-2">
-                  <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
-                    Storage (GB) *
-                  </Label>
-                  <Input
-                    id="storage"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.storage}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        storage: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-              </div>
+            {/* Droplet Size Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="droplet" className="text-sm font-medium text-neutral-300">
+                Droplet Size *
+              </Label>
+              <Select
+                value={selectedDroplet}
+                onValueChange={handleDropletChange}
+                disabled={isLoading || isLoadingDroplets}
+              >
+                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500">
+                  <SelectValue placeholder={isLoadingDroplets ? "Loading droplets..." : "Select a droplet size"} />
+                </SelectTrigger>
+                <SelectContent className="bg-neutral-800 border-neutral-700">
+                  {dropletSizes.map((droplet) => (
+                    <SelectItem
+                      key={droplet.slug}
+                      value={droplet.slug}
+                      className="text-white hover:bg-neutral-700 focus:bg-neutral-700"
+                    >
+                      <div className="flex items-center justify-between w-full gap-4">
+                        <span className="font-medium">{droplet.slug}</span>
+                        <span className="text-xs text-neutral-400">
+                          {droplet.vcpus} vCPU • {Math.round(droplet.memory / 1024)}GB RAM • {droplet.disk}GB Disk
+                        </span>
+                        <span className="text-xs text-green-400 font-semibold">
+                          ${droplet.price_monthly}/mo
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {/* Droplet Details (if selected) */}
+            {selectedDropletData && (
+              <div className="p-4 bg-neutral-800/50 rounded-lg border border-neutral-700 space-y-3">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Server className="h-4 w-4 text-green-400" />
+                  Droplet Details
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <Cpu className="h-3.5 w-3.5" />
+                      <span className="text-xs">CPU</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {selectedDropletData.vcpus} vCPU
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <Server className="h-3.5 w-3.5" />
+                      <span className="text-xs">RAM</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {Math.round(selectedDropletData.memory / 1024)} GB
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      <span className="text-xs">Disk</span>
+                    </div>
+                    <span className="text-sm font-semibold text-white">
+                      {selectedDropletData.disk} GB
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-neutral-400">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      <span className="text-xs">DO Price</span>
+                    </div>
+                    <span className="text-sm font-semibold text-green-400">
+                      ${selectedDropletData.price_monthly}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-400 italic">
+                  {selectedDropletData.description}
+                </p>
+              </div>
+            )}
 
             {/* Pricing */}
             <div className="space-y-4">
@@ -277,6 +358,9 @@ export default function AddPlanDialog({
                     disabled={isLoading}
                     className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
                   />
+                  <p className="text-xs text-neutral-500">
+                    You can customize the price (DigitalOcean base: ${selectedDropletData?.price_monthly || "N/A"})
+                  </p>
                 </div>
 
                 {/* Discount */}
@@ -317,8 +401,8 @@ export default function AddPlanDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="cursor-pointer bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading || !selectedDroplet}
+                className="cursor-pointer bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
               >
                 {isLoading ? (
                   <>

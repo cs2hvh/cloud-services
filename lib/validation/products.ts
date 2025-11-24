@@ -14,6 +14,7 @@ export const createProductSchema = z.object({
     storage: z.number().positive("Storage must be positive"),
   }),
   discount: z.number().min(0).max(100).optional().nullable(),
+  slug: z.string().optional().nullable(),
 });
 
 export const updateProductSchema = z.object({
@@ -29,6 +30,7 @@ export const updateProductSchema = z.object({
     })
     .optional(),
   discount: z.number().min(0).max(100).optional().nullable(),
+  slug: z.string().optional().nullable(),
 });
 
 export const deleteProductSchema = z.object({

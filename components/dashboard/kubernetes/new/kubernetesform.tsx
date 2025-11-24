@@ -305,7 +305,7 @@ const NewClusterPage = ({
       const payload = {
         names: nodeNames,
         region: state.selectedLocation, //form-dependent
-        size: `s-${selectedProduct?.resources.cpu}vcpu-${selectedProduct?.resources.ram}gb-amd`, //form-dependent
+        size: selectedProduct?.slug, //form-dependent
         image: "ubuntu-25-04-x64",
         backups: false,
         ipv6: true,

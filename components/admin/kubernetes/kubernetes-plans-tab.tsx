@@ -215,7 +215,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
           </Button>
         </div>
 
-        {/* <div className="flex gap-2">
+        <div className="flex gap-2">
           <Button
             onClick={() => setAddDialogOpen(true)}
             className="cursor-pointer bg-green-600 hover:bg-green-700 text-white border-0"
@@ -223,7 +223,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
             <Plus className="h-4 w-4 mr-2" />
             New Plan
           </Button>
-        </div> */}
+        </div>
       </div>
 
       {/* Products Table */}
@@ -271,16 +271,23 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                       className="hover:bg-neutral-800/30 transition-colors"
                     >
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <Package className="h-4 w-4 text-neutral-500" />
-                          <div>
-                            <div className="font-medium text-white text-sm">
-                              {product.name}
-                            </div>
-                            <div className="text-xs text-neutral-500 truncate max-w-[120px]">
-                              {product.id}
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-neutral-500" />
+                            <div>
+                              <div className="font-medium text-white text-sm">
+                                {product.name}
+                              </div>
+                              <div className="text-xs text-neutral-500 truncate max-w-[120px]">
+                                {product.id}
+                              </div>
                             </div>
                           </div>
+                          {(product as any).slug && (
+                            <Badge className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border-0 w-fit text-xs px-2 py-0.5">
+                              {(product as any).slug}
+                            </Badge>
+                          )}
                         </div>
                       </td>
 

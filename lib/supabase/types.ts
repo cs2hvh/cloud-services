@@ -384,6 +384,7 @@ export type Database = {
           resources: { cpu: number; ram: number; storage: number };
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
+          slug?:string;
         };
         Insert: {
           created_at?: string | null;
@@ -396,6 +397,7 @@ export type Database = {
           resources: { cpu: number; ram: number; storage: number };
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
+           slug?:string;
         };
         Update: {
           created_at?: string | null;
@@ -408,6 +410,7 @@ export type Database = {
           resources?: Json;
           sub?: string | null;
           type?: Database["public"]["Enums"]["product_type"];
+           slug?:string;
         };
         Relationships: [];
       };
