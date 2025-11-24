@@ -364,6 +364,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
               {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
+                  
                 </SelectItem>
               ))}
             </SelectContent>

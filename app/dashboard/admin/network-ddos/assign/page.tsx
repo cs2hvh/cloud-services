@@ -24,7 +24,7 @@ const AdminSpectrumAssignSuspense = async () => {
     username: user.username || undefined,
   })).filter(user => user.email); // Only include users with email
 
-   const spectrumApps = await Spectrum_Apps.get_all_app_name();
+   const spectrumApps = await Spectrum_Apps.get_all_app_name('admin');
 
   return (
     <SpectrumAppCreate 

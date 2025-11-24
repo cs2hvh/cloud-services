@@ -436,15 +436,15 @@ export async function deleteSpectrumApp(appId: string) {
   // Add project log if applicable
   const projectId = (localBefore.success && localBefore.data?.project_id) || null;
   if (projectId && typeof projectId === "string") {
-    const dnsInfo = localBefore.success && localBefore.data?.dns;
-    const appName = (dnsInfo && typeof dnsInfo === "object" && "name" in dnsInfo) 
-      ? String(dnsInfo.name) 
-      : appId;
+    // const dnsInfo = localBefore.success && localBefore.data?.dns;
+    // const appName = (dnsInfo && typeof dnsInfo === "object" && "name" in dnsInfo) 
+    //   ? String(dnsInfo.name) 
+    //   : appId;
     
     await Projects.add_log?.({
       project_id: projectId,
       event: "SpectrumDelete",
-      text: `Spectrum app '${appName}' deleted`,
+      text: `Spectrum app '${localBefore?.data?.dns?.original_name||""}' deleted`,
     });
   }
 

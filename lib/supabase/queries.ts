@@ -2207,18 +2207,21 @@ export const Spectrum_Apps = {
   },
 
   //get all app name for unique name check
-   get_all_app_name: async () => {
+   get_all_app_name: async (role:String) => {
     try {
-      const supabase = await createSSRClient();
+      const supabase = await (role==='admin'? createSSRClient():createWorkerClient());
       const { data, error } = await supabase
         .from("spectrum_apps")
         .select("dns->>original_name")
         .order("created_at", { ascending: false });
 
+
+        console.log(data, ".........check..data in get_all_app_name........");
+
         const names = data?.map(row => row.original_name);
 
 
-       // console.log(names, "...........data in get_all_app_name........");
+        console.log(names, "...........data in get_all_app_name........");
       if (error) return [];
       return names || [];
     } catch {

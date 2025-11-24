@@ -45,7 +45,7 @@ interface SpectrumAppCreateProps {
 }
 
 const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spectrumApps = [] }: SpectrumAppCreateProps) => {
-  //console.log(spectrumApps,"........spectrumApps in spectrum create component........");
+  console.log(spectrumApps,"........spectrumApps in spectrum create component........");
   const [currentStep, setCurrentStep] = useState(role === "admin" ? 0 : 1);
   const [isLoading, setIsLoading] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState("");

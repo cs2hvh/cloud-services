@@ -13,7 +13,7 @@ const DDoSProtectionNewSuspense = async () => {
   }
 
   const projects = await Projects.get_all_by_user(user?.id);
-  const spectrumApps = await Spectrum_Apps.get_all_app_name();
+  const spectrumApps = await Spectrum_Apps.get_all_app_name('user');
 
   return <DDoSProtectionSelect projects={projects} userId={user?.id} spectrumApps={spectrumApps} />;
 };

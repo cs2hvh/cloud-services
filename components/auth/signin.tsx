@@ -63,6 +63,7 @@ export function SignInForm() {
 
   // ---- email/password sign-in
   async function onSubmit(values: InputType) {
+    debugger
     setIsLoading(true);
     const res = await api.post("/auth/signin/email", {
       email: values.email,
