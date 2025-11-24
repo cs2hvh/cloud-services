@@ -7,10 +7,17 @@ import { ChevronRight, Globe } from "lucide-react";
 import { StepProps } from "./types";
 import { toast } from "sonner";
 
-export const DomainStep = ({ formData, onUpdate, onNext, onBack }: StepProps) => {
+export const DomainStep = ({ formData, onUpdate, onNext, onBack,spectrumApps }: StepProps) => {
+
+  //console.log(spectrumApps,"........spectrumApps in domain step........");
   const handleNext = () => {
     if (!formData.domain.trim()) {
       toast.error('Please enter a domain name');
+      return;
+    }
+
+    if(spectrumApps?.includes(formData.domain)){
+      toast.error('This domain name is already in use. Please choose a different one.');
       return;
     }
     

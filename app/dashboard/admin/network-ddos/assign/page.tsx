@@ -1,5 +1,5 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Projects, Users } from "@/lib/supabase/queries";
+import { Projects, Spectrum_Apps, Users } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -24,12 +24,15 @@ const AdminSpectrumAssignSuspense = async () => {
     username: user.username || undefined,
   })).filter(user => user.email); // Only include users with email
 
+   const spectrumApps = await Spectrum_Apps.get_all_app_name();
+
   return (
     <SpectrumAppCreate 
       projects={projects} 
       userId={checkAdmin.userId || ""} 
       role="admin" 
       allUsers={allUsers} 
+      spectrumApps={spectrumApps}
     />
   );
 };

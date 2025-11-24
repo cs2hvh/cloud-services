@@ -37,10 +37,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    console.log("Admin kubernetes cluster delete request received");
+   // console.log("Admin kubernetes cluster delete request received");
     const body = await req.json();
     const { cluster_id } = body;
-    console.log(cluster_id, "...........cluster_id to delete........");
+   // console.log(cluster_id, "...........cluster_id to delete........");
 
     if (!cluster_id) {
       return NextResponse.json(

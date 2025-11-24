@@ -2205,6 +2205,26 @@ export const Spectrum_Apps = {
       return [];
     }
   },
+
+  //get all app name for unique name check
+   get_all_app_name: async () => {
+    try {
+      const supabase = await createSSRClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .select("dns->>original_name")
+        .order("created_at", { ascending: false });
+
+        const names = data?.map(row => row.original_name);
+
+
+       // console.log(names, "...........data in get_all_app_name........");
+      if (error) return [];
+      return names || [];
+    } catch {
+      return [];
+    }
+  },
 };
 
 

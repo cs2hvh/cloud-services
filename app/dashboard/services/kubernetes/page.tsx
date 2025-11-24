@@ -55,15 +55,15 @@ const KubernetesPage = () => {
     if (res.ok) {
       const data = await res.json();
 
-      // Ensure the data is stringified as JSON
-      const jsonString = JSON.stringify(data.data, null, 2); // nicely formatted JSON
+      // Use the YAML string directly without JSON.stringify
+      const yamlContent = data.data;
 
-      const blob = new Blob([jsonString], { type: "application/json" });
+      const blob = new Blob([yamlContent], { type: "application/x-yaml" });
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${clusterId}.json`; // Change extension to .json
+      a.download = `${clusterId}.yaml`; // Change extension to .yaml
       a.click();
 
       // Optional: revoke the URL after some time
@@ -93,7 +93,7 @@ const KubernetesPage = () => {
             //set clusters
             setClusters(
               //response.data.filter((item: Cluster) => item.status === "ready")
-               response.data
+              response.data
             );
           }
         }
@@ -152,7 +152,6 @@ const KubernetesPage = () => {
               </thead>
               <tbody className="divide-y divide-slate-700/60 bg-white/5">
                 {clusters.map((c) => (
-                  
                   <tr
                     key={c.id}
                     className="hover:bg-slate-700/30 transition-colors duration-150"
@@ -235,7 +234,7 @@ const KubernetesPage = () => {
           <div className="mt-6">
             <Link
               //want to send clusters through link
-              
+
               href="/dashboard/services/kubernetes/new"
               className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
             >

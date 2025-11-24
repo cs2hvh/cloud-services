@@ -212,15 +212,15 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
     if (res.ok) {
       const data = await res.json();
 
-      // Ensure the data is stringified as JSON
-      const jsonString = JSON.stringify(data.data, null, 2); // nicely formatted JSON
+      // Use the YAML string directly without JSON.stringify
+      const yamlContent = data.data;
 
-      const blob = new Blob([jsonString], { type: "application/json" });
+      const blob = new Blob([yamlContent], { type: "application/x-yaml" });
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${clusterId}.json`; // Change extension to .json
+      a.download = `${clusterId}.yaml`; // Changed extension to .yaml
       a.click();
 
       // Optional: revoke the URL after some time
@@ -434,13 +434,16 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
           </div>
         </motion.div>
 
+         {
+          ready===false &&
+         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 md:p-8 space-y-5"
         >
-          {steps.map((s, idx) => {
+           {steps.map((s, idx) => {
             const done = status[s.key];
             const inProgress = !done && idx === currentIndex;
             if (ready === false) {
@@ -464,7 +467,7 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
             }
           })}
 
-          <div className="flex items-center justify-between text-xs text-white/60 pt-2">
+           <div className="flex items-center justify-between text-xs text-white/60 pt-2">
             <div className="flex items-center gap-2">
               {!allDone ? (
                 <span className="inline-flex items-center gap-2">
@@ -485,7 +488,11 @@ function SingleCluster({ clusterId }: { clusterId: string }) {
               )}
             </div>
           </div>
-        </motion.div>
+          </motion.div>
+         }
+
+         
+       
 
         {ready && (
           <>

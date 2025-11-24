@@ -25,7 +25,7 @@ const ClusterNewPage = async ({
   return (
     <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Single Cluster Page</h1>
+        <h1 className="text-3xl font-bold">Manage Your Cluster</h1>
         <p className="text-white/60">This page contains information about single cluster.</p>
       </div>
       

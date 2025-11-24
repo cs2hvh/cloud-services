@@ -28,7 +28,7 @@ import {
 } from "./steps";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
-import { Tables } from "@/lib/supabase/types";
+import { Admin_SpectrumApp, Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 
@@ -41,9 +41,11 @@ interface SpectrumAppCreateProps {
     email: string;
     username?: string;
   }>;
+  spectrumApps?: String[];
 }
 
-const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: SpectrumAppCreateProps) => {
+const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spectrumApps = [] }: SpectrumAppCreateProps) => {
+  //console.log(spectrumApps,"........spectrumApps in spectrum create component........");
   const [currentStep, setCurrentStep] = useState(role === "admin" ? 0 : 1);
   const [isLoading, setIsLoading] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState("");
@@ -463,6 +465,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [] }: S
           {/* Step 2: Domain */}
           {currentStep === 2 && (
             <DomainStep
+              spectrumApps={spectrumApps}
               formData={formData}
               onUpdate={updateFormData}
               onNext={handleNextStep}
