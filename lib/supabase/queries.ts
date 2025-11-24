@@ -2516,6 +2516,24 @@ export const Platform_Apps = {
     }
   },
 
+  list_all: async (): Promise<any[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(`[Platform_Apps] Error listing all apps: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_Apps] Error listing all apps: ${err}`);
+      return [];
+    }
+  },
+
   delete: async (app_id: string, user_id: string) => {
     try {
       const supabase = await createServiceClient();

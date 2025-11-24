@@ -15,7 +15,7 @@ export class PortAllocator {
 
     try {
       // Get all apps to find used ports
-      const apps = await Platform_Apps.list_by_owner(""); // Gets all apps via service role
+      const apps = await Platform_Apps.list_all();
       
       const usedPorts = apps
         .map((app: any) => app.port)
@@ -44,7 +44,7 @@ export class PortAllocator {
    */
   static async isAvailable(port: number): Promise<boolean> {
     try {
-      const apps = await Platform_Apps.list_by_owner("");
+      const apps = await Platform_Apps.list_all();
       const usedPorts = apps
         .map((app: any) => app.port)
         .filter((p: any) => p !== null && p !== undefined);

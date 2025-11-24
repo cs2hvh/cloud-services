@@ -197,6 +197,68 @@ export async function GET() {
   }
 }
 
+// Handle PATCH requests: update an existing Jenkins job configuration
+export async function PATCH(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const appId = searchParams.get("id");
+
+    if (!appId) {
+      return NextResponse.json({ error: "App ID required" }, { status: 400 });
+    }
+
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Access Denied" }, { status: 403 });
+    }
+
+    // Create service client for database operations
+    const supabase = await createServiceClient();
+
+    // Get app details
+    const { data: app, error: fetchError } = await supabase
+      .from("platform_apps")
+      .select("*")
+      .eq("id", appId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !app) {
+      return NextResponse.json({ error: "App not found" }, { status: 404 });
+    }
+
+    // Update Jenkins job with new pipeline configuration
+    try {
+      const jobName = `${app.name}-job`;
+      const pipeline = createNodeJsPipeline(
+        app.name,
+        app.repository_url,
+        app.branch,
+        app.port.toString()
+      );
+      
+      await getJenkinsClient().job.config(jobName, pipeline);
+      console.log(`Job "${jobName}" updated successfully!`);
+
+      return NextResponse.json({ 
+        message: "Job configuration updated successfully!",
+        jobName 
+      });
+    } catch (error) {
+      console.error("Error updating Jenkins job:", error);
+      return NextResponse.json({ 
+        error: "Failed to update Jenkins job configuration" 
+      }, { status: 500 });
+    }
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Something went wrong." }, {
+      status: 500,
+    });
+  }
+}
+
 // Handle DELETE requests: delete an app
 export async function DELETE(request: Request) {
   try {
