@@ -33,6 +33,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 interface Repository {
   id: string;
@@ -60,11 +61,17 @@ interface ProviderConnection {
 
 // Framework detection and build settings
 const frameworkConfigs = {
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install' },
-  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install' },
-  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install' },
-  'Static': { buildCommand: '', outputDir: '.', installCommand: '' },
+  'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
+  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
+  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
 };
 
 const AppDeploymentSelect = () => {
@@ -251,9 +258,25 @@ const AppDeploymentSelect = () => {
       toast.error('Please select a repository');
       return;
     }
-    if (currentStep === 3 && (!appName.trim() || !framework)) {
-      toast.error('Please enter app name and select framework');
-      return;
+    if (currentStep === 3) {
+      if (!appName.trim()) {
+        toast.error('Please enter an app name');
+        return;
+      }
+      if (!framework) {
+        toast.error('Please select a framework');
+        return;
+      }
+      // Validate app name format
+      const normalizedName = appName.toLowerCase().trim();
+      if (normalizedName.length < 3) {
+        toast.error('App name must be at least 3 characters long');
+        return;
+      }
+      if (normalizedName.length > 63) {
+        toast.error('App name must be at most 63 characters long');
+        return;
+      }
     }
     
     if (currentStep < 4) {
@@ -267,15 +290,82 @@ const AppDeploymentSelect = () => {
     }
   };
 
+  const router = useRouter();
+
   const onSubmit = async () => {
+    if (!selectedRepo || !selectedProvider || !appName || !framework) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Here you would make the API call to deploy the application
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate deployment
+      const selectedRepoData = repositories.find(r => r.id === selectedRepo);
+      if (!selectedRepoData) {
+        toast.error('Selected repository not found');
+        setIsLoading(false);
+        return;
+      }
+
+      // Normalize app name to meet validation requirements
+      const normalizedName = appName
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
+
+      // Ensure name starts and ends with alphanumeric
+      const validName = normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/) 
+        ? normalizedName 
+        : `app-${normalizedName}`.replace(/^-+|-+$/g, '');
+
+      if (validName.length < 3) {
+        toast.error('App name must be at least 3 characters long');
+        setIsLoading(false);
+        return;
+      }
+
+      // Construct proper repository URL based on provider
+      const repoUrlMap: Record<string, string> = {
+        github: `https://github.com/${selectedRepoData.fullName}`,
+        gitlab: `https://gitlab.com/${selectedRepoData.fullName}`,
+        bitbucket: `https://bitbucket.org/${selectedRepoData.fullName}`,
+      };
+
+      const payload = {
+        name: validName,
+        git_provider: selectedProvider as 'github' | 'gitlab' | 'bitbucket',
+        repository_id: selectedRepoData.id,
+        repository_name: selectedRepoData.fullName,
+        repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+        branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
+        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static',
+        build_command: buildCommand || undefined,
+        output_directory: outputDir || undefined,
+        env_vars: envVars.filter(ev => ev.key && ev.value),
+      };
+
+      const response = await fetch('/api/services/platform-apps/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create application');
+      }
+
       toast.success('Application deployment started successfully!');
-      // Redirect to deployment status page
-    } catch {
-      toast.error('Failed to start deployment. Please try again.');
+      
+      // Redirect to apps list page after a short delay
+      setTimeout(() => {
+        router.push('/dashboard/services/apps');
+      }, 1500);
+    } catch (error: any) {
+      console.error('Deployment error:', error);
+      toast.error(error.message || 'Failed to start deployment. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -565,19 +655,62 @@ const AppDeploymentSelect = () => {
                 </div>
 
                 <div>
-                  <Label className="text-white">Framework</Label>
+                  <Label className="text-white">Framework / Pipeline Type</Label>
                   <Select value={framework} onValueChange={setFramework}>
                     <SelectTrigger className="bg-white/10 border-white/20 text-white">
                       <SelectValue placeholder="Select framework" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Next.js">Next.js</SelectItem>
-                      <SelectItem value="React">React</SelectItem>
-                      <SelectItem value="Vue.js">Vue.js</SelectItem>
-                      <SelectItem value="Node.js">Node.js</SelectItem>
+                      {/* Test Pipeline */}
+                      <SelectItem value="simple-test">
+                        🧪 Simple Test (No Build/Deploy)
+                      </SelectItem>
+                      
+                      {/* Node.js Frameworks */}
+                      <SelectItem value="Next.js">🚀 Next.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="React">⚛️ React (bring Dockerfile)</SelectItem>
+                      <SelectItem value="Vue.js">💚 Vue.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="Node.js">📦 Node.js (bring Dockerfile)</SelectItem>
+                      <SelectItem value="express">🔥 Express.js (auto-Dockerfile)</SelectItem>
+                      
+                      {/* Python Frameworks */}
+                      <SelectItem value="python">🐍 Python (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="django">🎸 Django (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="flask">🌶️ Flask (auto-Dockerfile)</SelectItem>
+                      <SelectItem value="fastapi">⚡ FastAPI (auto-Dockerfile)</SelectItem>
+                      
+                      {/* Static */}
                       <SelectItem value="Static">Static Site</SelectItem>
                     </SelectContent>
                   </Select>
+                  
+                  {/* Framework-specific hints */}
+                  {framework === 'simple-test' && (
+                    <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                      <p className="text-xs text-blue-400 font-medium">🧪 Test Pipeline</p>
+                      <p className="text-xs text-blue-300 mt-1">
+                        Only clones repo and validates files. No builds or deployment. Perfect for testing Jenkins setup.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {(framework === 'express' || framework === 'python' || framework === 'django' || framework === 'flask' || framework === 'fastapi') && (
+                    <div className="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                      <p className="text-xs text-green-400 font-medium">✨ Auto-Dockerfile Generation</p>
+                      <p className="text-xs text-green-300 mt-1">
+                        Dockerfile auto-created if missing, then built by Kaniko in Kubernetes. Zero config needed!
+                      </p>
+                    </div>
+                  )}
+                  
+                  {(framework === 'Next.js' || framework === 'React' || framework === 'Vue.js' || framework === 'Node.js') && (
+                    <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                      <p className="text-xs text-yellow-400 font-medium">⚠️ Dockerfile Required</p>
+                      <p className="text-xs text-yellow-300 mt-1">
+                        Add a Dockerfile to your repo root. Will be built by Kaniko in Kubernetes cluster.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -608,8 +741,9 @@ const AppDeploymentSelect = () => {
                       Add Variable
                     </Button>
                   </div>
-                  {envVars.map((env, index) => (
-                    <div key={index} className="flex gap-2">
+                  <div className="space-y-2">
+                    {envVars.map((env, index) => (
+                      <div key={index} className="flex gap-2">
                       <Input
                         value={env.key}
                         onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
@@ -631,7 +765,8 @@ const AppDeploymentSelect = () => {
                         Remove
                       </Button>
                     </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
 
                 <div>

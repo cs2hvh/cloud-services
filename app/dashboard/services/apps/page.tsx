@@ -1,23 +1,158 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Code, Plus, Search, GitBranch, Globe } from "lucide-react";
+import { Code, Plus, Search, GitBranch, Globe, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, Trash2, Eye, Terminal } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
+import { useEffect, useState } from "react";
+
+interface App {
+  id: string;
+  name: string;
+  slug: string;
+  repository_url: string;
+  port: number;
+  status: string;
+  deployment_url?: string;
+  created_at: string;
+  project_id?: string;
+}
+
+interface BuildInfo {
+  number: number;
+  building: boolean;
+  result: 'SUCCESS' | 'FAILURE' | 'ABORTED' | 'UNSTABLE' | null;
+  duration: number;
+  timestamp: number;
+  url: string;
+}
 
 const ApplicationDeploymentPage = () => {
-  // No dummy data - will be replaced with actual deployed applications from backend
-  const deployedApps = [];
+  const [deployedApps, setDeployedApps] = useState<App[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedApp, setSelectedApp] = useState<string | null>(null);
+  const [buildInfo, setBuildInfo] = useState<Record<string, BuildInfo>>({});
+  const [buildLogs, setBuildLogs] = useState<Record<string, string>>({});
+  const [fetchedBuilds, setFetchedBuilds] = useState<Set<string>>(new Set());
 
-  // Mock stats for demonstration
+  // Fetch apps
+  useEffect(() => {
+    fetchApps();
+    const interval = setInterval(fetchApps, 10000); // Refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch build info for each app (only once per app)
+  useEffect(() => {
+    deployedApps.forEach(app => {
+      if (!fetchedBuilds.has(app.name)) {
+        fetchBuildInfo(app.name);
+        setFetchedBuilds(prev => new Set(prev).add(app.name));
+      }
+    });
+  }, [deployedApps, fetchedBuilds]);
+
+  // Refresh build info for apps that are building
+  useEffect(() => {
+    const buildingApps = deployedApps.filter(app => {
+      const build = buildInfo[app.name];
+      return build?.building || app.status === 'building';
+    });
+
+    if (buildingApps.length === 0) return;
+
+    const interval = setInterval(() => {
+      buildingApps.forEach(app => {
+        fetchBuildInfo(app.name);
+      });
+    }, 10000); // Check building apps every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [deployedApps, buildInfo]);
+
+  const fetchApps = async () => {
+    try {
+      const res = await fetch('/api/jenkins');
+      const data = await res.json();
+      setDeployedApps(data.apps || []);
+    } catch (error) {
+      console.error('Error fetching apps:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchBuildInfo = async (appName: string) => {
+    try {
+      const res = await fetch(`/api/jenkins/build-info?app=${appName}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBuildInfo(prev => ({ ...prev, [appName]: data }));
+      }
+    } catch (error) {
+      console.error(`Error fetching build info for ${appName}:`, error);
+    }
+  };
+
+  const fetchBuildLogs = async (appName: string, buildNumber: number) => {
+    try {
+      const res = await fetch(`/api/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`);
+      if (res.ok) {
+        const data = await res.json();
+        setBuildLogs(prev => ({ ...prev, [appName]: data.logs }));
+      }
+    } catch (error) {
+      console.error(`Error fetching build logs for ${appName}:`, error);
+    }
+  };
+
+  const deleteApp = async (appId: string, appName: string) => {
+    if (!confirm(`Are you sure you want to delete ${appName}?`)) return;
+    
+    try {
+      const res = await fetch(`/api/jenkins?id=${appId}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchApps();
+      }
+    } catch (error) {
+      console.error('Error deleting app:', error);
+    }
+  };
+
+  const getStatusBadge = (status: string, buildResult?: BuildInfo) => {
+    if (buildResult?.building) {
+      return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><Loader2 className="w-3 h-3 mr-1 animate-spin" />Building</Badge>;
+    }
+    
+    switch (status) {
+      case 'running':
+        return <Badge className="bg-green-500/20 text-green-400 border-green-500/30"><CheckCircle2 className="w-3 h-3 mr-1" />Running</Badge>;
+      case 'failed':
+        return <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><XCircle className="w-3 h-3 mr-1" />Failed</Badge>;
+      case 'building':
+        return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><Loader2 className="w-3 h-3 mr-1 animate-spin" />Building</Badge>;
+      default:
+        return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+    }
+  };
+
+  // Filter apps based on search
+  const filteredApps = deployedApps.filter(app => 
+    app.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Calculate stats
   const stats = {
-    totalApps: 0,
-    activeDeployments: 0,
-    totalBuilds: 0,
-    successRate: "100%"
+    totalApps: deployedApps.length,
+    activeDeployments: deployedApps.filter(app => app.status === 'running').length,
+    totalBuilds: deployedApps.length,
+    successRate: deployedApps.length > 0 
+      ? `${Math.round((deployedApps.filter(app => app.status === 'running').length / deployedApps.length) * 100)}%`
+      : "100%"
   };
 
   return (
@@ -120,7 +255,14 @@ const ApplicationDeploymentPage = () => {
 
       {/* Deployed Applications */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        {deployedApps.length > 0 ? (
+        {loading ? (
+          <Card className="bg-white/5 border-white/10">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-12 w-12 text-white/30 mb-4 animate-spin" />
+              <p className="text-white/60">Loading applications...</p>
+            </CardContent>
+          </Card>
+        ) : filteredApps.length > 0 ? (
           <div>
             {/* Search bar */}
             <div className="bg-white/5 p-4 rounded-lg mb-6 flex items-center justify-between">
@@ -129,14 +271,138 @@ const ApplicationDeploymentPage = () => {
                 <input 
                   type="text" 
                   placeholder="Search deployed applications..." 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full bg-transparent focus:outline-none text-white placeholder-white/50"
                 />
               </div>
+              <div className="text-sm text-white/60">
+                {filteredApps.length} of {deployedApps.length} apps
+              </div>
             </div>
             
-            {/* Deployed applications will be mapped here */}
+            {/* Deployed applications */}
             <div className="grid grid-cols-1 gap-4">
-              {/* Applications will be rendered here */}
+              {filteredApps.map((app) => {
+                const build = buildInfo[app.name];
+                const logs = buildLogs[app.name];
+                const isExpanded = selectedApp === app.name;
+                const domain = app.deployment_url ? new URL(app.deployment_url).hostname : `${app.slug}.uizb210.xyz`;
+
+                return (
+                  <Card key={app.id} className="bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h3 className="text-xl font-bold text-white">{app.name}</h3>
+                            {getStatusBadge(app.status, build)}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-white/60">
+                            <a 
+                              href={`https://${domain}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center hover:text-white transition-colors"
+                            >
+                              <Globe className="w-4 h-4 mr-1" />
+                              {domain}
+                              <ExternalLink className="w-3 h-3 ml-1" />
+                            </a>
+                            <span className="flex items-center">
+                              <GitBranch className="w-4 h-4 mr-1" />
+                              Port {app.port}
+                            </span>
+                            <span>
+                              Created {new Date(app.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          
+                          {build && (
+                            <div className="mt-3 flex items-center gap-4 text-sm">
+                              <span className="text-white/70">
+                                Build #{build.number}
+                              </span>
+                              {build.building ? (
+                                <span className="text-blue-400 flex items-center">
+                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  Building...
+                                </span>
+                              ) : build.result === 'SUCCESS' ? (
+                                <span className="text-green-400 flex items-center">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Success ({(build.duration / 1000).toFixed(0)}s)
+                                </span>
+                              ) : build.result === 'FAILURE' ? (
+                                <span className="text-red-400 flex items-center">
+                                  <XCircle className="w-3 h-3 mr-1" />
+                                  Failed
+                                </span>
+                              ) : (
+                                <span className="text-yellow-400">Pending</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (isExpanded) {
+                                setSelectedApp(null);
+                              } else {
+                                setSelectedApp(app.name);
+                                if (build) {
+                                  fetchBuildLogs(app.name, build.number);
+                                }
+                              }
+                            }}
+                            className="bg-white/5 border-white/10 hover:bg-white/20"
+                          >
+                            <Terminal className="w-4 h-4 mr-2" />
+                            {isExpanded ? 'Hide' : 'View'} Logs
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteApp(app.id, app.name)}
+                            className="bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Build Logs */}
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-4"
+                        >
+                          <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-semibold text-white flex items-center">
+                                <Terminal className="w-4 h-4 mr-2" />
+                                Build Logs {build && `(Build #${build.number})`}
+                              </h4>
+                              {build?.building && (
+                                <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                              )}
+                            </div>
+                            <pre className="text-xs text-white/80 font-mono overflow-x-auto max-h-96 overflow-y-auto">
+                              {logs || 'Loading logs...'}
+                            </pre>
+                          </div>
+                        </motion.div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -172,8 +438,10 @@ const ApplicationDeploymentPage = () => {
             { name: 'React', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg' },
             { name: 'Vue.js', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/vuejs/vuejs-original.svg' },
             { name: 'Node.js', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/nodejs/nodejs-original.svg' },
+            { name: 'Express.js', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/express/express-original.svg' },
             { name: 'Python', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg' },
-            { name: 'Go', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original.svg' },
+            { name: 'Django', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/django/django-plain.svg' },
+            { name: 'Flask', icon: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/flask/flask-original.svg' },
           ].map((framework) => (
             <Card key={framework.name} className="bg-white/5 border-white/10 text-center">
               <CardContent className="p-4">

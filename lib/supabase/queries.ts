@@ -2573,6 +2573,154 @@ export const ObjectSpaces = {
   },
 };
 
+// Platform Apps query helpers
+// Note: Types will be available after running supabase gen types
+export const Platform_Apps = {
+  create: async (payload: any) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update: async (app_id: string, patch: any) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", app_id)
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*")
+        .eq("id", app_id)
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  list_by_owner: async (user_id: string): Promise<any[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(`[Platform_Apps] Error listing apps: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_Apps] Error listing apps: ${err}`);
+      return [];
+    }
+  },
+
+  list_all: async (): Promise<any[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(`[Platform_Apps] Error listing all apps: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_Apps] Error listing all apps: ${err}`);
+      return [];
+    }
+  },
+
+  delete: async (app_id: string, user_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase
+        .from("platform_apps")
+        .delete()
+        .eq("id", app_id)
+        .eq("user_id", user_id);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  // Environment variables
+  set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // Delete existing env vars for this app
+      await supabase
+        .from("platform_app_env_vars")
+        .delete()
+        .eq("app_id", app_id);
+      
+      // Insert new env vars
+      if (env_vars.length > 0) {
+        const { error } = await supabase
+          .from("platform_app_env_vars")
+          .insert(env_vars.map(ev => ({ app_id, key: ev.key, value: ev.value })));
+        
+        if (error) return { success: false, error: error.message };
+      }
+      
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_env_vars: async (app_id: string): Promise<any[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_app_env_vars")
+        .select("*")
+        .eq("app_id", app_id);
+      if (error) {
+        console.error(`[Platform_Apps] Error getting env vars: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_Apps] Error getting env vars: ${err}`);
+      return [];
+    }
+  },
+};
+
 // Export the queries object for backward compatibility
 const api = {
   users: Users,
