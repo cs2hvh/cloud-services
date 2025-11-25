@@ -47,6 +47,12 @@ interface Repository {
   provider: 'github' | 'gitlab' | 'bitbucket';
 }
 
+interface Branch {
+  name: string;
+  commitSha: string;
+  protected: boolean;
+}
+
 interface GitProvider {
   id: 'github' | 'gitlab' | 'bitbucket';
   name: string;
@@ -78,7 +84,9 @@ const AppDeploymentSelect = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [repositories, setRepositories] = useState<Repository[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
   const [gitProviders, setGitProviders] = useState<GitProvider[]>([
     { id: 'github', name: 'GitHub', icon: '/github.png', connected: false },
     { id: 'gitlab', name: 'GitLab', icon: '/gitlab.png', connected: false },
@@ -172,6 +180,121 @@ const AppDeploymentSelect = () => {
     }
   }, []);
 
+  // Fetch branches from API when repository is selected
+  const fetchBranches = useCallback(async (provider: string, repo: Repository) => {
+    if (!provider || !repo) {
+      setBranches([]);
+      return;
+    }
+
+    setLoadingBranches(true);
+    try {
+      let apiEndpoint = '';
+      
+      if (provider === 'github') {
+        apiEndpoint = `/api/github/branches?repo=${encodeURIComponent(repo.fullName)}`;
+      } else if (provider === 'gitlab') {
+        apiEndpoint = `/api/gitlab/branches?project_id=${encodeURIComponent(repo.id)}`;
+      } else if (provider === 'bitbucket') {
+        apiEndpoint = `/api/bitbucket/branches?repo=${encodeURIComponent(repo.fullName)}`;
+      } else {
+        setBranches([]);
+        toast.error('Provider not supported for branch fetching');
+        return;
+      }
+
+      const response = await fetch(apiEndpoint);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setBranches(data.branches || []);
+        
+        if (data.branches?.length === 0) {
+          toast.info(`No branches found in the selected repository`);
+        } else if (data.note) {
+          toast.success(data.note);
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('Branch fetch error:', errorData);
+        toast.error(errorData.message || 'Failed to fetch branches');
+        setBranches([]);
+      }
+    } catch {
+      toast.error('Network error while fetching branches');
+      setBranches([]);
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, []);
+
+  // Detect framework from repository files
+  const detectFramework = useCallback(async (provider: string, repo: Repository, branch: string) => {
+    if (!provider || !repo) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/detect-framework', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          provider,
+          repoFullName: repo.fullName,
+          branch
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.framework) {
+          // Normalize framework name to match our configs
+          let normalizedFramework = data.framework;
+          
+          // Map detected frameworks to our config keys
+          const frameworkMap: Record<string, string> = {
+            'Next.js': 'Next.js',
+            'React': 'React',
+            'Vue.js': 'Vue.js',
+            'Angular': 'Static',
+            'Svelte': 'Static',
+            'Express': 'express',
+            'Node.js': 'Node.js',
+            'Django': 'django',
+            'Flask': 'flask',
+            'FastAPI': 'fastapi',
+            'Laravel': 'Static',
+            'Symfony': 'Static',
+            'Ruby on Rails': 'Static',
+            'PHP': 'Static',
+            'Python': 'python',
+            'python': 'python',
+            'Ruby': 'Static',
+            'Static': 'Static'
+          };
+          
+          normalizedFramework = frameworkMap[data.framework] || 'Static';
+          
+          setFramework(normalizedFramework);
+          
+          // Use additional detection metadata
+          if (data.hasDockerfile) {
+            console.log('Repository has Dockerfile');
+            // Could set a Docker-specific deployment option here
+          }
+          
+          if (data.buildSystem) {
+            console.log('Detected build system:', data.buildSystem);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Framework detection error:', error);
+    }
+  }, []);
+
   // Load provider status on component mount
   useEffect(() => {
     fetchProviderStatus();
@@ -185,6 +308,9 @@ const AppDeploymentSelect = () => {
     } else {
       setRepositories([]);
     }
+    // Clear branches when provider changes
+    setBranches([]);
+    setSelectedBranch('');
   }, [selectedProvider, fetchRepositories]);
 
   // Auto-fill build settings when framework is selected
@@ -203,9 +329,16 @@ const AppDeploymentSelect = () => {
       if (repo) {
         setAppName(repo.name);
         setSelectedBranch(repo.defaultBranch);
+        // Fetch branches for the selected repository
+        fetchBranches(selectedProvider, repo);
+        // Detect framework for the selected repository
+        detectFramework(selectedProvider, repo, repo.defaultBranch);
       }
+    } else {
+      setBranches([]);
+      setSelectedBranch('');
     }
-  }, [selectedRepo, repositories]);
+  }, [selectedRepo, repositories, selectedProvider, fetchBranches, detectFramework]);
 
   const connectProvider = async (providerId: string) => {
     setIsLoading(true);
@@ -645,72 +778,106 @@ const AppDeploymentSelect = () => {
                   </div>
                   <div>
                     <Label className="text-white">Deploy Branch</Label>
-                    <Input
-                      value={selectedBranch}
-                      onChange={(e) => setSelectedBranch(e.target.value)}
-                      placeholder="main"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
+                    {loadingBranches ? (
+                      <div className="flex items-center gap-2 p-3 bg-white/10 rounded-md">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span className="text-white/60 text-sm">Loading branches...</span>
+                      </div>
+                    ) : branches.length > 0 ? (
+                      <div className="space-y-2">
+                        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                          <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                            <SelectValue placeholder="Select branch" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {branches.map((branch) => (
+                              <SelectItem key={branch.name} value={branch.name}>
+                                <div className="flex items-center gap-2">
+                                  <span>{branch.name}</span>
+                                  {branch.protected && (
+                                    <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/30">
+                                      Protected
+                                    </Badge>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          onClick={() => selectedRepoData && fetchBranches(selectedProvider, selectedRepoData)}
+                          variant="outline" 
+                          size="sm"
+                          className="border-white/20 text-white hover:bg-white/10"
+                          disabled={loadingBranches}
+                        >
+                          <Loader2 className={`w-4 h-4 mr-2 ${loadingBranches ? 'animate-spin' : 'hidden'}`} />
+                          Refresh Branches
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Input
+                          value={selectedBranch}
+                          onChange={(e) => setSelectedBranch(e.target.value)}
+                          placeholder="main"
+                          className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                        />
+                        <Button 
+                          onClick={() => selectedRepoData && fetchBranches(selectedProvider, selectedRepoData)}
+                          variant="outline" 
+                          size="sm"
+                          className="border-white/20 text-white hover:bg-white/10"
+                          disabled={loadingBranches}
+                        >
+                          <Loader2 className={`w-4 h-4 mr-2 ${loadingBranches ? 'animate-spin' : 'hidden'}`} />
+                          Refresh Branches
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div>
                   <Label className="text-white">Framework / Pipeline Type</Label>
-                  <Select value={framework} onValueChange={setFramework}>
-                    <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                      <SelectValue placeholder="Select framework" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Test Pipeline */}
-                      <SelectItem value="simple-test">
-                        🧪 Simple Test (No Build/Deploy)
-                      </SelectItem>
-                      
-                      {/* Node.js Frameworks */}
-                      <SelectItem value="Next.js">🚀 Next.js (bring Dockerfile)</SelectItem>
-                      <SelectItem value="React">⚛️ React (bring Dockerfile)</SelectItem>
-                      <SelectItem value="Vue.js">💚 Vue.js (bring Dockerfile)</SelectItem>
-                      <SelectItem value="Node.js">📦 Node.js (bring Dockerfile)</SelectItem>
-                      <SelectItem value="express">🔥 Express.js (auto-Dockerfile)</SelectItem>
-                      
-                      {/* Python Frameworks */}
-                      <SelectItem value="python">🐍 Python (auto-Dockerfile)</SelectItem>
-                      <SelectItem value="django">🎸 Django (auto-Dockerfile)</SelectItem>
-                      <SelectItem value="flask">🌶️ Flask (auto-Dockerfile)</SelectItem>
-                      <SelectItem value="fastapi">⚡ FastAPI (auto-Dockerfile)</SelectItem>
-                      
-                      {/* Static */}
-                      <SelectItem value="Static">Static Site</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={framework} onValueChange={setFramework}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white flex-1">
+                        <SelectValue placeholder="Select framework" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {/* Test Pipeline */}
+                        <SelectItem value="simple-test">
+                           Simple Test (No Build/Deploy)
+                        </SelectItem>
+                        
+                        {/* Node.js Frameworks */}
+                        <SelectItem value="Next.js"> Next.js (bring Dockerfile)</SelectItem>
+                        <SelectItem value="React"> React (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Vue.js"> Vue.js (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
+                        <SelectItem value="express"> Express.js (auto-Dockerfile)</SelectItem>
+                        
+                        {/* Python Frameworks */}
+                        <SelectItem value="python"> Python (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="django"> Django (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="flask"> Flask (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="fastapi"> FastAPI (auto-Dockerfile)</SelectItem>
+                        
+                        {/* Static */}
+                        <SelectItem value="Static">Static Site</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button 
+                      onClick={() => selectedRepoData && detectFramework(selectedProvider, selectedRepoData, selectedBranch)}
+                      variant="outline" 
+                      size="sm"
+                      className="border-white/20 text-white hover:bg-white/10"
+                    >
+                      Detect
+                    </Button>
+                  </div>
                   
-                  {/* Framework-specific hints */}
-                  {framework === 'simple-test' && (
-                    <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                      <p className="text-xs text-blue-400 font-medium">🧪 Test Pipeline</p>
-                      <p className="text-xs text-blue-300 mt-1">
-                        Only clones repo and validates files. No builds or deployment. Perfect for testing Jenkins setup.
-                      </p>
-                    </div>
-                  )}
-                  
-                  {(framework === 'express' || framework === 'python' || framework === 'django' || framework === 'flask' || framework === 'fastapi') && (
-                    <div className="mt-2 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                      <p className="text-xs text-green-400 font-medium">✨ Auto-Dockerfile Generation</p>
-                      <p className="text-xs text-green-300 mt-1">
-                        Dockerfile auto-created if missing, then built by Kaniko in Kubernetes. Zero config needed!
-                      </p>
-                    </div>
-                  )}
-                  
-                  {(framework === 'Next.js' || framework === 'React' || framework === 'Vue.js' || framework === 'Node.js') && (
-                    <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                      <p className="text-xs text-yellow-400 font-medium">⚠️ Dockerfile Required</p>
-                      <p className="text-xs text-yellow-300 mt-1">
-                        Add a Dockerfile to your repo root. Will be built by Kaniko in Kubernetes cluster.
-                      </p>
-                    </div>
-                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
