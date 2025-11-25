@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   if (parsed.data.projectId) {
     await Projects.add_log({
       project_id: parsed.data.projectId,
-      event: "Box",
+      event: "Kubernetes Create",
       text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`,
      
     }, body.role);

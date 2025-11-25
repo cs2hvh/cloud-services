@@ -82,7 +82,7 @@ const Dashboard = ({
   const onlineDatabases = data.database_clusters.filter(db => db.status === 'online').length;
   const readyK8sClusters = data.kubernetes_clusters.filter(k8s => k8s.status === 'ready').length;
   const spectrum_apps = data.spectrum_apps.filter(app => app.status === 'updated'||'created').length;
-  const object_storage = data.object_storage.filter(object=>object.status==='active');
+  const object_storage = data.object_storage.filter(object=>object.status==='active').length;
 
   const stats = [
     {
@@ -105,7 +105,7 @@ const Dashboard = ({
     },
     {
       title: "Active Services",
-      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage.length).toString(),
+      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage).toString(),
       icon: ShieldCheck,
       color: "bg-gradient-to-br from-purple-600 to-blue-600",
     },
@@ -179,7 +179,9 @@ const Dashboard = ({
     { name: 'Game', value: data.game_servers.length },
     { name: 'DB', value: data.database_clusters.length },
     { name: 'K8s', value: data.kubernetes_clusters.length },
-    { name: 'Active', value: activeGameServers + onlineDatabases + readyK8sClusters },
+    { name: 'Bucket', value: object_storage  },
+    { name: 'Network-ddos', value: spectrum_apps },
+    { name: 'Active', value: activeGameServers + onlineDatabases + readyK8sClusters+spectrum_apps+object_storage },
   ];
 
   return (

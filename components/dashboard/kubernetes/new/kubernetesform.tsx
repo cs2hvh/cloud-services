@@ -22,6 +22,7 @@ import {
   //   MapPin,
   Server,
   User,
+  Box,
 } from "lucide-react";
 import Image from "next/image";
 import { Input } from "@/components/ui/input";
@@ -836,45 +837,74 @@ const NewClusterPage = ({
                       />
                       <Label
                         htmlFor={plan.name || ""}
-                        className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                        className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-4 sm:p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
                       >
-                        {plan.name && (
-                          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-white/10">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Cpu className="w-4 h-4 text-blue-400" />
-                                <span className="text-xs text-white/60">
-                                  CPU
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {plan.resources.cpu || 0} vCPU
-                              </p>
+                        {/* Plan Header */}
+                        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 mb-4">
+                          <div className="flex items-start gap-3 flex-1">
+                            <div className="p-2 bg-blue-500/20 rounded-lg shrink-0">
+                              <Box className="w-5 h-5 text-blue-400" />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <Server className="w-4 h-4 text-green-400" />
-                                <span className="text-xs text-white/60">
-                                  RAM
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {plan.resources.ram || 0} GB
-                              </p>
-                            </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <HardDrive className="w-4 h-4 text-purple-400" />
-                                <span className="text-xs text-white/60">
-                                  Storage
-                                </span>
-                              </div>
-                              <p className="font-semibold text-white">
-                                {plan.resources.storage || 0} GB
-                              </p>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-base sm:text-lg font-bold text-white mb-1 truncate">
+                                {plan.name}
+                              </h3>
+                              {plan.description && (
+                                <p className="text-xs sm:text-sm text-white/60 line-clamp-2">
+                                  {plan.description}
+                                </p>
+                              )}
                             </div>
                           </div>
-                        )}
+                          <div className="text-left sm:text-right ml-11 sm:ml-4 shrink-0">
+                            <div className="text-xl sm:text-2xl font-bold text-green-400">
+                              ${plan.price?.toFixed(2) || "0.00"}
+                            </div>
+                            <div className="text-xs text-white/60">per month</div>
+                            {plan.discount && plan.discount > 0 && (
+                              <div className="text-xs text-orange-400 mt-1">
+                                {plan.discount}% off
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Resources Grid */}
+                        <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-white/10">
+                          <div>
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                              <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
+                              <span className="text-[10px] sm:text-xs text-white/60">
+                                CPU
+                              </span>
+                            </div>
+                            <p className="text-sm sm:text-base font-semibold text-white truncate">
+                              {plan.resources.cpu || 0} vCPU
+                            </p>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                              <Server className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400 shrink-0" />
+                              <span className="text-[10px] sm:text-xs text-white/60">
+                                RAM
+                              </span>
+                            </div>
+                            <p className="text-sm sm:text-base font-semibold text-white truncate">
+                              {plan.resources.ram || 0} GB
+                            </p>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                              <HardDrive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400 shrink-0" />
+                              <span className="text-[10px] sm:text-xs text-white/60">
+                                Storage
+                              </span>
+                            </div>
+                            <p className="text-sm sm:text-base font-semibold text-white truncate">
+                              {plan.resources.storage || 0} GB
+                            </p>
+                          </div>
+                        </div>
                       </Label>
                     </div>
                   ))}
