@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getValidGitHubToken, validateGitHubToken } from "@/lib/github/token-refresh";
 
 interface GitHubRepository {
   id: number;
@@ -87,17 +88,12 @@ export async function GET() {
       accessToken = githubIdentity.identity_data.provider_token;
       // console.log('Found token in identity_data.provider_token');
     }
-    // Last resort: check the github_tokens table (for linked accounts)
+    // Last resort: check the github_tokens table (for linked accounts) with refresh logic
     else {
-      const { data: tokenData } = await supabase
-        .from('github_tokens')
-        .select('access_token')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (tokenData?.access_token) {
-        accessToken = tokenData.access_token;
-        // console.log('Found token in github_tokens table');
+      const validToken = await getValidGitHubToken(user.id);
+      if (validToken) {
+        accessToken = validToken;
+        // console.log('Found valid token via refresh logic');
       }
     }
 
@@ -105,15 +101,9 @@ export async function GET() {
       // console.log('Using provider token for GitHub API access');
       
       // Test the token first
-      const userResponse = await fetch('https://api.github.com/user', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'AhuraSense-Cloud-Platform'
-        }
-      });
-
-      if (userResponse.ok) {
+      const tokenValid = await validateGitHubToken(accessToken);
+      
+      if (tokenValid) {
         // Token works, fetch all repositories
         const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
           headers: {
@@ -148,7 +138,47 @@ export async function GET() {
           }, { status: 200 });
         }
       } else {
-        // console.log('Provider token is invalid, falling back to public repos');
+        // Token is invalid, try to get a refreshed token
+        console.log('[GitHub Repositories] Token invalid, attempting to refresh');
+        const refreshedToken = await getValidGitHubToken(user.id);
+        if (refreshedToken) {
+          accessToken = refreshedToken;
+          // Try again with refreshed token
+          const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Accept': 'application/vnd.github.v3+json',
+              'User-Agent': 'AhuraSense-Cloud-Platform'
+            }
+          });
+
+          if (response.ok) {
+            const repos: GitHubRepository[] = await response.json();
+            const privateCount = repos.filter((repo: GitHubRepository) => repo.private).length;
+            console.log(`Successfully fetched ${repos.length} repositories (${privateCount} private) from GitHub with refreshed token`);
+            
+            const transformedRepos = repos.map((repo: GitHubRepository) => ({
+              id: repo.id.toString(),
+              name: repo.name,
+              fullName: repo.full_name,
+              description: repo.description || '',
+              private: repo.private,
+              defaultBranch: repo.default_branch,
+              language: repo.language || 'Unknown',
+              updatedAt: repo.updated_at,
+              provider: 'github',
+              cloneUrl: repo.clone_url,
+              htmlUrl: repo.html_url
+            }));
+
+            return Response.json({ 
+              repositories: transformedRepos,
+              note: `Loaded ${transformedRepos.length} repositories including ${privateCount} private repositories`
+            }, { status: 200 });
+          }
+        } else {
+          console.log('[GitHub Repositories] Unable to refresh token');
+        }
       }
     }
 

@@ -83,16 +83,13 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      // Last resort: check the github_tokens table
+      // Last resort: check the github_tokens table with refresh logic
       if (!accessToken) {
-        const { data: tokenData } = await serviceSupabase
-          .from('github_tokens')
-          .select('access_token')
-          .eq('user_id', auth.user!.id)
-          .single();
-        
-        if (tokenData?.access_token) {
-          accessToken = tokenData.access_token;
+        // Import the token refresh utility
+        const { getValidGitHubToken } = await import('@/lib/github/token-refresh');
+        const validToken = await getValidGitHubToken(auth.user!.id);
+        if (validToken) {
+          accessToken = validToken;
         }
       }
       

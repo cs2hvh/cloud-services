@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
                 github_username: githubUser.login,
                 github_user_id: githubUser.id,
                 scopes: "repo user:email",
+                refresh_token: data.session.provider_refresh_token, // Store refresh token if available
+                expires_at: data.session.expires_at ? new Date(data.session.expires_at).toISOString() : null, // Store expiration if available
                 updated_at: new Date().toISOString(),
               });
 

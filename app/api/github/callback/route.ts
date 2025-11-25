@@ -82,6 +82,8 @@ export async function GET(request: NextRequest) {
         github_username: githubUser.login,
         github_user_id: githubUser.id,
         scopes: tokenData.scope,
+        refresh_token: tokenData.refresh_token, // Store refresh token if provided
+        expires_at: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null, // Calculate expiration time
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       });
