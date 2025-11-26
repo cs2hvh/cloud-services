@@ -76,6 +76,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   // Error handler utility
   const getErrorMessage = (error: unknown, defaultMessage: string): string => {
+    debugger
     if (error instanceof AxiosError) {
       return error.response?.data?.error || defaultMessage;
     }
@@ -175,6 +176,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setDeleteUserModal({ show: false, username: "", confirmText: "" });
         await fetchUsers();
       }
+     
     } catch (error) {
       console.error("[handleDeleteUser] Error:", error);
       toast.error(getErrorMessage(error, "Failed to delete user"));
@@ -236,7 +238,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   // Delete database
   const handleDeleteDatabase = async () => {
-    debugger
+   // debugger
     if (deleteDbModal.confirmText !== deleteDbModal.dbName) {
       toast.error("Database name does not match!");
       return;
@@ -244,6 +246,12 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
     setDeletingDb(true);
     try {
+
+      if(deleteDbModal.dbName==='defaultdb'||deleteDbModal.dbName==='admin'){
+        toast.error("Cannot delete system database!");
+        setDeletingDb(false);
+        return;
+      }
       const response = await api.post("/services/database/dbs/delete", {
         cluster_id: clusterId,
         db_name: deleteDbModal.dbName,
@@ -328,7 +336,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                       <p className="text-white font-semibold mb-1 truncate">
                         {user.name}
                       </p>
-                      <div className="flex items-center gap-2">
+                  {
+                    user.password &&
+                        <div className="flex items-center gap-2">
                         <code className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded font-mono truncate flex-1">
                           {showPasswords[user.name]
                             ? user.password
@@ -350,6 +360,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                           )}
                         </button>
                       </div>
+                  }
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button

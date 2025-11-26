@@ -417,7 +417,7 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedProject(database.project_id || "")}
                   disabled={loading === "project"}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -515,7 +515,7 @@ export const SettingsTab = ({
                 <button
                   onClick={handleUpdateMaintenanceWindow}
                   disabled={loading === "maintenance"}
-                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
                 >
                   {loading === "maintenance" ? (
                     <>
@@ -537,7 +537,7 @@ export const SettingsTab = ({
                     }
                   }}
                   disabled={loading === "maintenance"}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -635,7 +635,7 @@ export const SettingsTab = ({
                     selectedRegion === database.region ||
                     isMigrating
                   }
-                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
                 >
                   {loading === "region" ? (
                     <>
@@ -652,7 +652,7 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedRegion(database.region || "")}
                   disabled={loading === "region" || isMigrating}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -760,7 +760,7 @@ export const SettingsTab = ({
                     !selectedSize ||
                     selectedSize === database.size
                   }
-                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
                 >
                   {loading === "storage" ? (
                     <>
@@ -777,7 +777,7 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedSize(database.size || "")}
                   disabled={loading === "storage"}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />
                   Cancel
@@ -852,7 +852,7 @@ export const SettingsTab = ({
               <button
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={loading === "delete"}
-                className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
               >
                 <X className="h-4 w-4" />
                 Cancel

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getDropletSizes,
-  getKubernetesSuitableSizes,
   DropletSize,
 } from "@/lib/digitalocean/api/sizes";
 

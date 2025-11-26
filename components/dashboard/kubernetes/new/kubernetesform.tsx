@@ -21,7 +21,6 @@ import {
   Loader2,
   //   MapPin,
   Server,
-  User,
   Box,
 } from "lucide-react";
 import Image from "next/image";
@@ -126,30 +125,30 @@ const NewClusterPage = ({
     user: undefined,
   });
   //we need to make plan dynamic
-  const [availablePlans] = useState([
-    {
-      planId: "Shared",
-      label: "s-1vcpu-1gb-amd",
-      ram: 1,
-      cpu: 1,
-      storage: 25,
-      processor: "amd",
-    },
-    {
-      planId: "Shared",
-      label: "s-2vcpu-2gb-amd",
-      ram: 2,
-      cpu: 1,
-      storage: 25,
-    },
-    {
-      planId: "Shared",
-      label: "s-2vcpu-4gb-amd",
-      ram: 4,
-      cpu: 2,
-      storage: 25,
-    },
-  ]);
+  // const [availablePlans] = useState([
+  //   {
+  //     planId: "Shared",
+  //     label: "s-1vcpu-1gb-amd",
+  //     ram: 1,
+  //     cpu: 1,
+  //     storage: 25,
+  //     processor: "amd",
+  //   },
+  //   {
+  //     planId: "Shared",
+  //     label: "s-2vcpu-2gb-amd",
+  //     ram: 2,
+  //     cpu: 1,
+  //     storage: 25,
+  //   },
+  //   {
+  //     planId: "Shared",
+  //     label: "s-2vcpu-4gb-amd",
+  //     ram: 4,
+  //     cpu: 2,
+  //     storage: 25,
+  //   },
+  // ]);
 
   const [state, setState] = useState({
     selectedUser: role === "admin" ? "" : userId,
@@ -686,7 +685,18 @@ const NewClusterPage = ({
                   )}
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-end">
+              <CardFooter className={role==='admin'?"flex justify-between":"flex justify-end"}>
+                {
+                  role === "admin" && (
+                     <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                  )
+                }
                 <Button
                   onClick={handleNextStep}
                   className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"

@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+    console.log(response.status,".............response data...........");
   } catch (err: unknown) {
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;

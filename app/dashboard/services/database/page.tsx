@@ -121,22 +121,22 @@ const DatabasePage = () => {
         <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-700">
-              <thead className="bg-slate-700/50 text-white">
+              <thead className="bg-neutral-800/50 border-b border-neutral-800">
                 <tr>
-                  <Th>Cluster</Th>
-                  <Th>DB_Type</Th>
-                  <Th>Location</Th>
-                  <Th>Date</Th>
-                  <Th>Version</Th>
-                  <Th>Status</Th>
-                  <Th>Actions</Th>
+                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Cluster Name</th>
+                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Engine</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Location</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Date</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Version</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Status</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-700/60 bg-white/5">
+              <tbody className="divide-y divide-neutral-800">
                 {clusters.map((c) => (
                   <tr
                     key={c.id}
-                    className="hover:bg-slate-700/30 transition-colors duration-150"
+                    className="hover:bg-neutral-800/30 transition-colors"
                   >
                     <Td>
                       <div className="font-medium text-white">{c.name}</div>
@@ -203,26 +203,7 @@ const DatabasePage = () => {
                     </Td>
 
                     <Td>
-                      {c.status === "migrating" ? (
-                        <div className="relative group">
-                          <button
-                            disabled
-                            className="
-                              inline-flex items-center justify-center
-                              rounded-md border border-slate-600
-                              px-3 py-1.5 text-sm font-medium
-                              text-slate-500 cursor-not-allowed
-                              w-full sm:w-auto
-                            "
-                          >
-                            View Cluster
-                          </button>
-                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-1 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-                            Cluster is currently migrating
-                          </div>
-                        </div>
-                      ) : (
-                        <Link
+                      <Link
                           href={{
                             pathname: `/dashboard/services/database/clusters/${encodeURIComponent(c.cluster_id)}`,
                             query: { clusterStatus: c.status },
@@ -240,7 +221,6 @@ const DatabasePage = () => {
                         >
                           View Cluster
                         </Link>
-                      )}
                     </Td>
                   </tr>
                 ))}
@@ -275,16 +255,7 @@ const DatabasePage = () => {
   );
 };
 
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600"
-    >
-      {children}
-    </th>
-  );
-}
+
 function Td({ children }: { children: React.ReactNode }) {
   return (
     <td className="px-6 py-4 text-sm text-slate-800 align-middle">

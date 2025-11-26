@@ -20,14 +20,13 @@ import {
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Zap, Lock, Shield, Network, Key, AlertCircle } from "lucide-react";
+import {  Shield, Network, Key } from "lucide-react";
 import { StepProps } from "./types";
 import { Separator } from "@/components/ui/separator";
 

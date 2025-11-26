@@ -7,15 +7,11 @@ import {
   // BookOpen,
   // Database,
   Archive,
-  BookOpen,
 } from "lucide-react";
 import Link from "next/link";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Tables } from "@/lib/supabase/types";
 import BucketsTable from "./buckets-table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Documentation from "./api-docs";
-
 interface ObjectStorageMainProps {
   buckets: ObjectSpaceBucket[];
   projects: Tables<"projects">[];
@@ -24,8 +20,6 @@ interface ObjectStorageMainProps {
 
 const ObjectStorageMain = ({
   buckets,
-  projects,
-  userId,
 }: ObjectStorageMainProps) => {
   return (
     <>

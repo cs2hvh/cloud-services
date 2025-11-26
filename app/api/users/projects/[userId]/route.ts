@@ -1,5 +1,5 @@
 import { Projects, Users } from "@/lib/supabase/queries";
-import { createClient, createSSRClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 // Helper function to check if user is admin

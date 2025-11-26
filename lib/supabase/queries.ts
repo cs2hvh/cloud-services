@@ -1,5 +1,5 @@
 // import { Encryption } from "@/config/functions";
-import Error from "next/error";
+// import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
 import {
@@ -2207,7 +2207,7 @@ export const Spectrum_Apps = {
   },
 
   //get all app name for unique name check
-   get_all_app_name: async (role:String) => {
+   get_all_app_name: async (role:string) => {
     try {
       const supabase = await (role==='admin'? createSSRClient():createWorkerClient());
       const { data, error } = await supabase

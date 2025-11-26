@@ -713,7 +713,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: Adm
                   onClick={onSubmit}
                   size="lg"
                   disabled={isLoading || !termsAccepted}
-                  className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
                 >
                   {isLoading ? (
                     <>

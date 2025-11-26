@@ -300,7 +300,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
         object_count: 0,
       };
 
-      const response = await axios.post("/api/services/object-storage/buckets/create", payload);
+      await axios.post("/api/services/object-storage/buckets/create", payload);
 
       toast.success("Bucket created successfully!");
       router.push(role==="admin" ? "/dashboard/admin/object-storage" : "/dashboard/services/object-storage");

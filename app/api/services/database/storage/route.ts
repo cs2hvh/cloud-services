@@ -24,8 +24,9 @@ export async function PUT(req: NextRequest) {
     const validatedData = validation.data;
 
     const payload = {
-      size: validatedData.size,
-      num_nodes: 1
+      size: 'db-s-1vcpu-2gb',
+      num_nodes: 1,
+      storage_size_mib:36239
     };
 
     // Resize database cluster via DigitalOcean API

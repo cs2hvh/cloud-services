@@ -182,7 +182,7 @@ export const OverviewTab = ({
     <div className="flex gap-2 mb-4">
       <button
         onClick={() => setActiveTab("public")}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+        className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
           activeTab === "public"
             ? "bg-white text-black shadow-md"
             : "bg-white/10 text-slate-400 hover:bg-white/20"
@@ -194,7 +194,7 @@ export const OverviewTab = ({
       {database.private_connection && (
         <button
           onClick={() => setActiveTab("private")}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+          className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
             activeTab === "private"
               ? "bg-white text-black shadow-md"
               : "bg-white/10 text-slate-400 hover:bg-white/20"
@@ -256,7 +256,9 @@ export const OverviewTab = ({
             )
           }
         />
-        <ConnectionField
+       {
+        database.engine!='mongodb' &&
+         <ConnectionField
           label="Password"
           value={safeStringValue(database.public_connection?.password)}
           isPassword
@@ -269,6 +271,7 @@ export const OverviewTab = ({
             )
           }
         />
+       }
       </div>
 
       {/* Right Section */}
@@ -352,7 +355,9 @@ export const OverviewTab = ({
     </motion.section>
 
     {/* CA Certificate */}
-    <motion.section
+    {
+      database.engine !== "mongodb" && (
+        <motion.section
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.4 }}
@@ -381,13 +386,15 @@ export const OverviewTab = ({
               database.ca_certificate
             )
           }
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-colors"
+          className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-colors"
         >
           <Download className="h-4 w-4" />
           Download Certificate
         </button>
       </div>
     </motion.section>
+      )
+    }
   </div>
 
   {/* Section 5: Monthly Cost */}

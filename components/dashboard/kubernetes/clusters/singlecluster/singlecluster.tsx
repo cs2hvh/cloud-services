@@ -50,8 +50,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Label,
-  Legend,
 } from "recharts";
 // import { read } from "fs";
 
@@ -173,9 +171,9 @@ function SingleCluster({
   const [insightLoading, setInsightLoading] = useState(false);
 
   // Settings tab state
-  const [projects, setProjects] = useState<Project[]>(userProjects);
+  const [projects] = useState<Project[]>(userProjects);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("select");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
+  // const [currentUserId, setCurrentUserId] = useState<string>("");
   const [currentProjectId, setCurrentProjectId] = useState<string>("");
 
   // Delete confirmation dialogs state
@@ -310,7 +308,7 @@ function SingleCluster({
   const onDeleteNode = async () => {
     if (!nodeToDelete) return;
 
-    const { droplet_id, index } = nodeToDelete;
+    const { droplet_id} = nodeToDelete;
     setLoading(true);
     setDeleteNodeDialog(false);
 
@@ -1148,7 +1146,7 @@ function GraphCard({
               labelStyle={{ color: "rgba(255,255,255,0.8)" }}
               itemStyle={{ color: color }}
             />
-            {data.datasets.map((dataset, index) => (
+            {data.datasets.map((dataset ) => (
               <Line
                 key={dataset.label}
                 type="monotone"

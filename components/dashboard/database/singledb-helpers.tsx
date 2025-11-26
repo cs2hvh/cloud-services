@@ -121,7 +121,7 @@ export const extractDisk = (size: string): string => {
   // DigitalOcean doesn't include disk in size string, use lookup table
   const diskMap: Record<string, string> = {
     "db-s-1vcpu-1gb": "10 GB",
-    "db-s-1vcpu-2gb": "25 GB",
+    "db-s-1vcpu-2gb": "34 GB",
     "db-s-2vcpu-4gb": "38 GB",
     "db-s-4vcpu-8gb": "115 GB",
     "db-s-6vcpu-16gb": "270 GB",

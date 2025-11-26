@@ -26,9 +26,9 @@ import {
   SettingsStep,
   type SpectrumFormData,
 } from "./steps";
-import api from "@/lib/axios/axios";
+// import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
-import { Admin_SpectrumApp, Tables } from "@/lib/supabase/types";
+import {  Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
 
@@ -41,7 +41,7 @@ interface SpectrumAppCreateProps {
     email: string;
     username?: string;
   }>;
-  spectrumApps?: String[];
+  spectrumApps?: string[];
 }
 
 const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spectrumApps = [] }: SpectrumAppCreateProps) => {

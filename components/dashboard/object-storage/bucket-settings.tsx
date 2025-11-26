@@ -49,7 +49,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
 
     try {
       let endpoint = "";
-      let payload: any = { bucket_id: bucket.id };
+      const payload: any = { bucket_id: bucket.id };
 
       switch (setting) {
         case "acl":

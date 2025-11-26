@@ -2,7 +2,7 @@ import DatabaseSelect from "@/components/dashboard/database/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 // import { serviceLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
-import { Locations, Products, Projects } from "@/lib/supabase/queries";
+import { Database_Clusters, Locations, Products, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
@@ -10,6 +10,7 @@ const DatabaseNewSuspense = async () => {
   const products = await Products.get_by_type("database");
   const location = await Locations.get_all();
   const user = await getUser();
+  const clusters=await Database_Clusters.read_all_owner_id(user?.id||"");
     
       if (!user) {
         notFound();
@@ -21,7 +22,7 @@ const DatabaseNewSuspense = async () => {
      const projects = await Projects.get_all_by_user(user.id);
 
   //console.log(products,"...........database products...........");
-  return <DatabaseSelect products={products} locations={location} projects={projects} userId={user.id} />;
+  return <DatabaseSelect products={products} locations={location} projects={projects} userId={user.id} clusters={clusters} />;
 };
 
 const DatabaseNewPage = () => {

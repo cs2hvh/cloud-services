@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import {NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 

@@ -9,12 +9,9 @@ import {
   HeadObjectCommand,
   CopyObjectCommand,
   PutBucketCorsCommand,
-  GetBucketCorsCommand,
   DeleteBucketCorsCommand,
   PutBucketVersioningCommand,
-  GetBucketVersioningCommand,
   PutBucketAclCommand,
-  GetBucketAclCommand,
   ListObjectsV2CommandOutput,
   _Object,
 } from '@aws-sdk/client-s3';

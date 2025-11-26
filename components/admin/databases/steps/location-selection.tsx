@@ -106,7 +106,7 @@ export const LocationStep = ({
         </Button>
         <Button
           onClick={onNext}
-          className="bg-white text-black rounded-md hover:bg-gray-200"
+          className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
         >
           Next <ChevronRight size={16} className="ml-2" />
         </Button>

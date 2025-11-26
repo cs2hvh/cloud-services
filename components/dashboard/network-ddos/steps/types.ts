@@ -1,4 +1,4 @@
-import { Admin_SpectrumApp, Tables } from "@/lib/supabase/types";
+
 
 export interface SpectrumFormData {
   // Step 0: User (admin only)
@@ -38,5 +38,5 @@ export interface StepProps {
   onUpdate: (data: Partial<SpectrumFormData>) => void;
   onNext: () => void;
   onBack: () => void;
-  spectrumApps?: String[];
+  spectrumApps?: string[];
 }

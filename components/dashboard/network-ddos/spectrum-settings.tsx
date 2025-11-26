@@ -72,7 +72,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
     try {
       const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
-      let payload:any= { app_id: spectrumApp.spectrum_id };
+      const payload:any= { app_id: spectrumApp.spectrum_id };
 
       switch (setting) {
         case "dns":

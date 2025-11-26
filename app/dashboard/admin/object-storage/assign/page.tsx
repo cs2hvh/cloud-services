@@ -1,4 +1,3 @@
-import AdminDatabaseAssign from "@/components/admin/databases/assign-database-new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Locations, ObjectSpaces, Products, Projects, Users } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";

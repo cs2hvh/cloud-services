@@ -49,6 +49,7 @@ interface PageProps {
   locations: Tables<"locations">[];
    projects: Tables<"projects">[];
   userId: string;
+  clusters: Tables<"database_clusters">[];
 }
 
 interface DatabaseType {
@@ -61,7 +62,7 @@ interface DatabaseType {
   available: boolean;
 }
 
-const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) => {
+const DatabaseSelect = ({ products, locations, projects, userId, clusters }: PageProps) => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [termsAccepted, setTermsAccepted] = useState<boolean>(false);
@@ -107,6 +108,9 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     }
     if (!NAMING_RULES.CLUSTER_NAME_PATTERN.test(name)) {
       return "Cluster name must start and end with alphanumeric, contain only lowercase letters, numbers, and hyphens";
+    }
+    if( clusters.some(cluster => cluster.name === name)){
+      return "Cluster name already exists";
     }
     return "";
   };
@@ -423,7 +427,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                     className={`shrink-0 rounded-full flex items-center justify-center transition-colors duration-300
                       w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${
                         currentStep > step.id
-                          ? "bg-blue-600 text-white"
+                          ? "bg-green-600 text-white"
                           : currentStep === step.id
                             ? "bg-blue-500 text-white"
                             : "bg-white/10 text-white/50"
@@ -508,7 +512,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
               <CardFooter className="flex justify-end">
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -583,13 +587,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -617,13 +621,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                  <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -724,13 +728,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
     <Button
       variant="outline"
       onClick={handlePrevStep}
-      className="rounded-lg border-white/20 text-white hover:bg-white/10 hover:text-white transition-all"
+      className="cursor-pointer rounded-lg border-white/20 text-white hover:bg-white/10 hover:text-white transition-all"
     >
       Back
     </Button>
     <Button
       onClick={handleNextStep}
-      className="bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-all"
+      className="cursor-pointer bg-white text-black rounded-lg font-semibold hover:bg-gray-100 transition-all"
     >
       Next <ChevronRight size={16} className="ml-2" />
     </Button>
@@ -931,13 +935,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -993,13 +997,13 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -1048,7 +1052,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                   variant="outline"
                   onClick={handlePrevStep}
                   disabled={isLoading}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
@@ -1056,7 +1060,7 @@ const DatabaseSelect = ({ products, locations, projects, userId }: PageProps) =>
                   onClick={onSubmit}
                   size="lg"
                   disabled={isLoading || !termsAccepted}
-                  className="bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
                 >
                   {isLoading ? (
                     <>

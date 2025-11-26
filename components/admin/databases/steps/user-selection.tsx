@@ -186,7 +186,7 @@ export const UserSelectionStep = ({
         <Button
           onClick={onNext}
           disabled={!state.selectedUser}
-          className="bg-white text-black rounded-md hover:bg-gray-200 disabled:opacity-50"
+          className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
         >
           Next <ChevronRight size={16} className="ml-2" />
         </Button>

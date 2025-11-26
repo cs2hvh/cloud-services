@@ -20,7 +20,7 @@ const store = new Map<string, RateLimitStore>();
  * @returns Rate limiter function
  */
 export function rateLimit(config: RateLimitConfig) {
-  const { interval, uniqueTokenPerInterval } = config;
+  const { interval } = config;
 
   return {
     check: async (

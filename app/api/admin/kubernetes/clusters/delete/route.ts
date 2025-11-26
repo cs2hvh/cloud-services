@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import axios from "axios";
 
 // Helper function to check if user is admin
 export async function checkAdminAuth() {
@@ -37,10 +38,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-   // console.log("Admin kubernetes cluster delete request received");
     const body = await req.json();
     const { cluster_id } = body;
-   // console.log(cluster_id, "...........cluster_id to delete........");
 
     if (!cluster_id) {
       return NextResponse.json(
@@ -51,23 +50,66 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createServiceClient();
 
-    // Get cluster details first to destroy droplets if needed
-    const { data: cluster } = await supabase
+    // Get cluster details including droplet IDs
+    const { data: cluster, error: fetchError } = await supabase
       .from("clusters")
-      .select("*")
+      .select("*, control_plane, workers")
       .eq("cluster_id", cluster_id)
       .single();
 
-    if (!cluster) {
+    if (fetchError || !cluster) {
       return NextResponse.json(
         { error: "Cluster not found" },
         { status: 404 }
       );
     }
 
-    // TODO: Call DigitalOcean API to destroy droplets
-    // This should be implemented based on your DigitalOcean integration
-    // For now, we'll just delete from database
+    // Delete droplets from DigitalOcean
+    const dropletDeletionErrors: string[] = [];
+    
+    // Delete control plane droplet
+    if (cluster.control_plane?.droplet_id) {
+      try {
+        await axios.delete(
+          `https://api.digitalocean.com/v2/droplets/${cluster.control_plane.droplet_id}`,
+          {
+            headers: {
+              Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        console.log(`[Admin K8s Delete] ✅ Deleted control plane droplet: ${cluster.control_plane.droplet_id}`);
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+        console.error(`[Admin K8s Delete] ❌ Failed to delete control plane droplet: ${errorMsg}`);
+        dropletDeletionErrors.push(`Control plane: ${errorMsg}`);
+      }
+    }
+    
+    // Delete worker droplets
+    if (cluster.workers && Array.isArray(cluster.workers)) {
+      for (const worker of cluster.workers) {
+        if (worker?.droplet_id) {
+          try {
+            await axios.delete(
+              `https://api.digitalocean.com/v2/droplets/${worker.droplet_id}`,
+              {
+                headers: {
+                  Authorization: process.env.DIGITAL_OCEAN_TOKEN,
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+            console.log(`[Admin K8s Delete] ✅ Deleted worker droplet: ${worker.droplet_id}`);
+          } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            console.error(`[Admin K8s Delete] ❌ Failed to delete worker droplet: ${errorMsg}`);
+            dropletDeletionErrors.push(`Worker ${worker.droplet_id}: ${errorMsg}`);
+          }
+        }
+      }
+    }
     
     // Delete the cluster from database
     const { error: deleteError } = await supabase
@@ -90,6 +132,7 @@ export async function POST(req: NextRequest) {
       {
         success: true,
         message: "Kubernetes cluster deleted successfully",
+        droplet_warnings: dropletDeletionErrors.length > 0 ? dropletDeletionErrors : undefined
       },
       { status: 200 }
     );

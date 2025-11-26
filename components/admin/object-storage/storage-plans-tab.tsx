@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { Loader2, DollarSign } from "lucide-react";
-import { Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

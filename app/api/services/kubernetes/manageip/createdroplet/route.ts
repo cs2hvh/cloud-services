@@ -49,7 +49,7 @@ return NextResponse.json({ error: "there is some internal error. please try late
     if (err instanceof Error) {
       console.log(err.cause,"...............error in creating droplet................")
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        { error: "our server is not responding. please try later"},
         { status: 400 }
       );
     } else {

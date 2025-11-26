@@ -234,7 +234,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
               <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-transparent p-0 h-auto">
                 <TabsTrigger 
                   value="overview" 
-                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Overview
                 </TabsTrigger>
@@ -243,19 +243,19 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
                   <>
                   <TabsTrigger 
                   value="network" 
-                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Network
                 </TabsTrigger>
                 <TabsTrigger 
                   value="users-dbs" 
-                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Users & DBs
                 </TabsTrigger>
                 <TabsTrigger 
                   value="settings" 
-                  className="text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Settings
                 </TabsTrigger>

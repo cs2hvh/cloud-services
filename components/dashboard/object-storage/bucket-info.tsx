@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Copy, Check, Database, HardDrive, Eye, EyeOff, Key, Link as LinkIcon, Archive,  Trash2, Loader2 } from "lucide-react";
+import { Copy, Check, Database, HardDrive, Eye, EyeOff, Key, Trash2, Loader2 } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";

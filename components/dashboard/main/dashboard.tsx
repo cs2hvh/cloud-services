@@ -14,7 +14,6 @@ import {
   HardDrive,
   Eye,
   Archive,
-  Network,
   Shield,
 
 } from "lucide-react";
@@ -31,7 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { object } from "zod";
+// import { object } from "zod";
 
 interface PageProps {
     game_servers: Tables<"game_servers">[];
@@ -124,42 +123,42 @@ const Dashboard = ({
   ];
 
   // Generate activities from actual resources
-  const generateActivities = () => {
-    const activities: Array<{ id: string; action: string; type: string; time: string }> = [];
+  // const generateActivities = () => {
+  //   const activities: Array<{ id: string; action: string; type: string; time: string }> = [];
 
-    // Add game server activities
-    data.game_servers.slice(0, 3).forEach((server) => {
-      activities.push({
-        id: `game-${server.id}`,
-        action: `Game server "${server.name}" is ${server.status}`,
-        type: `${server.game_type}`,
-        time: server.created_at ? formatTimeAgo(new Date(server.created_at)) : "Recently",
-      });
-    });
+  //   // Add game server activities
+  //   data.game_servers.slice(0, 3).forEach((server) => {
+  //     activities.push({
+  //       id: `game-${server.id}`,
+  //       action: `Game server "${server.name}" is ${server.status}`,
+  //       type: `${server.game_type}`,
+  //       time: server.created_at ? formatTimeAgo(new Date(server.created_at)) : "Recently",
+  //     });
+  //   });
 
-    // Add database activities
-    data.database_clusters.slice(0, 2).forEach((db, idx) => {
-      activities.push({
-        id: `db-${db.id || idx}`,
-        action: `Database cluster "${db.name}" is ${db.status}`,
-        type: db.engine,
-        time: "Recently",
-      });
-    });
+  //   // Add database activities
+  //   data.database_clusters.slice(0, 2).forEach((db, idx) => {
+  //     activities.push({
+  //       id: `db-${db.id || idx}`,
+  //       action: `Database cluster "${db.name}" is ${db.status}`,
+  //       type: db.engine,
+  //       time: "Recently",
+  //     });
+  //   });
 
-    // Add kubernetes activities
-    data.kubernetes_clusters.slice(0, 2).forEach((k8s) => {
-      activities.push({
-        id: `k8s-${k8s.cluster_id}`,
-        action: `Kubernetes cluster "${k8s.cluster_name}" is ${k8s.status}`,
-        type: "Kubernetes",
-        time: "Recently",
-      });
-    });
+  //   // Add kubernetes activities
+  //   data.kubernetes_clusters.slice(0, 2).forEach((k8s) => {
+  //     activities.push({
+  //       id: `k8s-${k8s.cluster_id}`,
+  //       action: `Kubernetes cluster "${k8s.cluster_name}" is ${k8s.status}`,
+  //       type: "Kubernetes",
+  //       time: "Recently",
+  //     });
+  //   });
 
-    // Sort and return top 5
-    return activities.slice(0, 5);
-  };
+  //   // Sort and return top 5
+  //   return activities.slice(0, 5);
+  // };
 
   // Helper function to format time ago
   const formatTimeAgo = (date: Date): string => {
@@ -173,7 +172,7 @@ const Dashboard = ({
     return date.toLocaleDateString();
   };
 
-  const activities = generateActivities();
+  
 
   const chartData = [
     { name: 'Game', value: data.game_servers.length },

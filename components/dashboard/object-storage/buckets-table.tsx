@@ -2,15 +2,12 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Copy, Check, Archive, Plus, Trash, Ban, Loader2, CheckCircle } from "lucide-react";
+import { Copy, Check, Archive, Plus, Ban, Loader2, CheckCircle } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { format } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 
 interface BucketsTableProps {
   buckets: ObjectSpaceBucket[];
@@ -18,7 +15,7 @@ interface BucketsTableProps {
 
 const BucketsTable = ({ buckets }: BucketsTableProps) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const router = useRouter();
+ 
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -181,21 +178,6 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
 
 export default BucketsTable;
 
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      scope="col"
-      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-600"
-    >
-      {children}
-    </th>
-  );
-}
 
-function Td({ children }: { children: React.ReactNode }) {
-  return (
-    <td className="px-6 py-4 text-sm text-slate-800 align-middle">
-      {children}
-    </td>
-  );
-}
+
+

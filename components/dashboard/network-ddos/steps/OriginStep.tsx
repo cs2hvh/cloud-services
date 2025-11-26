@@ -4,7 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ChevronRight, Server, Cloud } from "lucide-react";
+import { ChevronRight, Server } from "lucide-react";
 import { StepProps } from "./types";
 import { toast } from "sonner";
 

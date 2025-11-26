@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { listSpectrumApps } from "@/config/spectrum-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
