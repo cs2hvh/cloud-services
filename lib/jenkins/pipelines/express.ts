@@ -132,17 +132,33 @@ pipeline {
             sh(
               script: '''
                 if [ -f Dockerfile ]; then
-                echo 'Using existing Dockerfile'
-              else
-                echo 'Generating default Express Dockerfile'
-                cat > Dockerfile << 'DOCKERFILE_END'
+                  echo 'Using existing Dockerfile'
+                  # Fix npm ci issue in existing Dockerfile
+                  if grep -q "npm ci" Dockerfile; then
+                    if [ ! -f package-lock.json ]; then
+                      echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing. Switching to npm install.'
+                      sed -i 's/npm ci --only=production/npm install --production/g' Dockerfile
+                      sed -i 's/npm ci/npm install/g' Dockerfile
+                      echo 'Dockerfile patched: npm ci replaced with npm install.'
+                    else
+                      echo 'package-lock.json found, keeping npm ci.'
+                    fi
+                  fi
+                else
+                  echo 'Generating default Express Dockerfile'
+                  cat > Dockerfile << 'DOCKERFILE_END'
 FROM node:18-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm ci --only=production
+                # Use npm install if package-lock.json doesn't exist
+                RUN if [ -f package-lock.json ]; then \
+                      npm ci --only=production; \
+                    else \
+                      npm install --production; \
+                    fi
 
 COPY . .
 
@@ -150,17 +166,17 @@ EXPOSE ${nodePort}
 
 CMD ["npm", "start"]
 DOCKERFILE_END
-                echo 'Dockerfile generated successfully'
-              fi
-              
-              if ! grep -q "FROM" Dockerfile; then
-                echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                exit 1
-              fi
-              
-              echo 'Dockerfile Contents:'
-              cat Dockerfile
-              echo 'Dockerfile preparation completed'
+                  echo 'Dockerfile generated successfully'
+                fi
+                
+                if ! grep -q "FROM" Dockerfile; then
+                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
+                  exit 1
+                fi
+                
+                echo 'Dockerfile Contents:'
+                cat Dockerfile
+                echo 'Dockerfile preparation completed'
               ''',
               returnStatus: false,
               returnStdout: false

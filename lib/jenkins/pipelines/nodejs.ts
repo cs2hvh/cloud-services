@@ -111,8 +111,7 @@ pipeline {
                 
                 # Fix npm ci issue in existing Dockerfile
                 if grep -q "npm ci" Dockerfile && [ ! -f package-lock.json ]; then
-                  echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing'
-                  echo 'Updating Dockerfile to use npm install instead'
+                  echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing. Switching to npm install.'
                   sed -i 's/npm ci --only=production/npm install --production/g' Dockerfile
                   sed -i 's/npm ci/npm install/g' Dockerfile
                 fi
@@ -125,12 +124,12 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Use npm install if package-lock.json doesn't exist
-RUN if [ -f package-lock.json ]; then \\
-      npm ci --only=production; \\
-    else \\
-      npm install --production; \\
-    fi
+                # Use npm install if package-lock.json doesn't exist
+                RUN if [ -f package-lock.json ]; then \
+                      npm ci --only=production; \
+                    else \
+                      npm install --production; \
+                    fi
 
 COPY . .
 
