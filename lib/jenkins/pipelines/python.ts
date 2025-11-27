@@ -7,11 +7,32 @@ export function createPythonPipeline(
   gitUrl: string,
   branch: string,
   nodePort: string,
+  size: string = 'small',
 ): string {
   const domain = `${name}.uizb210.xyz`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
+  const sizeKey = (size || 'small').toLowerCase();
+  let cpuRequest = '250m';
+  let cpuLimit = '500m';
+  let memoryRequest = '256Mi';
+  let memoryLimit = '512Mi';
+  let replicas = 1;
+
+  if (sizeKey === 'medium') {
+    cpuRequest = '500m';
+    cpuLimit = '1';
+    memoryRequest = '512Mi';
+    memoryLimit = '1Gi';
+    replicas = 2;
+  } else if (sizeKey === 'large') {
+    cpuRequest = '1';
+    cpuLimit = '2';
+    memoryRequest = '1Gi';
+    memoryLimit = '2Gi';
+    replicas = 3;
+  }
   
   // Remove token from URL for display purposes (keep only clean URL for metadata)
   const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
@@ -108,6 +129,8 @@ pipeline {
               script: '''
                 if [ -f Dockerfile ]; then
                 echo 'Using existing Dockerfile'
+                # If Dockerfile installs dependencies via pip/npm-like steps that may fail, consider patching here if needed
+                # (For Python we check for requirements usage; no change required by default)
               else
                 echo 'Generating default Python Dockerfile'
                 cat > Dockerfile << 'DOCKERFILE_END'
@@ -213,7 +236,7 @@ metadata:
   labels:
     app: \${APP_NAME}
 spec:
-  replicas: 1
+  replicas: ${replicas}
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -233,11 +256,11 @@ spec:
           value: "\${NODE_PORT}"
         resources:
           requests:
-            cpu: 250m
-            memory: 256Mi
+            cpu: ${cpuRequest}
+            memory: ${memoryRequest}
           limits:
-            cpu: 500m
-            memory: 512Mi
+            cpu: ${cpuLimit}
+            memory: ${memoryLimit}
         livenessProbe:
           httpGet:
             path: /

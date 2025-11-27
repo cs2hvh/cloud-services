@@ -35,10 +35,11 @@ async function createJob(
   github: string,
   branch: string,
   port: string,
+  size: string = 'small',
 ) {
   try {
     const jobName = `${name}-job`;
-    const pipeline = createNodeJsPipeline(name, github, branch, port);
+    const pipeline = createNodeJsPipeline(name, github, branch, port, size);
     // Create job in Jenkins
     await getJenkinsClient().job.create(jobName, pipeline);
     setTimeout(async () => {
@@ -55,7 +56,7 @@ async function createJob(
 // Handle POST requests: create the job and respond
 export async function POST(request: Request) {
   try {
-    const { name, github, branch, buildCommand, projectId } =
+    const { name, github, branch, buildCommand, projectId, size } =
       await request.json();
 
     if (!name || !github || !branch || !buildCommand) {
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
     });
 
     // Create Jenkins job
-    await createJob(name, github, branch, availablePort.toString());
+    await createJob(name, github, branch, availablePort.toString(), size || 'small');
 
     // Log the activity if project ID is provided
     if (projectId) {
@@ -235,7 +236,8 @@ export async function PATCH(request: Request) {
         app.name,
         app.repository_url,
         app.branch,
-        app.port.toString()
+        app.port.toString(),
+        (app.size as string) || 'small'
       );
       
       await getJenkinsClient().job.config(jobName, pipeline);

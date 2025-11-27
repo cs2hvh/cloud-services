@@ -20,7 +20,8 @@ export class JenkinsService {
     githubUrl: string,
     branch: string,
     port: number,
-    framework?: string
+    framework?: string,
+    size: string = 'small'
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -32,7 +33,7 @@ export class JenkinsService {
     console.log(`[JenkinsService] Framework: ${framework || 'default'}, Branch: ${branch}, Port: ${port}`);
 
     // Select pipeline based on framework
-    const pipeline = JenkinsService.selectPipeline(appName, githubUrl, branch, port.toString(), framework);
+    const pipeline = JenkinsService.selectPipeline(appName, githubUrl, branch, port.toString(), framework, size);
 
     // Create the job
     try {
@@ -190,7 +191,8 @@ export class JenkinsService {
     githubUrl: string,
     branch: string,
     port: string,
-    framework?: string
+    framework?: string,
+    size: string = 'small'
   ): string {
     const fw = framework?.toLowerCase();
 
@@ -203,14 +205,14 @@ export class JenkinsService {
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, port);
+        return createExpressPipeline(appName, githubUrl, branch, port, size);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, port);
+        return createPythonPipeline(appName, githubUrl, branch, port, size);
 
       case 'nodejs':
       case 'node.js':
@@ -222,7 +224,7 @@ export class JenkinsService {
       case 'vue.js':
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, port);
+        return createNodeJsPipeline(appName, githubUrl, branch, port, size);
     }
   }
 }

@@ -119,6 +119,7 @@ export async function POST(req: NextRequest) {
       build_command: appData.build_command,
       output_directory: appData.output_directory,
       env_vars: env_vars || [],
+      size: (appData as any).size || 'small',
     };
 
     // Deploy using the deployment service

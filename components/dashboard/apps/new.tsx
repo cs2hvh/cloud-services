@@ -104,6 +104,7 @@ const AppDeploymentSelect = () => {
   const [outputDir, setOutputDir] = useState<string>('');
   const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
   const [customDomain, setCustomDomain] = useState<string>('');
+  const [size, setSize] = useState<string>('small');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
 
@@ -476,6 +477,7 @@ const AppDeploymentSelect = () => {
         build_command: buildCommand || undefined,
         output_directory: outputDir || undefined,
         env_vars: envVars.filter(ev => ev.key && ev.value),
+        size: size || 'small',
       };
 
       const response = await fetch('/api/services/platform-apps/create', {
@@ -900,6 +902,22 @@ const AppDeploymentSelect = () => {
                     />
                   </div>
                 </div>
+                
+                <div className="mt-4">
+                  <Label className="text-white">Instance Size</Label>
+                  <div className="mt-2">
+                    <Select value={size} onValueChange={setSize}>
+                      <SelectTrigger className="bg-white/10 border-white/20 text-white w-48">
+                        <SelectValue placeholder="Select size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="small">Small — 250m CPU / 256Mi RAM / 1 replica</SelectItem>
+                        <SelectItem value="medium">Medium — 500m CPU / 512Mi RAM / 2 replicas</SelectItem>
+                        <SelectItem value="large">Large — 1 CPU / 1Gi RAM / 3 replicas</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
                 <div>
                   <div className="flex justify-between items-center mb-4">
@@ -982,6 +1000,10 @@ const AppDeploymentSelect = () => {
                     <div className="flex justify-between">
                       <span className="text-white/60">Framework:</span>
                       <span className="text-white">{framework}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Instance Size:</span>
+                      <span className="text-white">{size}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Build Command:</span>

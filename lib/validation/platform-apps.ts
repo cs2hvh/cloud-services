@@ -47,6 +47,7 @@ export const createPlatformAppSchema = z.object({
       value: z.string().min(1, "Environment variable value is required"),
     })
   ).optional().default([]),
+  size: z.enum(["small", "medium", "large"]).optional().default("small"),
 });
 
 export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;

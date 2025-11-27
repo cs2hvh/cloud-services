@@ -7,11 +7,32 @@ export function createNodeJsPipeline(
   gitUrl: string,
   branch: string,
   nodePort: string,
+  size: string = 'small',
 ): string {
   const domain = `${name}.uizb210.xyz`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
+  const sizeKey = (size || 'small').toLowerCase();
+  let cpuRequest = '250m';
+  let cpuLimit = '500m';
+  let memoryRequest = '256Mi';
+  let memoryLimit = '512Mi';
+  let replicas = 1;
+
+  if (sizeKey === 'medium') {
+    cpuRequest = '500m';
+    cpuLimit = '1';
+    memoryRequest = '512Mi';
+    memoryLimit = '1Gi';
+    replicas = 2;
+  } else if (sizeKey === 'large') {
+    cpuRequest = '1';
+    cpuLimit = '2';
+    memoryRequest = '1Gi';
+    memoryLimit = '2Gi';
+    replicas = 3;
+  }
   
   // Remove token from URL for display purposes (keep only clean URL for metadata)
   const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
@@ -109,11 +130,11 @@ pipeline {
                 if [ -f Dockerfile ]; then
                 echo 'Using existing Dockerfile'
                 
-                # Fix npm ci issue in existing Dockerfile
+                # Fix npm ci issue in existing Dockerfile: replace RUN ... npm ci with a conditional
                 if grep -q "npm ci" Dockerfile && [ ! -f package-lock.json ]; then
-                  echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing. Switching to npm install.'
-                  sed -i 's/npm ci --only=production/npm install --production/g' Dockerfile
-                  sed -i 's/npm ci/npm install/g' Dockerfile
+                  echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing'
+                  echo 'Patching Dockerfile to use conditional install (npm ci if lockfile exists, otherwise npm install)'
+                  awk '/[Rr][Uu][Nn].*npm ci/ { print "RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --production; fi"; next } { print }' Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp Dockerfile
                 fi
               else
                 echo 'Generating default Node.js Dockerfile'
@@ -224,8 +245,8 @@ metadata:
   namespace: default
   labels:
     app: \${APP_NAME}
-spec:
-  replicas: 1
+  spec:
+  replicas: ${replicas}
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -245,11 +266,11 @@ spec:
           value: "\${NODE_PORT}"
         resources:
           requests:
-            cpu: 250m
-            memory: 256Mi
+            cpu: ${cpuRequest}
+            memory: ${memoryRequest}
           limits:
-            cpu: 500m
-            memory: 512Mi
+            cpu: ${cpuLimit}
+            memory: ${memoryLimit}
         livenessProbe:
           httpGet:
             path: /

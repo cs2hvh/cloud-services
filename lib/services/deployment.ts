@@ -26,6 +26,7 @@ export interface DeploymentConfig {
   build_command?: string;
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
+  size?: string;
 }
 
 export interface DeploymentResult {
@@ -120,7 +121,8 @@ export class DeploymentService {
           jenkinsRepoUrl,
           config.branch,
           port,
-          config.framework
+          config.framework,
+          config.size || 'small'
         );
         console.log(`[DeploymentService] Step 5/5: Jenkins job created and triggered`);
 
