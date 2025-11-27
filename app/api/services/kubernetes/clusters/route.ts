@@ -4,6 +4,8 @@ import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects } from "@/lib/supabase/queries";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { rateLimit } from "@/lib/rate-limit";
 
 
 
@@ -21,15 +23,16 @@ const Auth =  z.object({
     password: EncryptedData
   })
 
+const ipRegex = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const NodeSpec = z.object({
-  host: z.string(),                               // external IP or DNS
+  host: z.string().min(1),                         // external IP or DNS
   role: z.enum(["control-plane", "worker"]),
   hostname: z.string().optional(),
-  cpu: z.number().int().min(1).optional(),        // validated only
-  memory_mb: z.number().int().min(1).optional(), // validated only
-  storage:z.number().int().min(1).optional(),
-  private_ip: z.string(),
-  droplet_id: z.number()
+  cpu: z.number().int().positive().optional(),
+  memory_mb: z.number().int().positive().optional(),
+  storage: z.number().int().positive().optional(),
+  private_ip: z.string().regex(ipRegex, "Invalid IPv4 address"),
+  droplet_id: z.number().int().positive()
 });
 
 const Payload = z.object({
@@ -42,12 +45,20 @@ const Payload = z.object({
   }),
   auth: Auth,
   nodes: z.array(NodeSpec) ,
-   ips: z.array(z.string()),                 // {"cp-1":{...}, "w-1":{...}}
-    ownerId: z.string(),      
-     projectId: z.string(),
+  ips: z.array(z.string().regex(ipRegex, "Invalid IPv4 address")),
+  ownerId: z.string(),
+  projectId: z.string(),
 });
 
 export async function POST(req: Request) {
+  // Basic rate limiting per IP/token
+  const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
+  try {
+    // Cast to any to satisfy type; limiter reads headers only
+    await limiter.check(req as any, 10);
+  } catch (e) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
   // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
@@ -79,8 +90,11 @@ export async function POST(req: Request) {
   }
 
   const clusterId = crypto.randomUUID();
-  const job = await provisionQueue.add("provision", { clusterId, ...parsed.data,decryptedPassword });
-  console.log(job,"...............job")
+  // Derive role server-side to avoid trusting client-provided role
+  const adminCheck = await requireAdmin();
+  const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
+
+  const job = await provisionQueue.add("provision", { clusterId, ...parsed.data, decryptedPassword, role: derivedRole });
 
   // Add activity log for Kubernetes cluster creation
   if (parsed.data.projectId) {
@@ -88,8 +102,7 @@ export async function POST(req: Request) {
       project_id: parsed.data.projectId,
       event: "Kubernetes Create",
       text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`,
-     
-    }, body.role);
+    }, derivedRole);
     console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
   }
 

@@ -85,8 +85,15 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
       } else {
         throw new Error(response.data.error || "Update failed");
       }
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || `Failed to update ${setting}`);
+    } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+      toast.error(message || `Failed to update ${setting}`);
     } finally {
       setIsLoading((prev) => ({ ...prev, [setting]: false }));
     }
@@ -133,7 +140,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
   }: {
     title: string;
     description: string;
-    icon: any;
+    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
     setting: string;
     children: React.ReactNode;
     gradientFrom?: string;

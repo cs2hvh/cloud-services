@@ -5,7 +5,7 @@ import { Tables } from '@/lib/supabase/types';
  */
 
 export const mockUser = {
-  id: 'pankaj.soni@ahurasense.com',
+  id: '550e8400-e29b-41d4-a716-446655440000',
   email: 'pankaj.soni@ahurasense.com',
   name: 'Test User',
 };
@@ -141,7 +141,7 @@ export const mockProduct: Tables<'products'> = {
   description: 'Basic MySQL database cluster',
   type: 'database',
   price: 15.0,
-  resources: { cpu: 1, ram: 1 },
+  resources: { cpu: 1, ram: 1, storage: 35 },
   sub: 'mysql-basic',
   image: null,
   discount: null,
@@ -154,7 +154,7 @@ export const mockProducts: Tables<'products'>[] = [
     ...mockProduct,
     id: 'prod-mysql-2vcpu',
     name: 'MySQL - 2 vCPU, 2GB RAM',
-    resources: { cpu: 2, ram: 2 },
+    resources: { cpu: 2, ram: 2, storage: 70 },
     price: 30.0,
   },
   {
@@ -247,5 +247,176 @@ export const mockInvalidPayloads = {
   invalidProjectId: {
     ...mockCreateDatabasePayload,
     project_id: 'not-a-uuid',
+  },
+};
+
+/**
+ * Mock data for Spectrum / Network DDoS Protection testing
+ */
+
+export const mockEncryptedDNS = {
+  iv: 'test-iv-hex-string',
+  encrypted: 'encrypted-ip-address',
+  tag: 'test-tag-hex-string',
+  salt: 'test-salt-hex-string',
+};
+
+export const mockSpectrumApp: Tables<'spectrum_apps'> = {
+  id: 'spec-550e8400-e29b-41d4-a716-446655440001',
+  spectrum_id: 'cf-spectrum-app-123456',
+  dns: {
+    name: mockEncryptedDNS,
+    type: 'A',
+    original_name: 'myapp',
+  },
+  protocol: 'tcp/22',
+  origin_direct: ['tcp://192.168.1.100:22'],
+  tls: 'off',
+  edge_ips: {
+    type: 'dynamic',
+    connectivity: 'all',
+  },
+  ip_firewall: false,
+  traffic_type: 'direct',
+  proxy_protocol: 'off',
+  owner_id: mockUser.id,
+  project_id: mockProject.id,
+  status: 'created',
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+};
+
+export const mockAdminSpectrumApp = {
+  ...mockSpectrumApp,
+  owner_email: 'test@example.com',
+  owner_username: 'testuser',
+};
+
+export const mockSpectrumAppSSH: Tables<'spectrum_apps'> = {
+  ...mockSpectrumApp,
+  id: 'spec-ssh-123',
+  spectrum_id: 'cf-spectrum-ssh-123',
+  dns: {
+    name: mockEncryptedDNS,
+    type: 'A',
+    original_name: 'ssh-server',
+  },
+  protocol: 'tcp/22',
+  origin_direct: ['tcp://10.0.0.5:22'],
+};
+
+export const mockSpectrumAppRDP: Tables<'spectrum_apps'> = {
+  ...mockSpectrumApp,
+  id: 'spec-rdp-123',
+  spectrum_id: 'cf-spectrum-rdp-123',
+  dns: {
+    name: mockEncryptedDNS,
+    type: 'A',
+    original_name: 'rdp-server',
+  },
+  protocol: 'tcp/3389',
+  origin_direct: ['tcp://10.0.0.10:3389'],
+};
+
+export const mockSpectrumAppMinecraft: Tables<'spectrum_apps'> = {
+  ...mockSpectrumApp,
+  id: 'spec-mc-123',
+  spectrum_id: 'cf-spectrum-mc-123',
+  dns: {
+    name: mockEncryptedDNS,
+    type: 'A',
+    original_name: 'mc-server',
+  },
+  protocol: 'tcp/25565',
+  origin_direct: ['tcp://10.0.0.20:25565'],
+  tls: 'full',
+  ip_firewall: true,
+};
+
+export const mockCloudflareSpectrumApp = {
+  id: 'cf-spectrum-app-123456',
+  dns: {
+    name: 'myapp.hostguardian.net',
+    type: 'A',
+  },
+  protocol: 'tcp/22',
+  origin_direct: ['tcp://192.168.1.100:22'],
+  tls: 'off',
+  edge_ips: {
+    type: 'dynamic',
+    connectivity: 'all',
+  },
+  ip_firewall: false,
+  traffic_type: 'direct',
+  proxy_protocol: 'off',
+  argo_smart_routing: true,
+};
+
+export const mockCreateSpectrumPayload = {
+  project_id: mockProject.id,
+  owner_id: mockUser.id,
+  dns: {
+    name: 'myapp',
+    type: 'A' as const,
+  },
+  protocol: 'tcp/22',
+  origin_direct: ['192.168.1.100:22'],
+  tls: 'off' as const,
+  edge_ips: {
+    type: 'dynamic',
+    connectivity: 'all',
+  },
+  ip_firewall: false,
+  traffic_type: 'direct',
+  proxy_protocol: 'off',
+  role: 'user',
+};
+
+export const mockInvalidSpectrumPayloads = {
+  invalidProtocol: {
+    ...mockCreateSpectrumPayload,
+    protocol: 'http/80', // Invalid protocol
+  },
+  invalidProtocolNoPort: {
+    ...mockCreateSpectrumPayload,
+    protocol: 'tcp', // Missing port
+  },
+  invalidProjectId: {
+    ...mockCreateSpectrumPayload,
+    project_id: 'not-a-uuid',
+  },
+  invalidOwnerId: {
+    ...mockCreateSpectrumPayload,
+    owner_id: 'not-a-uuid',
+  },
+  emptyOrigins: {
+    ...mockCreateSpectrumPayload,
+    origin_direct: [],
+  },
+  invalidDNSType: {
+    ...mockCreateSpectrumPayload,
+    dns: {
+      name: 'myapp',
+      type: 'MX' as any,
+    },
+  },
+  shortDNSName: {
+    ...mockCreateSpectrumPayload,
+    dns: {
+      name: 'ab',
+      type: 'A' as const,
+    },
+  },
+  invalidTLS: {
+    ...mockCreateSpectrumPayload,
+    tls: 'partial' as any,
+  },
+  invalidPortRange: {
+    ...mockCreateSpectrumPayload,
+    protocol: 'tcp/9000-8000', // Reversed range
+  },
+  invalidPortTooHigh: {
+    ...mockCreateSpectrumPayload,
+    protocol: 'tcp/99999', // Port > 65535
   },
 };

@@ -7,6 +7,9 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 process.env.DIGITAL_OCEAN_TOKEN = 'Bearer test-do-token';
 process.env.ENCRYPTION_KEY = 'test-encryption-key-32-characters';
+process.env.CLOUDFLARE_ZONE_ID = 'test-zone-id-123456';
+process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-api-token';
+process.env.PARENT_DOMAIN = '.hostguardian.net';
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({

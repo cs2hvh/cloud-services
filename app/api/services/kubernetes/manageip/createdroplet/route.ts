@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const payload={...json,
      user_data:`#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`
     }
-    console.log(payload,"...............................28")
+    //console.log(payload,"...............................28")
     const droplets=await axios.post(
         "https://api.digitalocean.com/v2/droplets",
        payload,
@@ -47,7 +47,7 @@ return NextResponse.json({ error: "there is some internal error. please try late
 
   } catch (err: unknown) {
     if (err instanceof Error) {
-      console.log(err.cause,"...............error in creating droplet................")
+    //  console.log(err.cause,"...............error in creating droplet................")
       return NextResponse.json(
         { error: "our server is not responding. please try later"},
         { status: 400 }

@@ -45,11 +45,11 @@ const KubernetesPage = () => {
   //   // console.log(await res.json(),".............res from download api...........");
   // };
 
-  const downloadKubeconfig = async (clusterId: string, kubeconfig: string) => {
+  const downloadKubeconfig = async (clusterId: string) => {
     const res = await fetch("/api/services/kubernetes/clusters/downloadkube", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kubeconfig }),
+      body: JSON.stringify({ cluster_id: clusterId }),
     });
 
     if (res.ok) {
@@ -196,7 +196,7 @@ const KubernetesPage = () => {
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => {
-                            downloadKubeconfig(c.cluster_id, c.kubeconfig);
+                            downloadKubeconfig(c.cluster_id);
                           }}
                           className="cursor-pointer rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors duration-200"
                         >

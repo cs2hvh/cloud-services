@@ -24,7 +24,7 @@ api.interceptors.response.use(
       //  console.log(error,".............axios error interceptors...........");
 
     if (status === 400) {
-      toast.error(serverMessage || "Bad request - invalid input.");
+      toast.error("our server is busy. please try after sometimes");
     } else if (status === 401) {
       toast.error(serverMessage || "Unauthorized - please login.");
     } else if (status === 403) {

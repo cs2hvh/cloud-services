@@ -52,9 +52,15 @@ export async function createBucket(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error creating bucket:', error);
-    return { success: false, error: error.message };
+  }catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -72,9 +78,15 @@ export async function deleteBucket(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting bucket:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -129,9 +141,15 @@ export async function listObjects(
       totalSize,
       totalCount: objects.length,
     };
-  } catch (error: any) {
-    console.error('Error listing objects:', error);
-    throw new Error(`Failed to list objects: ${error.message}`);
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    throw new Error(`Failed to list objects: ${message}`);
   }
 }
 
@@ -155,9 +173,15 @@ export async function uploadFile(
       })
     );
     return { success: true, etag: response.ETag };
-  } catch (error: any) {
-    console.error('Error uploading file:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -181,9 +205,15 @@ export async function downloadFile(
       data: response.Body as Readable,
       contentType: response.ContentType,
     };
-  } catch (error: any) {
-    console.error('Error downloading file:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -203,9 +233,15 @@ export async function deleteFile(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error deleting file:', error);
-    return { success: false, error: error.message };
+  }catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -230,9 +266,15 @@ export async function getFileMetadata(
       lastModified: response.LastModified,
       contentType: response.ContentType,
     };
-  } catch (error: any) {
-    console.error('Error getting file metadata:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -254,9 +296,15 @@ export async function generatePresignedUrl(
 
     const url = await getSignedUrl(client, command, { expiresIn });
     return { success: true, url };
-  } catch (error: any) {
-    console.error('Error generating presigned URL:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -279,9 +327,15 @@ export async function copyFile(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error copying file:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -319,9 +373,15 @@ export async function updateBucketCORS(
       );
     }
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating CORS:', error);
-    return { success: false, error: error.message };
+  }catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -343,9 +403,15 @@ export async function updateBucketVersioning(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating versioning:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -365,9 +431,15 @@ export async function updateBucketACL(
       })
     );
     return { success: true };
-  } catch (error: any) {
-    console.error('Error updating ACL:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, error: message };
   }
 }
 
@@ -391,9 +463,15 @@ export async function getBucketStats(
     } while (continuationToken);
 
     return { success: true, size: totalSize, count: totalCount };
-  } catch (error: any) {
-    console.error('Error getting bucket stats:', error);
-    return { success: false, size: 0, count: 0, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, size: 0, count: 0, error: message };
   }
 }
 
@@ -421,8 +499,14 @@ export async function emptyBucket(
     } while (continuationToken);
 
     return { success: true, deletedCount };
-  } catch (error: any) {
-    console.error('Error emptying bucket:', error);
-    return { success: false, deletedCount: 0, error: error.message };
+  } catch (error: unknown) {
+  console.error('Error emptying bucket:', error);
+
+  let message = 'Unknown error';
+
+  if (error instanceof Error) {
+    message = error.message;
+  }
+    return { success: false, deletedCount: 0, error: message };
   }
 }

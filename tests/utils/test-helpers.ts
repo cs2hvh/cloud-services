@@ -19,20 +19,19 @@ export function renderWithProviders(
 /**
  * Mock authenticated user session
  */
-export function mockAuthenticatedUser(userId?: string) {
+export async function mockAuthenticatedUser(userId?: string) {
   const mockUser = {
     id: userId || '550e8400-e29b-41d4-a716-446655440000',
     email: 'pankaj.soni@ahurasense.com',
     name: 'Test User',
   };
 
-  vi.mock('@/lib/auth/server-auth', () => ({
-    authenticateUser: vi.fn(() => Promise.resolve({
-      authenticated: true,
-      user: mockUser,
-      response: null,
-    })),
-  }));
+  const { authenticateUser } = await import('@/lib/auth/server-auth');
+  vi.mocked(authenticateUser).mockResolvedValue({
+    authenticated: true,
+    user: mockUser as any,
+    response: null,
+  });
 
   return mockUser;
 }
@@ -40,17 +39,17 @@ export function mockAuthenticatedUser(userId?: string) {
 /**
  * Mock unauthenticated user session
  */
-export function mockUnauthenticatedUser() {
-  vi.mock('@/lib/auth/server-auth', () => ({
-    authenticateUser: vi.fn(() => Promise.resolve({
-      authenticated: false,
-      user: null,
-      response: new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401 }
-      ),
-    })),
-  }));
+export async function mockUnauthenticatedUser() {
+  const { NextResponse } = await import('next/server');
+  const { authenticateUser } = await import('@/lib/auth/server-auth');
+  vi.mocked(authenticateUser).mockResolvedValue({
+    authenticated: false,
+    user: null,
+    response: NextResponse.json(
+      { message: 'Unauthorized - please login' },
+      { status: 401 }
+    ),
+  } as any);
 }
 
 /**
@@ -266,4 +265,122 @@ export function expectDecryptionCalled(decryptFn: any, encryptedData: any) {
     encryptedData,
     expect.any(String)
   );
+}
+
+/**
+ * Mock Cloudflare Spectrum API
+ */
+export function mockCloudflareAPI(endpoint: string, response: any, status = 200) {
+  return vi.fn((url: string, config?: any) => {
+    if (url.includes('spectrum/apps')) {
+      return Promise.resolve({
+        status,
+        data: {
+          success: status < 400,
+          result: response,
+          errors: status >= 400 ? [{ message: 'Cloudflare API error' }] : [],
+        },
+      });
+    }
+    return Promise.reject(new Error('Endpoint not mocked'));
+  });
+}
+
+/**
+ * Mock admin user session with admin role
+ */
+export async function mockAdminUser(userId?: string) {
+  const mockUser = {
+    id: userId || '550e8400-e29b-41d4-a716-446655440000',
+    email: 'admin@ahurasense.com',
+    name: 'Admin User',
+    roles: ['admin'],
+  };
+
+  const { authenticateUser } = await import('@/lib/auth/server-auth');
+  vi.mocked(authenticateUser).mockResolvedValue({
+    authenticated: true,
+    user: mockUser as any,
+    response: null,
+  });
+
+  // Note: requireAdmin mock would need to be set up at test file level
+  // if @/lib/supabase/auth is being used
+
+  return mockUser;
+}
+
+/**
+ * Mock non-admin user session
+ */
+export async function mockNonAdminUser(userId?: string) {
+  const mockUser = {
+    id: userId || '550e8400-e29b-41d4-a716-446655440001',
+    email: 'user@ahurasense.com',
+    name: 'Regular User',
+    roles: [],
+  };
+
+  const { authenticateUser } = await import('@/lib/auth/server-auth');
+  vi.mocked(authenticateUser).mockResolvedValue({
+    authenticated: true,
+    user: mockUser as any,
+    response: null,
+  });
+
+  return mockUser;
+}
+
+/**
+ * Mock Spectrum_Apps Supabase queries
+ */
+export function mockSpectrumQueries() {
+  return {
+    create: vi.fn(),
+    update: vi.fn(),
+    get: vi.fn(),
+    list_by_owner: vi.fn(),
+    delete: vi.fn(),
+    get_all_for_admin: vi.fn(),
+    get_all_app_name: vi.fn(),
+  };
+}
+
+/**
+ * Mock rate limiting - allow request
+ */
+export async function mockRateLimitAllow() {
+  const { limitByUser } = await import('@/lib/cooldown/userbased');
+  vi.mocked(limitByUser).mockResolvedValue({
+    allowed: true,
+  });
+}
+
+/**
+ * Mock rate limiting - deny request
+ */
+export async function mockRateLimitDeny(retryAfterSec = 30) {
+  const { limitByUser } = await import('@/lib/cooldown/userbased');
+  vi.mocked(limitByUser).mockResolvedValue({
+    allowed: false,
+    retryAfterSec,
+  });
+}
+
+/**
+ * Mock DNS resolution API
+ */
+export function mockDNSResolution(ip: string = '1.2.3.4') {
+  return vi.fn((url: string) => {
+    if (url.includes('ip-api.com')) {
+      return Promise.resolve({
+        status: 200,
+        data: {
+          query: ip,
+          status: 'success',
+        },
+      });
+    }
+    return Promise.reject(new Error('DNS API not mocked'));
+  });
 }
