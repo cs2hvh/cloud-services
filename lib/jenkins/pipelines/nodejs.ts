@@ -136,6 +136,20 @@ pipeline {
                   echo 'Patching Dockerfile to use conditional install (npm ci if lockfile exists, otherwise npm install)'
                   awk '/[Rr][Uu][Nn].*npm ci/ { print "RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --production; fi"; next } { print }' Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp Dockerfile
                 fi
+                
+                # Fix CMD instruction for Next.js standalone support
+                if grep -q "CMD \[\"npm\"" Dockerfile || grep -q "CMD \[\"next\"" Dockerfile; then
+                  echo 'Patching Dockerfile CMD instruction for Next.js standalone support'
+                  # Remove existing CMD and add entrypoint script
+                  grep -v "CMD \[\"npm\"" Dockerfile | grep -v "CMD \[\"next\"" > Dockerfile.tmp
+                  cat >> Dockerfile.tmp << 'EOF'
+                  
+# Create entrypoint script to handle both standalone and regular modes
+RUN echo '#!/bin/sh\nif [ -f .next/standalone/server.js ]; then\n  echo "Starting Next.js standalone server"\n  node .next/standalone/server.js\nelse\n  echo "Starting with npm start"\n  npm start\nfi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+EOF
+                  mv Dockerfile.tmp Dockerfile
+                fi
               else
                 echo 'Generating default Node.js Dockerfile'
                 cat > Dockerfile << 'DOCKERFILE_END'
@@ -145,18 +159,34 @@ WORKDIR /app
 
 COPY package*.json ./
 
-                # Use npm install if package-lock.json doesn't exist
+                # Install all dependencies (including devDependencies)
                 RUN if [ -f package-lock.json ]; then \
-                      npm ci --only=production; \
+                      npm ci; \
                     else \
-                      npm install --production; \
+                      npm install; \
                     fi
 
 COPY . .
 
+                # Build the Next.js application
+                RUN npm run build
+
 EXPOSE ${nodePort}
 
-CMD ["npx", "next", "start", "-p", "${nodePort}"]
+                # Set the PORT environment variable
+                ENV PORT=${nodePort}
+                
+                # Check if Next.js standalone output exists, otherwise use npm start
+                RUN if [ -f .next/standalone/server.js ]; then \
+                  echo 'Using Next.js standalone server'; \
+                else \
+                  echo 'Using npm start'; \
+                fi
+                
+                # Create entrypoint script to handle both standalone and regular modes
+                RUN echo '#!/bin/sh\nif [ -f .next/standalone/server.js ]; then\n  echo "Starting Next.js standalone server"\n  node .next/standalone/server.js\nelse\n  echo "Starting with npm run start"\n  npm run start\nfi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+                
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 DOCKERFILE_END
                 echo 'Dockerfile generated successfully'
               fi

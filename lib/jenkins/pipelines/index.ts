@@ -5,8 +5,9 @@ import { createSimpleTestPipeline } from './simple-test';
 import { createNodeJsPipeline } from './nodejs';
 import { createExpressPipeline } from './express';
 import { createPythonPipeline } from './python';
+import { createNextJsPipeline } from './nextjs';
 
-export { createSimpleTestPipeline, createNodeJsPipeline, createExpressPipeline, createPythonPipeline };
+export { createSimpleTestPipeline, createNodeJsPipeline, createExpressPipeline, createPythonPipeline, createNextJsPipeline };
 
 /**
  * Pipeline type constants
@@ -16,6 +17,7 @@ export const PipelineType = {
   NODEJS: 'nodejs',
   EXPRESS: 'express',
   PYTHON: 'python',
+  NEXTJS: 'nextjs',
 } as const;
 
 export type PipelineTypeValue = typeof PipelineType[keyof typeof PipelineType];
@@ -33,6 +35,8 @@ export function getPipelineGenerator(type: PipelineTypeValue) {
       return createExpressPipeline;
     case PipelineType.PYTHON:
       return createPythonPipeline;
+    case PipelineType.NEXTJS:
+      return createNextJsPipeline;
     default:
       throw new Error(`Unknown pipeline type: ${type}`);
   }

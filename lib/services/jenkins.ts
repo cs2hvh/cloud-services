@@ -7,6 +7,7 @@ import {
   createNodeJsPipeline,
   createExpressPipeline,
   createPythonPipeline,
+  createNextJsPipeline,
   PipelineType,
   type PipelineTypeValue,
 } from "@/lib/jenkins/pipelines";
@@ -214,11 +215,14 @@ export class JenkinsService {
         console.log(`[JenkinsService] Using PYTHON pipeline`);
         return createPythonPipeline(appName, githubUrl, branch, port, size);
 
+      case 'nextjs':
+      case 'next.js':
+        console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
+        return createNextJsPipeline(appName, githubUrl, branch, port, size);
+
       case 'nodejs':
       case 'node.js':
       case 'node':
-      case 'nextjs':
-      case 'next.js':
       case 'react':
       case 'vue':
       case 'vue.js':
