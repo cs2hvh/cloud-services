@@ -1,5 +1,5 @@
 /**
- * Node.js Pipeline - Next.js, React, Vue.js, Express
+ * Node.js Pipeline - Plain Node.js Applications
  * Auto-creates Dockerfile, builds with Kaniko
  */
 export function createNodeJsPipeline(
@@ -13,6 +13,9 @@ export function createNodeJsPipeline(
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
+  
+  // Remove token from URL for display purposes (keep only clean URL for metadata)
+  const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
   const sizeKey = (size || 'small').toLowerCase();
   let cpuRequest = '250m';
   let cpuLimit = '500m';
@@ -33,16 +36,13 @@ export function createNodeJsPipeline(
     memoryLimit = '2Gi';
     replicas = 3;
   }
-  
-  // Remove token from URL for display purposes (keep only clean URL for metadata)
-  const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
     Node.js deployment pipeline for ${name}
-    Supports Next.js, React, Vue.js, Express, builds with Kaniko
+    Auto-creates Dockerfile if missing, builds with Kaniko
     Accessible at https://${domain} (port ${nodePort})
   </description>
   <keepDependencies>false</keepDependencies>
@@ -88,6 +88,7 @@ pipeline {
       steps {
         script {
           echo 'STAGE: Initialize'
+          echo 'PIPELINE: Node.js Deployment Pipeline'
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${gitUrl}"
           echo "Branch: ${branch}"
@@ -120,6 +121,31 @@ pipeline {
       }
     }
 
+    stage('Validate Prerequisites') {
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Validate Prerequisites'
+            echo 'Checking required files and project structure'
+            sh(
+              script: '''
+                if [ ! -f package.json ]; then
+                  echo 'WARNING: package.json not found'
+                  echo 'Node.js projects typically require a package.json file'
+                else
+                  echo 'package.json found'
+                fi
+                
+                echo 'Prerequisites check completed'
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
+          }
+        }
+      }
+    }
+
     stage('Prepare Dockerfile') {
       steps {
         container('git') {
@@ -129,64 +155,39 @@ pipeline {
               script: '''
                 if [ -f Dockerfile ]; then
                 echo 'Using existing Dockerfile'
-                
-                # Fix npm ci issue in existing Dockerfile: replace RUN ... npm ci with a conditional
+                # Patch any RUN ... npm ci lines to be conditional when lockfile missing
                 if grep -q "npm ci" Dockerfile && [ ! -f package-lock.json ]; then
                   echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing'
                   echo 'Patching Dockerfile to use conditional install (npm ci if lockfile exists, otherwise npm install)'
                   awk '/[Rr][Uu][Nn].*npm ci/ { print "RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --production; fi"; next } { print }' Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp Dockerfile
                 fi
                 
-                # Fix CMD instruction for Next.js standalone support
-                if grep -q "CMD \[\"npm\"" Dockerfile || grep -q "CMD \[\"next\"" Dockerfile; then
-                  echo 'Patching Dockerfile CMD instruction for Next.js standalone support'
-                  # Remove existing CMD and add entrypoint script
-                  grep -v "CMD \[\"npm\"" Dockerfile | grep -v "CMD \[\"next\"" > Dockerfile.tmp
-                  cat >> Dockerfile.tmp << 'EOF'
-                  
-# Create entrypoint script to handle both standalone and regular modes
-RUN echo '#!/bin/sh\nif [ -f .next/standalone/server.js ]; then\n  echo "Starting Next.js standalone server"\n  node .next/standalone/server.js\nelse\n  echo "Starting with npm start"\n  npm start\nfi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-EOF
-                  mv Dockerfile.tmp Dockerfile
+                # Ensure CMD instruction exists for npm start
+                if ! grep -q "CMD \[" Dockerfile; then
+                  echo 'Adding CMD instruction for npm start'
+                  echo 'CMD ["npm", "start"]' >> Dockerfile
                 fi
               else
                 echo 'Generating default Node.js Dockerfile'
                 cat > Dockerfile << 'DOCKERFILE_END'
-FROM node:20-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
 COPY package*.json ./
 
-                # Install all dependencies (including devDependencies)
+                # Use npm install if package-lock.json doesn't exist
                 RUN if [ -f package-lock.json ]; then \
-                      npm ci; \
+                      npm ci --only=production; \
                     else \
-                      npm install; \
+                      npm install --production; \
                     fi
 
 COPY . .
 
-                # Build the Next.js application
-                RUN npm run build
-
 EXPOSE ${nodePort}
 
-                # Set the PORT environment variable
-                ENV PORT=${nodePort}
-                
-                # Check if Next.js standalone output exists, otherwise use npm start
-                RUN if [ -f .next/standalone/server.js ]; then \
-                  echo 'Using Next.js standalone server'; \
-                else \
-                  echo 'Using npm start'; \
-                fi
-                
-                # Create entrypoint script to handle both standalone and regular modes
-                RUN echo '#!/bin/sh\nif [ -f .next/standalone/server.js ]; then\n  echo "Starting Next.js standalone server"\n  node .next/standalone/server.js\nelse\n  echo "Starting with npm run start"\n  npm run start\nfi' > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
-                
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["npm", "start"]
 DOCKERFILE_END
                 echo 'Dockerfile generated successfully'
               fi
