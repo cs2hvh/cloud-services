@@ -139,7 +139,7 @@ pipeline {
               else
                 echo 'Generating default Node.js Dockerfile'
                 cat > Dockerfile << 'DOCKERFILE_END'
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
@@ -156,7 +156,7 @@ COPY . .
 
 EXPOSE ${nodePort}
 
-CMD ["npm", "start"]
+CMD ["npx", "next", "start", "-p", "${nodePort}"]
 DOCKERFILE_END
                 echo 'Dockerfile generated successfully'
               fi
@@ -237,6 +237,7 @@ EOF
             sh(
               script: '''
               echo 'Generating Kubernetes deployment manifest'
+
               cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -245,7 +246,7 @@ metadata:
   namespace: default
   labels:
     app: \${APP_NAME}
-  spec:
+spec:
   replicas: ${replicas}
   selector:
     matchLabels:
