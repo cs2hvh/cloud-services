@@ -6,6 +6,7 @@ import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
 import { PortAllocator } from "./port-allocator";
+import { InfrastructureCleanupService } from "./infrastructure-cleanup";
 import { randomBytes } from "crypto";
 
 // Generate a random ID
@@ -199,12 +200,55 @@ export class DeploymentService {
       await Platform_Apps.delete(appId, userId);
       console.log(`[DeploymentService] Database record deleted`);
 
-      // Clean up infrastructure (don't block on this)
-      this.cleanupInfrastructure(app.name);
+      // Clean up infrastructure (now waits for completion)
+      await this.cleanupInfrastructure(app.name);
 
       return true;
     } catch (error: any) {
       console.error(`[DeploymentService] ❌ Deletion failed:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete only Jenkins job for an app (decoupled operation)
+   */
+  static async deleteJenkinsJob(appName: string): Promise<void> {
+    console.log(`[DeploymentService] Deleting Jenkins job for ${appName}`);
+    try {
+      await JenkinsService.deleteJob(appName);
+      console.log(`[DeploymentService] ✅ Jenkins job deleted for ${appName}`);
+    } catch (error) {
+      console.error(`[DeploymentService] ❌ Failed to delete Jenkins job for ${appName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete only Kubernetes resources for an app (decoupled operation)
+   */
+  static async deleteKubernetesResources(appName: string): Promise<void> {
+    console.log(`[DeploymentService] Creating Jenkins deletion job for Kubernetes resources of ${appName}`);
+    try {
+      // Use Jenkins to handle the deletion
+      await JenkinsService.createDeleteJob(appName);
+      console.log(`[DeploymentService] ✅ Jenkins deletion job created and triggered for ${appName}`);
+    } catch (error) {
+      console.error(`[DeploymentService] ❌ Failed to create Jenkins deletion job for ${appName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete only DNS record for an app (decoupled operation)
+   */
+  static async deleteDnsRecord(appName: string): Promise<void> {
+    console.log(`[DeploymentService] Deleting DNS record for ${appName}`);
+    try {
+      await DNSService.deleteRecord(appName);
+      console.log(`[DeploymentService] ✅ DNS record deleted for ${appName}`);
+    } catch (error) {
+      console.error(`[DeploymentService] ❌ Failed to delete DNS record for ${appName}:`, error);
       throw error;
     }
   }
@@ -215,69 +259,22 @@ export class DeploymentService {
   private static async cleanupInfrastructure(appName: string): Promise<void> {
     console.log(`[DeploymentService] Cleaning up infrastructure for ${appName}`);
 
+    // Use the new InfrastructureCleanupService for decoupled deletion
     try {
-      await Promise.all([
-        // Delete DNS record
-        DNSService.deleteRecord(appName).catch(err => {
-          console.error(`[DeploymentService] DNS cleanup error:`, err);
-        }),
-
-        // Delete Jenkins job
-        JenkinsService.deleteJob(appName).catch(err => {
-          console.error(`[DeploymentService] Jenkins cleanup error:`, err);
-        }),
-
-        // Delete Kubernetes resources
-        this.deleteK8sResources(appName).catch(err => {
-          console.error(`[DeploymentService] K8s cleanup error:`, err);
-        }),
-      ]);
-
-      console.log(`[DeploymentService] ✅ Infrastructure cleanup completed`);
-    } catch (error) {
-      console.error(`[DeploymentService] Infrastructure cleanup error:`, error);
+      // Delete Jenkins job
+      await InfrastructureCleanupService.deleteJenkinsJob(appName);
+    } catch (error: any) {
+      console.error(`[DeploymentService] Jenkins cleanup error:`, error);
     }
-  }
 
-  /**
-   * Delete Kubernetes resources for an app
-   */
-  private static async deleteK8sResources(appName: string): Promise<void> {
     try {
-      const kubectl = (await import("@/lib/kubernetes")).default;
-      const { AppsV1Api, CoreV1Api, NetworkingV1Api } = await import("@kubernetes/client-node");
-
-      const namespace = "default";
-      const deploymentName = `${appName}-app`;
-      const serviceName = `${appName}-service`;
-      const ingressName = `${appName}-ingress`;
-
-      const appsApi = kubectl.makeApiClient(AppsV1Api);
-      const coreV1Api = kubectl.makeApiClient(CoreV1Api);
-      const networkingApi = kubectl.makeApiClient(NetworkingV1Api);
-
-      // Delete resources concurrently
-      await Promise.all([
-        appsApi.deleteNamespacedDeployment({
-          name: deploymentName,
-          namespace: namespace,
-        }).catch(err => console.error(`Error deleting deployment:`, err)),
-        
-        coreV1Api.deleteNamespacedService({
-          name: serviceName,
-          namespace: namespace,
-        }).catch(err => console.error(`Error deleting service:`, err)),
-        
-        networkingApi.deleteNamespacedIngress({
-          name: ingressName,
-          namespace: namespace,
-        }).catch(err => console.error(`Error deleting ingress:`, err)),
-      ]);
-
-      console.log(`[DeploymentService] ✅ Deleted K8s resources for ${appName}`);
-    } catch (error) {
-      console.error("[DeploymentService] Error deleting K8s resources:", error);
-      throw error;
+      // Delete Kubernetes resources using Jenkins deletion job
+      await InfrastructureCleanupService.deleteKubernetesResources(appName);
+    } catch (error: any) {
+      console.error(`[DeploymentService] K8s cleanup error:`, error);
+      throw error; // Re-throw to ensure the API knows about the failure
     }
+
+    console.log(`[DeploymentService] ✅ Infrastructure cleanup completed for ${appName} (Jenkins and K8s deletion jobs)`);
   }
 }

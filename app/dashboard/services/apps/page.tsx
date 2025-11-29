@@ -76,7 +76,7 @@ const ApplicationDeploymentPage = () => {
 
   const fetchApps = async () => {
     try {
-      const res = await fetch('/api/jenkins');
+      const res = await fetch('/api/services/platform-apps/list');
       const data = await res.json();
       setDeployedApps(data.apps || []);
     } catch (error) {
@@ -111,15 +111,41 @@ const ApplicationDeploymentPage = () => {
   };
 
   const deleteApp = async (appId: string, appName: string) => {
-    if (!confirm(`Are you sure you want to delete ${appName}?`)) return;
+    if (!confirm(`Are you sure you want to delete ${appName}? This action cannot be undone.`)) return;
+    
+    // Show loading state
+    const originalApps = [...deployedApps];
+    setDeployedApps(deployedApps.map(app => 
+      app.id === appId ? { ...app, status: 'deleting' } : app
+    ));
     
     try {
-      const res = await fetch(`/api/jenkins?id=${appId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/services/platform-apps/delete`, { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          app_id: appId
+        })
+      });
+      
       if (res.ok) {
-        fetchApps();
+        // Remove the app from the list
+        setDeployedApps(deployedApps.filter(app => app.id !== appId));
+        const data = await res.json();
+        alert(data.message || 'App deleted successfully');
+      } else {
+        // Restore original state on error
+        setDeployedApps(originalApps);
+        const errorData = await res.json();
+        alert(errorData.error || 'Failed to delete app');
       }
     } catch (error) {
+      // Restore original state on error
+      setDeployedApps(originalApps);
       console.error('Error deleting app:', error);
+      alert('Error deleting app');
     }
   };
 
@@ -135,6 +161,8 @@ const ApplicationDeploymentPage = () => {
         return <Badge className="bg-red-500/20 text-red-400 border-red-500/30"><XCircle className="w-3 h-3 mr-1" />Failed</Badge>;
       case 'building':
         return <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30"><Loader2 className="w-3 h-3 mr-1 animate-spin" />Building</Badge>;
+      case 'deleting':
+        return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Loader2 className="w-3 h-3 mr-1 animate-spin" />Deleting</Badge>;
       default:
         return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
     }

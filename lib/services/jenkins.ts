@@ -8,6 +8,7 @@ import {
   createExpressPipeline,
   createPythonPipeline,
   createNextJsPipeline,
+  createDeletePipeline,
   PipelineType,
   type PipelineTypeValue,
 } from "@/lib/jenkins/pipelines";
@@ -64,6 +65,64 @@ export class JenkinsService {
   }
 
   /**
+   * Create a Jenkins deletion job
+   */
+  static async createDeleteJob(
+    appName: string,
+    size: string = 'small'
+  ): Promise<number> {
+    if (!process.env.JENKINS_URL) {
+      throw new Error("JENKINS_URL not configured");
+    }
+
+    const jobName = `${appName}-delete-job`;
+    
+    console.log(`[JenkinsService] Creating deletion job: ${jobName}`);
+
+    // Create delete pipeline
+    const pipeline = createDeletePipeline(appName, size);
+
+    // Create the job
+    try {
+      await jenkins.job.create(jobName, pipeline);
+      console.log(`[JenkinsService] ✅ Created Jenkins deletion job: ${jobName}`);
+    } catch (error: any) {
+      console.error(`[JenkinsService] Failed to create deletion job:`, error?.message);
+      throw new Error(`Jenkins deletion job creation failed: ${error?.message}`);
+    }
+
+    // Trigger build immediately
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    try {
+      await jenkins.job.build(jobName);
+      console.log(`[JenkinsService] ✅ Build triggered for deletion job: ${jobName}`);
+      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/`);
+      
+      // Wait a bit for the build to be registered in Jenkins
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get the actual build number
+      const buildNumber = await this.getLatestDeleteBuildNumber(appName);
+      if (buildNumber) {
+        console.log(`[JenkinsService] ✅ Build #${buildNumber} confirmed for deletion job: ${jobName}`);
+        return buildNumber;
+      } else {
+        // Fallback to build #1 if we can't get the build number
+        console.log(`[JenkinsService] ⚠️  Could not get build number, using fallback #1 for: ${jobName}`);
+        return 1;
+      }
+    } catch (error: any) {
+      console.error(`[JenkinsService] ❌ Error triggering deletion build:`, error?.message);
+      // Try to delete the created job since build failed
+      await jenkins.job.destroy(jobName).catch((err: any) => 
+        console.error(`[JenkinsService] Failed to cleanup deletion job after build failure:`, err)
+      );
+      throw new Error(`Jenkins deletion build trigger failed: ${error?.message}`);
+    }
+  }
+
+  /**
    * Delete a Jenkins job
    */
   static async deleteJob(appName: string): Promise<void> {
@@ -74,6 +133,19 @@ export class JenkinsService {
     await jenkins.job.destroy(jobName);
     
     console.log(`[JenkinsService] ✅ Deleted Jenkins job: ${jobName}`);
+  }
+
+  /**
+   * Delete a Jenkins deletion job
+   */
+  static async deleteDeleteJob(appName: string): Promise<void> {
+    const jobName = `${appName}-delete-job`;
+    
+    console.log(`[JenkinsService] Deleting deletion job: ${jobName}`);
+    
+    await jenkins.job.destroy(jobName);
+    
+    console.log(`[JenkinsService] ✅ Deleted Jenkins deletion job: ${jobName}`);
   }
 
   /**
@@ -109,6 +181,21 @@ export class JenkinsService {
       return jobInfo.lastBuild?.number || null;
     } catch (error: any) {
       console.error(`[JenkinsService] Error getting latest build number:`, error?.message);
+      return null;
+    }
+  }
+
+  /**
+   * Get latest build number for a deletion job
+   */
+  static async getLatestDeleteBuildNumber(appName: string): Promise<number | null> {
+    const jobName = `${appName}-delete-job`;
+    
+    try {
+      const jobInfo = await jenkins.job.get(jobName);
+      return jobInfo.lastBuild?.number || null;
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error getting latest delete build number:`, error?.message);
       return null;
     }
   }
@@ -180,6 +267,37 @@ export class JenkinsService {
       };
     } catch (error: any) {
       console.error(`[JenkinsService] Error checking build status:`, error?.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Check if deletion build is complete and return final status
+   */
+  static async checkDeleteBuildStatus(appName: string, buildNumber: number): Promise<{
+    building: boolean;
+    result: 'SUCCESS' | 'FAILURE' | 'ABORTED' | 'UNSTABLE' | null;
+    status: 'running' | 'failed' | 'building';
+  }> {
+    const jobName = `${appName}-delete-job`;
+    
+    try {
+      const buildInfo = await jenkins.build.get(jobName, buildNumber);
+      
+      let status: 'running' | 'failed' | 'building' = 'building';
+      
+      if (!buildInfo.building) {
+        // Build is complete
+        status = buildInfo.result === 'SUCCESS' ? 'running' : 'failed';
+      }
+      
+      return {
+        building: buildInfo.building,
+        result: buildInfo.result,
+        status,
+      };
+    } catch (error: any) {
+      console.error(`[JenkinsService] Error checking delete build status:`, error?.message);
       throw error;
     }
   }
