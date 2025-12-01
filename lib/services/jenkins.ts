@@ -2,6 +2,7 @@
  * Jenkins Service - Handles CI/CD job operations
  */
 import jenkins from "@/lib/jenkins";
+import { APP_DOMAIN } from "@/config/domain";
 import {
   createSimpleTestPipeline,
   createNodeJsPipeline,
@@ -80,7 +81,7 @@ export class JenkinsService {
     console.log(`[JenkinsService] Creating deletion job: ${jobName}`);
 
     // Create delete pipeline
-    const pipeline = createDeletePipeline(appName, size);
+    const pipeline = createDeletePipeline(appName, size, APP_DOMAIN);
 
     // Create the job
     try {
@@ -324,19 +325,19 @@ export class JenkinsService {
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, port, size);
+        return createExpressPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, port, size);
+        return createPythonPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
 
       case 'nextjs':
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
-        return createNextJsPipeline(appName, githubUrl, branch, port, size);
+        return createNextJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
 
       case 'nodejs':
       case 'node.js':
@@ -346,7 +347,7 @@ export class JenkinsService {
       case 'vue.js':
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, port, size);
+        return createNodeJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
     }
   }
 }

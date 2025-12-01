@@ -2,6 +2,7 @@
  * DNS Service - Handles Cloudflare DNS operations
  */
 import cloudflare from "@/lib/cloudflare";
+import { getAppDomain } from "@/config/domain";
 
 export class DNSService {
   /**
@@ -16,7 +17,8 @@ export class DNSService {
       throw new Error("CLOUDFLARE_API_TOKEN not configured");
     }
 
-    console.log(`[DNSService] Creating DNS: ${appName}.uizb210.xyz -> ${ipAddress}`);
+    const fullDomain = getAppDomain(appName);
+    console.log(`[DNSService] Creating DNS: ${fullDomain} -> ${ipAddress}`);
 
     try {
       await cloudflare.dns.records.create({
@@ -29,7 +31,7 @@ export class DNSService {
       });
 
       console.log(`[DNSService] ✅ Created DNS record for ${appName}`);
-      console.log(`[DNSService] Record will be accessible at: https://${appName}.uizb210.xyz`);
+      console.log(`[DNSService] Record will be accessible at: https://${fullDomain}`);
     } catch (error: any) {
       console.error(`[DNSService] Cloudflare API error:`, error?.message);
       throw new Error(`Failed to create DNS record: ${error?.message || 'Unknown error'}`);
@@ -50,8 +52,9 @@ export class DNSService {
       zone_id: process.env.CLOUDFLARE_ZONE_ID,
     });
 
+    const fullDomain = getAppDomain(appName);
     const matchingRecords = records.result?.filter((record: any) =>
-      record.name === `${appName}.uizb210.xyz`
+      record.name === fullDomain
     ) || [];
 
     for (const record of matchingRecords) {
@@ -75,8 +78,9 @@ export class DNSService {
       zone_id: process.env.CLOUDFLARE_ZONE_ID,
     });
 
+    const fullDomain = getAppDomain(appName);
     const exists = records.result?.some((record: any) =>
-      record.name === `${appName}.uizb210.xyz`
+      record.name === fullDomain
     ) || false;
 
     return exists;

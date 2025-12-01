@@ -189,17 +189,20 @@ The `JenkinsService` automatically selects the right pipeline based on framework
 import { JenkinsService } from '@/lib/services/jenkins';
 
 // Simple test (no deployment)
-await JenkinsService.createJob('test-app', 'https://...', 'main', 31000, 'simple-test');
+await JenkinsService.createJob('test-app', 'https://...', 'main', 3000, 'simple-test');
 
-// Express with auto-Dockerfile
-await JenkinsService.createJob('my-api', 'https://...', 'main', 31001, 'express');
+// Express with auto-Dockerfile (port 3000 is standard for Node.js)
+await JenkinsService.createJob('my-api', 'https://...', 'main', 3000, 'express');
 
-// Node.js (requires Dockerfile)
-await JenkinsService.createJob('my-next-app', 'https://...', 'main', 31002, 'nextjs');
+// Node.js / Next.js (requires Dockerfile, uses port 3000)
+await JenkinsService.createJob('my-next-app', 'https://...', 'main', 3000, 'nextjs');
 
-// Python
-await JenkinsService.createJob('my-django', 'https://...', 'main', 31003, 'django');
+// Python (uses port 8000 for FastAPI/Flask/Django)
+await JenkinsService.createJob('my-django', 'https://...', 'main', 8000, 'django');
 ```
+
+**Note:** The port parameter now represents the internal container port, not a NodePort.
+All apps are exposed via NGINX Ingress Controller on ports 80/443 using ClusterIP services.
 
 ## Framework Mapping
 

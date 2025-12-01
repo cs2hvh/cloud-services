@@ -4,8 +4,9 @@
 export function createDeletePipeline(
   name: string,
   size: string = 'small',
+  appDomain: string = 'galaxyhvh.com',
 ): string {
-  const domain = `${name}.uizb210.xyz`;
+  const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;  // Match the deployment naming convention
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;

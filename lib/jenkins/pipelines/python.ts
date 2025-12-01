@@ -8,8 +8,9 @@ export function createPythonPipeline(
   branch: string,
   nodePort: string,
   size: string = 'small',
+  appDomain: string = 'galaxyhvh.com',
 ): string {
-  const domain = `${name}.uizb210.xyz`;
+  const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
@@ -33,6 +34,9 @@ export function createPythonPipeline(
     memoryLimit = '2Gi';
     replicas = 3;
   }
+
+  // Use standard container port (8000) for Python apps (FastAPI/Flask/Django)
+  const containerPort = 8000;
   
   // Remove token from URL for display purposes (keep only clean URL for metadata)
   const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
@@ -43,7 +47,7 @@ export function createPythonPipeline(
   <description>
     Python deployment pipeline for ${name}
     Supports Django, Flask, FastAPI, builds with Kaniko
-    Accessible at https://${domain} (port ${nodePort})
+    Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
 
@@ -77,7 +81,7 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    NODE_PORT = '${nodePort}'
+    CONTAINER_PORT = '${containerPort}'
     DOCKER_IMAGE = "hav0ky/${appName}:latest"
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -91,7 +95,7 @@ pipeline {
           echo "Application Name: \${env.APP_NAME}"
           echo "Git Repository: ${gitUrl}"
           echo "Branch: ${branch}"
-          echo "Port: \${env.NODE_PORT}"
+          echo "Container Port: \${env.CONTAINER_PORT}"
           echo "Domain: \${env.DOMAIN}"
           echo "Build Number: \${env.BUILD_NUMBER}"
           echo 'Initialization completed'
@@ -144,7 +148,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE ${nodePort}
+EXPOSE ${containerPort}
 
 CMD ["python", "app.py"]
 DOCKERFILE_END
@@ -250,10 +254,10 @@ spec:
         image: \${DOCKER_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${nodePort}
+        - containerPort: ${containerPort}
         env:
         - name: PORT
-          value: "\${NODE_PORT}"
+          value: "${containerPort}"
         resources:
           requests:
             cpu: ${cpuRequest}
@@ -264,7 +268,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /
-            port: \${NODE_PORT}
+            port: ${containerPort}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -272,7 +276,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /
-            port: \${NODE_PORT}
+            port: ${containerPort}
           initialDelaySeconds: 10
           periodSeconds: 5
           timeoutSeconds: 3
@@ -291,10 +295,9 @@ spec:
     app: \${APP_NAME}
   ports:
   - protocol: TCP
-    port: \${NODE_PORT}
-    targetPort: \${NODE_PORT}
-    nodePort: \${NODE_PORT}
-  type: NodePort
+    port: 80
+    targetPort: ${containerPort}
+  type: ClusterIP
 SERVICE_EOF
 
               echo 'Generating certificate manifest'
@@ -338,7 +341,7 @@ spec:
           service:
             name: \${SERVICE_NAME}
             port:
-              number: \${NODE_PORT}
+              number: 80
 INGRESS_EOF
             ''',
             returnStatus: false

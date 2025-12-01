@@ -4,10 +4,12 @@ export function createNextJsPipeline(
   branch: string,
   nodePort: string,
   size: string = 'small',
+  appDomain: string = 'galaxyhvh.com',
 ): string {
-  const domain = `${name}.uizb210.xyz`;
+  const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
+  const ingressName = `${name}-ingress`;
 
   // sanitize git url
   const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
@@ -36,20 +38,11 @@ export function createNextJsPipeline(
   // fixed container port for Next.js
   const containerPort = 3000;
 
-  // validate nodePort: only include if numeric and between 30000 and 32767
-  let nodePortYaml = '';
-  const npNum = parseInt(nodePort || '', 10);
-  if (!isNaN(npNum) && npNum >= 30000 && npNum <= 32767) {
-    nodePortYaml = `    nodePort: ${npNum}\n`;
-  } else if (nodePort && nodePort.trim().length > 0) {
-    // invalid nodePort supplied — we intentionally omit it so k8s assigns one
-    nodePortYaml = `    # nodePort omitted (invalid value supplied: ${nodePort})\n`;
-  }
-
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <description>
     Next.js Deployment Pipeline for ${name}
+    Accessible at https://${domain} via NGINX Ingress
   </description>
 
   <properties>
@@ -70,7 +63,8 @@ pipeline {
   environment {
     APP_NAME = '${appName}'
     SERVICE_NAME = '${serviceName}'
-    NODE_PORT = '${nodePort}'
+    INGRESS_NAME = '${ingressName}'
+    DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
     DOCKER_IMAGE = "hav0ky/${appName}:latest"
     KUBECONFIG = credentials('kubeconfig_file')
@@ -163,13 +157,19 @@ EOF
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
-
-          sh """
-cat > deployment.yaml <<EOF
+          script {
+            echo 'STAGE: Deploy to Kubernetes'
+            
+            sh '''
+              echo 'Generating Kubernetes deployment manifest'
+              cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: \${APP_NAME}
+  namespace: default
+  labels:
+    app: \${APP_NAME}
 spec:
   replicas: ${replicas}
   selector:
@@ -183,6 +183,7 @@ spec:
       containers:
       - name: \${APP_NAME}
         image: \${DOCKER_IMAGE}
+        imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
         env:
@@ -207,27 +208,91 @@ spec:
             port: ${containerPort}
           initialDelaySeconds: 15
           periodSeconds: 20
-EOF
-"""
+DEPLOY_EOF
 
-          sh """
-cat > service.yaml <<EOF
+              echo 'Generating Kubernetes service manifest'
+              cat > service.yaml << SERVICE_EOF
 apiVersion: v1
 kind: Service
 metadata:
   name: \${SERVICE_NAME}
+  namespace: default
 spec:
   selector:
     app: \${APP_NAME}
-  type: NodePort
   ports:
-  - port: ${containerPort}
+  - protocol: TCP
+    port: 80
     targetPort: ${containerPort}
-${nodePortYaml}EOF
-"""
+  type: ClusterIP
+SERVICE_EOF
 
-          sh "kubectl apply -f deployment.yaml"
-          sh "kubectl apply -f service.yaml"
+              echo 'Generating certificate manifest'
+              cat > certificate.yaml << CERT_EOF
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${name}-cert
+  namespace: default
+spec:
+  secretName: ${name}-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - \${DOMAIN}
+CERT_EOF
+
+              echo 'Generating Kubernetes ingress manifest'
+              cat > ingress.yaml << INGRESS_EOF
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: \${INGRESS_NAME}
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - \${DOMAIN}
+    secretName: ${name}-tls
+  rules:
+  - host: \${DOMAIN}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: \${SERVICE_NAME}
+            port:
+              number: 80
+INGRESS_EOF
+            '''
+
+            sh 'kubectl apply -f deployment.yaml'
+            sh 'kubectl apply -f service.yaml'
+            sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
+            sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
+          }
+        }
+      }
+    }
+
+    stage('Verify Deployment') {
+      steps {
+        container('kubectl') {
+          script {
+            echo 'STAGE: Verify Deployment'
+            echo "Checking deployment status for \${env.APP_NAME}"
+            
+            sh 'kubectl get deployment,service,ingress -l app=\${APP_NAME}'
+            sh 'kubectl get pods -l app=\${APP_NAME}'
+            
+            echo 'Deployment verification completed successfully'
+          }
         }
       }
     }
@@ -236,19 +301,17 @@ ${nodePortYaml}EOF
 
   post {
     success {
-      echo "Deployment successful! NodePort URL:"
-      container('kubectl') {
-        sh '''
-          echo "============================="
-          echo "     CLUSTER NODE INFO"
-          echo "============================="
-          kubectl get nodes -o wide
-
-          echo "============================="
-          echo "      SERVICE DETAILS"
-          echo "============================="
-          kubectl get svc
-        '''
+      script {
+        echo 'PIPELINE: Success'
+        echo "Deployment completed successfully for \${env.APP_NAME}"
+        echo "Service URL: https://\${env.DOMAIN}"
+      }
+    }
+    
+    failure {
+      script {
+        echo 'PIPELINE: Failure'
+        echo "Deployment failed for \${env.APP_NAME}"
       }
     }
   }

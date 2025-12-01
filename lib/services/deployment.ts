@@ -41,6 +41,26 @@ export interface DeploymentResult {
 
 export class DeploymentService {
   /**
+   * Get standard container port based on framework
+   */
+  private static getContainerPort(framework: string): number {
+    switch (framework?.toLowerCase()) {
+      case 'python':
+      case 'django':
+      case 'flask':
+      case 'fastapi':
+        return 8000;
+      case 'nodejs':
+      case 'node':
+      case 'express':
+      case 'nextjs':
+      case 'next':
+      default:
+        return 3000;
+    }
+  }
+
+  /**
    * Deploy a new application
    */
   static async deploy(config: DeploymentConfig): Promise<DeploymentResult> {
@@ -50,12 +70,9 @@ export class DeploymentService {
     console.log(`[DeploymentService] Branch: ${config.branch}`);
 
     try {
-      // Step 1: Allocate port
-      const port = await PortAllocator.allocate();
-      if (!port) {
-        throw new Error("No available ports");
-      }
-      console.log(`[DeploymentService] Step 1/5: Port allocated - ${port}`);
+      // Step 1: Get standard container port based on framework (no NodePort allocation needed)
+      const containerPort = this.getContainerPort(config.framework);
+      console.log(`[DeploymentService] Step 1/5: Container port selected - ${containerPort} (NGINX Ingress handles external routing)`);
 
       // Step 2: Create database record
       const slug = `${config.name}-${generateId(6)}`;
@@ -72,7 +89,7 @@ export class DeploymentService {
         build_command: config.build_command,
         output_directory: config.output_directory,
         status: "pending" as const, // Will be updated to 'building' when Jenkins starts
-        port,
+        port: containerPort, // Store container port for reference
         ip: process.env.KUBE_IP || null,
       };
 
@@ -93,26 +110,27 @@ export class DeploymentService {
       }
 
       // Step 4: Create DNS record
-      // try {
-      //   if (!process.env.KUBE_IP) {
-      //     throw new Error("KUBE_IP environment variable not configured");
-      //   }
-      //   await DNSService.createRecord(config.name, process.env.KUBE_IP);
-      //   console.log(`[DeploymentService] Step 4/5: DNS record created - ${config.name}.uizb210.xyz`);
-      // } catch (dnsError: any) {
-      //   console.error(`[DeploymentService] DNS creation failed:`, dnsError?.message);
-      //   // Rollback: Delete database record and free the port
-      //   await Platform_Apps.delete(app.id, config.user_id).catch(err => 
-      //     console.error(`[DeploymentService] Failed to rollback DB record:`, err)
-      //   );
-      //   throw new Error(`DNS creation failed: ${dnsError?.message}`);
-      // }
+      const { getAppDomain } = await import('@/config/domain');
+      try {
+        if (!process.env.KUBE_IP) {
+          throw new Error("KUBE_IP environment variable not configured");
+        }
+        await DNSService.createRecord(config.name, process.env.KUBE_IP);
+        console.log(`[DeploymentService] Step 4/5: DNS record created - ${getAppDomain(config.name)}`);
+      } catch (dnsError: any) {
+        console.error(`[DeploymentService] DNS creation failed:`, dnsError?.message);
+        // Rollback: Delete database record
+        await Platform_Apps.delete(app.id, config.user_id).catch(err => 
+          console.error(`[DeploymentService] Failed to rollback DB record:`, err)
+        );
+        throw new Error(`DNS creation failed: ${dnsError?.message}`);
+      }
 
       // Step 5: Create Jenkins job and start build monitoring
       try {
         // Update status to 'building' before triggering Jenkins
         await Platform_Apps.update(app.id, { status: "building" });
-        console.log(`[DeploymentService] Step 4/5: Status updated to 'building'`);
+        console.log(`[DeploymentService] Step 5/5: Status updated to 'building'`);
         
         // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
         const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
@@ -121,11 +139,11 @@ export class DeploymentService {
           config.name,
           jenkinsRepoUrl,
           config.branch,
-          port,
+          containerPort,
           config.framework,
           config.size || 'small'
         );
-        console.log(`[DeploymentService] Step 5/5: Jenkins job created and triggered`);
+        console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 
         // Start background polling for build status
         BuildPollingService.startPolling({
@@ -137,6 +155,7 @@ export class DeploymentService {
       } catch (jenkinsError: any) {
         console.error(`[DeploymentService] Jenkins job creation failed:`, jenkinsError?.message);
         // Rollback: Delete DNS and DB record on Jenkins failure
+        // Note: DNS record should exist at this point since it's created before Jenkins job
         await Promise.all([
           DNSService.deleteRecord(config.name).catch(err => 
             console.error(`[DeploymentService] Failed to rollback DNS:`, err)
@@ -149,7 +168,8 @@ export class DeploymentService {
       }
 
       // Update deployment URL
-      const deploymentUrl = `https://${config.name}.uizb210.xyz`;
+      const { getAppUrl } = await import('@/config/domain');
+      const deploymentUrl = getAppUrl(config.name);
       await Platform_Apps.update(app.id, { deployment_url: deploymentUrl });
 
       // Get build number for response
@@ -164,7 +184,7 @@ export class DeploymentService {
         success: true,
         app_id: app.id,
         deployment_url: deploymentUrl,
-        port,
+        port: containerPort,
         build_number: buildNumber,
       };
     } catch (error: any) {
