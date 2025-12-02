@@ -337,173 +337,237 @@ const ApplicationDeploymentPage = () => {
 
       {/* Deployed Applications */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-        {loading ? (
-          <Card className="bg-white/5 border-white/10">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-12 w-12 text-white/30 mb-4 animate-spin" />
-              <p className="text-white/60">Loading applications...</p>
-            </CardContent>
-          </Card>
-        ) : filteredApps.length > 0 ? (
-          <div>
-            {/* Search bar */}
-            <div className="bg-white/5 p-4 rounded-lg mb-6 flex items-center justify-between">
-              <div className="flex items-center w-full max-w-md">
-                <Search className="w-5 h-5 text-white/50 mr-3"/>
-                <input 
-                  type="text" 
-                  placeholder="Search deployed applications..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full bg-transparent focus:outline-none text-white placeholder-white/50"
-                />
+        <Card className="bg-white/5 border-white/10">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl text-white">Deployed Applications</CardTitle>
+                <CardDescription className="text-white/60">
+                  Manage your deployed applications and view build status
+                </CardDescription>
               </div>
-              <div className="text-sm text-white/60">
-                {filteredApps.length} of {deployedApps.length} apps
-              </div>
+              <Badge variant="outline" className="text-white/60 border-white/20">
+                {deployedApps.length} {deployedApps.length === 1 ? 'app' : 'apps'}
+              </Badge>
             </div>
-            
-            {/* Deployed applications */}
-            <div className="grid grid-cols-1 gap-4">
-              {filteredApps.map((app) => {
-                const build = buildInfo[app.name];
-                const logs = buildLogs[app.name];
-                const isExpanded = selectedApp === app.name;
-                const domain = app.deployment_url ? new URL(app.deployment_url).hostname : `${app.slug}.uizb210.xyz`;
+          </CardHeader>
+          <CardContent className="pt-0">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-12">
+                <Loader2 className="h-12 w-12 text-white/30 mb-4 animate-spin" />
+                <p className="text-white/60">Loading applications...</p>
+              </div>
+            ) : deployedApps.length > 0 ? (
+              <div>
+                {/* Search bar */}
+                <div className="bg-black/30 p-3 rounded-lg mb-4 flex items-center justify-between border border-white/5">
+                  <div className="flex items-center w-full max-w-md">
+                    <Search className="w-4 h-4 text-white/40 mr-2"/>
+                    <input 
+                      type="text" 
+                      placeholder="Search applications..." 
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-transparent focus:outline-none text-sm text-white placeholder-white/40"
+                    />
+                  </div>
+                  <div className="text-xs text-white/50">
+                    {filteredApps.length} of {deployedApps.length}
+                  </div>
+                </div>
+                
+                {/* Scrollable apps list */}
+                <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
+                  {filteredApps.map((app) => {
+                    const build = buildInfo[app.name];
+                    const logs = buildLogs[app.name];
+                    const isExpanded = selectedApp === app.name;
+                    const domain = app.deployment_url ? new URL(app.deployment_url).hostname : `${app.slug}.galaxyhvh.com`;
+                    const isAppDeleting = app.status === 'deleting';
 
-                return (
-                  <Card key={app.id} className="bg-white/5 border-white/10 hover:bg-white/10 transition-colors">
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-xl font-bold text-white">{app.name}</h3>
-                            {getStatusBadge(app.status, build)}
+                    return (
+                      <div 
+                        key={app.id} 
+                        className={`rounded-lg border transition-all duration-200 ${
+                          isAppDeleting 
+                            ? 'bg-yellow-500/5 border-yellow-500/20 opacity-70' 
+                            : 'bg-black/30 border-white/5 hover:border-white/10 hover:bg-black/40'
+                        }`}
+                      >
+                        <div className="p-4">
+                          {/* Main Row */}
+                          <div className="flex items-center justify-between">
+                            {/* Left: App Info */}
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              {/* Status Indicator */}
+                              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                                isAppDeleting ? 'bg-yellow-400 animate-pulse' :
+                                app.status === 'running' ? 'bg-green-400' : 
+                                app.status === 'failed' ? 'bg-red-400' :
+                                app.status === 'building' ? 'bg-blue-400 animate-pulse' :
+                                'bg-yellow-400'
+                              }`} />
+                              
+                              {/* App Name & URL */}
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="text-sm font-semibold text-white truncate">{app.name}</h3>
+                                  {getStatusBadge(app.status, build)}
+                                </div>
+                                <a 
+                                  href={`https://${domain}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className={`text-xs flex items-center gap-1 transition-colors truncate ${
+                                    isAppDeleting ? 'text-white/40 pointer-events-none' : 'text-white/50 hover:text-blue-400'
+                                  }`}
+                                >
+                                  <Globe className="w-3 h-3 flex-shrink-0" />
+                                  <span className="truncate">{domain}</span>
+                                  <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+                                </a>
+                              </div>
+                            </div>
+
+                            {/* Center: Build Info */}
+                            <div className="hidden md:flex items-center gap-6 px-4">
+                              <div className="text-center">
+                                <p className="text-xs text-white/40 mb-0.5">Port</p>
+                                <p className="text-sm text-white font-mono">{app.port}</p>
+                              </div>
+                              {build && (
+                                <div className="text-center">
+                                  <p className="text-xs text-white/40 mb-0.5">Build</p>
+                                  <p className="text-sm text-white font-mono flex items-center gap-1">
+                                    #{build.number}
+                                    {build.building ? (
+                                      <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                                    ) : build.result === 'SUCCESS' ? (
+                                      <CheckCircle2 className="w-3 h-3 text-green-400" />
+                                    ) : build.result === 'FAILURE' ? (
+                                      <XCircle className="w-3 h-3 text-red-400" />
+                                    ) : null}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="text-center">
+                                <p className="text-xs text-white/40 mb-0.5">Created</p>
+                                <p className="text-sm text-white/70">{new Date(app.created_at).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+
+                            {/* Right: Actions */}
+                            <div className="flex items-center gap-2 ml-4">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={isAppDeleting}
+                                onClick={() => {
+                                  if (isExpanded) {
+                                    setSelectedApp(null);
+                                  } else {
+                                    setSelectedApp(app.name);
+                                    if (build) {
+                                      fetchBuildLogs(app.name, build.number);
+                                    }
+                                  }
+                                }}
+                                className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/10"
+                              >
+                                <Terminal className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                disabled={isAppDeleting}
+                                onClick={() => deleteApp(app.id, app.name)}
+                                className="h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+                              >
+                                {isAppDeleting ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-white/60">
-                            <a 
-                              href={`https://${domain}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="flex items-center hover:text-white transition-colors"
-                            >
-                              <Globe className="w-4 h-4 mr-1" />
-                              {domain}
-                              <ExternalLink className="w-3 h-3 ml-1" />
-                            </a>
-                            <span className="flex items-center">
-                              <GitBranch className="w-4 h-4 mr-1" />
+
+                          {/* Mobile: Additional Info */}
+                          <div className="md:hidden mt-3 pt-3 border-t border-white/5 flex items-center gap-4 text-xs text-white/50">
+                            <span className="flex items-center gap-1">
+                              <GitBranch className="w-3 h-3" />
                               Port {app.port}
                             </span>
-                            <span>
-                              Created {new Date(app.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                          
-                          {build && (
-                            <div className="mt-3 flex items-center gap-4 text-sm">
-                              <span className="text-white/70">
+                            {build && (
+                              <span className="flex items-center gap-1">
                                 Build #{build.number}
+                                {build.building ? (
+                                  <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                                ) : build.result === 'SUCCESS' ? (
+                                  <CheckCircle2 className="w-3 h-3 text-green-400" />
+                                ) : build.result === 'FAILURE' ? (
+                                  <XCircle className="w-3 h-3 text-red-400" />
+                                ) : null}
                               </span>
-                              {build.building ? (
-                                <span className="text-blue-400 flex items-center">
-                                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                                  Building...
-                                </span>
-                              ) : build.result === 'SUCCESS' ? (
-                                <span className="text-green-400 flex items-center">
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Success ({(build.duration / 1000).toFixed(0)}s)
-                                </span>
-                              ) : build.result === 'FAILURE' ? (
-                                <span className="text-red-400 flex items-center">
-                                  <XCircle className="w-3 h-3 mr-1" />
-                                  Failed
-                                </span>
-                              ) : (
-                                <span className="text-yellow-400">Pending</span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              if (isExpanded) {
-                                setSelectedApp(null);
-                              } else {
-                                setSelectedApp(app.name);
-                                if (build) {
-                                  fetchBuildLogs(app.name, build.number);
-                                }
-                              }
-                            }}
-                            className="bg-white/5 border-white/10 hover:bg-white/20"
-                          >
-                            <Terminal className="w-4 h-4 mr-2" />
-                            {isExpanded ? 'Hide' : 'View'} Logs
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => deleteApp(app.id, app.name)}
-                            className="bg-red-500/10 border-red-500/30 hover:bg-red-500/20 text-red-400"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Build Logs */}
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="mt-4"
-                        >
-                          <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="text-sm font-semibold text-white flex items-center">
-                                <Terminal className="w-4 h-4 mr-2" />
-                                Build Logs {build && `(Build #${build.number})`}
-                              </h4>
-                              {build?.building && (
-                                <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                              )}
-                            </div>
-                            <pre className="text-xs text-white/80 font-mono overflow-x-auto max-h-96 overflow-y-auto">
-                              {logs || 'Loading logs...'}
-                            </pre>
+                            )}
+                            <span>{new Date(app.created_at).toLocaleDateString()}</span>
                           </div>
-                        </motion.div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <Card className="bg-white/5 border-white/10 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Code className="h-12 w-12 text-white/30 mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">No Applications Deployed</h3>
-              <p className="text-white/60 text-center mb-4 max-w-md">
-                Deploy your first application from a Git repository to get started with our platform.
-              </p>
-              <Button asChild>
-                <Link href="/dashboard/services/apps/new">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Deploy Your First App
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                        </div>
+
+                        {/* Build Logs (Expandable) */}
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="border-t border-white/5"
+                          >
+                            <div className="p-4 bg-black/50">
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-xs font-semibold text-white/70 flex items-center">
+                                  <Terminal className="w-3 h-3 mr-1.5" />
+                                  Build Logs {build && `#${build.number}`}
+                                </h4>
+                                {build?.building && (
+                                  <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                                )}
+                              </div>
+                              <pre className="text-[11px] text-white/70 font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/30 rounded p-3 custom-scrollbar">
+                                {logs || 'Loading logs...'}
+                              </pre>
+                            </div>
+                          </motion.div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* No results message */}
+                {filteredApps.length === 0 && searchTerm && (
+                  <div className="text-center py-8">
+                    <Search className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                    <p className="text-sm text-white/50">No applications match "{searchTerm}"</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 border border-dashed border-white/10 rounded-lg">
+                <Code className="h-10 w-10 text-white/20 mb-3" />
+                <h3 className="text-base font-medium text-white mb-1">No Applications Deployed</h3>
+                <p className="text-sm text-white/50 text-center mb-4 max-w-sm">
+                  Deploy your first application from a Git repository to get started.
+                </p>
+                <Button size="sm" asChild>
+                  <Link href="/dashboard/services/apps/new">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Deploy Your First App
+                  </Link>
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Supported Frameworks */}
