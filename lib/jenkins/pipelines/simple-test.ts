@@ -51,7 +51,7 @@ pipeline {
         script {
           echo 'STAGE: Initialize'
           echo "Test Name: \${env.TEST_NAME}"
-          echo "Git Repository: ${gitUrl}"
+          echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
           echo "Build Number: \${env.BUILD_NUMBER}"
           echo 'Initialization completed'

@@ -95,7 +95,7 @@ pipeline {
         script {
           echo 'STAGE: Initialize'
           echo "Application Name: \${env.APP_NAME}"
-          echo "Git Repository: ${gitUrl}"
+          echo "Git Repository: ${cleanUrl}"
           echo "Branch: ${branch}"
           echo "Container Port: \${env.CONTAINER_PORT}"
           echo "Domain: \${env.DOMAIN}"
@@ -196,8 +196,6 @@ DOCKERFILE_END
                   exit 1
                 fi
                 
-                echo 'Dockerfile Contents:'
-                cat Dockerfile
                 echo 'Dockerfile preparation completed'
               ''',
               returnStatus: false,

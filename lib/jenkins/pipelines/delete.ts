@@ -20,15 +20,10 @@ export function createDeletePipeline(
   <actions/>
   <description>
     Delete pipeline for ${name}
-    Deletes: Deployment, Service, Ingress, Certificate, TLS Secret
   </description>
   <keepDependencies>false</keepDependencies>
 
-  <properties>
-    <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
-      <projectUrl>https://github.com/hav0k-studios/cloud-services</projectUrl>
-    </com.coravy.hudson.plugins.github.GithubProjectProperty>
-  </properties>
+  <properties/>
 
   <triggers/>
 
@@ -90,26 +85,14 @@ spec:
       steps {
         container('kubectl') {
           script {
-            echo 'STAGE: Delete Kubernetes Resources'
-            echo "Deleting resources for: \${env.APP_NAME}"
+            echo 'Deleting application resources...'
             
             sh """
-              echo "Deleting deployment..."
               kubectl delete deployment \${APP_NAME} --namespace=default --ignore-not-found=true
-              
-              echo "Deleting service..."
               kubectl delete service \${SERVICE_NAME} --namespace=default --ignore-not-found=true
-              
-              echo "Deleting ingress..."
               kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true
-              
-              echo "Deleting certificate..."
               kubectl delete certificate \${CERT_NAME} --namespace=default --ignore-not-found=true
-              
-              echo "Deleting TLS secret..."
               kubectl delete secret \${TLS_SECRET_NAME} --namespace=default --ignore-not-found=true
-              
-              echo "✅ Kubernetes resource deletion completed"
             """
           }
         }
@@ -120,11 +103,9 @@ spec:
       steps {
         container('kubectl') {
           script {
-            echo 'STAGE: Verify Deletion'
+            echo 'Verifying resources are deleted...'
             
             sh """
-              echo "Verifying resources are deleted..."
-              
               kubectl get deployment \${APP_NAME} --namespace=default 2>/dev/null && echo "⚠️ Deployment still exists" || echo "✅ Deployment deleted"
               kubectl get service \${SERVICE_NAME} --namespace=default 2>/dev/null && echo "⚠️ Service still exists" || echo "✅ Service deleted"
               kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "⚠️ Ingress still exists" || echo "✅ Ingress deleted"
