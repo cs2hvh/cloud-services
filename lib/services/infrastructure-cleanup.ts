@@ -64,6 +64,13 @@ export class InfrastructureCleanupService {
         if (!status.building) {
           if (status.result === 'SUCCESS') {
             console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job completed successfully`);
+            // Clean up the delete job itself
+            try {
+              await JenkinsService.deleteDeleteJob(appName);
+              console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job cleaned up`);
+            } catch (cleanupError) {
+              console.warn(`[InfrastructureCleanupService] ⚠️ Failed to cleanup delete job (non-critical):`, cleanupError);
+            }
             return;
           } else {
             throw new Error(`Jenkins deletion job failed with result: ${status.result}`);

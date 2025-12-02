@@ -299,6 +299,12 @@ export class JenkinsService {
       };
     } catch (error: any) {
       console.error(`[JenkinsService] Error checking delete build status:`, error?.message);
+      // Mark as notFound if it's a 404 (build doesn't exist yet)
+      if (error?.message?.includes('404') || error?.message?.includes('not found') || error?.statusCode === 404) {
+        const notFoundError = new Error(`Build #${buildNumber} not found for ${jobName}`);
+        (notFoundError as any).notFound = true;
+        throw notFoundError;
+      }
       throw error;
     }
   }
