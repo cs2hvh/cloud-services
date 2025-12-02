@@ -420,3 +420,143 @@ export const mockInvalidSpectrumPayloads = {
     protocol: 'tcp/99999', // Port > 65535
   },
 };
+
+/**
+ * Mock data for Object Storage testing
+ */
+
+export const mockObjectSpaceBucket = {
+  id: 'bucket-550e8400-e29b-41d4-a716-446655440000',
+  type: 'bucket' as const,
+  name: 'test-bucket-12345',
+  bucket_id: 'test-bucket-12345',
+  owner_id: mockUser.id,
+  project_id: mockProject.id,
+  region: 'nyc3',
+  status: 'active' as const,
+  endpoint: JSON.stringify({
+    iv: 'test-iv-hex-string',
+    encrypted: 'encrypted-endpoint-data',
+    tag: 'test-tag-hex-string',
+    salt: 'test-salt-hex-string',
+  }),
+  acl: 'private' as const,
+  cors_enabled: false,
+  versioning_enabled: false,
+  size_bytes: 1048576, // 1 MB
+  object_count: 5,
+  key_id: JSON.stringify({
+    iv: 'test-iv-hex-string',
+    encrypted: 'encrypted-access-key-data',
+    tag: 'test-tag-hex-string',
+    salt: 'test-salt-hex-string',
+  }),
+  secret_key: JSON.stringify({
+    iv: 'test-iv-hex-string',
+    encrypted: 'encrypted-secret-key-data',
+    tag: 'test-tag-hex-string',
+    salt: 'test-salt-hex-string',
+  }),
+  created_at: '2024-01-01T00:00:00Z',
+  updated_at: '2024-01-01T00:00:00Z',
+};
+
+export const mockPublicBucket = {
+  ...mockObjectSpaceBucket,
+  id: 'bucket-public-123',
+  bucket_id: 'public-bucket-456',
+  name: 'public-bucket-456',
+  acl: 'public-read' as const,
+};
+
+export const mockBucketWithCORS = {
+  ...mockObjectSpaceBucket,
+  id: 'bucket-cors-123',
+  bucket_id: 'cors-bucket-789',
+  name: 'cors-bucket-789',
+  cors_enabled: true,
+};
+
+export const mockBucketWithVersioning = {
+  ...mockObjectSpaceBucket,
+  id: 'bucket-versioning-123',
+  bucket_id: 'versioning-bucket-abc',
+  name: 'versioning-bucket-abc',
+  versioning_enabled: true,
+};
+
+export const mockCreateBucketPayload = {
+  type: 'bucket' as const,
+  name: 'new-test-bucket-xyz',
+  region: 'nyc3',
+  acl: 'private' as const,
+  cors_enabled: false,
+  versioning_enabled: false,
+  owner_id: mockUser.id,
+  project_id: mockProject.id,
+};
+
+export const mockDigitalOceanSpacesKey = {
+  spaces_key: {
+    id: 'key-do-spaces-123456',
+    name: 'new-test-bucket-xyz',
+    access_key: 'DO00ABC123XYZ456789',
+    secret_key: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+  },
+};
+
+export const mockBucketStats = {
+  size: 1048576,
+  count: 5,
+};
+
+export const mockInvalidBucketPayloads = {
+  nameTooShort: {
+    ...mockCreateBucketPayload,
+    name: 'ab', // Too short (min 3)
+  },
+  nameTooLong: {
+    ...mockCreateBucketPayload,
+    name: 'a'.repeat(64), // Too long (max 63)
+  },
+  nameWithUppercase: {
+    ...mockCreateBucketPayload,
+    name: 'Test-Bucket', // Has uppercase
+  },
+  nameStartsWithHyphen: {
+    ...mockCreateBucketPayload,
+    name: '-bucket-name',
+  },
+  nameEndsWithHyphen: {
+    ...mockCreateBucketPayload,
+    name: 'bucket-name-',
+  },
+  nameIPFormat: {
+    ...mockCreateBucketPayload,
+    name: '192.168.1.1',
+  },
+  nameStartsWithXn: {
+    ...mockCreateBucketPayload,
+    name: 'xn--bucket-name',
+  },
+  nameEndsWithS3Alias: {
+    ...mockCreateBucketPayload,
+    name: 'my-bucket-s3alias',
+  },
+  invalidRegion: {
+    ...mockCreateBucketPayload,
+    region: 'invalid-region',
+  },
+  invalidACL: {
+    ...mockCreateBucketPayload,
+    acl: 'public-write' as any,
+  },
+  invalidProjectId: {
+    ...mockCreateBucketPayload,
+    project_id: 'not-a-uuid',
+  },
+  invalidOwnerId: {
+    ...mockCreateBucketPayload,
+    owner_id: 'not-a-uuid',
+  },
+};

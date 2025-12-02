@@ -19,6 +19,8 @@ import {
   CheckCircle,
   Loader2,
   Ban,
+  GamepadIcon,
+  Box,
 
 } from "lucide-react";
 import Link from "next/link";
@@ -310,7 +312,7 @@ const Dashboard = ({
             </div>
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <HardDrive className="mx-auto h-12 w-12 text-white/30" />
+              <GamepadIcon className="mx-auto h-12 w-12 text-white/30" />
               <h3 className="mt-2 text-sm font-semibold">No game servers</h3>
               <p className="mt-1 text-sm text-white/50">Get started by deploying a new game server.</p>
               <div className="mt-6">
@@ -396,7 +398,7 @@ const Dashboard = ({
             </div>
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <HardDrive className="mx-auto h-12 w-12 text-white/30" />
+              <Database className="mx-auto h-12 w-12 text-white/30" />
               <h3 className="mt-2 text-sm font-semibold">No database clusters</h3>
               <p className="mt-1 text-sm text-white/50">Get started by creating a database cluster.</p>
               <div className="mt-6">
@@ -462,7 +464,7 @@ const Dashboard = ({
             </div>
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <HardDrive className="mx-auto h-12 w-12 text-white/30" />
+              <Box className="mx-auto h-12 w-12 text-white/30" />
               <h3 className="mt-2 text-sm font-semibold">No Kubernetes clusters</h3>
               <p className="mt-1 text-sm text-white/50">Get started by creating a Kubernetes cluster.</p>
               <div className="mt-6">
@@ -627,7 +629,7 @@ const Dashboard = ({
         >
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">Object Spaces</h2>
-            <Link href="/dashboard/services/kubernetes" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
+            <Link href="/dashboard/services/object-storage" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
               View all
             </Link>
           </div>
@@ -739,13 +741,13 @@ const Dashboard = ({
             </div>
           ) : (
             <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <HardDrive className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No Layered Protection</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by creating a Spectrum  Protection.</p>
+              <Archive className="mx-auto h-12 w-12 text-white/30" />
+              <h3 className="mt-2 text-sm font-semibold">No Spaces Bucket</h3>
+              <p className="mt-1 text-sm text-white/50">Get started by creating a Space Bucket.</p>
               <div className="mt-6">
-                <Link href="/dashboard/network-ddos/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
+                <Link href="/dashboard/object-storage/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
                   <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Layered Protection
+                  New Space Bucket
                 </Link>
               </div>
             </div>
