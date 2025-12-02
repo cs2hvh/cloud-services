@@ -5,7 +5,6 @@ import { Platform_Apps } from "@/lib/supabase/queries";
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
-import { PortAllocator } from "./port-allocator";
 import { InfrastructureCleanupService } from "./infrastructure-cleanup";
 import { randomBytes } from "crypto";
 
@@ -279,22 +278,40 @@ export class DeploymentService {
   private static async cleanupInfrastructure(appName: string): Promise<void> {
     console.log(`[DeploymentService] Cleaning up infrastructure for ${appName}`);
 
-    // Use the new InfrastructureCleanupService for decoupled deletion
+    const errors: string[] = [];
+
+    // 1. Delete DNS record FIRST (most important for re-deployment)
     try {
-      // Delete Jenkins job
+      await DNSService.deleteRecord(appName);
+      console.log(`[DeploymentService] ✅ DNS record deleted for ${appName}`);
+    } catch (error: any) {
+      console.error(`[DeploymentService] DNS cleanup error:`, error);
+      errors.push(`DNS: ${error?.message}`);
+      // Don't throw - continue with other cleanup
+    }
+
+    // 2. Delete Jenkins job
+    try {
       await InfrastructureCleanupService.deleteJenkinsJob(appName);
     } catch (error: any) {
       console.error(`[DeploymentService] Jenkins cleanup error:`, error);
+      errors.push(`Jenkins: ${error?.message}`);
+      // Don't throw - continue with other cleanup
     }
 
+    // 3. Delete Kubernetes resources using Jenkins deletion job
     try {
-      // Delete Kubernetes resources using Jenkins deletion job
       await InfrastructureCleanupService.deleteKubernetesResources(appName);
     } catch (error: any) {
       console.error(`[DeploymentService] K8s cleanup error:`, error);
-      throw error; // Re-throw to ensure the API knows about the failure
+      errors.push(`K8s: ${error?.message}`);
+      // Don't throw - DNS already deleted, so re-deployment will work
     }
 
-    console.log(`[DeploymentService] ✅ Infrastructure cleanup completed for ${appName} (Jenkins and K8s deletion jobs)`);
+    if (errors.length > 0) {
+      console.warn(`[DeploymentService] ⚠️ Cleanup completed with errors: ${errors.join(', ')}`);
+    } else {
+      console.log(`[DeploymentService] ✅ Infrastructure cleanup completed for ${appName}`);
+    }
   }
 }

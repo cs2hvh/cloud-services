@@ -1,5 +1,6 @@
 /**
  * Delete Pipeline - Deletes Kubernetes resources for an app
+ * Uses lightweight pod template (only kubectl, ~256MB) instead of full common-agent (~4GB)
  */
 export function createDeletePipeline(
   name: string,
@@ -16,7 +17,7 @@ export function createDeletePipeline(
   <actions/>
   <description>
     Delete pipeline for ${name}
-    Deletes Kubernetes resources: Deployment, Service, Ingress
+    Deletes: Deployment, Service, Ingress
   </description>
   <keepDependencies>false</keepDependencies>
 
@@ -36,7 +37,38 @@ export function createDeletePipeline(
 pipeline {
   agent {
     kubernetes {
-      inheritFrom 'common-agent'
+      podRetention never()
+      activeDeadlineSeconds 300
+      yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins-agent: delete-agent
+spec:
+  activeDeadlineSeconds: 300
+  containers:
+  - name: kubectl
+    image: alpine/k8s:1.28.0
+    command:
+    - cat
+    tty: true
+    resources:
+      requests:
+        memory: "64Mi"
+        cpu: "50m"
+      limits:
+        memory: "128Mi"
+        cpu: "200m"
+  - name: jnlp
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "300m"
+'''
     }
   }
 
@@ -49,43 +81,25 @@ pipeline {
   }
 
   stages {
-    stage('Initialize') {
-      steps {
-        script {
-          echo 'STAGE: Initialize'
-          echo "Application Name: \${env.APP_NAME}"
-          echo "Domain: \${env.DOMAIN}"
-          echo 'Initialization completed'
-        }
-      }
-    }
-
     stage('Delete Kubernetes Resources') {
       steps {
         container('kubectl') {
           script {
             echo 'STAGE: Delete Kubernetes Resources'
-            echo 'Deleting Kubernetes resources'
+            echo "Deleting resources for: \${env.APP_NAME}"
             
-            echo 'Deleting deployment'
-            sh(
-              script: 'kubectl delete deployment \${APP_NAME} --namespace=default --ignore-not-found=true',
-              returnStatus: true
-            )
-            
-            echo 'Deleting service'
-            sh(
-              script: 'kubectl delete service \${SERVICE_NAME} --namespace=default --ignore-not-found=true',
-              returnStatus: true
-            )
-            
-            echo 'Deleting ingress'
-            sh(
-              script: 'kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true',
-              returnStatus: true
-            )
-            
-            echo 'Kubernetes resource deletion completed'
+            sh """
+              echo "Deleting deployment..."
+              kubectl delete deployment \${APP_NAME} --namespace=default --ignore-not-found=true
+              
+              echo "Deleting service..."
+              kubectl delete service \${SERVICE_NAME} --namespace=default --ignore-not-found=true
+              
+              echo "Deleting ingress..."
+              kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true
+              
+              echo "✅ Kubernetes resource deletion completed"
+            """
           }
         }
       }
@@ -96,27 +110,16 @@ pipeline {
         container('kubectl') {
           script {
             echo 'STAGE: Verify Deletion'
-            echo "Checking that resources for \${env.APP_NAME} have been deleted"
             
-            echo 'Verifying deployment deletion'
-            sh(
-              script: 'kubectl get deployment \${APP_NAME} --namespace=default && echo "❌ Deployment still exists" || echo "✅ Deployment deleted"',
-              returnStatus: true
-            )
-            
-            echo 'Verifying service deletion'
-            sh(
-              script: 'kubectl get service \${SERVICE_NAME} --namespace=default && echo "❌ Service still exists" || echo "✅ Service deleted"',
-              returnStatus: true
-            )
-            
-            echo 'Verifying ingress deletion'
-            sh(
-              script: 'kubectl get ingress \${INGRESS_NAME} --namespace=default && echo "❌ Ingress still exists" || echo "✅ Ingress deleted"',
-              returnStatus: true
-            )
-            
-            echo 'Deletion verification completed'
+            sh """
+              echo "Verifying resources are deleted..."
+              
+              kubectl get deployment \${APP_NAME} --namespace=default 2>/dev/null && echo "⚠️ Deployment still exists" || echo "✅ Deployment deleted"
+              kubectl get service \${SERVICE_NAME} --namespace=default 2>/dev/null && echo "⚠️ Service still exists" || echo "✅ Service deleted"
+              kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "⚠️ Ingress still exists" || echo "✅ Ingress deleted"
+              
+              echo "Verification completed"
+            """
           }
         }
       }
@@ -125,24 +128,11 @@ pipeline {
   
   post {
     success {
-      script {
-        echo 'PIPELINE: Success'
-        echo "Kubernetes resources deleted successfully for \${env.APP_NAME}"
-      }
+      echo "✅ Successfully deleted Kubernetes resources for ${name}"
     }
     
     failure {
-      script {
-        echo 'PIPELINE: Failure'
-        echo "Failed to delete Kubernetes resources for \${env.APP_NAME}"
-      }
-    }
-    
-    always {
-      script {
-        echo 'PIPELINE: Cleanup'
-        echo 'Cleanup completed - temporary files removed during pod termination'
-      }
+      echo "❌ Failed to delete Kubernetes resources for ${name}"
     }
   }
 }
