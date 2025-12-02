@@ -85,12 +85,11 @@ pipeline {
     stage('Prepare Dockerfile') {
       steps {
         container('git') {
-          script {
-            sh '''
-              if [ -f Dockerfile ]; then
-                echo "Using existing Dockerfile"
-              else
-                echo "Creating default Next.js Dockerfile (Node 20 required)"
+          sh '''
+            if [ -f Dockerfile ]; then
+              echo "Using existing Dockerfile"
+            else
+              echo "Creating default Next.js Dockerfile (Node 20 required)"
 
 cat > Dockerfile << 'EOF'
 # ---- Build Stage ----
@@ -118,9 +117,8 @@ EXPOSE 3000
 ENV PORT=3000
 CMD ["npm", "start"]
 EOF
-              fi
-            '''
-          }
+            fi
+          '''
         }
       }
     }
@@ -159,12 +157,10 @@ EOF
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
-          script {
-            echo 'STAGE: Deploy to Kubernetes'
-            
-            sh '''
-              echo 'Generating Kubernetes deployment manifest'
-              cat > deployment.yaml << DEPLOY_EOF
+          sh '''
+            echo "STAGE: Deploy to Kubernetes"
+            echo "Generating Kubernetes deployment manifest"
+            cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -212,8 +208,8 @@ spec:
           periodSeconds: 20
 DEPLOY_EOF
 
-              echo 'Generating Kubernetes service manifest'
-              cat > service.yaml << SERVICE_EOF
+            echo "Generating Kubernetes service manifest"
+            cat > service.yaml << SERVICE_EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -229,8 +225,8 @@ spec:
   type: ClusterIP
 SERVICE_EOF
 
-              echo 'Generating certificate manifest'
-              cat > certificate.yaml << CERT_EOF
+            echo "Generating certificate manifest"
+            cat > certificate.yaml << CERT_EOF
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -245,8 +241,8 @@ spec:
   - \${DOMAIN}
 CERT_EOF
 
-              echo 'Generating Kubernetes ingress manifest'
-              cat > ingress.yaml << INGRESS_EOF
+            echo "Generating Kubernetes ingress manifest"
+            cat > ingress.yaml << INGRESS_EOF
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -272,13 +268,12 @@ spec:
             port:
               number: 80
 INGRESS_EOF
-            '''
+          '''
 
-            sh 'kubectl apply -f deployment.yaml'
-            sh 'kubectl apply -f service.yaml'
-            sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
-            sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
-          }
+          sh 'kubectl apply -f deployment.yaml'
+          sh 'kubectl apply -f service.yaml'
+          sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
+          sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
         }
       }
     }
@@ -286,15 +281,13 @@ INGRESS_EOF
     stage('Verify Deployment') {
       steps {
         container('kubectl') {
-          script {
-            echo 'STAGE: Verify Deployment'
-            echo "Checking deployment status for \${env.APP_NAME}"
-            
-            sh 'kubectl get deployment,service,ingress -l app=\${APP_NAME}'
-            sh 'kubectl get pods -l app=\${APP_NAME}'
-            
-            echo 'Deployment verification completed successfully'
-          }
+          sh '''
+            echo "STAGE: Verify Deployment"
+            echo "Checking deployment status for $APP_NAME"
+            kubectl get deployment,service,ingress -l app=$APP_NAME
+            kubectl get pods -l app=$APP_NAME
+            echo "Deployment verification completed successfully"
+          '''
         }
       }
     }
@@ -303,22 +296,23 @@ INGRESS_EOF
 
   post {
     success {
-      script {
-        echo 'PIPELINE: Success'
-        echo "Deployment completed successfully for \${env.APP_NAME}"
-        echo "Service URL: https://\${env.DOMAIN}"
-      }
+      sh '''
+        echo "PIPELINE: Success"
+        echo "Deployment completed successfully for $APP_NAME"
+        echo "Service URL: https://$DOMAIN"
+      '''
     }
     
     failure {
-      script {
-        echo 'PIPELINE: Failure'
-        echo "Deployment failed for \${env.APP_NAME}"
-      }
+      sh '''
+        echo "PIPELINE: Failure"
+        echo "Deployment failed for $APP_NAME"
+      '''
     }
   }
 }
 ]]></script>
+    <sandbox>true</sandbox>
   </definition>
 </flow-definition>
 `;
