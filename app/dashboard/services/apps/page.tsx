@@ -1,11 +1,22 @@
 'use client';
 
 import { motion } from "motion/react";
-import { Code, Plus, Search, GitBranch, Globe, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, Trash2, Eye, Terminal } from "lucide-react";
+import { Code, Plus, Search, GitBranch, Globe, ExternalLink, Loader2, CheckCircle2, XCircle, Clock, Trash2, Eye, Terminal, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 
@@ -38,13 +49,23 @@ const ApplicationDeploymentPage = () => {
   const [buildInfo, setBuildInfo] = useState<Record<string, BuildInfo>>({});
   const [buildLogs, setBuildLogs] = useState<Record<string, string>>({});
   const [fetchedBuilds, setFetchedBuilds] = useState<Set<string>>(new Set());
+  
+  // Delete modal state
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [appToDelete, setAppToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch apps
   useEffect(() => {
     fetchApps();
-    const interval = setInterval(fetchApps, 10000); // Refresh every 10 seconds
+    const interval = setInterval(() => {
+      // Don't refresh while deleting to prevent race condition
+      if (!isDeleting) {
+        fetchApps();
+      }
+    }, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [isDeleting]);
 
   // Fetch build info for each app (only once per app)
   useEffect(() => {
@@ -78,7 +99,19 @@ const ApplicationDeploymentPage = () => {
     try {
       const res = await fetch('/api/services/platform-apps/list');
       const data = await res.json();
-      setDeployedApps(data.apps || []);
+      // Preserve 'deleting' status for apps that are being deleted
+      setDeployedApps(prev => {
+        const deletingAppIds = prev.filter(app => app.status === 'deleting').map(app => app.id);
+        const newApps = data.apps || [];
+        // Keep deleting apps visible with their status
+        const deletingApps = prev.filter(app => app.status === 'deleting' && !newApps.some((a: App) => a.id === app.id));
+        return [
+          ...newApps.map((app: App) => 
+            deletingAppIds.includes(app.id) ? { ...app, status: 'deleting' } : app
+          ),
+          ...deletingApps
+        ];
+      });
     } catch (error) {
       console.error('Error fetching apps:', error);
     } finally {
@@ -111,11 +144,19 @@ const ApplicationDeploymentPage = () => {
   };
 
   const deleteApp = async (appId: string, appName: string) => {
-    if (!confirm(`Are you sure you want to delete ${appName}? This action cannot be undone.`)) return;
+    // Open confirmation modal
+    setAppToDelete({ id: appId, name: appName });
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!appToDelete) return;
     
-    // Show loading state
-    const originalApps = [...deployedApps];
-    setDeployedApps(deployedApps.map(app => 
+    const { id: appId, name: appName } = appToDelete;
+    setIsDeleting(true);
+    
+    // Show loading state in the app list (keep the app visible with 'deleting' status)
+    setDeployedApps(prev => prev.map(app => 
       app.id === appId ? { ...app, status: 'deleting' } : app
     ));
     
@@ -131,21 +172,34 @@ const ApplicationDeploymentPage = () => {
       });
       
       if (res.ok) {
-        // Remove the app from the list
-        setDeployedApps(deployedApps.filter(app => app.id !== appId));
-        const data = await res.json();
-        alert(data.message || 'App deleted successfully');
+        toast.success(`${appName} deleted successfully`, {
+          description: "All resources have been cleaned up including DNS, Kubernetes, and certificates."
+        });
+        // Remove the app from the list AFTER successful deletion
+        setDeployedApps(prev => prev.filter(app => app.id !== appId));
       } else {
-        // Restore original state on error
-        setDeployedApps(originalApps);
+        // Restore original status on error
+        setDeployedApps(prev => prev.map(app => 
+          app.id === appId ? { ...app, status: 'running' } : app
+        ));
         const errorData = await res.json();
-        alert(errorData.error || 'Failed to delete app');
+        toast.error(`Failed to delete ${appName}`, {
+          description: errorData.error || 'An unexpected error occurred'
+        });
       }
     } catch (error) {
-      // Restore original state on error
-      setDeployedApps(originalApps);
+      // Restore original status on error
+      setDeployedApps(prev => prev.map(app => 
+        app.id === appId ? { ...app, status: 'running' } : app
+      ));
       console.error('Error deleting app:', error);
-      alert('Error deleting app');
+      toast.error(`Error deleting ${appName}`, {
+        description: 'Network error or server unavailable'
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteModalOpen(false);
+      setAppToDelete(null);
     }
   };
 
@@ -618,6 +672,57 @@ const ApplicationDeploymentPage = () => {
           </Card>
         </div>
       </motion.div>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <AlertDialogContent className="bg-zinc-900 border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              Delete Application
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="text-white/70 text-sm">
+                Are you sure you want to delete <span className="font-semibold text-white">{appToDelete?.name}</span>?
+                <br /><br />
+                This action will permanently remove:
+                <ul className="list-disc list-inside mt-2 space-y-1 text-white/60">
+                  <li>Kubernetes deployment, service, and ingress</li>
+                  <li>SSL certificate and TLS secret</li>
+                  <li>DNS record</li>
+                  <li>Jenkins build job</li>
+                </ul>
+                <p className="text-red-400 font-medium mt-4">This action cannot be undone.</p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              disabled={isDeleting}
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Application
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
