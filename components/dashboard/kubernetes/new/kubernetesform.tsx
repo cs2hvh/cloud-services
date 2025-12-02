@@ -505,7 +505,7 @@ const NewClusterPage = ({
   //   const dbTypes = Object.keys(databaseInfo);
 
   return (
-    <div className="py-4">
+    <div >
       <div className="mb-8">
         <div className="mb-6 flex items-center">
           <Link
@@ -635,7 +635,9 @@ const NewClusterPage = ({
                             )}
                           </div>
                         </div>
+                        
                       ))
+                      
                     )}
                   </div>
                 </div>
@@ -830,7 +832,9 @@ const NewClusterPage = ({
               <CardHeader>
                 <CardTitle className="text-white">Cluster Plan</CardTitle>
               </CardHeader>
+               <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
               <CardContent>
+               
                 <RadioGroup
                   value={state.selectedPlan}
                   onValueChange={(value) =>
@@ -919,7 +923,9 @@ const NewClusterPage = ({
                     </div>
                   ))}
                 </RadioGroup>
+                
               </CardContent>
+              </div>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"

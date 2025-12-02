@@ -11,6 +11,7 @@ export const spectrumDNSchema = z.object({
     errorMap: () => ({ message: "DNS type must be 'A' or 'CNAME'" }),
   }),
   original_name: z.string().optional(),
+  original_protocol: z.string().optional(), 
 });
 
 // Edge IPs configuration (required)

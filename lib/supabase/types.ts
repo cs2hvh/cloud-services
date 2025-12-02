@@ -88,7 +88,7 @@ export type Admin_SpectrumApp = {
   created_at: string | null;
   project_id: string | null;
   edge_ips: Json | null;
-  dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null};
+  dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null,original_protocol?:string | null} | null;
 }
 
 export type Admin_KubernetesCluster = {
@@ -1035,7 +1035,7 @@ export type Database = {
         Row: {
           id: string; // surrogate uuid
           spectrum_id: string; // cloudflare id
-          dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null}; // {name: string (encrypted), type: "A" | "CNAME"}
+          dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null,original_protocol?:string | null}; // {name: string (encrypted), type: "A" | "CNAME"}
           tls: "off" | "full";
           edge_ips: Json; // {type: string, connectivity: string}
           ip_firewall: boolean;

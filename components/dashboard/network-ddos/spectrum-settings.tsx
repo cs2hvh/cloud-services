@@ -460,7 +460,9 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         </SettingCard>
 
         {/* TLS Configuration */}
-        <SettingCard
+       {
+        spectrumApp.dns?.original_protocol?.startsWith("tcp") &&
+         <SettingCard
           icon={Lock}
           title="TLS Configuration"
           settingKey="tls"
@@ -500,6 +502,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           </div>
         </SettingCard>
 
+       }
         {/* IP Firewall */}
         {/* <SettingCard
           icon={Shield}

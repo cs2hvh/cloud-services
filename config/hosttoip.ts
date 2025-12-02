@@ -54,7 +54,7 @@ export async function resolveHost(hostOrUrl: string): Promise<ResolveResult> {
       resolveMx(parsedHost).catch(() => [])
     ]);
 
-    console.log(a, aaaa, cname, mx, ".............dns resolve results.............");
+   // console.log(a, aaaa, cname, mx, ".............dns resolve results.............");
 
     // Add results to records array
     if (a && a.length) result.records.push({ type: "A", records: a });

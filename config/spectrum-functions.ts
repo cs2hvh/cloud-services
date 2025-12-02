@@ -170,6 +170,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
       name: encryptedDnsName,
       type: result.dns?.type || payload.dns.type,
       original_name: payload.dns.name,
+      original_protocol: payload.dns.original_protocol
     } as unknown as Json,
     protocol: result.protocol || payload.protocol,
     origin_direct: payload.origin_direct,

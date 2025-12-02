@@ -214,14 +214,14 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     try {
       // Log the form data
       //console.log('Spectrum App Configuration:', formData);
-      debugger
+      //debugger
       const response = await fetch("/api/services/spectrum/apps/create", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          dns: { name: formData.domain, type: "CNAME" },
+          dns: { name: formData.domain, type: "CNAME" , original_protocol: formData.appType},
           protocol: `${
             formData.appType === "rdp" || formData.appType === "ssh"
               ? "tcp"

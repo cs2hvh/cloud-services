@@ -54,12 +54,14 @@ export async function POST(req: NextRequest) {
 
     // Handle result based on success/failure
     if (!result.success) {
+      // Check if the error is due to bucket already existing
+      const statusCode = result.error === "Bucket already exists" ? 409 : 500;
       return NextResponse.json(
         {
           error: result.error,
-          message: result.message,
+          message: statusCode===409?"Bucket already exists.":result.message,
         },
-        { status: 500 }
+        { status: statusCode }
       );
     }
 

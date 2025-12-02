@@ -74,13 +74,17 @@ function getEnvironmentConfig(): { success: true; config: EnvironmentConfig } | 
 async function createSpacesBucket(
   config: CreateBucketConfig, 
   envConfig: EnvironmentConfig
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; errorCode?: string }> {
   try {
     const s3Client = createS3Client(config.region, envConfig.spacesAccessKey, envConfig.spacesSecretKey);
     const bucketResult = await s3CreateBucket(s3Client, config.name, config.acl || 'private');
 
     if (!bucketResult.success) {
-      return { success: false, error: bucketResult.error };
+      return { 
+        success: false, 
+        error: bucketResult.error,
+        errorCode: bucketResult.errorCode
+      };
     }
 
     return { success: true };
@@ -250,6 +254,14 @@ export async function handleCreateBucket(config: CreateBucketConfig): Promise<Cr
   // Step 2: Create bucket in DigitalOcean Spaces
   const bucketResult = await createSpacesBucket(config, envConfig);
   if (!bucketResult.success) {
+    // Check if bucket already exists in the cloud provider
+    if (bucketResult.errorCode === 'BucketAlreadyExists' || bucketResult.errorCode === 'BucketAlreadyOwnedByYou') {
+      return {
+        success: false,
+        error: "Bucket already exists",
+        message: "A bucket with this name already exists. Please choose a different name."
+      };
+    }
     return {
       success: false,
       error: "Failed to create storage bucket",
@@ -507,7 +519,7 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
 
   try {
     // Get bucket from database
-    console.log("Fetching bucket for deletion:", config.bucket_id);
+   // console.log("Fetching bucket for deletion:", config.bucket_id);
     const bucket = await ObjectSpaces.get_bucket_by_bucket_id(config.bucket_id, config.is_admin);
 
     if (!bucket) {

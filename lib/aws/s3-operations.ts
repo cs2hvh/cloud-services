@@ -42,7 +42,7 @@ export async function createBucket(
   client: S3Client,
   bucketName: string,
   acl: 'private' | 'public-read' = 'private'
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; errorCode?: string }> {
   try {
    // console.log(S3Client,"......................S3Client");
     await client.send(
@@ -52,15 +52,22 @@ export async function createBucket(
       })
     );
     return { success: true };
-  }catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  }catch (error: any) {
+    console.error('Error creating bucket:', error);
 
-  let message = 'Unknown error';
+    let message = 'Unknown error';
+    let errorCode = error.name || 'UnknownError';
 
-  if (error instanceof Error) {
-    message = error.message;
-  }
-    return { success: false, error: message };
+    if (error instanceof Error) {
+      message = error.message;
+    }
+
+    // Check for specific bucket already exists errors
+    if (errorCode === 'BucketAlreadyExists' || errorCode === 'BucketAlreadyOwnedByYou') {
+      message = 'Bucket with this name already exists in the cloud provider';
+    }
+
+    return { success: false, error: message, errorCode };
   }
 }
 
