@@ -1,6 +1,7 @@
 /**
  * Delete Pipeline - Deletes Kubernetes resources for an app
  * Uses lightweight pod template (only kubectl, ~256MB) instead of full common-agent (~4GB)
+ * Deletes: Deployment, Service, Ingress, Certificate, and TLS Secret
  */
 export function createDeletePipeline(
   name: string,
@@ -11,13 +12,15 @@ export function createDeletePipeline(
   const appName = `${name}-app`;  // Match the deployment naming convention
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
+  const certName = `${name}-cert`;  // Certificate name
+  const tlsSecretName = `${name}-tls`;  // TLS secret name
   
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
     Delete pipeline for ${name}
-    Deletes: Deployment, Service, Ingress
+    Deletes: Deployment, Service, Ingress, Certificate, TLS Secret
   </description>
   <keepDependencies>false</keepDependencies>
 
@@ -76,6 +79,8 @@ spec:
     APP_NAME = '${appName}'
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
+    CERT_NAME = '${certName}'
+    TLS_SECRET_NAME = '${tlsSecretName}'
     DOMAIN = '${domain}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -98,6 +103,12 @@ spec:
               echo "Deleting ingress..."
               kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true
               
+              echo "Deleting certificate..."
+              kubectl delete certificate \${CERT_NAME} --namespace=default --ignore-not-found=true
+              
+              echo "Deleting TLS secret..."
+              kubectl delete secret \${TLS_SECRET_NAME} --namespace=default --ignore-not-found=true
+              
               echo "✅ Kubernetes resource deletion completed"
             """
           }
@@ -117,6 +128,8 @@ spec:
               kubectl get deployment \${APP_NAME} --namespace=default 2>/dev/null && echo "⚠️ Deployment still exists" || echo "✅ Deployment deleted"
               kubectl get service \${SERVICE_NAME} --namespace=default 2>/dev/null && echo "⚠️ Service still exists" || echo "✅ Service deleted"
               kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "⚠️ Ingress still exists" || echo "✅ Ingress deleted"
+              kubectl get certificate \${CERT_NAME} --namespace=default 2>/dev/null && echo "⚠️ Certificate still exists" || echo "✅ Certificate deleted"
+              kubectl get secret \${TLS_SECRET_NAME} --namespace=default 2>/dev/null && echo "⚠️ TLS Secret still exists" || echo "✅ TLS Secret deleted"
               
               echo "Verification completed"
             """
