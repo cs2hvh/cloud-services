@@ -822,12 +822,12 @@ function SingleCluster({
                       color="#3b82f6"
                     />
                     <GraphCard
-                      title="Memory Usage"
+                      title="Memory Free"
                       data={insightGraphsData.memory}
                       color="#a855f7"
                     />
                     <GraphCard
-                      title="Disk Usage"
+                      title="Disk Free"
                       data={insightGraphsData.disk}
                       color="#ec4899"
                     />

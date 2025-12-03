@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Lock,
   Network,
@@ -24,6 +24,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
+import { UUID } from "crypto";
 
 interface SpectrumAppSettingsProps {
   spectrumApp: Tables<"spectrum_apps">;

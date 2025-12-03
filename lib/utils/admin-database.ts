@@ -2,10 +2,11 @@ import { AdminDatabaseState } from "@/lib/types/admin-database";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
 import { z } from "zod";
 import api from "@/lib/axios/axios";
+import { Tables } from "../supabase/types";
 
 export const submitDatabaseAssignment = async (
   state: AdminDatabaseState,
-  availablePlans: any[],
+  availablePlans: Tables<"products">[],
   termsAccepted: boolean
 ) => {
   if (!termsAccepted) {

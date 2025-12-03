@@ -109,7 +109,13 @@ export async function listObjects(
   delimiter?: string
 ): Promise<ListObjectsResult> {
   try {
-    const command: any = {
+    const command:{
+    Bucket: string;
+    Prefix: string;
+    MaxKeys: number;
+    ContinuationToken: string | undefined;
+    Delimiter?: string;
+} = {
       Bucket: bucketName,
       Prefix: prefix,
       MaxKeys: maxKeys,

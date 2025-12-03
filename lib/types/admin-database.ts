@@ -41,7 +41,7 @@ export interface AdminDatabaseErrors {
 export interface AdminDatabaseAssignProps {
   products: Tables<"products">[];
   locations: Tables<"locations">[];
-  allUsers: any[];
+  allUsers: Tables<"user_profiles">[];
   allProjects: Tables<"projects">[];
 }
 

@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   try {
     await limiter.check(req as any, 15);
   } catch (e) {
-    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    return NextResponse.json({ error: "Too many requests" ,message:e}, { status: 429 });
   }
   const body = await req.json().catch(() => ({} as any));
 

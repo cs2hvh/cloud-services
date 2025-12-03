@@ -15,7 +15,7 @@ interface SummaryCardProps {
   selectedDatabase?: Tables<"products">;
   selectedLocationData?: Tables<"locations">;
   selectedDbTypeInfo?: DatabaseType;
-  selectedUserData:{ email: string } | null;
+  selectedUserData?:Tables<"user_profiles">;
   userProjects: UserProject[];
 }
 
