@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Copy,
   Check,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -312,7 +313,7 @@ export function AppCard({
           className="border-t border-white/5"
         >
           {/* Tab Headers */}
-          <div className="flex border-b border-white/5 bg-black/30">
+          <div className="flex items-center border-b border-white/5 bg-black/30">
             <button
               onClick={() => setActiveTab('logs')}
               className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors ${
@@ -335,6 +336,14 @@ export function AppCard({
               <Activity className="w-3.5 h-3.5" />
               Metrics
               {metricsLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+            </button>
+            {/* Close button */}
+            <button
+              onClick={onToggleLogs}
+              className="ml-auto mr-2 p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
 

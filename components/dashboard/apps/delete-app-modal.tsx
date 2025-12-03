@@ -45,6 +45,14 @@ export function DeleteAppModal({
   const handleDelete = async () => {
     if (!appId || !appName) return;
 
+    // Close modal immediately for better UX
+    onOpenChange(false);
+    
+    // Show toast that deletion started
+    toast.info(`Deleting ${appName}...`, {
+      description: 'This may take a moment. The app will show as "Deleting" until complete.',
+    });
+
     setIsDeleting(true);
     onDeleteStart(appId);
 
@@ -77,7 +85,6 @@ export function DeleteAppModal({
       onDeleteError(appId);
     } finally {
       setIsDeleting(false);
-      onOpenChange(false);
     }
   };
 

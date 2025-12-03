@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 
 export interface AppMetrics {
   cpu_usage: number;      // CPU usage as percentage (0-100)
@@ -28,6 +28,25 @@ interface UseAppMetricsReturn {
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+}
+
+/**
+ * Custom hook to check if tab is visible
+ * Pauses auto-refresh when user switches to another tab
+ */
+function useTabVisible(): boolean {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsVisible(document.visibilityState === 'visible');
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
+
+  return isVisible;
 }
 
 // Helper to parse API response into frontend format
@@ -82,9 +101,16 @@ export function useAppMetrics({
   const [health, setHealth] = useState<AppHealth | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isTabVisible = useTabVisible();
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!appId || !enabled) return;
+
+    // Cancel any in-flight request
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     setLoading(true);
     setError(null);
@@ -92,8 +118,8 @@ export function useAppMetrics({
     try {
       // Fetch metrics and health in parallel
       const [metricsRes, healthRes] = await Promise.all([
-        fetch(`/api/services/platform-apps/metrics?app_id=${appId}`),
-        fetch(`/api/services/platform-apps/health?app_id=${appId}`),
+        fetch(`/api/services/platform-apps/metrics?app_id=${appId}`, { signal }),
+        fetch(`/api/services/platform-apps/health?app_id=${appId}`, { signal }),
       ]);
 
       if (metricsRes.ok) {
@@ -110,24 +136,31 @@ export function useAppMetrics({
         setError('Failed to fetch monitoring data');
       }
     } catch (err) {
+      // Ignore abort errors
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to fetch monitoring data');
     } finally {
       setLoading(false);
     }
   }, [appId, enabled]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => abortControllerRef.current?.abort();
+  }, []);
+
   // Initial fetch
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Auto-refresh
+  // Auto-refresh only when tab is visible
   useEffect(() => {
-    if (!enabled || refreshInterval <= 0) return;
+    if (!enabled || refreshInterval <= 0 || !isTabVisible) return;
 
     const interval = setInterval(fetchData, refreshInterval);
     return () => clearInterval(interval);
-  }, [enabled, refreshInterval, fetchData]);
+  }, [enabled, refreshInterval, fetchData, isTabVisible]);
 
   return {
     metrics,
@@ -163,9 +196,20 @@ export function useMultipleAppMetrics({
   const [data, setData] = useState<Record<string, AppMetricsData>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isTabVisible = useTabVisible();
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Memoize appIds to prevent unnecessary re-renders
+  const stableAppIds = useMemo(() => appIds.join(','), [appIds]);
 
   const fetchAllData = useCallback(async () => {
-    if (!enabled || appIds.length === 0) return;
+    const currentAppIds = stableAppIds.split(',').filter(Boolean);
+    if (!enabled || currentAppIds.length === 0) return;
+
+    // Cancel any in-flight requests
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     setLoading(true);
     setError(null);
@@ -175,15 +219,15 @@ export function useMultipleAppMetrics({
 
       // Fetch all apps in parallel (batched to avoid overwhelming the API)
       const batchSize = 5;
-      for (let i = 0; i < appIds.length; i += batchSize) {
-        const batch = appIds.slice(i, i + batchSize);
+      for (let i = 0; i < currentAppIds.length; i += batchSize) {
+        const batch = currentAppIds.slice(i, i + batchSize);
         
         await Promise.all(
           batch.map(async (appId) => {
             try {
               const [metricsRes, healthRes] = await Promise.all([
-                fetch(`/api/services/platform-apps/metrics?app_id=${appId}`),
-                fetch(`/api/services/platform-apps/health?app_id=${appId}`),
+                fetch(`/api/services/platform-apps/metrics?app_id=${appId}`, { signal }),
+                fetch(`/api/services/platform-apps/health?app_id=${appId}`, { signal }),
               ]);
 
               const metricsData = metricsRes.ok ? await metricsRes.json() : null;
@@ -193,7 +237,9 @@ export function useMultipleAppMetrics({
                 metrics: parseMetricsResponse(metricsData),
                 health: parseHealthResponse(healthData),
               };
-            } catch {
+            } catch (err) {
+              // Ignore abort errors
+              if (err instanceof Error && err.name === 'AbortError') return;
               results[appId] = { metrics: null, health: null };
             }
           })
@@ -202,24 +248,31 @@ export function useMultipleAppMetrics({
 
       setData(results);
     } catch (err) {
+      // Ignore abort errors
+      if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Failed to fetch monitoring data');
     } finally {
       setLoading(false);
     }
-  }, [appIds, enabled]);
+  }, [stableAppIds, enabled]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => abortControllerRef.current?.abort();
+  }, []);
 
   // Initial fetch
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
 
-  // Auto-refresh
+  // Auto-refresh only when tab is visible
   useEffect(() => {
-    if (!enabled || refreshInterval <= 0) return;
+    if (!enabled || refreshInterval <= 0 || !isTabVisible) return;
 
     const interval = setInterval(fetchAllData, refreshInterval);
     return () => clearInterval(interval);
-  }, [enabled, refreshInterval, fetchAllData]);
+  }, [enabled, refreshInterval, fetchAllData, isTabVisible]);
 
   return {
     data,
