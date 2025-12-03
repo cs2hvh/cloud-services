@@ -31,6 +31,9 @@ export async function GET(request: NextRequest) {
             const githubUser = await userResponse.json();
 
             // Store the GitHub token for repository access
+            // NOTE: GitHub OAuth tokens from Supabase linkIdentity do NOT expire (they are classic OAuth tokens)
+            // The data.session.expires_at is the Supabase SESSION expiration, NOT the GitHub token expiration
+            // We should NOT set expires_at for these tokens, or set it far in the future
             const { error: upsertError } = await supabase
               .from("github_tokens")
               .upsert({
@@ -39,8 +42,8 @@ export async function GET(request: NextRequest) {
                 github_username: githubUser.login,
                 github_user_id: githubUser.id,
                 scopes: "repo user:email",
-                refresh_token: data.session.provider_refresh_token, // Store refresh token if available
-                expires_at: data.session.expires_at ? new Date(data.session.expires_at).toISOString() : null, // Store expiration if available
+                refresh_token: data.session.provider_refresh_token || null, // Usually null for linkIdentity
+                expires_at: null, // GitHub OAuth tokens don't expire - DON'T use Supabase session expiry
                 updated_at: new Date().toISOString(),
               });
 

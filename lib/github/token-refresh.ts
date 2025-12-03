@@ -41,7 +41,14 @@ export async function refreshGitHubToken(refreshToken: string): Promise<string |
 }
 
 /**
- * Gets a valid GitHub access token for a user, attempting to refresh if needed
+ * Gets a valid GitHub access token for a user.
+ * 
+ * GitHub OAuth tokens (classic) from Supabase linkIdentity do NOT expire.
+ * They remain valid until:
+ * - User revokes access in GitHub settings
+ * - User changes their GitHub password
+ * - The OAuth app is deleted
+ * 
  * @param userId The user ID to get token for
  * @returns A valid access token if available, null otherwise
  */
@@ -49,97 +56,24 @@ export async function getValidGitHubToken(userId: string): Promise<string | null
   try {
     const supabase = await createClient();
     
-    // Get stored token data
+    // Get stored token from database
     const { data: tokenData, error } = await supabase
       .from('github_tokens')
-      .select('access_token, refresh_token, expires_at, updated_at')
+      .select('access_token')
       .eq('user_id', userId)
       .single();
 
-    if (error || !tokenData) {
+    if (error || !tokenData?.access_token) {
       console.log('[GitHub Token] No stored token found for user:', userId);
       return null;
     }
 
-    // Check if token has expiration info and is expired
-    const now = new Date().getTime();
-    
-    // If we have explicit expiration time and it's in the past
-    if (tokenData.expires_at) {
-      const expiresAt = new Date(tokenData.expires_at).getTime();
-      if (expiresAt < now) {
-        console.log('[GitHub Token] Token expired, attempting refresh');
-        // Try to refresh if we have a refresh token
-        if (tokenData.refresh_token) {
-          const newToken = await refreshGitHubToken(tokenData.refresh_token);
-          if (newToken) {
-            // Update the stored token
-            const { error: updateError } = await supabase
-              .from('github_tokens')
-              .update({
-                access_token: newToken,
-                updated_at: new Date().toISOString(),
-                // GitHub tokens typically expire in 8 hours (28800 seconds)
-                expires_at: new Date(now + 8 * 60 * 60 * 1000).toISOString()
-              })
-              .eq('user_id', userId);
-
-            if (updateError) {
-              console.error('[GitHub Token] Failed to update refreshed token:', updateError);
-            } else {
-              console.log('[GitHub Token] Successfully refreshed and updated token');
-            }
-            
-            return newToken;
-          } else {
-            console.log('[GitHub Token] Failed to refresh expired token');
-            return null;
-          }
-        } else {
-          console.log('[GitHub Token] Token expired but no refresh token available');
-          return null;
-        }
-      }
-    }
-    
-    // Check if token hasn't been updated in more than 7 days (conservative approach)
-    // This handles cases where we don't have explicit expiration info
-    const updatedAt = new Date(tokenData.updated_at).getTime();
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-    
-    if (updatedAt < sevenDaysAgo) {
-      console.log('[GitHub Token] Token may be stale (> 7 days old), attempting refresh');
-      // Try to refresh if we have a refresh token
-      if (tokenData.refresh_token) {
-        const newToken = await refreshGitHubToken(tokenData.refresh_token);
-        if (newToken) {
-          // Update the stored token
-          const { error: updateError } = await supabase
-            .from('github_tokens')
-            .update({
-              access_token: newToken,
-              updated_at: new Date().toISOString(),
-              expires_at: new Date(now + 8 * 60 * 60 * 1000).toISOString()
-            })
-            .eq('user_id', userId);
-
-          if (updateError) {
-            console.error('[GitHub Token] Failed to update refreshed token:', updateError);
-          } else {
-            console.log('[GitHub Token] Successfully refreshed and updated stale token');
-          }
-          
-          return newToken;
-        } else {
-          console.log('[GitHub Token] Failed to refresh stale token');
-        }
-      }
-    }
-    
-    // Token seems valid, return it
+    // Return the token - it doesn't expire
+    // If it's been revoked, the API call will fail with 401 and caller handles fallback
+    console.log('[GitHub Token] Found stored token for user:', userId);
     return tokenData.access_token;
   } catch (error) {
-    console.error('[GitHub Token] Error getting valid token:', error);
+    console.error('[GitHub Token] Error getting token:', error);
     return null;
   }
 }
