@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Lock,
   Network,
@@ -8,11 +8,11 @@ import {
   Save,
   X,
   Loader2,
-  Server,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import OriginServersCard from "./origin-servers-card";
 import {
   Select,
   SelectContent,
@@ -31,9 +31,6 @@ interface SpectrumAppSettingsProps {
 }
 
 const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
- 
-
-  let x:string="";
   const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
   
@@ -54,14 +51,11 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
     ipFirewall: spectrumApp.ip_firewall || false,
     trafficType: spectrumApp.traffic_type || "direct",
     proxyProtocol: spectrumApp.proxy_protocol || "off",
-    origins: spectrumApp.origin_direct || [],
     edgeIpType: edgeIps?.type || "dynamic",
     edgeIpConnectivity: edgeIps?.connectivity || "all",
   });
 
-  // Origin input state
-  const [newOriginIp, setNewOriginIp] = useState("");
-  const [newOriginPort, setNewOriginPort] = useState("");
+
 
   // Only update settings when spectrumApp actually changes (different app)
   // NOT when it's just refreshed with the same data
@@ -105,63 +99,6 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           break;
         case "proxyProtocol":
           payload.proxy_protocol = settings.proxyProtocol;
-          break;
-        case "origins":
-          if (settings.origins.length === 0) {
-            toast.error("At least one origin is required");
-            setIsLoading((prev) => ({ ...prev, [setting]: false }));
-            return;
-          }
-          
-          // Validate each origin format and construct full origin with protocol
-          const formattedOrigins: string[] = [];
-          const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-          const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-          const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-          const portRegex = /^\d+$/;
-          
-          for (const origin of settings.origins) {
-            // Parse the stored origin (format: "ip:port")
-            const parts = origin.split(':');
-            if (parts.length !== 2) {
-              toast.error(`Invalid origin format: ${origin}`);
-              setIsLoading((prev) => ({ ...prev, [setting]: false }));
-              return;
-            }
-            
-            const [ip, port] = parts;
-            
-            // Validate IP/hostname
-            const isValidIp = ipv4Regex.test(ip) || ipv6Regex.test(ip) || hostnameRegex.test(ip);
-            if (!isValidIp) {
-              toast.error(`Invalid IP address or hostname: ${ip}`);
-              setIsLoading((prev) => ({ ...prev, [setting]: false }));
-              return;
-            }
-            
-            // Validate port
-            if (!portRegex.test(port)) {
-              toast.error(`Invalid port number: ${port}`);
-              setIsLoading((prev) => ({ ...prev, [setting]: false }));
-              return;
-            }
-            
-            const portNum = parseInt(port, 10);
-            if (portNum < 1 || portNum > 65535) {
-              toast.error(`Port number must be between 1 and 65535: ${port}`);
-              setIsLoading((prev) => ({ ...prev, [setting]: false }));
-              return;
-            }
-            
-            // Extract protocol from settings.protocol (e.g., "tcp/22" -> "tcp")
-            const protocolMatch = settings.protocol.match(/^(tcp|udp)/i);
-            const protocol = protocolMatch ? protocolMatch[1].toLowerCase() : 'tcp';
-            
-            // Format as protocol://ip:port
-            formattedOrigins.push(`${protocol}://${ip}:${port}`);
-          }
-          
-          payload.origin_direct = formattedOrigins;
           break;
         case "edgeIps":
           payload.edge_ips = {
@@ -235,14 +172,6 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           proxyProtocol: spectrumApp.proxy_protocol,
         }));
         break;
-      case "origins":
-        setSettings((prev) => ({
-          ...prev,
-          origins: spectrumApp.origin_direct || [],
-        }));
-        setNewOriginIp("");
-        setNewOriginPort("");
-        break;
       case "edgeIps":
         setSettings((prev) => ({
           ...prev,
@@ -253,65 +182,11 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
     }
   };
 
-  const addOrigin = () => {
-    if (!newOriginIp.trim() || !newOriginPort.trim()) {
-      toast.error("Both IP/hostname and port are required");
-      return;
-    }
-    
-    // Validate IP address or hostname
-    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-    const ipv6Regex = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/;
-    const hostnameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
-    
-    const trimmedIp = newOriginIp.trim();
-    if (!ipv4Regex.test(trimmedIp) && !ipv6Regex.test(trimmedIp) && !hostnameRegex.test(trimmedIp)) {
-      toast.error("Invalid IP address or hostname format");
-      return;
-    }
-    
-    // Validate port
-    const portRegex = /^\d+$/;
-    const trimmedPort = newOriginPort.trim();
-    if (!portRegex.test(trimmedPort)) {
-      toast.error("Port must be a number");
-      return;
-    }
-    
-    const portNum = parseInt(trimmedPort, 10);
-    if (portNum < 1 || portNum > 65535) {
-      toast.error("Port number must be between 1 and 65535");
-      return;
-    }
-    
-    // Store as "ip:port" format (without protocol)
-    const newOrigin = `${trimmedIp}:${trimmedPort}`;
-    
-    if (settings.origins.includes(newOrigin)) {
-      toast.error("Origin already exists");
-      return;
-    }
-    
-    setSettings((prev) => ({
-      ...prev,
-      origins: [...prev.origins, newOrigin],
-    }));
-    setNewOriginIp("");
-    setNewOriginPort("");
-  };
 
 
 
-  const removeOrigin = (origin: string) => {
-    if (settings.origins.length <= 1) {
-      toast.error("At least one origin is required");
-      return;
-    }
-    setSettings((prev) => ({
-      ...prev,
-      origins: prev.origins.filter((o) => o !== origin),
-    }));
-  };
+
+
 
 
     
@@ -399,8 +274,11 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
 
   useEffect(() => {
-      //debugger
-    if (lastSpectrumIdRef.current !== spectrumApp.spectrum_id) {
+    // Only update if spectrum_id actually changed (different app selected)
+    // AND we're not currently in edit mode for any setting
+    const hasActiveEdits = Object.values(editMode).some(mode => mode === true);
+    
+    if (lastSpectrumIdRef.current !== spectrumApp.spectrum_id && !hasActiveEdits) {
       // Different app, update everything
       lastSpectrumIdRef.current = spectrumApp.spectrum_id;
       const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
@@ -413,15 +291,12 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         ipFirewall: spectrumApp.ip_firewall || false,
         trafficType: spectrumApp.traffic_type || "direct",
         proxyProtocol: spectrumApp.proxy_protocol || "off",
-        origins: spectrumApp.origin_direct || [],
         edgeIpType: edgeIps?.type || "dynamic",
         edgeIpConnectivity: edgeIps?.connectivity || "all",
       });
       setEditMode({});
-      setNewOriginIp("");
-      setNewOriginPort("");
     }
-  }, [spectrumApp]);
+  }, [spectrumApp.spectrum_id, editMode, spectrumApp]);
 
   return (
     <div className="space-y-4">
@@ -436,7 +311,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           icon={Network}
           title="Protocol Configuration"
           settingKey="protocol"
-          description="Define protocol and port"
+          description="Define protocol and Edge-ip port"
         >
           <div className="space-y-2">
             <Label htmlFor="protocol" className="text-xs text-white/80">
@@ -489,8 +364,15 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
                 <SelectItem value="off" className="text-white">
                   Off
                 </SelectItem>
+                <SelectItem value="flexible" className="text-white">
+                  Flexible
+                </SelectItem>
+               
                 <SelectItem value="full" className="text-white">
                   Full
+                </SelectItem>
+                <SelectItem value="strict" className="text-white">
+                  Full(Strict)
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -532,7 +414,9 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         </SettingCard> */}
 
         {/* Traffic Type */}
-        <SettingCard
+        {
+          spectrumApp?.dns?.original_protocol?.startsWith("tcp") &&
+          <SettingCard
           icon={Network}
           title="Traffic Type"
           settingKey="trafficType"
@@ -569,6 +453,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
             </Select>
           </div>
         </SettingCard>
+        }
 
         {/* Proxy Protocol */}
         <SettingCard
@@ -611,100 +496,15 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
             </Select>
           </div>
         </SettingCard>
-          <SettingCard
-          icon={Server}
-          title="Origin Servers"
-          settingKey="origins"
-          description="Configure origin servers"
-        >
-          <div className="space-y-3">
-            <div className="space-y-2">
-              <Label className="text-xs text-white/80">Current Origins</Label>
-              <div className="space-y-2">
-                {settings.origins.map((origin, index) => {
-                  // Extract IP:port from format like "tcp://192.168.1.1:8080" or just "192.168.1.1:8080"
-                  const displayOrigin = origin.includes('://') 
-                    ? origin.split('://')[1] 
-                    : origin;
-                  return (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-2 bg-white/5 rounded border border-white/10"
-                  >
-                    <span className="text-xs text-white font-mono">{displayOrigin}</span>
-                    {editMode.origins && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeOrigin(origin)}
-                        className="h-6 w-6 p-0 hover:bg-red-500/20 hover:text-red-400"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {editMode.origins && (
-              <div className="space-y-2">
-                <Label className="text-xs text-white/80">
-                  Add New Origin
-                </Label>
-                <div className="flex gap-2">
-                  <div className="flex-1 space-y-1">
-                    <Input
-                     onClick={() => { x="ip"; }}
-                      autoFocus
-                      id="new-origin-ip"
-                      value={newOriginIp}
-                      onChange={(e) => setNewOriginIp(e.target.value)}
-                      placeholder="IP or hostname"
-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addOrigin();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="w-24 space-y-1">
-                    <Input
-                     onClick={() => { x="port"; }}
-                     autoFocus={x ==="port"}
-                      id="new-origin-port"
-                      value={newOriginPort}
-                      onChange={(e) => setNewOriginPort(e.target.value)}
-                      placeholder="Port"
-                      className="bg-white/5 border-white/10 text-white placeholder:text-white/40 h-9"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addOrigin();
-                        }
-                      }}
-                    />
-                  </div>
-                  <Button
-                    onClick={addOrigin}
-                    className="bg-white/10 hover:bg-white/20 text-white h-9"
-                  >
-                    Add
-                  </Button>
-                </div>
-                <p className="text-xs text-white/50">
-                  Enter IP address or hostname and port separately
-                </p>
-              </div>
-            )}
-          </div>
-        </SettingCard>
+        
+        <OriginServersCard 
+          spectrumId={spectrumApp.spectrum_id}
+          initialOrigins={spectrumApp.origin_direct || []}
+          protocol={spectrumApp.dns.original_protocol}
+        />
 
         {/* Edge IPs */}
-        <SettingCard
+        {/* <SettingCard
           icon={Network}
           title="Edge IP Configuration"
           settingKey="edgeIps"
@@ -770,7 +570,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
               </Select>
             </div>
           </div>
-        </SettingCard>
+        </SettingCard> */}
       </div>
     </div>
   );

@@ -42,13 +42,7 @@ const getLocationName = (regionCode: string): string => {
 };
 
 const DatabasePage = () => {
-  // Dummy data for now, replace with actual data from your backend
-  // const databases = [
-  //   {
-  //     name: "production-db-1",
-  //   },
-  // ];
-
+ 
   const user = useSession();
   const router = useRouter();
 

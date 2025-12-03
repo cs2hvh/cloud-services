@@ -281,7 +281,7 @@ const NewClusterPage = ({
     }
 
     try {
-      //debugger;
+      debugger;
       setIsLoading(true);
       if (
         !state.selectedNode ||
@@ -437,9 +437,9 @@ const NewClusterPage = ({
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
-        toast.error(err.message);
+        //toast.error(err.message);
       } else {
-        toast.error("Unknown error occurred");
+       // toast.error("Unknown error occurred");
       }
     } finally {
       setIsLoading(false);
