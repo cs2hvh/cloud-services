@@ -11,8 +11,11 @@ export function createNextJsPipeline(
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
 
-  // sanitize git url
-  const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
+  // Remove token from URL for display purposes (keep only clean URL for metadata)
+  // Handle both GitHub (https://token@github.com/) and GitLab (https://oauth2:token@gitlab.com/) formats
+  const cleanUrl = gitUrl
+    .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
+    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/');
   const sizeKey = (size || 'small').toLowerCase();
 
   let cpuRequest = '500m';

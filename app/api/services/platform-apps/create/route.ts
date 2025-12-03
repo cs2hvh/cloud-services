@@ -104,6 +104,56 @@ export async function POST(req: NextRequest) {
         console.log('[platform-apps/create] ⚠️ No GitHub token found - private repos may fail');
       }
     }
+    
+    // Get GitLab access token for private repository access
+    // GitLab URL format: https://oauth2:<token>@gitlab.com/user/repo.git
+    if (appData.git_provider === 'gitlab' && authenticated_repository_url.includes('gitlab.com')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+          console.log('[platform-apps/create] Found GitLab token in session.provider_token');
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const gitlabIdentity = session.user.identities.find(id => id.provider === 'gitlab');
+          if (gitlabIdentity?.identity_data?.provider_token) {
+            accessToken = gitlabIdentity.identity_data.provider_token;
+            console.log('[platform-apps/create] Found GitLab token in identity_data.provider_token');
+          }
+        }
+      }
+      
+      // Check the gitlab_tokens table with auto-refresh (GitLab tokens expire in 2 hours!)
+      if (!accessToken) {
+        const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+        const validToken = await getValidGitLabToken(auth.user!.id);
+        if (validToken) {
+          accessToken = validToken;
+          console.log('[platform-apps/create] Found GitLab token in gitlab_tokens table (with auto-refresh)');
+        }
+      }
+      
+      if (accessToken) {
+        // GitLab uses oauth2:<token>@gitlab.com format for authenticated access
+        // Handle both https://gitlab.com/... and https://www.gitlab.com/...
+        authenticated_repository_url = authenticated_repository_url.replace(
+          /https:\/\/(www\.)?gitlab\.com\//,
+          `https://oauth2:${accessToken}@gitlab.com/`
+        );
+        console.log('[platform-apps/create] ✅ Injected GitLab token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No GitLab token found - private repos may fail');
+      }
+    }
 
     // Prepare deployment configuration
     const deploymentConfig: DeploymentConfig = {

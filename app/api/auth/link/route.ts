@@ -65,12 +65,28 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin") || "http://localhost:3000";
   console.log(origin, "....................52");
 
+  // Define scopes for each provider
+  const getProviderScopes = (p: string): string | undefined => {
+    switch (p) {
+      case 'github':
+        return 'repo user:email';
+      case 'gitlab':
+        // GitLab scopes: api for full access, read_user for profile
+        // GitLab tokens expire in 2 hours, so we need api scope for refresh tokens
+        return 'api read_user';
+      case 'bitbucket':
+        return 'repository account';
+      default:
+        return undefined;
+    }
+  };
+
   if (method === "connect") {
     const { data, error } = await supabase.auth.linkIdentity({
       provider,
       options: {
         redirectTo: `${origin}/api/auth/callback`,
-        scopes: provider === 'github' ? 'repo user:email' : undefined,
+        scopes: getProviderScopes(provider),
       },
     });
     if (error) {

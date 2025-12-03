@@ -8,7 +8,10 @@ export function createSimpleTestPipeline(
   branch: string,
 ): string {
   // Remove token from URL for display purposes (keep only clean URL for metadata)
-  const cleanUrl = gitUrl.replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/');
+  // Handle both GitHub (https://token@github.com/) and GitLab (https://oauth2:token@gitlab.com/) formats
+  const cleanUrl = gitUrl
+    .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
+    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/');
   
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
