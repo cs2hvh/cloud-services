@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import {
   Globe,
@@ -10,10 +11,29 @@ import {
   Trash2,
   Terminal,
   GitBranch,
+  Cpu,
+  MemoryStick,
+  Box,
+  RotateCcw,
+  Activity,
+  Clock,
+  AlertTriangle,
+  TrendingUp,
+  HardDrive,
+  Server,
+  Network,
+  Container,
+  Shield,
+  Layers,
+  RefreshCw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
+import { AppMetrics, AppHealth, useAppDetails, AppDetails } from '@/hooks/use-app-metrics';
 
 interface AppCardProps {
   app: App;
@@ -23,6 +43,9 @@ interface AppCardProps {
   onToggleLogs: () => void;
   onDelete: () => void;
   onFetchLogs: (buildNumber: number) => void;
+  metrics?: AppMetrics | null;
+  health?: AppHealth | null;
+  metricsLoading?: boolean;
 }
 
 function getStatusBadge(status: string, build?: BuildInfo) {
@@ -81,17 +104,42 @@ export function AppCard({
   onToggleLogs,
   onDelete,
   onFetchLogs,
+  metrics,
+  health,
+  metricsLoading,
 }: AppCardProps) {
   const domain = app.deployment_url
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
+  const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  
+  // Fetch detailed info when metrics tab is active and expanded
+  const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
+    appId: app.id,
+    enabled: isExpanded && activeTab === 'metrics' && app.status === 'running',
+  });
 
   const handleToggleLogs = () => {
     if (!isExpanded && build) {
       onFetchLogs(build.number);
     }
+    setActiveTab('logs');
     onToggleLogs();
+  };
+
+  const handleToggleMetrics = () => {
+    setActiveTab('metrics');
+    if (!isExpanded) {
+      onToggleLogs();
+    }
+  };
+
+  const copyToClipboard = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   return (
@@ -166,6 +214,29 @@ export function AppCard({
                 </p>
               </div>
             )}
+            {/* Quick Metrics Summary */}
+            {app.status === 'running' && (
+              <div 
+                className="text-center cursor-pointer hover:bg-white/5 rounded px-2 py-1 transition-colors"
+                onClick={handleToggleMetrics}
+              >
+                <p className="text-xs text-white/40 mb-0.5 flex items-center justify-center gap-1">
+                  <Activity className="w-3 h-3" /> Metrics
+                </p>
+                {metricsLoading ? (
+                  <Loader2 className="w-3 h-3 text-white/40 animate-spin mx-auto" />
+                ) : health ? (
+                  <p className="text-xs text-white/70 font-mono">
+                    {health.pod_count} pod{health.pod_count !== 1 ? 's' : ''}
+                    {health.restart_count > 0 && (
+                      <span className="text-yellow-400 ml-1">⚠</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-xs text-white/40">View</p>
+                )}
+              </div>
+            )}
             <div className="text-center">
               <p className="text-xs text-white/40 mb-0.5">Created</p>
               <p className="text-sm text-white/70">
@@ -202,7 +273,7 @@ export function AppCard({
         </div>
 
         {/* Mobile: Additional Info */}
-        <div className="md:hidden mt-3 pt-3 border-t border-white/5 flex items-center gap-4 text-xs text-white/50">
+        <div className="md:hidden mt-3 pt-3 border-t border-white/5 flex flex-wrap items-center gap-3 text-xs text-white/50">
           <span className="flex items-center gap-1">
             <GitBranch className="w-3 h-3" />
             Port {app.port}
@@ -219,11 +290,20 @@ export function AppCard({
               ) : null}
             </span>
           )}
+          {app.status === 'running' && (
+            <button
+              onClick={handleToggleMetrics}
+              className="flex items-center gap-1 text-blue-400 hover:text-blue-300"
+            >
+              <Activity className="w-3 h-3" />
+              Metrics
+            </button>
+          )}
           <span>{new Date(app.created_at).toLocaleDateString()}</span>
         </div>
       </div>
 
-      {/* Build Logs (Expandable) */}
+      {/* Expandable Section with Tabs */}
       {isExpanded && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -231,17 +311,426 @@ export function AppCard({
           exit={{ opacity: 0, height: 0 }}
           className="border-t border-white/5"
         >
+          {/* Tab Headers */}
+          <div className="flex border-b border-white/5 bg-black/30">
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors ${
+                activeTab === 'logs'
+                  ? 'text-white border-b-2 border-blue-500 -mb-px'
+                  : 'text-white/50 hover:text-white/70'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              Build Logs
+            </button>
+            <button
+              onClick={() => setActiveTab('metrics')}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors ${
+                activeTab === 'metrics'
+                  ? 'text-white border-b-2 border-green-500 -mb-px'
+                  : 'text-white/50 hover:text-white/70'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Metrics
+              {metricsLoading && <Loader2 className="w-3 h-3 animate-spin" />}
+            </button>
+          </div>
+
+          {/* Tab Content */}
           <div className="p-4 bg-black/50">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-xs font-semibold text-white/70 flex items-center">
-                <Terminal className="w-3 h-3 mr-1.5" />
-                Build Logs {build && `#${build.number}`}
-              </h4>
-              {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-            </div>
-            <pre className="text-[11px] text-white/70 font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/30 rounded p-3 custom-scrollbar">
-              {logs || 'Loading logs...'}
-            </pre>
+            {activeTab === 'logs' ? (
+              /* Build Logs Tab */
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-semibold text-white/70 flex items-center">
+                    <Terminal className="w-3 h-3 mr-1.5" />
+                    Build Logs {build && `#${build.number}`}
+                  </h4>
+                  {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                </div>
+                <pre className="text-[11px] text-white/70 font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/30 rounded p-3 custom-scrollbar">
+                  {logs || 'Loading logs...'}
+                </pre>
+              </div>
+            ) : (
+              /* Metrics Tab */
+              <div>
+                {(metricsLoading || detailsLoading) && !metrics && !details ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-white/40 animate-spin" />
+                    <span className="ml-2 text-sm text-white/50">Loading metrics...</span>
+                  </div>
+                ) : !metrics && !health && !details ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                    <p className="text-sm text-white/50">No metrics available</p>
+                    <p className="text-xs text-white/30 mt-1">Metrics will appear when the app is running</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Refresh Button */}
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => refetchDetails()}
+                        disabled={detailsLoading}
+                        className="h-7 px-2 text-white/50 hover:text-white hover:bg-white/10"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 mr-1 ${detailsLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </div>
+
+                    {/* Health Status */}
+                    {health && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <Box className="w-3.5 h-3.5" />
+                          Health Status
+                        </h5>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Status</p>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-2 h-2 rounded-full ${
+                                health.status === 'healthy' ? 'bg-green-400' :
+                                health.status === 'degraded' ? 'bg-yellow-400' :
+                                health.status === 'unhealthy' ? 'bg-red-400' : 'bg-gray-400'
+                              }`} />
+                              <span className={`text-sm font-medium capitalize ${
+                                health.status === 'healthy' ? 'text-green-400' :
+                                health.status === 'degraded' ? 'text-yellow-400' :
+                                health.status === 'unhealthy' ? 'text-red-400' : 'text-white/50'
+                              }`}>
+                                {health.status}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Box className="w-3 h-3" /> Pods
+                            </p>
+                            <p className="text-lg font-bold text-white">{health.pod_count}</p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <RotateCcw className="w-3 h-3" /> Restarts
+                            </p>
+                            <p className={`text-lg font-bold ${
+                              health.restart_count > 5 ? 'text-red-400' :
+                              health.restart_count > 0 ? 'text-yellow-400' : 'text-green-400'
+                            }`}>
+                              {health.restart_count}
+                            </p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Clock className="w-3 h-3" /> Uptime
+                            </p>
+                            <p className="text-sm font-medium text-white">
+                              {details?.pod?.uptime || '-'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resource Usage */}
+                    {metrics && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <TrendingUp className="w-3.5 h-3.5" />
+                          Resource Usage
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* CPU Usage */}
+                          <div className="bg-black/20 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs text-white/40 flex items-center gap-1">
+                                <Cpu className="w-3.5 h-3.5" /> CPU Usage
+                              </p>
+                              <span className="text-sm font-mono text-white">
+                                {(metrics.cpu_usage ?? 0).toFixed(2)}%
+                              </span>
+                            </div>
+                            <Progress 
+                              value={metrics.cpu_usage ?? 0} 
+                              className="h-2 bg-white/10"
+                            />
+                            <div className="flex justify-between mt-2 text-xs text-white/30">
+                              <span>Request: {details?.container?.resources.requests.cpu || '100m'}</span>
+                              <span>Limit: {details?.container?.resources.limits.cpu || '500m'}</span>
+                            </div>
+                          </div>
+
+                          {/* Memory Usage */}
+                          <div className="bg-black/20 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs text-white/40 flex items-center gap-1">
+                                <HardDrive className="w-3.5 h-3.5" /> Memory Usage
+                              </p>
+                              <span className="text-sm font-mono text-white">
+                                {(metrics.memory_mb ?? 0).toFixed(1)} Mi
+                              </span>
+                            </div>
+                            <Progress 
+                              value={metrics.memory_usage ?? 0} 
+                              className="h-2 bg-white/10"
+                            />
+                            <div className="flex justify-between mt-2 text-xs text-white/30">
+                              <span>Request: {details?.container?.resources.requests.memory || '128Mi'}</span>
+                              <span>Limit: {details?.container?.resources.limits.memory || '512Mi'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Pod & Container Info */}
+                    {details?.pod && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <Container className="w-3.5 h-3.5" />
+                          Pod Information
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Pod Name</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-mono text-white truncate flex-1">
+                                {details.pod.name}
+                              </p>
+                              <button 
+                                onClick={() => copyToClipboard(details.pod!.name, 'pod')}
+                                className="text-white/30 hover:text-white/70 transition-colors"
+                              >
+                                {copiedField === 'pod' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Server className="w-3 h-3" /> Node
+                            </p>
+                            <p className="text-xs text-white truncate" title={details.pod.nodeName}>
+                              {details.pod.nodeName.split('-').slice(0, 2).join('-')}...
+                            </p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Network className="w-3 h-3" /> Pod IP
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-mono text-white">{details.pod.podIP}</p>
+                              <button 
+                                onClick={() => copyToClipboard(details.pod!.podIP, 'podip')}
+                                className="text-white/30 hover:text-white/70 transition-colors"
+                              >
+                                {copiedField === 'podip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Server className="w-3 h-3" /> Node IP
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-xs font-mono text-white">{details.pod.nodeIP}</p>
+                              <button 
+                                onClick={() => copyToClipboard(details.pod!.nodeIP, 'nodeip')}
+                                className="text-white/30 hover:text-white/70 transition-colors"
+                              >
+                                {copiedField === 'nodeip' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Phase</p>
+                            <Badge className={`text-[10px] ${
+                              details.pod.phase === 'Running' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                              details.pod.phase === 'Pending' ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                              'bg-red-500/20 text-red-400 border-red-500/30'
+                            }`}>
+                              {details.pod.phase}
+                            </Badge>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Started</p>
+                            <p className="text-xs text-white">
+                              {details.pod.startTime ? new Date(details.pod.startTime).toLocaleString() : '-'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Container Info */}
+                    {details?.container && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5" />
+                          Container
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Image</p>
+                            <p className="text-xs font-mono text-white truncate" title={details.container.image}>
+                              {details.container.image.split('/').pop()?.split('@')[0] || details.container.image}
+                            </p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Tag</p>
+                            <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px]">
+                              {details.container.imageTag}
+                            </Badge>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">State</p>
+                            <Badge className={`text-[10px] ${
+                              details.container.state === 'Running' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                              details.container.state.includes('Waiting') ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' :
+                              'bg-red-500/20 text-red-400 border-red-500/30'
+                            }`}>
+                              {details.container.state}
+                            </Badge>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Ready</p>
+                            <span className={`text-sm font-medium ${details.container.ready ? 'text-green-400' : 'text-red-400'}`}>
+                              {details.container.ready ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Network Info */}
+                    {details?.network && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <Network className="w-3.5 h-3.5" />
+                          Network
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Ingress Host</p>
+                            <p className="text-xs font-mono text-white truncate">{details.network.ingressHost}</p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1 flex items-center gap-1">
+                              <Shield className="w-3 h-3" /> TLS
+                            </p>
+                            <Badge className={`text-[10px] ${
+                              details.network.tlsEnabled 
+                                ? 'bg-green-500/20 text-green-400 border-green-500/30' 
+                                : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+                            }`}>
+                              {details.network.tlsEnabled ? 'Enabled' : 'Disabled'}
+                            </Badge>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Service</p>
+                            <p className="text-xs text-white">{details.network.serviceName}</p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Port</p>
+                            <p className="text-xs font-mono text-white">{details.network.servicePort}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Deployment Info */}
+                    {details?.deployment && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <Layers className="w-3.5 h-3.5" />
+                          Deployment
+                        </h5>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Replicas</p>
+                            <p className="text-lg font-bold text-white">
+                              {details.deployment.readyReplicas}/{details.deployment.replicas}
+                            </p>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Strategy</p>
+                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-500/30 text-[10px]">
+                              {details.deployment.strategy}
+                            </Badge>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Available</p>
+                            <span className={`text-sm font-medium ${
+                              details.deployment.availableReplicas >= details.deployment.replicas 
+                                ? 'text-green-400' : 'text-yellow-400'
+                            }`}>
+                              {details.deployment.availableReplicas}
+                            </span>
+                          </div>
+                          <div className="bg-black/20 rounded-lg p-3">
+                            <p className="text-xs text-white/40 mb-1">Created</p>
+                            <p className="text-xs text-white">
+                              {details.deployment.createdAt ? new Date(details.deployment.createdAt).toLocaleDateString() : '-'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Events */}
+                    {details?.events && details.events.length > 0 && (
+                      <div className="bg-black/30 rounded-lg p-4">
+                        <h5 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Recent Events
+                        </h5>
+                        <div className="space-y-2">
+                          {details.events.map((event, idx) => (
+                            <div 
+                              key={idx} 
+                              className={`bg-black/20 rounded-lg p-3 border-l-2 ${
+                                event.type === 'Warning' ? 'border-yellow-500' : 'border-blue-500'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge className={`text-[10px] ${
+                                      event.type === 'Warning' 
+                                        ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' 
+                                        : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                    }`}>
+                                      {event.reason}
+                                    </Badge>
+                                    {event.count > 1 && (
+                                      <span className="text-xs text-white/40">×{event.count}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-white/70 truncate">{event.message}</p>
+                                </div>
+                                <p className="text-xs text-white/30 flex-shrink-0">
+                                  {event.lastTimestamp ? new Date(event.lastTimestamp).toLocaleTimeString() : ''}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Timestamp */}
+                    <p className="text-xs text-white/30 text-right">
+                      Last updated: {new Date(details?.timestamp || metrics?.timestamp || new Date()).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </motion.div>
       )}

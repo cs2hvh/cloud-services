@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Search, Code, Plus, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { AppCard } from './app-card';
 import { DeleteAppModal } from './delete-app-modal';
 import { App, BuildInfo } from './types';
+import { useMultipleAppMetrics } from '@/hooks/use-app-metrics';
 
 interface AppsListProps {
   apps: App[];
@@ -33,6 +34,19 @@ export function AppsList({
   // Delete modal state
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [appToDelete, setAppToDelete] = useState<{ id: string; name: string; originalStatus: string } | null>(null);
+
+  // Get app IDs for running apps only (no need to fetch metrics for non-running apps)
+  const runningAppIds = useMemo(() => 
+    apps.filter(app => app.status === 'running').map(app => app.id),
+    [apps]
+  );
+
+  // Fetch metrics for all running apps
+  const { data: metricsData, loading: metricsLoading } = useMultipleAppMetrics({
+    appIds: runningAppIds,
+    enabled: runningAppIds.length > 0,
+    refreshInterval: 30000, // Refresh every 30 seconds
+  });
 
   // Filter apps based on search
   const filteredApps = apps.filter((app) =>
@@ -116,20 +130,26 @@ export function AppsList({
 
               {/* Scrollable apps list */}
               <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-                {filteredApps.map((app) => (
-                  <AppCard
-                    key={app.id}
-                    app={app}
-                    build={buildInfo[app.name]}
-                    logs={buildLogs[app.name]}
-                    isExpanded={selectedApp === app.name}
-                    onToggleLogs={() =>
-                      setSelectedApp(selectedApp === app.name ? null : app.name)
-                    }
-                    onDelete={() => handleDelete(app.id, app.name)}
-                    onFetchLogs={(buildNumber) => onFetchLogs(app.name, buildNumber)}
-                  />
-                ))}
+                {filteredApps.map((app) => {
+                  const appMetrics = metricsData[app.id];
+                  return (
+                    <AppCard
+                      key={app.id}
+                      app={app}
+                      build={buildInfo[app.name]}
+                      logs={buildLogs[app.name]}
+                      isExpanded={selectedApp === app.name}
+                      onToggleLogs={() =>
+                        setSelectedApp(selectedApp === app.name ? null : app.name)
+                      }
+                      onDelete={() => handleDelete(app.id, app.name)}
+                      onFetchLogs={(buildNumber) => onFetchLogs(app.name, buildNumber)}
+                      metrics={appMetrics?.metrics}
+                      health={appMetrics?.health}
+                      metricsLoading={metricsLoading && app.status === 'running'}
+                    />
+                  );
+                })}
               </div>
 
               {/* No results message */}
