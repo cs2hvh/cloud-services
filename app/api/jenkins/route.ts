@@ -2,7 +2,7 @@ import { getUser } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import cloudflare from "@/lib/cloudflare";
 import getJenkinsClient from "@/lib/jenkins";
-import { createPipelineXml } from "@/lib/jenkins/pipeline";
+import { createNodeJsPipeline } from "@/lib/jenkins/pipelines";
 import { NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 
@@ -35,10 +35,11 @@ async function createJob(
   github: string,
   branch: string,
   port: string,
+  size: string = 'small',
 ) {
   try {
     const jobName = `${name}-job`;
-    const pipeline = createPipelineXml(name, github, branch, port);
+    const pipeline = createNodeJsPipeline(name, github, branch, port, size);
     // Create job in Jenkins
     await getJenkinsClient().job.create(jobName, pipeline);
     setTimeout(async () => {
@@ -55,30 +56,31 @@ async function createJob(
 // Handle POST requests: create the job and respond
 export async function POST(request: Request) {
   try {
-    const { name, github, branch, buildCommand, projectId } =
+    const { name, github, branch, buildCommand, projectId, size } =
       await request.json();
 
     if (!name || !github || !branch || !buildCommand) {
-      return new Response("Missing required fields", { status: 400 });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
     // Get authenticated user
     const user = await getUser();
     if (!user) {
-      return new Response("Access Denied.", { status: 403 });
+      return NextResponse.json({ error: "Access Denied" }, { status: 403 });
     }
 
     // Create service client for database operations
     const supabase = await createServiceClient();
 
-    // Get all used ports from apps table
+    // Get all used ports from platform_apps table
     const { data: apps, error: appsError } = await supabase
-      .from("apps")
-      .select("port");
+      .from("platform_apps")
+      .select("port")
+      .not("port", "is", null);
 
     if (appsError) {
       console.error("Error fetching apps:", appsError);
-      return new Response("Database error", { status: 500 });
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
     const usedPorts = apps?.map((app) => app.port) || [];
@@ -94,30 +96,38 @@ export async function POST(request: Request) {
 
     if (!availablePort) {
       console.error("No available ports");
-      return new Response("No available ports", { status: 500 });
+      return NextResponse.json({ error: "No available ports" }, { status: 500 });
     }
 
-    // Generate a unique ID for the app
-    const id = uuidv4().substring(0, 10);
+    // Generate slug from name
+    const slug = `${name}-${uuidv4().substring(0, 6)}`;
 
     // Create app record in database
     const { data: newApp, error: createError } = await supabase
-      .from("apps")
+      .from("platform_apps")
       .insert({
-        id,
-        github_url: github,
         name,
+        slug,
+        git_provider: "github",
+        repository_id: "", // Will be populated later if needed
+        repository_name: name,
+        repository_url: github,
+        branch: branch,
+        framework: buildCommand || "nodejs",
+        build_command: buildCommand,
+        status: "building",
         user_id: user.id,
         port: availablePort,
+        ip: process.env.KUBE_IP,
+        deployment_url: `https://${name}.uizb210.xyz`,
         project_id: projectId || null,
-        status: "building",
       })
       .select()
       .single();
 
     if (createError) {
       console.error("Error creating app:", createError);
-      return new Response("Failed to create app", { status: 500 });
+      return NextResponse.json({ error: "Failed to create app" }, { status: 500 });
     }
 
     // Create DNS record in Cloudflare
@@ -131,7 +141,7 @@ export async function POST(request: Request) {
     });
 
     // Create Jenkins job
-    await createJob(name, github, branch, availablePort.toString());
+    await createJob(name, github, branch, availablePort.toString(), size || 'small');
 
     // Log the activity if project ID is provided
     if (projectId) {
@@ -148,8 +158,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error(error);
-    return new Response(
-      JSON.stringify({ error: error || "Something went wrong." }),
+    return NextResponse.json(
+      { error: error || "Something went wrong." },
       { status: 500 },
     );
   }
@@ -161,7 +171,7 @@ export async function GET() {
     // Get authenticated user
     const user = await getUser();
     if (!user) {
-      return new Response("Access Denied.", { status: 403 });
+      return NextResponse.json({ error: "Access Denied" }, { status: 403 });
     }
 
     // Create client for database operations
@@ -169,20 +179,83 @@ export async function GET() {
 
     // Get user's apps
     const { data: apps, error } = await supabase
-      .from("apps")
+      .from("platform_apps")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) {
       console.error("Error fetching apps:", error);
-      return new Response("Database error", { status: 500 });
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
     }
 
     return NextResponse.json({ apps });
   } catch (error) {
     console.error(error);
-    return new Response(JSON.stringify({ error: "Something went wrong." }), {
+    return NextResponse.json({ error: "Something went wrong." }, {
+      status: 500,
+    });
+  }
+}
+
+// Handle PATCH requests: update an existing Jenkins job configuration
+export async function PATCH(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const appId = searchParams.get("id");
+
+    if (!appId) {
+      return NextResponse.json({ error: "App ID required" }, { status: 400 });
+    }
+
+    // Get authenticated user
+    const user = await getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Access Denied" }, { status: 403 });
+    }
+
+    // Create service client for database operations
+    const supabase = await createServiceClient();
+
+    // Get app details
+    const { data: app, error: fetchError } = await supabase
+      .from("platform_apps")
+      .select("*")
+      .eq("id", appId)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !app) {
+      return NextResponse.json({ error: "App not found" }, { status: 404 });
+    }
+
+    // Update Jenkins job with new pipeline configuration
+    try {
+      const jobName = `${app.name}-job`;
+      const pipeline = createNodeJsPipeline(
+        app.name,
+        app.repository_url,
+        app.branch,
+        app.port.toString(),
+        (app.size as string) || 'small'
+      );
+      
+      await getJenkinsClient().job.config(jobName, pipeline);
+      console.log(`Job "${jobName}" updated successfully!`);
+
+      return NextResponse.json({ 
+        message: "Job configuration updated successfully!",
+        jobName 
+      });
+    } catch (error) {
+      console.error("Error updating Jenkins job:", error);
+      return NextResponse.json({ 
+        error: "Failed to update Jenkins job configuration" 
+      }, { status: 500 });
+    }
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Something went wrong." }, {
       status: 500,
     });
   }
@@ -195,13 +268,13 @@ export async function DELETE(request: Request) {
     const appId = searchParams.get("id");
 
     if (!appId) {
-      return new Response("App ID required", { status: 400 });
+      return NextResponse.json({ error: "App ID required" }, { status: 400 });
     }
 
     // Get authenticated user
     const user = await getUser();
     if (!user) {
-      return new Response("Access Denied.", { status: 403 });
+      return NextResponse.json({ error: "Access Denied" }, { status: 403 });
     }
 
     // Create service client for database operations
@@ -209,14 +282,14 @@ export async function DELETE(request: Request) {
 
     // Get app details first
     const { data: app, error: fetchError } = await supabase
-      .from("apps")
+      .from("platform_apps")
       .select("*")
       .eq("id", appId)
       .eq("user_id", user.id)
       .single();
 
     if (fetchError || !app) {
-      return new Response("App not found", { status: 404 });
+      return NextResponse.json({ error: "App not found" }, { status: 404 });
     }
 
     // Delete Jenkins job
@@ -238,14 +311,14 @@ export async function DELETE(request: Request) {
 
     // Delete app from database
     const { error: deleteError } = await supabase
-      .from("apps")
+      .from("platform_apps")
       .delete()
       .eq("id", appId)
       .eq("user_id", user.id);
 
     if (deleteError) {
       console.error("Error deleting app:", deleteError);
-      return new Response("Failed to delete app", { status: 500 });
+      return NextResponse.json({ error: "Failed to delete app" }, { status: 500 });
     }
 
     // Log the activity if project ID exists
@@ -260,7 +333,7 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: "App deleted successfully!" });
   } catch (error) {
     console.error(error);
-    return new Response(JSON.stringify({ error: "Something went wrong." }), {
+    return NextResponse.json({ error: "Something went wrong." }, {
       status: 500,
     });
   }
