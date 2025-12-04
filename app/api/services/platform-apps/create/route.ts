@@ -155,6 +155,61 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Handle Bitbucket token injection for private repositories
+    // Bitbucket URL format: https://x-token-auth:<token>@bitbucket.org/workspace/repo.git
+    if (appData.git_provider === 'bitbucket' && authenticated_repository_url.includes('bitbucket.org')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first (freshest token)
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+          console.log('[platform-apps/create] Found Bitbucket token in session.provider_token');
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const bitbucketIdentity = session.user.identities.find(id => id.provider === 'bitbucket');
+          if (bitbucketIdentity?.identity_data?.provider_token) {
+            accessToken = bitbucketIdentity.identity_data.provider_token;
+            console.log('[platform-apps/create] Found Bitbucket token in identity_data.provider_token');
+          }
+        }
+      }
+      
+      // Fallback: Check the bitbucket_tokens table with auto-refresh (if table exists)
+      // Bitbucket tokens expire in ~1-2 hours, so refresh is important
+      if (!accessToken) {
+        try {
+          const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+          const validToken = await getValidBitbucketToken(auth.user!.id);
+          if (validToken) {
+            accessToken = validToken;
+            console.log('[platform-apps/create] Found Bitbucket token in bitbucket_tokens table (with auto-refresh)');
+          }
+        } catch (e) {
+          console.log('[platform-apps/create] bitbucket_tokens table not available, skipping fallback');
+        }
+      }
+      
+      if (accessToken) {
+        // Bitbucket uses x-token-auth:<token>@bitbucket.org format for authenticated access
+        // Handle both https://bitbucket.org/... and https://www.bitbucket.org/...
+        authenticated_repository_url = authenticated_repository_url.replace(
+          /https:\/\/(www\.)?bitbucket\.org\//,
+          `https://x-token-auth:${accessToken}@bitbucket.org/`
+        );
+        console.log('[platform-apps/create] ✅ Injected Bitbucket token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No Bitbucket token found - private repos may fail');
+      }
+    }
+
     // Prepare deployment configuration
     const deploymentConfig: DeploymentConfig = {
       name: appData.name,

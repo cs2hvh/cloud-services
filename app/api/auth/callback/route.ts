@@ -121,6 +121,64 @@ export async function GET(request: NextRequest) {
           // Don't fail the auth flow if token storage fails
         }
       }
+
+      // Handle Bitbucket token storage
+      // IMPORTANT: Bitbucket tokens expire after 1-2 hours
+      // We MUST store the refresh_token to be able to get new access tokens
+      const bitbucketIdentity = user.identities?.find(
+        (identity) => identity.provider === "bitbucket"
+      );
+
+      if (bitbucketIdentity && data.session.provider_token) {
+        try {
+          // Get Bitbucket user info
+          const userResponse = await fetch("https://api.bitbucket.org/2.0/user", {
+            headers: {
+              Authorization: `Bearer ${data.session.provider_token}`,
+              Accept: "application/json",
+            },
+          });
+
+          if (userResponse.ok) {
+            const bitbucketUser = await userResponse.json();
+
+            // Bitbucket tokens expire in ~3600 seconds (1 hour) typically
+            // Calculate expiration time - use 3600 seconds (1 hour) as per Bitbucket docs
+            const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
+
+            // Store the Bitbucket token for repository access
+            const { error: upsertError } = await supabase
+              .from("bitbucket_tokens")
+              .upsert({
+                user_id: user.id,
+                access_token: data.session.provider_token,
+                bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
+                bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
+                scopes: "repository account",
+                refresh_token: data.session.provider_refresh_token || null, // Critical for Bitbucket!
+                expires_at: expiresAt, // Bitbucket tokens DO expire - typically 1 hour
+                updated_at: new Date().toISOString(),
+              });
+
+            if (upsertError) {
+              console.error("Failed to upsert Bitbucket token:", upsertError);
+            } else {
+              console.log(
+                "Stored Bitbucket token for repository access:",
+                bitbucketUser.username || bitbucketUser.nickname
+              );
+              if (!data.session.provider_refresh_token) {
+                console.warn(
+                  "Warning: No refresh token received for Bitbucket. Token will expire in ~1 hour."
+                );
+              }
+            }
+          }
+        } catch (error) {
+          console.error("Failed to store Bitbucket token:", error);
+          // Don't fail the auth flow if token storage fails
+        }
+      }
     }
 
     if (!error) {

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getValidBitbucketToken } from "@/lib/bitbucket/token-refresh";
 
 interface BitbucketBranch {
   name: string;
@@ -32,10 +33,20 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     
-    // Get the current session which includes provider tokens
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (sessionError || !session) {
+    if (userError || !user) {
+      return Response.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Get the current session to check for provider tokens
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
       return Response.json(
         { message: "No active session" },
         { status: 401 }
@@ -54,26 +65,47 @@ export async function GET(request: Request) {
       );
     }
 
-    // Try to use access token if available
+    // Try to get a valid access token from various sources
     let accessToken = null;
+    let tokenSource = 'none';
     
-    // Check for token in session first
+    // Source 1: Session provider_token (only available immediately after OAuth callback)
     if (session.provider_token) {
       accessToken = session.provider_token;
+      tokenSource = 'session.provider_token';
+      console.log('[Bitbucket Branches] Found token in session.provider_token');
     }
-    // Fallback to identity data
+    // Source 2: Identity data provider_token (usually not populated by Supabase)
     else if (bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
+      tokenSource = 'identity_data.provider_token';
+      console.log('[Bitbucket Branches] Found token in identity_data.provider_token');
+    }
+    // Source 3: Database stored token with automatic refresh (most reliable for Bitbucket!)
+    // IMPORTANT: Bitbucket tokens expire in ~1 hour, so we need to check and refresh them
+    else {
+      console.log('[Bitbucket Branches] No session token, checking bitbucket_tokens table for user:', user.id);
+      const storedToken = await getValidBitbucketToken(user.id);
+      if (storedToken) {
+        accessToken = storedToken;
+        tokenSource = 'bitbucket_tokens_table';
+        console.log('[Bitbucket Branches] Found valid token in bitbucket_tokens table (with auto-refresh)');
+      } else {
+        console.log('[Bitbucket Branches] No valid token found in bitbucket_tokens table');
+      }
     }
 
     if (!accessToken) {
       return Response.json(
         { 
-          message: "Bitbucket access token not found. Please reconnect your Bitbucket account." 
+          message: "Bitbucket access token not found or expired. Please reconnect your Bitbucket account.",
+          needsAppAuth: true
         },
         { status: 400 }
       );
     }
+
+    console.log(`[Bitbucket Branches] Using token from: ${tokenSource}`);
 
     // Get repository name from query parameters
     const url = new URL(request.url);
@@ -96,6 +128,20 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
+      // Log the error for debugging
+      const errorText = await response.text();
+      console.log(`[Bitbucket Branches] API request failed with status ${response.status}: ${errorText}`);
+      console.log(`[Bitbucket Branches] Token from ${tokenSource} may be invalid or expired`);
+      
+      // If token from database failed, delete it so user can re-authenticate
+      if (tokenSource === 'bitbucket_tokens_table') {
+        console.log('[Bitbucket Branches] Deleting invalid stored token');
+        await supabase
+          .from('bitbucket_tokens')
+          .delete()
+          .eq('user_id', user.id);
+      }
+      
       if (response.status === 404) {
         return Response.json(
           { message: "Repository not found or access denied" },
@@ -108,7 +154,10 @@ export async function GET(request: Request) {
         );
       } else if (response.status === 401) {
         return Response.json(
-          { message: "Bitbucket token is invalid or expired. Please reconnect your Bitbucket account." },
+          { 
+            message: "Bitbucket token is invalid or expired. Please reconnect your Bitbucket account.",
+            needsAppAuth: true
+          },
           { status: 400 }
         );
       }

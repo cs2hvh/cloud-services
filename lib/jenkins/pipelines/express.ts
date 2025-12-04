@@ -16,10 +16,11 @@ export function createExpressPipeline(
   const ingressName = `${name}-ingress`;
   
   // Remove token from URL for display purposes (keep only clean URL for metadata)
-  // Handle both GitHub (https://token@github.com/) and GitLab (https://oauth2:token@gitlab.com/) formats
+  // Handle GitHub (https://token@github.com/), GitLab (https://oauth2:token@gitlab.com/), and Bitbucket (https://x-token-auth:token@bitbucket.org/) formats
   const cleanUrl = gitUrl
     .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
-    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/');
+    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
+    .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
   const sizeKey = (size || 'small').toLowerCase();
   let cpuRequest = '250m';
   let cpuLimit = '500m';
