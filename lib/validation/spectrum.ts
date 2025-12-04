@@ -48,7 +48,7 @@ export const updateSpectrumAppSchema = z.object({
   dns: spectrumDNSchema.optional(),
   protocol: spectrumProtocolSchema.optional(),
   origin_direct: z.array(z.string()).optional(),
-  tls: z.enum(["off", "full"]).optional(),
+  tls: z.enum(["off", "full","strict","flexible"]).optional(),
   edge_ips: spectrumEdgeIpsSchema.optional(),
   ip_firewall: z.boolean().optional(),
   traffic_type: z.string().optional(),

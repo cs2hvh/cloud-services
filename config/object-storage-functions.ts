@@ -5,6 +5,9 @@ import { Encryption } from "@/config/functions";
 import { createSpacesKey } from "@/lib/digitalocean/api/bucket";
 import { createS3Client } from "@/lib/aws/s3-client";
 import { createBucket as s3CreateBucket } from "@/lib/aws/s3-operations";
+import { getBucketStats } from "@/lib/aws/s3-operations";
+import { emptyBucket, deleteBucket as s3DeleteBucket } from "@/lib/aws/s3-operations";
+import { deleteSpacesKey } from "@/lib/digitalocean/api/bucket";
 
 // Types for better type safety
 export type BucketACL = 'private' | 'public-read';
@@ -258,7 +261,7 @@ export async function handleCreateBucket(config: CreateBucketConfig): Promise<Cr
     if (bucketResult.errorCode === 'BucketAlreadyExists' || bucketResult.errorCode === 'BucketAlreadyOwnedByYou') {
       return {
         success: false,
-        error: "Bucket already exists",
+        error: "A bucket with this name already exists. Please choose a different name.",
         message: "A bucket with this name already exists. Please choose a different name."
       };
     }
@@ -310,10 +313,7 @@ export async function handleCreateBucket(config: CreateBucketConfig): Promise<Cr
   };
 }
 
-// Additional imports for read and delete operations
-import { getBucketStats } from "@/lib/aws/s3-operations";
-import { emptyBucket, deleteBucket as s3DeleteBucket } from "@/lib/aws/s3-operations";
-import { deleteSpacesKey } from "@/lib/digitalocean/api/bucket";
+
 
 // Types for read operation
 export interface ReadBucketConfig {

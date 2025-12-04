@@ -301,12 +301,8 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
   return (
     <div className="space-y-4">
-    
-
       {/* Grid Layout for Settings */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-
         {/* Protocol Configuration */}
         <SettingCard
           icon={Network}
@@ -336,56 +332,57 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         </SettingCard>
 
         {/* TLS Configuration */}
-       {
-        spectrumApp.dns?.original_protocol?.startsWith("tcp") &&
-         <SettingCard
-          icon={Lock}
-          title="TLS Configuration"
-          settingKey="tls"
-          description="Configure TLS encryption"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="tls" className="text-xs text-white/80">
-              TLS Mode
-            </Label>
-            <Select
-              value={settings.tls}
-              onValueChange={(value) =>
-                setSettings((prev) => ({ ...prev, tls: value as "off" | "full" }))
-              }
-              disabled={!editMode.tls}
-            >
-              <SelectTrigger
-                id="tls"
-                className="bg-white/5 border-white/10 text-white h-9"
+        {spectrumApp.dns?.original_protocol?.startsWith("tcp") && (
+          <SettingCard
+            icon={Lock}
+            title="TLS Configuration"
+            settingKey="tls"
+            description="Configure TLS encryption"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="tls" className="text-xs text-white/80">
+                TLS Mode
+              </Label>
+              <Select
+                value={settings.tls}
+                onValueChange={(value) =>
+                  setSettings((prev) => ({
+                    ...prev,
+                    tls: value as "off" | "full",
+                  }))
+                }
+                disabled={!editMode.tls}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-white/10">
-                <SelectItem value="off" className="text-white">
-                  Off
-                </SelectItem>
-                <SelectItem value="flexible" className="text-white">
-                  Flexible
-                </SelectItem>
-               
-                <SelectItem value="full" className="text-white">
-                  Full
-                </SelectItem>
-                <SelectItem value="strict" className="text-white">
-                  Full(Strict)
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-white/50">
-              {settings.tls === "full"
-                ? "TLS encryption enabled"
-                : "TLS encryption disabled"}
-            </p>
-          </div>
-        </SettingCard>
+                <SelectTrigger
+                  id="tls"
+                  className="bg-white/5 border-white/10 text-white h-9"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-white/10">
+                  <SelectItem value="off" className="text-white">
+                    Off
+                  </SelectItem>
+                  <SelectItem value="flexible" className="text-white">
+                    Flexible
+                  </SelectItem>
 
-       }
+                  <SelectItem value="full" className="text-white">
+                    Full
+                  </SelectItem>
+                  <SelectItem value="strict" className="text-white">
+                    Full(Strict)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-white/50">
+                {settings.tls === "full"
+                  ? "TLS encryption enabled"
+                  : "TLS encryption disabled"}
+              </p>
+            </div>
+          </SettingCard>
+        )}
         {/* IP Firewall */}
         {/* <SettingCard
           icon={Shield}
@@ -415,46 +412,45 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         </SettingCard> */}
 
         {/* Traffic Type */}
-        {
-          spectrumApp?.dns?.original_protocol?.startsWith("tcp") &&
+        {/* {spectrumApp?.dns?.original_protocol?.startsWith("tcp") && (
           <SettingCard
-          icon={Network}
-          title="Traffic Type"
-          settingKey="trafficType"
-          description="Configure traffic routing"
-        >
-          <div className="space-y-2">
-            <Label htmlFor="traffic-type" className="text-xs text-white/80">
-              Traffic Type
-            </Label>
-            <Select
-              value={settings.trafficType}
-              onValueChange={(value) =>
-                setSettings((prev) => ({ ...prev, trafficType: value }))
-              }
-              disabled={!editMode.trafficType}
-            >
-              <SelectTrigger
-                id="traffic-type"
-                className="bg-white/5 border-white/10 text-white h-9"
+            icon={Network}
+            title="Traffic Type"
+            settingKey="trafficType"
+            description="Configure traffic routing"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="traffic-type" className="text-xs text-white/80">
+                Traffic Type
+              </Label>
+              <Select
+                value={settings.trafficType}
+                onValueChange={(value) =>
+                  setSettings((prev) => ({ ...prev, trafficType: value }))
+                }
+                disabled={!editMode.trafficType}
               >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-zinc-900 border-white/10">
-                <SelectItem value="direct" className="text-white">
-                  Direct
-                </SelectItem>
-                <SelectItem value="http" className="text-white">
-                  HTTP
-                </SelectItem>
-                <SelectItem value="https" className="text-white">
-                  HTTPS
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </SettingCard>
-        }
+                <SelectTrigger
+                  id="traffic-type"
+                  className="bg-white/5 border-white/10 text-white h-9"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-white/10">
+                  <SelectItem value="direct" className="text-white">
+                    Direct
+                  </SelectItem>
+                  <SelectItem value="http" className="text-white">
+                    HTTP
+                  </SelectItem>
+                  <SelectItem value="https" className="text-white">
+                    HTTPS
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </SettingCard>
+        )} */}
 
         {/* Proxy Protocol */}
         <SettingCard
@@ -484,21 +480,25 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
                 <SelectItem value="off" className="text-white">
                   Off
                 </SelectItem>
-                <SelectItem value="v1" className="text-white">
-                  Version 1
-                </SelectItem>
+                {spectrumApp?.protocol?.startsWith("tcp") && (
+                  <SelectItem value="v1" className="text-white">
+                    Version 1
+                  </SelectItem>
+                )}
                 <SelectItem value="v2" className="text-white">
                   Version 2
                 </SelectItem>
-                <SelectItem value="simple" className="text-white">
-                  Simple
-                </SelectItem>
+                {spectrumApp?.protocol?.startsWith("udp") && (
+                  <SelectItem value="simple" className="text-white">
+                    Simple
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
         </SettingCard>
-        
-        <OriginServersCard 
+
+        <OriginServersCard
           spectrumId={spectrumApp.spectrum_id}
           initialOrigins={spectrumApp.origin_direct || []}
           protocol={spectrumApp.dns.original_protocol}

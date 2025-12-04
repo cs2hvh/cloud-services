@@ -152,6 +152,9 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                 <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                  Name
                 </th>
+                 <th className="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  App Type
+                </th>
                 <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                   Protocol
                 </th>
@@ -189,6 +192,12 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                         </div>
                       </div>
                     </div>
+                  </td>
+
+                   <td className="hidden md:table-cell px-4 sm:px-6 py-4">
+                    <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
+                      {app.dns.original_protocol}
+                    </code>
                   </td>
 
                   {/* Protocol - Hidden on mobile */}
