@@ -76,6 +76,8 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [storagePrice, setStoragePrice] = useState<number>(0);
   const [loadingPrice, setLoadingPrice] = useState(true);
+  const [isCheckingName, setIsCheckingName] = useState(false);
+  const [nameAvailable, setNameAvailable] = useState<boolean | null>(null);
 
   const [formData, setFormData] = useState({
     selectedUser: role === "admin" ? "" : userId,
@@ -216,7 +218,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     }
   };
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
     let hasError = false;
 
     if (currentStep === 0 && role === "admin") {
@@ -231,7 +233,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     }
 
     if (currentStep === 1) {
-     // debugger
+       debugger
       const nameError = validateBucketName(formData.name);
       if (nameError) {
         setErrors((prev) => ({ ...prev, name: nameError }));
@@ -239,6 +241,18 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
         hasError = true;
       } else {
         setErrors((prev) => ({ ...prev, name: "" }));
+        // Check global availability via server API (reuse helper)
+        const available = await checkNameAvailability(formData.name);
+       
+        if (available === false) {
+          setErrors((prev) => ({ ...prev, name: "Bucket name is already taken globally" }));
+          toast.error("Bucket name is already taken globally");
+          hasError = true;
+        } else if (available === null) {
+          // conservative: treat unknown as error
+          toast.error("Failed to verify bucket name availability. Try again.");
+          hasError = true;
+        }
       }
     }
 
@@ -269,6 +283,35 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     } else if (!hasError && currentStep === maxStep) {
       // On last step, validate everything before allowing submit
       onSubmit();
+    }
+  };
+
+  // Helper: check name availability via server API
+  const checkNameAvailability = async (name: string): Promise<boolean | null> => {
+    if (!name) return null;
+    const local = validateBucketName(name);
+    if (local) {
+      setNameAvailable(null);
+      return null;
+    }
+
+    try {
+      setIsCheckingName(true);
+      const resp = await axios.get("/api/services/object-storage/check-bucket", {
+        params: { name },
+      });
+      const exists = resp.data?.exists;
+      const available = !exists;
+      setNameAvailable(available);
+      // Update inline error state only when not available
+      setErrors((prev) => ({ ...prev, name: available ? "" : "Bucket name is already taken globally" }));
+      return available;
+    } catch (err) {
+      console.error("Error checking bucket name:", err);
+      setNameAvailable(null);
+      return null;
+    } finally {
+      setIsCheckingName(false);
     }
   };
 
@@ -526,14 +569,19 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                     onChange={(e) => {
                       const value = e.target.value.toLowerCase();
                       setFormData({ ...formData, name: value });
+                      // reset availability on change
+                      if (nameAvailable !== null) setNameAvailable(null);
                       if (errors.name) {
                         const nameError = validateBucketName(value);
                         setErrors({ ...errors, name: nameError });
                       }
                     }}
-                    onBlur={() => {
+                    onBlur={async () => {
                       const error = validateBucketName(formData.name);
                       setErrors({ ...errors, name: error });
+                      if (!error) {
+                        await checkNameAvailability(formData.name);
+                      }
                     }}
                     type="text"
                     placeholder="my-bucket"
@@ -547,6 +595,18 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                       <span>{errors.name}</span>
                     </div>
                   )}
+                  {!errors.name && isCheckingName && (
+                    <div className="flex items-center gap-2 text-sm text-white/60">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Checking availability...</span>
+                    </div>
+                  )}
+                  {!errors.name && nameAvailable === true && (
+                    <div className="text-sm text-green-400">Name is available</div>
+                  )}
+                  {!errors.name && nameAvailable === false && (
+                    <div className="text-sm text-red-400">Name is already taken globally</div>
+                  )}
                   <p className="text-xs text-white/50">
                     Must be 3-63 characters, lowercase letters, numbers, and hyphens only.
                   </p>
@@ -555,9 +615,18 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
               <CardFooter className="flex justify-end">
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  disabled={isCheckingName}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 disabled:opacity-60"
                 >
-                  Next <ChevronRight size={16} className="ml-2" />
+                  {isCheckingName ? (
+                    <>
+                      Checking... <Loader2 className="w-4 h-4 animate-spin ml-2" />
+                    </>
+                  ) : (
+                    <>
+                      Next <ChevronRight size={16} className="ml-2" />
+                    </>
+                  )}
                 </Button>
               </CardFooter>
             </Card>
@@ -630,7 +699,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
@@ -736,7 +805,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="rounded-md border-white/20 text-dark hover:bg-white/10">
+                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10">
                   Back
                 </Button>
                 <Button
@@ -837,7 +906,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                   variant="outline"
                   onClick={handlePrevStep}
                   disabled={isLoading}
-                  className="rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
                 >
                   Back
                 </Button>
