@@ -5,6 +5,7 @@ import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { checkAdminAuth } from "@/app/api/admin/network-ddos/apps/delete/route";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { Spectrum_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -29,14 +30,23 @@ export async function POST(req: NextRequest) {
      }
     
     const body = await req.json();
-      if (!authorized && auth.user.id !== body.owner_id) {
-        return NextResponse.json(
-          { error: "Unauthorized - Admin access required" },
-          { status: 403 }
-        );
-      }
     const validation = validateRequest(deleteSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
+
+    const appRecord = await Spectrum_Apps.get(validation.data.app_id);
+    if (!appRecord.success || !appRecord.data) {
+      return NextResponse.json(
+        { error: "Spectrum app not found" },
+        { status: 404 }
+      );
+    }
+
+    if (!authorized && appRecord.data.owner_id !== auth.user!.id) {
+      return NextResponse.json(
+        { error: "Unauthorized - Admin access required" },
+        { status: 403 }
+      );
+    }
 
     const result = await deleteSpectrumApp(validation.data.app_id);
     return NextResponse.json(result, { status: 200 });

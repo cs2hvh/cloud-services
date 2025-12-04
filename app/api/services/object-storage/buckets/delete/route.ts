@@ -4,6 +4,7 @@ import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { deleteBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -26,7 +27,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = validateRequest(deleteBucketSchema, body);
     if (!parsed.success) return parsed.response;
-    const { bucket_id, force = true, is_admin } = parsed.data;
+    const { bucket_id, force = true } = parsed.data;
+
+    const adminCheck = await requireAdmin();
+    const isAdmin = adminCheck.ok;
 
     // 🔒 SECURE: Use centralized function for bucket deletion
     // All sensitive operations are handled securely in the config layer
@@ -36,7 +40,7 @@ export async function POST(req: NextRequest) {
       bucket_id,
       user_id: auth.user!.id,
       force,
-      is_admin: is_admin,
+      is_admin: isAdmin,
     });
 
     // Handle result based on success/failure

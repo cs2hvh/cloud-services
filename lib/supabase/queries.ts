@@ -321,7 +321,8 @@ export const Projects = {
   // Get a project by ID
   get_by_id: async (id: string): Promise<Project | null> => {
     try {
-      const supabase = await createClient();
+      console.log("Fetching project with ID:", id);
+      const supabase = await createServiceClient();
       const { data, error } = await supabase
         .from("projects")
         .select("*")

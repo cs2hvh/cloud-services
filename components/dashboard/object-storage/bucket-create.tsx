@@ -233,7 +233,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     }
 
     if (currentStep === 1) {
-       debugger
+      // debugger
       const nameError = validateBucketName(formData.name);
       if (nameError) {
         setErrors((prev) => ({ ...prev, name: nameError }));

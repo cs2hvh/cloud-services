@@ -3,8 +3,9 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { ObjectSpaces, Projects } from "@/lib/supabase/queries";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -31,6 +32,26 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
+    const authenticatedUserId = auth.user!.id;
+    const requestedOwnerId = validatedData.owner_id;
+    let targetOwnerId = authenticatedUserId;
+
+    if (requestedOwnerId !== authenticatedUserId) {
+      const adminCheck = await requireAdmin();
+      if (!adminCheck.ok) {
+        return NextResponse.json(
+          {
+            error: "Unauthorized",
+            message: "You cannot create buckets for other users",
+          },
+          { status: 403 }
+        );
+      }
+      targetOwnerId = requestedOwnerId;
+    }
+
+    
+
     // Duplicate check (DB uniqueness exists; this gives user-friendly 409)
     const existing = await ObjectSpaces.get_bucket_by_bucket_id(validatedData.name);
     if (existing) {
@@ -48,7 +69,7 @@ export async function POST(req: NextRequest) {
       acl: validatedData.acl,
       cors_enabled: validatedData.cors_enabled,
       versioning_enabled: validatedData.versioning_enabled,
-      owner_id: validatedData.owner_id,
+      owner_id: targetOwnerId,
       project_id: validatedData.project_id,
     });
 

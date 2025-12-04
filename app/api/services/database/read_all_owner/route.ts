@@ -5,6 +5,7 @@ import { Encryption } from "@/config/functions";
 import { EncryptedData } from "@/lib/supabase/types";
 import { readAllOwnerSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -23,8 +24,25 @@ export async function POST(req: NextRequest) {
     }
     const validatedData = validation.data;
 
+    const authenticatedUserId = auth.user!.id;
+    let targetOwnerId = authenticatedUserId;
+
+    if (validatedData.id !== authenticatedUserId) {
+      const adminCheck = await requireAdmin();
+      if (!adminCheck.ok) {
+        return NextResponse.json(
+          {
+            error: "Unauthorized",
+            message: "You can only access your own database clusters",
+          },
+          { status: 403 }
+        );
+      }
+      targetOwnerId = validatedData.id;
+    }
+
       const supabase_read = await Database_Clusters.read_all_owner(
-            validatedData.id
+            targetOwnerId
           );
 
          // console.log(supabase_read, "...........supabase read all owner response...........");
