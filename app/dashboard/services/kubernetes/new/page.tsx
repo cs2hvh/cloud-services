@@ -2,25 +2,25 @@ import NewClusterForm from "@/components/dashboard/kubernetes/new/kubernetesform
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { vmLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
-import { Clusters, Products, Projects } from "@/lib/supabase/queries";
+import { Clusters, Projects } from "@/lib/supabase/queries";
+import { getCachedProducts } from "@/lib/cache/query-cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-
 const KubernetesNewSuspense = async () => {
-    const user = await getUser();
-   
-     if (!user) {
-       notFound();
-     }
-   
-    if(!user){
-        throw new Error("User not found");
-    }
-    const projects = await Projects.get_all_by_user(user.id);
-    const clusters = await Clusters.get_by_user_id(user.id);
-    const products = (await Products.get_by_type("kubernetes"));
-   // console.log("Projects in Kube new page",projects);
+  const user = await getUser();
+ 
+  if (!user) {
+    notFound();
+  }
+
+  // Parallel data fetching with caching for products
+  const [projects, clusters, products] = await Promise.all([
+    Projects.get_all_by_user(user.id),
+    Clusters.get_by_user_id(user.id),
+    getCachedProducts.byType("kubernetes"),
+  ]);
+
   return <NewClusterForm locations={vmLocations} projects={projects} userId={user.id} clusters={clusters} products={products} />;
 };
 

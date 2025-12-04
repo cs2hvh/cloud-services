@@ -1,4 +1,4 @@
-import { Tables } from "@/lib/supabase/types";
+import { Admin_User, Tables } from "@/lib/supabase/types";
 
 export interface DatabaseType {
   id: string;
@@ -41,7 +41,7 @@ export interface AdminDatabaseErrors {
 export interface AdminDatabaseAssignProps {
   products: Tables<"products">[];
   locations: Tables<"locations">[];
-  allUsers: Tables<"user_profiles">[];
+  allUsers: Admin_User[];
   allProjects: Tables<"projects">[];
 }
 

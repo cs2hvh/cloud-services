@@ -7,7 +7,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { formatPrice } from "@/lib/utils";
 import Image from "next/image";
-import { Tables } from "@/lib/supabase/types";
+import { Admin_User, Tables } from "@/lib/supabase/types";
 import { DatabaseType, AdminDatabaseState, UserProject } from "@/lib/types/admin-database";
 
 interface SummaryCardProps {
@@ -15,7 +15,7 @@ interface SummaryCardProps {
   selectedDatabase?: Tables<"products">;
   selectedLocationData?: Tables<"locations">;
   selectedDbTypeInfo?: DatabaseType;
-  selectedUserData?:Tables<"user_profiles">;
+  selectedUserData: Admin_User|undefined;
   userProjects: UserProject[];
 }
 

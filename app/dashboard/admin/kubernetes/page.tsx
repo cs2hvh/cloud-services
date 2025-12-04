@@ -3,7 +3,8 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminKubernetes from "@/components/admin/kubernetes/admin-kubernetes";
-import { Clusters, Products } from "@/lib/supabase/queries";
+import { Clusters } from "@/lib/supabase/queries";
+import { getCachedProducts } from "@/lib/cache/query-cache";
 
 const AdminKubernetesSuspense = async () => {
   const checkAdmin = await requireAdmin();
@@ -12,10 +13,10 @@ const AdminKubernetesSuspense = async () => {
     notFound();
   }
 
-  // Fetch both clusters and kubernetes products in parallel
+  // Fetch clusters and kubernetes products in parallel with caching
   const [clusters, kubernetesProducts] = await Promise.all([
     Clusters.get_all_for_admin(),
-    Products.get_by_type("kubernetes"),
+    getCachedProducts.byType("kubernetes"),
   ]);
 
   return <AdminKubernetes all_clusters={clusters} all_products={kubernetesProducts} />;

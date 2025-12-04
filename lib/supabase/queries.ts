@@ -2,6 +2,7 @@
 // import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
+import { handleQueryError } from "@/lib/utils/error-handler";
 import {
   network_rules,
   Tables,
@@ -45,14 +46,12 @@ export const Users = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting user by id: ${error.message}`,
-        );
+        handleQueryError('Get user by ID', error, 'Users');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting user by id: ${err}`);
+      handleQueryError('Get user by ID', err, 'Users');
       return null;
     }
   },
@@ -82,15 +81,13 @@ export const Users = {
         .single();
 
       if (profileError) {
-        console.log(
-          `[Supabase] Error while getting user profile: ${profileError.message}`,
-        );
+        handleQueryError('Get user profile by email', profileError, 'Users');
         return null;
       }
 
       return { ...profile, email: user.email || "" };
     } catch (err) {
-      console.log(`[Supabase] Error while getting user by email: ${err}`);
+      handleQueryError('Get user by email', err, 'Users');
       return null;
     }
   },
@@ -105,14 +102,12 @@ export const Users = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting all users: ${error.message}`,
-        );
+        handleQueryError('Get all users', error, 'Users');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting all users: ${err}`);
+      handleQueryError('Get all users', err, 'Users');
       return [];
     }
   },
@@ -190,14 +185,12 @@ export const Users = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting user by discord: ${error.message}`,
-        );
+        handleQueryError('Get user by discord', error, 'Users');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting user by discord: ${err}`);
+      handleQueryError('Get user by discord', err, 'Users');
       return null;
     }
   },
@@ -212,14 +205,12 @@ export const Users = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting user by steam: ${error.message}`,
-        );
+        handleQueryError('Get user by steam', error, 'Users');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting user by steam: ${err}`);
+      handleQueryError('Get user by steam', err, 'Users');
       return null;
     }
   },
@@ -233,12 +224,12 @@ export const Users = {
       );
 
       if (error) {
-        console.log(`[Supabase] Error while updating user password: ${error.message}`);
+        handleQueryError('Update user password', error, 'Users');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while updating user password: ${err}`);
+      handleQueryError('Update user password', err, 'Users');
       return false;
     }
   },
@@ -256,14 +247,12 @@ export const Users = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while creating user profile: ${error.message}`,
-        );
+        handleQueryError('Create user profile', error, 'Users');
         return null;
       }
       return data.id;
     } catch (err) {
-      console.log(`[Supabase] Error while creating user profile: ${err}`);
+      handleQueryError('Create user profile', err, 'Users');
       return null;
     }
   },
@@ -281,12 +270,12 @@ export const Users = {
         .eq("id", id);
 
       if (error) {
-        console.log(`[Supabase] Error while updating user: ${error.message}`);
+        handleQueryError('Update user', error, 'Users');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while updating user: ${err}`);
+      handleQueryError('Update user', err, 'Users');
       return false;
     }
   },
@@ -298,12 +287,12 @@ export const Users = {
       const { error } = await supabase.auth.admin.deleteUser(userId);
 
       if (error) {
-        console.log(`[Supabase] Error while deleting user: ${error.message}`);
+        handleQueryError('Delete user', error, 'Users');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while deleting user: ${err}`);
+      handleQueryError('Delete user', err, 'Users');
       return false;
     }
   },
@@ -317,12 +306,12 @@ export const Users = {
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        console.log(`[Supabase] Error while counting users: ${error.message}`);
+        handleQueryError('Count users', error, 'Users');
         return 0;
       }
       return count || 0;
     } catch (err) {
-      console.log(`[Supabase] Error while counting users: ${err}`);
+      handleQueryError('Count users', err, 'Users');
       return 0;
     }
   },
@@ -369,7 +358,7 @@ export const Projects = {
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting projects by userId: ${err}`);
+      handleQueryError('getting projects by userId', err, 'Projects');
       return [];
     }
   },
@@ -382,14 +371,12 @@ export const Projects = {
         .select("*")
 
       if (error) {
-        console.log(
-          `[Supabase] Error............. while getting projects by userId: ${error.message}`,
-        );
+        handleQueryError('getting all projects for admin', error, 'Projects');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting projects by userId: ${err}`);
+      handleQueryError('getting all projects for admin', err, 'Projects');
       return [];
     }
   },
@@ -404,14 +391,12 @@ export const Projects = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while creating project: ${error.message}`,
-        );
+        handleQueryError('creating project', error, 'Projects');
         return null;
       }
       return data.id;
     } catch (err) {
-      console.log(`[Supabase] Error while creating project: ${err}`);
+      handleQueryError('creating project', err, 'Projects');
       return null;
     }
   },
@@ -429,14 +414,12 @@ export const Projects = {
         .eq("id", id);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while updating project: ${error.message}`,
-        );
+        handleQueryError('updating project', error, 'Projects');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while updating project: ${err}`);
+      handleQueryError('updating project', err, 'Projects');
       return false;
     }
   },
@@ -448,14 +431,12 @@ export const Projects = {
       const { error } = await supabase.from("projects").delete().eq("id", id);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while deleting project: ${error.message}`,
-        );
+        handleQueryError('deleting project', error, 'Projects');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while deleting project: ${err}`);
+      handleQueryError('deleting project', err, 'Projects');
       return false;
     }
   },
@@ -470,14 +451,12 @@ export const Projects = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project logs: ${error.message}`,
-        );
+        handleQueryError('getting project logs', error, 'Projects');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project logs: ${err}`);
+      handleQueryError('getting project logs', err, 'Projects');
       return null;
     }
   },
@@ -492,14 +471,12 @@ export const Projects = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project logs: ${error.message}`,
-        );
+        handleQueryError('getting project logs by user', error, 'Projects');
         return [];
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project logs: ${err}`);
+      handleQueryError('getting project logs by user', err, 'Projects');
       return [];
     }
   },
@@ -510,14 +487,12 @@ export const Projects = {
       const { error } = await supabase.from("project_logs").insert(props);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while creating project log: ${error.message}`,
-        );
+        handleQueryError('creating project log', error, 'Projects');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while creating project log: ${err}`);
+      handleQueryError('creating project log', err, 'Projects');
       return false;
     }
   },
@@ -531,14 +506,12 @@ export const Projects = {
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while counting projects: ${error.message}`,
-        );
+        handleQueryError('counting projects', error, 'Projects');
         return 0;
       }
       return count || 0;
     } catch (err) {
-      console.log(`[Supabase] Error while counting projects: ${err}`);
+      handleQueryError('counting projects', err, 'Projects');
       return 0;
     }
   },
@@ -555,14 +528,12 @@ export const GameServers = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting game server by id: ${error.message}`,
-        );
+        handleQueryError('getting game server by id', error, 'GameServers');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting game server by id: ${err}`);
+      handleQueryError('getting game server by id', err, 'GameServers');
       return null;
     }
   },
@@ -577,16 +548,12 @@ export const GameServers = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting game servers by user: ${error.message}`,
-        );
+        handleQueryError('getting game servers by user', error, 'GameServers');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(
-        `[Supabase] Error while getting game servers by user: ${err}`,
-      );
+      handleQueryError('getting game servers by user', err, 'GameServers');
       return [];
     }
   },
@@ -601,16 +568,12 @@ export const GameServers = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting game servers by project: ${error.message}`,
-        );
+        handleQueryError('getting game servers by project', error, 'GameServers');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(
-        `[Supabase] Error while getting game servers by project: ${err}`,
-      );
+      handleQueryError('getting game servers by project', err, 'GameServers');
       return [];
     }
   },
@@ -627,14 +590,12 @@ export const GameServers = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while creating game server: ${error.message}`,
-        );
+        handleQueryError('creating game server', error, 'GameServers');
         return null;
       }
       return data.id;
     } catch (err) {
-      console.log(`[Supabase] Error while creating game server: ${err}`);
+      handleQueryError('creating game server', err, 'GameServers');
       return null;
     }
   },
@@ -651,14 +612,12 @@ export const GameServers = {
         .eq("id", id);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while updating game server: ${error.message}`,
-        );
+        handleQueryError('updating game server', error, 'GameServers');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while updating game server: ${err}`);
+      handleQueryError('updating game server', err, 'GameServers');
       return false;
     }
   },
@@ -672,14 +631,12 @@ export const GameServers = {
         .eq("id", id);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while deleting game server: ${error.message}`,
-        );
+        handleQueryError('deleting game server', error, 'GameServers');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while deleting game server: ${err}`);
+      handleQueryError('deleting game server', err, 'GameServers');
       return false;
     }
   },
@@ -696,14 +653,12 @@ export const Products = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting product by id: ${error.message}`,
-        );
+        handleQueryError('getting product by id', error, 'Products');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting product by id: ${err}`);
+      handleQueryError('getting product by id', err, 'Products');
       return null;
     }
   },
@@ -717,14 +672,12 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting all products: ${error.message}`,
-        );
+        handleQueryError('getting all products', error, 'Products');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting all products: ${err}`);
+      handleQueryError('getting all products', err, 'Products');
       return [];
     }
   },
@@ -739,14 +692,12 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting products by type: ${error.message}`,
-        );
+        handleQueryError('getting products by type', error, 'Products');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting products by type: ${err}`);
+      handleQueryError('getting products by type', err, 'Products');
       return [];
     }
   },
@@ -762,14 +713,12 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting products by type and subtype: ${error.message}`,
-        );
+        handleQueryError('getting products by type and subtype', error, 'Products');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting products by type and subtype: ${err}`);
+      handleQueryError('getting products by type and subtype', err, 'Products');
       return [];
     }
   },
@@ -786,14 +735,12 @@ export const Products = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while creating product: ${error.message}`,
-        );
+        handleQueryError('creating product', error, 'Products');
         return { success: false, error: error.message };
       }
       return { success: true, data };
     } catch (err) {
-      console.log(`[Supabase] Error while creating product: ${err}`);
+      handleQueryError('creating product', err, 'Products');
       return { success: false, error: String(err) };
     }
   },
@@ -812,12 +759,12 @@ export const Products = {
         .single();
 
       if (error) {
-        console.log(`[Supabase] Error while updating product: ${error.message}`);
+        handleQueryError('updating product', error, 'Products');
         return { success: false, error: error.message };
       }
       return { success: true, data };
     } catch (err) {
-      console.log(`[Supabase] Error while updating product: ${err}`);
+      handleQueryError('updating product', err, 'Products');
       return { success: false, error: String(err) };
     }
   },
@@ -828,12 +775,12 @@ export const Products = {
       const { error } = await supabase.from("products").delete().eq("id", id);
 
       if (error) {
-        console.log(`[Supabase] Error while deleting product: ${error.message}`);
+        handleQueryError('deleting product', error, 'Products');
         return { success: false, error: error.message };
       }
       return { success: true };
     } catch (err) {
-      console.log(`[Supabase] Error while deleting product: ${err}`);
+      handleQueryError('deleting product', err, 'Products');
       return { success: false, error: String(err) };
     }
   },
@@ -852,15 +799,13 @@ export const Products = {
         .eq("size", id);
 
       if (error) {
-        console.log(
-          `[Supabase] Error while checking product usage: ${error.message}`,
-        );
+        handleQueryError('checking product usage', error, 'Products');
         return { inUse: false, count: 0 };
       }
 
       return { inUse: (count || 0) > 0, count: count || 0 };
     } catch (err) {
-      console.log(`[Supabase] Error while checking product usage: ${err}`);
+      handleQueryError('checking product usage', err, 'Products');
       return { inUse: false, count: 0 };
     }
   },
@@ -878,14 +823,12 @@ export const Locations = {
         .order("city");
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting locations: ${error.message}`
-        );
+        handleQueryError('getting locations', error, 'Locations');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting locations: ${err}`);
+      handleQueryError('getting locations', err, 'Locations');
       return [];
     }
   },
@@ -900,14 +843,12 @@ export const Locations = {
         .order("city");
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting locations: ${error.message}`
-        );
+        handleQueryError('getting locations by type', error, 'Locations');
         return [];
       }
       return data || [];
     } catch (err) {
-      console.log(`[Supabase] Error while getting locations: ${err}`);
+      handleQueryError('getting locations by type', err, 'Locations');
       return [];
     }
   },
@@ -920,7 +861,7 @@ export const Locations = {
       .single();
 
     if (error) {
-      console.error("[Locations] insert failed:", error.message);
+      handleQueryError('inserting location', error, 'Locations');
       return { success: false, error: error.message };
     }
 
@@ -941,12 +882,12 @@ export const OTPs = {
         .single();
 
       if (error) {
-        console.log(`[Supabase] Error while creating OTP: ${error.message}`);
+        handleQueryError('creating OTP', error, 'OTPs');
         return null;
       }
       return data.id;
     } catch (err) {
-      console.log(`[Supabase] Error while creating OTP: ${err}`);
+      handleQueryError('creating OTP', err, 'OTPs');
       return null;
     }
   },
@@ -965,12 +906,12 @@ export const OTPs = {
         .single();
 
       if (error) {
-        console.log(`[Supabase] Error while getting OTP: ${error.message}`);
+        handleQueryError('getting OTP by email', error, 'OTPs');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting OTP: ${err}`);
+      handleQueryError('getting OTP by email', err, 'OTPs');
       return null;
     }
   },
@@ -984,12 +925,12 @@ export const OTPs = {
         .eq("id", id);
 
       if (error) {
-        console.log(`[Supabase] Error while verifying OTP: ${error.message}`);
+        handleQueryError('verifying OTP', error, 'OTPs');
         return false;
       }
       return true;
     } catch (err) {
-      console.log(`[Supabase] Error while verifying OTP: ${err}`);
+      handleQueryError('verifying OTP', err, 'OTPs');
       return false;
     }
   },
@@ -1009,12 +950,12 @@ export const OTPs = {
         .single();
 
       if (error || !data) {
-        console.log(`[Supabase] Error while verifying OTP: ${error?.message || 'No data found'}`);
+        handleQueryError('verifying OTP code', error || new Error('No data found'), 'OTPs');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while verifying OTP: ${err}`);
+      handleQueryError('verifying OTP code', err, 'OTPs');
       return null;
     }
   },
@@ -1229,14 +1170,14 @@ export const Clusters = {
 
 
        if (!projectId || typeof projectId !== 'string') {
-      console.error('[Clusters.get_by_project_id] Invalid project ID');
+      handleQueryError('getting project by id - invalid project ID', new Error('Invalid project ID'), 'Clusters');
       return [];
     }
 
 
      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(projectId)) {
-      console.error('[Clusters.get_by_project_id] Invalid UUID format');
+      handleQueryError('getting project by id - invalid UUID format', new Error('Invalid UUID format'), 'Clusters');
       return [];
     }
 
@@ -1248,14 +1189,12 @@ export const Clusters = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project by id: ${error.message}`,
-        );
+        handleQueryError('getting clusters by project id', error, 'Clusters');
         return [];
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      handleQueryError('getting clusters by project id', err, 'Clusters');
       return [];
     }
   },
@@ -1268,14 +1207,14 @@ export const Clusters = {
 
 
        if (!userId || typeof userId !== 'string') {
-      console.error('[Clusters.get_by_user_id] Invalid user ID');
+      handleQueryError('getting clusters by user id - invalid user ID', new Error('Invalid user ID'), 'Clusters');
       return [];
     }
 
 
      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
-      console.error('[Clusters.get_by_user_id] Invalid UUID format');
+      handleQueryError('getting clusters by user id - invalid UUID format', new Error('Invalid UUID format'), 'Clusters');
       return [];
     }
 
@@ -1287,14 +1226,12 @@ export const Clusters = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project by id: ${error.message}`,
-        );
+        handleQueryError('getting clusters by user id', error, 'Clusters');
         return [];
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      handleQueryError('getting clusters by user id', err, 'Clusters');
       return [];
     }
   },
@@ -1310,14 +1247,12 @@ export const Clusters = {
         .single();
 
       if (error) {
-        console.log(
-          `[Supabase] Error while getting project by id: ${error.message}`,
-        );
+        handleQueryError('getting cluster by id', error, 'Clusters');
         return null;
       }
       return data;
     } catch (err) {
-      console.log(`[Supabase] Error while getting project by id: ${err}`);
+      handleQueryError('getting cluster by id', err, 'Clusters');
       return null;
     }
   },
@@ -1355,19 +1290,22 @@ export const Clusters = {
 
       if (!clusters || clusters.length === 0) return [];
 
-      // Get auth users for emails
-      const { data: authUsers, error: authError } =
-        await supabase.auth.admin.listUsers();
-
-      if (authError) {
-        console.log(
-          `[Clusters] Error getting auth users: ${authError.message}`
-        );
+      // Get unique owner IDs to minimize auth queries
+      const uniqueOwnerIds = [...new Set(clusters.map(c => c.owner_id).filter(Boolean))];
+      
+      // Batch fetch only the needed user emails
+      const emailMap = new Map<string, string>();
+      if (uniqueOwnerIds.length > 0) {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (!authError && authUsers?.users) {
+          authUsers.users
+            .filter(u => uniqueOwnerIds.includes(u.id))
+            .forEach(u => {
+              if (u.id && u.email) emailMap.set(u.id, u.email);
+            });
+        }
       }
-
-      const emailMap = new Map(
-        authUsers?.users?.map((u) => [u.id, u.email]) || []
-      );
 
       // Map and merge data with proper typing
       const merged: Admin_KubernetesCluster[] = clusters
@@ -1855,16 +1793,22 @@ export const Database_Clusters = {
 
       if (!clusters || clusters.length === 0) return [];
 
-      // Get auth users for emails
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      // Get unique owner IDs to minimize auth queries
+      const uniqueOwnerIds = [...new Set(clusters.map(c => c.owner_id).filter(Boolean))];
       
-      if (authError) {
-        console.log(`[Database_Clusters] Error while getting auth users: ${authError.message}`);
+      // Batch fetch only the needed user emails
+      const emailMap = new Map<string, string>();
+      if (uniqueOwnerIds.length > 0) {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (!authError && authUsers?.users) {
+          authUsers.users
+            .filter(u => uniqueOwnerIds.includes(u.id))
+            .forEach(u => {
+              if (u.id && u.email) emailMap.set(u.id, u.email);
+            });
+        }
       }
-
-      const emailMap = new Map(
-        authUsers?.users?.map(u => [u.id, u.email]) || []
-      );
 
       // Map and merge data with proper typing
       const merged: Admin_Database[] = clusters
@@ -2156,19 +2100,22 @@ export const Spectrum_Apps = {
 
       if (!apps || apps.length === 0) return [];
 
-      // Get auth users for emails
-      const { data: authUsers, error: authError } =
-        await supabase.auth.admin.listUsers();
-
-      if (authError) {
-        console.log(
-          `[Spectrum_Apps] Error while getting auth users: ${authError.message}`
-        );
+      // Get unique owner IDs to minimize auth queries
+      const uniqueOwnerIds = [...new Set(apps.map(a => a.owner_id).filter(Boolean))];
+      
+      // Batch fetch only the needed user emails
+      const emailMap = new Map<string, string>();
+      if (uniqueOwnerIds.length > 0) {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (!authError && authUsers?.users) {
+          authUsers.users
+            .filter(u => uniqueOwnerIds.includes(u.id))
+            .forEach(u => {
+              if (u.id && u.email) emailMap.set(u.id, u.email);
+            });
+        }
       }
-
-      const emailMap = new Map(
-        authUsers?.users?.map((u) => [u.id, u.email]) || []
-      );
 
       // Map and merge data with proper typing
       const merged: Admin_SpectrumApp[] = apps
@@ -2525,19 +2472,22 @@ export const ObjectSpaces = {
 
       if (!buckets || buckets.length === 0) return [];
 
-      // Get auth users for emails
-      const { data: authUsers, error: authError } =
-        await supabase.auth.admin.listUsers();
-
-      if (authError) {
-        console.log(
-          `[ObjectSpaces] Error while getting auth users: ${authError.message}`
-        );
+      // Get unique owner IDs to minimize auth queries
+      const uniqueOwnerIds = [...new Set(buckets.map(b => b.owner_id).filter(Boolean))];
+      
+      // Batch fetch only the needed user emails
+      const emailMap = new Map<string, string>();
+      if (uniqueOwnerIds.length > 0) {
+        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+        
+        if (!authError && authUsers?.users) {
+          authUsers.users
+            .filter(u => uniqueOwnerIds.includes(u.id))
+            .forEach(u => {
+              if (u.id && u.email) emailMap.set(u.id, u.email);
+            });
+        }
       }
-
-      const emailMap = new Map(
-        authUsers?.users?.map((u) => [u.id, u.email]) || []
-      );
 
       // Map and merge data with proper typing
       const merged: Admin_Bucket[] = buckets

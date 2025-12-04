@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Tables } from "@/lib/supabase/types";
 import SpectrumAppsTable from "./spectrum-apps-table";
+import { useMemo } from "react";
 
 interface NetworkDDoSMainProps {
   spectrumApps: Tables<"spectrum_apps">[];
@@ -13,13 +14,13 @@ interface NetworkDDoSMainProps {
 }
 
 const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
-  // Calculate stats from actual data
-  const stats = {
+  // Calculate stats from actual data - memoized to prevent recalculation on every render
+  const stats = useMemo(() => ({
     totalApplications: spectrumApps.length,
     activeConnections: spectrumApps.filter(app => app.status === "created" || app.status === "updated").length,
     dataTransferred: "0 GB", // This would come from analytics
     uptime: "99.9%"
-  };
+  }), [spectrumApps]);
 
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">

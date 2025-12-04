@@ -1,27 +1,26 @@
 import DatabaseSelect from "@/components/dashboard/database/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-// import { serviceLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
-import { Database_Clusters, Locations, Products, Projects } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects } from "@/lib/supabase/queries";
+import { getCachedProducts, getCachedLocations } from "@/lib/cache/query-cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 const DatabaseNewSuspense = async () => {
-  const products = await Products.get_by_type("database");
-  const location = await Locations.get_all();
   const user = await getUser();
-  const clusters=await Database_Clusters.read_all_owner_id(user?.id||"");
-    
-      if (!user) {
-        notFound();
-      }
-    
-     if(!user){
-         throw new Error("User not found");
-     }
-     const projects = await Projects.get_all_by_user(user.id);
+  
+  if (!user) {
+    notFound();
+  }
 
-  //console.log(products,"...........database products...........");
+  // Parallel data fetching with caching for products and locations
+  const [products, location, projects, clusters] = await Promise.all([
+    getCachedProducts.byType("database"),
+    getCachedLocations.all(),
+    Projects.get_all_by_user(user.id),
+    Database_Clusters.read_all_owner_id(user.id),
+  ]);
+
   return <DatabaseSelect products={products} locations={location} projects={projects} userId={user.id} clusters={clusters} />;
 };
 

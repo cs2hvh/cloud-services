@@ -25,7 +25,7 @@ const AdminDatabaseAssignSuspense = async () => {
     <AdminDatabaseAssign 
       products={products} 
       locations={locations} 
-      allUsers={users || []} 
+      allUsers={users} 
       allProjects={projects || []}
     />
   );

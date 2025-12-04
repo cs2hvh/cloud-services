@@ -15,8 +15,11 @@ const ObjectStorageSuspense = async () => {
     notFound();
   }
 
-  const projects = await Projects.get_all_by_user(user.id);
-  const buckets = await ObjectSpaces.get_buckets(user.id);
+  // Parallel data fetching for better performance
+  const [projects, buckets] = await Promise.all([
+    Projects.get_all_by_user(user.id),
+    ObjectSpaces.get_buckets(user.id),
+  ]);
   // Sensitive fields remain encrypted; UI will request decrypted credentials on demand.
 
   return (
