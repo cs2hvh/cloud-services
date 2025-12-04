@@ -1,26 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { S3Client, HeadBucketCommand } from "@aws-sdk/client-s3";
+import { HeadBucketCommand } from "@aws-sdk/client-s3";
+import { createS3ClientFromAccessKey} from "@/lib/aws/s3-client";
 
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const name = (url.searchParams.get("name") || "").trim();
+    const region = (url.searchParams.get("region") || "nyc3").trim();
     if (!name) {
       return NextResponse.json({ error: "Bucket name is required" }, { status: 400 });
     }
 
-    const endpoint = process.env.DO_SPACES_ENDPOINT || "https://nyc3.digitaloceanspaces.com";
-    const accessKeyId = process.env.DO_SPACES_KEY || "";
-    const secretAccessKey = process.env.DO_SPACES_SECRET || "";
-
-    const client = new S3Client({
-      region: "us-east-1",
-      endpoint,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
-    });
+    // Create S3 client from centralized factory (no direct key exposure here)
+    const client = createS3ClientFromAccessKey(region);
 
     try {
       await client.send(new HeadBucketCommand({ Bucket: name }));
