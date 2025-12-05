@@ -16,6 +16,45 @@ import {
 
 export class JenkinsService {
   /**
+   * Trigger a build for an existing Jenkins job
+   * Used by webhooks for auto-deploy
+   */
+  static async triggerBuild(appName: string): Promise<number> {
+    if (!process.env.JENKINS_URL) {
+      throw new Error("JENKINS_URL not configured");
+    }
+
+    const jobName = `${appName}-job`;
+    
+    console.log(`[JenkinsService] Triggering build for: ${jobName}`);
+
+    try {
+      // Check if job exists first
+      const exists = await this.jobExists(appName);
+      if (!exists) {
+        throw new Error(`Job ${jobName} does not exist`);
+      }
+
+      // Trigger the build
+      await jenkins.job.build(jobName);
+      
+      // Wait a moment for build to be registered
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Get the build number
+      const buildNumber = await this.getLatestBuildNumber(appName) || 1;
+      
+      console.log(`[JenkinsService] ✅ Build #${buildNumber} triggered for: ${jobName}`);
+      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${buildNumber}/`);
+      
+      return buildNumber;
+    } catch (error: any) {
+      console.error(`[JenkinsService] ❌ Error triggering build for ${jobName}:`, error?.message);
+      throw new Error(`Failed to trigger build: ${error?.message}`);
+    }
+  }
+
+  /**
    * Create and trigger a Jenkins job
    */
   static async createJob(

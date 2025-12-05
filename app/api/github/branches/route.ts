@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getValidGitHubToken } from "@/lib/github/token-refresh";
 
 interface GitHubBranch {
   name: string;
@@ -33,34 +34,41 @@ export async function GET(request: Request) {
       );
     }
 
-    // Check if user has GitHub provider linked
+    // Check if user has GitHub provider linked (Supabase identity)
     const githubIdentity = session.user.identities?.find(
       identity => identity.provider === 'github'
     );
 
-    if (!githubIdentity) {
-      return Response.json(
-        { message: "GitHub account not connected" },
-        { status: 400 }
-      );
-    }
-
-    // Try to use provider token if available
+    // Try to get a valid access token from various sources
     let accessToken = null;
     
-    // Check for token in session first
+    // Source 1: Session provider_token (only available immediately after OAuth callback)
     if (session.provider_token) {
       accessToken = session.provider_token;
+      console.log('[GitHub Branches] Found token in session.provider_token');
     }
-    // Fallback to identity data
-    else if (githubIdentity.identity_data?.provider_token) {
+    // Source 2: Identity data provider_token
+    else if (githubIdentity?.identity_data?.provider_token) {
       accessToken = githubIdentity.identity_data.provider_token;
+      console.log('[GitHub Branches] Found token in identity_data.provider_token');
+    }
+    // Source 3: Database stored token (most reliable for persistent access)
+    else {
+      console.log('[GitHub Branches] No session token, checking github_tokens table for user:', user.id);
+      const storedToken = await getValidGitHubToken(user.id);
+      if (storedToken) {
+        accessToken = storedToken;
+        console.log('[GitHub Branches] Found valid token in github_tokens table');
+      } else {
+        console.log('[GitHub Branches] No valid token found in github_tokens table');
+      }
     }
 
     if (!accessToken) {
       return Response.json(
         { 
-          message: "GitHub access token not found. Please reconnect your GitHub account." 
+          message: "GitHub account not connected. Please connect your GitHub account.",
+          needsAuth: true
         },
         { status: 400 }
       );
@@ -77,8 +85,8 @@ export async function GET(request: Request) {
       );
     }
 
-    // Test the token first
-    const userResponse = await fetch('https://api.github.com/user', {
+    // Fetch branches for the repository
+    const response = await fetch(`https://api.github.com/repos/${repoFullName}/branches?per_page=100`, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/vnd.github.v3+json',
@@ -86,18 +94,8 @@ export async function GET(request: Request) {
       }
     });
 
-    if (userResponse.ok) {
-      // Token works, fetch branches for the repository
-      const response = await fetch(`https://api.github.com/repos/${repoFullName}/branches?per_page=100`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'AhuraSense-Cloud-Platform'
-        }
-      });
-
-      if (response.ok) {
-        const branches: GitHubBranch[] = await response.json();
+    if (response.ok) {
+      const branches: GitHubBranch[] = await response.json();
         
         const transformedBranches = branches.map((branch: GitHubBranch) => ({
           name: branch.name,
@@ -119,13 +117,12 @@ export async function GET(request: Request) {
           { message: "GitHub API rate limit exceeded or insufficient permissions" },
           { status: 403 }
         );
+      } else if (response.status === 401) {
+        return Response.json(
+          { message: "GitHub token is invalid or expired. Please reconnect your GitHub account.", needsAuth: true },
+          { status: 400 }
+        );
       }
-    } else {
-      return Response.json(
-        { message: "GitHub token is invalid or expired. Please reconnect your GitHub account." },
-        { status: 400 }
-      );
-    }
 
     return Response.json(
       { message: "Failed to fetch branches" },

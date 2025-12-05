@@ -21,7 +21,7 @@ import {
   // ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-// import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
   Card,
@@ -105,6 +105,7 @@ const AppDeploymentSelect = () => {
   const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
   const [customDomain, setCustomDomain] = useState<string>('');
   const [size, setSize] = useState<string>('small');
+  const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
 
@@ -478,6 +479,8 @@ const AppDeploymentSelect = () => {
         output_directory: outputDir || undefined,
         env_vars: envVars.filter(ev => ev.key && ev.value),
         size: size || 'small',
+        auto_deploy: autoDeploy,
+        deploy_branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
       };
 
       const response = await fetch('/api/services/platform-apps/create', {
@@ -919,6 +922,30 @@ const AppDeploymentSelect = () => {
                   </div>
                 </div>
 
+                {/* Auto-Deploy Toggle */}
+                <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label className="text-white font-medium">Auto-Deploy on Git Push</Label>
+                      <p className="text-xs text-white/60">
+                        Automatically deploy when you push to the <span className="font-mono text-blue-400">{selectedBranch || 'selected branch'}</span>
+                      </p>
+                    </div>
+                    <Switch
+                      checked={autoDeploy}
+                      onCheckedChange={setAutoDeploy}
+                      className="data-[state=checked]:bg-blue-500"
+                    />
+                  </div>
+                  {autoDeploy && (
+                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
+                      <p className="text-xs text-blue-300">
+                        ✓ A webhook will be created in your repository to trigger deployments automatically when you push commits.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <Label className="text-white">Environment Variables</Label>
@@ -1013,6 +1040,12 @@ const AppDeploymentSelect = () => {
                       <span className="text-white/60">Output Directory:</span>
                       <span className="text-white font-mono text-sm">{outputDir}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Auto-Deploy:</span>
+                      <span className={autoDeploy ? "text-green-400" : "text-white/60"}>
+                        {autoDeploy ? '✓ Enabled' : 'Disabled'}
+                      </span>
+                    </div>
                     {customDomain && (
                       <div className="flex justify-between">
                         <span className="text-white/60">Custom Domain:</span>
@@ -1044,7 +1077,9 @@ const AppDeploymentSelect = () => {
                     <li>• Application will be deployed to our global infrastructure</li>
                     <li>• SSL certificate will be automatically provisioned</li>
                     <li>• You&apos;ll receive a deployment URL to access your app</li>
-                    <li>• Future pushes to {selectedBranch} will trigger automatic deployments</li>
+                    {autoDeploy && (
+                      <li className="text-green-400">• A webhook will be set up to auto-deploy on push to <span className="font-mono">{selectedBranch}</span></li>
+                    )}
                   </ul>
                 </div>
               </CardContent>

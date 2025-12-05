@@ -27,6 +27,8 @@ export interface DeploymentConfig {
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
   size?: string;
+  auto_deploy?: boolean;
+  deploy_branch?: string;
 }
 
 export interface DeploymentResult {
@@ -90,6 +92,8 @@ export class DeploymentService {
         status: "pending" as const, // Will be updated to 'building' when Jenkins starts
         port: containerPort, // Store container port for reference
         ip: process.env.KUBE_IP || null,
+        auto_deploy: config.auto_deploy || false,
+        deploy_branch: config.deploy_branch || config.branch,
       };
 
       const result = await Platform_Apps.create(appPayload);

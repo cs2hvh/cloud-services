@@ -225,6 +225,8 @@ export async function POST(req: NextRequest) {
       output_directory: appData.output_directory,
       env_vars: env_vars || [],
       size: (appData as any).size || 'small',
+      auto_deploy: appData.auto_deploy || false,
+      deploy_branch: appData.deploy_branch || appData.branch || 'main',
     };
 
     // Deploy using the deployment service
@@ -237,11 +239,58 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // If auto_deploy is enabled, register webhook for the app
+    if (appData.auto_deploy && result.app_id) {
+      try {
+        console.log('[platform-apps/create] Auto-deploy enabled, registering webhook...');
+        
+        // Get the appropriate access token for webhook registration
+        let webhookToken = null;
+        if (appData.git_provider === 'github') {
+          const { getValidGitHubToken } = await import('@/lib/github/token-refresh');
+          webhookToken = await getValidGitHubToken(auth.user!.id);
+        } else if (appData.git_provider === 'gitlab') {
+          const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+          webhookToken = await getValidGitLabToken(auth.user!.id);
+        } else if (appData.git_provider === 'bitbucket') {
+          try {
+            const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+            webhookToken = await getValidBitbucketToken(auth.user!.id);
+          } catch {
+            console.log('[platform-apps/create] Bitbucket token refresh not available');
+          }
+        }
+
+        if (webhookToken) {
+          const { WebhookManager } = await import('@/lib/services/webhook-manager');
+          const webhookResult = await WebhookManager.registerWebhook({
+            app_id: result.app_id,
+            provider: appData.git_provider,
+            repository_name: appData.repository_name,
+            access_token: webhookToken,
+          });
+
+          if (webhookResult.success) {
+            console.log('[platform-apps/create] ✅ Webhook registered successfully');
+          } else {
+            console.warn('[platform-apps/create] ⚠️ Webhook registration failed:', webhookResult.error);
+            // Don't fail the deployment, just log the warning
+          }
+        } else {
+          console.warn('[platform-apps/create] ⚠️ No access token available for webhook registration');
+        }
+      } catch (webhookError) {
+        console.error('[platform-apps/create] Webhook registration error:', webhookError);
+        // Don't fail the deployment, just log the error
+      }
+    }
+
     return NextResponse.json({
       message: 'Created App Successfully!',
       app_id: result.app_id,
       deployment_url: result.deployment_url,
       port: result.port,
+      auto_deploy: appData.auto_deploy || false,
     }, { status: 201 });
   } catch (err: any) {
     console.error('[platform-apps/create] Error:', err);

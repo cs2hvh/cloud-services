@@ -357,6 +357,12 @@ INGRESS_EOF
               returnStatus: false
             )
             
+            echo 'Restarting deployment to pull new image'
+            sh(
+              script: 'kubectl rollout restart deployment/\${APP_NAME} -n default',
+              returnStatus: false
+            )
+            
             echo 'Applying service manifest'
             sh(
               script: 'kubectl apply -f service.yaml',

@@ -48,6 +48,8 @@ export const createPlatformAppSchema = z.object({
     })
   ).optional().default([]),
   size: z.enum(["small", "medium", "large"]).optional().default("small"),
+  auto_deploy: z.boolean().optional().default(false),
+  deploy_branch: z.string().optional(),
 });
 
 export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;

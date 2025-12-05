@@ -2719,6 +2719,177 @@ export const Platform_Apps = {
       return [];
     }
   },
+
+  // Get app by repository ID and provider (for webhook lookups)
+  get_by_repository: async (repository_id: string, git_provider: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*, platform_app_webhooks(*)")
+        .eq("repository_id", repository_id)
+        .eq("git_provider", git_provider)
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+};
+
+// ============================================
+// Platform App Webhooks Queries
+// ============================================
+export const Platform_App_Webhooks = {
+  create: async (payload: {
+    app_id: string;
+    provider: 'github' | 'gitlab' | 'bitbucket';
+    webhook_id: string;
+    webhook_secret: string;
+    webhook_url: string;
+    events?: string[];
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_app_webhooks")
+        .insert({
+          ...payload,
+          events: payload.events || ['push'],
+        })
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_by_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_app_webhooks")
+        .select("*")
+        .eq("app_id", app_id);
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || [] };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  // Find app with webhook by repository (used by incoming webhooks)
+  find_by_repository: async (repository_id: string, provider: 'github' | 'gitlab' | 'bitbucket') => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select(`
+          *,
+          platform_app_webhooks!inner(*)
+        `)
+        .eq("repository_id", repository_id)
+        .eq("git_provider", provider)
+        .eq("platform_app_webhooks.provider", provider)
+        .single();
+      
+      if (error) {
+        console.error(`[Platform_App_Webhooks] Error finding by repo: ${error.message}`);
+        return null;
+      }
+      
+      // Flatten the response
+      const webhook = data.platform_app_webhooks?.[0] || data.platform_app_webhooks;
+      return {
+        ...data,
+        webhook_secret: webhook?.webhook_secret,
+        webhook_id: webhook?.id,
+        auto_deploy_enabled: webhook?.auto_deploy_enabled ?? true,
+        deploy_branch: data.deploy_branch || data.branch,
+      };
+    } catch (err) {
+      console.error(`[Platform_App_Webhooks] Error: ${err}`);
+      return null;
+    }
+  },
+
+  update: async (webhook_id: string, patch: any) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_app_webhooks")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", webhook_id)
+        .select()
+        .single();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  // Record webhook trigger
+  record_trigger: async (webhook_id: string, error?: string) => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // First get current count
+      const { data: current } = await supabase
+        .from("platform_app_webhooks")
+        .select("trigger_count")
+        .eq("id", webhook_id)
+        .single();
+      
+      const newCount = (current?.trigger_count || 0) + 1;
+      
+      const { error: updateError } = await supabase
+        .from("platform_app_webhooks")
+        .update({
+          last_triggered_at: new Date().toISOString(),
+          trigger_count: newCount,
+          last_error: error || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", webhook_id);
+      
+      return !updateError;
+    } catch {
+      return false;
+    }
+  },
+
+  delete: async (app_id: string, provider: 'github' | 'gitlab' | 'bitbucket') => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase
+        .from("platform_app_webhooks")
+        .delete()
+        .eq("app_id", app_id)
+        .eq("provider", provider);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  delete_all_for_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase
+        .from("platform_app_webhooks")
+        .delete()
+        .eq("app_id", app_id);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
 };
 
 // Export the queries object for backward compatibility

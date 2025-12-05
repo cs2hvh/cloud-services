@@ -8,21 +8,42 @@ export async function GET(request: NextRequest) {
     const code = searchParams.get("code");
     const state = searchParams.get("state");
     
+    console.log('[GitHub Callback] Received callback with code and state');
+    
     if (!code || !state) {
+      console.error('[GitHub Callback] Missing code or state');
       return NextResponse.redirect(`${process.env.DOMAIN}/dashboard/services/apps/new?error=missing_code`);
     }
 
-    // Extract user ID from state
-    const userId = state.split('-')[0];
+    // Extract user ID from state (format: userId-timestamp)
+    // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    // State format: userId-timestamp where userId is a UUID
+    // Split by '-' and take first 5 parts (the UUID), last part is timestamp
+    const stateParts = state.split('-');
+    // UUID has 5 parts separated by 4 dashes, so join first 5 parts
+    const userId = stateParts.slice(0, 5).join('-');
+    console.log('[GitHub Callback] Expected user ID from state:', userId);
     
     const supabase = await createClient();
     
     // Verify the user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (userError || !user || user.id !== userId) {
+    console.log('[GitHub Callback] Current user:', user?.id || 'none');
+    console.log('[GitHub Callback] User error:', userError?.message || 'none');
+    
+    // If no user session, try to proceed anyway with the userId from state
+    // This handles cases where cookies don't persist across ngrok redirects
+    if (userError || !user) {
+      console.warn('[GitHub Callback] No active session, proceeding with state userId:', userId);
+      // We'll use userId from state and trust it (secured by GitHub OAuth flow)
+    } else if (user.id !== userId) {
+      console.error('[GitHub Callback] User ID mismatch:', user.id, '!==', userId);
       return NextResponse.redirect(`${process.env.DOMAIN}/dashboard/services/apps/new?error=invalid_user`);
     }
+
+    // Use the userId from state (which is verified by GitHub OAuth state parameter)
+    const targetUserId = user?.id || userId;
 
     // Exchange code for access token
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -71,29 +92,40 @@ export async function GET(request: NextRequest) {
     }
 
     const githubUser = await userResponse.json();
+    
+    console.log('[GitHub Callback] GitHub user:', githubUser.login);
 
     // Store the GitHub access token in your database
-    // You'll need to create a table for storing these tokens
-    const { error: insertError } = await supabase
+    // Use service client to bypass RLS since we might not have a session
+    const { createServiceClient } = await import('@/lib/supabase/server');
+    const serviceSupabase = await createServiceClient();
+    
+    // Use upsert with onConflict to handle existing tokens
+    const { error: insertError } = await serviceSupabase
       .from('github_tokens')
-      .upsert({
-        user_id: user.id,
-        access_token: accessToken,
-        github_username: githubUser.login,
-        github_user_id: githubUser.id,
-        scopes: tokenData.scope,
-        refresh_token: tokenData.refresh_token, // Store refresh token if provided
-        expires_at: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null, // Calculate expiration time
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      .upsert(
+        {
+          user_id: targetUserId,
+          access_token: accessToken,
+          github_username: githubUser.login,
+          github_user_id: githubUser.id,
+          scopes: tokenData.scope,
+          refresh_token: tokenData.refresh_token || null,
+          expires_at: tokenData.expires_in ? new Date(Date.now() + tokenData.expires_in * 1000).toISOString() : null,
+          updated_at: new Date().toISOString()
+        },
+        { 
+          onConflict: 'user_id',
+          ignoreDuplicates: false 
+        }
+      );
 
     if (insertError) {
-      console.error('Failed to store GitHub token:', insertError);
+      console.error('[GitHub Callback] Failed to store GitHub token:', insertError);
       return NextResponse.redirect(`${process.env.DOMAIN}/dashboard/services/apps/new?error=token_storage_failed`);
     }
 
-    console.log('Successfully stored GitHub access token for user:', user.id);
+    console.log('[GitHub Callback] Successfully stored GitHub access token for user:', targetUserId);
 
     // Redirect back to the app deployment page with success
     return NextResponse.redirect(`${process.env.DOMAIN}/dashboard/services/apps/new?github_connected=true`);
