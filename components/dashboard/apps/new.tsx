@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from "react";
+import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -342,29 +343,12 @@ const AppDeploymentSelect = () => {
     }
   }, [selectedRepo, repositories, selectedProvider, fetchBranches, detectFramework]);
 
+  const { connectProvider: performConnection } = useProviderConnection();
+
   const connectProvider = async (providerId: string) => {
     setIsLoading(true);
     try {
-      let response;
-      
-      if (providerId === 'github') {
-        // Use GitHub App flow for better repository access
-        response = await fetch('/api/github/app-auth', {
-          method: 'POST',
-        });
-      } else {
-        // Use standard Supabase OAuth for other providers
-        response = await fetch(`/api/auth/signin/${providerId}`, {
-          method: 'POST',
-        });
-      }
-      
-      const data = await response.json();
-      if (data.url) {
-        window.location.href = data.url;
-      }
-    } catch {
-      toast.error(`Failed to connect to ${providerId}`);
+      await performConnection(providerId, 'connect');
     } finally {
       setIsLoading(false);
     }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import EnableTotp from "../2fa/page";
 import api from "@/lib/axios/axios";
+import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 
 type OAuthProvider = "github" | "google" | "gitlab" | "bitbucket" | "email";
 
@@ -14,27 +15,6 @@ type ProviderItem = {
   provider: string;
   status: boolean; // true = linked, false = not linked
 };
-
-/**
- * Example API calls:
- * - Connect:   POST   /api/auth/link        body: { provider: "github" }
- * - Disconnect:DELETE /api/auth/link        body: { provider: "github" }
- * Adjust endpoints to match your backend if needed.
- */
-
-async function connectAccount(provider: OAuthProvider, method: string) {
-  const res = await fetch("/api/auth/link", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ provider, method }),
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error || "Failed to connect account");
-  }
-  return res.json().catch(() => ({}));
-}
 
 const PROVIDER_LABEL: Record<Exclude<OAuthProvider, "email">, string> = {
   github: "GitHub",
@@ -177,34 +157,21 @@ const Accounts = () => {
   const [hitprovider, sethitprovider] = useState(false);
 
   const handleProviders = async () => {
-    setLoading(true);
     const response = await api.get("/auth/providers");
-    setLoading(false);
     if (response.status === 200) {
-      //console.log(response,"......response.......192")
       setProviders(response.data.providers);
     }
   };
 
+  const { connectProvider: performConnection } = useProviderConnection();
+
   const handleConnect = async (provider: OAuthProvider, method: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      // optimistic
-      //   setItems((prev) =>
-      //     prev.map((p) => (p.provider === provider ? { ...p, status: true } : p))
-      //   );
-      const response = await connectAccount(provider, method);
-      //console.log(response, ".....................223");
-      if (response.url && method === "connect") {
-        window.location.href = response?.url;
-        sethitprovider(!hitprovider);
-      } else {
-        toast.info("disconnect success");
+      const result = await performConnection(provider, method as 'connect' | 'disconnect');
+      if (result.success && method === 'disconnect') {
         sethitprovider(!hitprovider);
       }
-    } catch (err) {
-      console.error(err);
-      toast.error((err as Error).message || "Something went wrong");
     } finally {
       setLoading(false);
     }

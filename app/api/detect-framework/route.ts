@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getValidGitHubToken } from "@/lib/github/token-refresh";
+import { GitHubProvider } from "@/lib/providers/github";
 
 // Core types
 interface FileContent {
@@ -301,9 +301,10 @@ export async function POST(request: Request) {
     // Source 3: Database stored tokens (most reliable for persistent access)
     if (!accessToken) {
       if (provider === 'github') {
-        const storedToken = await getValidGitHubToken(user.id);
+        const githubProvider = new GitHubProvider();
+        const storedToken = await githubProvider.getToken(user.id);
         if (storedToken) {
-          accessToken = storedToken;
+          accessToken = storedToken.accessToken;
           console.log('[Detect Framework] Found GitHub token in github_tokens table');
         }
       } else if (provider === 'gitlab') {

@@ -3,7 +3,7 @@
  * Handles registration and deletion of webhooks with Git providers
  */
 import crypto from 'crypto';
-import { getValidGitHubToken } from '@/lib/github/token-refresh';
+import { GitHubProvider } from '@/lib/providers/github';
 import { Platform_App_Webhooks, Platform_Apps } from '@/lib/supabase/queries';
 import type { WebhookRegistrationResult, GitProvider } from '@/lib/webhooks/types';
 
@@ -215,7 +215,9 @@ export class WebhookManager {
     repoId: string
   ): Promise<WebhookRegistrationResult> {
     // Get user's GitHub token
-    const token = await getValidGitHubToken(userId);
+    const githubProvider = new GitHubProvider();
+    const tokenObj = await githubProvider.getToken(userId);
+    const token = tokenObj?.accessToken;
     if (!token) {
       console.error('[WebhookManager] No GitHub token found for user:', userId);
       return {
@@ -253,7 +255,9 @@ export class WebhookManager {
       }
 
       // Get token
-      const token = await getValidGitHubToken(userId);
+      const githubProvider = new GitHubProvider();
+      const tokenObj = await githubProvider.getToken(userId);
+      const token = tokenObj?.accessToken;
       if (token) {
         // Delete from GitHub
         await this.deleteGitHubWebhookById(
@@ -346,7 +350,9 @@ export class WebhookManager {
     webhookId: string
   ): Promise<boolean> {
     try {
-      const token = await getValidGitHubToken(userId);
+      const githubProvider = new GitHubProvider();
+      const tokenObj = await githubProvider.getToken(userId);
+      const token = tokenObj?.accessToken;
       if (!token) return false;
 
       const response = await fetch(

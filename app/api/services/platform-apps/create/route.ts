@@ -85,11 +85,12 @@ export async function POST(req: NextRequest) {
       
       // Last resort: check the github_tokens table with refresh logic
       if (!accessToken) {
-        // Import the token refresh utility
-        const { getValidGitHubToken } = await import('@/lib/github/token-refresh');
-        const validToken = await getValidGitHubToken(auth.user!.id);
-        if (validToken) {
-          accessToken = validToken;
+        // Import the GitHub provider
+        const { GitHubProvider } = await import('@/lib/providers/github');
+        const githubProvider = new GitHubProvider();
+        const tokenObj = await githubProvider.getToken(auth.user!.id);
+        if (tokenObj?.accessToken) {
+          accessToken = tokenObj.accessToken;
         }
       }
       
@@ -247,8 +248,10 @@ export async function POST(req: NextRequest) {
         // Get the appropriate access token for webhook registration
         let webhookToken = null;
         if (appData.git_provider === 'github') {
-          const { getValidGitHubToken } = await import('@/lib/github/token-refresh');
-          webhookToken = await getValidGitHubToken(auth.user!.id);
+          const { GitHubProvider } = await import('@/lib/providers/github');
+          const githubProvider = new GitHubProvider();
+          const tokenObj = await githubProvider.getToken(auth.user!.id);
+          webhookToken = tokenObj?.accessToken;
         } else if (appData.git_provider === 'gitlab') {
           const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
           webhookToken = await getValidGitLabToken(auth.user!.id);
