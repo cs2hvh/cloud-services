@@ -3,7 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
-import { ObjectSpaces, Projects } from "@/lib/supabase/queries";
+import { ObjectSpaces, Projects, Billing } from "@/lib/supabase/queries";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 
@@ -63,6 +63,29 @@ export async function POST(req: NextRequest) {
 
     // 🔒 SECURE: Use centralized function for bucket creation
     // All sensitive operations are handled securely in the config layer
+    // Billing: upfront and hourly (dummy)
+    const INITIAL_COST = 1.0;
+    const HOURLY_RATE = 60;
+
+    // Check and deduct before provisioning
+    const hasBalance = await Billing.has_balance(targetOwnerId, INITIAL_COST);
+    if (!hasBalance) {
+      const bal = await Billing.get_balance(targetOwnerId);
+      return NextResponse.json(
+        { error: "Insufficient credits", message: `Required: ${INITIAL_COST}`, balance: bal },
+        { status: 402 }
+      );
+    }
+
+    try {
+      await Billing.deduct(targetOwnerId, INITIAL_COST);
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: "Credit deduction failed", message: e?.message ?? String(e) },
+        { status: 500 }
+      );
+    }
+
     const result = await ObjectStorageFunctions.createBucket({
       name: validatedData.name,
       region: validatedData.region,
@@ -87,14 +110,15 @@ export async function POST(req: NextRequest) {
     }
 
     // ✅ SUCCESS RESPONSE
-    return NextResponse.json(
-      {
-        success: true,
-        data: result.data,
-        message: result.message,
-      },
-      { status: 201 }
-    );
+    // Add to billing.active_objectspace for hourly billing
+    try {
+      const serviceId = (result.data as any)?.id ?? validatedData.name;
+      await Billing.add_active_objectspace({ userId: targetOwnerId, serviceId, hourlyRate: HOURLY_RATE });
+    } catch (e) {
+      console.error("[billing] active_objectspace insert failed:", e);
+    }
+
+    return NextResponse.json({ success: true, data: result.data, message: result.message }, { status: 201 });
   } catch (error) {
     // Generic error handling - no sensitive details exposed
     const errorMessage =

@@ -53,7 +53,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     }
 
     try {
-      debugger
+      //debugger
       isFetchingRef.current = true;
       console.log("🔄 Fetching database cluster...");
       

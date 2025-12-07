@@ -3,7 +3,7 @@ import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects, Billing } from "@/lib/supabase/queries";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -94,6 +94,24 @@ export async function POST(req: Request) {
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
+  // Billing: dummy fixed amounts
+  const INITIAL_COST = 5.0; // upfront
+  const HOURLY_RATE = 0.25; // per hour
+
+  // Check balance first
+  const hasBalance = await Billing.has_balance(parsed.data.ownerId, INITIAL_COST);
+  if (!hasBalance) {
+    const bal = await Billing.get_balance(parsed.data.ownerId);
+    return NextResponse.json({ error: "Insufficient credits", balance: bal, required: INITIAL_COST }, { status: 402 });
+  }
+
+  // Deduct upfront
+  try {
+    await Billing.deduct(parsed.data.ownerId, INITIAL_COST);
+  } catch (err: any) {
+    return NextResponse.json({ error: "Credit deduction failed", details: err?.message ?? String(err) }, { status: 500 });
+  }
+
   const job = await provisionQueue.add("provision", { clusterId, ...parsed.data, decryptedPassword, role: derivedRole });
 
   // Add activity log for Kubernetes cluster creation
@@ -104,6 +122,13 @@ export async function POST(req: Request) {
       text: `Kubernetes cluster '${parsed.data.cluster.name}' creation started`,
     }, derivedRole);
     console.log(`[createKubernetesCluster] ✅ Activity log added for cluster creation`);
+  }
+
+  // Insert into billing.active_kubernetes
+  try {
+    await Billing.add_active_kubernetes({ userId: parsed.data.ownerId, serviceId: clusterId, hourlyRate: HOURLY_RATE });
+  } catch (e) {
+    console.error("[billing] active_kubernetes insert failed:", e);
   }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });

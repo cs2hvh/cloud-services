@@ -311,8 +311,10 @@ const NewClusterPage = ({
         ipv6: true,
         monitoring: true,
         tags: ["env:prod", "web", "ssh-allowed"],
-        // user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
-       
+        // Pass ownerId to allow server-side credit checks
+        ownerId: targetUserId,
+        // Optional: allow overriding initial upfront cost; default handled server-side
+        initial_cost: 5.0,
       };
 
       console.log(payload, "...............298");
@@ -437,7 +439,7 @@ const NewClusterPage = ({
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
-        //toast.error(err.message);
+       // toast.error(err.message)
       } else {
        // toast.error("Unknown error occurred");
       }

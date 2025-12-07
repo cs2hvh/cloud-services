@@ -317,6 +317,99 @@ export const Users = {
   },
 };
 
+// Billing helpers (no RPC)
+export const Billing = {
+  get_balance: async (userId: string): Promise<number> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("credit_balance")
+      .eq("user_id", userId)
+      .single();
+      console.log(data,"........",error)
+    if (error) return 0;
+    return (data?.credit_balance as number) ?? 0;
+  },
+
+  has_balance: async (userId: string, requiredAmount: number): Promise<boolean> => {
+    const bal = await Billing.get_balance(userId);
+    return bal >= requiredAmount;
+  },
+
+  deduct: async (userId: string, amount: number): Promise<number> => {
+    const supabase = await createServiceClient();
+    const bal = await Billing.get_balance(userId);
+    if (bal < amount) throw new Error("Insufficient balance");
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .update({ credit_balance: bal - amount })
+      .eq("user_id", userId)
+      .select("credit_balance")
+      .single();
+    if (error) throw new Error(`Credit deduction failed: ${error.message}`);
+    return (data?.credit_balance as number) ?? bal - amount;
+  },
+
+  add_active_kubernetes: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_kubernetes: ${error.message}`);
+  },
+  add_active_database: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_database")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_database: ${error.message}`);
+  },
+  add_active_objectspace: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_objectspace")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_objectspace: ${error.message}`);
+  },
+  add_active_spectrum: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_spectrum")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error) throw new Error(`Failed to insert active_spectrum: ${error.message}`);
+  },
+};
+
 export const Projects = {
   // Get a project by ID
   get_by_id: async (id: string): Promise<Project | null> => {

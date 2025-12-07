@@ -1,12 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Encryption, generateStrongPassword } from "@/config/functions";
+import { Billing } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   try {
     //debugger
     const json = await req.json();
     //console.log(json,"...............................25")
+    // Expect ownerId in payload to check credits
+    const ownerId: string | undefined = json?.ownerId;
+    const upfront: number = typeof json?.initial_cost === "number" ? json.initial_cost : 5.0; // default dummy upfront
+
+    if (!ownerId) {
+      return NextResponse.json({ error: "ownerId is required to validate credits" }, { status: 400 });
+    }
+
+    // Check balance before hitting DO API
+    const hasBalance = await Billing.has_balance(ownerId, upfront);
+    if (!hasBalance) {
+      const bal = await Billing.get_balance(ownerId);
+      return NextResponse.json({ error: "Insufficient credits", balance: bal, required: upfront }, { status: 402 });
+    }
+
+    // Deduct upfront immediately to avoid race conditions with external provisioning
+    try {
+      await Billing.deduct(ownerId, upfront);
+    } catch (err: any) {
+      return NextResponse.json({ error: "Credit deduction failed", details: err?.message ?? String(err) }, { status: 500 });
+    }
 
     const vmPassword=generateStrongPassword();
   //console.log(vmPassword,".................generateStrongPassword..............28")

@@ -29,7 +29,11 @@ api.interceptors.response.use(
       toast.error(serverMessage || "Unauthorized - please login.");
     } else if (status === 403) {
       toast.error(serverMessage || "Forbidden - access denied.");
-    } else if (status === 404) {
+    }
+    else if (status === 402) {
+      toast.error(serverMessage || "Insufficient credits.please add credits to proceed.");
+    }
+     else if (status === 404) {
       toast.error(serverMessage || "Not found.");
     } else if (status === 500) {
       toast.error(serverMessage || "Server error, please try again later.");

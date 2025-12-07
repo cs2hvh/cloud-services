@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters, Billing } from "@/lib/supabase/queries";
 // import { resolve } from "path";
 // import { resolveHost } from "@/config/hosttoip";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
-import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
+import {
+  createDatabaseSchema,
+  validateEngineVersion,
+} from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseUser } from "@/lib/supabase/types";
 
@@ -44,6 +47,35 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Billing: upfront and hourly (dummy for now)
+    const INITIAL_COST = 3.0; // upfront
+    const HOURLY_RATE = 0.15; // per hour
+
+    // Check and deduct credits BEFORE creating provider resources
+    const hasBalance = await Billing.has_balance(
+      validatedData.owner_id,
+      INITIAL_COST
+    );
+    if (!hasBalance) {
+      const bal = await Billing.get_balance(validatedData.owner_id);
+      return NextResponse.json(
+        { error: "Insufficient credits", balance: bal, required: INITIAL_COST },
+        { status: 402 }
+      );
+    }
+
+    try {
+      await Billing.deduct(validatedData.owner_id, INITIAL_COST);
+    } catch (err: any) {
+      return NextResponse.json(
+        {
+          error: "Credit deduction failed",
+          details: err?.message ?? String(err),
+        },
+        { status: 500 }
+      );
+    }
+
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
     console.log("Creating database with data:", validatedData);
     const database = await axios.post(
@@ -62,7 +94,10 @@ export async function POST(req: NextRequest) {
 
       // Encrypt sensitive data before storing
       const encryptionKey = process.env.ENCRYPTION_KEY!;
-      console.log(encryptionKey,"...........encryption key in create database api...........");
+      // console.log(
+      //   encryptionKey,
+      //   "...........encryption key in create database api..........."
+      // );
 
       // Encrypt main password
       // const encryptedPassword = Encryption.encrypt(
@@ -76,7 +111,7 @@ export async function POST(req: NextRequest) {
         database.data.database.connection.password,
         encryptionKey
       );
-     // console.log(encryptedPublicPassword,"...........encrypted public password in create database api...........");
+      // console.log(encryptedPublicPassword,"...........encrypted public password in create database api...........");
 
       // Encrypt private connection password
       const encryptedPrivatePassword = Encryption.encrypt(
@@ -87,10 +122,14 @@ export async function POST(req: NextRequest) {
       //console.log(encryptedPrivatePassword,"...........encrypted private password in create database api...........");
 
       // Encrypt user passwords
-      const encryptedUsers = database.data.database.users?.map((user: DatabaseUser) => ({
-        ...user,
-        password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
-      }));
+      const encryptedUsers = database.data.database.users?.map(
+        (user: DatabaseUser) => ({
+          ...user,
+          password: user.password
+            ? Encryption.encrypt(user.password, encryptionKey)
+            : undefined,
+        })
+      );
 
       const sendData = {
         name: database.data.database.name,
@@ -118,7 +157,6 @@ export async function POST(req: NextRequest) {
         dbs: database.data.database.db_names || [],
       };
 
-
       //console.log("[createDatabase] Database created successfully:", sendData);
 
       const supabase_data = await Database_Clusters.create(sendData);
@@ -126,6 +164,19 @@ export async function POST(req: NextRequest) {
       //console.log(supabase_data, "...........supabase create database response...........");
 
       if (supabase_data.success) {
+        // Insert into billing.active_database for hourly billing
+        try {
+          // Prefer the local row id if present; fallback to provider id
+          const serviceId =
+            (supabase_data.data as any)?.id ?? database.data.database.id;
+          await Billing.add_active_database({
+            userId: validatedData.owner_id,
+            serviceId,
+            hourlyRate: HOURLY_RATE,
+          });
+        } catch (e) {
+          console.error("[billing] active_database insert failed:", e);
+        }
         return NextResponse.json(
           {
             data: supabase_data.data,
@@ -135,7 +186,10 @@ export async function POST(req: NextRequest) {
         );
       } else {
         // ✅ Handle Supabase insertion failure
-        console.error("[createDatabase] Supabase insertion failed:", supabase_data.error);
+        console.error(
+          "[createDatabase] Supabase insertion failed:",
+          supabase_data.error
+        );
         return NextResponse.json(
           {
             error: "Failed to save database cluster to database",
@@ -148,13 +202,13 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;
-      console.log(message,"..............error...........");
+      console.log(message, "..............error...........");
       return NextResponse.json(
         { error: message ?? "Invalid request" },
         { status: 400 }
       );
     } else {
-      console.log("unknown error occurred","..............error...........");
+      console.log("unknown error occurred", "..............error...........");
       return NextResponse.json(
         { error: "Unknown error occurred" },
         { status: 400 }

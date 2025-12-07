@@ -1122,6 +1122,44 @@ export type Database = {
       [_ in never]: never;
     };
   };
+  billing: {
+    Tables: {
+      user_credits: {
+        Row: { id: string; user_id: string; credit_balance: number; created_at: string | null };
+        Insert: { id?: string; user_id: string; credit_balance?: number; created_at?: string | null };
+        Update: { id?: string; user_id?: string; credit_balance?: number; created_at?: string | null };
+        Relationships: [];
+      };
+      active_kubernetes: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      active_database: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      active_objectspace: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+      active_spectrum: {
+        Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
+        Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Update: { id?: string; service_id?: string; user_id?: string; hourly_rate?: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
+        Relationships: [];
+      };
+    };
+    Views: { [_ in never]: never };
+    Functions: { [_ in never]: never };
+    Enums: { [_ in never]: never };
+    CompositeTypes: { [_ in never]: never };
+  };
 };
 
 export type Tables<
