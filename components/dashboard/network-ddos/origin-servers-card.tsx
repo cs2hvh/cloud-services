@@ -30,7 +30,7 @@ const OriginServersCard = ({ spectrumId, initialOrigins, protocol }: OriginServe
     setIsLoading(true);
 
     try {
-        let requiredProtocol=protocol==='ssh'||protocol==='rdp'?'tcp':protocol;
+        const requiredProtocol = protocol === 'ssh' || protocol === 'rdp' ? 'tcp' : protocol;
       const payload = {
         app_id: spectrumId,
         origin_direct: [`${requiredProtocol}://${origins[0]}`], // Store with protocol prefix

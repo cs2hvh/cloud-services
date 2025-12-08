@@ -366,7 +366,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
                               <Shield className="h-4 w-4 text-blue-400" />
                               <div>
                                 <div className="font-medium text-white text-sm">
-                                  {app.dns.original_name || "N/A"}
+                                  {app.dns?.original_name || "N/A"}
                                 </div>
                                 <div className="text-xs text-neutral-500 truncate max-w-[150px]">
                                   {app.spectrum_id}

@@ -3,7 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { getSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { getSpectrumApp } from "@/config/spectrum-functions";
-import { checkAdminAuth } from "@/app/api/admin/network-ddos/apps/delete/route";
+import { checkAdminAuth } from "@/lib/auth/check-admin";
 import { limitByUser } from "@/lib/cooldown/userbased";
 
 export async function POST(req: NextRequest) {

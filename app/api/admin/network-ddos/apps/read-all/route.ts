@@ -1,3 +1,15 @@
+import { NextResponse } from "next/server";
+
+// TODO: Implement admin read-all spectrum apps endpoint
+export async function GET() {
+  return NextResponse.json(
+    { error: "Endpoint not yet implemented" },
+    { status: 501 }
+  );
+}
+
+// Original implementation (commented out for future reference):
+/*
 // import { NextRequest, NextResponse } from "next/server";
 // import { authenticateUser } from "@/lib/auth/server-auth";
 // import { Spectrum_Apps } from "@/lib/supabase/queries";
@@ -44,3 +56,4 @@
 //     );
 //   }
 // }
+*/

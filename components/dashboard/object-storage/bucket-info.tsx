@@ -324,7 +324,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Bucket?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the bucket "{bucketData.name}" and all files inside it.
+              This will permanently delete the bucket &quot;{bucketData.name}&quot; and all files inside it.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -47,6 +47,7 @@ export interface BaseProvider {
  */
 export function createProvider(provider: GitProvider): BaseProvider {
   if (provider === 'github') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { GitHubProvider } = require('./github/index');
     return new GitHubProvider();
   } else if (provider === 'gitlab') {

@@ -3,6 +3,8 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Locations, Products, Users, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+
+export const dynamic = "force-dynamic";
 import { requireAdmin } from "@/lib/supabase/auth";
 
 

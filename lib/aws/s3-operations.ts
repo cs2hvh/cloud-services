@@ -56,7 +56,7 @@ export async function createBucket(
     console.error('Error creating bucket:', error);
 
     let message = 'Unknown error';
-    let errorCode = error.name || 'UnknownError';
+    const errorCode = error.name || 'UnknownError';
 
     if (error instanceof Error) {
       message = error.message;

@@ -6,6 +6,8 @@ import { Clusters, Products, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 
 const KubernetesNewSuspense = async () => {
     const user = await getUser();

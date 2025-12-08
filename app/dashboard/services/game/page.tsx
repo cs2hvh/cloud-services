@@ -25,7 +25,7 @@ const GameServiceSuspense = async () => {
     );
   }
 
-  return <GameServerGrid data={gameservers} type="game_servers" />;
+  return <GameServerGrid data={gameservers} />;
 };
 
 const GameServicePage = () => {

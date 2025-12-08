@@ -6,6 +6,8 @@ import { Database_Clusters, Locations, Products, Projects } from "@/lib/supabase
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 const DatabaseNewSuspense = async () => {
   const products = await Products.get_by_type("database");
   const location = await Locations.get_all();

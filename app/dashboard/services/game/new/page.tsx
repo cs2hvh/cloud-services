@@ -4,6 +4,8 @@ import { Products } from "@/lib/supabase/queries";
 import ptero_axios from "@/lib/pterodactyl";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 const GameNewSuspense = async () => {
   const products = await Products.get_by_type("game");
   const { data } = await ptero_axios.get("/api/application/locations");
