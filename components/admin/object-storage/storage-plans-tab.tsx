@@ -15,6 +15,7 @@ import axios from "axios";
 
 export default function StoragePlansTab() {
   const [price, setPrice] = useState<string>("");
+  const [fixedPrice, setFixedPrice] = useState<string>("0");
   const [loading, setLoading] = useState(false);
   const [fetchingPrice, setFetchingPrice] = useState(true);
   const [productId, setProductId] = useState<string | null>(null);
@@ -29,9 +30,11 @@ export default function StoragePlansTab() {
         if (products && products.length > 0) {
           const storageProduct = products[0];
           setPrice(storageProduct.price?.toString() || "0");
+          setFixedPrice((storageProduct.fixed_price ?? 0).toString());
           setProductId(storageProduct.id);
         } else {
           setPrice("0");
+          setFixedPrice("0");
         }
       } catch (error) {
         console.error("Error fetching object storage price:", error);
@@ -49,6 +52,10 @@ export default function StoragePlansTab() {
       toast.error("Please enter a valid price");
       return;
     }
+    if (parseFloat(fixedPrice) < 0) {
+      toast.error("Fixed price cannot be negative");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -60,6 +67,7 @@ export default function StoragePlansTab() {
           type: "object-storage",
           sub:"object-storage",
           price: parseFloat(price),
+          fixed_price: parseFloat(fixedPrice) || 0,
 
           resources: {cpu: 1, ram: 1, storage: 1},
         });
@@ -69,6 +77,7 @@ export default function StoragePlansTab() {
         await axios.put("/api/admin/products", {
           id: productId,
           price: parseFloat(price),
+          fixed_price: parseFloat(fixedPrice) || 0,
         });
         toast.success("Storage price updated successfully!");
       }
@@ -105,7 +114,7 @@ export default function StoragePlansTab() {
     >
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
         <div className="px-6 py-6">
-          <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-neutral-800 rounded-lg">
               <DollarSign className="h-5 w-5 text-neutral-300" />
             </div>
@@ -132,7 +141,28 @@ export default function StoragePlansTab() {
                   className="bg-white/10 border-white/20 text-white h-9 text-sm"
                   disabled={loading}
                 />
-                <Button
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="storage-fixed-price" className="text-white text-sm">
+                Fixed Price (USD)
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="storage-fixed-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fixedPrice}
+                  onChange={(e) => setFixedPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="bg-white/10 border-white/20 text-white h-9 text-sm"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div>
+              <Button
                   onClick={handleUpdatePrice}
                   disabled={loading}
                   size="sm"
@@ -146,15 +176,15 @@ export default function StoragePlansTab() {
                   ) : (
                     "Update"
                   )}
-                </Button>
-              </div>
+              </Button>
+            </div>
               <p className="text-neutral-500 text-xs">
                 This price will be shown to users when creating new buckets
               </p>
             </div>
           </div>
         </div>
-      </div>
+     
     </motion.div>
   );
 }

@@ -7,6 +7,7 @@ import { ObjectSpaces, Projects, Billing } from "@/lib/supabase/queries";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { getRatesForObjectStorage } from "@/config/pricing";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -64,9 +65,8 @@ export async function POST(req: NextRequest) {
 
     // 🔒 SECURE: Use centralized function for bucket creation
     // All sensitive operations are handled securely in the config layer
-    // Billing: upfront and hourly (dummy)
-    const INITIAL_COST = 1.0;
-    const HOURLY_RATE = 60;
+    // Billing: upfront and hourly (dynamic from admin pricing)
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForObjectStorage();
 
     // Check balance BEFORE provisioning
     const balCheck = await ensureBalance(targetOwnerId, INITIAL_COST);

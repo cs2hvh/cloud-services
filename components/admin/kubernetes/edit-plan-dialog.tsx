@@ -55,6 +55,7 @@ export default function EditPlanDialog({
     ram: 4,
     storage: 50,
     price: 25.0,
+    fixed_price: 0,
     discount: 0,
     slug: "",
   });
@@ -107,6 +108,7 @@ export default function EditPlanDialog({
         ram: product.resources?.ram || 4,
         storage: product.resources?.storage || 50,
         price: product.price || 25.0,
+        fixed_price: (product as any).fixed_price || 0,
         discount: product.discount || 0,
         slug: (product as any).slug || "",
       });
@@ -142,6 +144,7 @@ export default function EditPlanDialog({
         name: formData.name,
         description: formData.description || null,
         price: formData.price,
+        fixed_price: formData.fixed_price ?? 0,
         resources: {
           cpu: formData.cpu,
           ram: formData.ram,
@@ -432,28 +435,50 @@ export default function EditPlanDialog({
                   />
                 </div>
 
-                {/* Discount */}
+                {/* Fixed Price */}
                 <div className="space-y-2">
-                  <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
-                    Discount (%)
+                  <Label htmlFor="fixed_price" className="text-sm font-medium text-neutral-300">
+                    Fixed Price (USD)
                   </Label>
                   <Input
-                    id="discount"
+                    id="fixed_price"
                     type="number"
                     min="0"
-                    max="100"
-                    step="1"
-                    value={formData.discount}
+                    step="0.01"
+                    value={formData.fixed_price}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        discount: parseInt(e.target.value) || 0,
+                        fixed_price: parseFloat(e.target.value) || 0,
                       })
                     }
                     disabled={isLoading}
                     className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              {/* Discount */}
+              <div className="space-y-2">
+                <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
+                  Discount (%)
+                </Label>
+                <Input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.discount}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      discount: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  disabled={isLoading}
+                  className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+                />
               </div>
             </div>
 

@@ -7,6 +7,7 @@ import { Projects, Billing } from "@/lib/supabase/queries";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { getRatesForKubernetesExisting } from "@/config/pricing";
 
 
 
@@ -95,9 +96,8 @@ export async function POST(req: Request) {
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
-  // Billing: dummy fixed amounts
-  const INITIAL_COST = 5.0; // upfront
-  const HOURLY_RATE = 0.25; // per hour
+  // Billing: dynamic from admin pricing (existing cluster import uses default plan)
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting();
 
   // Check balance BEFORE provisioning
   const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);

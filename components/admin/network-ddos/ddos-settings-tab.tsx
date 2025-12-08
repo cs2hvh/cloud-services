@@ -11,6 +11,7 @@ import axios from "axios";
 
 export default function DDoSSettingsTab() {
   const [price, setPrice] = useState<string>("");
+  const [fixedPrice, setFixedPrice] = useState<string>("0");
   const [loading, setLoading] = useState(false);
   const [fetchingPrice, setFetchingPrice] = useState(true);
   const [productId, setProductId] = useState<string | null>(null);
@@ -25,9 +26,11 @@ export default function DDoSSettingsTab() {
         if (products && products.length > 0) {
           const ddosProduct = products[0];
           setPrice(ddosProduct.price?.toString() || "0");
+          setFixedPrice((ddosProduct.fixed_price ?? 0).toString());
           setProductId(ddosProduct.id);
         } else {
           setPrice("0");
+          setFixedPrice("0");
         }
       } catch (error) {
         console.error("Error fetching network DDoS price:", error);
@@ -45,6 +48,10 @@ export default function DDoSSettingsTab() {
       toast.error("Please enter a valid price");
       return;
     }
+    if (parseFloat(fixedPrice) < 0) {
+      toast.error("Fixed price cannot be negative");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -56,6 +63,7 @@ export default function DDoSSettingsTab() {
           type: "network-ddos",
           sub: "network-ddos",
           price: parseFloat(price),
+          fixed_price: parseFloat(fixedPrice) || 0,
           resources: { cpu: 1, ram: 1, storage: 1 },
         });
         toast.success("DDoS protection price created successfully!");
@@ -64,6 +72,7 @@ export default function DDoSSettingsTab() {
         await axios.put("/api/admin/products", {
           id: productId,
           price: parseFloat(price),
+          fixed_price: parseFloat(fixedPrice) || 0,
         });
         toast.success("DDoS protection price updated successfully!");
       }
@@ -133,26 +142,46 @@ export default function DDoSSettingsTab() {
                   className="bg-white/10 border-white/20 text-white h-9 text-sm"
                   disabled={loading}
                 />
-                <Button
-                  onClick={handleUpdatePrice}
-                  disabled={loading}
-                  size="sm"
-                  className="cursor-pointer bg-white text-black hover:bg-gray-200 h-9 px-4 text-sm"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Updating
-                    </>
-                  ) : (
-                    "Update"
-                  )}
-                </Button>
               </div>
               <p className="text-neutral-500 text-xs">
                 This price will be shown to users when creating new DDoS
                 protection apps
               </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ddos-fixed-price" className="text-white text-sm">
+                Fixed Price (USD)
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="ddos-fixed-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={fixedPrice}
+                  onChange={(e) => setFixedPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="bg-white/10 border-white/20 text-white h-9 text-sm"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+            <div>
+              <Button
+                onClick={handleUpdatePrice}
+                disabled={loading}
+                size="sm"
+                className="cursor-pointer bg-white text-black hover:bg-gray-200 h-9 px-4 text-sm"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    Updating
+                  </>
+                ) : (
+                  "Update"
+                )}
+              </Button>
             </div>
           </div>
         </div>

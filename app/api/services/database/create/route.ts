@@ -12,6 +12,7 @@ import {
 } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseUser } from "@/lib/supabase/types";
+import { getRatesForDatabase } from "@/config/pricing";
 
 interface database_error {
   response: {
@@ -48,9 +49,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Billing: upfront and hourly (dummy for now)
-    const INITIAL_COST = 3.0; // upfront
-    const HOURLY_RATE = 0.15; // per hour
+    // Billing: upfront and hourly (dynamic from admin pricing)
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForDatabase({
+      engine: validatedData.engine,
+      sizeSlug: validatedData.size,
+    });
 
     // Check balance BEFORE creating provider resources
     const balCheck = await ensureBalance(validatedData.owner_id, INITIAL_COST);

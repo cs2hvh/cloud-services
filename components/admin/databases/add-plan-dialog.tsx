@@ -43,6 +43,7 @@ export default function AddPlanDialog({
     ram: 1,
     storage: 15,
     price: 15.0,
+    fixed_price: 0,
     discount: 0,
   });
 
@@ -55,6 +56,7 @@ export default function AddPlanDialog({
       ram: 1,
       storage: 15,
       price: 15.0,
+      fixed_price: 0,
       discount: 0,
     });
   };
@@ -93,6 +95,7 @@ export default function AddPlanDialog({
         type: "database",
         sub: formData.sub,
         price: formData.price,
+        fixed_price: formData.fixed_price ?? 0,
         resources: {
           cpu: formData.cpu,
           ram: formData.ram,
@@ -345,6 +348,65 @@ export default function AddPlanDialog({
                     className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
+              </div>
+            </div>
+
+            {/* Pricing */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-white">Pricing</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="price" className="text-sm font-medium text-neutral-300">
+                    Price (USD/month) *
+                  </Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
+                    }
+                    disabled={isLoading}
+                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fixed_price" className="text-sm font-medium text-neutral-300">
+                    Fixed Price (USD)
+                  </Label>
+                  <Input
+                    id="fixed_price"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.fixed_price}
+                    onChange={(e) =>
+                      setFormData({ ...formData, fixed_price: parseFloat(e.target.value) || 0 })
+                    }
+                    disabled={isLoading}
+                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
+                  Discount (%)
+                </Label>
+                <Input
+                  id="discount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="1"
+                  value={formData.discount}
+                  onChange={(e) =>
+                    setFormData({ ...formData, discount: parseInt(e.target.value) || 0 })
+                  }
+                  disabled={isLoading}
+                  className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                />
               </div>
             </div>
 

@@ -6,6 +6,7 @@ import { Billing } from "@/lib/supabase/queries";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { getRatesForSpectrum } from "@/config/pricing";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -34,9 +35,8 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(createSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
-    // Billing: upfront and hourly (dummy values)
-    const INITIAL_COST = 15;
-    const HOURLY_RATE = 60;
+    // Billing: upfront and hourly (dynamic from admin pricing)
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForSpectrum();
 
     // Check balance BEFORE creating Spectrum app
     const ownerId = validation.data.owner_id;

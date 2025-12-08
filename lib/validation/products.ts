@@ -8,6 +8,7 @@ export const createProductSchema = z.object({
     errorMap: () => ({ message: "Invalid database type" }),
   }),
   price: z.number().positive("Price must be positive"),
+  fixed_price: z.number().min(0).optional().nullable(),
   resources: z.object({
     cpu: z.number().positive("CPU must be positive"),
     ram: z.number().positive("RAM must be positive"),
@@ -22,6 +23,7 @@ export const updateProductSchema = z.object({
   name: z.string().min(1, "Name is required").optional(),
   description: z.string().optional().nullable(),
   price: z.number().positive("Price must be positive").optional(),
+  fixed_price: z.number().min(0).optional().nullable(),
   resources: z
     .object({
       cpu: z.number().positive("CPU must be positive"),
