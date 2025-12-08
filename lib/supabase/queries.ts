@@ -327,9 +327,81 @@ export const Billing = {
       .select("credit_balance")
       .eq("user_id", userId)
       .single();
-      console.log(data,"........",error)
     if (error) return 0;
     return (data?.credit_balance as number) ?? 0;
+  },
+
+  get_user_credits: async (
+    userId: string,
+  ): Promise<{ credit_balance: number; promo_credits: number; topup_credits: number }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("credit_balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error || !data) {
+      console.log(error?.message,"error getting balance")
+      return { credit_balance: 0, promo_credits: 0, topup_credits: 0 };
+    }
+
+    console.log(data.credit_balance,"data.credit_balance")
+    return {
+      credit_balance: (data as any).credit_balance ?? 0,
+      promo_credits: (data as any).promo_credits ?? 0,
+      topup_credits: (data as any).topup_credits ?? 0,
+    };
+  },
+
+  topup: async (
+    userId: string,
+    amount: number,
+  ): Promise<{ credit_balance: number; promo_credits?: number; topup_credits?: number }> => {
+    const supabase = await createServiceClient();
+    const { data: existing } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("credit_balance")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const prevBal = (existing as any)?.credit_balance ?? 0;
+   // const prevTop = (existing as any)?.topup_credits ?? 0;
+
+    if (!existing) {
+      console.log("user has no existing credits, creating new record");
+      const { data, error } = await supabase
+        .schema("billing")
+        .from("user_credits")
+        .insert({ user_id: userId, credit_balance: amount})
+        .select("credit_balance")
+        .single();
+      if (error) throw new Error(`Top-up failed: ${error.message}`);
+      return {
+        credit_balance: (data as any)?.credit_balance ?? amount,
+        promo_credits: (data as any)?.promo_credits,
+        topup_credits: (data as any)?.topup_credits,
+      };
+    }
+
+    const next = {
+      credit_balance: prevBal + amount,
+    } 
+
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .update(next)
+      .eq("user_id", userId)
+      .select("credit_balance")
+      .single();
+    if (error) throw new Error(`Top-up failed: ${error.message}`);
+    return {
+      credit_balance: (data as any)?.credit_balance ?? next.credit_balance,
+      promo_credits: (data as any)?.promo_credits,
+      topup_credits: (data as any)?.topup_credits,
+    };
   },
 
   has_balance: async (userId: string, requiredAmount: number): Promise<boolean> => {

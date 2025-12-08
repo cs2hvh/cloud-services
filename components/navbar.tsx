@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard } from "lucide-react";
+import { Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard, CreditCard } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
@@ -116,7 +116,7 @@ export function Navbar() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 mt-2 w-56 rounded-xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden"
+                      className="absolute right-0 mt-2 w-56 rounded-xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden z-50"
                     >
                       <div className="px-4 py-3 border-b border-white/10">
                         <p className="text-sm font-medium text-white">
@@ -127,24 +127,31 @@ export function Navbar() {
                       <div className="py-2">
                         <button
                           onClick={() => router.push("/dashboard")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <LayoutDashboard className="w-4 h-4" />
                           <span>Dashboard</span>
                         </button>
                         <button
                           onClick={() => router.push("/dashboard/profile")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <User className="w-4 h-4" />
                           <span>Profile</span>
                         </button>
                         <button
                           onClick={() => router.push("/dashboard/settings")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <Settings className="w-4 h-4" />
                           <span>Settings</span>
+                        </button>
+                        <button
+                          onClick={() => router.push("/dashboard/nav/billing")}
+                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                        >
+                          <CreditCard className="w-4 h-4" />
+                          <span>Billing</span>
                         </button>
                       </div>
 
@@ -226,6 +233,13 @@ export function Navbar() {
                       onClick={() => setIsOpen(false)}
                     >
                       Dashboard
+                    </Link>
+                    <Link
+                      href="/dashboard/nav/billing"
+                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Billing
                     </Link>
                     <button
                       onClick={() => {
