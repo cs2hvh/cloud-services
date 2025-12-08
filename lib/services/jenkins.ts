@@ -10,8 +10,6 @@ import {
   createPythonPipeline,
   createNextJsPipeline,
   createDeletePipeline,
-  PipelineType,
-  type PipelineTypeValue,
 } from "@/lib/jenkins/pipelines";
 
 export class JenkinsService {
@@ -108,8 +106,7 @@ export class JenkinsService {
    * Create a Jenkins deletion job
    */
   static async createDeleteJob(
-    appName: string,
-    size: string = 'small'
+    appName: string
   ): Promise<number> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -120,7 +117,7 @@ export class JenkinsService {
     console.log(`[JenkinsService] Creating deletion job: ${jobName}`);
 
     // Create delete pipeline
-    const pipeline = createDeletePipeline(appName, size, APP_DOMAIN);
+    const pipeline = createDeletePipeline(appName, APP_DOMAIN);
 
     // Create the job
     try {
@@ -197,7 +194,7 @@ export class JenkinsService {
     try {
       await jenkins.job.get(jobName);
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -219,8 +216,8 @@ export class JenkinsService {
     try {
       const jobInfo = await jenkins.job.get(jobName);
       return jobInfo.lastBuild?.number || null;
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error getting latest build number:`, error?.message);
+    } catch {
+      console.error(`[JenkinsService] Error getting latest build number:`);
       return null;
     }
   }

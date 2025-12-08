@@ -46,7 +46,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
 
     // 4. Handle ping event (webhook creation confirmation)
     if (GitHubWebhookHandler.isPingEvent(event)) {
-      const pingData = GitHubWebhookHandler.parsePingEvent(body, deliveryId);
+      const pingData = GitHubWebhookHandler.parsePingEvent(body);
       console.log(`[GitHub Webhook] ✅ Ping received - Webhook ID: ${pingData.webhook_id}, Zen: "${pingData.zen}"`);
       return NextResponse.json({
         success: true,

@@ -12,7 +12,6 @@ import { createClient } from '@/lib/supabase/server';
 import { GitHubProvider } from './index';
 import {
   Repository,
-  Branch,
   RepositoriesResponse,
   BranchesResponse,
 } from '../types';

@@ -59,7 +59,7 @@ async function fetchFile(provider: string, repoFullName: string, filePath: strin
         return { content: atob(data.content), encoding: 'utf-8' };
       }
     }
-  } catch (error) {
+  } catch {
     console.log(`Failed to fetch ${filePath} from ${provider}`);
   }
   
@@ -90,7 +90,7 @@ async function detectFromPackageJson(context: DetectionContext): Promise<Partial
         return { framework: "Node.js", language: "JavaScript" };
       }
     }
-  } catch (error) {
+  } catch {
     console.log("Failed to parse package.json");
   }
   
@@ -147,7 +147,7 @@ async function detectFromComposerJson(context: DetectionContext): Promise<Partia
         return { framework: "PHP", language: "PHP" };
       }
     }
-  } catch (error) {
+  } catch {
     console.log("Failed to parse composer.json");
   }
   

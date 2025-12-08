@@ -3,7 +3,6 @@
 
 import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { toast } from "sonner";
 import { twMerge } from "tailwind-merge";
 import EnableTotp from "../2fa/page";
 import api from "@/lib/axios/axios";

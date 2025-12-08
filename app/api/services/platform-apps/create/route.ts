@@ -60,9 +60,7 @@ export async function POST(req: NextRequest) {
     let authenticated_repository_url = appData.repository_url;
     if (appData.git_provider === 'github' && authenticated_repository_url.startsWith('https://github.com/')) {
       const { createClient } = await import('@/lib/supabase/server');
-      const { createServiceClient } = await import('@/lib/supabase/server');
       const supabase = await createClient();
-      const serviceSupabase = await createServiceClient();
       
       // Get session and user identity
       const { data: { session } } = await supabase.auth.getSession();
@@ -193,7 +191,7 @@ export async function POST(req: NextRequest) {
             accessToken = validToken;
             console.log('[platform-apps/create] Found Bitbucket token in bitbucket_tokens table (with auto-refresh)');
           }
-        } catch (e) {
+        } catch {
           console.log('[platform-apps/create] bitbucket_tokens table not available, skipping fallback');
         }
       }

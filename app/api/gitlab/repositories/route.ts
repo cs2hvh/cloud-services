@@ -14,19 +14,7 @@ interface GitLabRepository {
   web_url: string;
 }
 
-interface TransformedRepository {
-  id: string;
-  name: string;
-  fullName: string;
-  description: string;
-  private: boolean;
-  defaultBranch: string;
-  language: string;
-  updatedAt: string;
-  provider: 'gitlab';
-  cloneUrl: string;
-  htmlUrl: string;
-}
+
 
 export async function GET() {
   try {

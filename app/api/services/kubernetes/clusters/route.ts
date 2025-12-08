@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   try {
     // Cast to any to satisfy type; limiter reads headers only
     await limiter.check(req as any, 10);
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   // Check authentication

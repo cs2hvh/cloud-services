@@ -11,7 +11,6 @@ import {
   MoreVertical,
   Plus,
   ShieldCheck,
-  HardDrive,
   Eye,
   Archive,
   Shield,

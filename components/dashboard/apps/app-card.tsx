@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Globe,
@@ -12,7 +12,6 @@ import {
   Terminal,
   GitBranch,
   Cpu,
-  MemoryStick,
   Box,
   RotateCcw,
   Activity,
@@ -34,7 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
-import { AppMetrics, AppHealth, useAppDetails, AppDetails } from '@/hooks/use-app-metrics';
+import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
 
 interface AppCardProps {
   app: App;

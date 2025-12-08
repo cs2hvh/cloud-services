@@ -106,7 +106,7 @@ export class GitHubWebhookHandler {
   /**
    * Parse ping event (webhook creation confirmation)
    */
-  static parsePingEvent(body: any, deliveryId: string): { 
+  static parsePingEvent(body: any): { 
     webhook_id: string; 
     zen: string;
     repository_id: string;

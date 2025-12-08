@@ -6,7 +6,6 @@
 
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
-import { DeploymentService } from "./deployment";
 
 export class InfrastructureCleanupService {
   /**

@@ -9,7 +9,6 @@
  * const branches = await github.getBranches(repo, token);
  */
 
-import { createClient } from '@/lib/supabase/server';
 import {
   BaseProvider,
 } from '../base';

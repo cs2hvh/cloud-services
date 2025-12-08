@@ -6,7 +6,7 @@
  * Headers: Authorization, Accept, User-Agent
  */
 
-import { AuthToken, Repository, Branch } from '../types';
+import { Repository, Branch } from '../types';
 
 export class GitHubApiClient {
   private baseUrl = 'https://api.github.com';
@@ -32,7 +32,7 @@ export class GitHubApiClient {
   /**
    * Handle GitHub API errors with meaningful messages
    */
-  private handleError(status: number, message?: string) {
+  private handleError(status: number) {
     const errors: Record<number, string> = {
       401: 'GitHub token is invalid or expired',
       403: 'GitHub API rate limit exceeded or insufficient permissions',

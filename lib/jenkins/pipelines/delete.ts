@@ -5,7 +5,6 @@
  */
 export function createDeletePipeline(
   name: string,
-  size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
 ): string {
   const domain = `${name}.${appDomain}`;

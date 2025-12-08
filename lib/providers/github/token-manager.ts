@@ -9,7 +9,6 @@
  */
 
 import { createClient } from '@/lib/supabase/server';
-import { AuthToken } from '../types';
 
 export class GitHubTokenManager {
   /**

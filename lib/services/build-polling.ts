@@ -74,7 +74,7 @@ export class BuildPollingService {
     pollCount: number;
     buildFound: boolean;
   }): Promise<void> {
-    const { appId, appName, buildNumber, maxPolls, pollInterval, buildStartTimeout } = context;
+    const { appId, appName, buildNumber, maxPolls, pollInterval } = context;
     let { pollCount, buildFound } = context;
 
     pollCount++;
@@ -227,7 +227,7 @@ export class BuildPollingService {
   } | null> {
     try {
       return await JenkinsService.checkBuildStatus(appName, buildNumber);
-    } catch (error) {
+    } catch {
       return null;
     }
   }

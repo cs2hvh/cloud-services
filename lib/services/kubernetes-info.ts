@@ -8,8 +8,6 @@ import {
   CoreV1Api,
   AppsV1Api,
   NetworkingV1Api,
-  V1Pod,
-  V1Deployment,
 } from '@kubernetes/client-node';
 import kubeConfig from '@/lib/kubernetes';
 
