@@ -3,6 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { createSpectrumApp } from "@/config/spectrum-functions";
 import { Billing } from "@/lib/supabase/queries";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 
@@ -37,23 +38,13 @@ export async function POST(req: NextRequest) {
     const INITIAL_COST = 15;
     const HOURLY_RATE = 60;
 
-    // Check & deduct before creating Spectrum app
+    // Check balance BEFORE creating Spectrum app
     const ownerId = validation.data.owner_id;
-    const hasBalance = await Billing.has_balance(ownerId, INITIAL_COST);
-    if (!hasBalance) {
-      const bal = await Billing.get_balance(ownerId);
+    const balCheck = await ensureBalance(ownerId, INITIAL_COST);
+    if (!balCheck.ok) {
       return NextResponse.json(
-        { error: "Insufficient credits", balance: bal, required: INITIAL_COST },
+        { error: "Insufficient credits", balance: balCheck.balance, required: INITIAL_COST },
         { status: 402 }
-      );
-    }
-
-    try {
-      await Billing.deduct(ownerId, INITIAL_COST);
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: "Credit deduction failed", details: e?.message ?? String(e) },
-        { status: 500 }
       );
     }
 
@@ -63,10 +54,19 @@ export async function POST(req: NextRequest) {
     try {
       const serviceId = (result?.app?.id as string) || (result?.cloudflare?.id as string);
       if (serviceId) {
-        await Billing.add_active_spectrum({ userId: ownerId, serviceId, hourlyRate: HOURLY_RATE });
+        await postProvisionBilling({
+          userId: ownerId,
+          initialCost: INITIAL_COST,
+          hourlyRate: HOURLY_RATE,
+          serviceId,
+          addActive: Billing.add_active_spectrum,
+        });
       }
-    } catch (e) {
-      console.error("[billing] active_spectrum insert failed:", e);
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: "Post-provision billing failed", details: e?.message ?? String(e) },
+        { status: 500 }
+      );
     }
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         console.log(`[deleteKubernetesCluster] ✅ Deleted control plane droplet: ${clusterData.control_plane.droplet_id}`);
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-        console.error(`[deleteKubernetesCluster] ❌ Failed to delete control plane droplet: ${errorMsg}`);
+       // console.error(`[deleteKubernetesCluster] ❌ Failed to delete control plane droplet: ${errorMsg}`);
         dropletDeletionErrors.push(`Control plane: ${errorMsg}`);
       }
     }
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
             console.log(`[deleteKubernetesCluster] ✅ Deleted worker droplet: ${worker.droplet_id}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-            console.error(`[deleteKubernetesCluster] ❌ Failed to delete worker droplet: ${errorMsg}`);
+           // console.error(`[deleteKubernetesCluster] ❌ Failed to delete worker droplet: ${errorMsg}`);
             dropletDeletionErrors.push(`Worker ${worker.droplet_id}: ${errorMsg}`);
           }
         }

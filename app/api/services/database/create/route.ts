@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters, Billing } from "@/lib/supabase/queries";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 // import { resolve } from "path";
 // import { resolveHost } from "@/config/hosttoip";
 import { authenticateUser } from "@/lib/auth/server-auth";
@@ -51,28 +52,12 @@ export async function POST(req: NextRequest) {
     const INITIAL_COST = 3.0; // upfront
     const HOURLY_RATE = 0.15; // per hour
 
-    // Check and deduct credits BEFORE creating provider resources
-    const hasBalance = await Billing.has_balance(
-      validatedData.owner_id,
-      INITIAL_COST
-    );
-    if (!hasBalance) {
-      const bal = await Billing.get_balance(validatedData.owner_id);
+    // Check balance BEFORE creating provider resources
+    const balCheck = await ensureBalance(validatedData.owner_id, INITIAL_COST);
+    if (!balCheck.ok) {
       return NextResponse.json(
-        { error: "Insufficient credits", balance: bal, required: INITIAL_COST },
+        { error: "Insufficient credits", balance: balCheck.balance, required: INITIAL_COST },
         { status: 402 }
-      );
-    }
-
-    try {
-      await Billing.deduct(validatedData.owner_id, INITIAL_COST);
-    } catch (err: any) {
-      return NextResponse.json(
-        {
-          error: "Credit deduction failed",
-          details: err?.message ?? String(err),
-        },
-        { status: 500 }
       );
     }
 
@@ -164,18 +149,21 @@ export async function POST(req: NextRequest) {
       //console.log(supabase_data, "...........supabase create database response...........");
 
       if (supabase_data.success) {
-        // Insert into billing.active_database for hourly billing
+        // Deduct upfront and insert into billing.active_database after provisioning
         try {
-          // Prefer the local row id if present; fallback to provider id
-          const serviceId =
-            (supabase_data.data as any)?.id ?? database.data.database.id;
-          await Billing.add_active_database({
+          const serviceId = (supabase_data.data as any)?.id ?? database.data.database.id;
+          await postProvisionBilling({
             userId: validatedData.owner_id,
-            serviceId,
+            initialCost: INITIAL_COST,
             hourlyRate: HOURLY_RATE,
+            serviceId,
+            addActive: Billing.add_active_database,
           });
-        } catch (e) {
-          console.error("[billing] active_database insert failed:", e);
+        } catch (e: any) {
+          return NextResponse.json(
+            { error: "Post-provision billing failed", details: e?.message ?? String(e) },
+            { status: 500 }
+          );
         }
         return NextResponse.json(
           {

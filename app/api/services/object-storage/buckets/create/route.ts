@@ -4,6 +4,7 @@ import { createBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 import { ObjectSpaces, Projects, Billing } from "@/lib/supabase/queries";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 
@@ -67,22 +68,12 @@ export async function POST(req: NextRequest) {
     const INITIAL_COST = 1.0;
     const HOURLY_RATE = 60;
 
-    // Check and deduct before provisioning
-    const hasBalance = await Billing.has_balance(targetOwnerId, INITIAL_COST);
-    if (!hasBalance) {
-      const bal = await Billing.get_balance(targetOwnerId);
+    // Check balance BEFORE provisioning
+    const balCheck = await ensureBalance(targetOwnerId, INITIAL_COST);
+    if (!balCheck.ok) {
       return NextResponse.json(
-        { error: "Insufficient credits", message: `Required: ${INITIAL_COST}`, balance: bal },
+        { error: "Insufficient credits", message: `Required: ${INITIAL_COST}`, balance: balCheck.balance },
         { status: 402 }
-      );
-    }
-
-    try {
-      await Billing.deduct(targetOwnerId, INITIAL_COST);
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: "Credit deduction failed", message: e?.message ?? String(e) },
-        { status: 500 }
       );
     }
 
@@ -110,12 +101,21 @@ export async function POST(req: NextRequest) {
     }
 
     // ✅ SUCCESS RESPONSE
-    // Add to billing.active_objectspace for hourly billing
+    // Deduct upfront and add to billing.active_objectspace for hourly billing
     try {
       const serviceId = (result.data as any)?.id ?? validatedData.name;
-      await Billing.add_active_objectspace({ userId: targetOwnerId, serviceId, hourlyRate: HOURLY_RATE });
-    } catch (e) {
-      console.error("[billing] active_objectspace insert failed:", e);
+      await postProvisionBilling({
+        userId: targetOwnerId,
+        initialCost: INITIAL_COST,
+        hourlyRate: HOURLY_RATE,
+        serviceId,
+        addActive: Billing.add_active_objectspace,
+      });
+    } catch (e: any) {
+      return NextResponse.json(
+        { error: "Post-provision billing failed", message: e?.message ?? String(e) },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ success: true, data: result.data, message: result.message }, { status: 201 });

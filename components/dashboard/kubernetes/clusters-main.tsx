@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { DockIcon, Plus } from "lucide-react";
 import Link from "next/link";
 import { Tables } from "@/lib/supabase/types";
+import { format } from "date-fns";
 
 type ClusterData = Tables<"clusters_get">;
 
@@ -69,7 +70,7 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
                 <tr>
                   <Th>Cluster</Th>
                   <Th>Nodes</Th>
-                  <Th>Created</Th>
+                  {/* <Th>Created</Th> */}
                   <Th>Version</Th>
                   <Th>Status</Th>
                   <Th>Actions</Th>
@@ -94,7 +95,8 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
                         {c.workers?.length || 0}
                       </span>
                     </Td>
-                    <Td>
+                    
+                     <Td>
                       <span className="text-slate-300">{c.k8s_version || 'N/A'}</span>
                     </Td>
                     <Td>
