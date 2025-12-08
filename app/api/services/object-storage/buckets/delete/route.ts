@@ -5,6 +5,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { deleteBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { Billing } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -35,6 +36,17 @@ export async function POST(req: NextRequest) {
     // 🔒 SECURE: Use centralized function for bucket deletion
     // All sensitive operations are handled securely in the config layer
 
+
+    // Close billing for object storage bucket
+    try {
+      await Billing.close_active_service("objectspace", {
+        userId: auth.user!.id,
+        serviceId: bucket_id,
+        failOnInsufficient: false,
+      });
+    } catch (billErr: any) {
+      console.warn(`[deleteBucket] Billing close failed: ${billErr?.message || billErr}`);
+    }
 
     const result = await ObjectStorageFunctions.deleteBucket({
       bucket_id,

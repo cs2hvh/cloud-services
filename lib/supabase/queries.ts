@@ -410,6 +410,7 @@ export const Billing = {
   },
 
   deduct: async (userId: string, amount: number): Promise<number> => {
+    console.log(amount,"amount to deduct")
     const supabase = await createServiceClient();
     const bal = await Billing.get_balance(userId);
     if (bal < amount) throw new Error("Insufficient balance");
@@ -479,6 +480,94 @@ export const Billing = {
         last_billed_at: new Date().toISOString(),
       });
     if (error) throw new Error(`Failed to insert active_spectrum: ${error.message}`);
+  },
+
+  // Internal helper: compute prorated charge for remaining fraction of hour
+  _computeProratedCharge: (
+    hourlyRate: number | string,
+    lastBilledAt?: string | Date,
+    now: Date = new Date()
+  ): number => {
+    const rate = typeof hourlyRate === "number" ? hourlyRate : parseFloat(String(hourlyRate));
+    if (!rate || isNaN(rate) || rate <= 0) return 0;
+
+    let last: Date | null = null;
+    if (lastBilledAt) {
+      if (typeof lastBilledAt === "string") {
+        const str = lastBilledAt;
+        const hasTZ = str.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(str);
+        last = new Date(hasTZ ? str : `${str}Z`);
+      } else {
+        last = lastBilledAt;
+      }
+    }
+
+    // Bill for elapsed time since last_billed_at; if no last, bill 1 full hour
+    const hoursUsed = last ? Math.max(0, (now.getTime() - last.getTime()) / (1000 * 60 * 60)) : 1;
+    const cost = Number((hoursUsed * rate).toFixed(6));
+    return cost;
+  },
+
+  // Generic closer for active services in billing schema
+  close_active_service: async (
+    type: "database" | "kubernetes" | "objectspace" | "spectrum",
+    params: { userId: string; serviceId: string; failOnInsufficient?: boolean }
+  ): Promise<{ charged: number; newBalance: number | null }> => {
+    const supabase = await createServiceClient();
+    const tableMap: Record<string, string> = {
+      database: "active_database",
+      kubernetes: "active_kubernetes",
+      objectspace: "active_objectspace",
+      spectrum: "active_spectrum",
+    };
+    const table = tableMap[type];
+    console.log(table ,"..........table",params,"..........params");
+    // Fetch active row
+    const { data: row, error: getErr } = await supabase
+      .schema("billing")
+      .from(table)
+      .select("user_id, service_id, hourly_rate, last_billed_at")
+      .eq("service_id", params.serviceId)
+      .eq("user_id", params.userId)
+      .maybeSingle();
+
+      console.log(row,"..........row");
+
+    if (getErr) throw new Error(`Failed to fetch active ${type}: ${getErr.message}`);
+    if (!row) {
+      // Nothing to charge, but still attempt cleanup just in case of stale state
+      await supabase.schema("billing").from(table).delete().eq("service_id", params.serviceId).eq("user_id", params.userId);
+      return { charged: 0, newBalance: null };
+    }
+
+    const hourlyRate = (row)?.hourly_rate as number;
+    const lastBilledAt = (row)?.last_billed_at as string | undefined;
+    const charge = Billing._computeProratedCharge(hourlyRate, lastBilledAt);
+
+    // Deduct credits
+    let newBalance: number | null = null;
+    if (charge > 0) {
+      try {
+        newBalance = await Billing.deduct(params.userId, charge);
+      } catch (e: any) {
+        if (params.failOnInsufficient) {
+          throw new Error(e?.message || "Insufficient balance");
+        }
+        // If not failing hard, skip deduction and proceed to cleanup
+        newBalance = null;
+      }
+    }
+
+    // Remove active row to stop future accrual
+    const { error: delErr } = await supabase
+      .schema("billing")
+      .from(table)
+      .delete()
+      .eq("service_id", params.serviceId)
+      .eq("user_id", params.userId);
+    if (delErr) throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
+
+    return { charged: charge, newBalance };
   },
 };
 

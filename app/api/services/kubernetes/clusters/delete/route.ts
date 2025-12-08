@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects, Billing } from "@/lib/supabase/queries";
 import axios from "axios";
 
 export async function POST(req: NextRequest) {
@@ -28,6 +28,17 @@ export async function POST(req: NextRequest) {
 
     const clusterName = clusterData?.cluster_name || 'Unknown';
     const projectId = clusterData?.project_id || null;
+
+    // Close billing for kubernetes cluster (proration + cleanup)
+    try {
+      await Billing.close_active_service("kubernetes", {
+        userId: auth.user.id,
+        serviceId: json.cluster_id,
+        failOnInsufficient: false,
+      });
+    } catch (billErr: any) {
+      console.warn(`[deleteKubernetesCluster] Billing close failed: ${billErr?.message || billErr}`);
+    }
     
     // Delete droplets from DigitalOcean before deleting from database
     const dropletDeletionErrors: string[] = [];

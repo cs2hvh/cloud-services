@@ -254,6 +254,11 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
         router.refresh();
 
       }
+      else if(response.status===402){
+          toast.error('Insufficient balance. Please top up your account to create a Spectrum application.');
+          router.push('/dashboard/nav/billing');
+          return;
+      }
       else {
          toast.error('Sorry , we are temporarily unable to process your request. Please try again later.');
         return;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters, Projects } from "@/lib/supabase/queries";
+import { Database_Clusters, Projects, Billing } from "@/lib/supabase/queries";
 import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function POST(req: NextRequest) {
@@ -18,6 +18,18 @@ export async function POST(req: NextRequest) {
     const clusterName = clusterData.success ? clusterData.data.name : 'Unknown';
     const projectId = clusterData.success ? clusterData.data.project_id : null;
 
+    // Close billing (prorated deduction + remove active row)
+    try {
+      await Billing.close_active_service("database", {
+        userId: auth.user.id,
+        serviceId: body.id,
+        failOnInsufficient: false,
+      });
+    } catch (billErr: any) {
+      console.warn(`[deleteDatabase] Billing close failed: ${billErr?.message || billErr}`);
+      // proceed with deletion even if billing fails, per failOnInsufficient=false
+    }
+
     const database = await axios.delete(
       `https://api.digitalocean.com/v2/databases/${body.id}`,
       {
@@ -28,14 +40,14 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log(database.status,"............database delete response...........");
+   // console.log(database.status,"............database delete response...........");
 
     const sendData = {
       cluster_id: body.id,
     };
     const supabase_delete = await Database_Clusters.delete(sendData.cluster_id);
 
-    console.log(supabase_delete,"...........supabase delete response........");
+   // console.log(supabase_delete,"...........supabase delete response........");
     
     if (supabase_delete.success) {
       // Add activity log for database cluster deletion

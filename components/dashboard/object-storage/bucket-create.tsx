@@ -352,6 +352,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("Error creating bucket:", errorMessage);
       toast.error(axios.isAxiosError(error) ? error.response?.data?.error || "Failed to create bucket" : "Failed to create bucket");
+      
     } finally {
       setIsLoading(false);
     }

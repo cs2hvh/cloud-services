@@ -281,7 +281,7 @@ const NewClusterPage = ({
     }
 
     try {
-      debugger;
+     // debugger;
       setIsLoading(true);
       if (
         !state.selectedNode ||
@@ -323,7 +323,7 @@ const NewClusterPage = ({
         "/services/kubernetes/manageip/createdroplet",
         payload
       );
-      console.log(createDroplet.data, "...........createDroplet.............");
+      //console.log(createDroplet.data, "...........createDroplet.............");
 
       const sendPayload: SendPayload = {
         provider: "existing",
@@ -404,6 +404,11 @@ const NewClusterPage = ({
             continue;
           }
         }
+      }
+      else if(createDroplet.status===402){
+        toast.error('Insufficient balance. Please top up your account to create a Kubernetes cluster.');
+        router.push('dashboard/nav/billing');
+        return;
       }
 
       console.log(sendPayload, "...........sendPayload.............");

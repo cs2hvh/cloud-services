@@ -5,7 +5,7 @@ import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { checkAdminAuth } from "@/app/api/admin/network-ddos/apps/delete/route";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Spectrum_Apps } from "@/lib/supabase/queries";
+import { Spectrum_Apps, Billing } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -46,6 +46,17 @@ export async function POST(req: NextRequest) {
         { error: "Unauthorized - Admin access required" },
         { status: 403 }
       );
+    }
+
+    // Close billing for spectrum app
+    try {
+      await Billing.close_active_service("spectrum", {
+        userId: auth.user!.id,
+        serviceId: validation.data.app_id,
+        failOnInsufficient: false,
+      });
+    } catch (billErr: any) {
+      console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr?.message || billErr}`);
     }
 
     const result = await deleteSpectrumApp(validation.data.app_id);
