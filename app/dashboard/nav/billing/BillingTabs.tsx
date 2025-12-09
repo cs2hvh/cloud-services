@@ -101,7 +101,7 @@ export default function BillingTabs({
             </div>
 
             <form onSubmit={onTopup} className="space-y-3">
-              <label className="block text-sm text-gray-300">Enter amount to top up</label>
+              <label className="block text-sm text-gray-300">Enter amount to top up($)</label>
               <div className="flex gap-2">
                 <input
                   type="number"

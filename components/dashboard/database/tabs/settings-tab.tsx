@@ -330,6 +330,7 @@ export const SettingsTab = ({
     try {
       const response = await axios.post("/api/services/database/delete", {
         id: database.cluster_id,
+        id2:database.id
       });
 
       if (response.status === 200) {

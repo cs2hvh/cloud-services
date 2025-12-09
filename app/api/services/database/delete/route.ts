@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       console.log(`[deleteDatabase] Closing billing`, { userId: auth.user.id, serviceId: body.id2 });
       const billingResult = await Billing.close_active_service("database", {
         userId: auth.user.id,
-        serviceId: body.id,
+        serviceId: clusterData.data.id,
         failOnInsufficient: false,
       });
       console.log(`[deleteDatabase] Billing closed`, billingResult);
