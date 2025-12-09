@@ -31,11 +31,13 @@ export async function POST(req: NextRequest) {
 
     // Close billing for kubernetes cluster (proration + cleanup)
     try {
-      await Billing.close_active_service("kubernetes", {
+      console.log(`[deleteKubernetesCluster] Closing billing`, { userId: auth.user.id, serviceId: json.cluster_id });
+      const billingResult = await Billing.close_active_service("kubernetes", {
         userId: auth.user.id,
         serviceId: json.cluster_id,
         failOnInsufficient: false,
       });
+      console.log(`[deleteKubernetesCluster] Billing closed`, billingResult);
     } catch (billErr: any) {
       console.warn(`[deleteKubernetesCluster] Billing close failed: ${billErr?.message || billErr}`);
     }
@@ -88,11 +90,16 @@ export async function POST(req: NextRequest) {
     }
     
     // Delete cluster from database
-    const { error } = await supabase
+    const { data: deleteData, error } = await supabase
       .from("clusters")
       .delete()
       .eq("cluster_id", json.cluster_id)
-      .single();
+      .select();
+
+    console.log(`[deleteKubernetesCluster] Supabase delete result`, {
+      error: error?.message,
+      rowsDeleted: Array.isArray(deleteData) ? deleteData.length : 0,
+    });
 
     if (error)
       return NextResponse.json({ error: error.message }, { status: 400 });

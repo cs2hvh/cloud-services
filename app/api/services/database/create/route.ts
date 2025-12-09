@@ -50,10 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Billing: upfront and hourly (dynamic from admin pricing)
-    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForDatabase({
-      engine: validatedData.engine,
-      sizeSlug: validatedData.size,
-    });
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForDatabase(validatedData.plan_id);
 
     // Check balance BEFORE creating provider resources
     const balCheck = await ensureBalance(validatedData.owner_id, INITIAL_COST);

@@ -1,4 +1,5 @@
 import { Products } from "@/lib/supabase/queries";
+import { UUID } from "crypto";
 
 type Rates = { initialCost: number; hourlyRate: number };
 
@@ -16,17 +17,17 @@ function ratesFromProduct(product?: { price?: number | null; fixed_price?: numbe
   return { initialCost, hourlyRate };
 }
 
-export async function getRatesForDatabase(params: { engine: string; sizeSlug: string }): Promise<Rates> {
-  const products = await Products.get_by_type("database");
-  const byEngine = products.filter((p: any) => p.sub === params.engine);
-  const match = byEngine.find((p: any) => (p as any).slug === params.sizeSlug) ?? byEngine[0] ?? products[0];
-  return ratesFromProduct(match as any);
+export async function getRatesForDatabase(planId:string): Promise<Rates> {
+  const products = await Products.get_by_id(planId);
+  //const byEngine = products.filter((p: any) => p.sub === params.engine);
+  //const match = byEngine.find((p: any) => (p as any).slug === params.sizeSlug) ?? byEngine[0] ?? products[0];
+  return ratesFromProduct(products);
 }
 
-export async function getRatesForKubernetesExisting(): Promise<Rates> {
-  const products = await Products.get_by_type("kubernetes");
-  const pick = products[0] ?? null;
-  return ratesFromProduct(pick as any);
+export async function getRatesForKubernetesExisting(plan_id:string): Promise<Rates> {
+    console.log("Fetching rates for Kubernetes plan ID:", plan_id);
+  const products = await Products.get_by_id(plan_id);
+  return ratesFromProduct(products);
 }
 
 export async function getRatesForObjectStorage(): Promise<Rates> {

@@ -28,12 +28,15 @@ interface SpectrumAppsTableProps {
 const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const router = useRouter();
 
-  const handleDeleteClick = (spectrumId: string) => {
+  const handleDeleteClick = (spectrumId: string, id: string) => {
     setSelectedAppId(spectrumId);
+    setSelectedId(id);
     setDeleteDialogOpen(true);
+
   };
 
   const handleDeleteConfirm = async () => {
@@ -49,6 +52,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
         body: JSON.stringify({
           app_id: selectedAppId,
           owner_id: userId,
+          id: selectedId,
         }),
       });
 
@@ -252,7 +256,7 @@ const SpectrumAppsTable = ({ spectrumApps, userId }: SpectrumAppsTableProps) => 
                           size="sm"
                           variant="ghost"
                           className="cursor-pointer h-8 px-2 sm:px-3 text-red-400 hover:text-red-300 hover:bg-red-950/30"
-                          onClick={() => handleDeleteClick(app.spectrum_id)}
+                          onClick={() => handleDeleteClick(app.spectrum_id,app.id)}
                         >
                           <Trash className="h-4 w-4" />
                           <span className="hidden sm:inline ml-1">Delete</span>

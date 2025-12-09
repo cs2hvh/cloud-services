@@ -61,6 +61,7 @@ export type UpdateSpectrumAppPayload = z.infer<typeof updateSpectrumAppSchema>;
 export const deleteSpectrumAppSchema = z.object({
   app_id: z.string().min(1, "app_id is required"),
   owner_id: z.string().uuid("owner_id must be a valid UUID").optional(),
+  id: z.string().min(1, "id is required"),
 });
 
 export type DeleteSpectrumAppPayload = z.infer<typeof deleteSpectrumAppSchema>;

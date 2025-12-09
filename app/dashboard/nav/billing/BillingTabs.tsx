@@ -167,7 +167,7 @@ function StatCard({ label, value, highlight = false }: { label: string; value: n
       }`}
     >
       <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
-      <div className="mt-2 text-xl font-semibold text-white">{value}</div>
+      <div className="mt-2 text-xl font-semibold text-white">${value}</div>
     </div>
   );
 }

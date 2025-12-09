@@ -39,11 +39,13 @@ export async function POST(req: NextRequest) {
 
     // Close billing for object storage bucket
     try {
-      await Billing.close_active_service("objectspace", {
+      console.log(`[deleteBucket] Closing billing`, { userId: auth.user!.id, serviceId: bucket_id });
+      const billingResult = await Billing.close_active_service("objectspace", {
         userId: auth.user!.id,
         serviceId: bucket_id,
         failOnInsufficient: false,
       });
+      console.log(`[deleteBucket] Billing closed`, billingResult);
     } catch (billErr: any) {
       console.warn(`[deleteBucket] Billing close failed: ${billErr?.message || billErr}`);
     }

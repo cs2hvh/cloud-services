@@ -521,7 +521,15 @@ export const Billing = {
       spectrum: "active_spectrum",
     };
     const table = tableMap[type];
-    console.log(table ,"..........table",params,"..........params");
+    if (!table) {
+      console.error(`[Billing.close_active_service] Unknown service type:`, type);
+      throw new Error(`Unknown service type: ${type}`);
+    }
+
+    console.log(
+      `[Billing.close_active_service] Fetching active row`,
+      { type, table, userId: params.userId, serviceId: params.serviceId }
+    );
     // Fetch active row
     const { data: row, error: getErr } = await supabase
       .schema("billing")
@@ -531,12 +539,27 @@ export const Billing = {
       .eq("user_id", params.userId)
       .maybeSingle();
 
-      console.log(row,"..........row");
+    if (getErr) {
+      console.error(
+        `[Billing.close_active_service] Supabase fetch error for ${type}:`,
+        getErr.message
+      );
+      throw new Error(`Failed to fetch active ${type}: ${getErr.message}`);
+    }
 
-    if (getErr) throw new Error(`Failed to fetch active ${type}: ${getErr.message}`);
+    console.log(`[Billing.close_active_service] Active row`, row);
     if (!row) {
       // Nothing to charge, but still attempt cleanup just in case of stale state
-      await supabase.schema("billing").from(table).delete().eq("service_id", params.serviceId).eq("user_id", params.userId);
+      console.log(
+        `[Billing.close_active_service] No active row found; performing cleanup delete`,
+        { table, userId: params.userId, serviceId: params.serviceId }
+      );
+      await supabase
+        .schema("billing")
+        .from(table)
+        .delete()
+        .eq("service_id", params.serviceId)
+        .eq("user_id", params.userId);
       return { charged: 0, newBalance: null };
     }
 
@@ -544,17 +567,30 @@ export const Billing = {
     const lastBilledAt = (row)?.last_billed_at as string | undefined;
     const charge = Billing._computeProratedCharge(hourlyRate, lastBilledAt);
 
+    console.log(
+      `[Billing.close_active_service] Computed charge`,
+      { hourlyRate, lastBilledAt, charge }
+    );
+
     // Deduct credits
     let newBalance: number | null = null;
     if (charge > 0) {
       try {
         newBalance = await Billing.deduct(params.userId, charge);
+        console.log(
+          `[Billing.close_active_service] Deduction successful`,
+          { userId: params.userId, charge, newBalance }
+        );
       } catch (e: any) {
         if (params.failOnInsufficient) {
           throw new Error(e?.message || "Insufficient balance");
         }
         // If not failing hard, skip deduction and proceed to cleanup
         newBalance = null;
+        console.warn(
+          `[Billing.close_active_service] Deduction skipped due to error`,
+          { error: e?.message || String(e) }
+        );
       }
     }
 
@@ -565,7 +601,18 @@ export const Billing = {
       .delete()
       .eq("service_id", params.serviceId)
       .eq("user_id", params.userId);
-    if (delErr) throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
+    if (delErr) {
+      console.error(
+        `[Billing.close_active_service] Supabase delete error for ${type}:`,
+        delErr.message
+      );
+      throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
+    }
+
+    console.log(
+      `[Billing.close_active_service] Closed service successfully`,
+      { type, charged: charge, newBalance }
+    );
 
     return { charged: charge, newBalance };
   },

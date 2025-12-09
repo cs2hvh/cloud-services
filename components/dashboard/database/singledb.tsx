@@ -177,6 +177,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     try {
       const response = await api.post(`/services/database/delete`, {
         id: database?.cluster_id,
+        id2:database?.id
       });
 
       if (response.status === 200) {

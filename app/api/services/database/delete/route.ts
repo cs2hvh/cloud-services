@@ -20,11 +20,13 @@ export async function POST(req: NextRequest) {
 
     // Close billing (prorated deduction + remove active row)
     try {
-      await Billing.close_active_service("database", {
+      console.log(`[deleteDatabase] Closing billing`, { userId: auth.user.id, serviceId: body.id2 });
+      const billingResult = await Billing.close_active_service("database", {
         userId: auth.user.id,
         serviceId: body.id,
         failOnInsufficient: false,
       });
+      console.log(`[deleteDatabase] Billing closed`, billingResult);
     } catch (billErr: any) {
       console.warn(`[deleteDatabase] Billing close failed: ${billErr?.message || billErr}`);
       // proceed with deletion even if billing fails, per failOnInsufficient=false

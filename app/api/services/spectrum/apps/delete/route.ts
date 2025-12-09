@@ -50,11 +50,13 @@ export async function POST(req: NextRequest) {
 
     // Close billing for spectrum app
     try {
-      await Billing.close_active_service("spectrum", {
+      console.log(`[deleteSpectrumApp] Closing billing`, { userId: auth.user!.id, serviceId: validation.data.app_id });
+      const billingResult = await Billing.close_active_service("spectrum", {
         userId: auth.user!.id,
-        serviceId: validation.data.app_id,
+        serviceId: validation.data.id,
         failOnInsufficient: false,
       });
+      console.log(`[deleteSpectrumApp] Billing closed`, billingResult);
     } catch (billErr: any) {
       console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr?.message || billErr}`);
     }

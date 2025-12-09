@@ -315,6 +315,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
         version: state.selectedVersion,
         num_nodes: 1,
         size: `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`,
+        plan_id:selectedPlan.id,
         region: state.selectedLocation,
         project_id: state.selectedProject,
         owner_id: userId,

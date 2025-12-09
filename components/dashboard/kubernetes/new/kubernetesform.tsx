@@ -99,6 +99,7 @@ type SendPayload = {
   };
   nodes: NodeInfo[];
   ips: string[];
+  planId?: string;
 };
 
 const NewClusterPage = ({
@@ -338,6 +339,7 @@ const NewClusterPage = ({
           user: "root",
           password: createDroplet.data.vmPassword,
         },
+        planId:selectedProduct?.id,
         nodes: [],
         // "cp-1": { "host": "172.104.206.68", "role": "control-plane", "hostname": "cp-1", "cpu": 2, "memory_mb": 512 }
 

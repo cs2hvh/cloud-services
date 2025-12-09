@@ -50,6 +50,7 @@ const Payload = z.object({
   ips: z.array(z.string().regex(ipRegex, "Invalid IPv4 address")),
   ownerId: z.string(),
   projectId: z.string(),
+  planId:z.string().uuid()
 });
 
 export async function POST(req: Request) {
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
   // Billing: dynamic from admin pricing (existing cluster import uses default plan)
-  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting();
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(parsed.data.planId);
 
   // Check balance BEFORE provisioning
   const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);
