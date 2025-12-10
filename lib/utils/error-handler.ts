@@ -101,7 +101,7 @@ export function handleQueryError(
   error: unknown,
   module: string = 'Database'
 ): void {
-  const message = error instanceof Error ? error.message : String(error);
+  // const message = error instanceof Error ? error.message : String(error);
   logger.error(`${operation} failed`, { module, operation }, error);
 }
 

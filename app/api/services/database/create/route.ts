@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
       if (supabase_data.success) {
         // Deduct upfront and insert into billing.active_database after provisioning
         try {
-          const serviceId = (supabase_data.data as any)?.id ?? database.data.database.id;
+          const serviceId = supabase_data.data?.id ?? database.data.database.id;
           await postProvisionBilling({
             userId: validatedData.owner_id,
             initialCost: INITIAL_COST,
@@ -159,9 +159,19 @@ export async function POST(req: NextRequest) {
             serviceId,
             addActive: Billing.add_active_database,
           });
-        } catch (e: any) {
+        } catch (e) {
+          const message =
+            e instanceof Error
+              ? e.message
+              : typeof e === "string"
+                ? e
+                : JSON.stringify(e);
+
           return NextResponse.json(
-            { error: "Post-provision billing failed", details: e?.message ?? String(e) },
+            {
+              error: "Post-provision billing failed",
+              details: message,
+            },
             { status: 500 }
           );
         }

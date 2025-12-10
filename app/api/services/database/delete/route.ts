@@ -20,19 +20,30 @@ export async function POST(req: NextRequest) {
 
     // Close billing (prorated deduction + remove active row)
     try {
-      console.log(`[deleteDatabase] Closing billing`, { userId: auth.user.id, serviceId: body.id2 });
+      console.log(`[deleteDatabase] Closing billing`, {
+        userId: auth.user.id,
+        serviceId: body.id2,
+      });
       const billingResult = await Billing.close_active_service("database", {
         userId: auth.user.id,
         serviceId: clusterData.data.id,
         failOnInsufficient: false,
       });
       console.log(`[deleteDatabase] Billing closed`, billingResult);
-    } catch (billErr: any) {
-      console.warn(`[deleteDatabase] Billing close failed: ${billErr?.message || billErr}`);
+    } catch (billErr) {
+      const msg =
+        billErr instanceof Error
+          ? billErr.message
+          : typeof billErr === "string"
+            ? billErr
+            : JSON.stringify(billErr);
+
+      console.warn(`[deleteDatabase] Billing close failed: ${msg}`);
       // proceed with deletion even if billing fails, per failOnInsufficient=false
     }
 
-    const database = await axios.delete(
+
+    await axios.delete(
       `https://api.digitalocean.com/v2/databases/${body.id}`,
       {
         headers: {

@@ -19,7 +19,7 @@ async function BillingSuspense() {
   return (
     <div className="max-w-[1600px] mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-white">Billing</h1>
+        <h1 className="text-2xl font-semibold text-white">Billing($)</h1>
         <p className="text-sm text-neutral-400 mt-0.5">Manage balance and payment methods</p>
       </div>
 

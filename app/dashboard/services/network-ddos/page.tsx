@@ -4,7 +4,6 @@ import { Spectrum_Apps } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import NetworkDDoSMain from "@/components/dashboard/network-ddos/main";
-import { cache } from "react";
 
 const NetworkDDoSSuspense = async () => {
   const user = await getUser();

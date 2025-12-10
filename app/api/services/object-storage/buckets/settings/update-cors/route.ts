@@ -80,14 +80,17 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
-    console.error("❌ Error updating bucket CORS:", error);
-    return NextResponse.json(
-      {
-        error: "Failed to update bucket CORS",
-        message: error.message,
-      },
-      { status: 500 }
-    );
-  }
+  }  catch (e) {
+  const message =
+    e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+
+  return NextResponse.json(
+    {
+      error: "Failed to update bucket CORS",
+      details: message,
+    },
+    { status: 500 }
+  );
+}
+
 }

@@ -31,16 +31,28 @@ export async function POST(req: NextRequest) {
 
     // Close billing for kubernetes cluster (proration + cleanup)
     try {
-      console.log(`[deleteKubernetesCluster] Closing billing`, { userId: auth.user.id, serviceId: json.cluster_id });
+      console.log(`[deleteKubernetesCluster] Closing billing`, {
+        userId: auth.user.id,
+        serviceId: json.cluster_id,
+      });
       const billingResult = await Billing.close_active_service("kubernetes", {
         userId: auth.user.id,
         serviceId: json.cluster_id,
         failOnInsufficient: false,
       });
       console.log(`[deleteKubernetesCluster] Billing closed`, billingResult);
-    } catch (billErr: any) {
-      console.warn(`[deleteKubernetesCluster] Billing close failed: ${billErr?.message || billErr}`);
+    } catch (billErr) {
+      const msg =
+        billErr instanceof Error
+          ? billErr.message
+          : typeof billErr === "string"
+            ? billErr
+            : JSON.stringify(billErr);
+
+      console.warn(`[deleteDatabase] Billing close failed: ${msg}`);
+      // proceed with deletion even if billing fails, per failOnInsufficient=false
     }
+
     
     // Delete droplets from DigitalOcean before deleting from database
     const dropletDeletionErrors: string[] = [];

@@ -26,9 +26,20 @@ export async function POST(req: NextRequest) {
     // Deduct upfront immediately to avoid race conditions with external provisioning
     try {
       await Billing.deduct(ownerId, upfront);
-    } catch (err: any) {
-      return NextResponse.json({ error: "Credit deduction failed", details: err?.message ?? String(err) }, { status: 500 });
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string"
+            ? err
+            : JSON.stringify(err);
+
+      return NextResponse.json(
+        { error: "Credit deduction failed", details: msg },
+        { status: 500 }
+      );
     }
+
 
     const vmPassword=generateStrongPassword();
   //console.log(vmPassword,".................generateStrongPassword..............28")

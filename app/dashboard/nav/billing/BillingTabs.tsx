@@ -63,8 +63,8 @@ export default function BillingTabs({
       if (typeof data.balance === "number") setBalance(data.balance);
       pushToast("success", "Top-up successful");
       setAmount("");
-    } catch (err: any) {
-      pushToast("error", err?.message || "Failed to top up");
+    } catch (_err: any) {
+      pushToast("error", _err?.message || "Failed to top up");
     } finally {
       setLoadingTopup(false);
     }
@@ -72,7 +72,7 @@ export default function BillingTabs({
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment")} className="w-full">
         <TabsList className="w-full grid grid-cols-2 gap-2 bg-transparent p-0 h-auto mb-6">
           <TabsTrigger
             value="balance"
@@ -196,8 +196,8 @@ function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message
       pushToast("success", "Payment method saved");
       setOpen(false);
       setForm({ cardNumber: "", expiry: "", cvv: "" });
-    } catch (err: any) {
-      pushToast("error", err?.message || "Error saving payment method");
+    } catch (_err: any) {
+      pushToast("error", _err?.message || "Error saving payment method");
     } finally {
       setLoading(false);
     }

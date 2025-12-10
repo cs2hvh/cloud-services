@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       const usersResult = await Database_Clusters.get_users(validatedData.cluster_id);
       
       if (usersResult.success && Array.isArray(usersResult.data)) {
-        const updatedUsers = usersResult.data.map((u: any) => {
+        const updatedUsers = usersResult.data.map((u) => {
           if (u.name === validatedData.username) {
             return {
               ...u,

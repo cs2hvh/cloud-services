@@ -3,7 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
-import { ObjectSpaces, Projects, Billing } from "@/lib/supabase/queries";
+import { ObjectSpaces, Billing } from "@/lib/supabase/queries";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     // ✅ SUCCESS RESPONSE
     // Deduct upfront and add to billing.active_objectspace for hourly billing
     try {
-      const serviceId = (result.data as any)?.id ?? validatedData.name;
+      const serviceId = (result.data)?.id ?? validatedData.name;
       await postProvisionBilling({
         userId: targetOwnerId,
         initialCost: INITIAL_COST,
@@ -111,12 +111,20 @@ export async function POST(req: NextRequest) {
         serviceId,
         addActive: Billing.add_active_objectspace,
       });
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: "Post-provision billing failed", message: e?.message ?? String(e) },
-        { status: 500 }
-      );
-    }
+    } catch (err) {
+  const msg =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : JSON.stringify(err);
+
+  return NextResponse.json(
+    { error: "Post provision billing failed", details: msg },
+    { status: 500 }
+  );
+}
+
 
     return NextResponse.json({ success: true, data: result.data, message: result.message }, { status: 201 });
   } catch (error) {

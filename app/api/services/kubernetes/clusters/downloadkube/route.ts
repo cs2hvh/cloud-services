@@ -1,6 +1,6 @@
 // app/api/clusters/[id]/kubeconfig/route.ts
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
@@ -14,11 +14,11 @@ export async function POST(req: Request) {
   // Basic rate limiting per IP/token
   const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
   try {
-    await limiter.check(req as any, 15);
+    await limiter.check(req as NextRequest, 15);
   } catch (e) {
     return NextResponse.json({ error: "Too many requests" ,message:e}, { status: 429 });
   }
-  const body = await req.json().catch(() => ({} as any));
+  const body = await req.json().catch(() => ({}));
 
   const auth = await authenticateUser();
   if (!auth.authenticated) {

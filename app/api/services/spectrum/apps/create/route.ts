@@ -62,12 +62,19 @@ export async function POST(req: NextRequest) {
           addActive: Billing.add_active_spectrum,
         });
       }
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: "Post-provision billing failed", details: e?.message ?? String(e) },
-        { status: 500 }
-      );
-    }
+    } catch (e) {
+  const message =
+    e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+
+  return NextResponse.json(
+    {
+      error: "Post-provision billing failed",
+      details: message,
+    },
+    { status: 500 }
+  );
+}
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";

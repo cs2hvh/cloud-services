@@ -348,9 +348,9 @@ export const Billing = {
 
     console.log(data.credit_balance,"data.credit_balance")
     return {
-      credit_balance: (data as any).credit_balance ?? 0,
-      promo_credits: (data as any).promo_credits ?? 0,
-      topup_credits: (data as any).topup_credits ?? 0,
+      credit_balance: data.credit_balance ?? 0,
+      promo_credits:  0,
+      topup_credits: 0,
     };
   },
 
@@ -366,7 +366,7 @@ export const Billing = {
       .eq("user_id", userId)
       .maybeSingle();
 
-    const prevBal = (existing as any)?.credit_balance ?? 0;
+    const prevBal = existing?.credit_balance ?? 0;
    // const prevTop = (existing as any)?.topup_credits ?? 0;
 
     if (!existing) {
@@ -379,9 +379,9 @@ export const Billing = {
         .single();
       if (error) throw new Error(`Top-up failed: ${error.message}`);
       return {
-        credit_balance: (data as any)?.credit_balance ?? amount,
-        promo_credits: (data as any)?.promo_credits,
-        topup_credits: (data as any)?.topup_credits,
+        credit_balance: data?.credit_balance ?? amount,
+        promo_credits: 0,
+        topup_credits: 0,
       };
     }
 
@@ -398,9 +398,9 @@ export const Billing = {
       .single();
     if (error) throw new Error(`Top-up failed: ${error.message}`);
     return {
-      credit_balance: (data as any)?.credit_balance ?? next.credit_balance,
-      promo_credits: (data as any)?.promo_credits,
-      topup_credits: (data as any)?.topup_credits,
+      credit_balance: data ?.credit_balance ?? next.credit_balance,
+      promo_credits: 0,
+      topup_credits: 0,
     };
   },
 
@@ -581,15 +581,15 @@ export const Billing = {
           `[Billing.close_active_service] Deduction successful`,
           { userId: params.userId, charge, newBalance }
         );
-      } catch (e: any) {
+      } catch (_) {
         if (params.failOnInsufficient) {
-          throw new Error(e?.message || "Insufficient balance");
+          throw new Error("Insufficient balance");
         }
         // If not failing hard, skip deduction and proceed to cleanup
         newBalance = null;
         console.warn(
           `[Billing.close_active_service] Deduction skipped due to error`,
-          { error: e?.message || String(e) }
+          // { error: e?.message || String(e) }
         );
       }
     }

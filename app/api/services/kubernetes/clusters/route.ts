@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { provisionQueue } from "@/lib/queue";
 import { Encryption } from "@/config/functions";
@@ -58,8 +58,8 @@ export async function POST(req: Request) {
   const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
   try {
     // Cast to any to satisfy type; limiter reads headers only
-    await limiter.check(req as any, 10);
-  } catch (e) {
+    await limiter.check(req as NextRequest, 10);
+  } catch (_) {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   // Check authentication

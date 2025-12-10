@@ -52,14 +52,14 @@ export async function createBucket(
       })
     );
     return { success: true };
-  }catch (error: any) {
-    console.error('Error creating bucket:', error);
+  }catch (_error: any) {
+    console.error('Error creating bucket:',_error);
 
     let message = 'Unknown error';
-    let errorCode = error.name || 'UnknownError';
+    const errorCode = _error.name || 'UnknownError';
 
-    if (error instanceof Error) {
-      message = error.message;
+    if (_error instanceof Error) {
+      message = _error.message;
     }
 
     // Check for specific bucket already exists errors
