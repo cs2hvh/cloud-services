@@ -101,16 +101,16 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // Delete cluster from database
+    // Mark cluster as deleted in database (soft delete)
     const { data: deleteData, error } = await supabase
       .from("clusters")
-      .delete()
+      .update({ status: 'deleted' })
       .eq("cluster_id", json.cluster_id)
       .select();
 
-    console.log(`[deleteKubernetesCluster] Supabase delete result`, {
+    console.log(`[deleteKubernetesCluster] Supabase update result`, {
       error: error?.message,
-      rowsDeleted: Array.isArray(deleteData) ? deleteData.length : 0,
+      rowsUpdated: Array.isArray(deleteData) ? deleteData.length : 0,
     });
 
     if (error)

@@ -1488,6 +1488,7 @@ export const Clusters = {
         .from("clusters")
         .select("*")
         .eq("project_id", projectId)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -1525,6 +1526,7 @@ export const Clusters = {
         .from("clusters")
         .select("*")
         .eq("owner_id", userId)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -1581,6 +1583,7 @@ export const Clusters = {
           created_at,
           user_profiles(username)
         `)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -1709,7 +1712,8 @@ export const Database_Clusters = {
    const { data, error } = await supabase
      .from("database_cluster")
      .select("*")
-     .eq("owner_id", owner_id);
+     .eq("owner_id", owner_id)
+     .neq("status", "deleted");
 
    if (error) {
      console.error("[updateClusterWorker] update failed:", error.message);
@@ -1723,7 +1727,8 @@ export const Database_Clusters = {
    const { data, error } = await supabase
      .from("database_cluster")
      .select("*")
-     .eq("owner_id", owner_id);
+     .eq("owner_id", owner_id)
+     .neq("status", "deleted");
 
    if (error) {
      console.error("[updateClusterWorker] update failed:", error.message);
@@ -1745,6 +1750,22 @@ export const Database_Clusters = {
      .select();
     if (error) {
       console.error("[deleteClusterWorker] delete failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, cluster: data };
+ },
+
+ mark_as_deleted: async(cluster_id:string)=>{
+   // console.log(cluster_id, "...........in mark_as_deleted........");
+   const supabase = await createWorkerClient();
+   const { data, error } = await supabase
+     .from("database_cluster")
+     .update({ status: 'deleted' })
+     .eq("cluster_id", cluster_id)
+     .select();
+    if (error) {
+      console.error("[mark_as_deleted] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
@@ -2086,6 +2107,7 @@ export const Database_Clusters = {
           project_id,
           user_profiles!owner_id(username)
         `)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -2166,6 +2188,7 @@ export const Database_Clusters = {
         .from("database_cluster")
         .select("*")
         .eq("project_id", projectId)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -2344,6 +2367,7 @@ export const Spectrum_Apps = {
         .from("spectrum_apps")
         .select("*")
         .eq("owner_id", owner_id)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
       if (error) return [];
       return data || [];
@@ -2357,11 +2381,28 @@ export const Spectrum_Apps = {
       const { data, error } = await supabase
         .from("spectrum_apps")
         .delete()
-        .eq("spectrum_id", spectrum_id)
+        .eq("id", spectrum_id)
         .select();
       if (error) return { success: false, error: error.message };
       return { success: true, data };
     } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  mark_as_deleted: async (spectrum_id: string) => {
+    console.log('reached mark as delete')
+    try {
+      const supabase = await createWorkerClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .update({ status: 'deleted' })
+        .eq("id", spectrum_id)
+        .select();
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      console.log('error in mark as delete', err)
       return { success: false, error: String(err) };
     }
   },
@@ -2391,6 +2432,7 @@ export const Spectrum_Apps = {
           dns,
           user_profiles(username)
         `)
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -2542,6 +2584,26 @@ export const ObjectSpaces = {
     }
   },
 
+  mark_as_deleted: async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      console.log(id, "...........id in mark_as_deleted object space........");
+      const supabase = await createWorkerClient();
+      const { error } = await supabase
+        .from("object_spaces")
+        .update({ status: 'deleted' })
+        .eq("id", id);
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error marking as deleted: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error marking as deleted: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+
   update_status: async (
     id: string,
     status: ObjectSpaceBucket["status"]
@@ -2601,6 +2663,7 @@ export const ObjectSpaces = {
         .select("*")
         .eq("owner_id", owner_id)
         .eq("type", "bucket")
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -2620,6 +2683,7 @@ export const ObjectSpaces = {
         .from("object_spaces")
         .select("name")
         .eq("type", "bucket")
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -2761,6 +2825,7 @@ export const ObjectSpaces = {
           user_profiles(username)
         `)
         .eq("type", "bucket")
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       //console.log(buckets, "...........data in get_all_for_admin........");

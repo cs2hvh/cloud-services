@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     const sendData = {
       cluster_id: body.id,
     };
-    const supabase_delete = await Database_Clusters.delete(sendData.cluster_id);
+    const supabase_delete = await Database_Clusters.mark_as_deleted(sendData.cluster_id);
 
    // console.log(supabase_delete,"...........supabase delete response........");
     

@@ -31,7 +31,8 @@ export async function POST(
     const query = supabase
       .from("clusters")
       .select("id, cluster_name, cluster_id, status, workers, created_at, k8s_version, owner_id")
-      .eq("cluster_id", cluster_id);
+      .eq("cluster_id", cluster_id)
+      .neq("status", "deleted");
 
     const { data, error } = isAdmin
       ? await query.single()
@@ -60,7 +61,8 @@ export async function POST(
     const { data, error } = await supabase
       .from("clusters")
       .select("id, cluster_name, cluster_id, status, workers, created_at, k8s_version, owner_id")
-      .eq("owner_id", auth.user.id);
+      .eq("owner_id", auth.user.id)
+      .neq("status", "deleted");
 
     if (error) {
       return NextResponse.json(

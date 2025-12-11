@@ -554,7 +554,7 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
     // Delete access key from provider
     await deleteBucketAccessKey(bucket, envResult.config.encryptionKey);
 
-    // Delete from database
+    // Mark bucket as deleted in database (soft delete)
     if (!bucket.id) {
       return {
         success: false,
@@ -563,11 +563,11 @@ export async function handleDeleteBucket(config: DeleteBucketConfig): Promise<De
       };
     }
 
-    const dbResult = await ObjectSpaces.delete(bucket.id);
+    const dbResult = await ObjectSpaces.mark_as_deleted(bucket.id);
     if (!dbResult.success) {
       return {
         success: false,
-        error: "Failed to remove bucket from database",
+        error: "Failed to mark bucket as deleted in database",
         message: dbResult.error
       };
     }

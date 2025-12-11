@@ -22,18 +22,20 @@ import {
   X,
   Settings,
   Users,
-  Network
+  Network,
+  Ticket,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
 
 type AppSidebarProps = {
-   user: {
+  user: {
     id: string;
     email: string | null;
     user_metadata: { full_name?: string } | null;
-  } ,
+  };
   projects: Tables<"projects">[];
 };
 
@@ -41,8 +43,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [projectsExpanded, setProjectsExpanded] = useState(true);
-  const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
-  const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
+  const [computeExpanded, setComputeExpanded] = useState(
+    pathname.includes("/services/compute")
+  );
+  const [adminExpanded, setAdminExpanded] = useState(
+    pathname.includes("/admin")
+  );
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -62,15 +68,17 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     };
 
     checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
   // Check if user is admin
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const res = await fetch('/api/admin/proxmox/hosts', { cache: 'no-store' });
+        const res = await fetch("/api/admin/proxmox/hosts", {
+          cache: "no-store",
+        });
         setIsAdmin(res.ok);
       } catch {
         setIsAdmin(false);
@@ -471,6 +479,20 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       <Box className="w-4 h-4 mr-2" />
                       <span className="text-sm">Kubernetes</span>
                     </Link>
+                    <Link
+                      href="/dashboard/admin/coupons"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${
+                          pathname === "/dashboard/admin/coupons"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Ticket className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Coupons</span>
+                    </Link>
                   </div>
                 )}
               </div>
@@ -559,28 +581,31 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
       {/* Mobile overlay */}
       {isMobile && isMobileOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <div className={`
-        ${isMobile 
-          ? `fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out ${
-              isMobileOpen ? 'translate-x-0' : '-translate-x-full'
-            }`
-          : 'relative'
+      <div
+        className={`
+        ${
+          isMobile
+            ? `fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out ${
+                isMobileOpen ? "translate-x-0" : "-translate-x-full"
+              }`
+            : "relative"
         }
         flex h-screen w-72 flex-col bg-black border-r border-slate-800/50
-      `}>
+      `}
+      >
         {sidebarContent}
       </div>
 
       {/* Close sidebar when clicking on content (mobile) */}
       {isMobile && isMobileOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 z-30"
           onClick={() => setIsMobileOpen(false)}
         />

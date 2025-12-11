@@ -425,12 +425,12 @@ export async function deleteSpectrumApp(appId: string) {
     );
   }
 
-  // Delete from database
-  const del = await Spectrum_Apps.delete(appId);
+  // Mark as deleted in database (soft delete)
+  const del = await Spectrum_Apps.mark_as_deleted(appId);
 
   if (!del.success) {
     throw new Error(
-      `Deleted in Cloudflare but failed to remove locally: ${del.error}`
+      `Deleted in Cloudflare but failed to mark as deleted locally: ${del.error}`
     );
   }
 
