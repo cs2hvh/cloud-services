@@ -2,12 +2,20 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CreditCard, Wallet, X } from "lucide-react";
+import { CreditCard, Wallet, X, Ticket } from "lucide-react";
 import { z } from "zod";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 
 type Toast = { id: number; type: "success" | "error"; message: string };
+
+interface Coupon {
+  id: string;
+  code: string;
+  amount: number;
+  valid_till: string;
+  coupon_type: string;
+}
 
 const cardSchema = z.object({
   cardNumber: z
@@ -25,12 +33,15 @@ export default function BillingTabs({
   initialBalance = 0.0,
   promoCredits = 0,
   topupCredits = 0,
+  availableCoupons = [],
 }: {
   initialBalance?: number;
   promoCredits?: number;
   topupCredits?: number;
+  availableCoupons?: Coupon[];
 }) {
-  const [tab, setTab] = useState<"balance" | "payment">("balance");
+  const [tab, setTab] = useState<"balance" | "payment" | "coupons">("balance");
+  const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
   const [amount, setAmount] = useState("");
   const [loadingTopup, setLoadingTopup] = useState(false);
   const [balance, setBalance] = useState<number>(initialBalance);
@@ -70,10 +81,26 @@ export default function BillingTabs({
     }
   };
 
+  const handleRedeemCoupon = async (code: string) => {
+    try {
+      const res = await api.post("/billing/coupons/redeem", { code });
+      
+      if (res.data.success) {
+        setBalance(res.data.balance);
+        setCoupons(coupons.filter((c) => c.code !== code));
+        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+      } else {
+        pushToast("error", res.data.error || "Failed to redeem coupon");
+      }
+    } catch (error: any) {
+      pushToast("error", error.response?.data?.error || "Failed to redeem coupon");
+    }
+  };
+
   return (
     <div className="max-w-[1600px] mx-auto">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment")} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 gap-2 bg-transparent p-0 h-auto mb-6">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment" | "coupons")} className="w-full">
+        <TabsList className="w-full grid grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
           <TabsTrigger
             value="balance"
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -85,6 +112,12 @@ export default function BillingTabs({
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
           >
             Payment Method
+          </TabsTrigger>
+          <TabsTrigger
+            value="coupons"
+            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+          >
+            Coupons
           </TabsTrigger>
         </TabsList>
 
@@ -115,7 +148,7 @@ export default function BillingTabs({
                 <button
                   disabled={loadingTopup}
                   type="submit"
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {loadingTopup ? "Processing..." : "Top up"}
                 </button>
@@ -131,6 +164,41 @@ export default function BillingTabs({
             className="space-y-6"
           >
             <PaymentMethod pushToast={pushToast} />
+          </motion.div>
+        </TabsContent>
+
+        <TabsContent value="coupons" className="mt-0">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-white mb-1">Available Coupons</h3>
+              <p className="text-sm text-neutral-400">
+                Apply coupons to add credits to your balance
+              </p>
+            </div>
+
+            {coupons.length === 0 ? (
+              <div className="text-center py-12 rounded-lg border border-white/10 bg-black/20">
+                <Ticket className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
+                <p className="text-neutral-400">No coupons available at the moment</p>
+                <p className="text-sm text-neutral-500 mt-1">
+                  Check back later for promotional offers
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {coupons.map((coupon) => (
+                  <CouponCard
+                    key={coupon.id}
+                    coupon={coupon}
+                    onRedeem={handleRedeemCoupon}
+                  />
+                ))}
+              </div>
+            )}
           </motion.div>
         </TabsContent>
       </Tabs>
@@ -169,6 +237,61 @@ function StatCard({ label, value, highlight = false }: { label: string; value: n
       <div className="text-xs uppercase tracking-wide text-gray-400">{label}</div>
       <div className="mt-2 text-xl font-semibold text-white">${value}</div>
     </div>
+  );
+}
+
+function CouponCard({ coupon, onRedeem }: { coupon: Coupon; onRedeem: (code: string) => void }) {
+  const [loading, setLoading] = useState(false);
+
+  const handleApply = async () => {
+    setLoading(true);
+    await onRedeem(coupon.code);
+    setLoading(false);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  return (
+    <motion.div
+  initial={{ opacity: 0, scale: 0.95 }}
+  animate={{ opacity: 1, scale: 1 }}
+  className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-500/10 to-purple-500/10 p-4 backdrop-blur-xl hover:border-white/20 transition-all"
+>
+  <div className="flex items-center justify-between mb-3">
+    <div className="flex items-center gap-2">
+      <div className="p-1.5 bg-white/10 rounded">
+        <Ticket className="h-4 w-4 text-white" />
+      </div>
+      <code className="text-xs font-mono font-semibold text-white bg-white/10 px-2 py-0.5 rounded">
+        {coupon.code}
+      </code>
+    </div>
+    <div className="text-right">
+      <div className="text-base font-bold text-white">${coupon.amount}</div>
+    </div>
+  </div>
+  
+  <div className="mb-3 pb-3 border-b border-white/10">
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-neutral-300 capitalize">{coupon.coupon_type}</span>
+      <span className="text-neutral-300">Expires: {formatDate(coupon.valid_till)}</span>
+    </div>
+  </div>
+
+  <button
+    onClick={handleApply}
+    disabled={loading}
+    className="px-3 py-1.5 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer transition-all"
+  >
+    {loading ? "Applying..." : "Apply"}
+  </button>
+</motion.div>
   );
 }
 
@@ -217,7 +340,7 @@ function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message
         </div>
         <button
           onClick={() => setOpen(true)}
-          className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm"
+          className="cursor-pointer px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm"
         >
           Add Payment Method
         </button>
@@ -247,7 +370,7 @@ function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message
                 </div>
                 <button
                   onClick={() => !loading && setOpen(false)}
-                  className="p-1 rounded-md hover:bg-white/10 text-gray-300"
+                  className="cursor-pointer p-1 rounded-md hover:bg-white/10 text-gray-300"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -290,7 +413,7 @@ function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message
                 <button
                   disabled={loading}
                   type="submit"
-                  className="w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="cursor-pointer w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {loading ? "Saving..." : "Save Payment Method"}
                 </button>

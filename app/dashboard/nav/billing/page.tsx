@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import BillingTabs from "./BillingTabs";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { createClient } from "@/lib/supabase/server";
-import { Billing } from "@/lib/supabase/queries";
+import { Billing, Promocodes } from "@/lib/supabase/queries";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,14 @@ async function BillingSuspense() {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const userId = data.user?.id;
+  const userEmail = data.user?.email || "";
   if (!userId) redirect("/signin");
 
-  const credits = await Billing.get_user_credits(userId);
+  const [credits, availableCoupons] = await Promise.all([
+    Billing.get_user_credits(userId),
+    Promocodes.get_available_for_user(userId, userEmail),
+  ]);
+  
   console.log(credits,"credits in billing page")
 
   return (
@@ -28,6 +33,7 @@ async function BillingSuspense() {
           initialBalance={credits.credit_balance}
           promoCredits={credits.promo_credits}
           topupCredits={credits.topup_credits}
+          availableCoupons={availableCoupons}
         />
       </div>
     </div>

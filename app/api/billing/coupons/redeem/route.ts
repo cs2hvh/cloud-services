@@ -1,0 +1,54 @@
+import { createClient } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { Promocodes } from "@/lib/supabase/queries";
+
+// POST: Redeem a coupon code
+export async function POST(request: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user || !user.email) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json();
+    const { code } = body;
+
+    if (!code) {
+      return NextResponse.json(
+        { error: "Promo code is required" },
+        { status: 400 }
+      );
+    }
+
+    const result = await Promocodes.redeem(
+      code.toUpperCase().trim(),
+      user.id,
+      user.email
+    );
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Failed to redeem coupon" },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      balance: result.balance,
+      amount: result.amount,
+      message: `Successfully added $${result.amount} to your balance!`
+    });
+  } catch (error: any) {
+    console.error("[User Coupons] Error redeeming coupon:", error);
+    return NextResponse.json(
+      { error: error.message || "Failed to redeem coupon" },
+      { status: 500 }
+    );
+  }
+}

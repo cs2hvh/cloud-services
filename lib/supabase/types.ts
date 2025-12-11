@@ -1133,6 +1133,48 @@ export type Database = {
         Update: { id?: string; user_id?: string; credit_balance?: number; created_at?: string | null };
         Relationships: [];
       };
+      promocodes: {
+        Row: { 
+          id: string; 
+          code: string; 
+          amount: number; 
+          redeem_by: Json; 
+          valid_till: string; 
+          coupon_type: string; 
+          max_redemptions: number | null; 
+          created_by: string | null; 
+          created_at: string | null; 
+          updated_at: string | null; 
+          is_active: boolean; 
+        };
+        Insert: { 
+          id?: string; 
+          code: string; 
+          amount: number; 
+          redeem_by?: Json; 
+          valid_till: string; 
+          coupon_type: string; 
+          max_redemptions?: number | null; 
+          created_by?: string | null; 
+          created_at?: string | null; 
+          updated_at?: string | null; 
+          is_active?: boolean; 
+        };
+        Update: { 
+          id?: string; 
+          code?: string; 
+          amount?: number; 
+          redeem_by?: Json; 
+          valid_till?: string; 
+          coupon_type?: string; 
+          max_redemptions?: number | null; 
+          created_by?: string | null; 
+          created_at?: string | null; 
+          updated_at?: string | null; 
+          is_active?: boolean; 
+        };
+        Relationships: [];
+      };
       active_kubernetes: {
         Row: { id: string; service_id: string; user_id: string; hourly_rate: number; status: string; created_at: string | null; updated_at: string | null; last_billed_at: string | null };
         Insert: { id?: string; service_id: string; user_id: string; hourly_rate: number; status?: string; created_at?: string | null; updated_at?: string | null; last_billed_at?: string | null };
@@ -1244,3 +1286,18 @@ export type Enums<
   : PublicEnumNameOrOptions extends keyof Database["public"]["Enums"]
     ? Database["public"]["Enums"][PublicEnumNameOrOptions]
     : never;
+
+// Promocode types
+export type Promocode = Database["billing"]["Tables"]["promocodes"]["Row"];
+export type PromocodeInsert = Database["billing"]["Tables"]["promocodes"]["Insert"];
+export type PromocodeUpdate = Database["billing"]["Tables"]["promocodes"]["Update"];
+
+export interface RedeemedUser {
+  email: string;
+  userId: string;
+  redeemedAt: string;
+}
+
+export interface Admin_Promocode extends Promocode {
+  redemption_count?: number;
+}
