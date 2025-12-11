@@ -37,6 +37,7 @@ const NodeSpec = z.object({
 
 const Payload = z.object({
   provider: z.literal("existing"),
+  clusterType: z.enum(["user", "internal"]).default("user"),
   cluster: z.object({
     name: z.string(),                              // e.g. "ahura-01"
     location: z.string(),                          // e.g. "mumbai"

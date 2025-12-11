@@ -86,6 +86,7 @@ type NodeInfo = {
 
 type SendPayload = {
   provider: string;
+  clusterType: "user" | "internal";
   cluster: {
     name: string;
     location: string;
@@ -160,6 +161,7 @@ const NewClusterPage = ({
     selectedLocation: "", // Selected location
     selectedDbType: "", // Selected database type (mysql, mongodb, etc.)
     selectedProject: "", // Selected project (if applicable)
+    selectedClusterType: "user" as "user" | "internal", // Cluster type
     versions: ["1.31.1"] as string[], // Available versions
   });
 
@@ -325,6 +327,7 @@ const NewClusterPage = ({
 
       const sendPayload: SendPayload = {
         provider: "existing",
+        clusterType: selectedClusterType,
         cluster: {
           name: state.selectedName,
           location: state.selectedLocation,
@@ -406,7 +409,8 @@ const NewClusterPage = ({
 
       console.log(sendPayload, "...........sendPayload.............");
 
-      await sleep(120000);
+      // Wait for droplets to be SSH-ready (after API confirms creation is complete)
+      await sleep(30000);  // 30 seconds - droplets need time to fully initialize
 
       //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
       const response4 = await api.post("/services/kubernetes/clusters", {
@@ -453,6 +457,7 @@ const NewClusterPage = ({
     selectedNode,
     selectedVersion,
     selectedLocation,
+    selectedClusterType,
     // selectedDbType,
     versions,
     selectedProject,
@@ -668,23 +673,43 @@ const NewClusterPage = ({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <Input
-                    value={selectedName}
-                    onChange={(e) =>
-                      setState({ ...state, selectedName: e.target.value })
-                    }
-                    type="text"
-                    placeholder="my-production-cluster"
-                    className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
-                      validationErrors.name ? "border-red-500" : ""
-                    }`}
-                  />
-                  {validationErrors.name && (
-                    <p className="text-sm text-red-500">
-                      {validationErrors.name}
-                    </p>
-                  )}
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Input
+                      value={selectedName}
+                      onChange={(e) =>
+                        setState({ ...state, selectedName: e.target.value })
+                      }
+                      type="text"
+                      placeholder="my-production-cluster"
+                      className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
+                        validationErrors.name ? "border-red-500" : ""
+                      }`}
+                    />
+                    {validationErrors.name && (
+                      <p className="text-sm text-red-500">
+                        {validationErrors.name}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-white text-sm">Cluster Type</Label>
+                    <Select
+                      value={selectedClusterType}
+                      onValueChange={(value) =>
+                        setState({ ...state, selectedClusterType: value as "user" | "internal" })
+                      }
+                    >
+                      <SelectTrigger className="w-full bg-white/10 border-white/20 rounded-md text-white">
+                        <SelectValue placeholder="Select cluster type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-black border-white/20 text-white">
+                        <SelectItem value="user">User Cluster (basic K8s only)</SelectItem>
+                        <SelectItem value="internal">Internal Cluster (with addons)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className={role==='admin'?"flex justify-between":"flex justify-end"}>

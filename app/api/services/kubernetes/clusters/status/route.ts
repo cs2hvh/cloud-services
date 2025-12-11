@@ -20,9 +20,24 @@ export async function POST(
 ) {
   const supabase = await createSSRClient();
 
- // console.log("...............18.......params")
-  const body = await req.json().catch(() => null);
-  console.log(body,"...............params 22222")
+  let body;
+  try {
+    body = await req.json();
+  } catch (parseError) {
+    console.error("JSON parse error:", parseError);
+    return NextResponse.json(
+      { success: false, error: "Invalid JSON in request body" },
+      { status: 400 }
+    );
+  }
+
+  if (!body || !body.clusterId) {
+    return NextResponse.json(
+      { success: false, error: "clusterId is required" },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("clusters")
     .select("create_status, connect_status, verify_status, status,kubeconfig,node_config,control_plane,workers")
