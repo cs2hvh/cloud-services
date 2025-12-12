@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 
 // Helper function to check if user is admin
-export async function checkAdminAuth() {
+async function checkAdminAuth() {
   const supabase = await createClient();
   
   const {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Save, Loader2, Package } from "lucide-react";
+import { X, Save, Loader2 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
@@ -61,7 +61,7 @@ export default function EditPlanDialog({
         ram: product.resources?.ram || 1,
         storage: product.resources?.storage || 15,
         price: product.price || 15.0,
-        fixed_price: (product as any).fixed_price || 0,
+        fixed_price: (product as { fixed_price?: number }).fixed_price || 0,
         discount: product.discount || 0,
       });
     }

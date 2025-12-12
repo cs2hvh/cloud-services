@@ -27,7 +27,7 @@ async function checkAdminAuth() {
 }
 
 // GET: Get all promocodes (admin only)
-export async function GET(request: Request) {
+export async function GET() {
   const { authorized } = await checkAdminAuth();
 
   if (!authorized) {
@@ -40,10 +40,10 @@ export async function GET(request: Request) {
   try {
     const coupons = await Promocodes.get_all();
     return NextResponse.json({ success: true, data: coupons });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Admin Coupons] Error fetching coupons:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch coupons" },
+      { error: error instanceof Error ? error.message : "Failed to fetch coupons" },
       { status: 500 }
     );
   }
@@ -96,10 +96,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, data: result.data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Admin Coupons] Error creating coupon:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to create coupon" },
+      { error: error instanceof Error ? error.message : "Failed to create coupon" },
       { status: 500 }
     );
   }
@@ -127,7 +127,7 @@ export async function PUT(request: Request) {
       );
     }
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (amount !== undefined) updateData.amount = amount;
     if (valid_till !== undefined) updateData.valid_till = valid_till;
     if (coupon_type !== undefined) updateData.coupon_type = coupon_type;
@@ -144,10 +144,10 @@ export async function PUT(request: Request) {
     }
 
     return NextResponse.json({ success: true, data: result.data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Admin Coupons] Error updating coupon:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to update coupon" },
+      { error: error instanceof Error ? error.message : "Failed to update coupon" },
       { status: 500 }
     );
   }
@@ -185,10 +185,10 @@ export async function DELETE(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Admin Coupons] Error deleting coupon:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to delete coupon" },
+      { error: error instanceof Error ? error.message : "Failed to delete coupon" },
       { status: 500 }
     );
   }

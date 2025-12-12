@@ -56,7 +56,7 @@ interface PageProps {
   locations: Tables<"locations">[];
   projects: Tables<"projects">[];
   userId: string;
-  clusters: Tables<"clusters_get">[] | any[];
+  clusters: Tables<"clusters_get">[];
   products: Tables<"products">[];
   role?: "user" | "admin";
   allUsers?: Array<{

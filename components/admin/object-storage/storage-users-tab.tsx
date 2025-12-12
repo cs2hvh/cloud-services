@@ -210,6 +210,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
   // Apply filters and pagination whenever search or sort changes
   useEffect(() => {
     updatePagination(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, sortBy]);
 
   const getStatusColor = (status: string) => {

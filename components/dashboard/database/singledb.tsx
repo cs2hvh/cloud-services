@@ -158,6 +158,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         intervalRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ Proper dependency
 
   // Copy to clipboard helper

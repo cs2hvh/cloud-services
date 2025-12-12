@@ -45,7 +45,7 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
       if (response.data.local) {
         setSpectrumApp(response.data.local);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Failed to refresh app data:", error);
       toast.error("Failed to refresh app data");
     } finally {

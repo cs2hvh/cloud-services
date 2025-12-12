@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "motion/react";
-import { Ticket, Plus, Search, Pencil, Trash2, Calendar, DollarSign, Users, AlertCircle, Eye } from "lucide-react";
+import { Ticket, Plus, Search, Pencil, Trash2, Calendar, Users, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +31,7 @@ interface Coupon {
   id: string;
   code: string;
   amount: number;
-  redeem_by: any[];
+  redeem_by: Array<{ email: string; redeemed_at: string }>;
   valid_till: string;
   coupon_type: string;
   max_redemptions: number | null;
@@ -80,9 +80,9 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
       } else {
         toast.error(res.data.error || "Failed to delete coupon");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting coupon:", error);
-      toast.error(error.response?.data?.error || "Failed to delete coupon");
+      toast.error((error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to delete coupon");
     } finally {
       setLoading(false);
     }
@@ -351,7 +351,7 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
           <div className="mt-4">
             {selectedCouponForView && Array.isArray(selectedCouponForView.redeem_by) && selectedCouponForView.redeem_by.length > 0 ? (
               <div className="space-y-2">
-                {selectedCouponForView.redeem_by.map((user: any, index: number) => (
+                {selectedCouponForView.redeem_by.map((user: { email: string; redeemed_at: string }, index: number) => (
                   <div
                     key={index}
                     className="p-3 rounded-lg bg-black/40 border border-white/10 flex items-center justify-between"
@@ -363,7 +363,7 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
                     <div className="text-right">
                       <div className="text-xs text-neutral-400">Redeemed on</div>
                       <div className="text-sm text-white">
-                        {new Date(user.redeemedAt).toLocaleDateString("en-US", {
+                        {new Date(user.redeemed_at).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",

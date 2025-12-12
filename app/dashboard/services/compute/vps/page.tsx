@@ -56,7 +56,7 @@ export default function VPSPage() {
         throw error;
       }
 
-      setServers((data as any) || []);
+      setServers(data || []);
       console.log('[VPS Page] Loaded servers:', data?.length || 0);
     } catch (err) {
       console.error("Failed to load servers:", err);
@@ -100,8 +100,8 @@ export default function VPSPage() {
 
       toast.success(`Server ${action} successful`);
       await loadServers();
-    } catch (err: any) {
-      toast.error(err.message || `Failed to ${action} server`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : `Failed to ${action} server`);
     } finally {
       setActingId(null);
     }

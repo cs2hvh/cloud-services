@@ -479,10 +479,10 @@ export async function POST(req: NextRequest) {
     const startUpid = (startRes as any)?.data;
     if (startUpid) await waitTask(apiBase, node, startUpid, auth, dispatcher, 60000).catch(() => {});
 
-    let details: any = null;
+    let details: Record<string, unknown> | null = null;
     try {
       const cur = await fetchJson(apiBase, `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${newid}/status/current`, auth, dispatcher);
-      details = (cur as any)?.data ?? cur;
+      details = (cur as { data?: Record<string, unknown> })?.data ?? (cur as Record<string, unknown>);
     } catch {}
 
     const responsePayload = {
@@ -507,20 +507,20 @@ export async function POST(req: NextRequest) {
           .eq("id", reservationId);
         if (updErr) db.error = updErr.message; else db.saved = true;
       }
-    } catch (e: any) {
-      db.error = e?.message || String(e);
+    } catch (e: unknown) {
+      db.error = e instanceof Error ? e.message : String(e);
     }
 
     return Response.json({ ...responsePayload, db, pricing: { hourlyCost, initialCharge: hourlyCost * minimumHours } });
-  } catch (e: any) {
+  } catch (e: unknown) {
     try {
       if (reservationId != null) {
         await supabase
           .from("servers")
-          .update({ status: "failed", details: { error: e?.message } as any })
+          .update({ status: "failed", details: { error: e instanceof Error ? e.message : String(e) } })
           .eq("id", reservationId);
       }
     } catch {}
-    return Response.json({ ok: false, error: e?.message, errorDetails: serializeError(e) }, { status: 500 });
+    return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e), errorDetails: serializeError(e) }, { status: 500 });
   }
 }

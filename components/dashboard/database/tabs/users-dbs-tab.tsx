@@ -128,6 +128,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   useEffect(() => {
     fetchUsers();
     fetchDatabases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
 
   // Create user

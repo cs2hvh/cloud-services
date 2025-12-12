@@ -93,10 +93,10 @@ export async function GET(request: Request) {
     );
 
     // Enhance data with emails
-    const enhancedData = data?.map((db:any) => ({
+    const enhancedData = data?.map((db) => ({
       ...db,
       owner_email: emailMap.get(db.owner_id) || null,
-      owner_username: db.user_profiles?.username || null,
+      owner_username: (db.user_profiles as { username?: string } | null)?.username || null,
     }));
 
     return NextResponse.json({

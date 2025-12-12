@@ -31,11 +31,24 @@ const couponSchema = z.object({
   is_active: z.boolean(),
 });
 
+interface Coupon {
+  id: string;
+  code: string;
+  amount: number;
+  redeem_by: Array<{ email: string; redeemed_at: string }>;
+  valid_till: string;
+  coupon_type: string;
+  max_redemptions: number | null;
+  is_active: boolean;
+  created_at: string;
+  redemption_count?: number;
+}
+
 interface EditCouponDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  coupon: any;
-  onCouponUpdated: (coupon: any) => void;
+  coupon: Coupon | null;
+  onCouponUpdated: (coupon: Coupon) => void;
 }
 
 export default function EditCouponDialog({
@@ -68,6 +81,8 @@ export default function EditCouponDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!coupon) return;
+
     const data = {
       id: coupon.id,
       amount: parseFloat(formData.amount),
@@ -96,9 +111,9 @@ export default function EditCouponDialog({
       } else {
         toast.error(res.data.error || "Failed to update coupon");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating coupon:", error);
-      toast.error(error.response?.data?.error || "Failed to update coupon");
+      toast.error((error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to update coupon");
     } finally {
       setLoading(false);
     }

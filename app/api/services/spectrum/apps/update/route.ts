@@ -15,8 +15,8 @@ export async function PUT(req: NextRequest) {
 
     const result = await updateSpectrumApp(validation.data);
     return NextResponse.json(result);
-  } catch (err: any) {
-    const msg = err?.response?.data?.errors?.[0]?.message || err?.message || "Unknown error";
+  } catch (err: unknown) {
+    const msg = (err as { response?: { data?: { errors?: Array<{ message?: string }> } }; message?: string }).response?.data?.errors?.[0]?.message || (err instanceof Error ? err.message : null) || "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

@@ -74,8 +74,8 @@ export default function BillingTabs({
       if (typeof data.balance === "number") setBalance(data.balance);
       pushToast("success", "Top-up successful");
       setAmount("");
-    } catch (_err: any) {
-      pushToast("error", _err?.message || "Failed to top up");
+    } catch (_err: unknown) {
+      pushToast("error", _err instanceof Error ? _err.message : "Failed to top up");
     } finally {
       setLoadingTopup(false);
     }
@@ -92,8 +92,8 @@ export default function BillingTabs({
       } else {
         pushToast("error", res.data.error || "Failed to redeem coupon");
       }
-    } catch (error: any) {
-      pushToast("error", error.response?.data?.error || "Failed to redeem coupon");
+    } catch (error: unknown) {
+      pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
     }
   };
 
@@ -319,8 +319,8 @@ function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message
       pushToast("success", "Payment method saved");
       setOpen(false);
       setForm({ cardNumber: "", expiry: "", cvv: "" });
-    } catch (_err: any) {
-      pushToast("error", _err?.message || "Error saving payment method");
+    } catch (_err: unknown) {
+      pushToast("error", _err instanceof Error ? _err.message : "Error saving payment method");
     } finally {
       setLoading(false);
     }

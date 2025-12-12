@@ -212,6 +212,7 @@ export default function DDoSUsersTab({ all_apps }: DDoSUsersTabProps) {
   // Apply filters and pagination whenever search or sort changes
   useEffect(() => {
     updatePagination(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, sortBy]);
 
   const getStatusColor = (status: string | null) => {

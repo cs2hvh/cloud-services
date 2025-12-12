@@ -137,10 +137,10 @@ interface InsightGraphsData {
   disk: GraphData | null;
 }
 
-function SingleCluster({ 
+function SingleCluster({
   clusterId,
   userProjects,
-}: { 
+}: {
   clusterId: string;
   userProjects: Project[];
 }) {
@@ -156,18 +156,21 @@ function SingleCluster({
   const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  
+
   // Tab state
   const [activeTab, setActiveTab] = useState<string>("cluster");
-  
+
   // Insight tab state
-  const [selectedNodeForInsight, setSelectedNodeForInsight] = useState<string>("");
+  const [selectedNodeForInsight, setSelectedNodeForInsight] =
+    useState<string>("");
   const [insightTimeRange, setInsightTimeRange] = useState<number>(1);
-  const [insightGraphsData, setInsightGraphsData] = useState<InsightGraphsData>({
-    cpu: null,
-    memory: null,
-    disk: null,
-  });
+  const [insightGraphsData, setInsightGraphsData] = useState<InsightGraphsData>(
+    {
+      cpu: null,
+      memory: null,
+      disk: null,
+    }
+  );
   const [insightLoading, setInsightLoading] = useState(false);
 
   // Settings tab state
@@ -179,7 +182,10 @@ function SingleCluster({
   // Delete confirmation dialogs state
   const [deleteNodeDialog, setDeleteNodeDialog] = useState(false);
   const [deleteClusterDialog, setDeleteClusterDialog] = useState(false);
-  const [nodeToDelete, setNodeToDelete] = useState<{ droplet_id: string; index: number } | null>(null);
+  const [nodeToDelete, setNodeToDelete] = useState<{
+    droplet_id: string;
+    index: number;
+  } | null>(null);
 
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -308,7 +314,7 @@ function SingleCluster({
   const onDeleteNode = async () => {
     if (!nodeToDelete) return;
 
-    const { droplet_id} = nodeToDelete;
+    const { droplet_id } = nodeToDelete;
     setLoading(true);
     setDeleteNodeDialog(false);
 
@@ -345,6 +351,8 @@ function SingleCluster({
       return;
     }
 
+    debugger
+
     setLoading(true);
     setDeleteClusterDialog(false);
 
@@ -353,7 +361,7 @@ function SingleCluster({
         droplet_id: nodesData[i].droplet_id,
       });
     }
-    
+
     const delCluster = await api.post(`/services/kubernetes/clusters/delete`, {
       cluster_id: clusterId,
     });
@@ -373,25 +381,34 @@ function SingleCluster({
     }
 
     setInsightLoading(true);
-    
+
     try {
       // Fetch all three metrics in parallel
       const [cpuRes, memoryRes, diskRes] = await Promise.all([
-        api.post<MonitoringResponse>(`/services/kubernetes/clusters/monitering`, {
-          droplet_id: dropletId,
-          type: "cpu",
-          hrs: hrs,
-        }),
-        api.post<MonitoringResponse>(`/services/kubernetes/clusters/monitering`, {
-          droplet_id: dropletId,
-          type: "memory_free",
-          hrs: hrs,
-        }),
-        api.post<MonitoringResponse>(`/services/kubernetes/clusters/monitering`, {
-          droplet_id: dropletId,
-          type: "filesystem_free",
-          hrs: hrs,
-        }),
+        api.post<MonitoringResponse>(
+          `/services/kubernetes/clusters/monitering`,
+          {
+            droplet_id: dropletId,
+            type: "cpu",
+            hrs: hrs,
+          }
+        ),
+        api.post<MonitoringResponse>(
+          `/services/kubernetes/clusters/monitering`,
+          {
+            droplet_id: dropletId,
+            type: "memory_free",
+            hrs: hrs,
+          }
+        ),
+        api.post<MonitoringResponse>(
+          `/services/kubernetes/clusters/monitering`,
+          {
+            droplet_id: dropletId,
+            type: "filesystem_free",
+            hrs: hrs,
+          }
+        ),
       ]);
 
       // Transform the data
@@ -428,8 +445,6 @@ function SingleCluster({
     }
   };
 
-
-
   // Update cluster project
   const updateClusterProject = async () => {
     if (!selectedProjectId) {
@@ -444,10 +459,13 @@ function SingleCluster({
 
     setLoading(true);
     try {
-      const res = await api.post("/services/kubernetes/clusters/update_project", {
-        cluster_id: clusterId,
-        project_id: selectedProjectId,
-      });
+      const res = await api.post(
+        "/services/kubernetes/clusters/update_project",
+        {
+          cluster_id: clusterId,
+          project_id: selectedProjectId,
+        }
+      );
 
       if (res.status === 200) {
         toast.success("Cluster project updated successfully");
@@ -624,17 +642,30 @@ function SingleCluster({
         )}
 
         {ready && (
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-3 bg-white/10">
-              <TabsTrigger value="cluster" className="data-[state=active]:bg-white data-[state=active]:text-black">
+              <TabsTrigger
+                value="cluster"
+                className="data-[state=active]:bg-white data-[state=active]:text-black"
+              >
                 <FolderOpen className="h-4 w-4 mr-2" />
                 Cluster
               </TabsTrigger>
-              <TabsTrigger value="insight" className="data-[state=active]:bg-white data-[state=active]:text-black">
+              <TabsTrigger
+                value="insight"
+                className="data-[state=active]:bg-white data-[state=active]:text-black"
+              >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Insight
               </TabsTrigger>
-              <TabsTrigger value="settings" className="data-[state=active]:bg-white data-[state=active]:text-black">
+              <TabsTrigger
+                value="settings"
+                className="data-[state=active]:bg-white data-[state=active]:text-black"
+              >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
               </TabsTrigger>
@@ -665,8 +696,8 @@ function SingleCluster({
                   </button>
                 </div>
                 <p className="text-sm text-white/60">
-                  This file contains credentials for accessing your cluster. Store
-                  it securely and avoid committing it to version control.
+                  This file contains credentials for accessing your cluster.
+                  Store it securely and avoid committing it to version control.
                 </p>
               </motion.section>
 
@@ -742,7 +773,9 @@ function SingleCluster({
                           </td>
                           <td className="py-3 pr-0 text-right">
                             <button
-                              onClick={() => handleDeleteNodeClick(n.droplet_id, index)}
+                              onClick={() =>
+                                handleDeleteNodeClick(n.droplet_id, index)
+                              }
                               disabled={loading}
                               className="cursor-pointer inline-flex items-center gap-1 rounded-lg text-red-400 border border-2 border-red-500 px-2.5 py-1.5 text-xs hover:bg-red-500/20 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
@@ -783,8 +816,12 @@ function SingleCluster({
                       </SelectTrigger>
                       <SelectContent>
                         {nodesData?.map((node, index) => (
-                          <SelectItem key={node.droplet_id} value={node.droplet_id}>
-                            {node.public_ip} ({index === 0 ? "control-plane" : "worker"})
+                          <SelectItem
+                            key={node.droplet_id}
+                            value={node.droplet_id}
+                          >
+                            {node.public_ip} (
+                            {index === 0 ? "control-plane" : "worker"})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -811,7 +848,9 @@ function SingleCluster({
                   <div className="flex items-center justify-center py-20">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <p className="text-white/60 text-sm">Loading monitoring data...</p>
+                      <p className="text-white/60 text-sm">
+                        Loading monitoring data...
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -854,13 +893,14 @@ function SingleCluster({
 
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Select
-                  
                     value={selectedProjectId}
                     onValueChange={setSelectedProjectId}
-                    
                   >
                     <SelectTrigger className="w-full sm:flex-1 bg-white/10 border-white/20 text-white">
-                      <SelectValue placeholder="Select a project" className="text-white"/>
+                      <SelectValue
+                        placeholder="Select a project"
+                        className="text-white"
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {projects.map((project) => (
@@ -896,8 +936,8 @@ function SingleCluster({
                       Danger Zone
                     </h3>
                     <p className="text-sm text-red-300/80">
-                      Deleting this cluster will permanently remove all nodes and
-                      data. This action cannot be undone.
+                      Deleting this cluster will permanently remove all nodes
+                      and data. This action cannot be undone.
                     </p>
                   </div>
                 </div>
@@ -920,14 +960,21 @@ function SingleCluster({
       <AlertDialog open={deleteNodeDialog} onOpenChange={setDeleteNodeDialog}>
         <AlertDialogContent className="bg-slate-900 border-slate-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete Node</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">
+              Delete Node
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-300">
-              Are you sure you want to delete this node? This action cannot be undone.
+              Are you sure you want to delete this node? This action cannot be
+              undone.
               {nodeToDelete && (
                 <div className="mt-2 p-2 bg-slate-800 rounded text-sm">
                   <span className="text-slate-400">Node IP: </span>
                   <span className="text-white font-mono">
-                    {nodesData?.find(n => n.droplet_id === nodeToDelete.droplet_id)?.public_ip}
+                    {
+                      nodesData?.find(
+                        (n) => n.droplet_id === nodeToDelete.droplet_id
+                      )?.public_ip
+                    }
                   </span>
                 </div>
               )}
@@ -948,14 +995,22 @@ function SingleCluster({
       </AlertDialog>
 
       {/* Delete Cluster Confirmation Dialog */}
-      <AlertDialog open={deleteClusterDialog} onOpenChange={setDeleteClusterDialog}>
+      <AlertDialog
+        open={deleteClusterDialog}
+        onOpenChange={setDeleteClusterDialog}
+      >
         <AlertDialogContent className="bg-slate-900 border-slate-700">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white">Delete Cluster</AlertDialogTitle>
+            <AlertDialogTitle className="text-white">
+              Delete Cluster
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-300">
-              Are you sure you want to delete this entire cluster? This will permanently remove:
+              Are you sure you want to delete this entire cluster? This will
+              permanently remove:
               <ul className="mt-2 ml-4 list-disc text-sm space-y-1">
-                <li>All {nodesData?.length || 0} nodes (control plane and workers)</li>
+                <li>
+                  All {nodesData?.length || 0} nodes (control plane and workers)
+                </li>
                 <li>All cluster data and configurations</li>
                 <li>All associated resources</li>
               </ul>
@@ -1112,7 +1167,9 @@ function GraphCard({
         <div className="flex items-center gap-3 sm:gap-4 text-xs">
           <div>
             <span className="text-white/50">Current: </span>
-            <span className="text-white font-semibold">{latest.toFixed(2)}</span>
+            <span className="text-white font-semibold">
+              {latest.toFixed(2)}
+            </span>
           </div>
           <div>
             <span className="text-white/50">Avg: </span>
@@ -1123,8 +1180,14 @@ function GraphCard({
 
       <div className="h-[300px] md:h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+          <LineChart
+            data={chartData}
+            margin={{ top: 5, right: 10, bottom: 5, left: 0 }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="rgba(255,255,255,0.1)"
+            />
             <XAxis
               dataKey="time"
               tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 10 }}
@@ -1134,7 +1197,7 @@ function GraphCard({
             <YAxis
               tick={{ fill: "rgba(255,255,255,0.6)", fontSize: 10 }}
               width={50}
-              domain={['auto', 'auto']}
+              domain={["auto", "auto"]}
             />
             <Tooltip
               contentStyle={{
@@ -1146,7 +1209,7 @@ function GraphCard({
               labelStyle={{ color: "rgba(255,255,255,0.8)" }}
               itemStyle={{ color: color }}
             />
-            {data.datasets.map((dataset ) => (
+            {data.datasets.map((dataset) => (
               <Line
                 key={dataset.label}
                 type="monotone"

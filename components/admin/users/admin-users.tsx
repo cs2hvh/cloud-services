@@ -228,6 +228,7 @@ export default function AdminUsers({ all_users }: PageProps) {
   // Apply filters and pagination whenever search or role filter changes
   useEffect(() => {
     updatePagination(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, roleFilter]);
 
   const handleOpenRoleDialog = (user: Admin_User) => {

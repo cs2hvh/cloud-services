@@ -66,7 +66,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
 
     try {
       const dns = spectrumApp.dns as { name: unknown; type: string; decrypted_name?: string } | null;
-      const payload:any= { app_id: spectrumApp.spectrum_id };
+      const payload: Record<string, unknown> = { app_id: spectrumApp.spectrum_id };
 
       switch (setting) {
         case "dns":
@@ -110,6 +110,8 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
           throw new Error("Unknown setting");
       }
 
+      payload.argo_smart_routing=true;
+
       const response = await axios.put(
         "/api/services/spectrum/apps/update",
         payload
@@ -129,10 +131,10 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
       } else {
         throw new Error("Update failed");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMsg =
-        error.response?.data?.error ||
-        error.message ||
+        (error as { response?: { data?: { error?: string } } }).response?.data?.error ||
+        (error instanceof Error ? error.message : null) ||
         `Failed to update ${setting}`;
       toast.error(errorMsg);
       console.error("Update error:", error);

@@ -175,6 +175,20 @@ export interface ObjectSpaceBucket {
   //parent_access_key_id?: string | null;
 }
 
+export interface Promocodes {
+  id: string;
+  code: string;
+  amount: number;
+  redeem_by: Json;
+  valid_till: string;
+  coupon_type: string;
+  max_redemptions: number | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  is_active: boolean;
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -1039,7 +1053,7 @@ export type Database = {
           id: string; // surrogate uuid
           spectrum_id: string; // cloudflare id
           dns:  {name: string |EncryptedData, type: "A" | "CNAME",original_name?:string | null,original_protocol?:string | null}; // {name: string (encrypted), type: "A" | "CNAME"}
-          tls: "off" | "full";
+          tls: "off" | "full"|"strict"|"flexible";
           edge_ips: Json; // {type: string, connectivity: string}
           ip_firewall: boolean;
           traffic_type: string;
@@ -1056,7 +1070,7 @@ export type Database = {
           id?: string;
           spectrum_id: string;
           dns: Json; // {name: string (encrypted), type: "A" | "CNAME"}
-          tls?: "off" | "full";
+           tls: "off" | "full"|"strict"|"flexible";
           edge_ips?: Json; // {type: string, connectivity: string}
           ip_firewall?: boolean;
           traffic_type?: string;
@@ -1073,7 +1087,7 @@ export type Database = {
           id?: string;
           spectrum_id?: string;
           dns?: Json; // {name: string (encrypted), type: "A" | "CNAME"}
-          tls?: "off" | "full";
+           tls: "off" | "full"|"strict"|"flexible";
           edge_ips?: Json; // {type: string, connectivity: string}
           ip_firewall?: boolean;
           traffic_type?: string;

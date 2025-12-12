@@ -18,8 +18,8 @@ export async function GET(req: NextRequest) {
       await client.send(new HeadBucketCommand({ Bucket: name }));
       // If it succeeds (200), bucket exists
       return NextResponse.json({ exists: true, statusCode: 200 });
-    } catch (err: any) {
-      const status = err?.$metadata?.httpStatusCode ?? err?.statusCode ?? null;
+    } catch (err: unknown) {
+      const status = (err as { $metadata?: { httpStatusCode?: number }; statusCode?: number }).$metadata?.httpStatusCode ?? (err as { statusCode?: number }).statusCode ?? null;
       if (status === 404) {
         // Bucket does not exist
         return NextResponse.json({ exists: false, statusCode: 404 });
@@ -31,9 +31,9 @@ export async function GET(req: NextRequest) {
 
       // Unknown error: log and fail conservatively (treat as existing)
       console.error("check-bucket error:", err);
-      return NextResponse.json({ exists: true, statusCode: status, error: String(err?.message || err) });
+      return NextResponse.json({ exists: true, statusCode: status, error: String(err instanceof Error ? err.message : err) });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("check-bucket handler error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

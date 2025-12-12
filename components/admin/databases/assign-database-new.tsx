@@ -203,9 +203,9 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: Adm
         toast.success(response.data.message || "creating database for user");
         router.push("/dashboard/admin/databases");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log(error);
-      toast.error(error.message || "Failed to assign database. Please try again later.");
+      toast.error(error instanceof Error ? error.message : "Failed to assign database. Please try again later.");
     } finally {
       setIsLoading(false);
     }

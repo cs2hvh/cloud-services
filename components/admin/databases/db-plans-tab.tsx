@@ -172,19 +172,30 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
           updatePagination(1);
         }
       }
-    } catch (error: any) {
-      console.error("Error deleting product:", error);
-      
-      // Check if product is in use
-      if (error.response?.data?.inUse) {
-        toast.error(
-          `Cannot delete: ${error.response.data.count} database(s) are using this plan`
-        );
-      } else {
-        toast.error(
-          error.response?.data?.error || "Failed to delete database plan"
-        );
+    } catch (err) {
+      console.error("Error deleting product:", err);
+
+      // Narrow the error to AxiosError shape
+      if (typeof err === "object" && err !== null && "response" in err) {
+        const response = (err as any).response;
+
+        const inUse = response?.data?.inUse;
+        const count = response?.data?.count;
+        const message = response?.data?.error;
+
+        if (inUse) {
+          toast.error(
+            `Cannot delete: ${count} database(s) are using this plan`
+          );
+          return;
+        }
+
+        toast.error(message || "Failed to delete database plan");
+        return;
       }
+
+      // fallback when error is not axios-like
+      toast.error("Failed to delete database plan");
     } finally {
       setIsDeleting(false);
     }

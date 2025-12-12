@@ -2353,6 +2353,8 @@ export const Spectrum_Apps = {
   },
   update: async (spectrum_id: string, patch: TablesUpdate<"spectrum_apps">) => {
     try {
+
+      console.log('reached update spectrum app', spectrum_id, patch);
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("spectrum_apps")
@@ -2417,7 +2419,7 @@ export const Spectrum_Apps = {
       const { data, error } = await supabase
         .from("spectrum_apps")
         .update({ status: 'deleted' })
-        .eq("id", spectrum_id)
+        .eq("spectrum_id", spectrum_id)
         .select();
       if (error) return { success: false, error: error.message };
       return { success: true, data };

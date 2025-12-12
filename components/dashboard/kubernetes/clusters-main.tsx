@@ -4,7 +4,6 @@ import { motion } from "motion/react";
 import { DockIcon, Plus } from "lucide-react";
 import Link from "next/link";
 import { Tables } from "@/lib/supabase/types";
-import { format } from "date-fns";
 
 type ClusterData = Tables<"clusters_get">;
 
@@ -34,7 +33,7 @@ const downloadKubeconfig = async (clusterId: string) => {
 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
-  } catch (error) {
+  } catch {
     // Silent error handling - could be replaced with toast notification
   }
 };

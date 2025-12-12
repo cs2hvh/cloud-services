@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
   Search,
@@ -99,7 +99,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     return filtered;
   };
 
-  const updatePagination = (page: number) => {
+  const updatePagination = useCallback((page: number) => {
     const filtered = getFilteredAndSortedDatabases();
     const startIndex = (page - 1) * DATABASES_PER_PAGE;
     const endIndex = startIndex + DATABASES_PER_PAGE;
@@ -109,7 +109,8 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     setCurrentPage(page);
     setTotalPages(Math.ceil(filtered.length / DATABASES_PER_PAGE));
     // setTotalDatabases(filtered.length);
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [databases, searchQuery, sortBy]);
 
   const handleSearch = () => {
     updatePagination(1);
@@ -213,7 +214,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   // Apply filters and pagination whenever search or sort changes
   useEffect(() => {
     updatePagination(1);
-  }, [searchQuery, sortBy]);
+  }, [searchQuery, sortBy, updatePagination]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

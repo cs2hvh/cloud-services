@@ -1,3 +1,10 @@
+import { NextResponse } from "next/server";
+
+// This route is temporarily disabled
+export async function GET() {
+  return NextResponse.json({ error: "Not implemented" }, { status: 501 });
+}
+
 // import { NextRequest, NextResponse } from "next/server";
 // import { authenticateUser } from "@/lib/auth/server-auth";
 // import { Spectrum_Apps } from "@/lib/supabase/queries";

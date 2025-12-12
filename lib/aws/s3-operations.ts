@@ -52,11 +52,11 @@ export async function createBucket(
       })
     );
     return { success: true };
-  }catch (_error: any) {
+  }catch (_error: unknown) {
     console.error('Error creating bucket:',_error);
 
     let message = 'Unknown error';
-    const errorCode = _error.name || 'UnknownError';
+    const errorCode = (_error as { name?: string }).name || 'UnknownError';
 
     if (_error instanceof Error) {
       message = _error.message;

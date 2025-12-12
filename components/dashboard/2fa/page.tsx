@@ -209,7 +209,7 @@ export default function EnableTotp() {
                   alt="TOTP QR Code"
                   src={qrSvg}
                   className="mt-2 border rounded-md w-48 h-48 object-contain bg-white"
-                  onError={(e) => {
+                  onError={() => {
                     console.error("QR Code failed to load:", qrSvg);
                     setError(
                       "Failed to load QR code. Please use manual entry instead."

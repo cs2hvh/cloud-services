@@ -63,6 +63,13 @@ const StatusBadge = ({ status }: { status: string }) => {
       icon: XCircle,
       text: "Failed",
     },
+     migrating: {
+      color: "text-yellow-400",
+      bg: "bg-yellow-500/20",
+      border: "border-yellow-500",
+      icon: Loader2,
+      text: "Creating",
+    },
   };
 
   const config =
@@ -74,9 +81,9 @@ const StatusBadge = ({ status }: { status: string }) => {
       className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${config.border} ${config.bg}`}
     >
       <Icon
-        className={`h-5 w-5 ${config.color} ${status === "creating" ? "animate-spin" : ""}`}
+        className={`h-5 w-5 ${config.color} ${status === "creating"||status==="migrating" ? "animate-spin" : ""}`}
       />
-      <span className={`font-semibold ${config.color}`}>{config.text}</span>
+      <span className={`font-semibold ${config.color}`}>{status}</span>
     </div>
   );
 };
@@ -121,7 +128,7 @@ export const OverviewTab = ({
       </motion.div>
 
       {/* Show content based on status */}
-      {database.status === "creating" && (
+      {(database.status === "creating" || database.status === "migrating") && (
         <motion.div
           key="creating"
           initial={{ opacity: 0, scale: 0.95 }}

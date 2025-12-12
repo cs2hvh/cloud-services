@@ -28,7 +28,6 @@ import {
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Card } from "@/components/ui/card";
 
 type AppSidebarProps = {
   user: {

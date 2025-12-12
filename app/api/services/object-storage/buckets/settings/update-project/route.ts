@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = validateRequest(updateBucketProjectSchema, body);
     if (!parsed.success) return parsed.response;
-    const { bucket_id, project_id } = parsed.data as any;
+    const { bucket_id, project_id } = parsed.data as { bucket_id: string; project_id: string | null };
 
     console.log("📁 Updating bucket project assignment:", bucket_id, "to project:", project_id);
 
@@ -70,12 +70,12 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("❌ Error updating bucket project assignment:", error);
     return NextResponse.json(
       {
         error: "Failed to update project assignment",
-        message: error.message,
+        message: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

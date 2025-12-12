@@ -3,13 +3,13 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
-import { checkAdminAuth } from "@/app/api/admin/network-ddos/apps/delete/route";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Spectrum_Apps, Billing } from "@/lib/supabase/queries";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
-  const {authorized}=await checkAdminAuth();
+  const {ok: authorized}=await requireAdmin();
   if (!auth.authenticated) return auth.response;
 
   try {
@@ -57,8 +57,8 @@ export async function POST(req: NextRequest) {
         failOnInsufficient: false,
       });
       console.log(`[deleteSpectrumApp] Billing closed`, billingResult);
-    } catch (billErr: any) {
-      console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr?.message || billErr}`);
+    } catch (billErr: unknown) {
+      console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr instanceof Error ? billErr.message : String(billErr)}`);
     }
 
     const result = await deleteSpectrumApp(validation.data.app_id);

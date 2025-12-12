@@ -57,9 +57,8 @@ export async function POST(req: Request) {
   // Basic rate limiting per IP/token
   const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
   try {
-    // Cast to any to satisfy type; limiter reads headers only
     await limiter.check(req as NextRequest, 10);
-  } catch (_) {
+  } catch {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   // Check authentication
@@ -127,8 +126,8 @@ export async function POST(req: Request) {
       serviceId: clusterId,
       addActive: Billing.add_active_kubernetes,
     });
-  } catch (e: any) {
-    return NextResponse.json({ error: "Post-provision billing failed", details: e?.message ?? String(e) }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: "Post-provision billing failed", details: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });

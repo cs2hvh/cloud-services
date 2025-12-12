@@ -201,6 +201,7 @@ export const NetworkTab = ({
     } else {
       fetchNetworkRules();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
 
   // Format date

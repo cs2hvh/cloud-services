@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries";
 
 // GET: Get available coupons for current user
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -17,10 +17,10 @@ export async function GET(request: Request) {
 
     const coupons = await Promocodes.get_available_for_user(user.id, user.email);
     return NextResponse.json({ success: true, data: coupons });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[User Coupons] Error fetching available coupons:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to fetch coupons" },
+      { error: error instanceof Error ? error.message : "Failed to fetch coupons" },
       { status: 500 }
     );
   }

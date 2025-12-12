@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "motion/react";
 import {
   Search,
@@ -99,7 +99,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     return filtered;
   };
 
-  const updatePagination = (page: number) => {
+  const updatePagination = useCallback((page: number) => {
     const filtered = getFilteredProducts();
     const startIndex = (page - 1) * PRODUCTS_PER_PAGE;
     const endIndex = startIndex + PRODUCTS_PER_PAGE;
@@ -108,7 +108,8 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
     setProducts(paginatedProducts);
     setCurrentPage(page);
     setTotalPages(Math.ceil(filtered.length / PRODUCTS_PER_PAGE));
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productsList, searchQuery]);
 
   const handleSearch = () => {
     updatePagination(1);
@@ -145,17 +146,17 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
           updatePagination(1);
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error deleting product:", error);
       
       // Check if product is in use
-      if (error.response?.data?.inUse) {
+      if ((error as { response?: { data?: { inUse?: boolean; count?: number; error?: string } } }).response?.data?.inUse) {
         toast.error(
-          `Cannot delete: ${error.response.data.count} cluster(s) are using this plan`
+          `Cannot delete: ${(error as { response?: { data?: { count?: number } } }).response?.data?.count} cluster(s) are using this plan`
         );
       } else {
         toast.error(
-          error.response?.data?.error || "Failed to delete Kubernetes plan"
+          (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to delete Kubernetes plan"
         );
       }
     } finally {
@@ -182,7 +183,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
   // Apply filters and pagination whenever search changes
   useEffect(() => {
     updatePagination(1);
-  }, [searchQuery, productsList]);
+  }, [searchQuery, productsList, updatePagination]);
 
   return (
     <>
@@ -275,9 +276,9 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                               </div>
                             </div>
                           </div>
-                          {(product as any).slug && (
+                          {(product as { slug?: string }).slug && (
                             <Badge className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border-0 w-fit text-xs px-2 py-0.5">
-                              {(product as any).slug}
+                              {(product as { slug?: string }).slug}
                             </Badge>
                           )}
                         </div>

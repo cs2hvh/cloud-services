@@ -163,7 +163,7 @@ export const SettingsStep = ({
               </Label>
               <p className="text-sm text-white/60 mt-1">
                 Enable the protocol version that your origin supports, if any.
-                This relays the client's original connection information. It is
+                This relays the client&apos;s original connection information. It is
                 only supported for TCP and UDP applications.
               </p>
             </div>

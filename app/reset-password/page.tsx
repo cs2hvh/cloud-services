@@ -138,8 +138,8 @@ export default function ResetPasswordPage() {
           setOtpExpiresAt(response.data.expiresAt);
         }
       }
-    } catch (error: any) {
-      const message = error.response?.data?.message || "Failed to send reset code. Please try again.";
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message || "Failed to send reset code. Please try again.";
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -155,8 +155,8 @@ export default function ResetPasswordPage() {
         toast.success("Password reset successfully! You can now sign in.");
         router.push("/signin");
       }
-    } catch (error: any) {
-      const message = error.response?.data?.message || "Failed to reset password. Please try again.";
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message || "Failed to reset password. Please try again.";
       toast.error(message);
     } finally {
       setIsLoading(false);
@@ -175,8 +175,8 @@ export default function ResetPasswordPage() {
             setOtpExpiresAt(response.data.expiresAt);
           }
         }
-      } catch (error: any) {
-        const message = error.response?.data?.message || "Failed to resend code. Please try again.";
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } }).response?.data?.message || "Failed to resend code. Please try again.";
         toast.error(message);
       } finally {
         setIsLoading(false);

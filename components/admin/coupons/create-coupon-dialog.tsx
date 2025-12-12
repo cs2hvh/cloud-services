@@ -30,10 +30,23 @@ const couponSchema = z.object({
   max_redemptions: z.number().nullable(),
 });
 
+interface Coupon {
+  id: string;
+  code: string;
+  amount: number;
+  redeem_by: Array<{ email: string; redeemed_at: string }>;
+  valid_till: string;
+  coupon_type: string;
+  max_redemptions: number | null;
+  is_active: boolean;
+  created_at: string;
+  redemption_count?: number;
+}
+
 interface CreateCouponDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCouponCreated: (coupon: any) => void;
+  onCouponCreated: (coupon: Coupon) => void;
 }
 
 export default function CreateCouponDialog({
@@ -87,9 +100,9 @@ export default function CreateCouponDialog({
       } else {
         toast.error(res.data.error || "Failed to create coupon");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating coupon:", error);
-      toast.error(error.response?.data?.error || "Failed to create coupon");
+      toast.error((error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to create coupon");
     } finally {
       setLoading(false);
     }
@@ -156,7 +169,7 @@ export default function CreateCouponDialog({
               </SelectTrigger>
               <SelectContent className="bg-neutral-900 border-white/10">
                 <SelectItem value="one-time">One-Time Use</SelectItem>
-                <SelectItem value="multi-use">Multi-Use</SelectItem>
+                {/* <SelectItem value="multi-use">Multi-Use</SelectItem> */}
                 <SelectItem value="limited">Limited Use</SelectItem>
               </SelectContent>
             </Select>

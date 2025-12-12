@@ -44,10 +44,10 @@ export async function POST(request: Request) {
       amount: result.amount,
       message: `Successfully added $${result.amount} to your balance!`
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[User Coupons] Error redeeming coupon:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to redeem coupon" },
+      { error: error instanceof Error ? error.message : "Failed to redeem coupon" },
       { status: 500 }
     );
   }

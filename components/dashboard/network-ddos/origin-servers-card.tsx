@@ -30,15 +30,17 @@ const OriginServersCard = ({ spectrumId, initialOrigins, protocol }: OriginServe
     setIsLoading(true);
 
     try {
+      debugger
         const requiredProtocol=protocol==='ssh'||protocol==='rdp'?'tcp':protocol;
       const payload = {
         app_id: spectrumId,
         origin_direct: [`${requiredProtocol}://${origins[0]}`], // Store with protocol prefix
+        argo_smart_routing:true
       };
 
       const response = await axios.put("/api/services/spectrum/apps/update", payload);
 
-      if (response.data.success) {
+      if (response.status === 200) {
         toast.success("Origin servers updated successfully");
         setEditMode(false);
       } else {

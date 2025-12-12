@@ -68,9 +68,9 @@ export function ChangePasswordDialog({ open, onOpenChange, onSuccess }: ChangePa
         });
         onSuccess?.();
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Password change error:", err);
-      const message = err.response?.data?.message || "Failed to change password";
+      const message = (err as { response?: { data?: { message?: string } } }).response?.data?.message || "Failed to change password";
       toast.error(message);
     } finally {
       setPasswordLoading(false);

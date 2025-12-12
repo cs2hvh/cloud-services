@@ -108,11 +108,11 @@ export default function EditPlanDialog({
         ram: product.resources?.ram || 4,
         storage: product.resources?.storage || 50,
         price: product.price || 25.0,
-        fixed_price: (product as any).fixed_price || 0,
+        fixed_price: (product as { fixed_price?: number }).fixed_price || 0,
         discount: product.discount || 0,
-        slug: (product as any).slug || "",
+        slug: (product as { slug?: string }).slug || "",
       });
-      setSelectedDroplet((product as any).slug || "");
+      setSelectedDroplet((product as { slug?: string }).slug || "");
     }
   }, [product]);
 

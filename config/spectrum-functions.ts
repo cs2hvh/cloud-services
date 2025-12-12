@@ -348,7 +348,7 @@ export async function updateSpectrumApp(data: UpdateSpectrumAppPayload) {
   const result = cfResp.data.result;
 
   // Build database update payload
-  const updatePayload: Record<string, unknown> = {
+  const updatePayload: any = {
     status: "updated",
   };
 

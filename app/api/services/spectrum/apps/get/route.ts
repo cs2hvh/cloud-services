@@ -3,14 +3,14 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { getSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { getSpectrumApp } from "@/config/spectrum-functions";
-import { checkAdminAuth } from "@/app/api/admin/network-ddos/apps/delete/route";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
-  const { authorized } = await checkAdminAuth();
+  const { ok: authorized } = await requireAdmin();
 
   try {
      const rl = await limitByUser(auth.user!.id, {
@@ -59,10 +59,10 @@ export async function POST(req: NextRequest) {
       cloudflare: result.cloudflare,
       local: localWithDecryptedDns,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     const msg =
-      err?.response?.data?.errors?.[0]?.message ||
-      err?.message ||
+      (err as { response?: { data?: { errors?: Array<{ message?: string }> } }; message?: string }).response?.data?.errors?.[0]?.message ||
+      (err instanceof Error ? err.message : null) ||
       "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }

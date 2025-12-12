@@ -23,7 +23,7 @@ function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
   });
 }
 
-async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostConfig) {
+async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig) {
   const tokenId = host.token_id || undefined;
   const tokenSecret = host.token_secret || undefined;
   const username = host.username || undefined;
@@ -36,8 +36,8 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
         fetch(`${apiBase}/api2/json/nodes`, {
           cache: "no-store",
           redirect: "follow",
-          ...(tokenAuth as any),
-         
+          ...tokenAuth,
+          // @ts-expect-error undici dispatcher
           dispatcher,
         })
       );
@@ -62,7 +62,7 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
     const t = await ticketRes.text();
     throw new Error(`login failed (${ticketRes.status}): ${t}`);
   }
-  const ticketJson = (await ticketRes.json()) as any;
+  const ticketJson = (await ticketRes.json()) as { data?: { ticket?: string; CSRFPreventionToken?: string } };
   const ticket = ticketJson?.data?.ticket as string | undefined;
   const csrf = ticketJson?.data?.CSRFPreventionToken as string | undefined;
   if (!ticket) throw new Error("Missing PVE ticket in response");
@@ -70,13 +70,13 @@ async function proxmoxAuthCookie(apiBase: string, dispatcher: any, host: HostCon
   return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } as HeadersInit };
 }
 
-async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: RequestInit, dispatcher?: any) {
+async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: RequestInit, dispatcher?: UndiciAgent) {
   const body = new URLSearchParams();
   Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
   const res = await withTimeout(
     fetch(`${apiBase}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...(auth.headers as any) },
+      headers: { "Content-Type": "application/x-www-form-urlencoded", ...(auth.headers as Record<string, string>) },
       body,
       redirect: "follow",
       // @ts-expect-error undici dispatcher
@@ -91,7 +91,7 @@ async function postForm(apiBase: string, path: string, form: Record<string, stri
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as any;
+  const body = (await req.json().catch(() => ({}))) as { action?: string; serverId?: string };
   const action = String(body.action || '').toLowerCase();
   const serverId = body.serverId;
 
@@ -109,9 +109,9 @@ export async function POST(req: NextRequest) {
   if (serverErr) return Response.json({ ok: false, error: serverErr.message }, { status: 500 });
   if (!server) return Response.json({ ok: false, error: "Server not found" }, { status: 404 });
 
-  const vmid = (server as any).vmid as number | undefined;
-  const node = (server as any).node as string | undefined;
-  const hostId = (server as any).location as string | undefined;
+  const vmid = server.vmid as number | undefined;
+  const node = server.node as string | undefined;
+  const hostId = server.location as string | undefined;
   if (!vmid || !node || !hostId) return Response.json({ ok: false, error: "Missing vmid/node/location" }, { status: 400 });
 
   const { data: host, error: hostErr } = await supabase
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
     await supabase.from('servers').update({ status: newStatus }).eq('id', serverId);
 
     return Response.json({ ok: true, action, vmid, node, status: newStatus });
-  } catch (e: any) {
-    return Response.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
+  } catch (e: unknown) {
+    return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
 }
