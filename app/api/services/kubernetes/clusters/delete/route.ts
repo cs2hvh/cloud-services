@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects, Billing } from "@/lib/supabase/queries";
 import axios from "axios";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -10,6 +11,8 @@ export async function POST(req: NextRequest) {
   if (!auth.authenticated) {
     return auth.response;
   }
+
+  const adminCheck=await requireAdmin();
 
   try {
     const json = await req.json();
@@ -19,12 +22,19 @@ export async function POST(req: NextRequest) {
     // Get cluster details before deletion (including droplet IDs)
     const { data: clusterData, error: readError } = await supabase
       .from("clusters")
-      .select("cluster_name, project_id, control_plane, workers")
+      .select("cluster_name, project_id, control_plane, workers,owner_id")
       .eq("cluster_id", json.cluster_id)
       .single();
       
     if (readError)
       return NextResponse.json({ error: readError.message }, { status: 400 });
+
+    if(adminCheck.ok===false && clusterData?.owner_id!==auth.user.id){
+      return NextResponse.json(
+        { error: "Unauthorized - Admin access required" },
+        { status: 403 }
+      );
+    }
 
     const clusterName = clusterData?.cluster_name || 'Unknown';
     const projectId = clusterData?.project_id || null;
@@ -36,7 +46,7 @@ export async function POST(req: NextRequest) {
         serviceId: json.cluster_id,
       });
       const billingResult = await Billing.close_active_service("kubernetes", {
-        userId: auth.user.id,
+        userId: clusterData.owner_id,
         serviceId: json.cluster_id,
         failOnInsufficient: false,
       });

@@ -110,7 +110,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
     setTotalPages(Math.ceil(filtered.length / DATABASES_PER_PAGE));
     // setTotalDatabases(filtered.length);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [databases, searchQuery, sortBy]);
+  }, [searchQuery, sortBy, allDatabasesLocal]);
 
   const handleSearch = () => {
     updatePagination(1);
@@ -214,7 +214,8 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
   // Apply filters and pagination whenever search or sort changes
   useEffect(() => {
     updatePagination(1);
-  }, [searchQuery, sortBy, updatePagination]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, sortBy]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

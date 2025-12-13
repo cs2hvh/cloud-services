@@ -556,7 +556,7 @@ export const Billing = {
       .from(table)
       .select("user_id, service_id, hourly_rate, last_billed_at")
       .eq("service_id", params.serviceId)
-      .eq("user_id", params.userId)
+      //.eq("user_id", params.userId)
       .maybeSingle();
 
     if (getErr) {
@@ -579,7 +579,7 @@ export const Billing = {
         .from(table)
         .delete()
         .eq("service_id", params.serviceId)
-        .eq("user_id", params.userId);
+        //.eq("user_id", row?.user_id);
       return { charged: 0, newBalance: null };
     }
 
@@ -596,7 +596,7 @@ export const Billing = {
     let newBalance: number | null = null;
     if (charge > 0) {
       try {
-        newBalance = await Billing.deduct(params.userId, charge);
+        newBalance = await Billing.deduct(row.user_id, charge);
         console.log(
           `[Billing.close_active_service] Deduction successful`,
           { userId: params.userId, charge, newBalance }
@@ -620,7 +620,7 @@ export const Billing = {
       .from(table)
       .delete()
       .eq("service_id", params.serviceId)
-      .eq("user_id", params.userId);
+      //.eq("user_id", params.userId);
     if (delErr) {
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,

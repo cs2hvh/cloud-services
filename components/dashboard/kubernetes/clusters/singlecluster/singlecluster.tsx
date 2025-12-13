@@ -650,21 +650,21 @@ function SingleCluster({
             <TabsList className="grid w-full grid-cols-3 bg-white/10">
               <TabsTrigger
                 value="cluster"
-                className="data-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointer data-[state=active]:bg-white data-[state=active]:text-black"
               >
                 <FolderOpen className="h-4 w-4 mr-2" />
                 Cluster
               </TabsTrigger>
               <TabsTrigger
                 value="insight"
-                className="data-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointerdata-[state=active]:bg-white data-[state=active]:text-black"
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Insight
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
-                className="data-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointer data-[state=active]:bg-white data-[state=active]:text-black"
               >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings

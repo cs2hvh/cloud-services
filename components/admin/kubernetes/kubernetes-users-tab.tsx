@@ -132,7 +132,7 @@ export default function KubernetesUsersTab({ all_clusters }: KubernetesUsersTabP
 
     try {
       setIsDeleting(true);
-      await axios.post("/api/admin/kubernetes/clusters/delete", {
+      await axios.post("/api/services/kubernetes/clusters/delete", {
         cluster_id: selectedClusterId,
       });
 

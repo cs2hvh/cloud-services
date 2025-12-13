@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Billing, Database_Clusters } from "@/lib/supabase/queries";
 import { Encryption } from "@/config/functions";
-import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
+import {
+  createDatabaseSchema,
+  validateEngineVersion,
+} from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseUser } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/server";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { getRatesForDatabase } from "@/config/pricing";
 
 interface database_error {
   response: {
@@ -16,7 +21,7 @@ interface database_error {
 // Helper function to check if user is admin
 async function checkAdminAuth() {
   const supabase = await createClient();
-  
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -69,9 +74,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Billing: upfront and hourly (dynamic from admin pricing)
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
+      await getRatesForDatabase(validatedData.plan_id);
+
+    // Check balance BEFORE creating provider resources
+    const balCheck = await ensureBalance(validatedData.owner_id, INITIAL_COST);
+    if (!balCheck.ok) {
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          balance: balCheck.balance,
+          required: INITIAL_COST,
+        },
+        { status: 402 }
+      );
+    }
+
     // Validate that the target user exists and the project belongs to them
-   // const supabase = await createClient();
-    
+    // const supabase = await createClient();
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
     console.log("Admin creating database with data:", validatedData);
@@ -89,14 +110,20 @@ export async function POST(req: NextRequest) {
     if (database.status === 201) {
       // Encrypt sensitive data before storing
       const encryptionKey = process.env.ENCRYPTION_KEY!;
-      console.log(encryptionKey, "...........encryption key in admin create database api...........");
+      console.log(
+        encryptionKey,
+        "...........encryption key in admin create database api..........."
+      );
 
       // Encrypt public connection password
       const encryptedPublicPassword = Encryption.encrypt(
         database.data.database.connection.password,
         encryptionKey
       );
-      console.log(encryptedPublicPassword, "...........encrypted public password in admin create database api...........");
+      console.log(
+        encryptedPublicPassword,
+        "...........encrypted public password in admin create database api..........."
+      );
 
       // Encrypt private connection password
       const encryptedPrivatePassword = Encryption.encrypt(
@@ -104,13 +131,20 @@ export async function POST(req: NextRequest) {
         encryptionKey
       );
 
-      console.log(encryptedPrivatePassword, "...........encrypted private password in admin create database api...........");
+      console.log(
+        encryptedPrivatePassword,
+        "...........encrypted private password in admin create database api..........."
+      );
 
       // Encrypt user passwords
-      const encryptedUsers = database.data.database.users?.map((user: DatabaseUser) => ({
-        ...user,
-        password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
-      }));
+      const encryptedUsers = database.data.database.users?.map(
+        (user: DatabaseUser) => ({
+          ...user,
+          password: user.password
+            ? Encryption.encrypt(user.password, encryptionKey)
+            : undefined,
+        })
+      );
 
       const sendData = {
         name: database.data.database.name,
@@ -138,11 +172,63 @@ export async function POST(req: NextRequest) {
         dbs: database.data.database.db_names || [],
       };
 
-      console.log("[adminCreateDatabase] Database created successfully:", sendData);
+      console.log(
+        "[adminCreateDatabase] Database created successfully:",
+        sendData
+      );
 
       const supabase_data = await Database_Clusters.create(sendData);
 
-      console.log(supabase_data, "...........supabase admin create database response...........");
+      if (supabase_data.success) {
+        // Deduct upfront and insert into billing.active_database after provisioning
+        try {
+          const serviceId = supabase_data.data?.id ?? database.data.database.id;
+          await postProvisionBilling({
+            userId: validatedData.owner_id,
+            initialCost: INITIAL_COST,
+            hourlyRate: HOURLY_RATE,
+            serviceId,
+            addActive: Billing.add_active_database,
+          });
+        } catch (e) {
+          const message =
+            e instanceof Error
+              ? e.message
+              : typeof e === "string"
+                ? e
+                : JSON.stringify(e);
+
+          return NextResponse.json(
+            {
+              error: "Post-provision billing failed",
+              details: message,
+            },
+            { status: 500 }
+          );
+        }
+        return NextResponse.json(
+          {
+            data: supabase_data.data,
+            message: "database creation started",
+          },
+          { status: 200 }
+        );
+      } else {
+        // ✅ Handle Supabase insertion failure
+        console.error(
+          "[createDatabase] Supabase insertion failed:",
+          supabase_data.error
+        );
+        return NextResponse.json(
+          {
+            error: "Failed to save database cluster to database",
+            details: supabase_data.error,
+          },
+          { status: 500 }
+        );
+      }
+
+      // console.log(supabase_data, "...........supabase admin create database response...........");
 
       if (supabase_data.success) {
         return NextResponse.json(
@@ -154,7 +240,10 @@ export async function POST(req: NextRequest) {
         );
       } else {
         // ✅ Handle Supabase insertion failure
-        console.error("[adminCreateDatabase] Supabase insertion failed:", supabase_data.error);
+        console.error(
+          "[adminCreateDatabase] Supabase insertion failed:",
+          supabase_data.error
+        );
         return NextResponse.json(
           {
             error: "Failed to save database cluster to database",
@@ -167,13 +256,19 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;
-      console.log(message, "..............admin database creation error..........");
+      console.log(
+        message,
+        "..............admin database creation error.........."
+      );
       return NextResponse.json(
         { error: message ?? "Invalid request" },
         { status: 400 }
       );
     } else {
-      console.log("unknown error occurred in admin database creation", "..............error..........");
+      console.log(
+        "unknown error occurred in admin database creation",
+        "..............error.........."
+      );
       return NextResponse.json(
         { error: "Unknown error occurred" },
         { status: 400 }

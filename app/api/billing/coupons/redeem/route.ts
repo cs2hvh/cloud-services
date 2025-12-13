@@ -1,17 +1,32 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries";
+import { limitByUser } from "@/lib/cooldown/userbased";
 
 // POST: Redeem a coupon code
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     if (!user || !user.email) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rl = await limitByUser(user.id, {
+      prefix: "rl:bucket-create",
+      limit: 3,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
       return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
+        {
+          error: "Too Many Requests",
+          message: `Retry after ${rl.retryAfterSec}s`,
+        },
+        { status: 429 }
       );
     }
 
@@ -38,16 +53,19 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    return NextResponse.json({
+      success: true,
       balance: result.balance,
       amount: result.amount,
-      message: `Successfully added $${result.amount} to your balance!`
+      message: `Successfully added $${result.amount} to your balance!`,
     });
   } catch (error: unknown) {
     console.error("[User Coupons] Error redeeming coupon:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to redeem coupon" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to redeem coupon",
+      },
       { status: 500 }
     );
   }

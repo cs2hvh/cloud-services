@@ -42,6 +42,7 @@ export const submitDatabaseAssignment = async (
     region: state.selectedLocation,
     project_id: state.selectedProject,
     owner_id: state.selectedUser,
+    plan_id:selectedPlan.id
   };
 
   // Validate payload with Zod schema

@@ -220,7 +220,8 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
   // Apply filters and pagination whenever search or filter changes
   useEffect(() => {
     updatePagination(1);
-  }, [searchQuery, filterType, productsList]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, filterType]);
 
   const getDbTypeDisplay = (subtype: string) => {
     const typeMap: { [key: string]: string } = {

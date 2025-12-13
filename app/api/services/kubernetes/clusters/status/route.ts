@@ -22,7 +22,7 @@ export async function POST(
 
  // console.log("...............18.......params")
   const body = await req.json().catch(() => null);
-  console.log(body,"...............params 22222")
+ // console.log(body,"...............params 22222")
   const { data, error } = await supabase
     .from("clusters")
     .select("create_status, connect_status, verify_status, status,kubeconfig,node_config,control_plane,workers")
