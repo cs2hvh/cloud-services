@@ -21,6 +21,7 @@ const DbClusterGrid = ({
   data,
 }: {
   data: Tables<"database_clusters">[];
+  
 }) => {
   if (!data || data.length === 0) {
     return (

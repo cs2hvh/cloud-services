@@ -399,7 +399,7 @@ export type Database = {
           resources: { cpu: number; ram: number; storage: number };
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
-          slug?:string;
+         slug?:string|null;
         };
         Insert: {
           created_at?: string | null;
@@ -413,7 +413,7 @@ export type Database = {
           resources: { cpu: number; ram: number; storage: number };
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
-           slug?:string;
+           slug?:string|null;
         };
         Update: {
           created_at?: string | null;
@@ -427,7 +427,7 @@ export type Database = {
           resources?: Json;
           sub?: string | null;
           type?: Database["public"]["Enums"]["product_type"];
-           slug?:string;
+          slug?:string|null;
         };
         Relationships: [];
       };
@@ -1152,7 +1152,7 @@ export type Database = {
           id: string; 
           code: string; 
           amount: number; 
-          redeem_by: Json; 
+          redeem_by: {email:string,redeemed_at:string}[]|null; 
           valid_till: string; 
           coupon_type: string; 
           max_redemptions: number | null; 
@@ -1165,7 +1165,7 @@ export type Database = {
           id?: string; 
           code: string; 
           amount: number; 
-          redeem_by?: Json; 
+          redeem_by: {email:string,redeemed_at:string}[]|null; 
           valid_till: string; 
           coupon_type: string; 
           max_redemptions?: number | null; 
@@ -1178,7 +1178,7 @@ export type Database = {
           id?: string; 
           code?: string; 
           amount?: number; 
-          redeem_by?: Json; 
+          redeem_by: {email:string,redeemed_at:string}[]|null;  
           valid_till?: string; 
           coupon_type?: string; 
           max_redemptions?: number | null; 
@@ -1313,5 +1313,18 @@ export interface RedeemedUser {
 }
 
 export interface Admin_Promocode extends Promocode {
+  redemption_count?: number;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  amount: number;
+  redeem_by: Array<{ email: string; redeemedAt: string }>;
+  valid_till: string;
+  coupon_type: string;
+  max_redemptions: number | null;
+  is_active: boolean;
+  created_at: string;
   redemption_count?: number;
 }

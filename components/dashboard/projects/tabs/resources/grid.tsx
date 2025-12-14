@@ -26,6 +26,7 @@ const GameServerGrid = ({
   data,
 }: {
   data: Tables<"game_servers">[];
+  
 }) => {
   if (!data || data.length === 0) {
     return (

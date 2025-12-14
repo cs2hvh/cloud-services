@@ -16,9 +16,9 @@ const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
 
   return (
     <div className="space-y-8 p-6">
-      <GameServerGrid data={gameservers} type="game_servers" />
-      <KubernetesGrid data={clusters} type="clusters" />
-      <DbClusterGrid data={db_clusters} type="database_cluster" />
+      <GameServerGrid data={gameservers}  />
+      <KubernetesGrid data={clusters}  />
+      <DbClusterGrid data={db_clusters}  />
     </div>
   );
 };

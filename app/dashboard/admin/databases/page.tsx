@@ -6,6 +6,8 @@ import AdminDatabases from "@/components/admin/databases/admin-databases";
 import { Database_Clusters } from "@/lib/supabase/queries";
 import { getCachedProducts } from "@/lib/cache/query-cache";
 
+
+export const dynamic = "force-dynamic";
 const AdminDatabasesSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

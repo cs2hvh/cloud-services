@@ -148,7 +148,7 @@ async function fetchJson(apiBase: string, path: string, init?: ProxmoxAuthHeader
   return res.json();
 }
 
-async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<unknown> {
+async function postForm<T = unknown>(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent): Promise<T> {
   const body = new URLSearchParams();
   Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
   const res = await withTimeout(
@@ -165,7 +165,7 @@ async function postForm(apiBase: string, path: string, form: Record<string, stri
     const text = await res.text().catch(() => "");
     throw new Error(`${path} failed (${res.status}): ${text}`);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 }
 
 async function waitTask(apiBase: string, node: string, upid: string, auth: ProxmoxAuthHeaders, dispatcher?: UndiciAgent, timeoutMs = 180000): Promise<boolean> {
@@ -419,14 +419,14 @@ export async function POST(req: NextRequest) {
     const clonePayload: Record<string, string | number | boolean> = { newid, name: String(hostname), full: 1, target: String(node), storage: String(storage) };
     console.log(`[Proxmox Clone] Cloning from template VMID ${templateVmid} to new VMID ${newid}`);
 
-    const cloneRes = await postForm(
+    const cloneRes = await postForm<ProxmoxResponse<string>>(
       apiBase,
       `/api2/json/nodes/${encodeURIComponent(String(node))}/qemu/${templateVmid}/clone`,
       clonePayload,
       auth,
       dispatcher
     );
-    const upid = (cloneRes as ProxmoxResponse)?.data;
+    const upid = cloneRes.data;
     if (!upid) throw new Error("clone did not return task id");
     await waitTask(apiBase, String(node), String(upid), auth, dispatcher);
 
@@ -469,14 +469,14 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    const startRes = await postForm(
+    const startRes = await postForm<ProxmoxResponse<string>>(
       apiBase,
       `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${newid}/status/start`,
       {},
       auth,
       dispatcher
     );
-    const startUpid = (startRes as any)?.data;
+    const startUpid = startRes.data;
     if (startUpid) await waitTask(apiBase, node, startUpid, auth, dispatcher, 60000).catch(() => {});
 
     let details: Record<string, unknown> | null = null;

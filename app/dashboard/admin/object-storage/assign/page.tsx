@@ -5,7 +5,7 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/supabase/auth";
 import BucketCreate from "@/components/dashboard/object-storage/bucket-create";
 
-
+export const dynamic = "force-dynamic";
 const AdminDatabaseAssignSuspense = async () => {
   // Check admin authentication
   const checkAdmin = await requireAdmin();

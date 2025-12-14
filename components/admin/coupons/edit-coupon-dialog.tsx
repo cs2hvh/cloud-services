@@ -35,7 +35,7 @@ interface Coupon {
   id: string;
   code: string;
   amount: number;
-  redeem_by: Array<{ email: string; redeemed_at: string }>;
+  redeem_by: Array<{ email: string; redeemedAt: string }>;
   valid_till: string;
   coupon_type: string;
   max_redemptions: number | null;

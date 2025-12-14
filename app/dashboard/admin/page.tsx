@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminDashboard from "@/components/admin/admin";
 
+
+export const dynamic = "force-dynamic";
 const AdminDashboardSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

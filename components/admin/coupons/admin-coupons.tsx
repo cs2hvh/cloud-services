@@ -31,7 +31,7 @@ interface Coupon {
   id: string;
   code: string;
   amount: number;
-  redeem_by: Array<{ email: string; redeemed_at: string }>;
+  redeem_by: Array<{ email: string; redeemedAt: string }>;
   valid_till: string;
   coupon_type: string;
   max_redemptions: number | null;
@@ -351,7 +351,7 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
           <div className="mt-4">
             {selectedCouponForView && Array.isArray(selectedCouponForView.redeem_by) && selectedCouponForView.redeem_by.length > 0 ? (
               <div className="space-y-2">
-                {selectedCouponForView.redeem_by.map((user: { email: string; redeemed_at: string }, index: number) => (
+                {selectedCouponForView.redeem_by.map((user: { email: string; redeemedAt: string }, index: number) => (
                   <div
                     key={index}
                     className="p-3 rounded-lg bg-black/40 border border-white/10 flex items-center justify-between"
@@ -363,7 +363,7 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
                     <div className="text-right">
                       <div className="text-xs text-neutral-400">Redeemed on</div>
                       <div className="text-sm text-white">
-                        {new Date(user.redeemed_at).toLocaleDateString("en-US", {
+                        {new Date(user.redeemedAt).toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",

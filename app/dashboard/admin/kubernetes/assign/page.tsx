@@ -6,6 +6,8 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import NewClusterForm from "@/components/dashboard/kubernetes/new/kubernetesform";
 import { vmLocations } from "@/config/locations";
 
+
+export const dynamic = "force-dynamic";
 const AdminKubernetesAssignSuspense = async () => {
   // Check admin authentication
   const checkAdmin = await requireAdmin();

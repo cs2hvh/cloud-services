@@ -5,6 +5,9 @@ import { notFound } from "next/navigation";
 import AdminNetworkDDoS from "@/components/admin/network-ddos/admin-network-ddos";
 import { Spectrum_Apps } from "@/lib/supabase/queries";
 
+
+export const dynamic = "force-dynamic";
+
 const AdminNetworkDDoSSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

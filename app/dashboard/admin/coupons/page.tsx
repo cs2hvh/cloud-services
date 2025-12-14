@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import AdminCoupons from "@/components/admin/coupons/admin-coupons";
 import { Promocodes } from "@/lib/supabase/queries";
 
+export const dynamic = "force-dynamic";
+
 const AdminCouponsSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

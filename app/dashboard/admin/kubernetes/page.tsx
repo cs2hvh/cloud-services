@@ -6,6 +6,9 @@ import AdminKubernetes from "@/components/admin/kubernetes/admin-kubernetes";
 import { Clusters } from "@/lib/supabase/queries";
 import { getCachedProducts } from "@/lib/cache/query-cache";
 
+
+export const dynamic = "force-dynamic";
+
 const AdminKubernetesSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

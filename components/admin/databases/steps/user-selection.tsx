@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import {
   Card,
   CardContent,
@@ -18,17 +18,15 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, User, AlertCircle, Search, CheckCircle2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import {
-  AdminDatabaseState,
-  AdminDatabaseErrors,
-} from "@/lib/types/admin-database";
+import { AdminDatabaseState, AdminDatabaseErrors } from "@/lib/types/admin-database";
+import { Admin_User } from "@/lib/supabase/types";
 
 interface UserSelectionStepProps {
   state: AdminDatabaseState;
-  setState: (state: AdminDatabaseState) => void;
+  setState: Dispatch<SetStateAction<AdminDatabaseState>>;
   errors: AdminDatabaseErrors;
-  setErrors: (errors: AdminDatabaseErrors) => void;
-  allUsers: any[];
+  setErrors: Dispatch<SetStateAction<AdminDatabaseErrors>>;
+  allUsers: Admin_User[];
   onNext: () => void;
 }
 
@@ -45,7 +43,7 @@ export const UserSelectionStep = ({
   const filteredUsers = allUsers.filter(
     (user) =>
       !userSearchQuery ||
-      user.email.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      user?.email?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
       (user.username &&
         user.username.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
       user.id.toLowerCase().includes(userSearchQuery.toLowerCase())

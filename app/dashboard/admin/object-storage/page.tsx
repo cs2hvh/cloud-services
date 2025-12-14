@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import AdminObjectStorage from "@/components/admin/object-storage/admin-object-storage";
 import { ObjectSpaces } from "@/lib/supabase/queries";
 
+
+export const dynamic = "force-dynamic";
 const AdminObjectStorageSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

@@ -5,6 +5,8 @@ import { notFound } from "next/navigation";
 import AdminUsers from "@/components/admin/users/admin-users";
 import { Users } from "@/lib/supabase/queries";
 
+
+export const dynamic = "force-dynamic";
 const AdminUsersSuspense = async () => {
   const checkAdmin = await requireAdmin();
 

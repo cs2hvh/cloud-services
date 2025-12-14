@@ -34,7 +34,7 @@ interface Coupon {
   id: string;
   code: string;
   amount: number;
-  redeem_by: Array<{ email: string; redeemed_at: string }>;
+  redeem_by: Array<{ email: string; redeemedAt: string }>;
   valid_till: string;
   coupon_type: string;
   max_redemptions: number | null;
@@ -212,14 +212,14 @@ export default function CreateCouponDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="flex-1 border-white/10 text-white hover:bg-white/5"
+              className="cursor-pointer flex-1 border-white/10 text-white hover:bg-white/5"
               disabled={loading}
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
+              className="cursor-pointer flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
               disabled={loading}
             >
               {loading ? "Creating..." : "Create Coupon"}

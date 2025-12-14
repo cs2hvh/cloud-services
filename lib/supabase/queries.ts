@@ -18,6 +18,8 @@ import {
   Admin_SpectrumApp,
   ObjectSpaceBucket,
   Admin_KubernetesCluster,
+  Promocode,
+  Coupon,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
@@ -32,6 +34,30 @@ type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
 type Database = Tables<"database_clusters">;
 type Activity = Tables<"activities">;
+
+interface PromocodeRedemptionEntry {
+  userId?: string;
+  email?: string;
+  redeemedAt?: string;
+}
+
+const isPromocodeRedemptionEntry = (value: unknown): value is PromocodeRedemptionEntry => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const hasUserId = typeof record.userId === "string";
+  const hasEmail = typeof record.email === "string";
+  const redeemedAtValid = record.redeemedAt === undefined || typeof record.redeemedAt === "string";
+  return redeemedAtValid && (hasUserId || hasEmail);
+};
+
+const getPromocodeRedemptions = (value: Promocode["redeem_by"]): PromocodeRedemptionEntry[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isPromocodeRedemptionEntry);
+};
 
 
 export const Users = {
@@ -352,16 +378,10 @@ export const Billing = {
       .from("promocodes")
       .select("amount, redeem_by");
     
-    let promoCredits = 0;
-    if (promos) {
-      promos.forEach((promo: any) => {
-        const redeemBy = Array.isArray(promo.redeem_by) ? promo.redeem_by : [];
-        const userRedeemed = redeemBy.some((r: any) => r.userId === userId);
-        if (userRedeemed) {
-          promoCredits += promo.amount || 0;
-        }
-      });
-    }
+    const promoCredits = (promos ?? []).reduce((total, promo) => {
+      const userRedeemed = getPromocodeRedemptions(promo.redeem_by).some((entry) => entry.userId === userId);
+      return userRedeemed ? total + (promo.amount ?? 0) : total;
+    }, 0);
 
     const creditBalance = data.credit_balance ?? 0;
     const topupCredits = Math.max(0, creditBalance - promoCredits);
@@ -601,7 +621,7 @@ export const Billing = {
           `[Billing.close_active_service] Deduction successful`,
           { userId: params.userId, charge, newBalance }
         );
-      } catch (_) {
+      } catch (error) {
         if (params.failOnInsufficient) {
           throw new Error("Insufficient balance");
         }
@@ -609,7 +629,7 @@ export const Billing = {
         newBalance = null;
         console.warn(
           `[Billing.close_active_service] Deduction skipped due to error`,
-          // { error: e?.message || String(e) }
+          { error: error instanceof Error ? error.message : String(error) }
         );
       }
     }
@@ -2526,15 +2546,16 @@ export const Spectrum_Apps = {
       const { data, error } = await supabase
         .from("spectrum_apps")
         .select("dns->>original_name")
+        .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
 
-        console.log(data, ".........check..data in get_all_app_name........");
+       // console.log(data, ".........check..data in get_all_app_name........");
 
         const names = data?.map(row => row.original_name);
 
 
-        console.log(names, "...........data in get_all_app_name........");
+       // console.log(names, "...........data in get_all_app_name........");
       if (error) return [];
       return names || [];
     } catch {
@@ -2755,6 +2776,7 @@ export const ObjectSpaces = {
         .select("*")
         .eq("id", id)
         .eq("type", "bucket")
+        .neq("status", "deleted")
         .single();
 
       if (error) {
@@ -2921,7 +2943,7 @@ export const Promocodes = {
     coupon_type: string;
     max_redemptions?: number;
     created_by: string;
-  }): Promise<{ success: boolean; data?: any; error?: string }> => {
+  }): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
     try {
       const supabase = await createServiceClient();
       
@@ -2972,7 +2994,7 @@ export const Promocodes = {
     coupon_type?: string;
     max_redemptions?: number;
     is_active?: boolean;
-  }): Promise<{ success: boolean; data?: any; error?: string }> => {
+  }): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
     try {
       const supabase = await createServiceClient();
       
@@ -3023,7 +3045,7 @@ export const Promocodes = {
   },
 
   // Admin: Get all promocodes
-  get_all: async (): Promise<any[]> => {
+  get_all: async (): Promise<Coupon[]> => {
     try {
       const supabase = await createServiceClient();
       
@@ -3039,8 +3061,8 @@ export const Promocodes = {
       }
 
       // Calculate redemption count for each coupon
-      return (data || []).map((promo: any) => {
-        const redeemBy = Array.isArray(promo.redeem_by) ? promo.redeem_by : [];
+      return (data || []).map((promo) => {
+        const redeemBy = getPromocodeRedemptions(promo.redeem_by);
         return {
           ...promo,
           redemption_count: redeemBy.length,
@@ -3053,7 +3075,7 @@ export const Promocodes = {
   },
 
   // Get promocode by ID
-  get_by_id: async (id: string): Promise<any | null> => {
+  get_by_id: async (id: string): Promise<Promocode | null> => {
     try {
       const supabase = await createServiceClient();
       
@@ -3077,7 +3099,7 @@ export const Promocodes = {
   },
 
   // Get promocode by code
-  get_by_code: async (code: string): Promise<any | null> => {
+  get_by_code: async (code: string): Promise<Promocode | null> => {
     try {
       const supabase = await createServiceClient();
       
@@ -3102,7 +3124,7 @@ export const Promocodes = {
   },
 
   // User: Get available promocodes (not yet redeemed by user)
-  get_available_for_user: async (userId: string, email: string): Promise<any[]> => {
+  get_available_for_user: async (userId: string, email: string): Promise<Promocode[]> => {
     try {
       const supabase = await createServiceClient();
       
@@ -3119,11 +3141,9 @@ export const Promocodes = {
       }
 
       // Filter out coupons already redeemed by this user
-      const available = (data || []).filter((promo: any) => {
-        const redeemBy = Array.isArray(promo.redeem_by) ? promo.redeem_by : [];
-        const hasRedeemed = redeemBy.some((r: any) => 
-          r.userId === userId || r.email === email
-        );
+      const available = (data || []).filter((promo) => {
+        const redeemBy = getPromocodeRedemptions(promo.redeem_by);
+        const hasRedeemed = redeemBy.some((entry) => entry.userId === userId || entry.email === email);
         
         // Check max redemptions limit if set
         if (promo.max_redemptions && redeemBy.length >= promo.max_redemptions) {
@@ -3144,7 +3164,7 @@ export const Promocodes = {
   validate_code: async (code: string, userId: string, email: string): Promise<{ 
     valid: boolean; 
     error?: string; 
-    data?: any;
+    data?: Promocode;
   }> => {
     try {
       const supabase = await createServiceClient();
@@ -3167,10 +3187,8 @@ export const Promocodes = {
       }
 
       // Check if user already redeemed
-      const redeemBy = Array.isArray(promo.redeem_by) ? promo.redeem_by : [];
-      const alreadyRedeemed = redeemBy.some((r: any) => 
-        r.userId === userId || r.email === email
-      );
+      const redeemBy = getPromocodeRedemptions(promo.redeem_by);
+      const alreadyRedeemed = redeemBy.some((entry) => entry.userId === userId || entry.email === email);
 
       if (alreadyRedeemed) {
         return { valid: false, error: "You have already redeemed this promo code" };
@@ -3205,14 +3223,15 @@ export const Promocodes = {
       }
 
       const promo = validation.data;
+      if (!promo) {
+        return { success: false, error: "Promo code not found" };
+      }
 
       // Update redeem_by array
-      const redeemBy = Array.isArray(promo.redeem_by) ? promo.redeem_by : [];
-      redeemBy.push({
-        userId,
-        email,
-        redeemedAt: new Date().toISOString(),
-      });
+      const redeemBy = [
+        ...getPromocodeRedemptions(promo.redeem_by),
+        { userId, email, redeemedAt: new Date().toISOString() },
+      ];
 
       // Check if we need to deactivate the coupon (for limited type)
       const shouldDeactivate = 
@@ -3225,7 +3244,7 @@ export const Promocodes = {
         .schema("billing")
         .from("promocodes")
         .update({ 
-          redeem_by: redeemBy,
+          redeem_by: redeemBy as Promocode["redeem_by"],
           updated_at: new Date().toISOString(),
           ...(shouldDeactivate && { is_active: false }),
         })

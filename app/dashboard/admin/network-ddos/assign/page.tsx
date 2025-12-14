@@ -5,6 +5,8 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/supabase/auth";
 import SpectrumAppCreate from "@/components/dashboard/network-ddos/new";
 
+
+export const dynamic = "force-dynamic";
 const AdminSpectrumAssignSuspense = async () => {
   // Check admin authentication
   const checkAdmin = await requireAdmin();

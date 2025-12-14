@@ -91,7 +91,7 @@ function CountdownTimer({ expiresAt }: { expiresAt: string }) {
   );
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = React.useState(false);
@@ -426,5 +426,19 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="flex min-h-svh items-center justify-center bg-black/[0.96]">
+          <Icons.spinner className="h-6 w-6 animate-spin text-white" />
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </React.Suspense>
   );
 }

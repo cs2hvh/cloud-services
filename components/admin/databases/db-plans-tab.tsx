@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
+import { isAxiosError } from "axios";
 import EditPlanDialog from "./edit-plan-dialog";
 import AddPlanDialog from "./add-plan-dialog";
 
@@ -175,18 +176,14 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     } catch (err) {
       console.error("Error deleting product:", err);
 
-      // Narrow the error to AxiosError shape
-      if (typeof err === "object" && err !== null && "response" in err) {
-        const response = (err as any).response;
-
-        const inUse = response?.data?.inUse;
-        const count = response?.data?.count;
-        const message = response?.data?.error;
+      if (isAxiosError(err)) {
+        const responseData = err.response?.data as { inUse?: boolean; count?: number; error?: string } | undefined;
+        const inUse = responseData?.inUse;
+        const count = responseData?.count;
+        const message = responseData?.error;
 
         if (inUse) {
-          toast.error(
-            `Cannot delete: ${count} database(s) are using this plan`
-          );
+          toast.error(`Cannot delete: ${count ?? 0} database(s) are using this plan`);
           return;
         }
 
@@ -194,7 +191,6 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
         return;
       }
 
-      // fallback when error is not axios-like
       toast.error("Failed to delete database plan");
     } finally {
       setIsDeleting(false);

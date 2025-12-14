@@ -1,8 +1,16 @@
-import { AdminDatabaseState } from "@/lib/types/admin-database";
-import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
-import { z } from "zod";
 import api from "@/lib/axios/axios";
-import { Tables } from "../supabase/types";
+import { AdminDatabaseState } from "@/lib/types/admin-database";
+import { createDatabaseSchema, validateEngineVersion, type CreateDatabasePayload } from "@/lib/validation/database";
+import { z } from "zod";
+import { Tables } from "@/lib/supabase/types";
+
+const resolvePlanSize = (plan: Tables<"products">): CreateDatabasePayload["size"] => {
+  const cpu = plan.resources?.cpu || 1;
+  const ram = plan.resources?.ram || 1;
+  const computedSize = `db-s-${cpu}vcpu-${ram}gb`;
+
+  return computedSize as CreateDatabasePayload["size"];
+};
 
 export const submitDatabaseAssignment = async (
   state: AdminDatabaseState,
@@ -33,21 +41,22 @@ export const submitDatabaseAssignment = async (
   }
 
   // Prepare payload matching the schema
-  const payload = {
+  const unvalidatedPayload = {
     name: state.selectedName,
     engine: state.selectedDbType,
     version: state.selectedVersion,
     num_nodes: 1,
-    size: `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`,
+    size: resolvePlanSize(selectedPlan),
     region: state.selectedLocation,
     project_id: state.selectedProject,
     owner_id: state.selectedUser,
-    plan_id:selectedPlan.id
+    plan_id: selectedPlan.id,
   };
 
   // Validate payload with Zod schema
+  let payload: CreateDatabasePayload;
   try {
-    createDatabaseSchema.parse(payload);
+    payload = createDatabaseSchema.parse(unvalidatedPayload);
   } catch (validationError) {
     if (validationError instanceof z.ZodError) {
       const firstError = validationError.errors[0];
