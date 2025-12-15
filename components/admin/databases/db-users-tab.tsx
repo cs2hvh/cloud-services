@@ -503,7 +503,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
       </motion.div>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="bg-neutral-900 border-neutral-800">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white flex items-center gap-2">
@@ -512,15 +512,18 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-300">
               Do you want to permanently delete this cluster?
-              <div className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700">
-                <div className="text-sm text-neutral-400">Cluster Name:</div>
-                <div className="text-base font-semibold text-white mt-1">
+              <span className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700 block">
+                <span className="text-sm text-neutral-400 block">
+                  Cluster Name:
+                </span>
+                <span className="text-base font-semibold text-white mt-1 block">
                   {selectedClusterName}
-                </div>
-              </div>
-              <div className="mt-3 text-red-400 text-sm font-medium">
-                ⚠️ This action cannot be undone.
-              </div>
+                </span>
+              </span>
+              <span className="mt-3 text-red-400 text-sm font-medium block">
+                ⚠️ This action cannot be undone. Clusters in use cannot be
+                deleted.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -533,11 +536,11 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
             >
               {isDeleting ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <span className="animate-spin mr-2">⏳</span>
                   Deleting...
                 </>
               ) : (

@@ -152,6 +152,7 @@ function SingleCluster({
 
   const [loading, setLoading] = useState(false);
   const [clusterData, setClusterData] = useState<CheckStatus | null>(null);
+  const [clusterFailed, setClusterFailed] = useState(false);
   const [nodesData, setNodesData] = useState<NodeInfo | null>(null);
   const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
@@ -254,6 +255,38 @@ function SingleCluster({
       const data = (await res.json()) as Partial<CheckStatus>;
 
       console.log(data, "........................................data");
+
+      // Check if cluster creation failed
+      if (data.clusterInfo?.status === "failed") {
+        setClusterFailed(true);
+        setClusterData(data as CheckStatus);
+        const workers = data?.clusterInfo?.workers ?? [];
+        const controlPlane = data?.clusterInfo?.control_plane;
+        const nodes = [...(controlPlane ? [controlPlane] : []), ...workers];
+        setNodesData(nodes);
+        
+        // Stop polling
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+        abortRef.current?.abort();
+        
+        
+        //delete the cluster .
+        const response=await api.post(`/services/kubernetes/clusters/delete`, {
+          cluster_id: clusterId,
+        })
+        if(response.status===200){
+          router.push("/dashboard/services/kubernetes");
+          toast.error(
+          "Our server is facing some issue. Please try again later.",
+          { duration: 8000 }
+        );
+        }
+        
+        return;
+      }
 
       // Merge new truthy statuses without flipping any true back to false
       setStatus((prev) => ({
@@ -597,7 +630,41 @@ function SingleCluster({
           </p>
         </motion.div>
 
-        {ready === false && (
+        {clusterFailed && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/20 rounded-xl p-8 mb-6"
+          >
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-red-500/20 rounded-lg">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-semibold text-red-400 mb-2">
+                  Cluster Creation Failed
+                </h3>
+                <p className="text-white/70 mb-4">
+                  An error occurred during cluster creation. The droplets have
+                  been automatically cleaned up to prevent unnecessary charges.
+                </p>
+                <p className="text-white/60 text-sm mb-6">
+                  Please delete this failed cluster record and try creating a
+                  new cluster. If the issue persists, contact support.
+                </p>
+                <button
+                  onClick={handleDeleteClusterClick}
+                  className="px-6 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete Failed Cluster
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {ready === false && !clusterFailed && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

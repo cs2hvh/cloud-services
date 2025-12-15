@@ -45,6 +45,8 @@ export default function BillingTabs({
   const [amount, setAmount] = useState("");
   const [loadingTopup, setLoadingTopup] = useState(false);
   const [balance, setBalance] = useState<number>(initialBalance);
+  const [manualCouponCode, setManualCouponCode] = useState("");
+  const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pushToast = (type: Toast["type"], message: string) => {
@@ -94,6 +96,32 @@ export default function BillingTabs({
       }
     } catch (error: unknown) {
       pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
+    }
+  };
+
+  const handleManualCouponApply = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const code = manualCouponCode.trim();
+    if (!code) {
+      pushToast("error", "Please enter a coupon code");
+      return;
+    }
+    try {
+      setLoadingManualCoupon(true);
+      const res = await api.post("/billing/coupons/redeem", { code });
+      
+      if (res.data.success) {
+        setBalance(res.data.balance);
+        setCoupons(coupons.filter((c) => c.code !== code));
+        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+        setManualCouponCode("");
+      } else {
+        pushToast("error", res.data.error || "Failed to redeem coupon");
+      }
+    } catch (error: unknown) {
+      pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
+    } finally {
+      setLoadingManualCoupon(false);
     }
   };
 
@@ -171,8 +199,32 @@ export default function BillingTabs({
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
+            className="space-y-6"
           >
+            {/* Manual Coupon Code Input */}
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
+              <h3 className="text-base font-semibold text-white mb-2">Have a Coupon Code?</h3>
+              <p className="text-sm text-neutral-400 mb-3">
+                Enter your coupon code below to redeem it
+              </p>
+              <form onSubmit={handleManualCouponApply} className="flex gap-2">
+                <input
+                  type="text"
+                  value={manualCouponCode}
+                  onChange={(e) => setManualCouponCode(e.target.value.toUpperCase())}
+                  className="w-full sm:w-64 md:w-80 lg:w-auto max-w-full  bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50 font-mono"
+                  placeholder="Enter coupon code"
+                />
+                <button
+                  disabled={loadingManualCoupon}
+                  type="submit"
+                  className="w-24 sm:w-auto cursor-pointer px-5 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium hover:from-blue-700 hover:to-purple-700 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                >
+                  {loadingManualCoupon ? "Applying..." : "Apply"}
+                </button>
+              </form>
+            </div>
+
             <div className="mb-4">
               <h3 className="text-lg font-semibold text-white mb-1">Available Coupons</h3>
               <p className="text-sm text-neutral-400">

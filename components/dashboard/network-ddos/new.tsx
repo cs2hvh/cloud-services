@@ -581,7 +581,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                   className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
                 >
                   {isLoading ? 
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" /> : "Create"}
+                 <>Creating<Loader2 className="animate-spin h-4 w-4 mr-2" /></>: "Create"}
                 </Button>
               </CardContent>
             </Card>
