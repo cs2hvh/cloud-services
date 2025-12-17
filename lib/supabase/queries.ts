@@ -2562,6 +2562,26 @@ export const Spectrum_Apps = {
       return [];
     }
   },
+
+  get_by_project_id: async (projectId: string): Promise<SpectrumAppRow[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("spectrum_apps")
+        .select("*")
+        .eq("project_id", projectId)
+        .neq("status", "deleted")
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(`[Spectrum_Apps.get_by_project_id] Error: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Spectrum_Apps.get_by_project_id] Error: ${err}`);
+      return [];
+    }
+  },
 };
 
 
@@ -2716,6 +2736,28 @@ export const ObjectSpaces = {
       return (data as ObjectSpaceBucket[]) || [];
     } catch (err) {
       console.error(`[ObjectSpaces] Error getting buckets: ${err}`);
+      return [];
+    }
+  },
+
+  get_by_project_id: async (projectId: string): Promise<ObjectSpaceBucket[]> => {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("project_id", projectId)
+        .eq("type", "bucket")
+        .neq("status", "deleted")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[ObjectSpaces.get_by_project_id] Error: ${error.message}`);
+        return [];
+      }
+      return (data as ObjectSpaceBucket[]) || [];
+    } catch (err) {
+      console.error(`[ObjectSpaces.get_by_project_id] Error: ${err}`);
       return [];
     }
   },

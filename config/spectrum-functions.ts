@@ -436,6 +436,7 @@ export async function deleteSpectrumApp(appId: string) {
 
   // Add project log if applicable
   const projectId = (localBefore.success && localBefore.data?.project_id) || null;
+  console.log(projectId,"...........projectId........");
   if (projectId && typeof projectId === "string") {
     // const dnsInfo = localBefore.success && localBefore.data?.dns;
     // const appName = (dnsInfo && typeof dnsInfo === "object" && "name" in dnsInfo) 

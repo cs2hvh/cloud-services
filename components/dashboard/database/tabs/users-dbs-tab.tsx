@@ -137,6 +137,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       toast.error("Please enter a username");
       return;
     }
+    debugger
 
     setCreatingUser(true);
     try {
@@ -212,6 +213,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   // Create database
   const handleCreateDatabase = async () => {
+    debugger
     if (!newDbName.trim()) {
       toast.error("Please enter a database name");
       return;
@@ -224,7 +226,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         name: newDbName.trim(),
       });
 
-      if (response.status === 200) {
+      if (response.status === 201) {
         toast.success("Database created successfully!");
         setNewDbName("");
         await fetchDatabases();
@@ -303,7 +305,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
             <button
               onClick={fetchUsers}
               disabled={loadingUsers}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+              className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
               title="Refresh users"
             >
               <RefreshCw
@@ -347,7 +349,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                         </code>
                         <button
                           onClick={() => togglePasswordVisibility(user.name)}
-                          className="p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
+                          className="cursor-pointer p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
                           title={
                             showPasswords[user.name]
                               ? "Hide password"
@@ -366,7 +368,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleResetPassword(user.name)}
-                        className="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                        className="cursor-pointer px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
                         title="Reset password"
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
@@ -380,7 +382,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                             confirmText: "",
                           })
                         }
-                        className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                        className="cursor-pointer  px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
                         title="Delete user"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -409,7 +411,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
               <Button
                 onClick={handleCreateUser}
                 disabled={creatingUser || !newUserName.trim()}
-                className="flex items-center gap-2"
+                className="cursor-pointer  flex items-center gap-2"
               >
                 {creatingUser ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -437,7 +439,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
             <button
               onClick={fetchDatabases}
               disabled={loadingDatabases}
-              className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+              className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
               title="Refresh databases"
             >
               <RefreshCw
@@ -485,7 +487,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                           confirmText: "",
                         })
                       }
-                      className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
+                      className="cursor-pointer px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
                       title="Delete database"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -513,7 +515,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
               <Button
                 onClick={handleCreateDatabase}
                 disabled={creatingDb || !newDbName.trim()}
-                className="flex items-center gap-2"
+                className="cursor-pointer flex items-center gap-2"
               >
                 {creatingDb ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -595,7 +597,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   }
                   disabled={deletingUser}
                   variant="outline"
-                  className="flex-1"
+                  className="cursor-pointer flex-1"
                 >
                   Cancel
                 </Button>
@@ -606,7 +608,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     deletingUser
                   }
                   variant="destructive"
-                  className="flex-1"
+                  className="cursor-pointer flex-1"
                 >
                   {deletingUser ? (
                     <>
@@ -691,7 +693,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   }
                   disabled={deletingDb}
                   variant="outline"
-                  className="flex-1"
+                  className="cursor-pointer flex-1"
                 >
                   Cancel
                 </Button>
@@ -702,7 +704,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     deletingDb
                   }
                   variant="destructive"
-                  className="flex-1"
+                  className="cursor-pointer flex-1"
                 >
                   {deletingDb ? (
                     <>
@@ -771,7 +773,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                         "Password"
                       )
                     }
-                    className="p-2 hover:bg-white/10 rounded transition-colors flex-shrink-0"
+                    className="cursor-pointer p-2 hover:bg-white/10 rounded transition-colors flex-shrink-0"
                     title="Copy password"
                   >
                     <Eye className="h-4 w-4 text-slate-400" />
@@ -787,7 +789,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     newPassword: "",
                   })
                 }
-                className="w-full"
+                className="cursor-pointer w-full"
               >
                 Close
               </Button>

@@ -349,7 +349,7 @@ export const OverviewTab = ({
         <ConfigCard
           icon={HardDrive}
           label="Disk"
-          value={extractDisk(database.size)}
+          value={database.storage_size_mib?(database.storage_size_mib/1024).toString():"0"}
           color="text-purple-400"
         />
         <ConfigCard

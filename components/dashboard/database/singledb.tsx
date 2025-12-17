@@ -28,13 +28,15 @@ interface SingleDbProps {
 const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
-  
+
   const [database, setDatabase] = useState<Tables<"database_clusters"> | null>(
     null
   );
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [connectionTab, setConnectionTab] = useState<"public" | "private">("public");
+  const [connectionTab, setConnectionTab] = useState<"public" | "private">(
+    "public"
+  );
   const [activeTab, setActiveTab] = useState<string>(tabParam || "overview");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
@@ -56,7 +58,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       //debugger
       isFetchingRef.current = true;
       console.log("🔄 Fetching database cluster...");
-      
+
       const response = await api.post(`/services/database/read/`, {
         id: databaseId,
         checkStatus: true, // Backend will check DO and update Supabase
@@ -67,7 +69,12 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
         // Debug: Log the structure to identify object issues
         console.log("📊 [Frontend] Database Data received:", dbData);
-        console.log("📊 [Frontend] Status from API:", dbData.status, "Type:", typeof dbData.status);
+        console.log(
+          "📊 [Frontend] Status from API:",
+          dbData.status,
+          "Type:",
+          typeof dbData.status
+        );
         console.log("📊 [Frontend] Previous status:", previousStatus.current);
 
         setDatabase(dbData);
@@ -77,12 +84,14 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         const wasCreating = previousStatus.current === "creating";
         const isNowOnline = dbData.status === "online";
 
-        console.log(`📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`);
+        console.log(
+          `📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`
+        );
 
         // If database is now online, stop polling and show toast
         if (isNowOnline) {
           console.log("✅ [Frontend] Database is online, stopping polling");
-          
+
           // Stop polling
           if (intervalRef.current) {
             console.log("🛑 [Frontend] Clearing polling interval");
@@ -98,12 +107,16 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
             hasShownOnlineToast.current = true;
           }
         } else {
-          console.log(`ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`);
+          console.log(
+            `ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`
+          );
         }
-        
+
         // Update previous status
         previousStatus.current = dbData.status;
-        console.log(`📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`);
+        console.log(
+          `📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`
+        );
 
         return dbData.status; // Return status for use in useEffect
       }
@@ -116,16 +129,15 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     }
   }, [databaseId]); // ✅ Only databaseId needed
 
-
   const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error instanceof AxiosError) {
-    return error.response?.data?.error || defaultMessage;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return defaultMessage;
-};
+    if (error instanceof AxiosError) {
+      return error.response?.data?.error || defaultMessage;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return defaultMessage;
+  };
 
   // Initial load and status polling
   useEffect(() => {
@@ -133,18 +145,26 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     const initializePolling = async () => {
       console.log("🚀 [Frontend] Initializing polling...");
       const currentStatus = await fetchDatabaseCluster();
-      
-      console.log(`📊 [Frontend] Initial status after fetch: "${currentStatus}"`);
-      
+
+      console.log(
+        `📊 [Frontend] Initial status after fetch: "${currentStatus}"`
+      );
+
       // Only set up polling if the database is not already online
       if (currentStatus !== "online") {
-        console.log("⏱️ [Frontend] Database is not online, starting polling every 60s...");
+        console.log(
+          "⏱️ [Frontend] Database is not online, starting polling every 60s..."
+        );
         intervalRef.current = setInterval(() => {
-          console.log("🔄 [Frontend] Polling interval fired, fetching database status...");
+          console.log(
+            "🔄 [Frontend] Polling interval fired, fetching database status..."
+          );
           fetchDatabaseCluster();
         }, 60000); // 1 minute
       } else {
-        console.log("✅ [Frontend] Database is already online, skipping polling setup");
+        console.log(
+          "✅ [Frontend] Database is already online, skipping polling setup"
+        );
       }
     };
 
@@ -178,7 +198,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     try {
       const response = await api.post(`/services/database/delete`, {
         id: database?.cluster_id,
-        id2:database?.id
+        id2: database?.id,
       });
 
       if (response.status === 200) {
@@ -222,7 +242,6 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-black py-4 px-4 ">
-      
       <div className="mx-auto max-w-6xl space-y-6 mb-6">
         {/* Tabs */}
         <motion.div
@@ -230,39 +249,42 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             {/* Tab Navigation */}
             <div className="rounded-xl bg-black shadow-md p-1.5 mb-6">
               <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-transparent p-0 h-auto">
-                <TabsTrigger 
-                  value="overview" 
+                <TabsTrigger
+                  value="overview"
                   className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
                 >
                   Overview
                 </TabsTrigger>
-                {
-                  database.status==='online' &&
+                {database.status === "online" && (
                   <>
-                  <TabsTrigger 
-                  value="network" 
-                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                >
-                  Network
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="users-dbs" 
-                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                >
-                  Users & DBs
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="settings" 
-                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                >
-                  Settings
-                </TabsTrigger>
+                    <TabsTrigger
+                      value="network"
+                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                    >
+                      Network
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="users-dbs"
+                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                    >
+                      Users & DBs
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="settings"
+                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+                    >
+                      Settings
+                    </TabsTrigger>
                   </>
-                }
+                )}
               </TabsList>
             </div>
 
@@ -279,7 +301,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
             </TabsContent>
 
             <TabsContent value="network" className="mt-0">
-              <NetworkTab 
+              <NetworkTab
                 clusterId={database.cluster_id || ""}
                 databaseId={database.cluster_id || ""}
                 initialNetworkRules={database.network_rules}
@@ -292,7 +314,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
             </TabsContent>
 
             <TabsContent value="settings" className="mt-0">
-              <SettingsTab 
+              <SettingsTab
                 database={database}
                 onDatabaseUpdate={fetchDatabaseCluster}
                 products={products}

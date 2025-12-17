@@ -140,6 +140,7 @@ export async function POST(req: NextRequest) {
         // ✅ Fix: Normalize users and dbs to arrays (MongoDB returns undefined/null initially)
         users: encryptedUsers || [],
         dbs: database.data.database.db_names || [],
+        storage_size_mib: database.data.database.storage_size_mib,
       };
 
       //console.log("[createDatabase] Database created successfully:", sendData);

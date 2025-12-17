@@ -848,6 +848,7 @@ export type Database = {
           users?: DatabaseUser[];
           dbs?: DatabaseInstance[];
           window?: { day: string; hour: string };
+          storage_size_mib?:number;
 
         };
         Insert: {
@@ -867,6 +868,7 @@ export type Database = {
           network_rules?:network_rules;
           users?: DatabaseUser[];
           dbs?: DatabaseInstance[];
+          storage_size_mib?:number;
           // resource_config?:{ cpu: number; ram: number; storage: number }
 
         };
