@@ -66,7 +66,7 @@ const REGIONS = [
 export const SettingsTab = ({
   database,
   onDatabaseUpdate,
-  products,
+  // products,
 }: SettingsTabProps) => {
   const { projects } = useProjects();
   const [loading, setLoading] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export const SettingsTab = ({
   const [selectedRegion, setSelectedRegion] = useState(database.region || "");
 
   // Storage State
-  const [selectedSize, setSelectedSize] = useState(database.size || "");
+  // const [selectedSize] = useState(database.size || "");
 
   // Storage Upsize State
   const [selectedStorageGiB, setSelectedStorageGiB] = useState<number>(0);
@@ -162,29 +162,29 @@ export const SettingsTab = ({
   };
 
   // Transform products into storage tiers format
-  const storageTiers = products.map((product) => ({
-    slug: `db-s-${product.resources.cpu}vcpu-${product.resources.ram}gb`,
-    storage: `${product.resources.storage} GB`,
-    vcpu: `${product.resources.cpu}`,
-    ram: `${product.resources.ram} GB`,
-    diskGB: product.resources.storage,
-  }));
+  // const storageTiers = products.map((product) => ({
+  //   slug: `db-s-${product.resources.cpu}vcpu-${product.resources.ram}gb`,
+  //   storage: `${product.resources.storage} GB`,
+  //   vcpu: `${product.resources.cpu}`,
+  //   ram: `${product.resources.ram} GB`,
+  //   diskGB: product.resources.storage,
+  // }));
 
   // Helper function to get current storage info
-  const getCurrentStorageInfo = (currentSize: string) => {
-    const tier = storageTiers.find((t) => t.slug === currentSize);
-    return tier
-      ? `${tier.storage} Storage (${tier.vcpu} vCPU, ${tier.ram} RAM)`
-      : currentSize;
-  };
+  // const getCurrentStorageInfo = (currentSize: string) => {
+  //   const tier = storageTiers.find((t) => t.slug === currentSize);
+  //   return tier
+  //     ? `${tier.storage} Storage (${tier.vcpu} vCPU, ${tier.ram} RAM)`
+  //     : currentSize;
+  // };
 
   // Helper function to get only tiers with MORE storage than current
-  const getUpgradeTiers = (currentSize: string) => {
-    const current = storageTiers.find((t) => t.slug === currentSize);
-    if (!current) return storageTiers;
+  // const getUpgradeTiers = (currentSize: string) => {
+  //   const current = storageTiers.find((t) => t.slug === currentSize);
+  //   if (!current) return storageTiers;
 
-    return storageTiers.filter((t) => t.diskGB > current.diskGB);
-  };
+  //   return storageTiers.filter((t) => t.diskGB > current.diskGB);
+  // };
 
   const getErrorMessage = (error: unknown, defaultMessage: string): string => {
   if (error instanceof AxiosError) {
@@ -394,35 +394,35 @@ export const SettingsTab = ({
   };
 
   // Upgrade Plan Tier
-  const handleUpdateStorage = async () => {
-    if (!selectedSize) {
-      toast.error("Please select a storage tier");
-      return;
-    }
+  // const handleUpdateStorage = async () => {
+  //   if (!selectedSize) {
+  //     toast.error("Please select a storage tier");
+  //     return;
+  //   }
 
-    if (selectedSize === database.size) {
-      toast.info("Database is already using this storage tier");
-      return;
-    }
+  //   if (selectedSize === database.size) {
+  //     toast.info("Database is already using this storage tier");
+  //     return;
+  //   }
 
-    setLoading("storage");
-    try {
-      const response = await axios.put("/api/services/database/storage", {
-        database_id: database.cluster_id,
-        size: selectedSize,
-      });
+  //   setLoading("storage");
+  //   try {
+  //     const response = await axios.put("/api/services/database/storage", {
+  //       database_id: database.cluster_id,
+  //       size: selectedSize,
+  //     });
 
-      if (response.status === 200) {
-        toast.success("Storage tier upgrade initiated successfully");
-        onDatabaseUpdate?.();
-      }
-    } catch (error) {
-      console.error("Error upgrading storage:", error);
-      toast.error(getErrorMessage(error, "Failed to upgrade storage tier"));
-    } finally {
-      setLoading(null);
-    }
-  };
+  //     if (response.status === 200) {
+  //       toast.success("Storage tier upgrade initiated successfully");
+  //       onDatabaseUpdate?.();
+  //     }
+  //   } catch (error) {
+  //     console.error("Error upgrading storage:", error);
+  //     toast.error(getErrorMessage(error, "Failed to upgrade storage tier"));
+  //   } finally {
+  //     setLoading(null);
+  //   }
+  // };
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {

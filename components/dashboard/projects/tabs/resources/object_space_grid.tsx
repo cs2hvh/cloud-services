@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Cloud, ExternalLink, MapPin, HardDrive, Globe, Shield } from "lucide-react";
+import { Cloud, ExternalLink, MapPin, Globe, Shield } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import {
   Card,
@@ -49,13 +49,13 @@ const ObjectSpaceGrid = ({
     }
   };
 
-  const formatBytes = (bytes: number | undefined | null) => {
-    if (!bytes || bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB", "TB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
+  // const formatBytes = (bytes: number | undefined | null) => {
+  //   if (!bytes || bytes === 0) return "0 B";
+  //   const k = 1024;
+  //   const sizes = ["B", "KB", "MB", "GB", "TB"];
+  //   const i = Math.floor(Math.log(bytes) / Math.log(k));
+  //   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  // };
 
   return (
     <div className="space-y-4">

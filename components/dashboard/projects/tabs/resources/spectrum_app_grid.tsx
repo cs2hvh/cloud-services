@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { Shield, ExternalLink, MapPin, Activity } from "lucide-react";
+import { Shield, ExternalLink, Activity } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
   Card,

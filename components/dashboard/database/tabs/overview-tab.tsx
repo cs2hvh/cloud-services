@@ -24,7 +24,6 @@ import {
   safeStringValue,
   extractCpu,
   extractRam,
-  extractDisk,
   extractRegion,
   downloadCACertificate,
 } from "../singledb-helpers";
