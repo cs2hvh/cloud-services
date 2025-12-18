@@ -2126,6 +2126,25 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
+  update_storage_size: async(cluster_id: string, storage_size_mib: number) => {
+    //console.log(`[updateStorageSize] cluster_id: ${cluster_id}, storage_size_mib: ${storage_size_mib}`);
+    const supabase = await createWorkerClient();
+    
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ storage_size_mib })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[updateStorageSize] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data };
+  },
+
   // Get all databases for admin panel
   get_all_for_admin: async (): Promise<Admin_Database[]> => {
     try {

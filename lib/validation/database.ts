@@ -150,6 +150,21 @@ export const updateStorageSchema = z.object({
 export type UpdateStoragePayload = z.infer<typeof updateStorageSchema>;
 
 /**
+ * Storage Upsize Schema
+ * Validates storage upsize requests (disk only)
+ */
+export const upsizeStorageSchema = z.object({
+  database_id: z.string().uuid("Database ID must be a valid UUID"),
+  storage_size_mib: z
+    .number()
+    .int("Storage size must be an integer")
+    .min(10240, "Storage size must be at least 10 GiB (10240 MiB)")
+    .max(16384000, "Storage size must not exceed 16000 GiB (16384000 MiB)"),
+});
+
+export type UpsizeStoragePayload = z.infer<typeof upsizeStorageSchema>
+
+/**
  * Database User Management Schemas
  */
 export const createDatabaseUserSchema = z.object({

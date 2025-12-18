@@ -400,6 +400,7 @@ export type Database = {
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
          slug?:string|null;
+         upsize_range?:{lower:number;upper:number};
         };
         Insert: {
           created_at?: string | null;
@@ -414,6 +415,7 @@ export type Database = {
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
            slug?:string|null;
+            upsize_range?:{lower:number;upper:number};
         };
         Update: {
           created_at?: string | null;
@@ -428,6 +430,7 @@ export type Database = {
           sub?: string | null;
           type?: Database["public"]["Enums"]["product_type"];
           slug?:string|null;
+           upsize_range?:{lower:number;upper:number};
         };
         Relationships: [];
       };
