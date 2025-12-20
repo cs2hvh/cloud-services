@@ -48,7 +48,7 @@ export async function POST(request: Request) {
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.error || "Failed to redeem coupon" },
+        { message: result.error || "Failed to redeem coupon" },
         { status: 400 }
       );
     }

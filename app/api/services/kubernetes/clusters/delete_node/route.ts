@@ -4,59 +4,65 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
-
-
   const auth = await authenticateUser();
-    if (!auth.authenticated) {
-      return auth.response;
-    }
+  if (!auth.authenticated) {
+    return auth.response;
+  }
   try {
     const json = await req.json();
 
-
-    console.log(json,".........................41");
+    console.log(json, ".........................41");
     const supabase = await createServiceClient();
-    const { data,error } = await supabase
+    const { data, error } = await supabase
       .from("clusters")
-      .select('workers, cluster_name, project_id')
-  .eq('cluster_id', json.cluster_id)
-  .single();
+      .select("workers, cluster_name, project_id")
+      .eq("cluster_id", json.cluster_id)
+      .single();
 
-
-  console.log(data,"..............data in delete node api...........",error?.message);
+    console.log(
+      data,
+      "..............data in delete node api...........",
+      error?.message
+    );
 
     if (error)
-        //console.log(error.message,"..............error in delete node api...........");
+      //console.log(error.message,"..............error in delete node api...........");
       return NextResponse.json({ error: error.message }, { status: 400 });
 
-
-
     const filtered = (data?.workers ?? []).filter(
-  (w: { droplet_id: string }) => String(w.droplet_id) !== String(json.droplet_id)
-);
-   console.log(filtered,"..............filtered in delete node api...........");
+      (w: { droplet_id: string }) =>
+        String(w.droplet_id) !== String(json.droplet_id)
+    );
+    console.log(
+      filtered,
+      "..............filtered in delete node api..........."
+    );
 
-const { error: updErr } = await supabase
-  .from('clusters')
-  .update({ workers: filtered })
-  .eq('cluster_id', json.cluster_id)
-  .single();
+    const { error: updErr } = await supabase
+      .from("clusters")
+      .update({ workers: filtered })
+      .eq("cluster_id", json.cluster_id)
+      .single();
 
-
-  console.log(updErr?.message,"..............updErr in delete node api...........");
+    console.log(
+      updErr?.message,
+      "..............updErr in delete node api..........."
+    );
 
     if (updErr)
-        //console.log(updErr,"..............error in update delete node api...........");
-      return NextResponse.json({ error: updErr.message}, { status: 400 });
+      //console.log(updErr,"..............error in update delete node api...........");
+      return NextResponse.json({ error: updErr.message }, { status: 400 });
 
     // Add activity log for node deletion
     if (data.project_id) {
       await Projects.add_log({
         project_id: data.project_id,
         event: "Server",
-        text: `Worker node removed from Kubernetes cluster '${data.cluster_name}'`
+        text: `Worker node removed from Kubernetes cluster '${data.cluster_name}'`,
       });
-      console.log(`[deleteKubernetesNode] ✅ Activity log added for node deletion`);
+      console.log(
+        `[deleteKubernetesNode] ✅ Activity log added for node deletion`
+      );
     }
 
     return NextResponse.json(

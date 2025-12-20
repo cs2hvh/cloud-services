@@ -84,20 +84,22 @@ export default function BillingTabs({
   };
 
   const handleRedeemCoupon = async (code: string) => {
-    try {
+    // try {
       const res = await api.post("/billing/coupons/redeem", { code });
       
       if (res.data.success) {
         setBalance(res.data.balance);
         setCoupons(coupons.filter((c) => c.code !== code));
         pushToast("success", res.data.message || "Coupon redeemed successfully!");
-      } else {
-        pushToast("error", res.data.error || "Failed to redeem coupon");
       }
-    } catch (error: unknown) {
-      pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
+      // } else {
+      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      // }
+    // } catch (error: unknown) {
+    //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
+    // }
+  // };
     }
-  };
 
   const handleManualCouponApply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,17 +112,20 @@ export default function BillingTabs({
       setLoadingManualCoupon(true);
       const res = await api.post("/billing/coupons/redeem", { code });
       
-      if (res.data.success) {
+      if (res?.data?.success) {
         setBalance(res.data.balance);
         setCoupons(coupons.filter((c) => c.code !== code));
         pushToast("success", res.data.message || "Coupon redeemed successfully!");
         setManualCouponCode("");
-      } else {
-        pushToast("error", res.data.error || "Failed to redeem coupon");
       }
-    } catch (error: unknown) {
-      pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
-    } finally {
+      // } else {
+      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      // }
+    }
+    // } catch (error: unknown) {
+    //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
+    // } 
+    finally {
       setLoadingManualCoupon(false);
     }
   };

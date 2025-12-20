@@ -1080,19 +1080,18 @@ function SingleCluster({
                 </li>
                 <li>All cluster data and configurations</li>
                 <li>All associated resources</li>
+                <li>This action cannot be undone!</li>
               </ul>
-              <p className="mt-3 text-red-400 font-semibold">
-                This action cannot be undone!
-              </p>
+              
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-slate-700 text-white hover:bg-slate-600">
+            <AlertDialogCancel className="cursor-pointer bg-slate-700 text-white hover:bg-slate-600">
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={onDeleteCluster}
-              className="bg-red-600 text-white hover:bg-red-700"
+              className="cursor-pointer bg-red-600 text-white hover:bg-red-700"
             >
               Delete Cluster
             </AlertDialogAction>

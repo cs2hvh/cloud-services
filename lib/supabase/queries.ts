@@ -30,8 +30,8 @@ type GameServer = Tables<"game_servers">;
 type Product = Tables<"products">;
 type Location = Tables<"locations">;
 type OTP = Tables<"otps">;
-type  Clusters = Tables<"clusters">;
-type  ClustersGet = Tables<"clusters_get">;
+type Clusters = Tables<"clusters">;
+type ClustersGet = Tables<"clusters_get">;
 type Database = Tables<"database_clusters">;
 type Activity = Tables<"activities">;
 
@@ -41,24 +41,28 @@ interface PromocodeRedemptionEntry {
   redeemedAt?: string;
 }
 
-const isPromocodeRedemptionEntry = (value: unknown): value is PromocodeRedemptionEntry => {
+const isPromocodeRedemptionEntry = (
+  value: unknown
+): value is PromocodeRedemptionEntry => {
   if (typeof value !== "object" || value === null) {
     return false;
   }
   const record = value as Record<string, unknown>;
   const hasUserId = typeof record.userId === "string";
   const hasEmail = typeof record.email === "string";
-  const redeemedAtValid = record.redeemedAt === undefined || typeof record.redeemedAt === "string";
+  const redeemedAtValid =
+    record.redeemedAt === undefined || typeof record.redeemedAt === "string";
   return redeemedAtValid && (hasUserId || hasEmail);
 };
 
-const getPromocodeRedemptions = (value: Promocode["redeem_by"]): PromocodeRedemptionEntry[] => {
+const getPromocodeRedemptions = (
+  value: Promocode["redeem_by"]
+): PromocodeRedemptionEntry[] => {
   if (!Array.isArray(value)) {
     return [];
   }
   return value.filter(isPromocodeRedemptionEntry);
 };
-
 
 export const Users = {
   // Get a user by ID
@@ -72,18 +76,18 @@ export const Users = {
         .single();
 
       if (error) {
-        handleQueryError('Get user by ID', error, 'Users');
+        handleQueryError("Get user by ID", error, "Users");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('Get user by ID', err, 'Users');
+      handleQueryError("Get user by ID", err, "Users");
       return null;
     }
   },
 
   get_by_email: async (
-    email: string,
+    email: string
   ): Promise<(UserProfile & { email: string }) | null> => {
     try {
       const supabase = await createServiceClient();
@@ -107,13 +111,13 @@ export const Users = {
         .single();
 
       if (profileError) {
-        handleQueryError('Get user profile by email', profileError, 'Users');
+        handleQueryError("Get user profile by email", profileError, "Users");
         return null;
       }
 
       return { ...profile, email: user.email || "" };
     } catch (err) {
-      handleQueryError('Get user by email', err, 'Users');
+      handleQueryError("Get user by email", err, "Users");
       return null;
     }
   },
@@ -128,12 +132,12 @@ export const Users = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('Get all users', error, 'Users');
+        handleQueryError("Get all users", error, "Users");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('Get all users', err, 'Users');
+      handleQueryError("Get all users", err, "Users");
       return [];
     }
   },
@@ -142,7 +146,8 @@ export const Users = {
       const supabase = await createServiceClient();
       const { data, error } = await supabase
         .from("user_profiles")
-        .select(`
+        .select(
+          `
           id,
           username, 
           display_name, 
@@ -159,18 +164,19 @@ export const Users = {
           db_counts:database_cluster!owner_id(count),
           kc_counts:clusters!owner_id(count),
           server_counts:game_servers!user_id(count)
-        `)
+        `
+        )
         .order("created_at", { ascending: false });
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting all users: ${error.message}`,
+          `[Supabase] Error while getting all users: ${error.message}`
         );
         return [];
       }
 
       if (!data) return [];
-      
+
       const { data: authUsers } = await supabase.auth.admin.listUsers();
 
       // Merge user profiles with auth data to include emails and extract counts
@@ -188,7 +194,7 @@ export const Users = {
         updated_at: u.updated_at,
         suspend: u.suspend,
         two_factor_enabled: u.two_factor_enabled,
-        email: authUsers?.users.find(a => a.id === u.id)?.email || null,
+        email: authUsers?.users.find((a) => a.id === u.id)?.email || null,
         db_counts: u.db_counts?.[0]?.count || 0,
         kc_counts: u.kc_counts?.[0]?.count || 0,
         server_counts: u.server_counts?.[0]?.count || 0,
@@ -211,12 +217,12 @@ export const Users = {
         .single();
 
       if (error) {
-        handleQueryError('Get user by discord', error, 'Users');
+        handleQueryError("Get user by discord", error, "Users");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('Get user by discord', err, 'Users');
+      handleQueryError("Get user by discord", err, "Users");
       return null;
     }
   },
@@ -231,38 +237,40 @@ export const Users = {
         .single();
 
       if (error) {
-        handleQueryError('Get user by steam', error, 'Users');
+        handleQueryError("Get user by steam", error, "Users");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('Get user by steam', err, 'Users');
+      handleQueryError("Get user by steam", err, "Users");
       return null;
     }
   },
 
-  update_password: async (userId: string, newPassword: string): Promise<boolean> => {
+  update_password: async (
+    userId: string,
+    newPassword: string
+  ): Promise<boolean> => {
     try {
       const supabase = await createServiceClient();
-      const { error } = await supabase.auth.admin.updateUserById(
-        userId,
-        { password: newPassword }
-      );
+      const { error } = await supabase.auth.admin.updateUserById(userId, {
+        password: newPassword,
+      });
 
       if (error) {
-        handleQueryError('Update user password', error, 'Users');
+        handleQueryError("Update user password", error, "Users");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('Update user password', err, 'Users');
+      handleQueryError("Update user password", err, "Users");
       return false;
     }
   },
 
   // Create a new user profile (called automatically by trigger)
   create: async (
-    props: TablesInsert<"user_profiles">,
+    props: TablesInsert<"user_profiles">
   ): Promise<string | null> => {
     try {
       const supabase = await createClient();
@@ -273,12 +281,12 @@ export const Users = {
         .single();
 
       if (error) {
-        handleQueryError('Create user profile', error, 'Users');
+        handleQueryError("Create user profile", error, "Users");
         return null;
       }
       return data.id;
     } catch (err) {
-      handleQueryError('Create user profile', err, 'Users');
+      handleQueryError("Create user profile", err, "Users");
       return null;
     }
   },
@@ -286,7 +294,7 @@ export const Users = {
   // Update an existing user
   update: async (
     id: string,
-    props: TablesUpdate<"user_profiles">,
+    props: TablesUpdate<"user_profiles">
   ): Promise<boolean> => {
     try {
       const supabase = await createClient();
@@ -296,12 +304,12 @@ export const Users = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('Update user', error, 'Users');
+        handleQueryError("Update user", error, "Users");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('Update user', err, 'Users');
+      handleQueryError("Update user", err, "Users");
       return false;
     }
   },
@@ -313,12 +321,12 @@ export const Users = {
       const { error } = await supabase.auth.admin.deleteUser(userId);
 
       if (error) {
-        handleQueryError('Delete user', error, 'Users');
+        handleQueryError("Delete user", error, "Users");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('Delete user', err, 'Users');
+      handleQueryError("Delete user", err, "Users");
       return false;
     }
   },
@@ -332,12 +340,12 @@ export const Users = {
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        handleQueryError('Count users', error, 'Users');
+        handleQueryError("Count users", error, "Users");
         return 0;
       }
       return count || 0;
     } catch (err) {
-      handleQueryError('Count users', err, 'Users');
+      handleQueryError("Count users", err, "Users");
       return 0;
     }
   },
@@ -358,8 +366,12 @@ export const Billing = {
   },
 
   get_user_credits: async (
-    userId: string,
-  ): Promise<{ credit_balance: number; promo_credits: number; topup_credits: number }> => {
+    userId: string
+  ): Promise<{
+    credit_balance: number;
+    promo_credits: number;
+    topup_credits: number;
+  }> => {
     const supabase = await createServiceClient();
     const { data, error } = await supabase
       .schema("billing")
@@ -368,7 +380,7 @@ export const Billing = {
       .eq("user_id", userId)
       .maybeSingle();
     if (error || !data) {
-      console.log(error?.message,"error getting balance")
+      console.log(error?.message, "error getting balance");
       return { credit_balance: 0, promo_credits: 0, topup_credits: 0 };
     }
 
@@ -377,16 +389,25 @@ export const Billing = {
       .schema("billing")
       .from("promocodes")
       .select("amount, redeem_by");
-    
+
     const promoCredits = (promos ?? []).reduce((total, promo) => {
-      const userRedeemed = getPromocodeRedemptions(promo.redeem_by).some((entry) => entry.userId === userId);
+      const userRedeemed = getPromocodeRedemptions(promo.redeem_by).some(
+        (entry) => entry.userId === userId
+      );
       return userRedeemed ? total + (promo.amount ?? 0) : total;
     }, 0);
 
     const creditBalance = data.credit_balance ?? 0;
     const topupCredits = Math.max(0, creditBalance - promoCredits);
 
-    console.log(creditBalance,"data.credit_balance", promoCredits, "promo_credits", topupCredits, "topup_credits")
+    console.log(
+      creditBalance,
+      "data.credit_balance",
+      promoCredits,
+      "promo_credits",
+      topupCredits,
+      "topup_credits"
+    );
     return {
       credit_balance: creditBalance,
       promo_credits: promoCredits,
@@ -396,8 +417,12 @@ export const Billing = {
 
   topup: async (
     userId: string,
-    amount: number,
-  ): Promise<{ credit_balance: number; promo_credits?: number; topup_credits?: number }> => {
+    amount: number
+  ): Promise<{
+    credit_balance: number;
+    promo_credits?: number;
+    topup_credits?: number;
+  }> => {
     const supabase = await createServiceClient();
     const { data: existing } = await supabase
       .schema("billing")
@@ -407,14 +432,14 @@ export const Billing = {
       .maybeSingle();
 
     const prevBal = existing?.credit_balance ?? 0;
-   // const prevTop = (existing as any)?.topup_credits ?? 0;
+    // const prevTop = (existing as any)?.topup_credits ?? 0;
 
     if (!existing) {
       console.log("user has no existing credits, creating new record");
       const { data, error } = await supabase
         .schema("billing")
         .from("user_credits")
-        .insert({ user_id: userId, credit_balance: amount})
+        .insert({ user_id: userId, credit_balance: amount })
         .select("credit_balance")
         .single();
       if (error) throw new Error(`Top-up failed: ${error.message}`);
@@ -427,7 +452,7 @@ export const Billing = {
 
     const next = {
       credit_balance: prevBal + amount,
-    } 
+    };
 
     const { data, error } = await supabase
       .schema("billing")
@@ -438,19 +463,22 @@ export const Billing = {
       .single();
     if (error) throw new Error(`Top-up failed: ${error.message}`);
     return {
-      credit_balance: data ?.credit_balance ?? next.credit_balance,
+      credit_balance: data?.credit_balance ?? next.credit_balance,
       promo_credits: 0,
       topup_credits: 0,
     };
   },
 
-  has_balance: async (userId: string, requiredAmount: number): Promise<boolean> => {
+  has_balance: async (
+    userId: string,
+    requiredAmount: number
+  ): Promise<boolean> => {
     const bal = await Billing.get_balance(userId);
     return bal >= requiredAmount;
   },
 
   deduct: async (userId: string, amount: number): Promise<number> => {
-    console.log(amount,"amount to deduct")
+    // console.log(amount,"amount to deduct")
     const supabase = await createServiceClient();
     const bal = await Billing.get_balance(userId);
     if (bal < amount) throw new Error("Insufficient balance");
@@ -465,7 +493,11 @@ export const Billing = {
     return (data?.credit_balance as number) ?? bal - amount;
   },
 
-  add_active_kubernetes: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+  add_active_kubernetes: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
     const supabase = await createServiceClient();
     const { error } = await supabase
       .schema("billing")
@@ -477,9 +509,14 @@ export const Billing = {
         status: "active",
         last_billed_at: new Date().toISOString(),
       });
-    if (error) throw new Error(`Failed to insert active_kubernetes: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to insert active_kubernetes: ${error.message}`);
   },
-  add_active_database: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+  add_active_database: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
     const supabase = await createServiceClient();
     const { error } = await supabase
       .schema("billing")
@@ -491,9 +528,14 @@ export const Billing = {
         status: "active",
         last_billed_at: new Date().toISOString(),
       });
-    if (error) throw new Error(`Failed to insert active_database: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to insert active_database: ${error.message}`);
   },
-  add_active_objectspace: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+  add_active_objectspace: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
     const supabase = await createServiceClient();
     const { error } = await supabase
       .schema("billing")
@@ -505,9 +547,14 @@ export const Billing = {
         status: "active",
         last_billed_at: new Date().toISOString(),
       });
-    if (error) throw new Error(`Failed to insert active_objectspace: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to insert active_objectspace: ${error.message}`);
   },
-  add_active_spectrum: async (params: { userId: string; serviceId: string; hourlyRate: number }) => {
+  add_active_spectrum: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
     const supabase = await createServiceClient();
     const { error } = await supabase
       .schema("billing")
@@ -519,7 +566,8 @@ export const Billing = {
         status: "active",
         last_billed_at: new Date().toISOString(),
       });
-    if (error) throw new Error(`Failed to insert active_spectrum: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to insert active_spectrum: ${error.message}`);
   },
 
   // Internal helper: compute prorated charge for remaining fraction of hour
@@ -528,7 +576,10 @@ export const Billing = {
     lastBilledAt?: string | Date,
     now: Date = new Date()
   ): number => {
-    const rate = typeof hourlyRate === "number" ? hourlyRate : parseFloat(String(hourlyRate));
+    const rate =
+      typeof hourlyRate === "number"
+        ? hourlyRate
+        : parseFloat(String(hourlyRate));
     if (!rate || isNaN(rate) || rate <= 0) return 0;
 
     let last: Date | null = null;
@@ -543,7 +594,9 @@ export const Billing = {
     }
 
     // Bill for elapsed time since last_billed_at; if no last, bill 1 full hour
-    const hoursUsed = last ? Math.max(0, (now.getTime() - last.getTime()) / (1000 * 60 * 60)) : 1;
+    const hoursUsed = last
+      ? Math.max(0, (now.getTime() - last.getTime()) / (1000 * 60 * 60))
+      : 1;
     const cost = Number((hoursUsed * rate).toFixed(6));
     return cost;
   },
@@ -562,14 +615,19 @@ export const Billing = {
     };
     const table = tableMap[type];
     if (!table) {
-      console.error(`[Billing.close_active_service] Unknown service type:`, type);
+      console.error(
+        `[Billing.close_active_service] Unknown service type:`,
+        type
+      );
       throw new Error(`Unknown service type: ${type}`);
     }
 
-    console.log(
-      `[Billing.close_active_service] Fetching active row`,
-      { type, table, userId: params.userId, serviceId: params.serviceId }
-    );
+    console.log(`[Billing.close_active_service] Fetching active row`, {
+      type,
+      table,
+      userId: params.userId,
+      serviceId: params.serviceId,
+    });
     // Fetch active row
     const { data: row, error: getErr } = await supabase
       .schema("billing")
@@ -598,29 +656,31 @@ export const Billing = {
         .schema("billing")
         .from(table)
         .delete()
-        .eq("service_id", params.serviceId)
-        //.eq("user_id", row?.user_id);
+        .eq("service_id", params.serviceId);
+      //.eq("user_id", row?.user_id);
       return { charged: 0, newBalance: null };
     }
 
-    const hourlyRate = (row)?.hourly_rate as number;
-    const lastBilledAt = (row)?.last_billed_at as string | undefined;
+    const hourlyRate = row?.hourly_rate as number;
+    const lastBilledAt = row?.last_billed_at as string | undefined;
     const charge = Billing._computeProratedCharge(hourlyRate, lastBilledAt);
 
-    console.log(
-      `[Billing.close_active_service] Computed charge`,
-      { hourlyRate, lastBilledAt, charge }
-    );
+    console.log(`[Billing.close_active_service] Computed charge`, {
+      hourlyRate,
+      lastBilledAt,
+      charge,
+    });
 
     // Deduct credits
     let newBalance: number | null = null;
     if (charge > 0) {
       try {
         newBalance = await Billing.deduct(row.user_id, charge);
-        console.log(
-          `[Billing.close_active_service] Deduction successful`,
-          { userId: params.userId, charge, newBalance }
-        );
+        console.log(`[Billing.close_active_service] Deduction successful`, {
+          userId: params.userId,
+          charge,
+          newBalance,
+        });
       } catch (error) {
         if (params.failOnInsufficient) {
           throw new Error("Insufficient balance");
@@ -639,8 +699,8 @@ export const Billing = {
       .schema("billing")
       .from(table)
       .delete()
-      .eq("service_id", params.serviceId)
-      //.eq("user_id", params.userId);
+      .eq("service_id", params.serviceId);
+    //.eq("user_id", params.userId);
     if (delErr) {
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,
@@ -649,10 +709,11 @@ export const Billing = {
       throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
     }
 
-    console.log(
-      `[Billing.close_active_service] Closed service successfully`,
-      { type, charged: charge, newBalance }
-    );
+    console.log(`[Billing.close_active_service] Closed service successfully`, {
+      type,
+      charged: charge,
+      newBalance,
+    });
 
     return { charged: charge, newBalance };
   },
@@ -672,7 +733,7 @@ export const Projects = {
 
       if (error) {
         console.log(
-          `[Supabase] Error while getting project by id: ${error.message}`,
+          `[Supabase] Error while getting project by id: ${error.message}`
         );
         return null;
       }
@@ -690,17 +751,17 @@ export const Projects = {
       const { data, error } = await supabase
         .from("projects")
         .select("*")
-        .eq("owner", userId)
+        .eq("owner", userId);
 
       if (error) {
         console.log(
-          `[Supabase] Error............. while getting projects by userId: ${error.message}`,
+          `[Supabase] Error............. while getting projects by userId: ${error.message}`
         );
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting projects by userId', err, 'Projects');
+      handleQueryError("getting projects by userId", err, "Projects");
       return [];
     }
   },
@@ -708,17 +769,15 @@ export const Projects = {
   get_all_for_admin: async (): Promise<Project[]> => {
     try {
       const supabase = await createServiceClient();
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
+      const { data, error } = await supabase.from("projects").select("*");
 
       if (error) {
-        handleQueryError('getting all projects for admin', error, 'Projects');
+        handleQueryError("getting all projects for admin", error, "Projects");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting all projects for admin', err, 'Projects');
+      handleQueryError("getting all projects for admin", err, "Projects");
       return [];
     }
   },
@@ -733,12 +792,12 @@ export const Projects = {
         .single();
 
       if (error) {
-        handleQueryError('creating project', error, 'Projects');
+        handleQueryError("creating project", error, "Projects");
         return null;
       }
       return data.id;
     } catch (err) {
-      handleQueryError('creating project', err, 'Projects');
+      handleQueryError("creating project", err, "Projects");
       return null;
     }
   },
@@ -746,7 +805,7 @@ export const Projects = {
   // Update an existing project
   update: async (
     id: string,
-    props: TablesUpdate<"projects">,
+    props: TablesUpdate<"projects">
   ): Promise<boolean> => {
     try {
       const supabase = await createClient();
@@ -756,12 +815,12 @@ export const Projects = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('updating project', error, 'Projects');
+        handleQueryError("updating project", error, "Projects");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('updating project', err, 'Projects');
+      handleQueryError("updating project", err, "Projects");
       return false;
     }
   },
@@ -773,12 +832,12 @@ export const Projects = {
       const { error } = await supabase.from("projects").delete().eq("id", id);
 
       if (error) {
-        handleQueryError('deleting project', error, 'Projects');
+        handleQueryError("deleting project", error, "Projects");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('deleting project', err, 'Projects');
+      handleQueryError("deleting project", err, "Projects");
       return false;
     }
   },
@@ -793,12 +852,12 @@ export const Projects = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting project logs', error, 'Projects');
+        handleQueryError("getting project logs", error, "Projects");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('getting project logs', err, 'Projects');
+      handleQueryError("getting project logs", err, "Projects");
       return null;
     }
   },
@@ -813,28 +872,32 @@ export const Projects = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting project logs by user', error, 'Projects');
+        handleQueryError("getting project logs by user", error, "Projects");
         return [];
       }
       return data;
     } catch (err) {
-      handleQueryError('getting project logs by user', err, 'Projects');
+      handleQueryError("getting project logs by user", err, "Projects");
       return [];
     }
   },
 
-  add_log: async (props: TablesInsert<"project_logs">,role?:string): Promise<boolean> => {
+  add_log: async (
+    props: TablesInsert<"project_logs">,
+    role?: string
+  ): Promise<boolean> => {
     try {
-      const supabase =role==='admin' ? await createServiceClient() : await createClient();
+      const supabase =
+        role === "admin" ? await createServiceClient() : await createClient();
       const { error } = await supabase.from("project_logs").insert(props);
 
       if (error) {
-        handleQueryError('creating project log', error, 'Projects');
+        handleQueryError("creating project log", error, "Projects");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('creating project log', err, 'Projects');
+      handleQueryError("creating project log", err, "Projects");
       return false;
     }
   },
@@ -848,12 +911,12 @@ export const Projects = {
         .select("*", { count: "exact", head: true });
 
       if (error) {
-        handleQueryError('counting projects', error, 'Projects');
+        handleQueryError("counting projects", error, "Projects");
         return 0;
       }
       return count || 0;
     } catch (err) {
-      handleQueryError('counting projects', err, 'Projects');
+      handleQueryError("counting projects", err, "Projects");
       return 0;
     }
   },
@@ -870,12 +933,12 @@ export const GameServers = {
         .single();
 
       if (error) {
-        handleQueryError('getting game server by id', error, 'GameServers');
+        handleQueryError("getting game server by id", error, "GameServers");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('getting game server by id', err, 'GameServers');
+      handleQueryError("getting game server by id", err, "GameServers");
       return null;
     }
   },
@@ -890,12 +953,12 @@ export const GameServers = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting game servers by user', error, 'GameServers');
+        handleQueryError("getting game servers by user", error, "GameServers");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting game servers by user', err, 'GameServers');
+      handleQueryError("getting game servers by user", err, "GameServers");
       return [];
     }
   },
@@ -910,18 +973,22 @@ export const GameServers = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting game servers by project', error, 'GameServers');
+        handleQueryError(
+          "getting game servers by project",
+          error,
+          "GameServers"
+        );
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting game servers by project', err, 'GameServers');
+      handleQueryError("getting game servers by project", err, "GameServers");
       return [];
     }
   },
 
   create: async (
-    props: TablesInsert<"game_servers">,
+    props: TablesInsert<"game_servers">
   ): Promise<number | null> => {
     try {
       const supabase = await createClient();
@@ -932,19 +999,19 @@ export const GameServers = {
         .single();
 
       if (error) {
-        handleQueryError('creating game server', error, 'GameServers');
+        handleQueryError("creating game server", error, "GameServers");
         return null;
       }
       return data.id;
     } catch (err) {
-      handleQueryError('creating game server', err, 'GameServers');
+      handleQueryError("creating game server", err, "GameServers");
       return null;
     }
   },
 
   update: async (
     id: number,
-    props: TablesUpdate<"game_servers">,
+    props: TablesUpdate<"game_servers">
   ): Promise<boolean> => {
     try {
       const supabase = await createClient();
@@ -954,12 +1021,12 @@ export const GameServers = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('updating game server', error, 'GameServers');
+        handleQueryError("updating game server", error, "GameServers");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('updating game server', err, 'GameServers');
+      handleQueryError("updating game server", err, "GameServers");
       return false;
     }
   },
@@ -973,12 +1040,12 @@ export const GameServers = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('deleting game server', error, 'GameServers');
+        handleQueryError("deleting game server", error, "GameServers");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('deleting game server', err, 'GameServers');
+      handleQueryError("deleting game server", err, "GameServers");
       return false;
     }
   },
@@ -995,12 +1062,12 @@ export const Products = {
         .single();
 
       if (error) {
-        handleQueryError('getting product by id', error, 'Products');
+        handleQueryError("getting product by id", error, "Products");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('getting product by id', err, 'Products');
+      handleQueryError("getting product by id", err, "Products");
       return null;
     }
   },
@@ -1014,12 +1081,12 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting all products', error, 'Products');
+        handleQueryError("getting all products", error, "Products");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting all products', err, 'Products');
+      handleQueryError("getting all products", err, "Products");
       return [];
     }
   },
@@ -1034,17 +1101,20 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting products by type', error, 'Products');
+        handleQueryError("getting products by type", error, "Products");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting products by type', err, 'Products');
+      handleQueryError("getting products by type", err, "Products");
       return [];
     }
   },
 
-  get_by_type_and_subtype: async (type: string, subtype: string): Promise<Product[]> => {
+  get_by_type_and_subtype: async (
+    type: string,
+    subtype: string
+  ): Promise<Product[]> => {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase
@@ -1055,18 +1125,22 @@ export const Products = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting products by type and subtype', error, 'Products');
+        handleQueryError(
+          "getting products by type and subtype",
+          error,
+          "Products"
+        );
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting products by type and subtype', err, 'Products');
+      handleQueryError("getting products by type and subtype", err, "Products");
       return [];
     }
   },
 
   create: async (
-    props: TablesInsert<"products">,
+    props: TablesInsert<"products">
   ): Promise<{ success: boolean; data?: Product; error?: string }> => {
     try {
       const supabase = await createServiceClient();
@@ -1077,19 +1151,19 @@ export const Products = {
         .single();
 
       if (error) {
-        handleQueryError('creating product', error, 'Products');
+        handleQueryError("creating product", error, "Products");
         return { success: false, error: error.message };
       }
       return { success: true, data };
     } catch (err) {
-      handleQueryError('creating product', err, 'Products');
+      handleQueryError("creating product", err, "Products");
       return { success: false, error: String(err) };
     }
   },
 
   update: async (
     id: string,
-    props: TablesUpdate<"products">,
+    props: TablesUpdate<"products">
   ): Promise<{ success: boolean; data?: Product; error?: string }> => {
     try {
       const supabase = await createServiceClient();
@@ -1101,12 +1175,12 @@ export const Products = {
         .single();
 
       if (error) {
-        handleQueryError('updating product', error, 'Products');
+        handleQueryError("updating product", error, "Products");
         return { success: false, error: error.message };
       }
       return { success: true, data };
     } catch (err) {
-      handleQueryError('updating product', err, 'Products');
+      handleQueryError("updating product", err, "Products");
       return { success: false, error: String(err) };
     }
   },
@@ -1117,22 +1191,22 @@ export const Products = {
       const { error } = await supabase.from("products").delete().eq("id", id);
 
       if (error) {
-        handleQueryError('deleting product', error, 'Products');
+        handleQueryError("deleting product", error, "Products");
         return { success: false, error: error.message };
       }
       return { success: true };
     } catch (err) {
-      handleQueryError('deleting product', err, 'Products');
+      handleQueryError("deleting product", err, "Products");
       return { success: false, error: String(err) };
     }
   },
 
   check_usage: async (
-    id: string,
+    id: string
   ): Promise<{ inUse: boolean; count: number }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Check if any database cluster is using this product's size
       // The size field in database_clusters matches the product id pattern
       const { count, error } = await supabase
@@ -1141,13 +1215,13 @@ export const Products = {
         .eq("size", id);
 
       if (error) {
-        handleQueryError('checking product usage', error, 'Products');
+        handleQueryError("checking product usage", error, "Products");
         return { inUse: false, count: 0 };
       }
 
       return { inUse: (count || 0) > 0, count: count || 0 };
     } catch (err) {
-      handleQueryError('checking product usage', err, 'Products');
+      handleQueryError("checking product usage", err, "Products");
       return { inUse: false, count: 0 };
     }
   },
@@ -1165,12 +1239,12 @@ export const Locations = {
         .order("city");
 
       if (error) {
-        handleQueryError('getting locations', error, 'Locations');
+        handleQueryError("getting locations", error, "Locations");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting locations', err, 'Locations');
+      handleQueryError("getting locations", err, "Locations");
       return [];
     }
   },
@@ -1185,12 +1259,12 @@ export const Locations = {
         .order("city");
 
       if (error) {
-        handleQueryError('getting locations by type', error, 'Locations');
+        handleQueryError("getting locations by type", error, "Locations");
         return [];
       }
       return data || [];
     } catch (err) {
-      handleQueryError('getting locations by type', err, 'Locations');
+      handleQueryError("getting locations by type", err, "Locations");
       return [];
     }
   },
@@ -1203,15 +1277,13 @@ export const Locations = {
       .single();
 
     if (error) {
-      handleQueryError('inserting location', error, 'Locations');
+      handleQueryError("inserting location", error, "Locations");
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data };
   },
 };
-
-        
 
 export const OTPs = {
   create: async (props: TablesInsert<"otps">): Promise<number | null> => {
@@ -1224,12 +1296,12 @@ export const OTPs = {
         .single();
 
       if (error) {
-        handleQueryError('creating OTP', error, 'OTPs');
+        handleQueryError("creating OTP", error, "OTPs");
         return null;
       }
       return data.id;
     } catch (err) {
-      handleQueryError('creating OTP', err, 'OTPs');
+      handleQueryError("creating OTP", err, "OTPs");
       return null;
     }
   },
@@ -1248,12 +1320,12 @@ export const OTPs = {
         .single();
 
       if (error) {
-        handleQueryError('getting OTP by email', error, 'OTPs');
+        handleQueryError("getting OTP by email", error, "OTPs");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('getting OTP by email', err, 'OTPs');
+      handleQueryError("getting OTP by email", err, "OTPs");
       return null;
     }
   },
@@ -1267,17 +1339,20 @@ export const OTPs = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('verifying OTP', error, 'OTPs');
+        handleQueryError("verifying OTP", error, "OTPs");
         return false;
       }
       return true;
     } catch (err) {
-      handleQueryError('verifying OTP', err, 'OTPs');
+      handleQueryError("verifying OTP", err, "OTPs");
       return false;
     }
   },
 
-  verify_otp: async (email: string, otp_code: string): Promise<{ id: number; verified: boolean; expires_at: string } | null> => {
+  verify_otp: async (
+    email: string,
+    otp_code: string
+  ): Promise<{ id: number; verified: boolean; expires_at: string } | null> => {
     try {
       const supabase = await createServiceClient();
       const { data, error } = await supabase
@@ -1292,238 +1367,143 @@ export const OTPs = {
         .single();
 
       if (error || !data) {
-        handleQueryError('verifying OTP code', error || new Error('No data found'), 'OTPs');
+        handleQueryError(
+          "verifying OTP code",
+          error || new Error("No data found"),
+          "OTPs"
+        );
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('verifying OTP code', err, 'OTPs');
+      handleQueryError("verifying OTP code", err, "OTPs");
       return null;
     }
   },
 };
 
 
-// export const Vms = {
-//   // Get a project by ID
-//   get_by_specs: async (payloads: {
-//     name: string;
-//     location: string;
-//     version: string;
-//     planDetails: Plan;
-//     nodes: number;
-//   }) => {
-//    // console.log(payloads, "...........in buildPayloadWithFreeIps........");
-//     const nodeKeys = makeNodeKeys(payloads.nodes);
-//     console.log(nodeKeys, "...........nodeKeys........");
-
-//     const supabase = await createSSRClient()
-
-//     const { data, error } = await supabase
-//       .from("vms")
-//       .select(
-//         "id, ip_address, username, location,ram,cpu,storage, status, created_at"
-//       )
-//       .eq("location", payloads.location)
-//       .eq("status", "free")
-//       .eq("ram", payloads.planDetails.ram)
-//       .eq("cpu", payloads.planDetails.cpu)
-//       .eq("storage", payloads.planDetails.storage)
-//       .order("created_at", { ascending: true })
-//       .limit(payloads.nodes + 1);
-
-//     //console.log(res.status, "...........res.status........");
-
-//     if (error) {
-//       // const msg = await res.text().catch(() => "Failed to fetch free IPs");
-//       console.log(error.message, "...............error.message");
-//       return { success: false, error: error.message };
-//     }
-//     console.log(data, "...............data");
-
-//     const ips = data.slice(0, payloads.nodes + 1).map((v) => v.ip_address);
-
-//     //3) Build node map with attached IPs
-//     const nodes: Record<
-//       string,
-//       {
-//         host: string;
-//         role: "control-plane" | "worker";
-//         hostname: string;
-//         cpu: number;
-//         memory_mb: number;
-//       }
-//     > = {};
-
-//     nodeKeys.forEach((key, i) => {
-//       nodes[key] = {
-//         host: ips[i],
-//         role: key.startsWith("cp-") ? "control-plane" : "worker",
-//         hostname: key,
-//         cpu: payloads.planDetails.cpu,
-//         memory_mb: payloads.planDetails.ram,
-//       };
-//     });
-
-//     // 4) Final payload (IPs included; no passwords in ips array)
-//     const payload = {
-//       provider: "existing",
-//       cluster: {
-//         name: payloads.name,
-//         location: payloads.location,
-//         pod_cidr: "10.244.0.0/16",
-//         k8s_minor: payloads.version,
-//       },
-//       auth: { method: "password", user: "root", password: "luV5DivOV98g" }, // <-- replace with your real secret handling
-//       nodes,
-//       ips, // only IPs, as requested
-//     };
-
-//     return { success: true, payload };
-//   },
-
-//   update_vm_by_ip: async (ips: string[]) => {
-//     console.log(ips, "...............ips");
-
-
-//     const { data, error } = await supabase
-//       .from("vms")
-//       .update({ status: "used" })
-//       .in("ip_address", ips) // <- match multiple rows by IP
-//       .eq("status", "free") // optional guard: only free -> used
-//       .select("id, ip_address, username, location, status, created_at");
-//     if (error?.message) {
-//       console.log(error?.message, "...............error.message");
-//       throw new Error(error.message);
-//     }
-
-//     return {
-//       success: true,
-//       message: "IP status updated successfully",
-//       data: data,
-//     };
-//   },
-// };
-
-
 export const Clusters = {
   // Get a project by ID
-//   create:async(payload:Clusters )=>{
+  //   create:async(payload:Clusters )=>{
 
-//     const encryptedKubeconfig = payload.kubeConfig
-//         ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
-//         : null;
-//       const row = {
-//     cluster_id: payload.clusterId,
-//     cluster_name: payload.clusterName,
+  //     const encryptedKubeconfig = payload.kubeConfig
+  //         ? Encryption.encrypt(payload.kubeConfig, process.env.ENCRYPTION_KEY!)
+  //         : null;
+  //       const row = {
+  //     cluster_id: payload.clusterId,
+  //     cluster_name: payload.clusterName,
 
-//     control_plane: payload.controlPlane ?? null,
-//     workers: payload.workers ?? [],
+  //     control_plane: payload.controlPlane ?? null,
+  //     workers: payload.workers ?? [],
 
-//     create_status: payload.createStatus ?? false,
-//     connect_status: payload.connectStatus ?? false,
-//     verify_status: payload.verifyStatus ?? false,
+  //     create_status: payload.createStatus ?? false,
+  //     connect_status: payload.connectStatus ?? false,
+  //     verify_status: payload.verifyStatus ?? false,
 
-//     kubeconfig: encryptedKubeconfig ?? null,
-//     node_config: payload.nodeConfig ?? null,
+  //     kubeconfig: encryptedKubeconfig ?? null,
+  //     node_config: payload.nodeConfig ?? null,
 
-//     cni_plugin: payload.cniPlugin ?? null,
-//     k8s_version: payload.k8sVersion ?? null,
+  //     cni_plugin: payload.cniPlugin ?? null,
+  //     k8s_version: payload.k8sVersion ?? null,
 
-//     status: payload.status ?? "pending",
-//     password: payload.password ?? null,
-//    // owner_id: payload.ownerId ?? null,
-//   };
+  //     status: payload.status ?? "pending",
+  //     password: payload.password ?? null,
+  //    // owner_id: payload.ownerId ?? null,
+  //   };
 
+  //   const { data, error } = await supabase
+  //     .from("clusters")
+  //     .insert(row)
+  //     .select()
+  //     .single();
 
-  
+  //   if (error) {
+  //     console.error("[createClusterWorker] insert failed:", error.message);
+  //     return { success: false, error: error.message };
+  //   }
+  //   return {
+  //     success: true,
+  //     cluster: data
+  //   };
+  //   },
 
-//   const { data, error } = await supabase
-//     .from("clusters")
-//     .insert(row)
-//     .select()
-//     .single();
+  //   update: async (params: {
+  //   clusterId: string;
+  //   phase: Phase;
+  //   value?: boolean;
+  //   status?: Status;
+  //   extras?: Partial<{
+  //     control_plane: string | null;
+  //     workers: string[];
+  //     kubeconfig: string | null;
+  //     node_config: NodeConfig | null;
+  //     cni_plugin: string | null;
+  //     k8s_version: string | null;
+  //   }>;
+  // }) => {
+  //   const { clusterId, phase, value = true, status, extras = {} } = params;
 
-//   if (error) {
-//     console.error("[createClusterWorker] insert failed:", error.message);
-//     return { success: false, error: error.message };
-//   }
-//   return { 
-//     success: true, 
-//     cluster: data 
-//   };
-//   },
+  //   const fieldMap: Record<
+  //     Phase,
+  //     "create_status" | "connect_status" | "verify_status"
+  //   > = {
+  //     create: "create_status",
+  //     connect: "connect_status",
+  //     verify: "verify_status",
+  //   };
 
-//   update: async (params: {
-//   clusterId: string;
-//   phase: Phase;
-//   value?: boolean;
-//   status?: Status;
-//   extras?: Partial<{
-//     control_plane: string | null;
-//     workers: string[];
-//     kubeconfig: string | null;
-//     node_config: NodeConfig | null;
-//     cni_plugin: string | null;
-//     k8s_version: string | null;
-//   }>;
-// }) => {
-//   const { clusterId, phase, value = true, status, extras = {} } = params;
+  //   const patch:Patch  = {
+  //     [fieldMap[phase]]: value,
+  //     ...extras,
+  //   };
+  //    if (status) patch.status = status;
 
-//   const fieldMap: Record<
-//     Phase,
-//     "create_status" | "connect_status" | "verify_status"
-//   > = {
-//     create: "create_status",
-//     connect: "connect_status",
-//     verify: "verify_status",
-//   };
+  //   const supabase = clientWorker(
+  //   process.env.SUPABASE_URL!, // or SUPABASE_URL
+  //   process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
+  //   { auth: { persistSession: false } }
+  // );
 
-//   const patch:Patch  = {
-//     [fieldMap[phase]]: value,
-//     ...extras,
-//   };
-//    if (status) patch.status = status;
+  //   const { data, error } = await supabase
+  //     .from("clusters")
+  //     .update(patch)
+  //     .eq("cluster_id", clusterId)
+  //     .select()
+  //     .single();
 
+  //   if (error) {
+  //     console.error("[updateClusterPhaseWorker] failed:", error.message);
+  //     return { success: false, error: error.message };
+  //   }
+  //   return { success: true, cluster: data };
+  //   },
 
-//   const supabase = clientWorker(
-//   process.env.SUPABASE_URL!, // or SUPABASE_URL
-//   process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!, // service role for server-side writes
-//   { auth: { persistSession: false } }
-// );
-
-//   const { data, error } = await supabase
-//     .from("clusters")
-//     .update(patch)
-//     .eq("cluster_id", clusterId)
-//     .select()
-//     .single();
-
-//   if (error) {
-//     console.error("[updateClusterPhaseWorker] failed:", error.message);
-//     return { success: false, error: error.message };
-//   }
-//   return { success: true, cluster: data };
-//   },
-  
-   get_by_project_id: async (projectId: string): Promise<ClustersGet[]>=> {
+  get_by_project_id: async (projectId: string): Promise<ClustersGet[]> => {
     try {
       //console.log(projectId,"..................933..id");
 
+      if (!projectId || typeof projectId !== "string") {
+        handleQueryError(
+          "getting project by id - invalid project ID",
+          new Error("Invalid project ID"),
+          "Clusters"
+        );
+        return [];
+      }
 
-       if (!projectId || typeof projectId !== 'string') {
-      handleQueryError('getting project by id - invalid project ID', new Error('Invalid project ID'), 'Clusters');
-      return [];
-    }
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(projectId)) {
+        handleQueryError(
+          "getting project by id - invalid UUID format",
+          new Error("Invalid UUID format"),
+          "Clusters"
+        );
+        return [];
+      }
 
-
-     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(projectId)) {
-      handleQueryError('getting project by id - invalid UUID format', new Error('Invalid UUID format'), 'Clusters');
-      return [];
-    }
-
-   const supabase = await createWorkerClient();
+      const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
@@ -1532,36 +1512,41 @@ export const Clusters = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting clusters by project id', error, 'Clusters');
+        handleQueryError("getting clusters by project id", error, "Clusters");
         return [];
       }
       return data;
     } catch (err) {
-      handleQueryError('getting clusters by project id', err, 'Clusters');
+      handleQueryError("getting clusters by project id", err, "Clusters");
       return [];
     }
   },
 
-
-
-   get_by_user_id: async (userId: string): Promise<ClustersGet[]>=> {
+  get_by_user_id: async (userId: string): Promise<ClustersGet[]> => {
     try {
       //console.log(projectId,"..................933..id");
 
+      if (!userId || typeof userId !== "string") {
+        handleQueryError(
+          "getting clusters by user id - invalid user ID",
+          new Error("Invalid user ID"),
+          "Clusters"
+        );
+        return [];
+      }
 
-       if (!userId || typeof userId !== 'string') {
-      handleQueryError('getting clusters by user id - invalid user ID', new Error('Invalid user ID'), 'Clusters');
-      return [];
-    }
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(userId)) {
+        handleQueryError(
+          "getting clusters by user id - invalid UUID format",
+          new Error("Invalid UUID format"),
+          "Clusters"
+        );
+        return [];
+      }
 
-
-     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(userId)) {
-      handleQueryError('getting clusters by user id - invalid UUID format', new Error('Invalid UUID format'), 'Clusters');
-      return [];
-    }
-
-   const supabase = await createWorkerClient();
+      const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
@@ -1570,20 +1555,20 @@ export const Clusters = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('getting clusters by user id', error, 'Clusters');
+        handleQueryError("getting clusters by user id", error, "Clusters");
         return [];
       }
       return data;
     } catch (err) {
-      handleQueryError('getting clusters by user id', err, 'Clusters');
+      handleQueryError("getting clusters by user id", err, "Clusters");
       return [];
     }
   },
 
-   get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
+  get_by_id: async (cluster_id: string): Promise<ClustersGet | null> => {
     try {
       //console.log(cluster_id,"..................933..id");
-       const supabase = await createWorkerClient();
+      const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("clusters")
         .select("*")
@@ -1591,12 +1576,12 @@ export const Clusters = {
         .single();
 
       if (error) {
-        handleQueryError('getting cluster by id', error, 'Clusters');
+        handleQueryError("getting cluster by id", error, "Clusters");
         return null;
       }
       return data;
     } catch (err) {
-      handleQueryError('getting cluster by id', err, 'Clusters');
+      handleQueryError("getting cluster by id", err, "Clusters");
       return null;
     }
   },
@@ -1604,11 +1589,12 @@ export const Clusters = {
   get_all_for_admin: async (): Promise<Admin_KubernetesCluster[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Get all clusters
       const { data: clusters, error } = await supabase
         .from("clusters")
-        .select(`
+        .select(
+          `
           id,
           cluster_id,
           cluster_name,
@@ -1622,7 +1608,8 @@ export const Clusters = {
           workers,
           created_at,
           user_profiles(username)
-        `)
+        `
+        )
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
@@ -1636,17 +1623,20 @@ export const Clusters = {
       if (!clusters || clusters.length === 0) return [];
 
       // Get unique owner IDs to minimize auth queries
-      const uniqueOwnerIds = [...new Set(clusters.map(c => c.owner_id).filter(Boolean))];
-      
+      const uniqueOwnerIds = [
+        ...new Set(clusters.map((c) => c.owner_id).filter(Boolean)),
+      ];
+
       // Batch fetch only the needed user emails
       const emailMap = new Map<string, string>();
       if (uniqueOwnerIds.length > 0) {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        
+        const { data: authUsers, error: authError } =
+          await supabase.auth.admin.listUsers();
+
         if (!authError && authUsers?.users) {
           authUsers.users
-            .filter(u => uniqueOwnerIds.includes(u.id))
-            .forEach(u => {
+            .filter((u) => uniqueOwnerIds.includes(u.id))
+            .forEach((u) => {
               if (u.id && u.email) emailMap.set(u.id, u.email);
             });
         }
@@ -1687,156 +1677,160 @@ export const Clusters = {
   },
 };
 
-
-
 export const Database_Clusters = {
- 
-  create:async(payload:Database )=>{
-  
-
-
+  create: async (payload: Database) => {
     //console.log(payload, "...........in createDatabaseClusterWorker........");
-   const supabase = await createWorkerClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .insert(payload)
-     .select()
-     .single();
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .insert(payload)
+      .select()
+      .single();
 
-       if (error) {
-    console.error("[createClusterWorker] insert failed:", error.message);
-    return { success: false, error: error.message };
-  } 
+    if (error) {
+      console.error("[createClusterWorker] insert failed:", error.message);
+      return { success: false, error: error.message };
+    }
 
- // console.log(data, "...........in createDatabaseClusterWorker........");
+    // console.log(data, "...........in createDatabaseClusterWorker........");
 
-  return { success: true, data: data };
+    return { success: true, data: data };
   },
 
-  update_status: async(cluster_id:string, status:string, caCertificate:string | EncryptedData|null|undefined, public_connection:Database_Connection, private_connection:Database_Connection)=>{
+  update_status: async (
+    cluster_id: string,
+    status: string,
+    caCertificate: string | EncryptedData | null | undefined,
+    public_connection: Database_Connection,
+    private_connection: Database_Connection
+  ) => {
+    // console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({
+        status,
+        ca_certificate: caCertificate,
+        public_connection,
+        private_connection,
+      })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+    //console.log(data, "...........in updateDatabaseClusterWorker........");
 
+    if (error) {
+      console.error("[updateClusterWorker] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data };
+  },
 
-   // console.log(caCertificate, "...........in updateDatabaseClusterWorker........");
-  const supabase = await createWorkerClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .update({ status, ca_certificate: caCertificate, public_connection, private_connection })
-     .eq("cluster_id", cluster_id)
-     .select("*")
-     .single();
-     //console.log(data, "...........in updateDatabaseClusterWorker........");
+  read: async (id: string) => {
+    const supabase = await createSSRClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("*")
+      .eq("cluster_id", id)
+      .single();
 
-   if (error) {
-     console.error("[updateClusterWorker] update failed:", error.message);
-     return { success: false, error: error.message };
-   }
-   return { success: true, data: data };
-},
+    if (error) {
+      console.error("[updateClusterWorker] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data };
+  },
+  read_all_owner: async (owner_id: string) => {
+    const supabase = await createSSRClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("*")
+      .eq("owner_id", owner_id)
+      .neq("status", "deleted");
 
-  read: async(id:string)=>{
-   const supabase = await createSSRClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .select("*")
-     .eq("cluster_id", id)
-     .single();
+    if (error) {
+      console.error("[updateClusterWorker] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data };
+  },
 
-   if (error) {
-     console.error("[updateClusterWorker] update failed:", error.message);
-     return { success: false, error: error.message };
-   }
-   return { success: true, data: data };
- },
-  read_all_owner: async(owner_id:string)=>{
-   const supabase = await createSSRClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .select("*")
-     .eq("owner_id", owner_id)
-     .neq("status", "deleted");
+  read_all_owner_id: async (owner_id: string): Promise<Database[]> => {
+    const supabase = await createSSRClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .select("*")
+      .eq("owner_id", owner_id)
+      .neq("status", "deleted");
 
-   if (error) {
-     console.error("[updateClusterWorker] update failed:", error.message);
-     return { success: false, error: error.message };
-   }
-   return { success: true, data: data };
- },
+    if (error) {
+      console.error("[updateClusterWorker] update failed:", error.message);
+      return [];
+    }
+    return data;
 
- read_all_owner_id: async(owner_id:string):Promise<Database[]>=>{
-   const supabase = await createSSRClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .select("*")
-     .eq("owner_id", owner_id)
-     .neq("status", "deleted");
-
-   if (error) {
-     console.error("[updateClusterWorker] update failed:", error.message);
-     return [];
-   }
-   return data;
-
-   if (error) {
-     return [];
-   }
- },
-  delete: async(cluster_id:string)=>{
-   // console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
-   const supabase = await createWorkerClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .delete()
-     .eq("cluster_id", cluster_id)
-     .select();
+    if (error) {
+      return [];
+    }
+  },
+  delete: async (cluster_id: string) => {
+    // console.log(cluster_id, "...........in deleteDatabaseClusterWorker........");
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .delete()
+      .eq("cluster_id", cluster_id)
+      .select();
     if (error) {
       console.error("[deleteClusterWorker] delete failed:", error.message);
       return { success: false, error: error.message };
     }
 
     return { success: true, cluster: data };
- },
+  },
 
- mark_as_deleted: async(cluster_id:string)=>{
-   // console.log(cluster_id, "...........in mark_as_deleted........");
-   const supabase = await createWorkerClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .update({ status: 'deleted' })
-     .eq("cluster_id", cluster_id)
-     .select();
+  mark_as_deleted: async (cluster_id: string) => {
+    // console.log(cluster_id, "...........in mark_as_deleted........");
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ status: "deleted" })
+      .eq("cluster_id", cluster_id)
+      .select();
     if (error) {
       console.error("[mark_as_deleted] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
     return { success: true, cluster: data };
- },
+  },
 
-  update_network_rules: async(cluster_id:string, network_rules:network_rules)=>{
-
-
-   // console.log(network_rules, "...........in updateDatabaseClusterWorker........");
-  const supabase = await createWorkerClient();
-   const { data, error } = await supabase
-     .from("database_cluster")
-     .update({ network_rules })
-     .eq("cluster_id", cluster_id)
-     .select("*")
-     .single();
+  update_network_rules: async (
+    cluster_id: string,
+    network_rules: network_rules
+  ) => {
+    // console.log(network_rules, "...........in updateDatabaseClusterWorker........");
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({ network_rules })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
     // console.log(data, "...........in updateDatabaseClusterWorker........");
 
-   if (error) {
-     console.error("[updateClusterWorker] update failed:", error.message);
-     return { success: false, error: error.message };
-   }
-   return { success: true, data: data };
-},
+    if (error) {
+      console.error("[updateClusterWorker] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data };
+  },
 
   // Database user management functions
-  add_user: async(cluster_id: string, user: DatabaseUser) => {
+  add_user: async (cluster_id: string, user: DatabaseUser) => {
     //console.log(user, "...........in addDatabaseUser........");
     const supabase = await createWorkerClient();
-    
+
     // First, get current users
     const { data: currentData, error: readError } = await supabase
       .from("database_cluster")
@@ -1868,10 +1862,10 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  remove_user: async(cluster_id: string, username: string) => {
-   // console.log(username, "...........in removeDatabaseUser........");
+  remove_user: async (cluster_id: string, username: string) => {
+    // console.log(username, "...........in removeDatabaseUser........");
     const supabase = await createWorkerClient();
-    
+
     // Get current users
     const { data: currentData, error: readError } = await supabase
       .from("database_cluster")
@@ -1885,7 +1879,9 @@ export const Database_Clusters = {
     }
 
     const currentUsers = currentData?.users || [];
-    const updatedUsers = currentUsers.filter((u: DatabaseUser) => u.name !== username);
+    const updatedUsers = currentUsers.filter(
+      (u: DatabaseUser) => u.name !== username
+    );
 
     // Update with user removed
     const { data, error } = await supabase
@@ -1903,10 +1899,10 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  update_users: async(cluster_id: string, users: DatabaseUser[]) => {
-   // console.log(users, "...........in updateDatabaseUsers........");
+  update_users: async (cluster_id: string, users: DatabaseUser[]) => {
+    // console.log(users, "...........in updateDatabaseUsers........");
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ users })
@@ -1915,16 +1911,16 @@ export const Database_Clusters = {
       .single();
 
     if (error) {
-     // console.error("[updateDatabaseUsers] update failed:", error.message);
+      // console.error("[updateDatabaseUsers] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
     return { success: true, data: data };
   },
 
-  get_users: async(cluster_id: string) => {
+  get_users: async (cluster_id: string) => {
     const supabase = await createSSRClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .select("users")
@@ -1940,10 +1936,10 @@ export const Database_Clusters = {
   },
 
   // Database instance management functions
-  add_db: async(cluster_id: string, database: DatabaseInstance) => {
+  add_db: async (cluster_id: string, database: DatabaseInstance) => {
     //console.log(database, "...........in addDatabase........");
     const supabase = await createWorkerClient();
-    
+
     // First, get current databases
     const { data: currentData, error: readError } = await supabase
       .from("database_cluster")
@@ -1975,16 +1971,16 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  remove_db: async(cluster_id: string, db_name: string) => {
+  remove_db: async (cluster_id: string, db_name: string) => {
     //console.log(db_name, "...........in removeDatabase........");
     const supabase = await createWorkerClient();
-    
+
     // Get current databases
     const { data: currentData, error: readError } = await supabase
       .from("database_cluster")
       .select("dbs")
       .eq("cluster_id", cluster_id)
-      .single(); 
+      .single();
 
     if (readError) {
       console.error("[removeDatabase] read failed:", readError.message);
@@ -1992,7 +1988,9 @@ export const Database_Clusters = {
     }
 
     const currentDbs = currentData?.dbs || [];
-    const updatedDbs = currentDbs.filter((db: DatabaseInstance) => db.name !== db_name);
+    const updatedDbs = currentDbs.filter(
+      (db: DatabaseInstance) => db.name !== db_name
+    );
 
     // Update with database removed
     const { data, error } = await supabase
@@ -2010,10 +2008,10 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  update_dbs: async(cluster_id: string, databases: DatabaseInstance[]) => {
-   // console.log(databases, "...........in updateDatabases........");
+  update_dbs: async (cluster_id: string, databases: DatabaseInstance[]) => {
+    // console.log(databases, "...........in updateDatabases........");
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ dbs: databases })
@@ -2029,9 +2027,9 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  get_dbs: async(cluster_id: string) => {
+  get_dbs: async (cluster_id: string) => {
     const supabase = await createSSRClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .select("dbs")
@@ -2047,10 +2045,10 @@ export const Database_Clusters = {
   },
 
   // Update project assignment for database cluster
-  update_project: async(cluster_id: string, project_id: string) => {
+  update_project: async (cluster_id: string, project_id: string) => {
     //console.log(`[updateProject] cluster_id: ${cluster_id}, project_id: ${project_id}`);
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ project_id })
@@ -2067,10 +2065,14 @@ export const Database_Clusters = {
   },
 
   // Update region and status for migration
-  update_region: async(cluster_id: string, region: string, status: string = "migrating") => {
+  update_region: async (
+    cluster_id: string,
+    region: string,
+    status: string = "migrating"
+  ) => {
     //console.log(`[updateRegion] cluster_id: ${cluster_id}, region: ${region}, status: ${status}`);
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ region, status })
@@ -2087,10 +2089,13 @@ export const Database_Clusters = {
   },
 
   // Update maintenance window
-  update_maintenance_window: async(cluster_id: string, window: { day: string, hour: string }) => {
+  update_maintenance_window: async (
+    cluster_id: string,
+    window: { day: string; hour: string }
+  ) => {
     //console.log(`[updateMaintenanceWindow] cluster_id: ${cluster_id}, window:`, window);
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ window })
@@ -2107,10 +2112,10 @@ export const Database_Clusters = {
   },
 
   // Update storage tier (size)
-  update_storage: async(cluster_id: string, size: string) => {
+  update_storage: async (cluster_id: string, size: string) => {
     //console.log(`[updateStorage] cluster_id: ${cluster_id}, size: ${size}`);
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ size })
@@ -2126,10 +2131,10 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
-  update_storage_size: async(cluster_id: string, storage_size_mib: number) => {
+  update_storage_size: async (cluster_id: string, storage_size_mib: number) => {
     //console.log(`[updateStorageSize] cluster_id: ${cluster_id}, storage_size_mib: ${storage_size_mib}`);
     const supabase = await createWorkerClient();
-    
+
     const { data, error } = await supabase
       .from("database_cluster")
       .update({ storage_size_mib })
@@ -2149,11 +2154,12 @@ export const Database_Clusters = {
   get_all_for_admin: async (): Promise<Admin_Database[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Get all database clusters with user profile data
       const { data: clusters, error } = await supabase
         .from("database_cluster")
-        .select(`
+        .select(
+          `
           id,
           name,
           engine,
@@ -2165,29 +2171,35 @@ export const Database_Clusters = {
           created_at,
           project_id,
           user_profiles!owner_id(username)
-        `)
+        `
+        )
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.log(`[Database_Clusters] Error while getting all databases: ${error.message}`);
+        console.log(
+          `[Database_Clusters] Error while getting all databases: ${error.message}`
+        );
         return [];
       }
 
       if (!clusters || clusters.length === 0) return [];
 
       // Get unique owner IDs to minimize auth queries
-      const uniqueOwnerIds = [...new Set(clusters.map(c => c.owner_id).filter(Boolean))];
-      
+      const uniqueOwnerIds = [
+        ...new Set(clusters.map((c) => c.owner_id).filter(Boolean)),
+      ];
+
       // Batch fetch only the needed user emails
       const emailMap = new Map<string, string>();
       if (uniqueOwnerIds.length > 0) {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        
+        const { data: authUsers, error: authError } =
+          await supabase.auth.admin.listUsers();
+
         if (!authError && authUsers?.users) {
           authUsers.users
-            .filter(u => uniqueOwnerIds.includes(u.id))
-            .forEach(u => {
+            .filter((u) => uniqueOwnerIds.includes(u.id))
+            .forEach((u) => {
               if (u.id && u.email) emailMap.set(u.id, u.email);
             });
         }
@@ -2211,7 +2223,7 @@ export const Database_Clusters = {
             status: cluster.status ?? "pending",
             owner_id: cluster.owner_id ?? "",
             owner_email: emailMap.get(cluster.owner_id ?? "") ?? null,
-            owner_username: (userProfile)?.username ?? null,
+            owner_username: userProfile?.username ?? null,
             created_at: cluster.created_at ?? null,
             project_id: cluster.project_id ?? "",
           } as Admin_Database;
@@ -2220,29 +2232,30 @@ export const Database_Clusters = {
 
       return merged;
     } catch (err) {
-      console.log(`[Database_Clusters] Error while getting all databases: ${err}`);
+      console.log(
+        `[Database_Clusters] Error while getting all databases: ${err}`
+      );
       return [];
     }
   },
 
-   get_by_project_id: async (projectId: string): Promise<Database[]>=> {
+  get_by_project_id: async (projectId: string): Promise<Database[]> => {
     try {
       //console.log(projectId,"..................933..id");
 
+      if (!projectId || typeof projectId !== "string") {
+        console.error("[Clusters.get_by_project_id] Invalid project ID");
+        return [];
+      }
 
-       if (!projectId || typeof projectId !== 'string') {
-      console.error('[Clusters.get_by_project_id] Invalid project ID');
-      return [];
-    }
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(projectId)) {
+        console.error("[Clusters.get_by_project_id] Invalid UUID format");
+        return [];
+      }
 
-
-     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(projectId)) {
-      console.error('[Clusters.get_by_project_id] Invalid UUID format');
-      return [];
-    }
-
-   const supabase = await createWorkerClient();
+      const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("database_cluster")
         .select("*")
@@ -2256,22 +2269,20 @@ export const Database_Clusters = {
         // );
         return [];
       }
-     // console.log(data, "...........data in database cluster by project id........");
+      // console.log(data, "...........data in database cluster by project id........");
       return data;
     } catch (err) {
       console.log(`[Supabase] Error while getting project by id: ${err}`);
       return [];
     }
   },
- 
-
-}
+};
 
 // Activities queries
 export const Activities = {
   // Add a new activity
   add: async (
-    props: TablesInsert<"activities">,
+    props: TablesInsert<"activities">
   ): Promise<{ success: boolean; id?: string; error?: string }> => {
     try {
       const supabase = await createClient();
@@ -2300,7 +2311,7 @@ export const Activities = {
   get_by_project_id: async (
     projectId: string,
     limit: number = 50,
-    offset: number = 0,
+    offset: number = 0
   ): Promise<Activity[]> => {
     try {
       if (!projectId || typeof projectId !== "string") {
@@ -2324,9 +2335,7 @@ export const Activities = {
         .range(offset, offset + limit - 1);
 
       if (error) {
-        console.error(
-          `[Activities.get_by_project_id] Error: ${error.message}`,
-        );
+        console.error(`[Activities.get_by_project_id] Error: ${error.message}`);
         return [];
       }
 
@@ -2341,7 +2350,7 @@ export const Activities = {
   get_by_owner_id: async (
     ownerId: string,
     limit: number = 50,
-    offset: number = 0,
+    offset: number = 0
   ): Promise<Activity[]> => {
     try {
       if (!ownerId || typeof ownerId !== "string") {
@@ -2392,8 +2401,7 @@ export const Spectrum_Apps = {
   },
   update: async (spectrum_id: string, patch: TablesUpdate<"spectrum_apps">) => {
     try {
-
-      console.log('reached update spectrum app', spectrum_id, patch);
+      console.log("reached update spectrum app", spectrum_id, patch);
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("spectrum_apps")
@@ -2452,18 +2460,18 @@ export const Spectrum_Apps = {
   },
 
   mark_as_deleted: async (spectrum_id: string) => {
-    console.log('reached mark as delete')
+    console.log("reached mark as delete");
     try {
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("spectrum_apps")
-        .update({ status: 'deleted' })
+        .update({ status: "deleted" })
         .eq("spectrum_id", spectrum_id)
         .select();
       if (error) return { success: false, error: error.message };
       return { success: true, data };
     } catch (err) {
-      console.log('error in mark as delete', err)
+      console.log("error in mark as delete", err);
       return { success: false, error: String(err) };
     }
   },
@@ -2472,11 +2480,12 @@ export const Spectrum_Apps = {
   get_all_for_admin: async (): Promise<Admin_SpectrumApp[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Get all spectrum apps
       const { data: apps, error } = await supabase
         .from("spectrum_apps")
-        .select(`
+        .select(
+          `
           id,
           spectrum_id,
           protocol,
@@ -2492,7 +2501,8 @@ export const Spectrum_Apps = {
           owner_id,
           dns,
           user_profiles(username)
-        `)
+        `
+        )
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
@@ -2506,17 +2516,20 @@ export const Spectrum_Apps = {
       if (!apps || apps.length === 0) return [];
 
       // Get unique owner IDs to minimize auth queries
-      const uniqueOwnerIds = [...new Set(apps.map(a => a.owner_id).filter(Boolean))];
-      
+      const uniqueOwnerIds = [
+        ...new Set(apps.map((a) => a.owner_id).filter(Boolean)),
+      ];
+
       // Batch fetch only the needed user emails
       const emailMap = new Map<string, string>();
       if (uniqueOwnerIds.length > 0) {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        
+        const { data: authUsers, error: authError } =
+          await supabase.auth.admin.listUsers();
+
         if (!authError && authUsers?.users) {
           authUsers.users
-            .filter(u => uniqueOwnerIds.includes(u.id))
-            .forEach(u => {
+            .filter((u) => uniqueOwnerIds.includes(u.id))
+            .forEach((u) => {
               if (u.id && u.email) emailMap.set(u.id, u.email);
             });
         }
@@ -2559,22 +2572,22 @@ export const Spectrum_Apps = {
   },
 
   //get all app name for unique name check
-   get_all_app_name: async (role:string) => {
+  get_all_app_name: async (role: string) => {
     try {
-      const supabase = await (role==='admin'? createSSRClient():createWorkerClient());
+      const supabase = await (role === "admin"
+        ? createSSRClient()
+        : createWorkerClient());
       const { data, error } = await supabase
         .from("spectrum_apps")
         .select("dns->>original_name")
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
 
+      // console.log(data, ".........check..data in get_all_app_name........");
 
-       // console.log(data, ".........check..data in get_all_app_name........");
+      const names = data?.map((row) => row.original_name);
 
-        const names = data?.map(row => row.original_name);
-
-
-       // console.log(names, "...........data in get_all_app_name........");
+      // console.log(names, "...........data in get_all_app_name........");
       if (error) return [];
       return names || [];
     } catch {
@@ -2592,7 +2605,9 @@ export const Spectrum_Apps = {
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
       if (error) {
-        console.error(`[Spectrum_Apps.get_by_project_id] Error: ${error.message}`);
+        console.error(
+          `[Spectrum_Apps.get_by_project_id] Error: ${error.message}`
+        );
         return [];
       }
       return data || [];
@@ -2603,31 +2618,23 @@ export const Spectrum_Apps = {
   },
 };
 
-
-
-
 //All storage of files in s3 bucket and recieve the url to store in database
 
-export const storeFile=async(clusterId:string, file:File)=>{
-
+export const storeFile = async (clusterId: string, file: File) => {
   const path = `clusters/${clusterId}/${Date.now()}-${file.name}`;
   const supabase = await createSSRClient();
-  const { error: uploadError } = await supabase
-    .storage
-    .from('kubeconfigs')   // bucket name
+  const { error: uploadError } = await supabase.storage
+    .from("kubeconfigs") // bucket name
     .upload(path, file, {
-      cacheControl: '3600',
+      cacheControl: "3600",
       upsert: false,
-      contentType: file.type
+      contentType: file.type,
     });
 
-    if (uploadError) throw uploadError;
+  if (uploadError) throw uploadError;
 
-  return { path }; 
-}
-
-
-
+  return { path };
+};
 
 // function makeNodeKeys(workers: number): string[] {
 //   const n = Math.max(0, Math.floor(workers)); // sanitize
@@ -2635,14 +2642,6 @@ export const storeFile=async(clusterId:string, file:File)=>{
 //   for (let i = 1; i <= n; i++) keys.push(`wp-${i}`);
 //   return keys;
 // }
-
-
-
-
-
-
-
-
 
 export const ObjectSpaces = {
   // Bucket operations only (access keys from .env)
@@ -2666,17 +2665,21 @@ export const ObjectSpaces = {
     }
   },
 
-  mark_as_deleted: async (id: string): Promise<{ success: boolean; error?: string }> => {
+  mark_as_deleted: async (
+    id: string
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
       console.log(id, "...........id in mark_as_deleted object space........");
       const supabase = await createWorkerClient();
       const { error } = await supabase
         .from("object_spaces")
-        .update({ status: 'deleted' })
+        .update({ status: "deleted" })
         .eq("id", id);
 
       if (error) {
-        console.error(`[ObjectSpaces] Error marking as deleted: ${error.message}`);
+        console.error(
+          `[ObjectSpaces] Error marking as deleted: ${error.message}`
+        );
         return { success: false, error: error.message };
       }
       return { success: true };
@@ -2716,23 +2719,23 @@ export const ObjectSpaces = {
     error?: string;
   }> => {
     try {
+      console.log(payload,"...........")
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("object_spaces")
-        .insert({
-          ...payload,
-          type: "bucket",
-        })
+        .insert(
+          payload
+        )
         .select()
         .single();
 
       if (error) {
-        console.error(`[ObjectSpaces] Error creating bucket: ${error.message}`);
+        //console.error(`[ObjectSpaces] Error creating bucket: ${error.message}`);
         return { success: false, error: error.message };
       }
       return { success: true, data: data as ObjectSpaceBucket };
     } catch (err) {
-      console.error(`[ObjectSpaces] Error creating bucket: ${err}`);
+      //console.error(`[ObjectSpaces] Error creating bucket: ${err}`);
       return { success: false, error: String(err) };
     }
   },
@@ -2759,7 +2762,9 @@ export const ObjectSpaces = {
     }
   },
 
-  get_by_project_id: async (projectId: string): Promise<ObjectSpaceBucket[]> => {
+  get_by_project_id: async (
+    projectId: string
+  ): Promise<ObjectSpaceBucket[]> => {
     try {
       const supabase = await createClient();
       const { data, error } = await supabase
@@ -2771,7 +2776,9 @@ export const ObjectSpaces = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error(`[ObjectSpaces.get_by_project_id] Error: ${error.message}`);
+        console.error(
+          `[ObjectSpaces.get_by_project_id] Error: ${error.message}`
+        );
         return [];
       }
       return (data as ObjectSpaceBucket[]) || [];
@@ -2807,7 +2814,9 @@ export const ObjectSpaces = {
   ): Promise<ObjectSpaceBucket | null> => {
     try {
       // console.log(id, "...........bucket_id in get_bucket_by_bucket_id........");
-      const supabase = is_admin ? await createWorkerClient() : await createSSRClient();
+      const supabase = is_admin
+        ? await createWorkerClient()
+        : await createSSRClient();
       const { data, error } = await supabase
         .from("object_spaces")
         .select("*")
@@ -2913,11 +2922,12 @@ export const ObjectSpaces = {
   get_all_for_admin: async (): Promise<Admin_Bucket[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Get all object storage buckets
       const { data: buckets, error } = await supabase
         .from("object_spaces")
-        .select(`
+        .select(
+          `
           id,
           name,
           size_bytes,
@@ -2928,7 +2938,8 @@ export const ObjectSpaces = {
           project_id,
           owner_id,
           user_profiles(username)
-        `)
+        `
+        )
         .eq("type", "bucket")
         .neq("status", "deleted")
         .order("created_at", { ascending: false });
@@ -2945,17 +2956,20 @@ export const ObjectSpaces = {
       if (!buckets || buckets.length === 0) return [];
 
       // Get unique owner IDs to minimize auth queries
-      const uniqueOwnerIds = [...new Set(buckets.map(b => b.owner_id).filter(Boolean))];
-      
+      const uniqueOwnerIds = [
+        ...new Set(buckets.map((b) => b.owner_id).filter(Boolean)),
+      ];
+
       // Batch fetch only the needed user emails
       const emailMap = new Map<string, string>();
       if (uniqueOwnerIds.length > 0) {
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-        
+        const { data: authUsers, error: authError } =
+          await supabase.auth.admin.listUsers();
+
         if (!authError && authUsers?.users) {
           authUsers.users
-            .filter(u => uniqueOwnerIds.includes(u.id))
-            .forEach(u => {
+            .filter((u) => uniqueOwnerIds.includes(u.id))
+            .forEach((u) => {
               if (u.id && u.email) emailMap.set(u.id, u.email);
             });
         }
@@ -3007,7 +3021,7 @@ export const Promocodes = {
   }): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Check if code already exists
       const { data: existing } = await supabase
         .schema("billing")
@@ -3037,28 +3051,31 @@ export const Promocodes = {
         .single();
 
       if (error) {
-        handleQueryError('Create promocode', error, 'Promocodes');
+        handleQueryError("Create promocode", error, "Promocodes");
         return { success: false, error: error.message };
       }
 
       return { success: true, data: newPromo };
     } catch (err) {
-      handleQueryError('Create promocode', err, 'Promocodes');
-      return { success: false, error: 'Failed to create promocode' };
+      handleQueryError("Create promocode", err, "Promocodes");
+      return { success: false, error: "Failed to create promocode" };
     }
   },
 
   // Admin: Update promocode
-  update: async (id: string, data: {
-    amount?: number;
-    valid_till?: string;
-    coupon_type?: string;
-    max_redemptions?: number;
-    is_active?: boolean;
-  }): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
+  update: async (
+    id: string,
+    data: {
+      amount?: number;
+      valid_till?: string;
+      coupon_type?: string;
+      max_redemptions?: number;
+      is_active?: boolean;
+    }
+  ): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data: updated, error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3071,14 +3088,14 @@ export const Promocodes = {
         .single();
 
       if (error) {
-        handleQueryError('Update promocode', error, 'Promocodes');
+        handleQueryError("Update promocode", error, "Promocodes");
         return { success: false, error: error.message };
       }
 
       return { success: true, data: updated };
     } catch (err) {
-      handleQueryError('Update promocode', err, 'Promocodes');
-      return { success: false, error: 'Failed to update promocode' };
+      handleQueryError("Update promocode", err, "Promocodes");
+      return { success: false, error: "Failed to update promocode" };
     }
   },
 
@@ -3086,7 +3103,7 @@ export const Promocodes = {
   delete: async (id: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3094,14 +3111,14 @@ export const Promocodes = {
         .eq("id", id);
 
       if (error) {
-        handleQueryError('Delete promocode', error, 'Promocodes');
+        handleQueryError("Delete promocode", error, "Promocodes");
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (err) {
-      handleQueryError('Delete promocode', err, 'Promocodes');
-      return { success: false, error: 'Failed to delete promocode' };
+      handleQueryError("Delete promocode", err, "Promocodes");
+      return { success: false, error: "Failed to delete promocode" };
     }
   },
 
@@ -3109,7 +3126,7 @@ export const Promocodes = {
   get_all: async (): Promise<Coupon[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data, error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3117,7 +3134,7 @@ export const Promocodes = {
         .order("created_at", { ascending: false });
 
       if (error) {
-        handleQueryError('Get all promocodes', error, 'Promocodes');
+        handleQueryError("Get all promocodes", error, "Promocodes");
         return [];
       }
 
@@ -3130,7 +3147,7 @@ export const Promocodes = {
         };
       });
     } catch (err) {
-      handleQueryError('Get all promocodes', err, 'Promocodes');
+      handleQueryError("Get all promocodes", err, "Promocodes");
       return [];
     }
   },
@@ -3139,7 +3156,7 @@ export const Promocodes = {
   get_by_id: async (id: string): Promise<Promocode | null> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data, error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3148,13 +3165,13 @@ export const Promocodes = {
         .single();
 
       if (error) {
-        handleQueryError('Get promocode by ID', error, 'Promocodes');
+        handleQueryError("Get promocode by ID", error, "Promocodes");
         return null;
       }
 
       return data;
     } catch (err) {
-      handleQueryError('Get promocode by ID', err, 'Promocodes');
+      handleQueryError("Get promocode by ID", err, "Promocodes");
       return null;
     }
   },
@@ -3163,7 +3180,7 @@ export const Promocodes = {
   get_by_code: async (code: string): Promise<Promocode | null> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data, error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3173,22 +3190,25 @@ export const Promocodes = {
         .single();
 
       if (error) {
-        handleQueryError('Get promocode by code', error, 'Promocodes');
+        handleQueryError("Get promocode by code", error, "Promocodes");
         return null;
       }
 
       return data;
     } catch (err) {
-      handleQueryError('Get promocode by code', err, 'Promocodes');
+      handleQueryError("Get promocode by code", err, "Promocodes");
       return null;
     }
   },
 
   // User: Get available promocodes (not yet redeemed by user)
-  get_available_for_user: async (userId: string, email: string): Promise<Promocode[]> => {
+  get_available_for_user: async (
+    userId: string,
+    email: string
+  ): Promise<Promocode[]> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data, error } = await supabase
         .schema("billing")
         .from("promocodes")
@@ -3197,49 +3217,64 @@ export const Promocodes = {
         .gte("valid_till", new Date().toISOString());
 
       if (error) {
-        handleQueryError('Get available promocodes for user', error, 'Promocodes');
+        handleQueryError(
+          "Get available promocodes for user",
+          error,
+          "Promocodes"
+        );
         return [];
       }
 
       // Filter out coupons already redeemed by this user
       const available = (data || []).filter((promo) => {
         const redeemBy = getPromocodeRedemptions(promo.redeem_by);
-        const hasRedeemed = redeemBy.some((entry) => entry.userId === userId || entry.email === email);
-        
+        const hasRedeemed = redeemBy.some(
+          (entry) => entry.userId === userId || entry.email === email
+        );
+
         // Check max redemptions limit if set
         if (promo.max_redemptions && redeemBy.length >= promo.max_redemptions) {
           return false;
         }
-        
+
         return !hasRedeemed;
       });
 
       return available;
     } catch (err) {
-      handleQueryError('Get available promocodes for user', err, 'Promocodes');
+      handleQueryError("Get available promocodes for user", err, "Promocodes");
       return [];
     }
   },
 
   // Validate coupon code
-  validate_code: async (code: string, userId: string, email: string): Promise<{ 
-    valid: boolean; 
-    error?: string; 
+  validate_code: async (
+    code: string,
+    userId: string,
+    email: string
+  ): Promise<{
+    valid: boolean;
+    error?: string;
     data?: Promocode;
   }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       const { data: promo, error } = await supabase
         .schema("billing")
         .from("promocodes")
         .select("*")
         .eq("code", code)
-        .eq("is_active", true)
         .single();
 
       if (error || !promo) {
-        return { valid: false, error: "Invalid or inactive promo code" };
+        return {
+          valid: false,
+          error: "You have entered an invalid promo code",
+        };
+      }
+      if (promo.is_active === false) {
+        return { valid: false, error: "This promo code is not active" };
       }
 
       // Check expiration
@@ -3249,10 +3284,15 @@ export const Promocodes = {
 
       // Check if user already redeemed
       const redeemBy = getPromocodeRedemptions(promo.redeem_by);
-      const alreadyRedeemed = redeemBy.some((entry) => entry.userId === userId || entry.email === email);
+      const alreadyRedeemed = redeemBy.some(
+        (entry) => entry.userId === userId || entry.email === email
+      );
 
       if (alreadyRedeemed) {
-        return { valid: false, error: "You have already redeemed this promo code" };
+        return {
+          valid: false,
+          error: "You have already redeemed this promo code",
+        };
       }
 
       // Check max redemptions
@@ -3262,21 +3302,25 @@ export const Promocodes = {
 
       return { valid: true, data: promo };
     } catch (err) {
-      handleQueryError('Validate promocode', err, 'Promocodes');
-      return { valid: false, error: 'Failed to validate promo code' };
+      handleQueryError("Validate promocode", err, "Promocodes");
+      return { valid: false, error: "Failed to validate promo code" };
     }
   },
 
   // User: Redeem promocode
-  redeem: async (code: string, userId: string, email: string): Promise<{ 
-    success: boolean; 
-    balance?: number; 
+  redeem: async (
+    code: string,
+    userId: string,
+    email: string
+  ): Promise<{
+    success: boolean;
+    balance?: number;
     amount?: number;
     error?: string;
   }> => {
     try {
       const supabase = await createServiceClient();
-      
+
       // Validate the code first
       const validation = await Promocodes.validate_code(code, userId, email);
       if (!validation.valid) {
@@ -3295,16 +3339,16 @@ export const Promocodes = {
       ];
 
       // Check if we need to deactivate the coupon (for limited type)
-      const shouldDeactivate = 
-        promo.coupon_type === 'limited' && 
-        promo.max_redemptions && 
+      const shouldDeactivate =
+        promo.coupon_type === "limited" &&
+        promo.max_redemptions &&
         redeemBy.length >= promo.max_redemptions;
 
       // Update promocode
       const { error: updateError } = await supabase
         .schema("billing")
         .from("promocodes")
-        .update({ 
+        .update({
           redeem_by: redeemBy as Promocode["redeem_by"],
           updated_at: new Date().toISOString(),
           ...(shouldDeactivate && { is_active: false }),
@@ -3312,21 +3356,25 @@ export const Promocodes = {
         .eq("id", promo.id);
 
       if (updateError) {
-        handleQueryError('Update promocode redeem_by', updateError, 'Promocodes');
+        handleQueryError(
+          "Update promocode redeem_by",
+          updateError,
+          "Promocodes"
+        );
         return { success: false, error: "Failed to redeem promo code" };
       }
 
       // Add amount to user balance
       const topupResult = await Billing.topup(userId, promo.amount);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         balance: topupResult.credit_balance,
         amount: promo.amount,
       };
     } catch (err) {
-      handleQueryError('Redeem promocode', err, 'Promocodes');
-      return { success: false, error: 'Failed to redeem promo code' };
+      handleQueryError("Redeem promocode", err, "Promocodes");
+      return { success: false, error: "Failed to redeem promo code" };
     }
   },
 };
@@ -3340,8 +3388,8 @@ const api = {
   locations: Locations,
   otps: OTPs,
   // vms:Vms,
-  clusters:Clusters,
-  database_clusters:Database_Clusters,
+  clusters: Clusters,
+  database_clusters: Database_Clusters,
   activities: Activities,
   object_spaces: ObjectSpaces,
 };

@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
         if (worker?.droplet_id) {
           try {
             await axios.delete(
-              `https://api.digitalocean.com/v2/droplets/${worker.droplet_id}`,
+              `https://api.digitalocean.com/v2/droplet/${worker.droplet_id}`,
               {
                 headers: {
                   Authorization: process.env.DIGITAL_OCEAN_TOKEN,
@@ -105,6 +105,7 @@ export async function POST(req: NextRequest) {
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
            // console.error(`[deleteKubernetesCluster] ❌ Failed to delete worker droplet: ${errorMsg}`);
+           return NextResponse.json({ message: "Failed to delete worker droplet" }, { status: 503 });
             dropletDeletionErrors.push(`Worker ${worker.droplet_id}: ${errorMsg}`);
           }
         }

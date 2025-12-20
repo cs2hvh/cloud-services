@@ -348,11 +348,6 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
           `/dashboard/services/database/clusters/${response.data.data.cluster_id}`
         );
       }
-      else if(response.status===402){
-        toast.error('Insufficient balance. Please top up your account to create a Database cluster.');
-        router.push('dashboard/nav/billing');
-        return;
-      }
     } catch (error) {
       console.log(error);
       toast.error("Failed to create database. Please try again later.");

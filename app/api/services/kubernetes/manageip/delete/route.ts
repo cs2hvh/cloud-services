@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         }
       );
 
-      console.log(droplets,"..............................24");
+      //console.log(droplets,"..............................24");
 
 
      
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     }
 
     if(droplets.status!=204){
-return NextResponse.json({ error: "there is some internal error. please try later" }, { status: 400 });
+return NextResponse.json({ message: "there is some internal error. please try later" }, { status: 503 });
     }
 
   } catch (err: unknown) {

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
-    console.log("Creating database with data:", validatedData);
+   // console.log("Creating database with data:", validatedData);
     const database = await axios.post(
       "https://api.digitalocean.com/v2/databases",
       validatedData,
@@ -197,6 +197,12 @@ export async function POST(req: NextRequest) {
           { status: 500 }
         );
       }
+    }
+    else if(database.status==500 || database.status==429){
+      return NextResponse.json({
+        error: "DigitalOcean API error",
+        message: "our server is busy. please try again later",
+      }, { status: 503 });
     }
   } catch (err: unknown) {
     if (err as database_error) {

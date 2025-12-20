@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
           }
             else{
                 //recall this api
-           return NextResponse.json({ error: "there is some internal error. please try later" }, { status: 400 });
+           return NextResponse.json({ message: "there is some internal error. please try later" }, { status: 400 });
     
             }
 
@@ -56,12 +56,12 @@ export async function POST(req: NextRequest) {
    catch (err: unknown) {
     if (err instanceof Error) {
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        { message: err.message ?? "Invalid request" },
         { status: 400 }
       );
     } else {
       return NextResponse.json(
-        { error: "Unknown error occurred" },
+        { message: "Unknown error occurred" },
         { status: 400 }
       );
     }

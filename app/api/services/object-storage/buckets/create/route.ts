@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     // Handle result based on success/failure
     if (!result.success) {
       // Check if the error is due to bucket already existing
-      const statusCode = result.error === "Bucket already exists" ? 409 : 500;
+      const statusCode = result.error === "Bucket already exists" ? 409 : 400;
       return NextResponse.json(
         {
           error: result.error,
