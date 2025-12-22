@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
                   const uriMatch = dbData.connection.uri.match(/^(.+@)([^:\/]+)(.+)$/);
                   if (uriMatch) {
                     encryptedPublicURI = `${uriMatch[1]}${publicHostIP}${uriMatch[3]}`;
-                    console.log(`[checkStatus] Updated URI with IP address`);
+                   // console.log(`[checkStatus] Updated URI with IP address`);
                   }
                 }
               }
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
             console.log(`[checkStatus] Skipping IP resolution for engine: ${dbData.engine} (only MySQL and PostgreSQL supported)`);
           }
 
-          console.log("reached here ---138")
+          //console.log("reached here ---138")
           
           // Encrypt the IP addresses
           const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
             }
 
 
-            console.log("reached here ---169")
+            //console.log("reached here ---169")
          
           
           // Encrypt CA certificate
@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
             : "";
           
 
-            console.log("reached here ---178")
+            //console.log("reached here ---178")
           // Update Supabase with online status and connection details
           await Database_Clusters.update_status(
             validatedData.id,
@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
           const updatedRead = await Database_Clusters.read(validatedData.id);
           if (updatedRead.success) {
             supabase_read.data = updatedRead.data;
-            console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
+           // console.log(`[checkStatus] ✅ Re-read from Supabase, new status: "${updatedRead.data.status}"`);
             
             // Add activity log for database cluster going online
             if (updatedRead.data.project_id) {
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (doStatus && supabase_read.success) {
-      console.log(`[checkStatus] ℹ️ Status matches - Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
+     // console.log(`[checkStatus] ℹ️ Status matches - Supabase: "${supabase_read.data.status}", DO: "${doStatus}"`);
     }
       //decrypt the host , password , caCertificate here before sending response
       if (supabase_read.success) {

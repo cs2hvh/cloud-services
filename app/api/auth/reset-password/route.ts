@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { reset_password_schema } from "@/types/zod/password-reset";
-import { OTPs, Users } from "@/lib/supabase/queries";
+import { OTPs } from "@/lib/supabase/queries/otps";
+import { Users } from "@/lib/supabase/queries/users";
 
 /**
  * POST /api/auth/reset-password

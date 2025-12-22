@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateSixDigitOtp } from "@/lib/utils";
 import { send_forgot_password_email } from "@/lib/resend/send_forgot";
 import { createServiceClient } from "@/lib/supabase/server";
-import { OTPs, Users } from "@/lib/supabase/queries";
+import {  Users } from "@/lib/supabase/queries/users";
+import { OTPs } from "@/lib/supabase/queries/otps";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { forgot_password_schema } from "@/types/zod/password-reset";
 

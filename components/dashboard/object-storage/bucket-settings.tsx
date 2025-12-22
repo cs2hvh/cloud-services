@@ -181,7 +181,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
                     variant="ghost"
                     onClick={() => handleCancel(setting)}
                     disabled={isLoading[setting]}
-                    className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
+                    className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
                   >
                     <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/70" />
                   </Button>
@@ -190,7 +190,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
                     variant="ghost"
                     onClick={() => handleSave(setting)}
                     disabled={isLoading[setting]}
-                    className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
+                    className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
                   >
                     {isLoading[setting] ? (
                       <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-white/70" />
@@ -206,7 +206,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
                   onClick={() =>
                     setEditMode((prev) => ({ ...prev, [setting]: true }))
                   }
-                  className="h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
+                  className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
                 >
                   <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/70" />
                 </Button>

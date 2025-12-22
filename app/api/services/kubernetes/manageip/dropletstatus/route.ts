@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
           );
 
 
-          console.log(checkStatus.data,"................checkStatus.........41")
+          //console.log(checkStatus.data,"................checkStatus.........41")
 
 
           if (checkStatus.status === 200) {

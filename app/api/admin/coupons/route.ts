@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { Promocodes } from "@/lib/supabase/queries";
+import { Promocodes } from "@/lib/supabase/queries/promocodes";
 
 // Helper function to check if user is admin
 async function checkAdminAuth() {

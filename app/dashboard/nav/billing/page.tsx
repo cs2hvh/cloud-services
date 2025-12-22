@@ -2,7 +2,8 @@ import { Suspense } from "react";
 import BillingTabs from "./BillingTabs";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { createClient } from "@/lib/supabase/server";
-import { Billing, Promocodes } from "@/lib/supabase/queries";
+import { Billing,  } from "@/lib/supabase/queries/billing";
+import {Promocodes} from "@/lib/supabase/queries/promocodes";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +32,8 @@ async function BillingSuspense() {
       <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 sm:p-6">
         <BillingTabs
           initialBalance={credits.credit_balance}
-          promoCredits={credits.promo_credits}
-          topupCredits={credits.topup_credits}
+          // promoCredits={credits.promo_credits}
+          // topupCredits={credits.topup_credits}
           availableCoupons={availableCoupons}
         />
       </div>

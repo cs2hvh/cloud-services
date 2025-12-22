@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Products } from "@/lib/supabase/queries";
+import { Products } from "@/lib/supabase/queries/products";
 import { requireAdmin } from "@/lib/supabase/auth";
 import {
   createProductSchema,

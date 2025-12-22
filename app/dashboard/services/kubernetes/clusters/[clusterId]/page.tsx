@@ -1,7 +1,7 @@
 "use server"
 import SingleCluster from "@/components/dashboard/kubernetes/clusters/singlecluster/singlecluster";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Suspense } from "react";
 

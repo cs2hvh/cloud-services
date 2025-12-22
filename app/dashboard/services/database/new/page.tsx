@@ -1,7 +1,8 @@
 import DatabaseSelect from "@/components/dashboard/database/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { Database_Clusters, Projects } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { getCachedProducts, getCachedLocations } from "@/lib/cache/query-cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";

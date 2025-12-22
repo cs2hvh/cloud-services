@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { Promocodes } from "@/lib/supabase/queries";
+import { Promocodes } from "@/lib/supabase/queries/promocodes";
 
 // GET: Get available coupons for current user
 export async function GET() {

@@ -31,8 +31,8 @@ const cardSchema = z.object({
 
 export default function BillingTabs({
   initialBalance = 0.0,
-  promoCredits = 0,
-  topupCredits = 0,
+  // promoCredits = 0,
+  // topupCredits = 0,
   availableCoupons = [],
 }: {
   initialBalance?: number;
@@ -161,8 +161,8 @@ export default function BillingTabs({
             className="space-y-6"
           >
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <StatCard label="Promo Credits" value={promoCredits} />
-              <StatCard label="Top-up Credits" value={topupCredits} />
+              {/* <StatCard label="Promo Credits" value={promoCredits} />
+              <StatCard label="Top-up Credits" value={topupCredits} /> */}
               <StatCard label="Remaining Balance" value={remaining} highlight />
             </div>
 

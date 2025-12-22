@@ -43,14 +43,14 @@ export async function POST(req: NextRequest) {
     }
 
     const currentRules = read_firewall.data?.rules || [];
-    console.log("Current firewall rules:", currentRules);
+    // console.log("Current firewall rules:", currentRules);
 
     // Step 2: Filter out the rule to delete
     const remainingRules = currentRules.filter(
       (rule: Rule) => rule.uuid !== validatedData.rule_uuid
     );
 
-    console.log("Remaining rules after deletion:", remainingRules);
+    // console.log("Remaining rules after deletion:", remainingRules);
 
     // Find the deleted rule for logging
     const deletedRule = currentRules.find(
@@ -74,11 +74,11 @@ export async function POST(req: NextRequest) {
       }
     );
 
-    console.log(
-      "Update firewall response:",
-      update_firewall.status,
-      update_firewall.statusText
-    );
+    // console.log(
+    //   "Update firewall response:",
+    //   update_firewall.status,
+    //   update_firewall.statusText
+    // );
 
     if (update_firewall.status === 204) {
       // Step 4: Fetch updated firewall rules to confirm
@@ -93,10 +93,10 @@ export async function POST(req: NextRequest) {
       );
 
       if (read_updated_firewall.status === 200) {
-        console.log(
-          "Updated firewall rules:",
-          read_updated_firewall.data?.rules
-        );
+        // console.log(
+        //   "Updated firewall rules:",
+        //   read_updated_firewall.data?.rules
+        // );
 
         // Step 5: Update Supabase with new rules
         const supabase_update = await Database_Clusters.update_network_rules(

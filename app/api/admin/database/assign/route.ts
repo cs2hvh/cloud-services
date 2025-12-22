@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Billing, Database_Clusters } from "@/lib/supabase/queries";
+import {Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { Billing } from "@/lib/supabase/queries/billing";
 import { Encryption } from "@/config/functions";
 import {
   createDatabaseSchema,

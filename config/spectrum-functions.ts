@@ -1,6 +1,6 @@
 import axios from "axios";
 import { Encryption } from "@/config/functions";
-import { Spectrum_Apps, Projects } from "@/lib/supabase/queries";
+import { Spectrum_Apps, Projects } from "@/lib/supabase/queries/";
 import type {
   CreateSpectrumAppPayload,
   UpdateSpectrumAppPayload,

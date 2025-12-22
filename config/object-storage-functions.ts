@@ -1,4 +1,4 @@
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { getBucketUrl } from "@/lib/validation/object-storage";
 import { resolveHost } from "@/config/hosttoip";
 import { Encryption } from "@/config/functions";

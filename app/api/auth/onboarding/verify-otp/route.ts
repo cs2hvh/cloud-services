@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
-import { OTPs } from "@/lib/supabase/queries";
+import { OTPs } from "@/lib/supabase/queries/otps";
 
 export async function POST(request: NextRequest) {
   try {

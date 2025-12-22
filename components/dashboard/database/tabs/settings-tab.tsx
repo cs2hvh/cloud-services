@@ -381,7 +381,7 @@ export const SettingsTab = ({
       });
 
       if (response.status === 200) {
-        toast.success("Storage upsize initiated successfully");
+        toast.success("Storage upsize success");
         onDatabaseUpdate?.();
         setSelectedStorageGiB(0);
       }
@@ -916,7 +916,7 @@ export const SettingsTab = ({
         {!showDeleteConfirm ? (
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg font-medium transition-colors"
+            className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg font-medium transition-colors"
           >
             <Trash2 className="h-4 w-4" />
             Delete Cluster
@@ -930,7 +930,7 @@ export const SettingsTab = ({
               <button
                 onClick={handleDeleteCluster}
                 disabled={loading === "delete"}
-                className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
+                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
               >
                 {loading === "delete" ? (
                   <>
