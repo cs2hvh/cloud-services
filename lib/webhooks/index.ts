@@ -3,10 +3,10 @@
  */
 export * from './types';
 export { GitHubWebhookHandler } from './github';
+export { BitbucketWebhookHandler } from './bitbucket';
+export { GitLabWebhookHandler } from './gitlab';
 
 // Re-export WebhookManager from services
 export { WebhookManager } from '@/lib/services/webhook-manager';
 
-// Will add GitLab and Bitbucket handlers later
-// export { GitLabWebhookHandler } from './gitlab';
-// export { BitbucketWebhookHandler } from './bitbucket';
+// GitLab handler exported above

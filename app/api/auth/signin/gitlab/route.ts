@@ -12,11 +12,12 @@ export async function POST(request: NextRequest) {
     // - read_user: Read-only access to user profile
     // - read_repository: Read-only access to repositories via Git-over-HTTP
     // Using 'api read_user' for full functionality including private repos
+    console.log("Initiating GitLab OAuth signin with scopes: api read_user");
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "gitlab",
       options: {
         redirectTo: `${origin}/api/auth/callback`,
-        scopes: "api read_user",
+        scopes: "read_user read_repository write_repository api read_api",
         queryParams: {
           access_type: "offline",
           prompt: "consent",

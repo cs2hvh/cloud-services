@@ -263,7 +263,9 @@ export async function POST(req: NextRequest) {
         }
 
         if (webhookToken) {
+          console.log(webhookToken, '...........webhook token...........');
           const { WebhookManager } = await import('@/lib/services/webhook-manager');
+          
           const webhookResult = await WebhookManager.registerWebhook({
             app_id: result.app_id,
             provider: appData.git_provider,
