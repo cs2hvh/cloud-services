@@ -83,9 +83,16 @@ export function SignInForm() {
   // ---- social sign-in
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
-    const response = await api.post("/auth/signin/gitlab", { type });
+    let response;
+    if (type === "github" || type === "google" || type === "bitbucket") {
+       response = await api.post("/auth/signin/github", { type });
+    } else if (type === "gitlab") {
+       response = await api.post("/auth/signin/gitlab", { type });
+    }
 
-    if (response.data?.url) {
+
+    //if we get the url from the response, redirect to it.
+    if (response?.data?.url) {
       window.location.href = response.data.url;
     }
     setIsLoading(false);

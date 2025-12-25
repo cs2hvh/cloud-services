@@ -117,14 +117,18 @@ export async function POST(req: NextRequest) {
       
       if (session) {
         // Check for token in session first
+        console.log("got session success....120")
         if (session.provider_token) {
           accessToken = session.provider_token;
           console.log('[platform-apps/create] Found GitLab token in session.provider_token');
         }
         // Fallback to identity data
         else if (session.user?.identities) {
+          console.log("got session user identities....127")
           const gitlabIdentity = session.user.identities.find(id => id.provider === 'gitlab');
+
           if (gitlabIdentity?.identity_data?.provider_token) {
+            console.log("got session user identity_data provider_token....131")
             accessToken = gitlabIdentity.identity_data.provider_token;
             console.log('[platform-apps/create] Found GitLab token in identity_data.provider_token');
           }
