@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 export async function POST(request: Request) {
   const supabase = await createClient();
 
-  const { provider, method } = await request.json().catch(() => ({}));
+  const { provider, method, returnTo } = await request.json().catch(() => ({}));
   if (!provider) {
     return NextResponse.json({ error: "Missing provider" }, { status: 400 });
   }
@@ -65,12 +65,33 @@ export async function POST(request: Request) {
   const origin = request.headers.get("origin") || "http://localhost:3000";
   console.log(origin, "....................52");
 
+  // Define scopes for each provider
+  const getProviderScopes = (p: string): string | undefined => {
+    switch (p) {
+      case 'github':
+        return 'repo user:email';
+      case 'gitlab':
+        // GitLab scopes: api for full access, read_user for profile
+        // GitLab tokens expire in 2 hours, so we need api scope for refresh tokens
+        return 'api read_user';
+      case 'bitbucket':
+        return 'repository account';
+      default:
+        return undefined;
+    }
+  };
+
   if (method === "connect") {
+    // Build callback URL with returnTo parameter so user comes back to the right page
+    const callbackUrl = returnTo 
+      ? `${origin}/api/auth/callback?next=${encodeURIComponent(returnTo)}`
+      : `${origin}/api/auth/callback`;
+    
     const { data, error } = await supabase.auth.linkIdentity({
       provider,
       options: {
-        redirectTo: `${origin}/api/auth/callback`,
-        scopes: provider === 'github' ? 'repo user:email' : undefined,
+        redirectTo: callbackUrl,
+        scopes: getProviderScopes(provider),
       },
     });
     if (error) {
@@ -84,20 +105,31 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ url: data?.url }, { status: 200 });
   } else {
+    // Disconnect: handle both Supabase identity and database tokens
+    
+    // First try to unlink from Supabase identity
     const identity = user.identities?.find((id) => id.provider === provider);
-    if (!identity) {
-      return new Response(JSON.stringify({ error: "Provider not linked" }), {
-        status: 400,
-      });
+    if (identity) {
+      const response = await supabase.auth.unlinkIdentity(identity);
+      if (response.error !== null) {
+        return NextResponse.json({ error: response.error.message }, { status: 400 });
+      }
     }
-    const response = await supabase.auth.unlinkIdentity(identity);
-    if (response.error === null) {
-      return NextResponse.json(
-        { message: "disconnect success", success: true },
-        { status: 200 },
-      );
+    
+    // Also delete from database token tables (for git API access)
+    if (provider === 'github') {
+      await supabase.from('github_tokens').delete().eq('user_id', user.id);
+    } else if (provider === 'gitlab') {
+      await supabase.from('gitlab_tokens').delete().eq('user_id', user.id);
+    } else if (provider === 'bitbucket') {
+      await supabase.from('bitbucket_tokens').delete().eq('user_id', user.id);
     }
-    //console.log(response,"..........response...............96");
+    
+    // Success - provider disconnected
+    return NextResponse.json(
+      { message: "disconnect success", success: true },
+      { status: 200 },
+    );
   }
 
   // Success: return the redirect URL so the client can navigate there.

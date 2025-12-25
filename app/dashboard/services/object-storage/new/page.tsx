@@ -3,6 +3,8 @@ import { getUser } from "@/lib/supabase/auth";
 import { Locations, ObjectSpaces, Projects } from "@/lib/supabase/queries";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
+
+export const dynamic = "force-dynamic";
 import BucketCreate from "@/components/dashboard/object-storage/bucket-create";
 
 const BucketNewSuspense = async () => {

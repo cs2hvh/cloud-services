@@ -1,39 +1,21 @@
+/**
+ * GitHub Repositories API Endpoint
+ * GET /api/github/repositories
+ * 
+ * Returns all repositories (public and private) for authenticated user
+ * Uses modular GitHub provider from lib/providers/github
+ */
+
 import { createClient } from "@/lib/supabase/server";
-
-interface GitHubRepository {
-  id: number;
-  name: string;
-  full_name: string;
-  description: string | null;
-  private: boolean;
-  default_branch: string;
-  language: string | null;
-  updated_at: string;
-  clone_url: string;
-  html_url: string;
-}
-
-// interface TransformedRepo {
-//   id: string;
-//   name: string;
-//   fullName: string;
-//   description: string;
-//   private: boolean;
-//   defaultBranch: string;
-//   language: string;
-//   updatedAt: string;
-//   provider: 'github';
-//   cloneUrl: string;
-//   htmlUrl: string;
-// }
+import { fetchUserRepositories } from "@/lib/providers/github/utils";
 
 export async function GET() {
   try {
     const supabase = await createClient();
-    
-    // Get the current user
+
+    // Check if user is authenticated
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !user) {
       return Response.json(
         { message: "Unauthorized" },
@@ -41,163 +23,16 @@ export async function GET() {
       );
     }
 
-   // console.log('Fetching GitHub repositories for user:', user.id);
+    // Use modular GitHub provider
+    const result = await fetchUserRepositories();
 
-    // Get the current session to check for provider tokens
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      return Response.json(
-        { message: "No active session" },
-        { status: 401 }
-      );
+    // If no repositories found and needs auth, return 400
+    if (result.repositories.length === 0 && result.needsAppAuth) {
+      return Response.json(result, { status: 400 });
     }
 
-    // Check if user has GitHub provider linked
-    const githubIdentity = session.user.identities?.find(
-      identity => identity.provider === 'github'
-    );
-
-    if (!githubIdentity) {
-      return Response.json(
-        { message: "GitHub account not connected" },
-        { status: 400 }
-      );
-    }
-
-    // Get GitHub username for fallback
-    const githubUsername = githubIdentity.identity_data?.user_name || 
-                          githubIdentity.identity_data?.login || 
-                          githubIdentity.identity_data?.preferred_username;
-
-    // console.log('GitHub username:', githubUsername);
-    // console.log('Provider token available:', !!session.provider_token);
-    // console.log('Session keys:', Object.keys(session));
-
-    // Try to use provider token if available
-    let accessToken = null;
-    
-    // Check for token in session first
-    if (session.provider_token) {
-      accessToken = session.provider_token;
-      // console.log('Found token in session.provider_token');
-    }
-    // Fallback to identity data
-    else if (githubIdentity.identity_data?.provider_token) {
-      accessToken = githubIdentity.identity_data.provider_token;
-      // console.log('Found token in identity_data.provider_token');
-    }
-    // Last resort: check the github_tokens table (for linked accounts)
-    else {
-      const { data: tokenData } = await supabase
-        .from('github_tokens')
-        .select('access_token')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (tokenData?.access_token) {
-        accessToken = tokenData.access_token;
-        // console.log('Found token in github_tokens table');
-      }
-    }
-
-    if (accessToken) {
-      // console.log('Using provider token for GitHub API access');
-      
-      // Test the token first
-      const userResponse = await fetch('https://api.github.com/user', {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'AhuraSense-Cloud-Platform'
-        }
-      });
-
-      if (userResponse.ok) {
-        // Token works, fetch all repositories
-        const response = await fetch('https://api.github.com/user/repos?sort=updated&per_page=100&visibility=all', {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/vnd.github.v3+json',
-            'User-Agent': 'AhuraSense-Cloud-Platform'
-          }
-        });
-
-        if (response.ok) {
-          const repos: GitHubRepository[] = await response.json();
-          const privateCount = repos.filter((repo: GitHubRepository) => repo.private).length;
-          console.log(`Successfully fetched ${repos.length} repositories (${privateCount} private) from GitHub`);
-          
-          const transformedRepos = repos.map((repo: GitHubRepository) => ({
-            id: repo.id.toString(),
-            name: repo.name,
-            fullName: repo.full_name,
-            description: repo.description || '',
-            private: repo.private,
-            defaultBranch: repo.default_branch,
-            language: repo.language || 'Unknown',
-            updatedAt: repo.updated_at,
-            provider: 'github',
-            cloneUrl: repo.clone_url,
-            htmlUrl: repo.html_url
-          }));
-
-          return Response.json({ 
-            repositories: transformedRepos,
-            note: `Loaded ${transformedRepos.length} repositories including ${privateCount} private repositories`
-          }, { status: 200 });
-        }
-      } else {
-        // console.log('Provider token is invalid, falling back to public repos');
-      }
-    }
-
-    // Fallback to public repositories if no valid token
-    if (githubUsername) {
-      // console.log('Fetching public repositories for:', githubUsername);
-      
-      const response = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=100`, {
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'AhuraSense-Cloud-Platform'
-        }
-      });
-
-      if (response.ok) {
-        const repos = await response.json();
-        const transformedRepos = repos.map((repo: GitHubRepository) => ({
-          id: repo.id.toString(),
-          name: repo.name,
-          fullName: repo.full_name,
-          description: repo.description || '',
-          private: repo.private,
-          defaultBranch: repo.default_branch,
-          language: repo.language || 'Unknown',
-          updatedAt: repo.updated_at,
-          provider: 'github',
-          cloneUrl: repo.clone_url,
-          htmlUrl: repo.html_url
-        }));
-
-        return Response.json({ 
-          repositories: transformedRepos,
-          warning: "Showing public repositories only. To access private repositories, you need to configure Supabase to store GitHub provider tokens.",
-          instructions: "In Supabase Dashboard → Authentication → Providers → GitHub, make sure to enable 'Store provider tokens' if available."
-        }, { status: 200 });
-      }
-    }
-
-    return Response.json(
-      { 
-        message: "Unable to fetch GitHub repositories. Please check your GitHub connection.",
-        debug: {
-          hasProviderToken: !!session.provider_token,
-          hasGithubIdentity: !!githubIdentity,
-          githubUsername: githubUsername || 'Not found'
-        }
-      },
-      { status: 400 }
-    );
+    // Return repositories (may be empty if error)
+    return Response.json(result, { status: 200 });
 
   } catch (error) {
     console.error("[GitHub Repositories API] Error:", error);

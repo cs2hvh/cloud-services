@@ -14,14 +14,14 @@ export const createProductSchema = z.object({
     ram: z.number().positive("RAM must be positive"),
     storage: z.number().positive("Storage must be positive"),
   }),
-  discount: z.number().min(0).max(100).optional().nullable(),
-  slug: z.string().optional().nullable(),
+  discount: z.number().min(0).max(100).optional(),
+  slug: z.string().optional(),
 });
 
 export const updateProductSchema = z.object({
   id: z.string().uuid("Invalid product ID"),
   name: z.string().min(1, "Name is required").optional(),
-  description: z.string().optional().nullable(),
+  description: z.string().optional(),
   price: z.number().positive("Price must be positive").optional(),
   fixed_price: z.number().min(0).optional().nullable(),
   resources: z
@@ -31,8 +31,8 @@ export const updateProductSchema = z.object({
       storage: z.number().positive("Storage must be positive"),
     })
     .optional(),
-  discount: z.number().min(0).max(100).optional().nullable(),
-  slug: z.string().optional().nullable(),
+  discount: z.number().min(0).max(100).optional(),
+  slug: z.string().optional(),
 });
 
 export const deleteProductSchema = z.object({

@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-// import { boolean } from "zod";
+import { getValidBitbucketToken } from "@/lib/bitbucket/token-refresh";
 
 
 interface transformedRepos {
@@ -21,18 +21,25 @@ export async function GET() {
   try {
     const supabase = await createClient();
     
-    // Get the current session which includes provider tokens
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
     
-    if (sessionError || !session) {
+    if (userError || !user) {
+      return Response.json(
+        { message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Get the current session to check for provider tokens
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
       return Response.json(
         { message: "No active session" },
         { status: 401 }
       );
     }
-
-    //console.log('=== DEBUGGING BITBUCKET TOKEN ACCESS ===');
-   // console.log('Session user ID:', session.user.id);
 
     // Check if user has Bitbucket provider linked
     const bitbucketIdentity = session.user.identities?.find(
@@ -46,27 +53,34 @@ export async function GET() {
       );
     }
 
-   // console.log('Bitbucket Identity Data:', JSON.stringify(bitbucketIdentity.identity_data, null, 2));
-
-    // Try to get access token from multiple locations
+    // Try to get a valid access token from various sources
     let accessToken = null;
+    let tokenSource = 'none';
     
-    // Method 1: Session provider token
+    // Source 1: Session provider_token (only available immediately after OAuth callback)
     if (session.provider_token) {
       accessToken = session.provider_token;
-     // console.log('Found token in session.provider_token');
+      tokenSource = 'session.provider_token';
+      console.log('[Bitbucket Repos] Found token in session.provider_token');
     }
-    
-    // Method 2: Identity data provider token
+    // Source 2: Identity data provider_token (usually not populated by Supabase)
     else if (bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
-      //console.log('Found token in identity_data.provider_token');
+      tokenSource = 'identity_data.provider_token';
+      console.log('[Bitbucket Repos] Found token in identity_data.provider_token');
     }
-    
-    // Method 3: Identity data access token
-    else if (bitbucketIdentity.identity_data?.access_token) {
-      accessToken = bitbucketIdentity.identity_data.access_token;
-      //console.log('Found token in identity_data.access_token');
+    // Source 3: Database stored token with automatic refresh (most reliable for Bitbucket!)
+    // IMPORTANT: Bitbucket tokens expire in ~1 hour, so we need to check and refresh them
+    else {
+      console.log('[Bitbucket Repos] No session token, checking bitbucket_tokens table for user:', user.id);
+      const storedToken = await getValidBitbucketToken(user.id);
+      if (storedToken) {
+        accessToken = storedToken;
+        tokenSource = 'bitbucket_tokens_table';
+        console.log('[Bitbucket Repos] Found valid token in bitbucket_tokens table (with auto-refresh)');
+      } else {
+        console.log('[Bitbucket Repos] No valid token found in bitbucket_tokens table');
+      }
     }
 
     if (!accessToken) {
@@ -75,14 +89,14 @@ export async function GET() {
       // Bitbucket doesn't have a public API for user repositories without authentication
       return Response.json(
         { 
-          message: "Bitbucket access token not found. Please check Bitbucket OAuth configuration.",
-          debug: "Bitbucket requires authentication for repository access"
+          message: "Bitbucket access token not found or expired. Please reconnect your Bitbucket account.",
+          needsAppAuth: true
         },
         { status: 400 }
       );
     }
 
-    //console.log('Using Bitbucket token for repo access');
+    console.log(`[Bitbucket Repos] Using token from: ${tokenSource}`);
 
     // Fetch all repositories using access token
     const response = await fetch('https://api.bitbucket.org/2.0/repositories?role=member&sort=-updated_on&pagelen=100', {
@@ -95,11 +109,24 @@ export async function GET() {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Bitbucket API Error:', response.status, errorText);
+      console.log(`[Bitbucket Repos] API request failed with status ${response.status}: ${errorText}`);
+      console.log(`[Bitbucket Repos] Token from ${tokenSource} may be invalid or expired`);
+      
+      // If token from database failed, delete it so user can re-authenticate
+      if (tokenSource === 'bitbucket_tokens_table') {
+        console.log('[Bitbucket Repos] Deleting invalid stored token');
+        await supabase
+          .from('bitbucket_tokens')
+          .delete()
+          .eq('user_id', user.id);
+      }
       
       if (response.status === 401) {
         return Response.json(
-          { message: "Bitbucket token is invalid or expired. Please reconnect your Bitbucket account." },
+          { 
+            message: "Bitbucket token is invalid or expired. Please reconnect your Bitbucket account.",
+            needsAppAuth: true
+          },
           { status: 400 }
         );
       }
@@ -109,7 +136,8 @@ export async function GET() {
 
     const data = await response.json();
     const repos = data.values || [];
-   // console.log(`Fetched ${repos.length} repositories from Bitbucket`);
+    const privateCount = repos.filter((repo: transformedRepos) => repo.is_private).length;
+    console.log(`[Bitbucket Repos] Successfully fetched ${repos.length} repositories (${privateCount} private)`);
     
     // Transform Bitbucket API response to our format
     const transformedRepos = repos.map((repo: transformedRepos) => ({
@@ -128,7 +156,7 @@ export async function GET() {
 
     return Response.json({ 
       repositories: transformedRepos,
-      note: `Successfully loaded ${transformedRepos.length} repositories from Bitbucket`
+      note: `Loaded ${transformedRepos.length} repositories including ${privateCount} private repositories`
     }, { status: 200 });
 
   } catch (error) {

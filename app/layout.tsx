@@ -23,7 +23,12 @@ export default function RootLayout({
     <html lang="en" className="dark">
       <body className={`${suse.variable}`}>
         {children}
-        <Toaster position="top-center" />
+        <Toaster 
+          position="top-right" 
+          theme="dark"
+          richColors
+          closeButton
+        />
       </body>
     </html>
   );

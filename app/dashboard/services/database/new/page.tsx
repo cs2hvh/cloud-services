@@ -7,6 +7,8 @@ import { getCachedProducts, getCachedLocations } from "@/lib/cache/query-cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 const DatabaseNewSuspense = async () => {
   const user = await getUser();
   

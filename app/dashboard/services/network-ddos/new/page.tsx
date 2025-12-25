@@ -6,6 +6,8 @@ import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 const DDoSProtectionNewSuspense = async () => {
   const user = await getUser();
 

@@ -83,7 +83,7 @@ export function SignInForm() {
   // ---- social sign-in
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
-    const response = await api.post("/auth/signin/github", { type });
+    const response = await api.post("/auth/signin/gitlab", { type });
 
     if (response.data?.url) {
       window.location.href = response.data.url;

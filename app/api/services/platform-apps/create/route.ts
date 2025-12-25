@@ -1,0 +1,304 @@
+import { NextRequest, NextResponse } from "next/server";
+import { validateRequest } from "@/lib/middleware/validate-request";
+import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { DeploymentService, type DeploymentConfig } from "@/lib/services";
+
+export async function POST(req: NextRequest) {
+  const auth = await authenticateUser();
+  if (!auth.authenticated) return auth.response;
+
+  // Validate required environment variables
+  const requiredEnvVars = [
+    'JENKINS_URL',
+    'CLOUDFLARE_API_TOKEN',
+    'CLOUDFLARE_ZONE_ID',
+    'KUBE_IP',
+    'SUPABASE_SERVICE_ROLE_KEY'
+  ];
+  
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  if (missingVars.length > 0) {
+    console.error('[platform-apps/create] Missing environment variables:', missingVars);
+    return NextResponse.json(
+      { 
+        error: 'Server configuration error',
+        message: `Missing required environment variables: ${missingVars.join(', ')}`,
+        details: 'Please configure all required environment variables in .env.local'
+      },
+      { status: 500 }
+    );
+  }
+
+  try {
+    const rl = await limitByUser(auth.user!.id, {
+      prefix: "rl:platform-app-create",
+      limit: 5,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        {
+          error: "Too Many Requests",
+          message: `Retry after ${rl.retryAfterSec}s`,
+        },
+        { status: 429 }
+      );
+    }
+
+    const body = await req.json();
+    const validation = validateRequest(createPlatformAppSchema, body);
+    if (!validation.success) return validation.response;
+
+    const { env_vars, ...appData } = validation.data;
+
+    // Store the ORIGINAL URL without token (for database)
+    const original_repository_url = appData.repository_url;
+    
+    // Get GitHub access token for private repository access (same logic as repositories endpoint)
+    let authenticated_repository_url = appData.repository_url;
+    if (appData.git_provider === 'github' && authenticated_repository_url.startsWith('https://github.com/')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const githubIdentity = session.user.identities.find(id => id.provider === 'github');
+          if (githubIdentity?.identity_data?.provider_token) {
+            accessToken = githubIdentity.identity_data.provider_token;
+          }
+        }
+      }
+      
+      // Last resort: check the github_tokens table with refresh logic
+      if (!accessToken) {
+        // Import the GitHub provider
+        const { GitHubProvider } = await import('@/lib/providers/github');
+        const githubProvider = new GitHubProvider();
+        const tokenObj = await githubProvider.getToken(auth.user!.id);
+        if (tokenObj?.accessToken) {
+          accessToken = tokenObj.accessToken;
+        }
+      }
+      
+      if (accessToken) {
+        // Inject token into URL for private repo access (only for Jenkins, not stored in DB)
+        authenticated_repository_url = authenticated_repository_url.replace(
+          'https://github.com/',
+          `https://${accessToken}@github.com/`
+        );
+        console.log('[platform-apps/create] ✅ Injected GitHub token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No GitHub token found - private repos may fail');
+      }
+    }
+    
+    // Get GitLab access token for private repository access
+    // GitLab URL format: https://oauth2:<token>@gitlab.com/user/repo.git
+    if (appData.git_provider === 'gitlab' && authenticated_repository_url.includes('gitlab.com')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+          console.log('[platform-apps/create] Found GitLab token in session.provider_token');
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const gitlabIdentity = session.user.identities.find(id => id.provider === 'gitlab');
+          if (gitlabIdentity?.identity_data?.provider_token) {
+            accessToken = gitlabIdentity.identity_data.provider_token;
+            console.log('[platform-apps/create] Found GitLab token in identity_data.provider_token');
+          }
+        }
+      }
+      
+      // Check the gitlab_tokens table with auto-refresh (GitLab tokens expire in 2 hours!)
+      if (!accessToken) {
+        const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+        const validToken = await getValidGitLabToken(auth.user!.id);
+        if (validToken) {
+          accessToken = validToken;
+          console.log('[platform-apps/create] Found GitLab token in gitlab_tokens table (with auto-refresh)');
+        }
+      }
+      
+      if (accessToken) {
+        // GitLab uses oauth2:<token>@gitlab.com format for authenticated access
+        // Handle both https://gitlab.com/... and https://www.gitlab.com/...
+        authenticated_repository_url = authenticated_repository_url.replace(
+          /https:\/\/(www\.)?gitlab\.com\//,
+          `https://oauth2:${accessToken}@gitlab.com/`
+        );
+        console.log('[platform-apps/create] ✅ Injected GitLab token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No GitLab token found - private repos may fail');
+      }
+    }
+
+    // Handle Bitbucket token injection for private repositories
+    // Bitbucket URL format: https://x-token-auth:<token>@bitbucket.org/workspace/repo.git
+    if (appData.git_provider === 'bitbucket' && authenticated_repository_url.includes('bitbucket.org')) {
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      // Get session and user identity
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      let accessToken = null;
+      
+      if (session) {
+        // Check for token in session first (freshest token)
+        if (session.provider_token) {
+          accessToken = session.provider_token;
+          console.log('[platform-apps/create] Found Bitbucket token in session.provider_token');
+        }
+        // Fallback to identity data
+        else if (session.user?.identities) {
+          const bitbucketIdentity = session.user.identities.find(id => id.provider === 'bitbucket');
+          if (bitbucketIdentity?.identity_data?.provider_token) {
+            accessToken = bitbucketIdentity.identity_data.provider_token;
+            console.log('[platform-apps/create] Found Bitbucket token in identity_data.provider_token');
+          }
+        }
+      }
+      
+      // Fallback: Check the bitbucket_tokens table with auto-refresh (if table exists)
+      // Bitbucket tokens expire in ~1-2 hours, so refresh is important
+      if (!accessToken) {
+        try {
+          const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+          const validToken = await getValidBitbucketToken(auth.user!.id);
+          if (validToken) {
+            accessToken = validToken;
+            console.log('[platform-apps/create] Found Bitbucket token in bitbucket_tokens table (with auto-refresh)');
+          }
+        } catch {
+          console.log('[platform-apps/create] bitbucket_tokens table not available, skipping fallback');
+        }
+      }
+      
+      if (accessToken) {
+        // Bitbucket uses x-token-auth:<token>@bitbucket.org format for authenticated access
+        // Handle both https://bitbucket.org/... and https://www.bitbucket.org/...
+        authenticated_repository_url = authenticated_repository_url.replace(
+          /https:\/\/(www\.)?bitbucket\.org\//,
+          `https://x-token-auth:${accessToken}@bitbucket.org/`
+        );
+        console.log('[platform-apps/create] ✅ Injected Bitbucket token for private repository access');
+      } else {
+        console.log('[platform-apps/create] ⚠️ No Bitbucket token found - private repos may fail');
+      }
+    }
+
+    // Prepare deployment configuration
+    const deploymentConfig: DeploymentConfig = {
+      name: appData.name,
+      repository_url: original_repository_url, // Store clean URL in database
+      authenticated_url: authenticated_repository_url, // Use authenticated URL for Jenkins
+      branch: appData.branch || "main",
+      framework: appData.framework,
+      git_provider: appData.git_provider,
+      repository_id: appData.repository_id,
+      repository_name: appData.repository_name,
+      user_id: auth.user!.id,
+      build_command: appData.build_command,
+      output_directory: appData.output_directory,
+      env_vars: env_vars || [],
+      size: (appData as any).size || 'small',
+      auto_deploy: appData.auto_deploy || false,
+      deploy_branch: appData.deploy_branch || appData.branch || 'main',
+    };
+
+    // Deploy using the deployment service
+    const result = await DeploymentService.deploy(deploymentConfig);
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error || "Deployment failed" },
+        { status: 500 }
+      );
+    }
+
+    // If auto_deploy is enabled, register webhook for the app
+    if (appData.auto_deploy && result.app_id) {
+      try {
+        console.log('[platform-apps/create] Auto-deploy enabled, registering webhook...');
+        
+        // Get the appropriate access token for webhook registration
+        let webhookToken = null;
+        if (appData.git_provider === 'github') {
+          const { GitHubProvider } = await import('@/lib/providers/github');
+          const githubProvider = new GitHubProvider();
+          const tokenObj = await githubProvider.getToken(auth.user!.id);
+          webhookToken = tokenObj?.accessToken;
+        } else if (appData.git_provider === 'gitlab') {
+          const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+          webhookToken = await getValidGitLabToken(auth.user!.id);
+        } else if (appData.git_provider === 'bitbucket') {
+          try {
+            const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+            webhookToken = await getValidBitbucketToken(auth.user!.id);
+          } catch {
+            console.log('[platform-apps/create] Bitbucket token refresh not available');
+          }
+        }
+
+        if (webhookToken) {
+          console.log(webhookToken, '...........webhook token...........');
+          const { WebhookManager } = await import('@/lib/services/webhook-manager');
+          
+          const webhookResult = await WebhookManager.registerWebhook({
+            app_id: result.app_id,
+            provider: appData.git_provider,
+            repository_name: appData.repository_name,
+            access_token: webhookToken,
+          });
+
+          if (webhookResult.success) {
+            console.log('[platform-apps/create] ✅ Webhook registered successfully');
+          } else {
+            console.warn('[platform-apps/create] ⚠️ Webhook registration failed:', webhookResult.error);
+            // Don't fail the deployment, just log the warning
+          }
+        } else {
+          console.warn('[platform-apps/create] ⚠️ No access token available for webhook registration');
+        }
+      } catch (webhookError) {
+        console.error('[platform-apps/create] Webhook registration error:', webhookError);
+        // Don't fail the deployment, just log the error
+      }
+    }
+
+    return NextResponse.json({
+      message: 'Created App Successfully!',
+      app_id: result.app_id,
+      deployment_url: result.deployment_url,
+      port: result.port,
+      auto_deploy: appData.auto_deploy || false,
+    }, { status: 201 });
+  } catch (err: any) {
+    console.error('[platform-apps/create] Error:', err);
+    return NextResponse.json({ 
+      error: err?.message || 'Something went wrong.'
+    }, { status: 500 });
+  }
+}

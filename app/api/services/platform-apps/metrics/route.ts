@@ -1,0 +1,92 @@
+import { NextRequest, NextResponse } from "next/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { Platform_Apps } from "@/lib/supabase/queries";
+import { PrometheusService } from "@/lib/services/prometheus";
+
+/**
+ * GET /api/services/platform-apps/metrics?app_id=xxx
+ * Get CPU and memory metrics for an app
+ */
+export async function GET(req: NextRequest) {
+  const auth = await authenticateUser();
+  if (!auth.authenticated) return auth.response;
+
+  try {
+    // Rate limiting
+    const rl = await limitByUser(auth.user!.id, {
+      prefix: "rl:platform-app-metrics",
+      limit: 30,
+      windowMs: 60_000,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+        { status: 429 }
+      );
+    }
+
+    // Get app_id from query params
+    const { searchParams } = new URL(req.url);
+    const appId = searchParams.get("app_id");
+
+    if (!appId) {
+      return NextResponse.json(
+        { error: "Missing 'app_id' parameter" },
+        { status: 400 }
+      );
+    }
+
+    // Verify ownership
+    const result = await Platform_Apps.get(appId);
+    if (!result.success || !result.data) {
+      return NextResponse.json({ error: "App not found" }, { status: 404 });
+    }
+    const app = result.data;
+    if (app.user_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Get metrics from Prometheus
+    const metrics = await PrometheusService.getAppMetrics(app.name);
+
+    return NextResponse.json({
+      app_id: appId,
+      app_name: app.name,
+      metrics: {
+        pods: metrics.pods.map(p => ({
+          pod: p.pod,
+          cpu: {
+            cores: p.cpu,
+            millicores: Math.round(p.cpu * 1000),
+            display: `${Math.round(p.cpu * 1000)}m`,
+          },
+          memory: {
+            bytes: p.memory,
+            megabytes: Math.round(p.memory / 1024 / 1024),
+            display: `${Math.round(p.memory / 1024 / 1024)}Mi`,
+          },
+        })),
+        total: {
+          cpu: {
+            cores: metrics.totalCpu,
+            millicores: Math.round(metrics.totalCpu * 1000),
+            display: `${Math.round(metrics.totalCpu * 1000)}m`,
+          },
+          memory: {
+            bytes: metrics.totalMemory,
+            megabytes: Math.round(metrics.totalMemory / 1024 / 1024),
+            display: `${Math.round(metrics.totalMemory / 1024 / 1024)}Mi`,
+          },
+        },
+      },
+      timestamp: metrics.timestamp,
+    });
+  } catch (err: any) {
+    console.error("[API] Error getting metrics:", err);
+    return NextResponse.json(
+      { error: err?.message || "Failed to get metrics" },
+      { status: 500 }
+    );
+  }
+}
