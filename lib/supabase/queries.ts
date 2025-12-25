@@ -3053,4 +3053,4 @@ const api = {
   object_spaces: ObjectSpaces,
 };
 
-export default api;
+export default api
