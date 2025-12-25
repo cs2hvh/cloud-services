@@ -26,7 +26,7 @@ export interface WebhookPayload {
     name: string;
     email: string;
   };
-  raw?: any;             // Original payload for debugging
+  raw?: Record<string, unknown>;             // Original payload for debugging
 }
 
 // Webhook configuration stored in database

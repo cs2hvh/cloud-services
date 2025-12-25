@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
     const env_vars = await Platform_Apps.get_env_vars(validation.data.app_id);
 
     return NextResponse.json({ ...result.data, env_vars });
-  } catch (err: any) {
-    const msg = err?.message || "Unknown error";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

@@ -55,10 +55,11 @@ export async function GET(req: NextRequest) {
       app_name: app.name,
       ...details,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[API] Error getting app details:", err);
+    const errorMessage = err instanceof Error ? err.message : "Failed to get app details";
     return NextResponse.json(
-      { error: err?.message || "Failed to get app details" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

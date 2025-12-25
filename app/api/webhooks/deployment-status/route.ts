@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     
     // Get all apps and find by name (since we don't have app_id from Jenkins)
     const apps = await Platform_Apps.list_by_owner("");
-    const app = apps.find((a: any) => a.name === appName);
+    const app = apps.find((a: { name: string }) => a.name === appName);
 
     if (!app) {
       console.warn(`[Webhook] App not found: ${appName}`);
@@ -60,10 +60,11 @@ export async function POST(req: NextRequest) {
       status,
       build_number,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[Webhook] Error updating deployment status:", error);
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

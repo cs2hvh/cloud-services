@@ -62,9 +62,20 @@ export class GitHubApiClient {
         throw this.handleError(response.status);
       }
 
-      const repos = await response.json() as any[];
+      const repos = await response.json() as Array<{
+        id: number;
+        name: string;
+        full_name: string;
+        description: string | null;
+        private: boolean;
+        default_branch: string;
+        language: string | null;
+        updated_at: string;
+        clone_url: string;
+        html_url: string;
+      }>;
 
-      return repos.map((repo: any) => ({
+      return repos.map((repo) => ({
         id: repo.id.toString(),
         name: repo.name,
         fullName: repo.full_name,
@@ -97,9 +108,13 @@ export class GitHubApiClient {
         throw this.handleError(response.status);
       }
 
-      const branches = await response.json() as any[];
+      const branches = await response.json() as Array<{
+        name: string;
+        commit: { sha: string };
+        protected: boolean;
+      }>;
 
-      return branches.map((branch: any) => ({
+      return branches.map((branch) => ({
         name: branch.name,
         commitSha: branch.commit.sha,
         protected: branch.protected,
@@ -132,7 +147,7 @@ export class GitHubApiClient {
         throw this.handleError(response.status);
       }
 
-      const data = await response.json() as any;
+      const data = await response.json() as { content?: string };
 
       // GitHub returns content in base64
       if (data.content) {

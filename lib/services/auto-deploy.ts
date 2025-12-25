@@ -95,10 +95,11 @@ export class AutoDeployService {
           size || 'small'
         );
         console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
-      } catch (updateError: any) {
+      } catch (updateError: unknown) {
         // If job doesn't exist, this is a problem
-        console.error(`[AutoDeploy] Failed to update job config:`, updateError.message);
-        throw new Error(`Failed to update Jenkins job: ${updateError.message}`);
+        const errorMessage = updateError instanceof Error ? updateError.message : 'Unknown error';
+        console.error(`[AutoDeploy] Failed to update job config:`, errorMessage);
+        throw new Error(`Failed to update Jenkins job: ${errorMessage}`);
       }
 
       // Step 5: Trigger the build
@@ -133,8 +134,9 @@ export class AutoDeployService {
         buildNumber,
       };
 
-    } catch (error: any) {
-      console.error(`[AutoDeploy] ❌ Auto-deploy failed:`, error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[AutoDeploy] ❌ Auto-deploy failed:`, errorMessage);
       
       // Mark delivery as failed
       if (deliveryId) {
@@ -143,7 +145,7 @@ export class AutoDeployService {
 
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -179,8 +181,9 @@ export class AutoDeployService {
       }
 
       return null;
-    } catch (error: any) {
-      console.error(`[AutoDeploy] Error getting ${provider} token:`, error.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[AutoDeploy] Error getting ${provider} token:`, errorMessage);
       return null;
     }
   }

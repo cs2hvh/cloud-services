@@ -38,12 +38,18 @@ export interface AppHealth {
   timestamp: string;
 }
 
+// Prometheus query result format
+interface PrometheusResult {
+  metric: Record<string, string>;
+  value: [number, string];
+}
+
 export class PrometheusService {
   /**
    * Query Prometheus via K8s API service proxy
    * Path: /api/v1/namespaces/{ns}/services/{svc}:{port}/proxy/{path}
    */
-  private static async query(promql: string): Promise<any> {
+  private static async query(promql: string): Promise<PrometheusResult[]> {
     try {
       const cluster = kubeConfig.getCurrentCluster();
       if (!cluster) {
@@ -93,8 +99,9 @@ export class PrometheusService {
       }
 
       return result.data.result;
-    } catch (error: any) {
-      console.error(`[PrometheusService] Query failed:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[PrometheusService] Query failed:`, errorMessage);
       throw error;
     }
   }
@@ -111,7 +118,7 @@ export class PrometheusService {
     
     const result = await this.query(promql);
     
-    return result.map((item: any) => ({
+    return result.map((item: PrometheusResult) => ({
       pod: item.metric.pod,
       cpu: parseFloat(item.value[1]) || 0,
     }));
@@ -129,7 +136,7 @@ export class PrometheusService {
     
     const result = await this.query(promql);
     
-    return result.map((item: any) => ({
+    return result.map((item: PrometheusResult) => ({
       pod: item.metric.pod,
       memory: parseFloat(item.value[1]) || 0,
     }));

@@ -62,10 +62,11 @@ export async function GET(req: NextRequest) {
       message: health.message,
       timestamp: health.timestamp,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[API] Error getting health:", err);
+    const errorMessage = err instanceof Error ? err.message : "Failed to get health status";
     return NextResponse.json(
-      { error: err?.message || "Failed to get health status" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

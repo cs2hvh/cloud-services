@@ -47,8 +47,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(result.data);
-  } catch (err: any) {
-    const msg = err?.message || "Unknown error";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

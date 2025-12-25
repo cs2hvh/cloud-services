@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
       build_command: appData.build_command,
       output_directory: appData.output_directory,
       env_vars: env_vars || [],
-      size: (appData as any).size || 'small',
+      size: (appData as { size?: string }).size || 'small',
       auto_deploy: appData.auto_deploy || false,
       deploy_branch: appData.deploy_branch || appData.branch || 'main',
     };
@@ -299,10 +299,11 @@ export async function POST(req: NextRequest) {
       port: result.port,
       auto_deploy: appData.auto_deploy || false,
     }, { status: 201 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('[platform-apps/create] Error:', err);
+    const errorMessage = err instanceof Error ? err.message : 'Something went wrong.';
     return NextResponse.json({ 
-      error: err?.message || 'Something went wrong.'
+      error: errorMessage
     }, { status: 500 });
   }
 }

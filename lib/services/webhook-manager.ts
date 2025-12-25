@@ -124,7 +124,7 @@ export class WebhookManager {
 
       // Step 1: Check if we already have a webhook record for this app
       const existingDbWebhook = await Platform_App_Webhooks.get_by_app(appId);
-      const existingGitHubRecord = existingDbWebhook.data?.find((w: any) => w.provider === 'github');
+      const existingGitHubRecord = existingDbWebhook.data?.find((w: { provider: string }) => w.provider === 'github');
       
       // Step 2: Decide on the secret - re-use existing or generate new
       let webhookSecret: string;
@@ -183,7 +183,7 @@ export class WebhookManager {
             error: 'Repository not found or insufficient permissions. Make sure you have admin access to the repository.',
           };
         }
-        if (response.status === 422 && errorData.errors?.some((e: any) => e.message?.includes('already exists'))) {
+        if (response.status === 422 && errorData.errors?.some((e: { message?: string }) => e.message?.includes('already exists'))) {
           return {
             success: false,
             error: 'Webhook already exists for this repository.',
@@ -226,11 +226,12 @@ export class WebhookManager {
         webhook_id: webhook.id.toString(),
       };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('[WebhookManager] Error registering webhook:', error);
       return {
         success: false,
-        error: error.message || 'Unknown error occurred',
+        error: errorMessage,
       };
     }
   }
@@ -262,7 +263,7 @@ export class WebhookManager {
         );
 
         if (listRes.ok) {
-          const existingHooks: any[] = await listRes.json();
+          const existingHooks: { id: number; url: string }[] = await listRes.json();
           const duplicates = existingHooks.filter((h) => h.url === webhookUrl);
           for (const hook of duplicates) {
             await fetch(
@@ -314,7 +315,7 @@ export class WebhookManager {
         };
       }
 
-      const data: any = await createRes.json();
+      const data: { id: number } = await createRes.json();
 
       const dbResult = await Platform_App_Webhooks.create({
         app_id: appId,
@@ -360,11 +361,12 @@ export class WebhookManager {
         success: true,
         webhook_id: String(data.id),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('[WebhookManager] Error registering GitLab webhook:', error);
       return {
         success: false,
-        error: error?.message || 'Unknown error occurred',
+        error: errorMessage,
       };
     }
   }
@@ -406,9 +408,9 @@ export class WebhookManager {
         );
 
         if (existingResp.ok) {
-          const existingData: any = await existingResp.json();
-          const hooks: any[] = existingData.values || [];
-          const existing = hooks.find((h: any) => h.url === webhookUrl);
+          const existingData: { values?: { uuid: string; url: string }[] } = await existingResp.json();
+          const hooks = existingData.values || [];
+          const existing = hooks.find((h: { uuid: string; url: string }) => h.url === webhookUrl);
 
           if (existing && existing.uuid) {
             console.log(
@@ -466,7 +468,7 @@ export class WebhookManager {
         };
       }
 
-      const hook: any = await createResp.json();
+      const hook: { uuid?: string; id?: number } = await createResp.json();
       const webhookId: string = hook.uuid || hook.id?.toString() || '';
 
       if (!webhookId) {
@@ -513,11 +515,12 @@ export class WebhookManager {
         success: true,
         webhook_id: webhookId,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       console.error('[WebhookManager] Error registering Bitbucket webhook:', error);
       return {
         success: false,
-        error: error?.message || 'Unknown error occurred',
+        error: errorMessage,
       };
     }
   }
@@ -566,7 +569,7 @@ export class WebhookManager {
         return true; // Consider it success if no webhook exists
       }
 
-      const webhookConfig = webhookResult.data.find((w: any) => w.provider === 'github');
+      const webhookConfig = webhookResult.data.find((w: { provider: string }) => w.provider === 'github');
       if (!webhookConfig) {
         console.log('[WebhookManager] No GitHub webhook found');
         return true;
@@ -592,7 +595,7 @@ export class WebhookManager {
       console.log(`[WebhookManager] ✅ Webhook deleted for ${repoOwner}/${repoName}`);
       return true;
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[WebhookManager] Error deleting webhook:', error);
       // Still try to delete from database
       await Platform_App_Webhooks.delete(appId, 'github').catch(() => {});
@@ -633,7 +636,7 @@ export class WebhookManager {
     token: string,
     repoOwner: string,
     repoName: string
-  ): Promise<any[]> {
+  ): Promise<{ id: number; config?: { url?: string } }[]> {
     try {
       const response = await fetch(
         `https://api.github.com/repos/${repoOwner}/${repoName}/hooks`,

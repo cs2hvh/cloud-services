@@ -45,10 +45,11 @@ export async function GET(req: NextRequest) {
       logs,
       next_start: startOffset + logs.length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[API] Error getting build logs:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to get build logs";
     return NextResponse.json(
-      { error: error?.message || "Failed to get build logs" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

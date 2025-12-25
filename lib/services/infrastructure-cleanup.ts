@@ -78,9 +78,10 @@ export class InfrastructureCleanupService {
         
         console.log(`[InfrastructureCleanupService] Jenkins deletion job still running...`);
         await new Promise(resolve => setTimeout(resolve, pollInterval));
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errorObj = error as { notFound?: boolean };
         // Handle the case where the build doesn't exist yet
-        if (error.notFound && !buildExists && retryCount < maxRetries) {
+        if (errorObj.notFound && !buildExists && retryCount < maxRetries) {
           retryCount++;
           console.log(`[InfrastructureCleanupService] Build not found yet, retrying... (${retryCount}/${maxRetries})`);
           await new Promise(resolve => setTimeout(resolve, pollInterval));

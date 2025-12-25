@@ -39,9 +39,10 @@ export class DNSService {
 
       console.log(`[DNSService] ✅ Created DNS record for ${appName}`);
       console.log(`[DNSService] Record will be accessible at: https://${fullDomain}`);
-    } catch (error: any) {
-      console.error(`[DNSService] Cloudflare API error:`, error?.message);
-      throw new Error(`Failed to create DNS record: ${error?.message || 'Unknown error'}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[DNSService] Cloudflare API error:`, errorMessage);
+      throw new Error(`Failed to create DNS record: ${errorMessage}`);
     }
   }
 
@@ -60,7 +61,7 @@ export class DNSService {
       zone_id: process.env.CLOUDFLARE_ZONE_ID,
     });
 
-    const matchingRecords = records.result?.filter((record: any) =>
+    const matchingRecords = records.result?.filter((record: { name: string }) =>
       record.name === fullDomain
     ) || [];
 
@@ -95,7 +96,7 @@ export class DNSService {
     });
 
     const fullDomain = getAppDomain(appName);
-    const exists = records.result?.some((record: any) =>
+    const exists = records.result?.some((record: { name: string }) =>
       record.name === fullDomain
     ) || false;
 

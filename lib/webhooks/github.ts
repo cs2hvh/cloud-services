@@ -68,36 +68,42 @@ export class GitHubWebhookHandler {
   /**
    * Check if this is a branch deletion (after = 0000...)
    */
-  static isBranchDeletion(body: any): boolean {
+  static isBranchDeletion(body: Record<string, unknown>): boolean {
     return body.deleted === true || body.after === '0000000000000000000000000000000000000000';
   }
 
   /**
    * Parse GitHub push event payload into normalized format
    */
-  static parsePushEvent(body: any, deliveryId: string): WebhookPayload {
-    const ref = body.ref || '';
+  static parsePushEvent(body: Record<string, unknown>, deliveryId: string): WebhookPayload {
+    const ref = (body.ref || '') as string;
     const branch = this.extractBranch(ref);
+    
+    const repository = body.repository as Record<string, unknown> | undefined;
+    const headCommit = body.head_commit as Record<string, unknown> | undefined;
+    const headCommitAuthor = headCommit?.author as Record<string, unknown> | undefined;
+    const pusher = body.pusher as Record<string, unknown> | undefined;
+    const sender = body.sender as Record<string, unknown> | undefined;
     
     return {
       provider: 'github',
       event: 'push',
       delivery_id: deliveryId,
       repository: {
-        id: body.repository?.id?.toString() || '',
-        full_name: body.repository?.full_name || '',
-        clone_url: body.repository?.clone_url || '',
+        id: String(repository?.id || ''),
+        full_name: String(repository?.full_name || ''),
+        clone_url: String(repository?.clone_url || ''),
       },
       ref,
       branch,
       commit: {
-        sha: body.after || body.head_commit?.id || '',
-        message: body.head_commit?.message || '',
-        author: body.head_commit?.author?.name || body.head_commit?.author?.username || '',
+        sha: String(body.after || headCommit?.id || ''),
+        message: String(headCommit?.message || ''),
+        author: String(headCommitAuthor?.name || headCommitAuthor?.username || ''),
       },
       pusher: {
-        name: body.pusher?.name || body.sender?.login || '',
-        email: body.pusher?.email || '',
+        name: String(pusher?.name || sender?.login || ''),
+        email: String(pusher?.email || ''),
       },
       raw: body,
     };
@@ -106,15 +112,17 @@ export class GitHubWebhookHandler {
   /**
    * Parse ping event (webhook creation confirmation)
    */
-  static parsePingEvent(body: any): { 
+  static parsePingEvent(body: Record<string, unknown>): { 
     webhook_id: string; 
     zen: string;
     repository_id: string;
   } {
+    const hook = body.hook as Record<string, unknown> | undefined;
+    const repository = body.repository as Record<string, unknown> | undefined;
     return {
-      webhook_id: body.hook_id?.toString() || body.hook?.id?.toString() || '',
-      zen: body.zen || '',
-      repository_id: body.repository?.id?.toString() || '',
+      webhook_id: String(body.hook_id || hook?.id || ''),
+      zen: String(body.zen || ''),
+      repository_id: String(repository?.id || ''),
     };
   }
 

@@ -8,6 +8,7 @@ import {
   CoreV1Api,
   AppsV1Api,
   NetworkingV1Api,
+  V1ContainerState,
 } from '@kubernetes/client-node';
 import kubeConfig from '@/lib/kubernetes';
 
@@ -146,7 +147,7 @@ export class KubernetesInfoService {
   /**
    * Get container state as string
    */
-  private static getContainerState(state: any): string {
+  private static getContainerState(state: V1ContainerState | undefined): string {
     if (state?.running) return 'Running';
     if (state?.waiting) return `Waiting: ${state.waiting.reason || 'Unknown'}`;
     if (state?.terminated) return `Terminated: ${state.terminated.reason || 'Unknown'}`;
@@ -212,8 +213,9 @@ export class KubernetesInfoService {
           lastTransitionTime: c.lastTransitionTime?.toISOString() || '',
         })),
       };
-    } catch (error: any) {
-      console.error('[KubernetesInfoService] getPodInfo error:', error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] getPodInfo error:', errorMessage);
       return null;
     }
   }
@@ -249,8 +251,9 @@ export class KubernetesInfoService {
           message: c.message || '',
         })),
       };
-    } catch (error: any) {
-      console.error('[KubernetesInfoService] getDeploymentInfo error:', error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] getDeploymentInfo error:', errorMessage);
       return null;
     }
   }
@@ -279,8 +282,9 @@ export class KubernetesInfoService {
         serviceName: rule?.http?.paths?.[0]?.backend?.service?.name || '',
         servicePort: rule?.http?.paths?.[0]?.backend?.service?.port?.number || 80,
       };
-    } catch (error: any) {
-      console.error('[KubernetesInfoService] getNetworkInfo error:', error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] getNetworkInfo error:', errorMessage);
       return null;
     }
   }
@@ -318,8 +322,9 @@ export class KubernetesInfoService {
         lastTimestamp: e.lastTimestamp?.toISOString() || '',
         count: e.count || 1,
       }));
-    } catch (error: any) {
-      console.error('[KubernetesInfoService] getEvents error:', error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] getEvents error:', errorMessage);
       return [];
     }
   }
