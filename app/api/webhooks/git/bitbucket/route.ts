@@ -30,9 +30,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     }
 
     // 2. Parse JSON
-    let body: any;
+    let body: Record<string, unknown>;
     try {
-      body = JSON.parse(rawBody);
+      body = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
       console.error('[Bitbucket Webhook] Invalid JSON payload');
       return NextResponse.json(
@@ -158,16 +158,17 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     let buildNumber: number;
     try {
       buildNumber = await JenkinsService.triggerBuild(app.name);
-    } catch (error: any) {
-      console.error('[Bitbucket Webhook] Failed to trigger build:', error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Bitbucket Webhook] Failed to trigger build:', errorMessage);
 
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, error?.message);
+      await Platform_App_Webhooks.record_trigger(app.webhook_id, errorMessage);
 
       return NextResponse.json(
         {
           success: false,
           action: 'error',
-          message: `Failed to trigger build: ${error?.message}`,
+          message: `Failed to trigger build: ${errorMessage}`,
           app_name: app.name,
         },
         { status: 500 }
@@ -204,13 +205,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       commit_sha: payload.commit.sha,
       build_number: buildNumber,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Bitbucket Webhook] Unexpected error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json(
       {
         success: false,
         action: 'error',
-        message: error?.message || 'Internal server error',
+        message: errorMessage,
       },
       { status: 500 }
     );

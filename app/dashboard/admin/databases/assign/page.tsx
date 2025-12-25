@@ -7,7 +7,6 @@ import { Suspense } from "react";
 export const dynamic = "force-dynamic";
 import { requireAdmin } from "@/lib/supabase/auth";
 
-export const dynamic = "force-dynamic";
 const AdminDatabaseAssignSuspense = async () => {
   // Check admin authentication
   const checkAdmin = await requireAdmin();

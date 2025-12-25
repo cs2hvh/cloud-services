@@ -112,7 +112,7 @@ export class BuildPollingService {
         }).catch(err => console.error(`[BuildPolling] Poll error:`, err));
       }, pollInterval);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       await this.handlePollError(error, {
         ...context,
         pollCount,
@@ -156,7 +156,7 @@ export class BuildPollingService {
    * Handle errors during polling
    */
   private static async handlePollError(
-    error: any,
+    error: unknown,
     context: {
       appId: string;
       appName: string;
@@ -169,9 +169,10 @@ export class BuildPollingService {
     }
   ): Promise<void> {
     const { appId, appName, pollCount, pollInterval, buildStartTimeout, buildFound } = context;
+    const errorMessage = error instanceof Error ? error.message : '';
 
     // Handle "build not found" error
-    if (error?.message?.includes('not found')) {
+    if (errorMessage.includes('not found')) {
       const waitTime = pollCount * pollInterval;
       
       // Still waiting for build to start
@@ -195,7 +196,7 @@ export class BuildPollingService {
     }
 
     // Other errors
-    console.error(`[BuildPolling] Error polling ${appName}:`, error?.message);
+    console.error(`[BuildPolling] Error polling ${appName}:`, errorMessage);
 
     // Retry if not exceeded max polls
     if (pollCount < context.maxPolls) {

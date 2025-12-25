@@ -83,13 +83,13 @@ export class GitHubProvider implements BaseProvider {
       return {
         repositories: repos,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[GitHub Provider] Error getting repositories:', error);
-
+      const errorObj = error as { error?: string; needsAuth?: boolean };
       return {
         repositories: [],
-        message: error.error || 'Failed to fetch repositories',
-        needsAppAuth: error.needsAuth,
+        message: errorObj.error || 'Failed to fetch repositories',
+        needsAppAuth: errorObj.needsAuth,
       };
     }
   }
@@ -105,12 +105,12 @@ export class GitHubProvider implements BaseProvider {
         branches: branches,
         note: `Loaded ${branches.length} branches`,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('[GitHub Provider] Error getting branches:', error);
-
+      const errorObj = error as { error?: string };
       return {
         branches: [],
-        message: error.error || 'Failed to fetch branches',
+        message: errorObj.error || 'Failed to fetch branches',
       };
     }
   }

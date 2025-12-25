@@ -99,10 +99,11 @@ export async function POST(req: NextRequest) {
       deploy_branch: app.branch,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Webhook Register] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ 
-      error: error.message || 'Internal server error' 
+      error: errorMessage 
     }, { status: 500 });
   }
 }
@@ -137,7 +138,7 @@ export async function GET(req: NextRequest) {
     const apps = await Platform_Apps.list_by_owner(user.id);
     
     const appsWithWebhooks = await Promise.all(
-      apps.map(async (app: any) => {
+      apps.map(async (app: { id: string; name: string; git_provider: string; branch: string; auto_deploy: boolean }) => {
         const webhooks = await Platform_App_Webhooks.get_by_app(app.id);
         return {
           id: app.id,
@@ -153,10 +154,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ apps: appsWithWebhooks });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Webhook List] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ 
-      error: error.message || 'Internal server error' 
+      error: errorMessage 
     }, { status: 500 });
   }
 }
@@ -214,10 +216,11 @@ export async function DELETE(req: NextRequest) {
       message: `Webhook removed for ${app.name}` 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[Webhook Delete] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ 
-      error: error.message || 'Internal server error' 
+      error: errorMessage 
     }, { status: 500 });
   }
 }

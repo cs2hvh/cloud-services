@@ -33,13 +33,14 @@ export async function POST(req: NextRequest) {
     try {
       await DeploymentService.delete(validation.data.app_id, auth.user!.id);
       return NextResponse.json({ message: "App deleted successfully" });
-    } catch (error: any) {
-      const statusCode = error.message === "App not found" ? 404 :
-                        error.message === "Unauthorized" ? 403 : 400;
-      return NextResponse.json({ error: error.message }, { status: statusCode });
+    } catch (error: unknown) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      const statusCode = errorMsg === "App not found" ? 404 :
+                        errorMsg === "Unauthorized" ? 403 : 400;
+      return NextResponse.json({ error: errorMsg }, { status: statusCode });
     }
-  } catch (err: any) {
-    const msg = err?.message || "Unknown error";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

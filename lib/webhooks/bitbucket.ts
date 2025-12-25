@@ -59,62 +59,69 @@ export class BitbucketWebhookHandler {
   }
 
   /** Bitbucket does not have a dedicated ping event like GitHub; we treat non-push as skip */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static isPingEvent(_event: string): boolean {
     return false;
   }
 
   /** Extract branch name from Bitbucket change object */
-  private static extractBranchFromChange(change: any): string {
-    return change?.new?.name || '';
+  private static extractBranchFromChange(change: Record<string, unknown>): string {
+    const newObj = change?.new as Record<string, unknown> | undefined;
+    return (newObj?.name as string) || '';
   }
 
   /** Check if this represents a branch deletion */
-  static isBranchDeletion(body: any): boolean {
-    const changes = body?.push?.changes || [];
+  static isBranchDeletion(body: Record<string, unknown>): boolean {
+    const push = body?.push as Record<string, unknown> | undefined;
+    const changes = (push?.changes || []) as Record<string, unknown>[];
     return changes.some(
-      (c: any) =>
+      (c: Record<string, unknown>) =>
         c.closed === true ||
-        (!c.new && c.old && c.old.type === 'branch')
+        (!c.new && c.old && (c.old as Record<string, unknown>).type === 'branch')
     );
   }
 
   /**
    * Parse Bitbucket push event into normalized payload
    */
-  static parsePushEvent(body: any, deliveryId: string): WebhookPayload {
-    const changes = body?.push?.changes || [];
+  static parsePushEvent(body: Record<string, unknown>, deliveryId: string): WebhookPayload {
+    const push = body?.push as Record<string, unknown> | undefined;
+    const changes = (push?.changes || []) as Record<string, unknown>[];
     const change =
-      changes.find((c: any) => c.new && c.new.type === 'branch') ||
+      changes.find((c: Record<string, unknown>) => c.new && (c.new as Record<string, unknown>).type === 'branch') ||
       changes[0] || {};
 
     const branch = this.extractBranchFromChange(change);
-    const target = change?.new?.target || change?.commits?.[0] || {};
+    const newObj = change?.new as Record<string, unknown> | undefined;
+    const target = (newObj?.target || (change?.commits as Record<string, unknown>[])?.[0] || {}) as Record<string, unknown>;
 
-    const repo = body.repository || {};
-    const cloneLinks: any[] = repo.links?.clone || [];
-    const httpsLink = cloneLinks.find((l: any) => l.name === 'https') || cloneLinks[0];
+    const repo = (body.repository || {}) as Record<string, unknown>;
+    const links = repo.links as Record<string, unknown> | undefined;
+    const cloneLinks = (links?.clone || []) as Record<string, unknown>[];
+    const httpsLink = cloneLinks.find((l: Record<string, unknown>) => l.name === 'https') || cloneLinks[0];
+
+    const actor = body.actor as Record<string, unknown> | undefined;
+    const targetAuthor = target.author as Record<string, unknown> | undefined;
+    const authorUser = targetAuthor?.user as Record<string, unknown> | undefined;
 
     return {
       provider: 'bitbucket',
       event: 'push',
       delivery_id: deliveryId,
       repository: {
-        id: (repo.uuid || repo.id || '').toString(),
-        full_name: repo.full_name || '',
-        clone_url: httpsLink?.href || '',
+        id: String(repo.uuid || repo.id || ''),
+        full_name: String(repo.full_name || ''),
+        clone_url: String(httpsLink?.href || ''),
       },
       ref: branch ? `refs/heads/${branch}` : '',
       branch,
       commit: {
-        sha: target.hash || '',
-        message: target.message || '',
-        author:
-          target.author?.user?.display_name ||
-          target.author?.raw ||
-          '',
+        sha: String(target.hash || ''),
+        message: String(target.message || ''),
+        author: String(authorUser?.display_name || targetAuthor?.raw || ''),
       },
       pusher: {
-        name: body.actor?.display_name || body.actor?.username || '',
+        name: String(actor?.display_name || actor?.username || ''),
         email: '',
       },
       raw: body,

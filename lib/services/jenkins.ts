@@ -46,9 +46,10 @@ export class JenkinsService {
       console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${buildNumber}/`);
       
       return buildNumber;
-    } catch (error: any) {
-      console.error(`[JenkinsService] ❌ Error triggering build for ${jobName}:`, error?.message);
-      throw new Error(`Failed to trigger build: ${error?.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] ❌ Error triggering build for ${jobName}:`, errorMessage);
+      throw new Error(`Failed to trigger build: ${errorMessage}`);
     }
   }
 
@@ -79,9 +80,10 @@ export class JenkinsService {
     try {
       await jenkins.job.create(jobName, pipeline);
       console.log(`[JenkinsService] ✅ Created Jenkins job: ${jobName}`);
-    } catch (error: any) {
-      console.error(`[JenkinsService] Failed to create job:`, error?.message);
-      throw new Error(`Jenkins job creation failed: ${error?.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Failed to create job:`, errorMessage);
+      throw new Error(`Jenkins job creation failed: ${errorMessage}`);
     }
 
     // Trigger build immediately (job creation might need a moment, hence the small delay)
@@ -92,13 +94,14 @@ export class JenkinsService {
       await jenkins.job.build(jobName);
       console.log(`[JenkinsService] ✅ Build #1 triggered for: ${jobName}`);
       console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/`);
-    } catch (error: any) {
-      console.error(`[JenkinsService] ❌ Error triggering build:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] ❌ Error triggering build:`, errorMessage);
       // Try to delete the created job since build failed
-      await jenkins.job.destroy(jobName).catch((err: any) => 
+      await jenkins.job.destroy(jobName).catch((err: unknown) => 
         console.error(`[JenkinsService] Failed to cleanup job after build failure:`, err)
       );
-      throw new Error(`Jenkins build trigger failed: ${error?.message}`);
+      throw new Error(`Jenkins build trigger failed: ${errorMessage}`);
     }
   }
 
@@ -123,9 +126,10 @@ export class JenkinsService {
     try {
       await jenkins.job.create(jobName, pipeline);
       console.log(`[JenkinsService] ✅ Created Jenkins deletion job: ${jobName}`);
-    } catch (error: any) {
-      console.error(`[JenkinsService] Failed to create deletion job:`, error?.message);
-      throw new Error(`Jenkins deletion job creation failed: ${error?.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Failed to create deletion job:`, errorMessage);
+      throw new Error(`Jenkins deletion job creation failed: ${errorMessage}`);
     }
 
     // Trigger build immediately
@@ -149,13 +153,14 @@ export class JenkinsService {
         console.log(`[JenkinsService] ⚠️  Could not get build number, using fallback #1 for: ${jobName}`);
         return 1;
       }
-    } catch (error: any) {
-      console.error(`[JenkinsService] ❌ Error triggering deletion build:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] ❌ Error triggering deletion build:`, errorMessage);
       // Try to delete the created job since build failed
-      await jenkins.job.destroy(jobName).catch((err: any) => 
+      await jenkins.job.destroy(jobName).catch((err: unknown) => 
         console.error(`[JenkinsService] Failed to cleanup deletion job after build failure:`, err)
       );
-      throw new Error(`Jenkins deletion build trigger failed: ${error?.message}`);
+      throw new Error(`Jenkins deletion build trigger failed: ${errorMessage}`);
     }
   }
 
@@ -202,7 +207,7 @@ export class JenkinsService {
   /**
    * Get job status
    */
-  static async getJobStatus(appName: string): Promise<any> {
+  static async getJobStatus(appName: string): Promise<unknown> {
     const jobName = `${appName}-job`;
     return await jenkins.job.get(jobName);
   }
@@ -231,8 +236,9 @@ export class JenkinsService {
     try {
       const jobInfo = await jenkins.job.get(jobName);
       return jobInfo.lastBuild?.number || null;
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error getting latest delete build number:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error getting latest delete build number:`, errorMessage);
       return null;
     }
   }
@@ -240,7 +246,14 @@ export class JenkinsService {
   /**
    * Get build information
    */
-  static async getBuildInfo(appName: string, buildNumber: number): Promise<any> {
+  static async getBuildInfo(appName: string, buildNumber: number): Promise<{
+    number: number;
+    building: boolean;
+    result: string | null;
+    duration: number;
+    timestamp: number;
+    url: string;
+  }> {
     const jobName = `${appName}-job`;
     
     try {
@@ -253,8 +266,9 @@ export class JenkinsService {
         timestamp: buildInfo.timestamp,
         url: buildInfo.url,
       };
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error getting build info:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error getting build info:`, errorMessage);
       throw error;
     }
   }
@@ -271,8 +285,9 @@ export class JenkinsService {
         type: 'text'
       });
       return log;
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error getting build log:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error getting build log:`, errorMessage);
       throw error;
     }
   }
@@ -302,8 +317,9 @@ export class JenkinsService {
         result: buildInfo.result,
         status,
       };
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error checking build status:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error checking build status:`, errorMessage);
       throw error;
     }
   }
@@ -333,12 +349,14 @@ export class JenkinsService {
         result: buildInfo.result,
         status,
       };
-    } catch (error: any) {
-      console.error(`[JenkinsService] Error checking delete build status:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorObj = error as { statusCode?: number };
+      console.error(`[JenkinsService] Error checking delete build status:`, errorMessage);
       // Mark as notFound if it's a 404 (build doesn't exist yet)
-      if (error?.message?.includes('404') || error?.message?.includes('not found') || error?.statusCode === 404) {
-        const notFoundError = new Error(`Build #${buildNumber} not found for ${jobName}`);
-        (notFoundError as any).notFound = true;
+      if (errorMessage.includes('404') || errorMessage.includes('not found') || errorObj.statusCode === 404) {
+        const notFoundError = new Error(`Build #${buildNumber} not found for ${jobName}`) as Error & { notFound: boolean };
+        notFoundError.notFound = true;
         throw notFoundError;
       }
       throw error;
@@ -428,9 +446,10 @@ export class JenkinsService {
       // Update the job configuration using Jenkins API
       await jenkins.job.config(jobName, pipeline);
       console.log(`[JenkinsService] ✅ Job config updated: ${jobName}`);
-    } catch (error: any) {
-      console.error(`[JenkinsService] Failed to update job config:`, error?.message);
-      throw new Error(`Jenkins job config update failed: ${error?.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Failed to update job config:`, errorMessage);
+      throw new Error(`Jenkins job config update failed: ${errorMessage}`);
     }
   }
 
@@ -443,9 +462,10 @@ export class JenkinsService {
     try {
       const config = await jenkins.job.config(jobName);
       return config;
-    } catch (error: any) {
-      console.error(`[JenkinsService] Failed to get job config:`, error?.message);
-      throw new Error(`Failed to get job config: ${error?.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Failed to get job config:`, errorMessage);
+      throw new Error(`Failed to get job config: ${errorMessage}`);
     }
   }
 }

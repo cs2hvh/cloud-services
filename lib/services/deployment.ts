@@ -121,13 +121,14 @@ export class DeploymentService {
         }
         await DNSService.createRecord(config.name, process.env.KUBE_IP);
         console.log(`[DeploymentService] Step 4/5: DNS record created - ${getAppDomain(config.name)}`);
-      } catch (dnsError: any) {
-        console.error(`[DeploymentService] DNS creation failed:`, dnsError?.message);
+      } catch (dnsError: unknown) {
+        const errorMessage = dnsError instanceof Error ? dnsError.message : 'Unknown error';
+        console.error(`[DeploymentService] DNS creation failed:`, errorMessage);
         // Rollback: Delete database record
         await Platform_Apps.delete(app.id, config.user_id).catch(err => 
           console.error(`[DeploymentService] Failed to rollback DB record:`, err)
         );
-        throw new Error(`DNS creation failed: ${dnsError?.message}`);
+        throw new Error(`DNS creation failed: ${errorMessage}`);
       }
 
       // Step 5: Create Jenkins job and start build monitoring
@@ -156,8 +157,9 @@ export class DeploymentService {
           buildNumber: 1, // First build for new job
         });
         
-      } catch (jenkinsError: any) {
-        console.error(`[DeploymentService] Jenkins job creation failed:`, jenkinsError?.message);
+      } catch (jenkinsError: unknown) {
+        const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : 'Unknown error';
+        console.error(`[DeploymentService] Jenkins job creation failed:`, errorMessage);
         // Rollback: Delete DNS and DB record on Jenkins failure
         // Note: DNS record should exist at this point since it's created before Jenkins job
         await Promise.all([
@@ -168,7 +170,7 @@ export class DeploymentService {
             console.error(`[DeploymentService] Failed to rollback DB record:`, err)
           )
         ]);
-        throw new Error(`Jenkins job creation failed: ${jenkinsError?.message}`);
+        throw new Error(`Jenkins job creation failed: ${errorMessage}`);
       }
 
       // Update deployment URL
@@ -191,11 +193,12 @@ export class DeploymentService {
         port: containerPort,
         build_number: buildNumber,
       };
-    } catch (error: any) {
-      console.error(`[DeploymentService] ❌ Deployment failed:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown deployment error';
+      console.error(`[DeploymentService] ❌ Deployment failed:`, errorMessage);
       return {
         success: false,
-        error: error?.message || "Unknown deployment error",
+        error: errorMessage,
       };
     }
   }
@@ -228,8 +231,9 @@ export class DeploymentService {
       await this.cleanupInfrastructure(app.name);
 
       return true;
-    } catch (error: any) {
-      console.error(`[DeploymentService] ❌ Deletion failed:`, error?.message);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[DeploymentService] ❌ Deletion failed:`, errorMessage);
       throw error;
     }
   }
@@ -289,27 +293,30 @@ export class DeploymentService {
     try {
       await DNSService.deleteRecord(appName);
       console.log(`[DeploymentService] ✅ DNS record deleted for ${appName}`);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[DeploymentService] DNS cleanup error:`, error);
-      errors.push(`DNS: ${error?.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`DNS: ${errorMessage}`);
       // Don't throw - continue with other cleanup
     }
 
     // 2. Delete Jenkins job
     try {
       await InfrastructureCleanupService.deleteJenkinsJob(appName);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[DeploymentService] Jenkins cleanup error:`, error);
-      errors.push(`Jenkins: ${error?.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`Jenkins: ${errorMessage}`);
       // Don't throw - continue with other cleanup
     }
 
     // 3. Delete Kubernetes resources using Jenkins deletion job
     try {
       await InfrastructureCleanupService.deleteKubernetesResources(appName);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`[DeploymentService] K8s cleanup error:`, error);
-      errors.push(`K8s: ${error?.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`K8s: ${errorMessage}`);
       // Don't throw - DNS already deleted, so re-deployment will work
     }
 

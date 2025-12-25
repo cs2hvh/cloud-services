@@ -25,8 +25,8 @@ export async function GET() {
 
     const apps = await Platform_Apps.list_by_owner(auth.user!.id);
     return NextResponse.json({ apps });
-  } catch (err: any) {
-    const msg = err?.message || "Unknown error";
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 }

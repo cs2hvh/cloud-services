@@ -485,9 +485,10 @@ const AppDeploymentSelect = () => {
       setTimeout(() => {
         router.push('/dashboard/services/apps');
       }, 1500);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Deployment error:', error);
-      toast.error(error.message || 'Failed to start deployment. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start deployment. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }

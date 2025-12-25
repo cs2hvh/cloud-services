@@ -21,7 +21,7 @@ interface DetectionResult {
   language: string;
   hasDockerfile?: boolean;
   buildSystem?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // File fetching functions

@@ -51,10 +51,11 @@ export async function GET(req: NextRequest) {
       app_name: appName,
       ...buildInfo,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[API] Error getting build info:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to get build info";
     return NextResponse.json(
-      { error: error?.message || "Failed to get build info" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

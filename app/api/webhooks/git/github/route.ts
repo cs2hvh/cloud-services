@@ -35,9 +35,9 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     }
 
     // 2. Parse JSON
-    let body: any;
+    let body: Record<string, unknown>;
     try {
-      body = JSON.parse(rawBody);
+      body = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
       console.error('[GitHub Webhook] Invalid JSON payload');
       return NextResponse.json({
@@ -209,12 +209,13 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       build_number: deployResult.buildNumber,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[GitHub Webhook] Unexpected error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({
       success: false,
       action: 'error',
-      message: error.message || 'Internal server error',
+      message: errorMessage,
     }, { status: 500 });
   }
 }

@@ -82,10 +82,11 @@ export async function GET(req: NextRequest) {
       },
       timestamp: metrics.timestamp,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[API] Error getting metrics:", err);
+    const errorMessage = err instanceof Error ? err.message : "Failed to get metrics";
     return NextResponse.json(
-      { error: err?.message || "Failed to get metrics" },
+      { error: errorMessage },
       { status: 500 }
     );
   }

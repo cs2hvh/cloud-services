@@ -18,7 +18,7 @@ interface BitbucketBranch {
       };
     };
   };
-  heads: any[];
+  heads: unknown[];
   links: {
     commits: {
       href: string;

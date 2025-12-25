@@ -47,6 +47,7 @@ export class GitLabWebhookHandler {
   }
 
   /** GitLab does not send a dedicated ping event like GitHub */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   static isPingEvent(_event: string): boolean {
     return false;
   }
@@ -58,8 +59,8 @@ export class GitLabWebhookHandler {
   }
 
   /** Check if this is a branch deletion */
-  static isBranchDeletion(body: any): boolean {
-    const after = body.after || '';
+  static isBranchDeletion(body: Record<string, unknown>): boolean {
+    const after = (body.after || '') as string;
     // GitLab uses all-zero after for deletions; checkout_sha may also be null
     return (
       after === '0000000000000000000000000000000000000000' ||
@@ -68,33 +69,34 @@ export class GitLabWebhookHandler {
   }
 
   /** Parse GitLab push event payload into normalized format */
-  static parsePushEvent(body: any, deliveryId: string): WebhookPayload {
-    const ref = body.ref || '';
+  static parsePushEvent(body: Record<string, unknown>, deliveryId: string): WebhookPayload {
+    const ref = (body.ref || '') as string;
     const branch = this.extractBranch(ref);
 
-    const project = body.project || {};
-    const commits: any[] = body.commits || [];
-    const latestCommit = commits[commits.length - 1] || {};
+    const project = (body.project || {}) as Record<string, unknown>;
+    const commits = (body.commits || []) as Record<string, unknown>[];
+    const latestCommit = (commits[commits.length - 1] || {}) as Record<string, unknown>;
+    const latestCommitAuthor = latestCommit.author as Record<string, unknown> | undefined;
 
     return {
       provider: 'gitlab',
       event: 'push',
       delivery_id: deliveryId,
       repository: {
-        id: project.id?.toString() || '',
-        full_name: project.path_with_namespace || '',
-        clone_url: project.git_http_url || '',
+        id: String(project.id || ''),
+        full_name: String(project.path_with_namespace || ''),
+        clone_url: String(project.git_http_url || ''),
       },
       ref,
       branch,
       commit: {
-        sha: latestCommit.id || body.checkout_sha || '',
-        message: latestCommit.message || '',
-        author: latestCommit.author?.name || body.user_username || '',
+        sha: String(latestCommit.id || body.checkout_sha || ''),
+        message: String(latestCommit.message || ''),
+        author: String(latestCommitAuthor?.name || body.user_username || ''),
       },
       pusher: {
-        name: body.user_username || latestCommit.author?.name || '',
-        email: body.user_email || latestCommit.author?.email || '',
+        name: String(body.user_username || latestCommitAuthor?.name || ''),
+        email: String(body.user_email || latestCommitAuthor?.email || ''),
       },
       raw: body,
     };
