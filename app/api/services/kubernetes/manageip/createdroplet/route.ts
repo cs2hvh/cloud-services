@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Encryption, generateStrongPassword } from "@/config/functions";
-import { Billing } from "@/lib/supabase/queries";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export async function POST(req: NextRequest) {
   try {

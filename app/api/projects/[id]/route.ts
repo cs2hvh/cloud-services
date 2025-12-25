@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { projectSchema } from "@/types/zod/project";
 import { NextRequest, NextResponse } from "next/server";
 

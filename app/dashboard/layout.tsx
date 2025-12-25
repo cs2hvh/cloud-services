@@ -1,7 +1,7 @@
 import { AppSidebar } from "@/components/dashboard/sidebar";
 import { requireAuthProfile } from "@/lib/supabase/auth";
 import { SessionProvider } from "./provider";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;

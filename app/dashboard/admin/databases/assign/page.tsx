@@ -1,6 +1,9 @@
 import AdminDatabaseAssign from "@/components/admin/databases/assign-database-new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Locations, Products, Users, Projects } from "@/lib/supabase/queries";
+import { Locations } from "@/lib/supabase/queries/locations";
+import { Products } from "@/lib/supabase/queries/products";
+import { Users } from "@/lib/supabase/queries/users";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 

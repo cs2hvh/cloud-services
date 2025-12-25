@@ -390,7 +390,7 @@ export type Database = {
         Row: {
           created_at: string | null;
           description: string | null;
-          discount: number | null;
+          discount?: number | null;
           id: string;
           image: string | null;
           name: string | null;

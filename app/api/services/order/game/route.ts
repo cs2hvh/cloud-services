@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Products } from "@/lib/supabase/queries";
+import { Products } from "@/lib/supabase/queries/products";
 import ptero_axios from "@/lib/pterodactyl";
 import { getPterodactylGameConfig } from "@/lib/pterodactyl/manifest";
 import { getRandomPort } from "@/lib/utils";

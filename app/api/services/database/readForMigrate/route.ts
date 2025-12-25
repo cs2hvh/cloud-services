@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function GET(req: NextRequest) {

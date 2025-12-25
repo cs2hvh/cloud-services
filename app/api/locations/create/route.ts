@@ -1,5 +1,5 @@
 //create api to create Location in supabase
-import { Locations } from "@/lib/supabase/queries";
+import { Locations } from "@/lib/supabase/queries/locations";
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 

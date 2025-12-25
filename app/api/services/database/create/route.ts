@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
-import { Database_Clusters, Billing } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { Billing } from "@/lib/supabase/queries/billing";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 // import { resolve } from "path";
 // import { resolveHost } from "@/config/hosttoip";

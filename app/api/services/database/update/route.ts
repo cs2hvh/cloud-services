@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Database_Clusters, Projects as ProjectQueries } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { Projects as ProjectQueries } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 
 export async function PUT(req: NextRequest) {

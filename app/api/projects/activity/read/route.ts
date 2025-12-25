@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { Activities } from "@/lib/supabase/queries";
+import { Activities } from "@/lib/supabase/queries/activities";
 
 export async function GET(req: Request) {
   try {

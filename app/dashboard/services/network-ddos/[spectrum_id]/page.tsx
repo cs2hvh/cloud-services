@@ -1,6 +1,6 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser, requireAdmin } from "@/lib/supabase/auth";
-import { Spectrum_Apps } from "@/lib/supabase/queries";
+import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import SpectrumAppTabs from "@/components/dashboard/network-ddos/spectrum-tabs";

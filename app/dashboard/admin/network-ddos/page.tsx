@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminNetworkDDoS from "@/components/admin/network-ddos/admin-network-ddos";
-import { Spectrum_Apps } from "@/lib/supabase/queries";
+import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 
 
 export const dynamic = "force-dynamic";

@@ -4,7 +4,8 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Spectrum_Apps, Billing } from "@/lib/supabase/queries";
+import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
+import { Billing } from "@/lib/supabase/queries/billing";
 import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Projects } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();

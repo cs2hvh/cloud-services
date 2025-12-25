@@ -4,7 +4,8 @@
  */
 
 import { cache } from "react";
-import { Products, Locations } from "@/lib/supabase/queries";
+import { Products } from "@/lib/supabase/queries/products";
+import { Locations } from "@/lib/supabase/queries/locations";
 
 /**
  * Cached product queries - products rarely change, safe to cache per request

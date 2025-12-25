@@ -1,6 +1,6 @@
 import GameServerSelect from "@/components/dashboard/game/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Products } from "@/lib/supabase/queries";
+import { Products } from "@/lib/supabase/queries/products";
 import ptero_axios from "@/lib/pterodactyl";
 import { Suspense } from "react";
 

@@ -1,4 +1,4 @@
-import { Products } from "@/lib/supabase/queries";
+import { Products } from "@/lib/supabase/queries/products";
 import { UUID } from "crypto";
 
 type Rates = { initialCost: number; hourlyRate: number };

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Projects, Billing } from "@/lib/supabase/queries";
+import { Projects,  } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
 import axios from "axios";
 import { requireAdmin } from "@/lib/supabase/auth";
 
@@ -104,8 +105,8 @@ export async function POST(req: NextRequest) {
             console.log(`[deleteKubernetesCluster] ✅ Deleted worker droplet: ${worker.droplet_id}`);
           } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-           // console.error(`[deleteKubernetesCluster] ❌ Failed to delete worker droplet: ${errorMsg}`);
-           return NextResponse.json({ message: "Failed to delete worker droplet" }, { status: 503 });
+           console.error(`[deleteKubernetesCluster] ❌ Failed to delete worker droplet: ${errorMsg}`);
+          // return NextResponse.json({ message: "Failed to delete worker droplet" }, { status: 503 });
             dropletDeletionErrors.push(`Worker ${worker.droplet_id}: ${errorMsg}`);
           }
         }

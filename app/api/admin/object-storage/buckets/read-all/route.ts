@@ -1,6 +1,6 @@
 import {NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 
 export async function GET() {
   // Check authentication

@@ -1,18 +1,16 @@
-import {
-  Clusters,
-  Database_Clusters,
-  GameServers,
-  ObjectSpaces,
-  Projects,
-  Spectrum_Apps,
-} from "@/lib/supabase/queries";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-// import { Separator } from "@/components/ui/separator";
 import { getUser } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import { ErrorMessage } from "@/components/dashboard/utils/error";
 import Dashboard from "@/components/dashboard/main/dashboard";
+import { Clusters } from "@/lib/supabase/queries/clusters";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { GameServers } from "@/lib/supabase/queries/gameservers";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import { Projects } from "@/lib/supabase/queries/projects";
+import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
+// import { Separator } from "@/components/ui/separator";
 
 const DashboardSuspense = async () => {
   const user = await getUser();

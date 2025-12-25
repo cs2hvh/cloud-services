@@ -1,4 +1,4 @@
-import { Billing } from "@/lib/supabase/queries";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export interface PostProvisionBillingArgs {
   userId: string;

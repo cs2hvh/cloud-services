@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminUsers from "@/components/admin/users/admin-users";
-import { Users } from "@/lib/supabase/queries";
+import { Users } from "@/lib/supabase/queries/users";
 
 
 export const dynamic = "force-dynamic";

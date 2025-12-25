@@ -5,7 +5,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { deleteBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { Billing } from "@/lib/supabase/queries";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export async function POST(req: NextRequest) {
   // Check authentication

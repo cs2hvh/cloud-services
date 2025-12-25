@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminDatabases from "@/components/admin/databases/admin-databases";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { getCachedProducts } from "@/lib/cache/query-cache";
 
 

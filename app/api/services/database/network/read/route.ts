@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Database_Clusters } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { readNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";

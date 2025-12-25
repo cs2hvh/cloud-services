@@ -1,7 +1,8 @@
 "use server";
 import Singledb from "@/components/dashboard/database/singledb";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Database_Clusters, Products } from "@/lib/supabase/queries";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
+import { Products } from "@/lib/supabase/queries/products";
 import { Suspense } from "react";
 import { Tables } from "@/lib/supabase/types";
 

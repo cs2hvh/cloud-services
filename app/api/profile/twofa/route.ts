@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { Users } from "@/lib/supabase/queries";
+import { Users } from "@/lib/supabase/queries/users";
 import { rateLimit } from "@/lib/rate-limit";
 
 // Rate limiter: 5 requests per minute per user

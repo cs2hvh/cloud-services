@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminObjectStorage from "@/components/admin/object-storage/admin-object-storage";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 
 
 export const dynamic = "force-dynamic";

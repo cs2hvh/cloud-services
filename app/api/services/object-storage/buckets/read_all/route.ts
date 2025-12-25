@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectSpaces } from "@/lib/supabase/queries";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Encryption } from "@/config/functions";
 import { limitByUser } from "@/lib/cooldown/userbased";

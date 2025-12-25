@@ -1,4 +1,4 @@
-import { Projects } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { ProjectActivityTable } from "./table";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";

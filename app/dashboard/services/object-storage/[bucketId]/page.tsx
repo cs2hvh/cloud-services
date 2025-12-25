@@ -1,6 +1,7 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { Locations, ObjectSpaces } from "@/lib/supabase/queries";
+import { Locations } from "@/lib/supabase/queries/locations";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import BucketTabs from "@/components/dashboard/object-storage/bucket-tabs";

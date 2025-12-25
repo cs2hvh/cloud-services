@@ -3,7 +3,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import AdminCoupons from "@/components/admin/coupons/admin-coupons";
-import { Promocodes } from "@/lib/supabase/queries";
+import { Promocodes } from "@/lib/supabase/queries/promocodes";
 
 export const dynamic = "force-dynamic";
 

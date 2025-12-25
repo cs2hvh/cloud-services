@@ -1,5 +1,8 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
-import { Locations, ObjectSpaces, Projects, Users } from "@/lib/supabase/queries";
+import { Locations } from "@/lib/supabase/queries/locations";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import { Projects } from "@/lib/supabase/queries/projects";
+import { Users } from "@/lib/supabase/queries/users";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/supabase/auth";

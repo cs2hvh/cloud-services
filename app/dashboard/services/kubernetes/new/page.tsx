@@ -2,7 +2,8 @@ import NewClusterForm from "@/components/dashboard/kubernetes/new/kubernetesform
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { vmLocations } from "@/config/locations";
 import { getUser } from "@/lib/supabase/auth";
-import { Clusters, Projects } from "@/lib/supabase/queries";
+import { Clusters } from "@/lib/supabase/queries/clusters";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { getCachedProducts } from "@/lib/cache/query-cache";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";

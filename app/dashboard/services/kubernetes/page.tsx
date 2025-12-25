@@ -1,6 +1,6 @@
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { getUser } from "@/lib/supabase/auth";
-import { Clusters } from "@/lib/supabase/queries";
+import { Clusters } from "@/lib/supabase/queries/clusters";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import KubernetesClustersMain from "@/components/dashboard/kubernetes/clusters-main";

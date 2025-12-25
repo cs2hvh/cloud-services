@@ -1,4 +1,8 @@
-import { Clusters, Database_Clusters, GameServers, Spectrum_Apps, ObjectSpaces } from "@/lib/supabase/queries";
+import { Clusters} from "@/lib/supabase/queries/clusters";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import {Spectrum_Apps} from "@/lib/supabase/queries/spectrum_apps";
+import { GameServers } from "@/lib/supabase/queries/gameservers";
+import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import GameServerGrid from "./grid";
 import KubernetesGrid from "./kubernetesgrid";
 import { Suspense } from "react";

@@ -1,4 +1,4 @@
-import { GameServers } from "@/lib/supabase/queries";
+import { GameServers } from "@/lib/supabase/queries/gameservers";
 import { Suspense } from "react";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import GameServerGrid from "@/components/dashboard/projects/tabs/resources/grid";
