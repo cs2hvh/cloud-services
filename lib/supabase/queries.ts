@@ -2767,6 +2767,43 @@ export const Platform_App_Webhooks = {
     }
   },
 
+  // Upsert: create or update webhook (ensures single webhook per app+provider)
+  upsert: async (payload: {
+    app_id: string;
+    provider: 'github' | 'gitlab' | 'bitbucket';
+    webhook_id: string;
+    webhook_secret: string;
+    webhook_url: string;
+    events?: string[];
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      
+      // First, delete any existing webhook for this app+provider
+      await supabase
+        .from("platform_app_webhooks")
+        .delete()
+        .eq("app_id", payload.app_id)
+        .eq("provider", payload.provider);
+      
+      // Then insert the new one
+      const { data, error } = await supabase
+        .from("platform_app_webhooks")
+        .insert({
+          ...payload,
+          events: payload.events || ['push'],
+          auto_deploy_enabled: true,
+        })
+        .select()
+        .single();
+      
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
   get_by_app: async (app_id: string) => {
     try {
       const supabase = await createServiceClient();
@@ -2782,9 +2819,90 @@ export const Platform_App_Webhooks = {
   },
 
   // Find app with webhook by repository (used by incoming webhooks)
-  find_by_repository: async (repository_id: string, provider: 'github' | 'gitlab' | 'bitbucket') => {
+  // Returns the FIRST app with auto_deploy_enabled that matches the branch
+  // If multiple apps share same repo, each should have different deploy_branch
+  find_by_repository: async (repository_id: string, provider: 'github' | 'gitlab' | 'bitbucket', branch?: string) => {
     try {
       const supabase = await createServiceClient();
+      
+      // Query WITHOUT .single() to handle multiple apps
+      let query = supabase
+        .from("platform_apps")
+        .select(`
+          *,
+          platform_app_webhooks!inner(*)
+        `)
+        .eq("repository_id", repository_id)
+        .eq("git_provider", provider)
+        .eq("platform_app_webhooks.provider", provider)
+        .eq("platform_app_webhooks.auto_deploy_enabled", true);
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error(`[Platform_App_Webhooks] Error finding by repo: ${error.message}`);
+        return null;
+      }
+      
+      if (!data || data.length === 0) {
+        console.log(`[Platform_App_Webhooks] No apps found for repository: ${repository_id}`);
+        return null;
+      }
+      
+      // If branch is provided, filter by deploy_branch
+      let matchedApp = data[0];
+      if (branch) {
+        const branchMatch = data.find(app => {
+          const deployBranch = app.deploy_branch || app.branch;
+          return deployBranch === branch;
+        });
+        if (branchMatch) {
+          matchedApp = branchMatch;
+        } else {
+          console.log(`[Platform_App_Webhooks] No app configured for branch: ${branch}`);
+          // Still return the first app if no branch match (backward compatibility)
+        }
+      }
+      
+      if (data.length > 1) {
+        console.log(`[Platform_App_Webhooks] Multiple apps (${data.length}) found for repo ${repository_id}, using: ${matchedApp.name}`);
+      }
+      
+      // Flatten the response with all required fields for auto-deploy
+      const webhook = matchedApp.platform_app_webhooks?.[0] || matchedApp.platform_app_webhooks;
+      return {
+        // App fields
+        id: matchedApp.id,
+        name: matchedApp.name,
+        slug: matchedApp.slug,
+        user_id: matchedApp.user_id,
+        repository_url: matchedApp.repository_url,
+        repository_name: matchedApp.repository_name,
+        repository_id: matchedApp.repository_id,
+        git_provider: matchedApp.git_provider,
+        branch: matchedApp.branch,
+        framework: matchedApp.framework,
+        port: matchedApp.port || 3000,  // Default to 3000 if not set
+        size: matchedApp.size || 'small',  // Default to small if not set
+        status: matchedApp.status,
+        deployment_url: matchedApp.deployment_url,
+        // Webhook fields
+        webhook_secret: webhook?.webhook_secret,
+        webhook_id: webhook?.id,
+        auto_deploy_enabled: webhook?.auto_deploy_enabled ?? true,
+        deploy_branch: matchedApp.deploy_branch || matchedApp.branch,
+      };
+    } catch (err) {
+      console.error(`[Platform_App_Webhooks] Error: ${err}`);
+      return null;
+    }
+  },
+
+  // Find ALL apps with webhooks by repository (for deploying multiple apps)
+  find_all_by_repository: async (repository_id: string, provider: 'github' | 'gitlab' | 'bitbucket', branch?: string) => {
+    try {
+      const supabase = await createServiceClient();
+      
       const { data, error } = await supabase
         .from("platform_apps")
         .select(`
@@ -2794,25 +2912,53 @@ export const Platform_App_Webhooks = {
         .eq("repository_id", repository_id)
         .eq("git_provider", provider)
         .eq("platform_app_webhooks.provider", provider)
-        .single();
+        .eq("platform_app_webhooks.auto_deploy_enabled", true);
       
       if (error) {
-        console.error(`[Platform_App_Webhooks] Error finding by repo: ${error.message}`);
-        return null;
+        console.error(`[Platform_App_Webhooks] Error finding apps by repo: ${error.message}`);
+        return [];
       }
       
-      // Flatten the response
-      const webhook = data.platform_app_webhooks?.[0] || data.platform_app_webhooks;
-      return {
-        ...data,
-        webhook_secret: webhook?.webhook_secret,
-        webhook_id: webhook?.id,
-        auto_deploy_enabled: webhook?.auto_deploy_enabled ?? true,
-        deploy_branch: data.deploy_branch || data.branch,
-      };
+      if (!data || data.length === 0) {
+        return [];
+      }
+      
+      // Filter by branch if provided
+      let filteredApps = data;
+      if (branch) {
+        filteredApps = data.filter(app => {
+          const deployBranch = app.deploy_branch || app.branch;
+          return deployBranch === branch;
+        });
+      }
+      
+      // Map to flattened format
+      return filteredApps.map(app => {
+        const webhook = app.platform_app_webhooks?.[0] || app.platform_app_webhooks;
+        return {
+          id: app.id,
+          name: app.name,
+          slug: app.slug,
+          user_id: app.user_id,
+          repository_url: app.repository_url,
+          repository_name: app.repository_name,
+          repository_id: app.repository_id,
+          git_provider: app.git_provider,
+          branch: app.branch,
+          framework: app.framework,
+          port: app.port || 3000,
+          size: app.size || 'small',
+          status: app.status,
+          deployment_url: app.deployment_url,
+          webhook_secret: webhook?.webhook_secret,
+          webhook_id: webhook?.id,
+          auto_deploy_enabled: webhook?.auto_deploy_enabled ?? true,
+          deploy_branch: app.deploy_branch || app.branch,
+        };
+      });
     } catch (err) {
       console.error(`[Platform_App_Webhooks] Error: ${err}`);
-      return null;
+      return [];
     }
   },
 

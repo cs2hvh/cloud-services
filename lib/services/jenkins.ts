@@ -392,4 +392,60 @@ export class JenkinsService {
         return createNodeJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
     }
   }
+
+  /**
+   * Update an existing Jenkins job configuration with new parameters
+   * Used by auto-deploy to refresh the Git URL with fresh access token
+   */
+  static async updateJobConfig(
+    appName: string,
+    githubUrl: string,
+    branch: string,
+    port: number,
+    framework?: string,
+    size: string = 'small'
+  ): Promise<void> {
+    if (!process.env.JENKINS_URL) {
+      throw new Error("JENKINS_URL not configured");
+    }
+
+    const jobName = `${appName}-job`;
+    
+    console.log(`[JenkinsService] Updating job config: ${jobName}`);
+    console.log(`[JenkinsService] New Git URL: ${githubUrl.replace(/https:\/\/[^@]+@/, 'https://***@')}`);
+
+    // Generate new pipeline with updated config
+    const pipeline = JenkinsService.selectPipeline(
+      appName, 
+      githubUrl, 
+      branch, 
+      port.toString(), 
+      framework, 
+      size
+    );
+
+    try {
+      // Update the job configuration using Jenkins API
+      await jenkins.job.config(jobName, pipeline);
+      console.log(`[JenkinsService] ✅ Job config updated: ${jobName}`);
+    } catch (error: any) {
+      console.error(`[JenkinsService] Failed to update job config:`, error?.message);
+      throw new Error(`Jenkins job config update failed: ${error?.message}`);
+    }
+  }
+
+  /**
+   * Get job configuration XML
+   */
+  static async getJobConfig(appName: string): Promise<string> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      const config = await jenkins.job.config(jobName);
+      return config;
+    } catch (error: any) {
+      console.error(`[JenkinsService] Failed to get job config:`, error?.message);
+      throw new Error(`Failed to get job config: ${error?.message}`);
+    }
+  }
 }

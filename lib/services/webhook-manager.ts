@@ -98,6 +98,15 @@ export class WebhookManager {
 
   /**
    * Register a GitHub webhook with a provided token
+   * 
+   * IMPORTANT: This method ensures GitHub and our database have the SAME secret.
+   * 
+   * Flow:
+   * 1. Check if we already have a webhook in our database for this app
+   * 2. If yes, re-use the existing secret (ensures consistency)
+   * 3. Clean up ALL existing webhooks on GitHub for this repo (not just URL match)
+   * 4. Create new webhook on GitHub with the secret
+   * 5. Update/create webhook record in database
    */
   static async registerGitHubWebhookWithToken(
     appId: string,
@@ -110,22 +119,36 @@ export class WebhookManager {
     console.log(`[WebhookManager] Registering GitHub webhook for ${repoOwner}/${repoName}`);
 
     try {
-      // Generate webhook secret
-      const webhookSecret = this.generateSecret();
       const webhookUrl = this.getWebhookUrl('github');
-
       console.log(`[WebhookManager] Webhook URL: ${webhookUrl}`);
 
-      // Check if webhook already exists
-      const existingWebhooks = await this.listGitHubWebhooks(token, repoOwner, repoName);
-      const existing = existingWebhooks.find(w => w.config?.url === webhookUrl);
+      // Step 1: Check if we already have a webhook record for this app
+      const existingDbWebhook = await Platform_App_Webhooks.get_by_app(appId);
+      const existingGitHubRecord = existingDbWebhook.data?.find((w: any) => w.provider === 'github');
       
-      if (existing) {
-        console.log(`[WebhookManager] Webhook already exists (ID: ${existing.id}), updating...`);
-        await this.deleteGitHubWebhookById(token, repoOwner, repoName, existing.id);
+      // Step 2: Decide on the secret - re-use existing or generate new
+      let webhookSecret: string;
+      if (existingGitHubRecord?.webhook_secret) {
+        console.log(`[WebhookManager] Re-using existing webhook secret for app: ${appId}`);
+        webhookSecret = existingGitHubRecord.webhook_secret;
+      } else {
+        console.log(`[WebhookManager] Generating new webhook secret for app: ${appId}`);
+        webhookSecret = this.generateSecret();
       }
 
-      // Create webhook on GitHub
+      // Step 3: Clean up ALL existing webhooks on GitHub that point to our webhook endpoints
+      // This handles cases where ngrok URL changed, multiple webhooks exist, etc.
+      const existingGitHubWebhooks = await this.listGitHubWebhooks(token, repoOwner, repoName);
+      const ourWebhookPattern = '/api/webhooks/git/github';
+      
+      for (const hook of existingGitHubWebhooks) {
+        if (hook.config?.url?.includes(ourWebhookPattern)) {
+          console.log(`[WebhookManager] Deleting existing webhook ID: ${hook.id}, URL: ${hook.config.url}`);
+          await this.deleteGitHubWebhookById(token, repoOwner, repoName, hook.id);
+        }
+      }
+
+      // Step 4: Create webhook on GitHub with the secret
       const response = await fetch(
         `https://api.github.com/repos/${repoOwner}/${repoName}/hooks`,
         {
@@ -176,8 +199,9 @@ export class WebhookManager {
       const webhook = await response.json();
       console.log(`[WebhookManager] ✅ GitHub webhook created: ${webhook.id}`);
 
-      // Store webhook config in database
-      const dbResult = await Platform_App_Webhooks.create({
+      // Step 5: Store/update webhook config in database using upsert
+      // This ensures we always have exactly ONE webhook record per app+provider
+      const dbResult = await Platform_App_Webhooks.upsert({
         app_id: appId,
         provider: 'github',
         webhook_id: webhook.id.toString(),

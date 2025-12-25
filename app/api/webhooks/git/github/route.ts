@@ -3,11 +3,19 @@
  * Receives push events from GitHub and triggers deployments
  * 
  * URL: POST /api/webhooks/git/github
+ * 
+ * Best Practices Implemented:
+ * - Responds within 10 seconds (GitHub requirement)
+ * - Validates webhook signature (HMAC-SHA256)
+ * - Uses X-GitHub-Delivery for idempotency
+ * - Refreshes access tokens for private repos
+ * - Updates Jenkins job config with fresh token
+ * - Polls build status until completion
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { GitHubWebhookHandler } from '@/lib/webhooks/github';
-import { Platform_Apps, Platform_App_Webhooks } from '@/lib/supabase/queries';
-import { JenkinsService } from '@/lib/services/jenkins';
+import { Platform_App_Webhooks } from '@/lib/supabase/queries';
+import { AutoDeployService } from '@/lib/services/auto-deploy';
 import type { WebhookResult } from '@/lib/webhooks/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult>> {
@@ -81,24 +89,26 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     console.log(`[GitHub Webhook] Push to ${payload.repository.full_name}:${payload.branch}`);
     console.log(`[GitHub Webhook] Commit: ${payload.commit.sha.substring(0, 7)} - ${payload.commit.message.split('\n')[0]}`);
 
-    // 8. Find app by repository ID
+    // 8. Find app by repository ID and branch (includes webhook info)
+    // This handles multiple apps from same repo by matching on branch
     const app = await Platform_App_Webhooks.find_by_repository(
       payload.repository.id,
-      'github'
+      'github',
+      payload.branch  // Pass the branch to filter apps
     );
 
     if (!app) {
-      console.warn(`[GitHub Webhook] No app found for repository: ${payload.repository.id}`);
+      console.warn(`[GitHub Webhook] No app found for repository: ${payload.repository.id} branch: ${payload.branch}`);
       return NextResponse.json({
         success: false,
         action: 'error',
-        message: `No app configured for repository ${payload.repository.full_name}`,
+        message: `No app configured for repository ${payload.repository.full_name} branch ${payload.branch}`,
       }, { status: 404 });
     }
 
-    console.log(`[GitHub Webhook] Found app: ${app.name} (${app.id})`);
+    console.log(`[GitHub Webhook] Found app: ${app.name} (${app.id}) for branch: ${payload.branch}`);
 
-    // 9. Validate webhook signature
+    // 9. Validate webhook signature (HMAC-SHA256)
     if (!GitHubWebhookHandler.validateSignature(rawBody, signature, app.webhook_secret)) {
       console.error(`[GitHub Webhook] ❌ Invalid signature for app: ${app.name}`);
       
@@ -136,39 +146,58 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       });
     }
 
-    // 12. Trigger Jenkins build
-    console.log(`[GitHub Webhook] 🚀 Triggering deployment for ${app.name}...`);
+    // 12. Trigger auto-deploy with fresh token refresh
+    // This is the key change - we now use AutoDeployService which:
+    // - Gets fresh access token for the user
+    // - Updates Jenkins job config with authenticated URL
+    // - Triggers build and polls for status
+    console.log(`[GitHub Webhook] 🚀 Triggering auto-deploy for ${app.name}...`);
     
-    let buildNumber: number;
-    try {
-      buildNumber = await JenkinsService.triggerBuild(app.name);
-    } catch (error: any) {
-      console.error(`[GitHub Webhook] ❌ Failed to trigger build:`, error.message);
+    const deployResult = await AutoDeployService.deploy({
+      appId: app.id,
+      appName: app.name,
+      userId: app.user_id,
+      gitProvider: 'github',
+      repositoryUrl: app.repository_url,
+      branch: targetBranch,
+      framework: app.framework,
+      port: app.port || 3000,
+      size: app.size || 'small',
+      commitSha: payload.commit.sha,
+      deliveryId: deliveryId,  // For idempotency
+    });
+
+    // 13. Handle deploy result
+    if (deployResult.skipped) {
+      console.log(`[GitHub Webhook] ⏭️ Deployment skipped: ${deployResult.skipReason}`);
+      return NextResponse.json({
+        success: true,
+        action: 'skipped',
+        message: deployResult.skipReason || 'Deployment skipped',
+        app_name: app.name,
+      });
+    }
+
+    if (!deployResult.success) {
+      console.error(`[GitHub Webhook] ❌ Auto-deploy failed:`, deployResult.error);
       
       // Record error
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, error.message);
+      await Platform_App_Webhooks.record_trigger(app.webhook_id, deployResult.error);
       
       return NextResponse.json({
         success: false,
         action: 'error',
-        message: `Failed to trigger build: ${error.message}`,
+        message: `Failed to trigger deployment: ${deployResult.error}`,
         app_name: app.name,
       }, { status: 500 });
     }
-
-    // 13. Update app status
-    await Platform_Apps.update(app.id, {
-      status: 'building',
-      last_deploy_trigger: 'webhook',
-      last_deploy_commit: payload.commit.sha,
-    });
 
     // 14. Record successful trigger
     await Platform_App_Webhooks.record_trigger(app.webhook_id);
 
     const duration = Date.now() - startTime;
     console.log(`[GitHub Webhook] ✅ Deployment triggered for ${app.name} (${duration}ms)`);
-    console.log(`[GitHub Webhook] Build #${buildNumber} - Commit: ${payload.commit.sha.substring(0, 7)}`);
+    console.log(`[GitHub Webhook] Build #${deployResult.buildNumber} - Commit: ${payload.commit.sha.substring(0, 7)}`);
 
     return NextResponse.json({
       success: true,
@@ -177,7 +206,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       app_name: app.name,
       branch: payload.branch,
       commit_sha: payload.commit.sha,
-      build_number: buildNumber,
+      build_number: deployResult.buildNumber,
     });
 
   } catch (error: any) {

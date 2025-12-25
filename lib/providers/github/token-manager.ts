@@ -8,16 +8,18 @@
  * 3. None - user needs to reconnect
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/server';
 
 export class GitHubTokenManager {
   /**
    * Get a valid GitHub access token for a user
    * GitHub OAuth tokens don't expire, but can be revoked by user
+   * Uses service client so it works without request context (e.g., webhooks)
    */
   async getToken(userId: string): Promise<string | null> {
     try {
-      const supabase = await createClient();
+      // Use service client for server-side operations without user context
+      const supabase = await createServiceClient();
 
       // Check database stored token
       const { data: tokenData, error } = await supabase
@@ -65,7 +67,7 @@ export class GitHubTokenManager {
    */
   async storeToken(userId: string, token: string): Promise<boolean> {
     try {
-      const supabase = await createClient();
+      const supabase = await createServiceClient();
 
       const { error } = await supabase
         .from('github_tokens')
@@ -96,7 +98,7 @@ export class GitHubTokenManager {
    */
   async deleteToken(userId: string): Promise<boolean> {
     try {
-      const supabase = await createClient();
+      const supabase = await createServiceClient();
 
       const { error } = await supabase
         .from('github_tokens')
