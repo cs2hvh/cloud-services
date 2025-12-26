@@ -69,9 +69,14 @@ interface ProviderConnection {
 // Framework detection and build settings
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
   'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
+  'Angular': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Angular CLI)' },
+  'SvelteKit': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Node adapter)' },
+  'Svelte': { buildCommand: 'npm run build', outputDir: 'public/build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
   'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
   'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
   'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
@@ -259,10 +264,13 @@ const AppDeploymentSelect = () => {
           // Map detected frameworks to our config keys
           const frameworkMap: Record<string, string> = {
             'Next.js': 'Next.js',
+            'Nuxt.js': 'Nuxt.js',
+            'Vite-React': 'Vite-React',
             'React': 'React',
             'Vue.js': 'Vue.js',
-            'Angular': 'Static',
-            'Svelte': 'Static',
+            'Angular': 'Angular',
+            'SvelteKit': 'SvelteKit',
+            'Svelte': 'Svelte',
             'Express': 'express',
             'Node.js': 'Node.js',
             'Django': 'django',
@@ -841,12 +849,19 @@ const AppDeploymentSelect = () => {
                            Simple Test (No Build/Deploy)
                         </SelectItem>
                         
-                        {/* Node.js Frameworks */}
-                        <SelectItem value="Next.js"> Next.js (bring Dockerfile)</SelectItem>
-                        <SelectItem value="React"> React (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Vue.js"> Vue.js (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
+                        {/* Node.js Frameworks - Auto Dockerfile */}
+                        <SelectItem value="Next.js"> Next.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Nuxt.js"> Nuxt.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Vite-React"> React + Vite (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Vue.js"> Vue.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Angular"> Angular (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="SvelteKit"> SvelteKit (auto-Dockerfile)</SelectItem>
                         <SelectItem value="express"> Express.js (auto-Dockerfile)</SelectItem>
+                        
+                        {/* Node.js Frameworks - Bring Dockerfile */}
+                        <SelectItem value="React"> React CRA (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Svelte"> Svelte (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
                         
                         {/* Python Frameworks */}
                         <SelectItem value="python"> Python (auto-Dockerfile)</SelectItem>
