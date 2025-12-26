@@ -28,7 +28,7 @@ export class WebhookManager {
    */
   private static getWebhookUrl(provider: GitProvider): string {
     // Priority: WEBHOOK_BASE_URL > DOMAIN > NEXT_PUBLIC_DOMAIN
-    const baseUrl = process.env.WEBHOOK_BASE_URL 
+    const baseUrl = process.env.WEBHOOK_BASE_URL || "https://carita-hydroponic-groundedly.ngrok-free.dev"
       || process.env.DOMAIN 
       || process.env.NEXT_PUBLIC_DOMAIN;
     

@@ -286,50 +286,49 @@ export async function POST(request: Request) {
     );
 
     let accessToken = null;
-    
-    // Source 1: Session provider_token (freshest)
-    if (session.provider_token) {
-      accessToken = session.provider_token;
-      console.log(`[Detect Framework] Found token in session.provider_token for ${provider}`);
+
+    // Source 1: Database stored tokens (most reliable for persistent access)
+    if (provider === 'github') {
+      const githubProvider = new GitHubProvider();
+      const storedToken = await githubProvider.getToken(user.id);
+      if (storedToken) {
+        accessToken = storedToken.accessToken;
+        console.log('[Detect Framework] Found GitHub token in github_tokens table');
+      }
+    } else if (provider === 'gitlab') {
+      try {
+        const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+        const storedToken = await getValidGitLabToken(user.id);
+        if (storedToken) {
+          accessToken = storedToken;
+          console.log('[Detect Framework] Found GitLab token in gitlab_tokens table');
+        }
+      } catch {
+        console.log('[Detect Framework] GitLab token refresh not available');
+      }
+    } else if (provider === 'bitbucket') {
+      try {
+        const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+        const storedToken = await getValidBitbucketToken(user.id);
+        if (storedToken) {
+          accessToken = storedToken;
+          console.log('[Detect Framework] Found Bitbucket token in bitbucket_tokens table');
+        }
+      } catch {
+        console.log('[Detect Framework] Bitbucket token refresh not available');
+      }
     }
+
     // Source 2: Identity data provider_token
-    else if (identity?.identity_data?.provider_token) {
+    if (!accessToken && identity?.identity_data?.provider_token) {
       accessToken = identity.identity_data.provider_token;
       console.log(`[Detect Framework] Found token in identity_data.provider_token for ${provider}`);
     }
-    
-    // Source 3: Database stored tokens (most reliable for persistent access)
-    if (!accessToken) {
-      if (provider === 'github') {
-        const githubProvider = new GitHubProvider();
-        const storedToken = await githubProvider.getToken(user.id);
-        if (storedToken) {
-          accessToken = storedToken.accessToken;
-          console.log('[Detect Framework] Found GitHub token in github_tokens table');
-        }
-      } else if (provider === 'gitlab') {
-        try {
-          const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
-          const storedToken = await getValidGitLabToken(user.id);
-          if (storedToken) {
-            accessToken = storedToken;
-            console.log('[Detect Framework] Found GitLab token in gitlab_tokens table');
-          }
-        } catch {
-          console.log('[Detect Framework] GitLab token refresh not available');
-        }
-      } else if (provider === 'bitbucket') {
-        try {
-          const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
-          const storedToken = await getValidBitbucketToken(user.id);
-          if (storedToken) {
-            accessToken = storedToken;
-            console.log('[Detect Framework] Found Bitbucket token in bitbucket_tokens table');
-          }
-        } catch {
-          console.log('[Detect Framework] Bitbucket token refresh not available');
-        }
-      }
+
+    // Source 3: Session provider_token, but only if this session actually belongs to this provider
+    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === provider) {
+      accessToken = session.provider_token;
+      console.log(`[Detect Framework] Found token in session.provider_token for ${provider}`);
     }
 
     if (!accessToken) {

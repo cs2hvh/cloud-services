@@ -45,6 +45,8 @@ export async function GET() {
       identity => identity.provider === 'gitlab'
     );
 
+    console.log('[GitLab Repos] GitLab identity:', gitlabIdentity);
+
     if (!gitlabIdentity) {
       return Response.json(
         { message: "GitLab account not connected" },
@@ -52,39 +54,40 @@ export async function GET() {
       );
     }
 
-    // Get GitLab username for fallback to public repos
-    const gitlabUsername = gitlabIdentity.identity_data?.username || 
-                          gitlabIdentity.identity_data?.preferred_username ||
-                          gitlabIdentity.identity_data?.name;
+    // Get GitLab identifiers for fallback to public repos
+    // Prefer stable identifiers (numeric id or real username) over display name
+    const gitlabUserId = (gitlabIdentity.identity_data as any)?.id;
+    const gitlabUsername = (gitlabIdentity.identity_data as any)?.username
+      || (gitlabIdentity.identity_data as any)?.preferred_username
+      || undefined; // avoid using full name with spaces as API username
 
     // Try to get a valid access token from various sources
     let accessToken = null;
     let tokenSource = 'none';
-    
-    // Source 1: Session provider_token (only available immediately after OAuth callback)
-    if (session.provider_token) {
-      accessToken = session.provider_token;
-      tokenSource = 'session.provider_token';
-      console.log('[GitLab Repos] Found token in session.provider_token');
+
+    // Source 1: Database stored token with automatic refresh (most reliable for GitLab!)
+    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
+    console.log('[GitLab Repos] Checking gitlab_tokens table for user:', user.id);
+    const storedToken = await getValidGitLabToken(user.id);
+    if (storedToken) {
+      accessToken = storedToken;
+      tokenSource = 'gitlab_tokens_table';
+      console.log('[GitLab Repos] Found valid token in gitlab_tokens table (with auto-refresh)');
     }
+
     // Source 2: Identity data provider_token (usually not populated by Supabase)
-    else if (gitlabIdentity.identity_data?.provider_token) {
+    if (!accessToken && gitlabIdentity.identity_data?.provider_token) {
       accessToken = gitlabIdentity.identity_data.provider_token;
       tokenSource = 'identity_data.provider_token';
       console.log('[GitLab Repos] Found token in identity_data.provider_token');
     }
-    // Source 3: Database stored token with automatic refresh (most reliable for GitLab!)
-    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
-    else {
-      console.log('[GitLab Repos] No session token, checking gitlab_tokens table for user:', user.id);
-      const storedToken = await getValidGitLabToken(user.id);
-      if (storedToken) {
-        accessToken = storedToken;
-        tokenSource = 'gitlab_tokens_table';
-        console.log('[GitLab Repos] Found valid token in gitlab_tokens table (with auto-refresh)');
-      } else {
-        console.log('[GitLab Repos] No valid token found in gitlab_tokens table');
-      }
+
+    // Source 3: Session provider_token, but only if this session actually belongs to GitLab
+    // This avoids using a GitHub token when calling GitLab APIs
+    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'gitlab') {
+      accessToken = session.provider_token;
+      tokenSource = 'session.provider_token';
+      console.log('[GitLab Repos] Found token in session.provider_token for GitLab');
     }
 
     // If we have a token, try to fetch all repositories including private ones
@@ -140,48 +143,84 @@ export async function GET() {
       }
     }
 
-    // Fallback: Fetch only public repositories using username
-    if (gitlabUsername) {
-      console.log(`[GitLab Repos] Falling back to public repos for user: ${gitlabUsername}`);
-      
-      const response = await fetch(`https://gitlab.com/api/v4/users/${gitlabUsername}/projects?visibility=public&per_page=100&order_by=updated_at`, {
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'AhuraSense-Cloud-Platform'
+    // Fallback: Fetch only public repositories
+    // Try by numeric user id first (most reliable), then by username
+    try {
+      if (gitlabUserId) {
+        console.log(`[GitLab Repos] Falling back to public repos for GitLab user id: ${gitlabUserId}`);
+        const response = await fetch(`https://gitlab.com/api/v4/users/${gitlabUserId}/projects?visibility=public&per_page=100&order_by=updated_at`, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'AhuraSense-Cloud-Platform'
+          }
+        });
+
+        if (response.ok) {
+          const repos = await response.json();
+          const transformedRepos = repos.map((repo: GitLabRepository) => ({
+            id: repo.id.toString(),
+            name: repo.name,
+            fullName: repo.path_with_namespace,
+            description: repo.description || '',
+            private: repo.visibility === 'private',
+            defaultBranch: repo.default_branch,
+            language: repo.language || 'Unknown',
+            updatedAt: repo.last_activity_at,
+            provider: 'gitlab' as const,
+            cloneUrl: repo.http_url_to_repo,
+            htmlUrl: repo.web_url
+          }));
+
+          return Response.json({ 
+            repositories: transformedRepos,
+            warning: "Showing public repositories only. GitLab token expired or not found. Please reconnect your GitLab account for private repository access.",
+            needsAppAuth: true
+          }, { status: 200 });
         }
-      });
+      } else if (gitlabUsername) {
+        console.log(`[GitLab Repos] Falling back to public repos for GitLab username: ${gitlabUsername}`);
+        const response = await fetch(`https://gitlab.com/api/v4/users/${encodeURIComponent(gitlabUsername)}/projects?visibility=public&per_page=100&order_by=updated_at`, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'AhuraSense-Cloud-Platform'
+          }
+        });
 
-      if (response.ok) {
-        const repos = await response.json();
-        const transformedRepos = repos.map((repo: GitLabRepository) => ({
-          id: repo.id.toString(),
-          name: repo.name,
-          fullName: repo.path_with_namespace,
-          description: repo.description || '',
-          private: repo.visibility === 'private',
-          defaultBranch: repo.default_branch,
-          language: repo.language || 'Unknown',
-          updatedAt: repo.last_activity_at,
-          provider: 'gitlab' as const,
-          cloneUrl: repo.http_url_to_repo,
-          htmlUrl: repo.web_url
-        }));
+        if (response.ok) {
+          const repos = await response.json();
+          const transformedRepos = repos.map((repo: GitLabRepository) => ({
+            id: repo.id.toString(),
+            name: repo.name,
+            fullName: repo.path_with_namespace,
+            description: repo.description || '',
+            private: repo.visibility === 'private',
+            defaultBranch: repo.default_branch,
+            language: repo.language || 'Unknown',
+            updatedAt: repo.last_activity_at,
+            provider: 'gitlab' as const,
+            cloneUrl: repo.http_url_to_repo,
+            htmlUrl: repo.web_url
+          }));
 
-        return Response.json({ 
-          repositories: transformedRepos,
-          warning: "Showing public repositories only. GitLab token expired or not found. Please reconnect your GitLab account for private repository access.",
-          needsAppAuth: true
-        }, { status: 200 });
+          return Response.json({ 
+            repositories: transformedRepos,
+            warning: "Showing public repositories only. GitLab token expired or not found. Please reconnect your GitLab account for private repository access.",
+            needsAppAuth: true
+          }, { status: 200 });
+        }
       }
+    } catch (fallbackError) {
+      console.log('[GitLab Repos] Public fallback failed:', fallbackError);
     }
 
-    // No token and no username - can't fetch anything
+    // No usable token and no successful public fallback - return empty list with guidance
     return Response.json(
       { 
-        message: "GitLab access token not found or expired. Please reconnect your GitLab account.",
+        repositories: [],
+        message: "GitLab account is linked but no valid API token is available. Please complete the GitLab App connection to enable repository access.",
         needsAppAuth: true
       },
-      { status: 400 }
+      { status: 200 }
     );
 
   } catch (error) {

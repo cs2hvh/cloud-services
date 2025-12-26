@@ -114,35 +114,31 @@ export async function POST(req: NextRequest) {
       const { data: { session } } = await supabase.auth.getSession();
       
       let accessToken = null;
-      
-      if (session) {
-        // Check for token in session first
-        console.log("got session success....120")
-        if (session.provider_token) {
-          accessToken = session.provider_token;
-          console.log('[platform-apps/create] Found GitLab token in session.provider_token');
-        }
-        // Fallback to identity data
-        else if (session.user?.identities) {
-          console.log("got session user identities....127")
-          const gitlabIdentity = session.user.identities.find(id => id.provider === 'gitlab');
 
-          if (gitlabIdentity?.identity_data?.provider_token) {
-            console.log("got session user identity_data provider_token....131")
-            accessToken = gitlabIdentity.identity_data.provider_token;
-            console.log('[platform-apps/create] Found GitLab token in identity_data.provider_token');
-          }
+      // First, check the gitlab_tokens table with auto-refresh (GitLab tokens expire in 2 hours!)
+      const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+      const validToken = await getValidGitLabToken(auth.user!.id);
+      if (validToken) {
+        accessToken = validToken;
+        console.log('[platform-apps/create] Found GitLab token in gitlab_tokens table (with auto-refresh)');
+      }
+
+      if (!accessToken && session?.user?.identities) {
+        console.log("got session user identities....127");
+        const gitlabIdentity = session.user.identities.find(id => id.provider === 'gitlab');
+
+        if (gitlabIdentity?.identity_data?.provider_token) {
+          console.log("got session user identity_data provider_token....131");
+          accessToken = gitlabIdentity.identity_data.provider_token;
+          console.log('[platform-apps/create] Found GitLab token in identity_data.provider_token');
         }
       }
-      
-      // Check the gitlab_tokens table with auto-refresh (GitLab tokens expire in 2 hours!)
-      if (!accessToken) {
-        const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
-        const validToken = await getValidGitLabToken(auth.user!.id);
-        if (validToken) {
-          accessToken = validToken;
-          console.log('[platform-apps/create] Found GitLab token in gitlab_tokens table (with auto-refresh)');
-        }
+
+      // Finally, fall back to session.provider_token only if this session is actually GitLab-based
+      if (!accessToken && session?.provider_token && (session.user as any)?.app_metadata?.provider === 'gitlab') {
+        console.log("got session success....120");
+        accessToken = session.provider_token;
+        console.log('[platform-apps/create] Found GitLab token in session.provider_token');
       }
       
       if (accessToken) {
@@ -168,36 +164,32 @@ export async function POST(req: NextRequest) {
       const { data: { session } } = await supabase.auth.getSession();
       
       let accessToken = null;
-      
-      if (session) {
-        // Check for token in session first (freshest token)
-        if (session.provider_token) {
-          accessToken = session.provider_token;
-          console.log('[platform-apps/create] Found Bitbucket token in session.provider_token');
+
+      // First, check the bitbucket_tokens table with auto-refresh (if table exists)
+      // Bitbucket tokens expire in ~1-2 hours, so refresh is important
+      try {
+        const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+        const validToken = await getValidBitbucketToken(auth.user!.id);
+        if (validToken) {
+          accessToken = validToken;
+          console.log('[platform-apps/create] Found Bitbucket token in bitbucket_tokens table (with auto-refresh)');
         }
-        // Fallback to identity data
-        else if (session.user?.identities) {
-          const bitbucketIdentity = session.user.identities.find(id => id.provider === 'bitbucket');
-          if (bitbucketIdentity?.identity_data?.provider_token) {
-            accessToken = bitbucketIdentity.identity_data.provider_token;
-            console.log('[platform-apps/create] Found Bitbucket token in identity_data.provider_token');
-          }
+      } catch {
+        console.log('[platform-apps/create] bitbucket_tokens table not available, skipping DB token check');
+      }
+
+      if (!accessToken && session?.user?.identities) {
+        const bitbucketIdentity = session.user.identities.find(id => id.provider === 'bitbucket');
+        if (bitbucketIdentity?.identity_data?.provider_token) {
+          accessToken = bitbucketIdentity.identity_data.provider_token;
+          console.log('[platform-apps/create] Found Bitbucket token in identity_data.provider_token');
         }
       }
-      
-      // Fallback: Check the bitbucket_tokens table with auto-refresh (if table exists)
-      // Bitbucket tokens expire in ~1-2 hours, so refresh is important
-      if (!accessToken) {
-        try {
-          const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
-          const validToken = await getValidBitbucketToken(auth.user!.id);
-          if (validToken) {
-            accessToken = validToken;
-            console.log('[platform-apps/create] Found Bitbucket token in bitbucket_tokens table (with auto-refresh)');
-          }
-        } catch {
-          console.log('[platform-apps/create] bitbucket_tokens table not available, skipping fallback');
-        }
+
+      // Finally, fall back to session.provider_token only if this session is actually Bitbucket-based
+      if (!accessToken && session?.provider_token && (session.user as any)?.app_metadata?.provider === 'bitbucket') {
+        accessToken = session.provider_token;
+        console.log('[platform-apps/create] Found Bitbucket token in session.provider_token');
       }
       
       if (accessToken) {
@@ -266,8 +258,29 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        if (!webhookToken) {
+          // Fallback: try to use session/identity provider_token if available for this provider
+          try {
+            const { createClient } = await import('@/lib/supabase/server');
+            const supabase = await createClient();
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (session) {
+              const identity = session.user?.identities?.find((id) => id.provider === appData.git_provider);
+              if (identity?.identity_data?.provider_token) {
+                webhookToken = identity.identity_data.provider_token;
+                console.log('[platform-apps/create] Using identity_data.provider_token as webhook token for', appData.git_provider);
+              } else if (session.provider_token && (session.user as any)?.app_metadata?.provider === appData.git_provider) {
+                webhookToken = session.provider_token;
+                console.log('[platform-apps/create] Using session.provider_token as webhook token for', appData.git_provider);
+              }
+            }
+          } catch (fallbackError) {
+            console.log('[platform-apps/create] Webhook token fallback lookup failed:', fallbackError);
+          }
+        }
+
         if (webhookToken) {
-          console.log(webhookToken, '...........webhook token...........');
           const { WebhookManager } = await import('@/lib/services/webhook-manager');
           
           const webhookResult = await WebhookManager.registerWebhook({

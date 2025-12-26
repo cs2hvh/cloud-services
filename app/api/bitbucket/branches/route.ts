@@ -68,31 +68,29 @@ export async function GET(request: Request) {
     // Try to get a valid access token from various sources
     let accessToken = null;
     let tokenSource = 'none';
-    
-    // Source 1: Session provider_token (only available immediately after OAuth callback)
-    if (session.provider_token) {
-      accessToken = session.provider_token;
-      tokenSource = 'session.provider_token';
-      console.log('[Bitbucket Branches] Found token in session.provider_token');
+
+    // Source 1: Database stored token with automatic refresh (most reliable for Bitbucket!)
+    // IMPORTANT: Bitbucket tokens expire in ~1 hour, so we need to check and refresh them
+    console.log('[Bitbucket Branches] Checking bitbucket_tokens table for user:', user.id);
+    const storedToken = await getValidBitbucketToken(user.id);
+    if (storedToken) {
+      accessToken = storedToken;
+      tokenSource = 'bitbucket_tokens_table';
+      console.log('[Bitbucket Branches] Found valid token in bitbucket_tokens table (with auto-refresh)');
     }
+
     // Source 2: Identity data provider_token (usually not populated by Supabase)
-    else if (bitbucketIdentity.identity_data?.provider_token) {
+    if (!accessToken && bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
       tokenSource = 'identity_data.provider_token';
       console.log('[Bitbucket Branches] Found token in identity_data.provider_token');
     }
-    // Source 3: Database stored token with automatic refresh (most reliable for Bitbucket!)
-    // IMPORTANT: Bitbucket tokens expire in ~1 hour, so we need to check and refresh them
-    else {
-      console.log('[Bitbucket Branches] No session token, checking bitbucket_tokens table for user:', user.id);
-      const storedToken = await getValidBitbucketToken(user.id);
-      if (storedToken) {
-        accessToken = storedToken;
-        tokenSource = 'bitbucket_tokens_table';
-        console.log('[Bitbucket Branches] Found valid token in bitbucket_tokens table (with auto-refresh)');
-      } else {
-        console.log('[Bitbucket Branches] No valid token found in bitbucket_tokens table');
-      }
+
+    // Source 3: Session provider_token, but only if this session actually belongs to Bitbucket
+    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'bitbucket') {
+      accessToken = session.provider_token;
+      tokenSource = 'session.provider_token';
+      console.log('[Bitbucket Branches] Found token in session.provider_token for Bitbucket');
     }
 
     if (!accessToken) {

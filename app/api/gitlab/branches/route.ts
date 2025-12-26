@@ -63,31 +63,29 @@ export async function GET(request: Request) {
     // Try to get a valid access token from various sources
     let accessToken = null;
     let tokenSource = 'none';
-    
-    // Source 1: Session provider_token (only available immediately after OAuth callback)
-    if (session.provider_token) {
-      accessToken = session.provider_token;
-      tokenSource = 'session.provider_token';
-      console.log('[GitLab Branches] Found token in session.provider_token');
+
+    // Source 1: Database stored token with automatic refresh (most reliable for GitLab!)
+    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
+    console.log('[GitLab Branches] Checking gitlab_tokens table for user:', user.id);
+    const storedToken = await getValidGitLabToken(user.id);
+    if (storedToken) {
+      accessToken = storedToken;
+      tokenSource = 'gitlab_tokens_table';
+      console.log('[GitLab Branches] Found valid token in gitlab_tokens table (with auto-refresh)');
     }
+
     // Source 2: Identity data provider_token (usually not populated by Supabase)
-    else if (gitlabIdentity.identity_data?.provider_token) {
+    if (!accessToken && gitlabIdentity.identity_data?.provider_token) {
       accessToken = gitlabIdentity.identity_data.provider_token;
       tokenSource = 'identity_data.provider_token';
       console.log('[GitLab Branches] Found token in identity_data.provider_token');
     }
-    // Source 3: Database stored token with automatic refresh (most reliable for GitLab!)
-    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
-    else {
-      console.log('[GitLab Branches] No session token, checking gitlab_tokens table for user:', user.id);
-      const storedToken = await getValidGitLabToken(user.id);
-      if (storedToken) {
-        accessToken = storedToken;
-        tokenSource = 'gitlab_tokens_table';
-        console.log('[GitLab Branches] Found valid token in gitlab_tokens table (with auto-refresh)');
-      } else {
-        console.log('[GitLab Branches] No valid token found in gitlab_tokens table');
-      }
+
+    // Source 3: Session provider_token, but only if this session actually belongs to GitLab
+    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'gitlab') {
+      accessToken = session.provider_token;
+      tokenSource = 'session.provider_token';
+      console.log('[GitLab Branches] Found token in session.provider_token for GitLab');
     }
 
     if (!accessToken) {

@@ -3116,6 +3116,87 @@ export const Platform_App_Webhooks = {
   },
 };
 
+// ============================================
+// GitLab Tokens Queries
+// ============================================
+export const GitLab_Tokens = {
+  // Get the GitLab token row for a user (service-role)
+  get_by_user: async (user_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("gitlab_tokens")
+        .select("*")
+        .eq("user_id", user_id)
+        .single();
+
+      if (error) {
+        console.error(`[GitLab_Tokens] Error getting token for user ${user_id}: ${error.message}`);
+        return null;
+      }
+
+      return data;
+    } catch (err) {
+      console.error(`[GitLab_Tokens] Error getting token for user ${user_id}: ${err}`);
+      return null;
+    }
+  },
+
+  // Upsert (insert or update) a GitLab token row
+  upsert: async (payload: {
+    user_id: string;
+    access_token: string;
+    refresh_token: string | null;
+    expires_at: string | null;
+    gitlab_username: string;
+    gitlab_user_id: number;
+    scopes: string;
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("gitlab_tokens")
+        .upsert({
+          ...payload,
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[GitLab_Tokens] Failed to upsert token:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err) {
+      console.error("[GitLab_Tokens] Error upserting token:", err);
+      return { success: false, error: String(err) };
+    }
+  },
+
+  // Delete token row for a user
+  delete_for_user: async (user_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase
+        .from("gitlab_tokens")
+        .delete()
+        .eq("user_id", user_id);
+
+      if (error) {
+        console.error(`[GitLab_Tokens] Failed to delete token for user ${user_id}: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error(`[GitLab_Tokens] Error deleting token for user ${user_id}: ${err}`);
+      return { success: false, error: String(err) };
+    }
+  },
+};
+
 // Re-export from the queries folder for backward compatibility
 export { Billing } from "./queries/billing";
 export { Promocodes } from "./queries/promocodes";
