@@ -6,6 +6,7 @@ import { createNodeJsPipeline } from './nodejs';
 import { createExpressPipeline } from './express';
 import { createPythonPipeline } from './python';
 import { createNextJsPipeline } from './nextjs';
+import { createNuxtJsPipeline } from './nuxtjs';
 import { createDeletePipeline } from './delete';
 import { createViteReactPipeline } from './vite-react';
 import { createVuePipeline } from './vue';
@@ -18,6 +19,7 @@ export {
   createExpressPipeline, 
   createPythonPipeline, 
   createNextJsPipeline, 
+  createNuxtJsPipeline,
   createDeletePipeline,
   createViteReactPipeline,
   createVuePipeline,
@@ -34,6 +36,7 @@ export const PipelineType = {
   EXPRESS: 'express',
   PYTHON: 'python',
   NEXTJS: 'nextjs',
+  NUXTJS: 'nuxtjs',
   DELETE: 'delete',
   VITE_REACT: 'vite-react',
   VUE: 'vue',
@@ -58,6 +61,8 @@ export function getPipelineGenerator(type: PipelineTypeValue) {
       return createPythonPipeline;
     case PipelineType.NEXTJS:
       return createNextJsPipeline;
+    case PipelineType.NUXTJS:
+      return createNuxtJsPipeline;
     case PipelineType.DELETE:
       return createDeletePipeline;
     case PipelineType.VITE_REACT:

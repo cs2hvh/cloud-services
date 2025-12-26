@@ -9,6 +9,7 @@ import {
   createExpressPipeline,
   createPythonPipeline,
   createNextJsPipeline,
+  createNuxtJsPipeline,
   createDeletePipeline,
   createViteReactPipeline,
   createVuePipeline,
@@ -402,6 +403,12 @@ export class JenkinsService {
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
         return createNextJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
+
+      case 'nuxtjs':
+      case 'nuxt.js':
+      case 'nuxt':
+        console.log(`[JenkinsService] Using NUXT.JS pipeline (auto-Dockerfile with Nitro server)`);
+        return createNuxtJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
 
       case 'vite-react':
       case 'vitereact':
