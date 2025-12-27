@@ -12,6 +12,7 @@ export { Activities } from "./activities";
 export { ObjectSpaces } from "./object_spaces";
 export { Spectrum_Apps } from "./spectrum_apps";
 export { Promocodes } from "./promocodes";
+export { Platform_Apps, Platform_App_Webhooks } from "./platform_apps";
 export { storeFile } from "./utils";
 
 // For backward compatibility - default export
