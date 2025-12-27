@@ -94,7 +94,7 @@ export class DeploymentService {
         ip: process.env.KUBE_IP || null,
         auto_deploy: config.auto_deploy || false,
         deploy_branch: config.deploy_branch || config.branch,
-        // Note: size is not stored in DB, always passed at deploy time
+        size: config.size || 'small', // Store size for redeployments
       };
 
       const result = await Platform_Apps.create(appPayload);

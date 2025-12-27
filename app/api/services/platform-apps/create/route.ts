@@ -54,6 +54,21 @@ export async function POST(req: NextRequest) {
 
     const { env_vars, ...appData } = validation.data;
 
+    // Check app limit per user (max 10 apps)
+    const MAX_APPS_PER_USER = 10;
+    const currentAppCount = await Platform_Apps.count_by_owner(auth.user!.id);
+    if (currentAppCount >= MAX_APPS_PER_USER) {
+      return NextResponse.json(
+        { 
+          error: 'App limit reached',
+          message: `You have reached the maximum limit of ${MAX_APPS_PER_USER} apps. Please delete an existing app to create a new one.`,
+          current_count: currentAppCount,
+          max_limit: MAX_APPS_PER_USER
+        },
+        { status: 403 }
+      );
+    }
+
     // Check if app name already exists (globally unique for DNS/Jenkins)
     const nameExists = await Platform_Apps.check_name_exists(appData.name);
     if (nameExists) {
