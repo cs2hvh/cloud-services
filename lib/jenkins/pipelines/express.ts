@@ -460,98 +460,112 @@ INGRESS_EOF
   
   post {
     success {
-      container('git') {
+      container('kubectl') {
         catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          withCredentials([string(credentialsId: 'deployment_record_secret', variable: 'DEPLOYMENT_RECORD_SECRET')]) {
-            sh '''
-              echo "PIPELINE: Success"
-              echo "Deployment completed successfully for $APP_NAME"
-              echo "Service URL: https://$DOMAIN"
+          sh '''
+            echo "PIPELINE: Success"
+            echo "Deployment completed successfully for $APP_NAME"
+            echo "Service URL: https://$DOMAIN"
 
-              if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-                echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-                exit 0
-              fi
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
 
-              if [ -z "$DEPLOYMENT_RECORD_SECRET" ]; then
-                echo "WARN: DEPLOYMENT_RECORD_SECRET not available; skipping deployment record"
-                exit 0
-              fi
-
-              DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
               COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-              IMAGE_DIGEST=""
-              if [ -f image-digest.txt ]; then IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\n'); fi
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
 
-              PAYLOAD=$(cat <<JSON
+            PAYLOAD=$(cat <<JSON
 {"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
 JSON
 )
 
-              if command -v curl >/dev/null 2>&1; then
-                curl -sS -X POST "$DEPLOYMENT_RECORD_URL" \
-                  -H "content-type: application/json" \
-                  -H "x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
-                  --data "$PAYLOAD" || true
-              elif command -v wget >/dev/null 2>&1; then
-                wget -qO- \
-                  --header="content-type: application/json" \
-                  --header="x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
-                  --post-data="$PAYLOAD" \
-                  "$DEPLOYMENT_RECORD_URL" || true
-              else
-                echo "WARN: curl/wget not available; skipping deployment record"
-              fi
-            '''
-          }
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
+                -H "content-type: application/json" \
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \
+                --header="content-type: application/json" \
+                --post-data="$PAYLOAD" \
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
         }
       }
     }
     
     failure {
-      container('git') {
+      container('kubectl') {
         catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          withCredentials([string(credentialsId: 'deployment_record_secret', variable: 'DEPLOYMENT_RECORD_SECRET')]) {
-            sh '''
-              echo "PIPELINE: Failure"
-              echo "Deployment failed for $APP_NAME"
+          sh '''
+            echo "PIPELINE: Failure"
+            echo "Deployment failed for $APP_NAME"
 
-              if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-                echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-                exit 0
-              fi
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
 
-              if [ -z "$DEPLOYMENT_RECORD_SECRET" ]; then
-                echo "WARN: DEPLOYMENT_RECORD_SECRET not available; skipping deployment record"
-                exit 0
-              fi
-
-              DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
               COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-              IMAGE_DIGEST=""
-              if [ -f image-digest.txt ]; then IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\n'); fi
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
 
-              PAYLOAD=$(cat <<JSON
+            PAYLOAD=$(cat <<JSON
 {"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
 JSON
 )
 
-              if command -v curl >/dev/null 2>&1; then
-                curl -sS -X POST "$DEPLOYMENT_RECORD_URL" \
-                  -H "content-type: application/json" \
-                  -H "x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
-                  --data "$PAYLOAD" || true
-              elif command -v wget >/dev/null 2>&1; then
-                wget -qO- \
-                  --header="content-type: application/json" \
-                  --header="x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
-                  --post-data="$PAYLOAD" \
-                  "$DEPLOYMENT_RECORD_URL" || true
-              else
-                echo "WARN: curl/wget not available; skipping deployment record"
-              fi
-            '''
-          }
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
+                -H "content-type: application/json" \
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \
+                --header="content-type: application/json" \
+                --post-data="$PAYLOAD" \
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
         }
       }
     }

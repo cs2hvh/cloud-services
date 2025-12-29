@@ -36,11 +36,12 @@ function normalizeInt(value: unknown): number | null {
  */
 export async function POST(req: NextRequest) {
   try {
-   
-
     const body = (await req.json()) as Partial<DeploymentRecordPayload>;
 
+    console.log('[DeploymentRecordWebhook] Received payload:', JSON.stringify(body));
+
     if (!body.app_id || !body.status || !body.trigger) {
+      console.error('[DeploymentRecordWebhook] Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields: app_id, status, trigger' },
         { status: 400 }
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!deployment) {
+      console.error('[DeploymentRecordWebhook] Failed to create deployment record:', insert.error);
       return NextResponse.json(
         { error: insert.error || 'Failed to create deployment record' },
         { status: 500 }
@@ -112,6 +114,7 @@ export async function POST(req: NextRequest) {
 
     // Mark as active + update app status on successful deploy
     if (body.status === 'success') {
+      console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
       await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);
       await Platform_Apps.update(body.app_id, {
         status: 'running',
@@ -119,6 +122,8 @@ export async function POST(req: NextRequest) {
         last_deploy_commit: body.commit_sha ?? null,
       });
     }
+
+    console.log('[DeploymentRecordWebhook] ✅ Deployment record created:', deployment.id);
 
     return NextResponse.json({
       success: true,

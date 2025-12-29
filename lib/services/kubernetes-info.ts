@@ -173,30 +173,30 @@ export class KubernetesInfoService {
       const { apps } = this.getApis();
       const deploymentName = `${appName}-app`;
 
-      const patchBody = {
-        spec: {
-          template: {
-            spec: {
-              containers: [{ name: deploymentName, image }],
-            },
-          },
+      // Use JSON Patch format (RFC 6902) for precise updates
+      const jsonPatch = [
+        {
+          op: 'replace',
+          path: '/spec/template/spec/containers/0/image',
+          value: image,
         },
-      };
+      ];
 
       await apps.patchNamespacedDeployment(
         {
           name: deploymentName,
           namespace,
-          body: patchBody as any,
+          body: jsonPatch,
           fieldManager: 'cloud-services',
         },
         {
           headers: {
-            'Content-Type': 'application/strategic-merge-patch+json',
+            'Content-Type': 'application/json-patch+json',
           },
         } as any
       );
 
+      console.log(`[KubernetesInfoService] ✅ Patched deployment ${deploymentName} to image: ${image}`);
       return { success: true };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);

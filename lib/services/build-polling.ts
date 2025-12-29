@@ -139,6 +139,10 @@ export class BuildPollingService {
 
     // Best-effort: log the currently running Kubernetes images to verify cluster connectivity
     if (buildStatus.status === 'running') {
+      // Wait a bit for the pod to start and pull the image before logging
+      // This helps show actual imageID instead of undefined
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      
       KubernetesInfoService.logAppImages(appName, `post-build-success build=${buildStatus.result || 'unknown'}`)
         .catch(() => undefined);
     }
