@@ -1,3 +1,5 @@
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+
 export function createNextJsPipeline(
   name: string,
   gitUrl: string,
@@ -5,6 +7,7 @@ export function createNextJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -42,6 +45,11 @@ export function createNextJsPipeline(
   // fixed container port for Next.js
   const containerPort = 3000;
 
+  // Generate Kubernetes Secret for environment variables (secure approach)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <description>
@@ -73,6 +81,7 @@ pipeline {
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
     DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
 
@@ -158,6 +167,25 @@ EOF
       }
     }
 
+    stage('Create Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          sh '''
+            echo "STAGE: Create Environment Secret"
+            echo "Creating Kubernetes secret: \${ENV_SECRET_NAME}"
+            cat > env-secret.yaml << 'SECRET_EOF'
+${secretYaml}
+SECRET_EOF
+            kubectl apply -f env-secret.yaml
+            echo "Environment secret created successfully"
+          '''
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
@@ -188,9 +216,9 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
+${envFromSection}
         env:
-        - name: PORT
-          value: "${containerPort}"
+${defaultEnvYaml}
         resources:
           requests:
             cpu: ${cpuRequest}

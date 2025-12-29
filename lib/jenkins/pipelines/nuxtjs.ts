@@ -3,6 +3,12 @@
  * 
  * Creates a Jenkins pipeline configuration for Nuxt.js (Nuxt 3) applications.
  * Uses Nitro server with Node.js preset, auto-generates Dockerfile if not present.
+ * Uses Kubernetes Secrets for environment variables (secure)
+ * 
+ * DEPLOYMENT CONTRACT:
+ * 1. Build stage
+ * 2. Create Environment Secret stage
+ * 3. Deploy to Kubernetes stage
  * 
  * Nuxt 3 Architecture:
  * - Build output: .output/ directory
@@ -10,6 +16,7 @@
  * - Default port: 3000
  * - Production command: node .output/server/index.mjs
  */
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 
 export function createNuxtJsPipeline(
   name: string,
@@ -18,6 +25,7 @@ export function createNuxtJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -57,6 +65,11 @@ export function createNuxtJsPipeline(
   // Nuxt 3 runs on port 3000 by default with Nitro
   const containerPort = 3000;
 
+  // Generate Kubernetes Secret for environment variables (secure approach)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <description>
@@ -92,6 +105,7 @@ pipeline {
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
     DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
 
@@ -191,11 +205,31 @@ EOF
       }
     }
 
+    stage('Create Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          sh '''
+            echo "STAGE: Create Environment Secret"
+            echo "Creating Kubernetes secret: \${ENV_SECRET_NAME}"
+            cat > env-secret.yaml << 'SECRET_EOF'
+${secretYaml}
+SECRET_EOF
+            kubectl apply -f env-secret.yaml
+            echo "Environment secret created successfully"
+          '''
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
           sh '''
             echo "STAGE: Deploy to Kubernetes"
+            
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
@@ -223,13 +257,8 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
-        env:
-        - name: HOST
-          value: "0.0.0.0"
-        - name: PORT
-          value: "${containerPort}"
-        - name: NODE_ENV
-          value: "production"
+${envFromSection}
+${defaultEnvYaml}
         resources:
           requests:
             cpu: ${cpuRequest}

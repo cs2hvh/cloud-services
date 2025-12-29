@@ -1,7 +1,15 @@
 /**
  * Angular Pipeline - Angular with Angular CLI build tool
  * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * Uses Kubernetes Secrets for environment variables (secure)
+ * 
+ * DEPLOYMENT CONTRACT:
+ * 1. Build stage
+ * 2. Create Environment Secret stage
+ * 3. Deploy to Kubernetes stage
  */
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+
 export function createAngularPipeline(
   name: string,
   gitUrl: string,
@@ -9,6 +17,7 @@ export function createAngularPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -44,6 +53,11 @@ export function createAngularPipeline(
 
   // Angular apps serve on port 3000 in production via serve
   const containerPort = 3000;
+
+  // Generate Kubernetes Secret for environment variables (secure approach)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -89,6 +103,7 @@ pipeline {
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
     DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
 
@@ -285,6 +300,30 @@ EOF
       }
     }
 
+    stage('Create Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          script {
+            echo 'STAGE: Create Environment Secret'
+            echo "Creating Kubernetes secret: \${env.ENV_SECRET_NAME}"
+            sh(
+              script: '''
+              cat > env-secret.yaml << 'SECRET_EOF'
+${secretYaml}
+SECRET_EOF
+              kubectl apply -f env-secret.yaml
+              echo 'Environment secret created successfully'
+              ''',
+              returnStatus: false
+            )
+          }
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
@@ -325,9 +364,8 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
-        env:
-        - name: PORT
-          value: "${containerPort}"
+${envFromSection}
+${defaultEnvYaml}
         resources:
           requests:
             cpu: ${cpuRequest}

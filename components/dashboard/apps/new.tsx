@@ -22,6 +22,7 @@ import {
   // ExternalLink,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import {
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
@@ -109,6 +111,8 @@ const AppDeploymentSelect = () => {
   const [buildCommand, setBuildCommand] = useState<string>('');
   const [outputDir, setOutputDir] = useState<string>('');
   const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
+  const [envInputMode, setEnvInputMode] = useState<'single' | 'bulk'>('single');
+  const [bulkEnvText, setBulkEnvText] = useState<string>('');
   const [customDomain, setCustomDomain] = useState<string>('');
   const [size, setSize] = useState<string>('small');
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
@@ -374,6 +378,67 @@ const AppDeploymentSelect = () => {
     setEnvVars(envVars.map((env, i) => 
       i === index ? { ...env, [field]: value } : env
     ));
+  };
+
+  // Parse .env file content into key-value pairs
+  const parseEnvContent = (content: string): {key: string, value: string}[] => {
+    const lines = content.split('\n');
+    const parsed: {key: string, value: string}[] = [];
+    
+    for (const line of lines) {
+      // Skip empty lines and comments
+      const trimmedLine = line.trim();
+      if (!trimmedLine || trimmedLine.startsWith('#')) continue;
+      
+      // Find first = sign
+      const eqIndex = trimmedLine.indexOf('=');
+      if (eqIndex === -1) continue;
+      
+      const key = trimmedLine.substring(0, eqIndex).trim();
+      let value = trimmedLine.substring(eqIndex + 1).trim();
+      
+      // Remove surrounding quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || 
+          (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      
+      // Skip if key is empty
+      if (!key) continue;
+      
+      parsed.push({ key, value });
+    }
+    
+    return parsed;
+  };
+
+  // Apply bulk env content
+  const applyBulkEnv = () => {
+    const parsed = parseEnvContent(bulkEnvText);
+    if (parsed.length === 0) {
+      toast.error('No valid environment variables found. Format: KEY=value');
+      return;
+    }
+    
+    // Merge with existing (new values override existing keys)
+    const existingKeys = new Set(envVars.map(e => e.key));
+    const newVars = parsed.filter(p => !existingKeys.has(p.key));
+    const updatedExisting = envVars.map(existing => {
+      const override = parsed.find(p => p.key === existing.key);
+      return override || existing;
+    });
+    
+    setEnvVars([...updatedExisting, ...newVars]);
+    setBulkEnvText('');
+    setEnvInputMode('single');
+    toast.success(`Added ${parsed.length} environment variable${parsed.length > 1 ? 's' : ''}`);
+  };
+
+  // Clear all env vars
+  const clearAllEnvVars = () => {
+    setEnvVars([]);
+    setBulkEnvText('');
+    toast.success('All environment variables cleared');
   };
 
   const handleNextStep = () => {
@@ -949,36 +1014,111 @@ const AppDeploymentSelect = () => {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <Label className="text-white">Environment Variables</Label>
-                    <Button onClick={addEnvVar} size="sm" className="bg-white text-black hover:bg-gray-200">
-                      Add Variable
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {envVars.map((env, index) => (
-                      <div key={index} className="flex gap-2">
-                      <Input
-                        value={env.key}
-                        onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
-                        placeholder="VARIABLE_NAME"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      />
-                      <Input
-                        value={env.value}
-                        onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
-                        placeholder="variable_value"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      />
-                      <Button
-                        onClick={() => removeEnvVar(index)}
-                        size="sm"
+                    {envVars.length > 0 && (
+                      <Button 
+                        onClick={clearAllEnvVars} 
+                        size="sm" 
                         variant="outline"
                         className="border-red-500/50 text-red-400 hover:bg-red-500/10"
                       >
-                        Remove
+                        Clear All ({envVars.length})
                       </Button>
-                    </div>
-                    ))}
+                    )}
                   </div>
+                  
+                  <Tabs value={envInputMode} onValueChange={(v) => setEnvInputMode(v as 'single' | 'bulk')} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 bg-white/10">
+                      <TabsTrigger value="single" className="data-[state=active]:bg-white data-[state=active]:text-black">
+                        Add One by One
+                      </TabsTrigger>
+                      <TabsTrigger value="bulk" className="data-[state=active]:bg-white data-[state=active]:text-black">
+                        Paste .env File
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="single" className="space-y-3 mt-4">
+                      <div className="space-y-2">
+                        {envVars.map((env, index) => (
+                          <div key={index} className="flex gap-2">
+                            <Input
+                              value={env.key}
+                              onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
+                              placeholder="VARIABLE_NAME"
+                              className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                            />
+                            <Input
+                              value={env.value}
+                              onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
+                              placeholder="variable_value"
+                              type="password"
+                              className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                            />
+                            <Button
+                              onClick={() => removeEnvVar(index)}
+                              size="sm"
+                              variant="outline"
+                              className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                            >
+                              Remove
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button onClick={addEnvVar} size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                        + Add Variable
+                      </Button>
+                    </TabsContent>
+                    
+                    <TabsContent value="bulk" className="space-y-3 mt-4">
+                      <Textarea
+                        value={bulkEnvText}
+                        onChange={(e) => setBulkEnvText(e.target.value)}
+                        placeholder={`Paste your .env file content here:
+
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=admin
+DB_PASSWORD=secret123
+
+# API Keys
+API_KEY=your-api-key
+JWT_SECRET=your-jwt-secret`}
+                        className="bg-white/10 border-white/20 text-white placeholder:text-white/40 font-mono text-sm min-h-[200px]"
+                      />
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={applyBulkEnv} 
+                          size="sm" 
+                          className="bg-white text-black hover:bg-gray-200"
+                          disabled={!bulkEnvText.trim()}
+                        >
+                          Apply Variables
+                        </Button>
+                        <Button 
+                          onClick={() => setBulkEnvText('')} 
+                          size="sm" 
+                          variant="outline"
+                          className="border-white/20 text-white hover:bg-white/10"
+                          disabled={!bulkEnvText.trim()}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      <p className="text-xs text-white/50">
+                        Supports standard .env format. Comments (#) and empty lines are ignored.
+                        Existing variables with the same key will be updated.
+                      </p>
+                    </TabsContent>
+                  </Tabs>
+                  
+                  {envVars.length > 0 && (
+                    <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-md">
+                      <p className="text-xs text-green-300">
+                        ✓ {envVars.length} environment variable{envVars.length > 1 ? 's' : ''} configured
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div>

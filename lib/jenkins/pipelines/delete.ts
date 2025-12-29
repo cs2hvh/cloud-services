@@ -75,6 +75,7 @@ spec:
     INGRESS_NAME = '${ingressName}'
     CERT_NAME = '${certName}'
     TLS_SECRET_NAME = '${tlsSecretName}'
+    ENV_SECRET_NAME = '${appName}-env-secret'
     DOMAIN = '${domain}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -92,6 +93,7 @@ spec:
               kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true
               kubectl delete certificate \${CERT_NAME} --namespace=default --ignore-not-found=true
               kubectl delete secret \${TLS_SECRET_NAME} --namespace=default --ignore-not-found=true
+              kubectl delete secret \${ENV_SECRET_NAME} --namespace=default --ignore-not-found=true
             """
           }
         }
@@ -110,6 +112,7 @@ spec:
               kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "⚠️ Ingress still exists" || echo "✅ Ingress deleted"
               kubectl get certificate \${CERT_NAME} --namespace=default 2>/dev/null && echo "⚠️ Certificate still exists" || echo "✅ Certificate deleted"
               kubectl get secret \${TLS_SECRET_NAME} --namespace=default 2>/dev/null && echo "⚠️ TLS Secret still exists" || echo "✅ TLS Secret deleted"
+              kubectl get secret \${ENV_SECRET_NAME} --namespace=default 2>/dev/null && echo "⚠️ Env Secret still exists" || echo "✅ Env Secret deleted"
               
               echo "Verification completed"
             """

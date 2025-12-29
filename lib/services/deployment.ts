@@ -140,13 +140,17 @@ export class DeploymentService {
         // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
         const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
         
+        // Get env vars to pass to Jenkins/Kubernetes
+        const envVarsToPass = config.env_vars || [];
+        
         await JenkinsService.createJob(
           config.name,
           jenkinsRepoUrl,
           config.branch,
           containerPort,
           config.framework,
-          config.size || 'small'
+          config.size || 'small',
+          envVarsToPass
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 
