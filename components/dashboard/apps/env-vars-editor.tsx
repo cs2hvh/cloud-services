@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Trash2,
   Plus,
+  Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -46,12 +47,47 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
   const [bulkText, setBulkText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
 
   // CRUD operations
   const addVar = () => setEnvVars([...envVars, { key: '', value: '', visible: false }]);
   const removeVar = (index: number) => setEnvVars(envVars.filter((_, i) => i !== index));
   const updateVar = (index: number, field: 'key' | 'value', val: string) => {
     setEnvVars(envVars.map((env, i) => i === index ? { ...env, [field]: val } : env));
+  };
+
+  // Handle paste - detect if user is pasting multiple env vars
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number, field: 'key' | 'value') => {
+    const pastedText = e.clipboardData.getData('text');
+    
+    // Check if pasted text contains multiple lines (likely .env content)
+    if (pastedText.includes('\n') && pastedText.includes('=')) {
+      e.preventDefault();
+      const parsed = parseEnvContent(pastedText);
+      if (parsed.length > 1) {
+        // Multiple env vars detected - merge with existing
+        const existingKeys = new Set(envVars.map(env => env.key));
+        const newVars = parsed.filter(p => !existingKeys.has(p.key));
+        const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+        setEnvVars([...updated, ...newVars]);
+        toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from paste`);
+        return;
+      }
+    }
+    
+    // Single KEY=VALUE paste - split it
+    if (field === 'key' && pastedText.includes('=') && !pastedText.includes('\n')) {
+      e.preventDefault();
+      const eqIdx = pastedText.indexOf('=');
+      const key = pastedText.substring(0, eqIdx).trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      let value = pastedText.substring(eqIdx + 1).trim();
+      // Remove quotes if present
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      setEnvVars(envVars.map((env, i) => i === index ? { ...env, key, value } : env));
+      toast.success('Parsed KEY=VALUE from paste');
+    }
   };
   const toggleVisibility = (index: number) => {
     setEnvVars(envVars.map((env, i) => i === index ? { ...env, visible: !env.visible } : env));
@@ -147,8 +183,111 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
     toast.success(`Added ${parsed.length} variable${parsed.length > 1 ? 's' : ''}`);
   };
 
+  // File drop handling
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.name.endsWith('.env') && !file.type.includes('text')) {
+      toast.error('Please drop a .env file or text file');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (!content) {
+        toast.error('Could not read file');
+        return;
+      }
+
+      const parsed = parseEnvContent(content);
+      if (parsed.length === 0) {
+        toast.error('No valid env variables found in file');
+        return;
+      }
+
+      const existingKeys = new Set(envVars.map(e => e.key));
+      const newVars = parsed.filter(p => !existingKeys.has(p.key));
+      const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+      setEnvVars([...updated, ...newVars]);
+      toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from ${file.name}`);
+    };
+    reader.onerror = () => toast.error('Failed to read file');
+    reader.readAsText(file);
+  };
+
+  const handleFileDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingFile(true);
+    }
+  };
+
+  const handleFileDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+  };
+
+  // File input handling
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (!content) {
+        toast.error('Could not read file');
+        return;
+      }
+
+      const parsed = parseEnvContent(content);
+      if (parsed.length === 0) {
+        toast.error('No valid env variables found in file');
+        return;
+      }
+
+      const existingKeys = new Set(envVars.map(e => e.key));
+      const newVars = parsed.filter(p => !existingKeys.has(p.key));
+      const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+      setEnvVars([...updated, ...newVars]);
+      toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from ${file.name}`);
+    };
+    reader.onerror = () => toast.error('Failed to read file');
+    reader.readAsText(file);
+    
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
   return (
-    <div className="space-y-4">
+    <div 
+      className="space-y-4"
+      onDrop={handleFileDrop}
+      onDragOver={handleFileDragOver}
+      onDragLeave={handleFileDragLeave}
+    >
+      {/* File Drop Overlay */}
+      {isDraggingFile && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center pointer-events-none">
+          <div className="border-2 border-dashed border-white rounded-xl p-12 bg-white/10 backdrop-blur-sm">
+            <div className="text-center">
+              <Upload className="h-12 w-12 text-white mx-auto mb-4" />
+              <p className="text-white text-lg font-medium">Drop your .env file here</p>
+              <p className="text-white/60 text-sm mt-1">We&apos;ll import all variables automatically</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <Label className="text-white">Environment Variables</Label>
         {envVars.length > 0 && (
@@ -156,6 +295,24 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
             <Trash2 className="h-3 w-3 mr-1" /> Clear All ({envVars.length})
           </Button>
         )}
+      </div>
+
+      {/* Drop Zone / Upload Area */}
+      <div className="relative">
+        <input
+          type="file"
+          accept=".env,.env.*,text/*"
+          onChange={handleFileInput}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          id="env-file-input"
+        />
+        <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center hover:border-white/40 hover:bg-white/5 transition-colors cursor-pointer">
+          <Upload className="h-6 w-6 text-white/50 mx-auto mb-2" />
+          <p className="text-white/70 text-sm">
+            <span className="text-white font-medium">Click to upload</span> or drag & drop your .env file
+          </p>
+          <p className="text-white/40 text-xs mt-1">Supports .env, .env.local, .env.production, etc.</p>
+        </div>
       </div>
 
       <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as 'single' | 'bulk')} className="w-full">
@@ -205,6 +362,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
                     <Input
                       value={env.key}
                       onChange={(e) => updateVar(env.idx, 'key', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
+                      onPaste={(e) => handlePaste(e, env.idx, 'key')}
                       placeholder="VARIABLE_NAME"
                       className={`bg-white/10 border-white/20 text-white placeholder:text-white/50 font-mono text-sm ${
                         !validation.valid ? 'border-red-500' : ''
@@ -225,6 +383,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
                     <Input
                       value={env.value}
                       onChange={(e) => updateVar(env.idx, 'value', e.target.value)}
+                      onPaste={(e) => handlePaste(e, env.idx, 'value')}
                       placeholder="value"
                       type={env.visible ? 'text' : 'password'}
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-10 font-mono text-sm"
@@ -255,12 +414,12 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
             )}
           </div>
 
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center flex-wrap">
             <Button onClick={addVar} size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
               <Plus className="h-3 w-3 mr-1" /> Add Variable
             </Button>
             {envVars.length > 0 && (
-              <span className="text-xs text-white/40">Drag to reorder • Click eye to show/hide</span>
+              <span className="text-xs text-white/40">Drag to reorder</span>
             )}
           </div>
         </TabsContent>
