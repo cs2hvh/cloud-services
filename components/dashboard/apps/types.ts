@@ -8,6 +8,7 @@ export interface App {
   deployment_url?: string;
   created_at: string;
   project_id?: string;
+  can_rollback?: boolean;
 }
 
 export interface BuildInfo {

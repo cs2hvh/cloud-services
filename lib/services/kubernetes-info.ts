@@ -30,11 +30,27 @@ export interface ContainerInfo {
   name: string;
   image: string;
   imageTag: string;
+  imageID?: string;
   ready: boolean;
   restartCount: number;
   startedAt: string;
   state: string;
   resources: ResourceSpec;
+}
+
+export interface ContainerImageInfo {
+  name: string;
+  image: string;
+  imageTag: string;
+  imageID?: string;
+}
+
+export interface AppImageSnapshot {
+  appName: string;
+  namespace: string;
+  deploymentImages: ContainerImageInfo[];
+  podImages: ContainerImageInfo[];
+  timestamp: string;
 }
 
 export interface ResourceSpec {
@@ -145,6 +161,126 @@ export class KubernetesInfoService {
   }
 
   /**
+   * Patch the Deployment container image for an app.
+   * Used for rollback (no build). Best-effort and returns structured status.
+   */
+  static async patchAppDeploymentImage(
+    appName: string,
+    image: string,
+    namespace = 'default'
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { apps } = this.getApis();
+      const deploymentName = `${appName}-app`;
+
+      const patchBody = {
+        spec: {
+          template: {
+            spec: {
+              containers: [{ name: deploymentName, image }],
+            },
+          },
+        },
+      };
+
+      await apps.patchNamespacedDeployment(
+        {
+          name: deploymentName,
+          namespace,
+          body: patchBody as any,
+          fieldManager: 'cloud-services',
+        },
+        {
+          headers: {
+            'Content-Type': 'application/strategic-merge-patch+json',
+          },
+        } as any
+      );
+
+      return { success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] patchAppDeploymentImage error:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Get container images from the Deployment spec (what Kubernetes is configured to run)
+   */
+  static async getDeploymentImages(appName: string, namespace = 'default'): Promise<ContainerImageInfo[]> {
+    try {
+      const { apps } = this.getApis();
+      const deploymentName = `${appName}-app`;
+
+      const response = await apps.readNamespacedDeployment({
+        name: deploymentName,
+        namespace,
+      });
+
+      const containers = response.spec?.template?.spec?.containers || [];
+      return containers.map((c) => ({
+        name: c.name || '',
+        image: c.image || '',
+        imageTag: this.parseImageTag(c.image || ''),
+        imageID: undefined,
+      }));
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] getDeploymentImages error:', errorMessage);
+      return [];
+    }
+  }
+
+  /**
+   * Snapshot both Deployment and Pod images (best-effort)
+   */
+  static async getAppImageSnapshot(appName: string, namespace = 'default'): Promise<AppImageSnapshot> {
+    const [deploymentImages, podInfo] = await Promise.all([
+      this.getDeploymentImages(appName, namespace),
+      this.getPodInfo(appName, namespace),
+    ]);
+
+    const podImages: ContainerImageInfo[] = (podInfo?.containers || []).map((c) => ({
+      name: c.name,
+      image: c.image,
+      imageTag: c.imageTag,
+      imageID: c.imageID,
+    }));
+
+    return {
+      appName,
+      namespace,
+      deploymentImages,
+      podImages,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Log current images to verify cluster connectivity and current rollout state.
+   * This is intentionally best-effort and should never throw.
+   */
+  static async logAppImages(appName: string, context: string, namespace = 'default'): Promise<void> {
+    try {
+      const snap = await this.getAppImageSnapshot(appName, namespace);
+      const dep = snap.deploymentImages.length
+        ? snap.deploymentImages
+        : [{ name: '(none)', image: '(not found)', imageTag: '(n/a)', imageID: '(n/a)' }];
+      const pod = snap.podImages.length
+        ? snap.podImages
+        : [{ name: '(none)', image: '(not running)', imageTag: '(n/a)', imageID: '(n/a)' }];
+
+      console.log(`[K8S Images] ${context} app=${appName} ns=${namespace} @ ${snap.timestamp}`);
+      console.log(`[K8S Images] Deployment containers:`, dep);
+      console.log(`[K8S Images] Pod containers:`, pod);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[K8S Images] ${context} app=${appName} failed:`, errorMessage);
+    }
+  }
+
+  /**
    * Get container state as string
    */
   private static getContainerState(state: V1ContainerState | undefined): string {
@@ -192,6 +328,7 @@ export class KubernetesInfoService {
           name: containerStatus?.name || containerSpec?.name || '',
           image: containerStatus?.image || containerSpec?.image || '',
           imageTag: this.parseImageTag(containerStatus?.image || ''),
+          imageID: containerStatus?.imageID,
           ready: containerStatus?.ready || false,
           restartCount: containerStatus?.restartCount || 0,
           startedAt: containerStatus?.state?.running?.startedAt?.toISOString() || '',

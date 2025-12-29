@@ -4,6 +4,7 @@
  */
 import { JenkinsService } from "./jenkins";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { KubernetesInfoService } from "./kubernetes-info";
 
 export interface BuildPollConfig {
   appId: string;
@@ -135,6 +136,12 @@ export class BuildPollingService {
     await Platform_Apps.update(appId, { 
       status: buildStatus.status as "running" | "failed" 
     });
+
+    // Best-effort: log the currently running Kubernetes images to verify cluster connectivity
+    if (buildStatus.status === 'running') {
+      KubernetesInfoService.logAppImages(appName, `post-build-success build=${buildStatus.result || 'unknown'}`)
+        .catch(() => undefined);
+    }
   }
 
   /**

@@ -58,11 +58,13 @@ export class JenkinsService {
    */
   static async createJob(
     appName: string,
+    appId: string,
     githubUrl: string,
     branch: string,
     port: number,
     framework?: string,
-    size: string = 'small'
+    size: string = 'small',
+    deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual'
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -74,7 +76,7 @@ export class JenkinsService {
     console.log(`[JenkinsService] Framework: ${framework || 'default'}, Branch: ${branch}, Port: ${port}`);
 
     // Select pipeline based on framework
-    const pipeline = JenkinsService.selectPipeline(appName, githubUrl, branch, port.toString(), framework, size);
+    const pipeline = JenkinsService.selectPipeline(appName, appId, githubUrl, branch, port.toString(), framework, size, deployTrigger);
 
     // Create the job
     try {
@@ -368,13 +370,16 @@ export class JenkinsService {
    */
   private static selectPipeline(
     appName: string,
+    appId: string,
     githubUrl: string,
     branch: string,
     port: string,
     framework?: string,
-    size: string = 'small'
+    size: string = 'small',
+    deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual'
   ): string {
     const fw = framework?.toLowerCase();
+    const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
 
     switch (fw) {
       case 'simple-test':
@@ -385,19 +390,19 @@ export class JenkinsService {
       case 'express':
       case 'express.js':
         console.log(`[JenkinsService] Using EXPRESS pipeline (auto-Dockerfile)`);
-        return createExpressPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
+        return createExpressPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger);
 
       case 'python':
       case 'django':
       case 'flask':
       case 'fastapi':
         console.log(`[JenkinsService] Using PYTHON pipeline`);
-        return createPythonPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
+        return createPythonPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger);
 
       case 'nextjs':
       case 'next.js':
         console.log(`[JenkinsService] Using NEXT.JS pipeline (auto-Dockerfile with standalone support)`);
-        return createNextJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
+        return createNextJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger);
 
       case 'nodejs':
       case 'node.js':
@@ -407,7 +412,7 @@ export class JenkinsService {
       case 'vue.js':
       default:
         console.log(`[JenkinsService] Using NODE.JS pipeline (requires Dockerfile)`);
-        return createNodeJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN);
+        return createNodeJsPipeline(appName, githubUrl, branch, port, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger);
     }
   }
 
@@ -417,11 +422,13 @@ export class JenkinsService {
    */
   static async updateJobConfig(
     appName: string,
+    appId: string,
     githubUrl: string,
     branch: string,
     port: number,
     framework?: string,
-    size: string = 'small'
+    size: string = 'small',
+    deployTrigger: 'manual' | 'webhook' | 'rollback' = 'webhook'
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -434,12 +441,14 @@ export class JenkinsService {
 
     // Generate new pipeline with updated config
     const pipeline = JenkinsService.selectPipeline(
-      appName, 
+      appName,
+      appId,
       githubUrl, 
       branch, 
       port.toString(), 
       framework, 
-      size
+      size,
+      deployTrigger
     );
 
     try {

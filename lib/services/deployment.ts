@@ -142,11 +142,13 @@ export class DeploymentService {
         
         await JenkinsService.createJob(
           config.name,
+          app.id,
           jenkinsRepoUrl,
           config.branch,
           containerPort,
           config.framework,
-          config.size || 'small'
+          config.size || 'small',
+          'manual'
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 

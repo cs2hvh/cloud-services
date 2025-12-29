@@ -5,6 +5,9 @@ export function createNextJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  appId: string = '',
+  webhookBaseUrl: string = '',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -72,7 +75,12 @@ pipeline {
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
-    DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    PLATFORM_APP_ID = '${appId}'
+    WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    DEPLOY_TRIGGER = '${deployTrigger}'
+
+    DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
+    DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
     KUBECONFIG = credentials('kubeconfig_file')
   }
 
@@ -151,7 +159,9 @@ EOF
               /kaniko/executor \
                 --context=$WORKSPACE \
                 --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE
+                --destination=$DOCKER_IMAGE_VERSION \
+                --destination=$DOCKER_IMAGE_LATEST \
+                --digest-file=image-digest.txt
             '''
           }
         }
@@ -184,7 +194,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE}
+        image: \${DOCKER_IMAGE_VERSION}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
@@ -301,18 +311,100 @@ INGRESS_EOF
 
   post {
     success {
-      sh '''
-        echo "PIPELINE: Success"
-        echo "Deployment completed successfully for $APP_NAME"
-        echo "Service URL: https://$DOMAIN"
-      '''
+      container('git') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          withCredentials([string(credentialsId: 'deployment_record_secret', variable: 'DEPLOYMENT_RECORD_SECRET')]) {
+            sh '''
+              echo "PIPELINE: Success"
+              echo "Deployment completed successfully for $APP_NAME"
+              echo "Service URL: https://$DOMAIN"
+
+              if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+                echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+                exit 0
+              fi
+
+              if [ -z "$DEPLOYMENT_RECORD_SECRET" ]; then
+                echo "WARN: DEPLOYMENT_RECORD_SECRET not available; skipping deployment record"
+                exit 0
+              fi
+
+              DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+              IMAGE_DIGEST=""
+              if [ -f image-digest.txt ]; then IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\n'); fi
+
+              PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+              if command -v curl >/dev/null 2>&1; then
+                curl -sS -X POST "$DEPLOYMENT_RECORD_URL" \
+                  -H "content-type: application/json" \
+                  -H "x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
+                  --data "$PAYLOAD" || true
+              elif command -v wget >/dev/null 2>&1; then
+                wget -qO- \
+                  --header="content-type: application/json" \
+                  --header="x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
+                  --post-data="$PAYLOAD" \
+                  "$DEPLOYMENT_RECORD_URL" || true
+              else
+                echo "WARN: curl/wget not available; skipping deployment record"
+              fi
+            '''
+          }
+        }
+      }
     }
     
     failure {
-      sh '''
-        echo "PIPELINE: Failure"
-        echo "Deployment failed for $APP_NAME"
-      '''
+      container('git') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          withCredentials([string(credentialsId: 'deployment_record_secret', variable: 'DEPLOYMENT_RECORD_SECRET')]) {
+            sh '''
+              echo "PIPELINE: Failure"
+              echo "Deployment failed for $APP_NAME"
+
+              if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+                echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+                exit 0
+              fi
+
+              if [ -z "$DEPLOYMENT_RECORD_SECRET" ]; then
+                echo "WARN: DEPLOYMENT_RECORD_SECRET not available; skipping deployment record"
+                exit 0
+              fi
+
+              DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+              IMAGE_DIGEST=""
+              if [ -f image-digest.txt ]; then IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\n'); fi
+
+              PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+              if command -v curl >/dev/null 2>&1; then
+                curl -sS -X POST "$DEPLOYMENT_RECORD_URL" \
+                  -H "content-type: application/json" \
+                  -H "x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
+                  --data "$PAYLOAD" || true
+              elif command -v wget >/dev/null 2>&1; then
+                wget -qO- \
+                  --header="content-type: application/json" \
+                  --header="x-deployment-record-secret: $DEPLOYMENT_RECORD_SECRET" \
+                  --post-data="$PAYLOAD" \
+                  "$DEPLOYMENT_RECORD_URL" || true
+              else
+                echo "WARN: curl/wget not available; skipping deployment record"
+              fi
+            '''
+          }
+        }
+      }
     }
   }
 }

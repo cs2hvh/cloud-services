@@ -2817,6 +2817,112 @@ export const Platform_Apps = {
 };
 
 // ============================================
+// Platform App Deployments Queries (History)
+// ============================================
+export const Platform_App_Deployments = {
+  create: async (payload: {
+    app_id: string;
+    build_number?: number | null;
+    commit_sha?: string | null;
+    image_tag?: string | null;
+    image_digest?: string | null;
+    status: 'success' | 'failed';
+    trigger: 'manual' | 'webhook' | 'rollback';
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .insert({
+          app_id: payload.app_id,
+          build_number: payload.build_number ?? null,
+          commit_sha: payload.commit_sha ?? null,
+          image_tag: payload.image_tag ?? null,
+          image_digest: payload.image_digest ?? null,
+          status: payload.status,
+          trigger: payload.trigger,
+        })
+        .select('*')
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  list_by_app: async (app_id: string, limit = 20) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error(`[Platform_App_Deployments] Error listing deployments: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_App_Deployments] Error listing deployments: ${err}`);
+      return [];
+    }
+  },
+
+  get_latest_successful: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || null };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_previous_successful: async (app_id: string, exclude_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+      let query = supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (exclude_deployment_id) {
+        query = query.neq('id', exclude_deployment_id);
+      }
+
+      const { data, error } = await query;
+      if (error) return { success: false, error: error.message };
+
+      const previous = (data || [])[0] || null;
+      return { success: true, data: previous };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  set_active_for_app: async (app_id: string, deployment_id: string | null) => {
+    return Platform_Apps.update(app_id, { active_deployment_id: deployment_id });
+  },
+};
+
+// ============================================
 // Platform App Webhooks Queries
 // ============================================
 export const Platform_App_Webhooks = {

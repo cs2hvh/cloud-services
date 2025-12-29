@@ -103,3 +103,9 @@ export const updateEnvVarsSchema = z.object({
 });
 
 export type UpdateEnvVarsPayload = z.infer<typeof updateEnvVarsSchema>;
+
+export const rollbackPlatformAppSchema = z.object({
+  app_id: z.string().uuid("App ID must be a valid UUID"),
+});
+
+export type RollbackPlatformAppPayload = z.infer<typeof rollbackPlatformAppSchema>;

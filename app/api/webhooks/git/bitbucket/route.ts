@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { BitbucketWebhookHandler } from '@/lib/webhooks/bitbucket';
 import { Platform_Apps, Platform_App_Webhooks } from '@/lib/supabase/queries';
 import { JenkinsService } from '@/lib/services/jenkins';
+import { BuildPollingService } from '@/lib/services/build-polling';
+import { KubernetesInfoService } from '@/lib/services/kubernetes-info';
 import type { WebhookResult } from '@/lib/webhooks/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult>> {
@@ -104,6 +106,10 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
 
     console.log(`[Bitbucket Webhook] Found app: ${app.name} (${app.id})`);
 
+    // Best-effort: log current Kubernetes images (connectivity verification)
+    KubernetesInfoService.logAppImages(app.name, `bitbucket-webhook-pre-build delivery=${deliveryId || 'n/a'}`)
+      .catch(() => undefined);
+
     // 8. Validate webhook signature (best-effort)
     const validSignature = BitbucketWebhookHandler.validateSignature(
       rawBody,
@@ -181,6 +187,14 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       last_deploy_trigger: 'webhook',
       last_deploy_commit: payload.commit.sha,
     });
+
+    // Start background polling so we can log the NEW Kubernetes image after rollout.
+    // This runs async and does not slow down the webhook response.
+    BuildPollingService.startPolling({
+      appId: app.id,
+      appName: app.name,
+      buildNumber,
+    }).catch(() => undefined);
 
     // 13. Record successful trigger
     await Platform_App_Webhooks.record_trigger(app.webhook_id);

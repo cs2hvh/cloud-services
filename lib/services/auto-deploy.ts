@@ -13,6 +13,7 @@ import { JenkinsService } from './jenkins';
 import { BuildPollingService } from './build-polling';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
+import { KubernetesInfoService } from './kubernetes-info';
 
 export interface AutoDeployConfig {
   appId: string;
@@ -53,6 +54,10 @@ export class AutoDeployService {
     console.log(`[AutoDeploy] Provider: ${gitProvider}, Branch: ${branch}, Commit: ${commitSha?.substring(0, 7) || 'unknown'}`);
 
     try {
+      // Best-effort: log current Kubernetes images (connectivity verification)
+      KubernetesInfoService.logAppImages(appName, `auto-deploy-pre-build delivery=${deliveryId || 'n/a'}`)
+        .catch(() => undefined);
+
       // Step 1: Check for duplicate delivery (idempotency)
       if (deliveryId) {
         const isDuplicate = this.checkDuplicateDelivery(deliveryId);
@@ -88,11 +93,13 @@ export class AutoDeployService {
       try {
         await JenkinsService.updateJobConfig(
           appName,
+          appId,
           authenticatedUrl,
           branch,
           port,
           framework,
-          size || 'small'
+          size || 'small',
+          'webhook'
         );
         console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
       } catch (updateError: unknown) {

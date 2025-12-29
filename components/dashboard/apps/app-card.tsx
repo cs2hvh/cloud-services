@@ -34,6 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
+import { toast } from 'sonner';
 
 interface AppCardProps {
   app: App;
@@ -112,6 +113,7 @@ export function AppCard({
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
+  const [rollingBack, setRollingBack] = useState(false);
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   
@@ -140,6 +142,37 @@ export function AppCard({
     navigator.clipboard.writeText(text);
     setCopiedField(field);
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const canRollback = !!app.can_rollback;
+  const rollbackDisabled = isAppDeleting || rollingBack || !canRollback;
+
+  const handleRollback = async () => {
+    if (rollbackDisabled) return;
+
+    setRollingBack(true);
+    try {
+      const res = await fetch('/api/services/platform-apps/rollback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(json?.error || 'Rollback failed');
+      }
+
+      toast.success('Rollback started');
+      if (isExpanded && activeTab === 'metrics') {
+        refetchDetails();
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Rollback failed';
+      toast.error(msg);
+    } finally {
+      setRollingBack(false);
+    }
   };
 
   return (
@@ -256,6 +289,22 @@ export function AppCard({
             >
               <Terminal className="w-4 h-4" />
             </Button>
+
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={rollbackDisabled}
+              onClick={handleRollback}
+              className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
+              title={canRollback ? 'Rollback to previous successful deployment' : 'No previous successful deployment available'}
+            >
+              {rollingBack ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <RotateCcw className="w-4 h-4" />
+              )}
+            </Button>
+
             <Button
               size="sm"
               variant="ghost"
