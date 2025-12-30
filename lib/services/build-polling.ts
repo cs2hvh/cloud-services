@@ -4,7 +4,6 @@
  */
 import { JenkinsService } from "./jenkins";
 import { Platform_Apps } from "@/lib/supabase/queries";
-import { KubernetesInfoService } from "./kubernetes-info";
 import { PrometheusService } from "./prometheus";
 
 export interface BuildPollConfig {

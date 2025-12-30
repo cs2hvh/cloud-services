@@ -114,7 +114,12 @@ export class JenkinsService {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     try {
-      await jenkins.job.build(jobName);
+      // Use buildWithParameters for jobs that have parameter definitions
+      // Pass empty COMMIT_SHA to use branch HEAD (default behavior)
+      await jenkins.job.build({
+        name: jobName,
+        parameters: { COMMIT_SHA: '' }
+      });
       console.log(`[JenkinsService] ✅ Build #1 triggered for: ${jobName}`);
       console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/`);
     } catch (error: unknown) {

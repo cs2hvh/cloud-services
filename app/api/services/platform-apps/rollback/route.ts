@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "App not found" }, { status: 404 });
     }
 
-    const app = appResult.data as any;
+    const app = appResult.data as { user_id: string; active_deployment_id?: string | null; name: string };
     if (app.user_id !== auth.user!.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }

@@ -164,7 +164,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Finally, fall back to session.provider_token only if this session is actually GitLab-based
-      if (!accessToken && session?.provider_token && (session.user as any)?.app_metadata?.provider === 'gitlab') {
+      if (!accessToken && session?.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === 'gitlab') {
         console.log("got session success....120");
         accessToken = session.provider_token;
         console.log('[platform-apps/create] Found GitLab token in session.provider_token');
@@ -216,7 +216,7 @@ export async function POST(req: NextRequest) {
       }
 
       // Finally, fall back to session.provider_token only if this session is actually Bitbucket-based
-      if (!accessToken && session?.provider_token && (session.user as any)?.app_metadata?.provider === 'bitbucket') {
+      if (!accessToken && session?.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === 'bitbucket') {
         accessToken = session.provider_token;
         console.log('[platform-apps/create] Found Bitbucket token in session.provider_token');
       }
@@ -299,7 +299,7 @@ export async function POST(req: NextRequest) {
               if (identity?.identity_data?.provider_token) {
                 webhookToken = identity.identity_data.provider_token;
                 console.log('[platform-apps/create] Using identity_data.provider_token as webhook token for', appData.git_provider);
-              } else if (session.provider_token && (session.user as any)?.app_metadata?.provider === appData.git_provider) {
+              } else if (session.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === appData.git_provider) {
                 webhookToken = session.provider_token;
                 console.log('[platform-apps/create] Using session.provider_token as webhook token for', appData.git_provider);
               }

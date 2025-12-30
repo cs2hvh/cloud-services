@@ -24,7 +24,7 @@ if (loadedFrom === 'NONE') {
   try {
     kubectl.loadFromDefault();
     loadedFrom = 'DEFAULT';
-  } catch (error) {
+  } catch {
     console.warn("Failed to load Kubernetes config from defaults (KUBECONFIG/~/.kube/config/in-cluster). Kubernetes operations will fail.");
   }
 }

@@ -7,10 +7,10 @@ export function createNextJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
-  envVars: EnvVar[] = [],
   appId: string = '',
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
+  envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;

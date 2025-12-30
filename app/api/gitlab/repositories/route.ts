@@ -56,9 +56,10 @@ export async function GET() {
 
     // Get GitLab identifiers for fallback to public repos
     // Prefer stable identifiers (numeric id or real username) over display name
-    const gitlabUserId = (gitlabIdentity.identity_data as any)?.id;
-    const gitlabUsername = (gitlabIdentity.identity_data as any)?.username
-      || (gitlabIdentity.identity_data as any)?.preferred_username
+    const identityData = gitlabIdentity.identity_data as { id?: string; username?: string; preferred_username?: string } | undefined;
+    const gitlabUserId = identityData?.id;
+    const gitlabUsername = identityData?.username
+      || identityData?.preferred_username
       || undefined; // avoid using full name with spaces as API username
 
     // Try to get a valid access token from various sources

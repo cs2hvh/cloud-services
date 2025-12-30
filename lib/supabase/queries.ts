@@ -2654,6 +2654,45 @@ export const ObjectSpaces = {
 // Platform Apps query helpers
 // Note: Types will be available after running supabase gen types
 export const Platform_Apps = {
+  // Count apps owned by a user (for limit checks)
+  count_by_owner: async (user_id: string): Promise<number> => {
+    try {
+      const supabase = await createServiceClient();
+      const { count, error } = await supabase
+        .from("platform_apps")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user_id);
+      if (error) {
+        console.error(`[Platform_Apps] Error counting apps: ${error.message}`);
+        return 0;
+      }
+      return count || 0;
+    } catch (err) {
+      console.error(`[Platform_Apps] Error counting apps: ${err}`);
+      return 0;
+    }
+  },
+
+  // Check if app name already exists (globally unique for DNS/Jenkins)
+  check_name_exists: async (name: string): Promise<boolean> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("id")
+        .eq("name", name)
+        .maybeSingle();
+      if (error) {
+        console.error(`[Platform_Apps] Error checking name: ${error.message}`);
+        return false; // Fail open - let create handle the error
+      }
+      return data !== null;
+    } catch (err) {
+      console.error(`[Platform_Apps] Error checking name: ${err}`);
+      return false;
+    }
+  },
+
   create: async (payload: Record<string, unknown>) => {
     try {
       const supabase = await createServiceClient();

@@ -89,15 +89,15 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     console.log(`[GitHub Webhook] Push to ${payload.repository.full_name}:${payload.branch}`);
     console.log(`[GitHub Webhook] Commit: ${payload.commit.sha.substring(0, 7)} - ${payload.commit.message.split('\n')[0]}`);
 
-    // 8. Find app by repository ID and branch (includes webhook info)
-    // This handles multiple apps from same repo by matching on branch
-    const app = await Platform_App_Webhooks.find_by_repository(
+    // 8. Find ALL apps by repository ID and branch (includes webhook info)
+    // This handles multiple apps from same repo - we'll validate signature against each
+    const allApps = await Platform_App_Webhooks.find_all_by_repository(
       payload.repository.id,
       'github',
       payload.branch  // Pass the branch to filter apps
     );
 
-    if (!app) {
+    if (!allApps || allApps.length === 0) {
       console.warn(`[GitHub Webhook] No app found for repository: ${payload.repository.id} branch: ${payload.branch}`);
       return NextResponse.json({
         success: false,
@@ -106,14 +106,26 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       }, { status: 404 });
     }
 
-    console.log(`[GitHub Webhook] Found app: ${app.name} (${app.id}) for branch: ${payload.branch}`);
+    // 9. Find the app whose webhook secret matches the signature
+    // This is necessary when multiple apps share the same repo but have different webhook secrets
+    let app = null;
+    for (const candidate of allApps) {
+      if (candidate.webhook_secret && GitHubWebhookHandler.validateSignature(rawBody, signature, candidate.webhook_secret)) {
+        app = candidate;
+        console.log(`[GitHub Webhook] ✅ Signature matched for app: ${candidate.name} (${candidate.id})`);
+        break;
+      }
+    }
 
-    // 9. Validate webhook signature (HMAC-SHA256)
-    if (!GitHubWebhookHandler.validateSignature(rawBody, signature, app.webhook_secret)) {
-      console.error(`[GitHub Webhook] ❌ Invalid signature for app: ${app.name}`);
+    if (!app) {
+      // Log which apps were tried
+      const appNames = allApps.map(a => a.name).join(', ');
+      console.error(`[GitHub Webhook] ❌ Invalid signature - tried apps: ${appNames}`);
       
-      // Record failed attempt
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, 'Invalid signature');
+      // Record failed attempt on first app (for tracking)
+      if (allApps[0]?.webhook_id) {
+        await Platform_App_Webhooks.record_trigger(allApps[0].webhook_id, 'Invalid signature');
+      }
       
       return NextResponse.json({
         success: false,
@@ -121,6 +133,8 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
         message: 'Invalid webhook signature',
       }, { status: 401 });
     }
+
+    console.log(`[GitHub Webhook] Found app: ${app.name} (${app.id}) for branch: ${payload.branch}`);
 
     // 10. Check if auto-deploy is enabled
     if (!app.auto_deploy_enabled) {

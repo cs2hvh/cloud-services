@@ -26,7 +26,7 @@ export async function GET() {
     const apps = await Platform_Apps.list_by_owner(auth.user!.id);
 
     const appsWithRollback = await Promise.all(
-      (apps || []).map(async (app: any) => {
+      (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
         const prev = await Platform_App_Deployments.get_previous_successful(
           app.id,
           app.active_deployment_id ?? null

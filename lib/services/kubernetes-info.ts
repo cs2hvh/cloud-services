@@ -188,12 +188,11 @@ export class KubernetesInfoService {
           namespace,
           body: jsonPatch,
           fieldManager: 'cloud-services',
-        },
-        {
+          // @ts-expect-error - headers option is valid but not in type definition
           headers: {
             'Content-Type': 'application/json-patch+json',
           },
-        } as any
+        }
       );
 
       console.log(`[KubernetesInfoService] ✅ Patched deployment ${deploymentName} to image: ${image}`);

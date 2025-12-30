@@ -340,7 +340,7 @@ export async function POST(request: Request) {
     }
 
     // Source 3: Session provider_token, but only if this session actually belongs to this provider
-    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === provider) {
+    if (!accessToken && session.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === provider) {
       accessToken = session.provider_token;
       console.log(`[Detect Framework] Found token in session.provider_token for ${provider}`);
     }

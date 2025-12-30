@@ -87,7 +87,7 @@ export async function GET(request: Request) {
     }
 
     // Source 3: Session provider_token, but only if this session actually belongs to Bitbucket
-    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'bitbucket') {
+    if (!accessToken && session.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === 'bitbucket') {
       accessToken = session.provider_token;
       tokenSource = 'session.provider_token';
       console.log('[Bitbucket Branches] Found token in session.provider_token for Bitbucket');
