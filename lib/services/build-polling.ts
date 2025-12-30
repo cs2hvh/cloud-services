@@ -5,6 +5,7 @@
 import { JenkinsService } from "./jenkins";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { KubernetesInfoService } from "./kubernetes-info";
+import { PrometheusService } from "./prometheus";
 
 export interface BuildPollConfig {
   appId: string;
@@ -28,6 +29,8 @@ export class BuildPollingService {
   private static readonly DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
   private static readonly DEFAULT_STARTUP_WAIT = 5000; // 5 seconds
   private static readonly DEFAULT_BUILD_START_TIMEOUT = 60000; // 1 minute
+  private static readonly HEALTH_CHECK_MAX_ATTEMPTS = 6; // 60 seconds total
+  private static readonly HEALTH_CHECK_INTERVAL = 10000; // 10 seconds
 
   /**
    * Start polling for build status
@@ -124,6 +127,7 @@ export class BuildPollingService {
 
   /**
    * Handle build completion
+   * If build succeeded, verify the app is actually healthy before marking as 'running'
    */
   private static async handleBuildComplete(
     appId: string,
@@ -133,19 +137,70 @@ export class BuildPollingService {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
 
-    await Platform_Apps.update(appId, { 
-      status: buildStatus.status as "running" | "failed" 
-    });
-
-    // Best-effort: log the currently running Kubernetes images to verify cluster connectivity
-    if (buildStatus.status === 'running') {
-      // Wait a bit for the pod to start and pull the image before logging
-      // This helps show actual imageID instead of undefined
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      
-      KubernetesInfoService.logAppImages(appName, `post-build-success build=${buildStatus.result || 'unknown'}`)
-        .catch(() => undefined);
+    // If build failed, mark as failed immediately
+    if (buildStatus.status === 'failed' || buildStatus.result !== 'SUCCESS') {
+      await Platform_Apps.update(appId, { status: "failed" });
+      return;
     }
+
+    // Build succeeded - now verify the app is actually healthy
+    console.log(`[BuildPolling] 🔍 Verifying app health for ${appName}...`);
+    
+    const isHealthy = await this.waitForHealthy(appName);
+    
+    if (isHealthy) {
+      console.log(`[BuildPolling] ✅ App ${appName} is healthy and running`);
+      await Platform_Apps.update(appId, { status: "running" });
+    } else {
+      console.log(`[BuildPolling] ❌ App ${appName} failed health check - pods not ready`);
+      await Platform_Apps.update(appId, { status: "failed" });
+    }
+  }
+
+  /**
+   * Wait for app to become healthy (pods running and ready)
+   * Polls health status for up to 60 seconds
+   */
+  private static async waitForHealthy(appName: string): Promise<boolean> {
+    for (let attempt = 1; attempt <= this.HEALTH_CHECK_MAX_ATTEMPTS; attempt++) {
+      try {
+        const health = await PrometheusService.getAppHealth(appName);
+        
+        console.log(`[BuildPolling] Health check ${attempt}/${this.HEALTH_CHECK_MAX_ATTEMPTS}: ${health.status} - ${health.message}`);
+        
+        if (health.status === 'healthy') {
+          return true;
+        }
+        
+        // If pods exist but not ready, keep waiting
+        if (health.podsTotal > 0 && attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
+          continue;
+        }
+        
+        // If no pods found after multiple attempts, consider it failed
+        if (health.podsTotal === 0 && attempt >= 3) {
+          console.log(`[BuildPolling] No pods found after ${attempt} attempts`);
+          return false;
+        }
+        
+        // Wait before next attempt
+        if (attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
+        }
+      } catch (error) {
+        console.error(`[BuildPolling] Health check error (attempt ${attempt}):`, error);
+        // On error, wait and retry (Prometheus might not be ready)
+        if (attempt < this.HEALTH_CHECK_MAX_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, this.HEALTH_CHECK_INTERVAL));
+        }
+      }
+    }
+    
+    // If we couldn't verify health, default to marking as running
+    // (better UX than failing a successful build due to monitoring issues)
+    console.log(`[BuildPolling] ⚠️ Could not verify health, assuming running`);
+    return true;
   }
 
   /**

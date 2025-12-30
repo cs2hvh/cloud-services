@@ -54,31 +54,37 @@ export async function GET() {
     }
 
     // Try to get a valid access token from various sources
+    // IMPORTANT: Bitbucket tokens expire in ~1-2 hours, so we MUST prioritize the database token
+    // which handles auto-refresh. Session tokens may be stale/expired!
     let accessToken = null;
     let tokenSource = 'none';
-
-    // Source 1: Database stored token with automatic refresh (most reliable for Bitbucket!)
-    // IMPORTANT: Bitbucket tokens expire in ~1 hour, so we need to check and refresh them
+    
+    // Source 1 (PRIORITY): Database stored token with automatic refresh
+    // This is the MOST RELIABLE source because it handles token expiry and refresh
     console.log('[Bitbucket Repos] Checking bitbucket_tokens table for user:', user.id);
     const storedToken = await getValidBitbucketToken(user.id);
     if (storedToken) {
       accessToken = storedToken;
       tokenSource = 'bitbucket_tokens_table';
-      console.log('[Bitbucket Repos] Found valid token in bitbucket_tokens table (with auto-refresh)');
+      console.log('[Bitbucket Repos] Using valid token from bitbucket_tokens table (with auto-refresh)');
+    }
+    // Source 2: Session provider_token (ONLY as fallback - may be expired!)
+    // This is only reliable immediately after OAuth callback
+    else if (session.provider_token) {
+      accessToken = session.provider_token;
+      tokenSource = 'session.provider_token';
+      console.log('[Bitbucket Repos] Fallback: Using session.provider_token (may be expired)');
     }
 
     // Source 2: Identity data provider_token (usually not populated by Supabase)
     if (!accessToken && bitbucketIdentity.identity_data?.provider_token) {
+    // Source 3: Identity data provider_token (usually not populated by Supabase)
+    else if (bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
       tokenSource = 'identity_data.provider_token';
-      console.log('[Bitbucket Repos] Found token in identity_data.provider_token');
-    }
-
-    // Source 3: Session provider_token, but only if this session actually belongs to Bitbucket
-    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'bitbucket') {
-      accessToken = session.provider_token;
-      tokenSource = 'session.provider_token';
-      console.log('[Bitbucket Repos] Found token in session.provider_token for Bitbucket');
+      console.log('[Bitbucket Repos] Fallback: Using identity_data.provider_token');
+    } else {
+      console.log('[Bitbucket Repos] No valid token found in any source');
     }
 
     if (!accessToken) {

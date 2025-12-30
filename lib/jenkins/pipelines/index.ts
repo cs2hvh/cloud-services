@@ -6,9 +6,26 @@ import { createNodeJsPipeline } from './nodejs';
 import { createExpressPipeline } from './express';
 import { createPythonPipeline } from './python';
 import { createNextJsPipeline } from './nextjs';
+import { createNuxtJsPipeline } from './nuxtjs';
 import { createDeletePipeline } from './delete';
+import { createViteReactPipeline } from './vite-react';
+import { createVuePipeline } from './vue';
+import { createAngularPipeline } from './angular';
+import { createSvelteKitPipeline } from './sveltekit';
 
-export { createSimpleTestPipeline, createNodeJsPipeline, createExpressPipeline, createPythonPipeline, createNextJsPipeline, createDeletePipeline };
+export { 
+  createSimpleTestPipeline, 
+  createNodeJsPipeline, 
+  createExpressPipeline, 
+  createPythonPipeline, 
+  createNextJsPipeline, 
+  createNuxtJsPipeline,
+  createDeletePipeline,
+  createViteReactPipeline,
+  createVuePipeline,
+  createAngularPipeline,
+  createSvelteKitPipeline,
+};
 
 /**
  * Pipeline type constants
@@ -19,7 +36,12 @@ export const PipelineType = {
   EXPRESS: 'express',
   PYTHON: 'python',
   NEXTJS: 'nextjs',
+  NUXTJS: 'nuxtjs',
   DELETE: 'delete',
+  VITE_REACT: 'vite-react',
+  VUE: 'vue',
+  ANGULAR: 'angular',
+  SVELTEKIT: 'sveltekit',
 } as const;
 
 export type PipelineTypeValue = typeof PipelineType[keyof typeof PipelineType];
@@ -39,8 +61,18 @@ export function getPipelineGenerator(type: PipelineTypeValue) {
       return createPythonPipeline;
     case PipelineType.NEXTJS:
       return createNextJsPipeline;
+    case PipelineType.NUXTJS:
+      return createNuxtJsPipeline;
     case PipelineType.DELETE:
       return createDeletePipeline;
+    case PipelineType.VITE_REACT:
+      return createViteReactPipeline;
+    case PipelineType.VUE:
+      return createVuePipeline;
+    case PipelineType.ANGULAR:
+      return createAngularPipeline;
+    case PipelineType.SVELTEKIT:
+      return createSvelteKitPipeline;
     default:
       throw new Error(`Unknown pipeline type: ${type}`);
   }

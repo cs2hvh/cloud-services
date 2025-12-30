@@ -1,6 +1,7 @@
 /**
- * Python Pipeline - Django, Flask, FastAPI
- * Auto-creates Dockerfile, builds with Kaniko
+ * SvelteKit Pipeline - SvelteKit with Node adapter
+ * Auto-creates Dockerfile, builds with Kaniko, deploys to Kubernetes
+ * SvelteKit with adapter-node produces a Node.js server (not static files)
  * Uses Kubernetes Secrets for environment variables (secure)
  * 
  * DEPLOYMENT CONTRACT:
@@ -10,22 +11,26 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 
-export function createPythonPipeline(
+export function createSvelteKitPipeline(
   name: string,
   gitUrl: string,
   branch: string,
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
-  appId: string = '',
-  webhookBaseUrl: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
+
+  // Remove token from URL for display purposes
+  const cleanUrl = gitUrl
+    .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
+    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
+    .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
+
   const sizeKey = (size || 'small').toLowerCase();
   let cpuRequest = '250m';
   let cpuLimit = '500m';
@@ -47,27 +52,20 @@ export function createPythonPipeline(
     replicas = 3;
   }
 
-  // Use standard container port (8000) for Python apps (FastAPI/Flask/Django)
-  const containerPort = 8000;
+  // SvelteKit with adapter-node serves on port 3000 by default
+  const containerPort = 3000;
 
   // Generate Kubernetes Secret for environment variables (secure approach)
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('python', containerPort);
-  
-  // Remove token from URL for display purposes (keep only clean URL for metadata)
-  // Handle GitHub (https://token@github.com/), GitLab (https://oauth2:token@gitlab.com/), and Bitbucket (https://x-token-auth:token@bitbucket.org/) formats
-  const cleanUrl = gitUrl
-    .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
-    .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
-    .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
   <description>
-    Python deployment pipeline for ${name}
-    Supports Django, Flask, FastAPI, builds with Kaniko
+    SvelteKit deployment pipeline for ${name}
+    Auto-creates Dockerfile if missing, builds with Kaniko
     Accessible at https://${domain} via NGINX Ingress
   </description>
   <keepDependencies>false</keepDependencies>
@@ -76,16 +74,6 @@ export function createPythonPipeline(
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
-    <hudson.model.ParametersDefinitionProperty>
-      <parameterDefinitions>
-        <hudson.model.StringParameterDefinition>
-          <name>COMMIT_SHA</name>
-          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
-          <defaultValue></defaultValue>
-          <trim>true</trim>
-        </hudson.model.StringParameterDefinition>
-      </parameterDefinitions>
-    </hudson.model.ParametersDefinitionProperty>
   </properties>
 
   <triggers>
@@ -115,12 +103,7 @@ pipeline {
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
-    PLATFORM_APP_ID = '${appId}'
-    WEBHOOK_BASE_URL = '${webhookBaseUrl}'
-    DEPLOY_TRIGGER = '${deployTrigger}'
-
-    DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
-    DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
+    DOCKER_IMAGE = "hav0ky/${appName}:latest"
     ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -148,23 +131,49 @@ pipeline {
           script {
             echo 'STAGE: Checkout Repository'
             echo 'Fetching source code from repository'
-            sh '''
-              echo "Cloning repository..."
-              git clone --branch ${branch} ${gitUrl} .
-              git config --global --add safe.directory "$(pwd)"
-              
-              # If COMMIT_SHA parameter is provided, checkout that specific commit
-              if [ -n "\${COMMIT_SHA}" ]; then
-                echo "Checking out specific commit: \${COMMIT_SHA}"
-                git checkout \${COMMIT_SHA}
-              else
-                echo "Using branch HEAD"
-              fi
-              
-              echo "Current commit:"
-              git log -1 --oneline
-            '''
+            git branch: '${branch}', url: '${gitUrl}'
+            sh(
+              script: '''
+                git config --global --add safe.directory "$(pwd)"
+                git log -1 --oneline
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
             echo 'Source code checkout completed'
+          }
+        }
+      }
+    }
+
+    stage('Validate Prerequisites') {
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Validate Prerequisites'
+            echo 'Checking required files and project structure'
+            sh(
+              script: '''
+                if [ ! -f package.json ]; then
+                  echo 'ERROR: package.json not found'
+                  echo 'SvelteKit projects require a package.json file'
+                  exit 1
+                fi
+                
+                echo 'package.json found'
+                
+                # Check for SvelteKit configuration
+                if [ -f svelte.config.js ]; then
+                  echo 'SvelteKit configuration found'
+                else
+                  echo 'WARNING: No svelte.config.js found, this may not be a SvelteKit project'
+                fi
+                
+                echo 'Prerequisites check completed'
+              ''',
+              returnStatus: false,
+              returnStdout: false
+            )
           }
         }
       }
@@ -178,35 +187,62 @@ pipeline {
             sh(
               script: '''
                 if [ -f Dockerfile ]; then
-                echo 'Using existing Dockerfile'
-                # If Dockerfile installs dependencies via pip/npm-like steps that may fail, consider patching here if needed
-                # (For Python we check for requirements usage; no change required by default)
-              else
-                echo 'Generating default Python Dockerfile'
-                cat > Dockerfile << 'DOCKERFILE_END'
-FROM python:3.11-slim
-
+                  echo 'Using existing Dockerfile'
+                else
+                  echo 'Generating default SvelteKit Dockerfile'
+                  cat > Dockerfile << 'DOCKERFILE_END'
+# ---- Build Stage ----
+FROM node:20-alpine AS builder
 WORKDIR /app
 
-COPY requirements.txt .
+# Copy package files
+COPY package*.json ./
 
-RUN pip install --no-cache-dir -r requirements.txt
+# Install dependencies
+RUN if [ -f package-lock.json ]; then \\
+      npm ci; \\
+    else \\
+      npm install; \\
+    fi
 
+# Copy source code
 COPY . .
 
-EXPOSE ${containerPort}
+# Build the SvelteKit application
+RUN npm run build
 
-CMD ["python", "app.py"]
+# ---- Production Stage ----
+FROM node:20-alpine AS production
+WORKDIR /app
+
+# Copy built application from builder stage
+# SvelteKit with adapter-node outputs to 'build' directory
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package*.json ./
+
+# Install production dependencies only
+RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
+
+# Expose port
+EXPOSE 3000
+
+# Set environment variables
+ENV PORT=3000
+ENV HOST=0.0.0.0
+ENV NODE_ENV=production
+
+# Run the Node.js server
+CMD ["node", "build"]
 DOCKERFILE_END
-                echo 'Dockerfile generated successfully'
-              fi
-              
-              if ! grep -q "FROM" Dockerfile; then
-                echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                exit 1
-              fi
-              
-              echo 'Dockerfile preparation completed'
+                  echo 'Dockerfile generated successfully'
+                fi
+                
+                if ! grep -q "FROM" Dockerfile; then
+                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
+                  exit 1
+                fi
+                
+                echo 'Dockerfile preparation completed'
               ''',
               returnStatus: false,
               returnStdout: false
@@ -221,7 +257,7 @@ DOCKERFILE_END
         container('kaniko') {
           script {
             echo 'STAGE: Build Docker Image'
-            echo "Building image: \${env.DOCKER_IMAGE_VERSION} (and tagging latest)"
+            echo "Building image: \${env.DOCKER_IMAGE}"
             withCredentials([usernamePassword(
               credentialsId: 'dockerhublogin',
               usernameVariable: 'DOCKER_USER',
@@ -230,9 +266,9 @@ DOCKERFILE_END
               sh(
                 script: '''
                   mkdir -p /kaniko/.docker
-                AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
+                  AUTH=\$(echo -n "\$DOCKER_USER:\$DOCKER_PASS" | base64)
 
-                cat <<EOF > /kaniko/.docker/config.json
+                  cat <<EOF > /kaniko/.docker/config.json
 {
   "auths": {
     "https://index.docker.io/v1/": {
@@ -242,15 +278,13 @@ DOCKERFILE_END
 }
 EOF
 
-                echo 'Executing Kaniko build'
-                /kaniko/executor \\
-                  --context=\${WORKSPACE} \\
-                  --dockerfile=Dockerfile \\
-                  --destination=\${DOCKER_IMAGE_VERSION} \\
-                  --destination=\${DOCKER_IMAGE_LATEST} \\
-                  --digest-file=image-digest.txt
-                
-                echo 'Image build completed successfully'
+                  echo 'Executing Kaniko build'
+                  /kaniko/executor \\
+                    --context=\${WORKSPACE} \\
+                    --dockerfile=Dockerfile \\
+                    --destination=\${DOCKER_IMAGE}
+                  
+                  echo 'Image build completed successfully'
                 ''',
                 returnStatus: false,
                 returnStdout: false
@@ -294,7 +328,7 @@ SECRET_EOF
             
             echo 'Creating namespace if not exists'
             sh(
-              script: 'kubectl get namespace default >/dev/null 2>&1 || true',
+              script: 'kubectl create namespace default --dry-run=client -o yaml | kubectl apply -f -',
               returnStatus: false
             )
             
@@ -321,7 +355,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE_VERSION}
+        image: \${DOCKER_IMAGE}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
@@ -481,113 +515,17 @@ INGRESS_EOF
   
   post {
     success {
-      container('kubectl') {
-        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          sh '''
-            echo "PIPELINE: Success"
-            echo "Deployment completed successfully for $APP_NAME"
-            echo "Service URL: https://$DOMAIN"
-
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-              exit 0
-            fi
-
-            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
-            COMMIT_SHA=""
-            IMAGE_DIGEST=""
-            
-            # Try to get commit SHA from git if available
-            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
-              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-            fi
-            
-            # Try to read image digest if file exists
-            if [ -f image-digest.txt ]; then 
-              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
-            fi
-
-            PAYLOAD=$(cat <<JSON
-{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
-JSON
-)
-
-            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
-            echo "Payload: $PAYLOAD"
-
-            # kubectl container has curl available
-            if command -v curl >/dev/null 2>&1; then
-              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
-                -H "content-type: application/json" \
-                --data "$PAYLOAD" 2>&1) || true
-              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-              BODY=$(echo "$RESPONSE" | sed '$d')
-              echo "Response (HTTP $HTTP_CODE): $BODY"
-            elif command -v wget >/dev/null 2>&1; then
-              wget -qO- \
-                --header="content-type: application/json" \
-                --post-data="$PAYLOAD" \
-                "$DEPLOYMENT_RECORD_URL" || true
-            else
-              echo "WARN: curl/wget not available; skipping deployment record"
-            fi
-          '''
-        }
+      script {
+        echo 'PIPELINE: Success'
+        echo "Deployment completed successfully for \${env.APP_NAME}"
+        echo "Service URL: https://\${env.DOMAIN}"
       }
     }
     
     failure {
-      container('kubectl') {
-        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          sh '''
-            echo "PIPELINE: Failure"
-            echo "Deployment failed for $APP_NAME"
-
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-              exit 0
-            fi
-
-            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
-            COMMIT_SHA=""
-            IMAGE_DIGEST=""
-            
-            # Try to get commit SHA from git if available
-            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
-              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-            fi
-            
-            # Try to read image digest if file exists
-            if [ -f image-digest.txt ]; then 
-              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
-            fi
-
-            PAYLOAD=$(cat <<JSON
-{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
-JSON
-)
-
-            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
-            echo "Payload: $PAYLOAD"
-
-            # kubectl container has curl available
-            if command -v curl >/dev/null 2>&1; then
-              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
-                -H "content-type: application/json" \
-                --data "$PAYLOAD" 2>&1) || true
-              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-              BODY=$(echo "$RESPONSE" | sed '$d')
-              echo "Response (HTTP $HTTP_CODE): $BODY"
-            elif command -v wget >/dev/null 2>&1; then
-              wget -qO- \
-                --header="content-type: application/json" \
-                --post-data="$PAYLOAD" \
-                "$DEPLOYMENT_RECORD_URL" || true
-            else
-              echo "WARN: curl/wget not available; skipping deployment record"
-            fi
-          '''
-        }
+      script {
+        echo 'PIPELINE: Failure'
+        echo "Deployment failed for \${env.APP_NAME}"
       }
     }
     

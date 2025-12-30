@@ -1,6 +1,24 @@
+/**
+ * Nuxt.js Pipeline Generator
+ * 
+ * Creates a Jenkins pipeline configuration for Nuxt.js (Nuxt 3) applications.
+ * Uses Nitro server with Node.js preset, auto-generates Dockerfile if not present.
+ * Uses Kubernetes Secrets for environment variables (secure)
+ * 
+ * DEPLOYMENT CONTRACT:
+ * 1. Build stage
+ * 2. Create Environment Secret stage
+ * 3. Deploy to Kubernetes stage
+ * 
+ * Nuxt 3 Architecture:
+ * - Build output: .output/ directory
+ * - Server: Nitro (runs as Node.js server)
+ * - Default port: 3000
+ * - Production command: node .output/server/index.mjs
+ */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 
-export function createNextJsPipeline(
+export function createNuxtJsPipeline(
   name: string,
   gitUrl: string,
   branch: string,
@@ -8,23 +26,22 @@ export function createNextJsPipeline(
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   envVars: EnvVar[] = [],
-  appId: string = '',
-  webhookBaseUrl: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;
   const ingressName = `${name}-ingress`;
 
-  // Remove token from URL for display purposes (keep only clean URL for metadata)
-  // Handle GitHub (https://token@github.com/), GitLab (https://oauth2:token@gitlab.com/), and Bitbucket (https://x-token-auth:token@bitbucket.org/) formats
+  // Remove token from URL for display purposes
+  // Handle GitHub, GitLab, and Bitbucket formats
   const cleanUrl = gitUrl
     .replace(/https:\/\/[^@]+@github\.com\//, 'https://github.com/')
     .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, 'https://gitlab.com/')
     .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, 'https://bitbucket.org/');
+  
   const sizeKey = (size || 'small').toLowerCase();
 
+  // Resource allocation based on size
   let cpuRequest = '500m';
   let cpuLimit = '1';
   let memoryRequest = '512Mi';
@@ -45,7 +62,7 @@ export function createNextJsPipeline(
     replicas = 3;
   }
 
-  // fixed container port for Next.js
+  // Nuxt 3 runs on port 3000 by default with Nitro
   const containerPort = 3000;
 
   // Generate Kubernetes Secret for environment variables (secure approach)
@@ -56,24 +73,18 @@ export function createNextJsPipeline(
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <description>
-    Next.js Deployment Pipeline for ${name}
+    Nuxt.js Deployment Pipeline for ${name}
     Accessible at https://${domain} via NGINX Ingress
+    
+    Framework: Nuxt 3 with Nitro server
+    Build Output: .output/
+    Server: node .output/server/index.mjs
   </description>
 
   <properties>
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
-    <hudson.model.ParametersDefinitionProperty>
-      <parameterDefinitions>
-        <hudson.model.StringParameterDefinition>
-          <name>COMMIT_SHA</name>
-          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
-          <defaultValue></defaultValue>
-          <trim>true</trim>
-        </hudson.model.StringParameterDefinition>
-      </parameterDefinitions>
-    </hudson.model.ParametersDefinitionProperty>
   </properties>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
@@ -93,12 +104,7 @@ pipeline {
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
-    PLATFORM_APP_ID = '${appId}'
-    WEBHOOK_BASE_URL = '${webhookBaseUrl}'
-    DEPLOY_TRIGGER = '${deployTrigger}'
-
-    DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
-    DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
+    DOCKER_IMAGE = "hav0ky/${appName}:latest"
     ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -108,22 +114,7 @@ pipeline {
     stage('Checkout Repo') {
       steps {
         container('git') {
-          sh '''
-            echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
-            git config --global --add safe.directory "$(pwd)"
-            
-            # If COMMIT_SHA parameter is provided, checkout that specific commit
-            if [ -n "\${COMMIT_SHA}" ]; then
-              echo "Checking out specific commit: \${COMMIT_SHA}"
-              git checkout \${COMMIT_SHA}
-            else
-              echo "Using branch HEAD"
-            fi
-            
-            echo "Current commit:"
-            git log -1 --oneline
-          '''
+          git branch: '${branch}', url: '${gitUrl}'
         }
       }
     }
@@ -135,33 +126,47 @@ pipeline {
             if [ -f Dockerfile ]; then
               echo "Using existing Dockerfile"
             else
-              echo "Creating default Next.js Dockerfile (Node 20 required)"
+              echo "Creating Nuxt.js Dockerfile (Nuxt 3 with Nitro)"
 
 cat > Dockerfile << 'EOF'
 # ---- Build Stage ----
 FROM node:20-alpine AS builder
 WORKDIR /app
 
+# Install dependencies first (better caching)
 COPY package*.json ./
 RUN npm install
 
+# Copy source and build
 COPY . .
+
+# Build Nuxt 3 app (creates .output directory)
 RUN npm run build
 
-# ---- Run Stage ----
-FROM node:20-alpine
+# ---- Production Stage ----
+FROM node:20-alpine AS runner
 WORKDIR /app
 
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/public ./public
+# Create non-root user for security
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nuxt
 
-RUN npm install --only=production
+# Copy built output from builder
+COPY --from=builder --chown=nuxt:nodejs /app/.output ./.output
 
-# Next.js listens on container port 3000
+# Switch to non-root user
+USER nuxt
+
+# Nuxt 3 Nitro server runs on port 3000
 EXPOSE 3000
+
+# Set environment variables
+ENV HOST=0.0.0.0
 ENV PORT=3000
-CMD ["npm", "start"]
+ENV NODE_ENV=production
+
+# Start Nitro server
+CMD ["node", ".output/server/index.mjs"]
 EOF
             fi
           '''
@@ -193,9 +198,7 @@ EOF
               /kaniko/executor \
                 --context=$WORKSPACE \
                 --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE_VERSION \
-                --destination=$DOCKER_IMAGE_LATEST \
-                --digest-file=image-digest.txt
+                --destination=$DOCKER_IMAGE
             '''
           }
         }
@@ -226,6 +229,7 @@ SECRET_EOF
         container('kubectl') {
           sh '''
             echo "STAGE: Deploy to Kubernetes"
+            
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
@@ -235,6 +239,7 @@ metadata:
   namespace: default
   labels:
     app: \${APP_NAME}
+    framework: nuxtjs
 spec:
   replicas: ${replicas}
   selector:
@@ -244,15 +249,15 @@ spec:
     metadata:
       labels:
         app: \${APP_NAME}
+        framework: nuxtjs
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE_VERSION}
+        image: \${DOCKER_IMAGE}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
 ${envFromSection}
-        env:
 ${defaultEnvYaml}
         resources:
           requests:
@@ -265,13 +270,13 @@ ${defaultEnvYaml}
           httpGet:
             path: /
             port: ${containerPort}
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /
             port: ${containerPort}
-          initialDelaySeconds: 15
+          initialDelaySeconds: 20
           periodSeconds: 20
 DEPLOY_EOF
 
@@ -282,6 +287,9 @@ kind: Service
 metadata:
   name: \${SERVICE_NAME}
   namespace: default
+  labels:
+    app: \${APP_NAME}
+    framework: nuxtjs
 spec:
   selector:
     app: \${APP_NAME}
@@ -315,6 +323,9 @@ kind: Ingress
 metadata:
   name: \${INGRESS_NAME}
   namespace: default
+  labels:
+    app: \${APP_NAME}
+    framework: nuxtjs
   annotations:
     kubernetes.io/ingress.class: nginx
 spec:
@@ -355,6 +366,7 @@ INGRESS_EOF
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
             echo "Deployment verification completed successfully"
+            echo "Application URL: https://$DOMAIN"
           '''
         }
       }
@@ -364,114 +376,19 @@ INGRESS_EOF
 
   post {
     success {
-      container('kubectl') {
-        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          sh '''
-            echo "PIPELINE: Success"
-            echo "Deployment completed successfully for $APP_NAME"
-            echo "Service URL: https://$DOMAIN"
-
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-              exit 0
-            fi
-
-            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
-            COMMIT_SHA=""
-            IMAGE_DIGEST=""
-            
-            # Try to get commit SHA from git if available
-            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
-              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-            fi
-            
-            # Try to read image digest if file exists
-            if [ -f image-digest.txt ]; then 
-              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
-            fi
-
-            PAYLOAD=$(cat <<JSON
-{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
-JSON
-)
-
-            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
-            echo "Payload: $PAYLOAD"
-
-            # kubectl container has curl available
-            if command -v curl >/dev/null 2>&1; then
-              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
-                -H "content-type: application/json" \
-                --data "$PAYLOAD" 2>&1) || true
-              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-              BODY=$(echo "$RESPONSE" | sed '$d')
-              echo "Response (HTTP $HTTP_CODE): $BODY"
-            elif command -v wget >/dev/null 2>&1; then
-              wget -qO- \
-                --header="content-type: application/json" \
-                --post-data="$PAYLOAD" \
-                "$DEPLOYMENT_RECORD_URL" || true
-            else
-              echo "WARN: curl/wget not available; skipping deployment record"
-            fi
-          '''
-        }
-      }
+      sh '''
+        echo "PIPELINE: Success"
+        echo "Nuxt.js deployment completed successfully for $APP_NAME"
+        echo "Service URL: https://$DOMAIN"
+      '''
     }
     
     failure {
-      container('kubectl') {
-        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
-          sh '''
-            echo "PIPELINE: Failure"
-            echo "Deployment failed for $APP_NAME"
-
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
-              exit 0
-            fi
-
-            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
-            COMMIT_SHA=""
-            IMAGE_DIGEST=""
-            
-            # Try to get commit SHA from git if available
-            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
-              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
-            fi
-            
-            # Try to read image digest if file exists
-            if [ -f image-digest.txt ]; then 
-              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
-            fi
-
-            PAYLOAD=$(cat <<JSON
-{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
-JSON
-)
-
-            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
-            echo "Payload: $PAYLOAD"
-
-            # kubectl container has curl available
-            if command -v curl >/dev/null 2>&1; then
-              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
-                -H "content-type: application/json" \
-                --data "$PAYLOAD" 2>&1) || true
-              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-              BODY=$(echo "$RESPONSE" | sed '$d')
-              echo "Response (HTTP $HTTP_CODE): $BODY"
-            elif command -v wget >/dev/null 2>&1; then
-              wget -qO- \
-                --header="content-type: application/json" \
-                --post-data="$PAYLOAD" \
-                "$DEPLOYMENT_RECORD_URL" || true
-            else
-              echo "WARN: curl/wget not available; skipping deployment record"
-            fi
-          '''
-        }
-      }
+      sh '''
+        echo "PIPELINE: Failure"
+        echo "Nuxt.js deployment failed for $APP_NAME"
+        echo "Check build logs and ensure Nuxt 3 project structure is correct"
+      '''
     }
   }
 }

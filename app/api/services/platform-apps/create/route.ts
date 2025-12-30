@@ -4,6 +4,7 @@ import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService, type DeploymentConfig } from "@/lib/services";
+import { Platform_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -52,6 +53,34 @@ export async function POST(req: NextRequest) {
     if (!validation.success) return validation.response;
 
     const { env_vars, ...appData } = validation.data;
+
+    // Check app limit per user (max 10 apps)
+    const MAX_APPS_PER_USER = 10;
+    const currentAppCount = await Platform_Apps.count_by_owner(auth.user!.id);
+    if (currentAppCount >= MAX_APPS_PER_USER) {
+      return NextResponse.json(
+        { 
+          error: 'App limit reached',
+          message: `You have reached the maximum limit of ${MAX_APPS_PER_USER} apps. Please delete an existing app to create a new one.`,
+          current_count: currentAppCount,
+          max_limit: MAX_APPS_PER_USER
+        },
+        { status: 403 }
+      );
+    }
+
+    // Check if app name already exists (globally unique for DNS/Jenkins)
+    const nameExists = await Platform_Apps.check_name_exists(appData.name);
+    if (nameExists) {
+      return NextResponse.json(
+        { 
+          error: 'App name already exists',
+          message: 'Please choose a different name. App names must be unique across all users.',
+          field: 'name'
+        },
+        { status: 409 } // 409 Conflict
+      );
+    }
 
     // Store the ORIGINAL URL without token (for database)
     const original_repository_url = appData.repository_url;

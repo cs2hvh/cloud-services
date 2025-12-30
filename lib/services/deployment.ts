@@ -94,7 +94,7 @@ export class DeploymentService {
         ip: process.env.KUBE_IP || null,
         auto_deploy: config.auto_deploy || false,
         deploy_branch: config.deploy_branch || config.branch,
-        // Note: size is not stored in DB, always passed at deploy time
+        size: config.size || 'small', // Store size for redeployments
       };
 
       const result = await Platform_Apps.create(appPayload);
@@ -140,6 +140,9 @@ export class DeploymentService {
         // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
         const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
         
+        // Get env vars to pass to Jenkins/Kubernetes
+        const envVarsToPass = config.env_vars || [];
+        
         await JenkinsService.createJob(
           config.name,
           app.id,
@@ -148,7 +151,8 @@ export class DeploymentService {
           containerPort,
           config.framework,
           config.size || 'small',
-          'manual'
+          'manual',
+          envVarsToPass
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 
@@ -162,17 +166,37 @@ export class DeploymentService {
       } catch (jenkinsError: unknown) {
         const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : 'Unknown error';
         console.error(`[DeploymentService] Jenkins job creation failed:`, errorMessage);
+        
         // Rollback: Delete DNS and DB record on Jenkins failure
-        // Note: DNS record should exist at this point since it's created before Jenkins job
-        await Promise.all([
-          DNSService.deleteRecord(config.name).catch(err => 
-            console.error(`[DeploymentService] Failed to rollback DNS:`, err)
-          ),
-          Platform_Apps.delete(app.id, config.user_id).catch(err => 
-            console.error(`[DeploymentService] Failed to rollback DB record:`, err)
-          )
-        ]);
-        throw new Error(`Jenkins job creation failed: ${errorMessage}`);
+        // Track rollback failures to include in error message
+        const rollbackErrors: string[] = [];
+        
+        // Delete DNS first (most critical for re-deployment with same name)
+        try {
+          await DNSService.deleteRecord(config.name);
+          console.log(`[DeploymentService] ✅ DNS rollback successful`);
+        } catch (dnsErr) {
+          const dnsErrMsg = dnsErr instanceof Error ? dnsErr.message : 'Unknown error';
+          console.error(`[DeploymentService] ❌ Failed to rollback DNS:`, dnsErrMsg);
+          rollbackErrors.push(`DNS cleanup failed: ${dnsErrMsg}`);
+        }
+        
+        // Delete DB record
+        try {
+          await Platform_Apps.delete(app.id, config.user_id);
+          console.log(`[DeploymentService] ✅ DB rollback successful`);
+        } catch (dbErr) {
+          const dbErrMsg = dbErr instanceof Error ? dbErr.message : 'Unknown error';
+          console.error(`[DeploymentService] ❌ Failed to rollback DB record:`, dbErrMsg);
+          rollbackErrors.push(`DB cleanup failed: ${dbErrMsg}`);
+        }
+        
+        // Include rollback failures in error message so user knows manual cleanup may be needed
+        const fullError = rollbackErrors.length > 0
+          ? `Jenkins job creation failed: ${errorMessage}. Warning: Partial cleanup failed (${rollbackErrors.join('; ')}). Please contact support if you cannot redeploy with the same name.`
+          : `Jenkins job creation failed: ${errorMessage}`;
+        
+        throw new Error(fullError);
       }
 
       // Update deployment URL

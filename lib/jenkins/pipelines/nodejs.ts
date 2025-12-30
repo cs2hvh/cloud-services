@@ -9,6 +9,7 @@ export function createNodeJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  envVars: EnvVar[] = [],
   appId: string = '',
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
@@ -107,6 +108,7 @@ pipeline {
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
     DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
+    ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
 

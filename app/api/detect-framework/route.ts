@@ -73,22 +73,36 @@ async function detectFromPackageJson(context: DetectionContext): Promise<Partial
   
   try {
     const packageJson = JSON.parse(packageJsonContent.content);
-    if (packageJson.dependencies) {
-      if (packageJson.dependencies.next) {
-        return { framework: "Next.js", version: packageJson.dependencies.next, language: "JavaScript" };
-      } else if (packageJson.dependencies.react) {
-        return { framework: "React", version: packageJson.dependencies.react, language: "JavaScript" };
-      } else if (packageJson.dependencies.vue) {
-        return { framework: "Vue.js", version: packageJson.dependencies.vue, language: "JavaScript" };
-      } else if (packageJson.dependencies['@angular/core']) {
-        return { framework: "Angular", version: packageJson.dependencies['@angular/core'], language: "JavaScript" };
-      } else if (packageJson.dependencies.svelte) {
-        return { framework: "Svelte", version: packageJson.dependencies.svelte, language: "JavaScript" };
-      } else if (packageJson.dependencies.express) {
-        return { framework: "Express", version: packageJson.dependencies.express, language: "JavaScript" };
-      } else {
-        return { framework: "Node.js", language: "JavaScript" };
+    const deps = packageJson.dependencies || {};
+    const devDeps = packageJson.devDependencies || {};
+    
+    // Check for Vite in devDependencies (common for Vite projects)
+    const hasVite = devDeps.vite || deps.vite;
+    
+    if (deps.next) {
+      return { framework: "Next.js", version: deps.next, language: "JavaScript" };
+    } else if (deps.nuxt) {
+      return { framework: "Nuxt.js", version: deps.nuxt, language: "JavaScript" };
+    } else if (deps.react) {
+      // Check if it's React with Vite
+      if (hasVite) {
+        return { framework: "Vite-React", version: deps.react, language: "JavaScript", buildSystem: "Vite" };
       }
+      return { framework: "React", version: deps.react, language: "JavaScript" };
+    } else if (deps.vue) {
+      // Vue 3 typically uses Vite, but check anyway
+      return { framework: "Vue.js", version: deps.vue, language: "JavaScript", buildSystem: hasVite ? "Vite" : "Vue CLI" };
+    } else if (deps['@angular/core'] || devDeps['@angular/core']) {
+      return { framework: "Angular", version: deps['@angular/core'] || devDeps['@angular/core'], language: "JavaScript" };
+    } else if (deps.svelte || deps['@sveltejs/kit'] || devDeps.svelte || devDeps['@sveltejs/kit']) {
+      // SvelteKit and Svelte are often in devDependencies
+      const hasSvelteKit = deps['@sveltejs/kit'] || devDeps['@sveltejs/kit'];
+      const svelteVersion = deps.svelte || devDeps.svelte || deps['@sveltejs/kit'] || devDeps['@sveltejs/kit'];
+      return { framework: hasSvelteKit ? "SvelteKit" : "Svelte", version: svelteVersion, language: "JavaScript" };
+    } else if (deps.express) {
+      return { framework: "Express", version: deps.express, language: "JavaScript" };
+    } else if (Object.keys(deps).length > 0 || Object.keys(devDeps).length > 0) {
+      return { framework: "Node.js", language: "JavaScript" };
     }
   } catch {
     console.log("Failed to parse package.json");

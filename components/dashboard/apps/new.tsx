@@ -24,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { EnvVarsEditor, EnvVar } from "./env-vars-editor";
 import {
   Card,
   CardContent,
@@ -69,9 +70,14 @@ interface ProviderConnection {
 // Framework detection and build settings
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
   'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
+  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
+  'Angular': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Angular CLI)' },
+  'SvelteKit': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Node adapter)' },
+  'Svelte': { buildCommand: 'npm run build', outputDir: 'public/build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
   'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
   'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
   'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
@@ -103,7 +109,7 @@ const AppDeploymentSelect = () => {
   const [framework, setFramework] = useState<string>('');
   const [buildCommand, setBuildCommand] = useState<string>('');
   const [outputDir, setOutputDir] = useState<string>('');
-  const [envVars, setEnvVars] = useState<{key: string, value: string}[]>([]);
+  const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [customDomain, setCustomDomain] = useState<string>('');
   const [size, setSize] = useState<string>('small');
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
@@ -259,10 +265,13 @@ const AppDeploymentSelect = () => {
           // Map detected frameworks to our config keys
           const frameworkMap: Record<string, string> = {
             'Next.js': 'Next.js',
+            'Nuxt.js': 'Nuxt.js',
+            'Vite-React': 'Vite-React',
             'React': 'React',
             'Vue.js': 'Vue.js',
-            'Angular': 'Static',
-            'Svelte': 'Static',
+            'Angular': 'Angular',
+            'SvelteKit': 'SvelteKit',
+            'Svelte': 'Svelte',
             'Express': 'express',
             'Node.js': 'Node.js',
             'Django': 'django',
@@ -352,20 +361,6 @@ const AppDeploymentSelect = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const addEnvVar = () => {
-    setEnvVars([...envVars, { key: '', value: '' }]);
-  };
-
-  const removeEnvVar = (index: number) => {
-    setEnvVars(envVars.filter((_, i) => i !== index));
-  };
-
-  const updateEnvVar = (index: number, field: 'key' | 'value', value: string) => {
-    setEnvVars(envVars.map((env, i) => 
-      i === index ? { ...env, [field]: value } : env
-    ));
   };
 
   const handleNextStep = () => {
@@ -841,12 +836,19 @@ const AppDeploymentSelect = () => {
                            Simple Test (No Build/Deploy)
                         </SelectItem>
                         
-                        {/* Node.js Frameworks */}
-                        <SelectItem value="Next.js"> Next.js (bring Dockerfile)</SelectItem>
-                        <SelectItem value="React"> React (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Vue.js"> Vue.js (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
+                        {/* Node.js Frameworks - Auto Dockerfile */}
+                        <SelectItem value="Next.js"> Next.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Nuxt.js"> Nuxt.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Vite-React"> React + Vite (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Vue.js"> Vue.js (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="Angular"> Angular (auto-Dockerfile)</SelectItem>
+                        <SelectItem value="SvelteKit"> SvelteKit (auto-Dockerfile)</SelectItem>
                         <SelectItem value="express"> Express.js (auto-Dockerfile)</SelectItem>
+                        
+                        {/* Node.js Frameworks - Bring Dockerfile */}
+                        <SelectItem value="React"> React CRA (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Svelte"> Svelte (bring Dockerfile)</SelectItem>
+                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
                         
                         {/* Python Frameworks */}
                         <SelectItem value="python"> Python (auto-Dockerfile)</SelectItem>
@@ -931,40 +933,8 @@ const AppDeploymentSelect = () => {
                   )}
                 </div>
 
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <Label className="text-white">Environment Variables</Label>
-                    <Button onClick={addEnvVar} size="sm" className="bg-white text-black hover:bg-gray-200">
-                      Add Variable
-                    </Button>
-                  </div>
-                  <div className="space-y-2">
-                    {envVars.map((env, index) => (
-                      <div key={index} className="flex gap-2">
-                      <Input
-                        value={env.key}
-                        onChange={(e) => updateEnvVar(index, 'key', e.target.value)}
-                        placeholder="VARIABLE_NAME"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      />
-                      <Input
-                        value={env.value}
-                        onChange={(e) => updateEnvVar(index, 'value', e.target.value)}
-                        placeholder="variable_value"
-                        className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                      />
-                      <Button
-                        onClick={() => removeEnvVar(index)}
-                        size="sm"
-                        variant="outline"
-                        className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                    ))}
-                  </div>
-                </div>
+                {/* Environment Variables */}
+                <EnvVarsEditor value={envVars} onChange={setEnvVars} />
 
                 <div>
                   <Label className="text-white">Custom Domain (Optional)</Label>

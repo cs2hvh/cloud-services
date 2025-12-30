@@ -62,32 +62,34 @@ export async function GET() {
       || undefined; // avoid using full name with spaces as API username
 
     // Try to get a valid access token from various sources
+    // IMPORTANT: GitLab tokens expire in 2 hours, so we MUST prioritize the database token
+    // which handles auto-refresh. Session tokens may be stale/expired!
     let accessToken = null;
     let tokenSource = 'none';
-
-    // Source 1: Database stored token with automatic refresh (most reliable for GitLab!)
-    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
+    
+    // Source 1 (PRIORITY): Database stored token with automatic refresh
+    // This is the MOST RELIABLE source because it handles token expiry and refresh
     console.log('[GitLab Repos] Checking gitlab_tokens table for user:', user.id);
     const storedToken = await getValidGitLabToken(user.id);
     if (storedToken) {
       accessToken = storedToken;
       tokenSource = 'gitlab_tokens_table';
-      console.log('[GitLab Repos] Found valid token in gitlab_tokens table (with auto-refresh)');
+      console.log('[GitLab Repos] Using valid token from gitlab_tokens table (with auto-refresh)');
     }
-
-    // Source 2: Identity data provider_token (usually not populated by Supabase)
-    if (!accessToken && gitlabIdentity.identity_data?.provider_token) {
-      accessToken = gitlabIdentity.identity_data.provider_token;
-      tokenSource = 'identity_data.provider_token';
-      console.log('[GitLab Repos] Found token in identity_data.provider_token');
-    }
-
-    // Source 3: Session provider_token, but only if this session actually belongs to GitLab
-    // This avoids using a GitHub token when calling GitLab APIs
-    if (!accessToken && session.provider_token && (session.user as any)?.app_metadata?.provider === 'gitlab') {
+    // Source 2: Session provider_token (ONLY as fallback - may be expired!)
+    // This is only reliable immediately after OAuth callback
+    else if (session.provider_token) {
       accessToken = session.provider_token;
       tokenSource = 'session.provider_token';
-      console.log('[GitLab Repos] Found token in session.provider_token for GitLab');
+      console.log('[GitLab Repos] Fallback: Using session.provider_token (may be expired)');
+    }
+    // Source 3: Identity data provider_token (usually not populated by Supabase)
+    else if (gitlabIdentity.identity_data?.provider_token) {
+      accessToken = gitlabIdentity.identity_data.provider_token;
+      tokenSource = 'identity_data.provider_token';
+      console.log('[GitLab Repos] Fallback: Using identity_data.provider_token');
+    } else {
+      console.log('[GitLab Repos] No valid token found in any source');
     }
 
     // If we have a token, try to fetch all repositories including private ones

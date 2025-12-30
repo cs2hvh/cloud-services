@@ -1,7 +1,10 @@
 /**
  * Express.js Pipeline - Express, Node.js Backend
  * Auto-creates Dockerfile, builds with Kaniko
+ * Uses Kubernetes Secrets for environment variables (secure)
  */
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+
 export function createExpressPipeline(
   name: string,
   gitUrl: string,
@@ -9,6 +12,7 @@ export function createExpressPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  envVars: EnvVar[] = [],
   appId: string = '',
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
@@ -47,6 +51,11 @@ export function createExpressPipeline(
 
   // Use standard container port (3000) instead of NodePort
   const containerPort = 3000;
+
+  // Generate Kubernetes Secret for environment variables (secure approach)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
   
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -107,6 +116,7 @@ pipeline {
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
     DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
+    ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
 
@@ -280,6 +290,30 @@ EOF
       }
     }
 
+    stage('Create Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          script {
+            echo 'STAGE: Create Environment Secret'
+            echo "Creating Kubernetes secret: \${env.ENV_SECRET_NAME}"
+            sh(
+              script: '''
+              cat > env-secret.yaml << 'SECRET_EOF'
+${secretYaml}
+SECRET_EOF
+              kubectl apply -f env-secret.yaml
+              echo 'Environment secret created successfully'
+              ''',
+              returnStatus: false
+            )
+          }
+        }
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       steps {
         container('kubectl') {
@@ -320,9 +354,9 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
+${envFromSection}
         env:
-        - name: PORT
-          value: "${containerPort}"
+${defaultEnvYaml}
         resources:
           requests:
             cpu: ${cpuRequest}
@@ -332,7 +366,7 @@ spec:
             memory: ${memoryLimit}
         livenessProbe:
           httpGet:
-            path: /
+            path: /health
             port: ${containerPort}
           initialDelaySeconds: 30
           periodSeconds: 10

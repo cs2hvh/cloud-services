@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'motion/react';
+import Link from 'next/link';
 import {
   Globe,
   ExternalLink,
@@ -28,6 +29,7 @@ import {
   Copy,
   Check,
   X,
+  Eye,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -206,7 +208,14 @@ export function AppCard({
             {/* App Name & URL */}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-sm font-semibold text-white truncate">{app.name}</h3>
+                <Link 
+                  href={`/dashboard/services/apps/${app.id}`}
+                  className={`text-sm font-semibold text-white truncate hover:text-blue-400 transition-colors ${
+                    isAppDeleting ? 'pointer-events-none' : ''
+                  }`}
+                >
+                  {app.name}
+                </Link>
                 {getStatusBadge(app.status, build)}
               </div>
               <a
@@ -280,12 +289,24 @@ export function AppCard({
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2 ml-4">
+            <Link href={`/dashboard/services/apps/${app.id}`}>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={isAppDeleting}
+                className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/10"
+                title="View Details"
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+            </Link>
             <Button
               size="sm"
               variant="ghost"
               disabled={isAppDeleting}
               onClick={handleToggleLogs}
               className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/10"
+              title="Build Logs"
             >
               <Terminal className="w-4 h-4" />
             </Button>
@@ -311,6 +332,7 @@ export function AppCard({
               disabled={isAppDeleting}
               onClick={onDelete}
               className="cursor-pointer h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+              title="Delete App"
             >
               {isAppDeleting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
