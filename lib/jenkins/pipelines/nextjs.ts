@@ -56,6 +56,16 @@ export function createNextJsPipeline(
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>COMMIT_SHA</name>
+          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
+          <defaultValue></defaultValue>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
   </properties>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
@@ -89,7 +99,22 @@ pipeline {
     stage('Checkout Repo') {
       steps {
         container('git') {
-          git branch: '${branch}', url: '${gitUrl}'
+          sh '''
+            echo "Cloning repository..."
+            git clone --branch ${branch} ${gitUrl} .
+            git config --global --add safe.directory "$(pwd)"
+            
+            # If COMMIT_SHA parameter is provided, checkout that specific commit
+            if [ -n "\${COMMIT_SHA}" ]; then
+              echo "Checking out specific commit: \${COMMIT_SHA}"
+              git checkout \${COMMIT_SHA}
+            else
+              echo "Using branch HEAD"
+            fi
+            
+            echo "Current commit:"
+            git log -1 --oneline
+          '''
         }
       }
     }

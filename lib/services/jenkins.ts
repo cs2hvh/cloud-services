@@ -16,8 +16,10 @@ export class JenkinsService {
   /**
    * Trigger a build for an existing Jenkins job
    * Used by webhooks for auto-deploy
+   * @param appName - The application name
+   * @param commitSha - Optional specific commit SHA to checkout
    */
-  static async triggerBuild(appName: string): Promise<number> {
+  static async triggerBuild(appName: string, commitSha?: string): Promise<number> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
     }
@@ -25,6 +27,9 @@ export class JenkinsService {
     const jobName = `${appName}-job`;
     
     console.log(`[JenkinsService] Triggering build for: ${jobName}`);
+    if (commitSha) {
+      console.log(`[JenkinsService] Target commit: ${commitSha}`);
+    }
 
     try {
       // Check if job exists first
@@ -33,8 +38,17 @@ export class JenkinsService {
         throw new Error(`Job ${jobName} does not exist`);
       }
 
-      // Trigger the build
-      await jenkins.job.build(jobName);
+      // Trigger the build with optional commit SHA parameter
+      if (commitSha) {
+        // Build with parameters - pass COMMIT_SHA to ensure exact commit is checked out
+        await jenkins.job.build({
+          name: jobName,
+          parameters: { COMMIT_SHA: commitSha },
+        });
+      } else {
+        // Build without parameters (uses branch HEAD)
+        await jenkins.job.build(jobName);
+      }
       
       // Wait a moment for build to be registered
       await new Promise(resolve => setTimeout(resolve, 2000));

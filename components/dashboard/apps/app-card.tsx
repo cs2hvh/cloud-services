@@ -295,7 +295,7 @@ export function AppCard({
               variant="ghost"
               disabled={rollbackDisabled}
               onClick={handleRollback}
-              className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
+              className="cursor-pointer h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
               title={canRollback ? 'Rollback to previous successful deployment' : 'No previous successful deployment available'}
             >
               {rollingBack ? (
@@ -310,7 +310,7 @@ export function AppCard({
               variant="ghost"
               disabled={isAppDeleting}
               onClick={onDelete}
-              className="h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
+              className="cursor-pointer h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
             >
               {isAppDeleting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

@@ -109,10 +109,11 @@ export class AutoDeployService {
         throw new Error(`Failed to update Jenkins job: ${errorMessage}`);
       }
 
-      // Step 5: Trigger the build
+      // Step 5: Trigger the build with specific commit SHA
+      // This ensures the exact commit from the webhook is deployed, not branch HEAD
       console.log(`[AutoDeploy] Step 4/4: Triggering build...`);
-      const buildNumber = await JenkinsService.triggerBuild(appName);
-      console.log(`[AutoDeploy] ✅ Build #${buildNumber} triggered`);
+      const buildNumber = await JenkinsService.triggerBuild(appName, commitSha);
+      console.log(`[AutoDeploy] ✅ Build #${buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`);
 
       // Step 6: Update app status in database
       await Platform_Apps.update(appId, {

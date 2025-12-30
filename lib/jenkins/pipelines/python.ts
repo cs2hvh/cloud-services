@@ -62,6 +62,16 @@ export function createPythonPipeline(
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>COMMIT_SHA</name>
+          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
+          <defaultValue></defaultValue>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
   </properties>
 
   <triggers>
@@ -123,15 +133,22 @@ pipeline {
           script {
             echo 'STAGE: Checkout Repository'
             echo 'Fetching source code from repository'
-            git branch: '${branch}', url: '${gitUrl}'
-            sh(
-              script: '''
-                git config --global --add safe.directory "$(pwd)"
-                git log -1 --oneline
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+              echo "Cloning repository..."
+              git clone --branch ${branch} ${gitUrl} .
+              git config --global --add safe.directory "$(pwd)"
+              
+              # If COMMIT_SHA parameter is provided, checkout that specific commit
+              if [ -n "\${COMMIT_SHA}" ]; then
+                echo "Checking out specific commit: \${COMMIT_SHA}"
+                git checkout \${COMMIT_SHA}
+              else
+                echo "Using branch HEAD"
+              fi
+              
+              echo "Current commit:"
+              git log -1 --oneline
+            '''
             echo 'Source code checkout completed'
           }
         }

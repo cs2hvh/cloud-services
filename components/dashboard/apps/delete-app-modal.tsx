@@ -116,7 +116,7 @@ export function DeleteAppModal({
         <AlertDialogFooter>
           <AlertDialogCancel
             disabled={isDeleting}
-            className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+            className="cursor-pointer bg-white/10 border-white/20 text-white hover:bg-white/20"
           >
             Cancel
           </AlertDialogCancel>
@@ -126,7 +126,7 @@ export function DeleteAppModal({
               handleDelete();
             }}
             disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
           >
             {isDeleting ? (
               <>
