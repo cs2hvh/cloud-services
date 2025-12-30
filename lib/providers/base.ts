@@ -51,9 +51,13 @@ export function createProvider(provider: GitProvider): BaseProvider {
     const { GitHubProvider } = require('./github/index');
     return new GitHubProvider();
   } else if (provider === 'gitlab') {
-    throw new Error('GitLab provider not yet refactored to modular structure');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { GitLabProvider } = require('./gitlab/index');
+    return new GitLabProvider();
   } else if (provider === 'bitbucket') {
-    throw new Error('Bitbucket provider not yet refactored to modular structure');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { BitbucketProvider } = require('./bitbucket/index');
+    return new BitbucketProvider();
   }
   throw new Error(`Unknown provider: ${provider}`);
 }

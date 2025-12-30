@@ -43,6 +43,7 @@ export interface RepositoriesResponse {
   repositories: Repository[];
   message?: string;
   warning?: string;
+  note?: string;
   needsAppAuth?: boolean;
 }
 

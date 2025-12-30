@@ -86,32 +86,60 @@ export async function middleware(request: NextRequest) {
   // IP cooldown check (early return if limited)
   const limited = applyIpCooldown(request);
   if (limited) return limited;
-  console.log(
-    request?.headers?.get("x-client-secret"),
-    ".....................89",
-    process.env.NEXT_PUBLIC_CLIENT_SECRET,
-    "....NEXT_PUBLIC_CLIENT_SECRET",
-  );
-  if (
-    request?.headers?.get("x-client-secret") !==
-    process.env.NEXT_PUBLIC_CLIENT_SECRET
-  ) {
-    return new NextResponse(
-      JSON.stringify({
-        error: "this link is protected # cors protection",
-        // cooldown_ms: msLeft,
-      }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          //"Retry-After": Math.ceil(msLeft / 1000).toString(),
+
+  // Skip client secret check for:
+  // 1. Non-API routes (frontend navigation)
+  // 2. Auth callback routes (OAuth redirects from providers)
+  // 3. Webhook routes (external services)
+  // 4. Public APIs that are called from client-side without axios
+  // 5. Git provider APIs (repositories, branches) - called from app deployment wizard
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api');
+  const isAuthCallback = request.nextUrl.pathname.startsWith('/api/auth/callback');
+  const isWebhook = request.nextUrl.pathname.startsWith('/api/webhooks');
+  const isPublicApi = request.nextUrl.pathname.startsWith('/api/auth/providers') ||
+                      request.nextUrl.pathname.startsWith('/api/auth/link');
+  
+  // Git provider APIs - these are called from the app deployment wizard (new.tsx)
+  // using fetch() without the x-client-secret header
+  const pathname = request.nextUrl.pathname;
+  const isGitProviderApi = 
+    pathname.startsWith('/api/github/repositories') ||
+    pathname.startsWith('/api/github/branches') ||
+    pathname.startsWith('/api/gitlab/repositories') ||
+    pathname.startsWith('/api/gitlab/branches') ||
+    pathname.startsWith('/api/bitbucket/repositories') ||
+    pathname.startsWith('/api/bitbucket/branches') ||
+    pathname.startsWith('/api/detect-framework') ||
+    pathname.startsWith('/api/admin/proxmox') ||
+    pathname.startsWith('/api/services/platform-apps');
+
+  // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, or git provider APIs
+  if (isApiRoute && !isAuthCallback && !isWebhook && !isPublicApi && !isGitProviderApi) {
+    if (
+      request?.headers?.get("x-client-secret") !==
+      process.env.NEXT_PUBLIC_CLIENT_SECRET
+    ) {
+      console.log(
+        '[Middleware] Client secret mismatch for:',
+        request.nextUrl.pathname,
+        'Got:',
+        request?.headers?.get("x-client-secret")?.substring(0, 10) + '...',
+      );
+      return new NextResponse(
+        JSON.stringify({
+          error: "Unauthorized - Invalid client secret",
+        }),
+        {
+          status: 401,
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      },
-    );
+      );
+    }
   }
 
-  //console.log('middleware---calling---5');
+  // Update session (handles session refresh to prevent 30-min logout)
   return await updateSession(request);
 }
 
@@ -122,11 +150,12 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
+     * - public folder assets
+     * 
+     * IMPORTANT: The matcher MUST include dashboard routes and API routes
+     * for session refresh to work properly. Without this, users get logged
+     * out after 30 minutes because sessions aren't being refreshed.
      */
-    // "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
-    "/api/auth/signin/github",
-    "/api/auth/signin/email",
-    "/api/auth/signup",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

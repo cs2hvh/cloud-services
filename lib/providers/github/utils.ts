@@ -3,6 +3,10 @@
  * High-level functions for common GitHub operations
  * These functions handle user authentication and token management
  * 
+ * KEY FIX: This now properly uses the stored GitHub token from github_tokens table
+ * instead of session.provider_token, which only works for the login provider.
+ * This ensures GitHub repos can be fetched even when logged in with GitLab/Bitbucket.
+ * 
  * Usage:
  * const repos = await github.fetchUserRepositories();
  * const branches = await github.fetchRepositoryBranches(repo);
@@ -21,12 +25,16 @@ const provider = new GitHubProvider();
 /**
  * Fetch repositories for the authenticated user
  * This is called from API endpoint or components
+ * 
+ * IMPORTANT: We prioritize the stored token from github_tokens table because:
+ * 1. It works regardless of which provider the user logged in with
+ * 2. session.provider_token is ONLY valid for the login provider
  */
 export async function fetchUserRepositories(): Promise<RepositoriesResponse> {
   try {
     const supabase = await createClient();
 
-    // Get current user
+    // Get current user - works regardless of login provider
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
@@ -37,26 +45,45 @@ export async function fetchUserRepositories(): Promise<RepositoriesResponse> {
       };
     }
 
-    // Get user's GitHub token
-    const session = await supabase.auth.getSession();
+    console.log('[GitHub Utils] Fetching repositories for user:', user.id);
 
+    // PRIORITY: Try stored token first - this works for cross-provider auth
+    // The token manager uses SERVICE CLIENT so it doesn't depend on session
     let token = null;
-
-    // Try session token first (fresh from OAuth)
-    if (session?.data?.session?.provider_token) {
-      token = session.data.session.provider_token;
-    } else {
-      // Try stored token
-      const storedToken = await provider.getToken(user.id);
-      if (storedToken) {
-        token = storedToken.accessToken;
+    const storedToken = await provider.getToken(user.id);
+    if (storedToken) {
+      token = storedToken.accessToken;
+      console.log('[GitHub Utils] Using stored token from github_tokens table');
+    }
+    
+    // FALLBACK: Only use session token if:
+    // 1. No stored token exists
+    // 2. The session was created with GitHub (not GitLab/Bitbucket)
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Check if the current session is actually a GitHub session
+      const isGitHubSession = session?.user?.app_metadata?.provider === 'github' ||
+        session?.user?.identities?.some(id => id.provider === 'github' && id.identity_id);
+      
+      if (session?.provider_token && isGitHubSession) {
+        token = session.provider_token;
+        console.log('[GitHub Utils] Using session.provider_token (GitHub session)');
+        
+        // Store this token for future use (so cross-provider auth works)
+        await provider.storeToken(user.id, { 
+          accessToken: token, 
+          tokenType: 'bearer', 
+          scope: 'repo user:email' 
+        });
       }
     }
 
     if (!token) {
+      console.log('[GitHub Utils] No GitHub token found for user:', user.id);
       return {
         repositories: [],
-        message: 'GitHub account not connected',
+        message: 'GitHub account not connected. Please connect your GitHub account to access repositories.',
         needsAppAuth: true,
       };
     }
@@ -92,19 +119,20 @@ export async function fetchRepositoryBranches(repo: Repository): Promise<Branche
       };
     }
 
-    // Get user's GitHub token
-    const session = await supabase.auth.getSession();
-
+    // PRIORITY: Try stored token first - this works for cross-provider auth
     let token = null;
-
-    // Try session token first (fresh from OAuth)
-    if (session?.data?.session?.provider_token) {
-      token = session.data.session.provider_token;
-    } else {
-      // Try stored token
-      const storedToken = await provider.getToken(user.id);
-      if (storedToken) {
-        token = storedToken.accessToken;
+    const storedToken = await provider.getToken(user.id);
+    if (storedToken) {
+      token = storedToken.accessToken;
+    }
+    
+    // FALLBACK: Only use session token if GitHub session
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      const isGitHubSession = session?.user?.app_metadata?.provider === 'github';
+      
+      if (session?.provider_token && isGitHubSession) {
+        token = session.provider_token;
       }
     }
 
