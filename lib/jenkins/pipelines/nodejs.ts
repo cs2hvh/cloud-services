@@ -1,3 +1,5 @@
+import { EnvVar } from "./utils";
+
 /**
  * Node.js Pipeline - Plain Node.js Applications
  * Auto-creates Dockerfile, builds with Kaniko
