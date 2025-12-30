@@ -79,6 +79,7 @@ export async function GET() {
     // Source 2: Identity data provider_token (usually not populated by Supabase)
     if (!accessToken && bitbucketIdentity.identity_data?.provider_token) {
     // Source 3: Identity data provider_token (usually not populated by Supabase)
+    }
     else if (bitbucketIdentity.identity_data?.provider_token) {
       accessToken = bitbucketIdentity.identity_data.provider_token;
       tokenSource = 'identity_data.provider_token';
