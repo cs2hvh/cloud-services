@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Copy,
   Check,
+  Link2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
+import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 
@@ -386,6 +388,10 @@ export default function AppDetailPage() {
               <Activity className="w-4 h-4 mr-2" />
               Overview
             </TabsTrigger>
+            <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
+              <Link2 className="w-4 h-4 mr-2" />
+              Domains
+            </TabsTrigger>
             <TabsTrigger value="logs" className="data-[state=active]:bg-white/10">
               <Terminal className="w-4 h-4 mr-2" />
               Logs
@@ -553,6 +559,16 @@ export default function AppDetailPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Domains Tab */}
+          <TabsContent value="domains">
+            <CustomDomainsManager
+              appId={app.id}
+              appName={app.name}
+              appStatus={app.status}
+              platformDomain={domain}
+            />
           </TabsContent>
 
           {/* Logs Tab */}

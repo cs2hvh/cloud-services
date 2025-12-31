@@ -110,7 +110,6 @@ const AppDeploymentSelect = () => {
   const [buildCommand, setBuildCommand] = useState<string>('');
   const [outputDir, setOutputDir] = useState<string>('');
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
-  const [customDomain, setCustomDomain] = useState<string>('');
   const [size, setSize] = useState<string>('small');
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -936,17 +935,23 @@ const AppDeploymentSelect = () => {
                 {/* Environment Variables */}
                 <EnvVarsEditor value={envVars} onChange={setEnvVars} />
 
-                <div>
-                  <Label className="text-white">Custom Domain (Optional)</Label>
-                  <Input
-                    value={customDomain}
-                    onChange={(e) => setCustomDomain(e.target.value)}
-                    placeholder="myapp.example.com"
-                    className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                  />
-                  <p className="text-xs text-white/60 mt-1">
-                    Leave empty to use our default domain
-                  </p>
+                {/* Custom Domain Info */}
+                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-blue-400">🌐</span>
+                    </div>
+                    <div>
+                      <Label className="text-white font-medium">Custom Domain</Label>
+                      <p className="text-xs text-white/60 mt-1">
+                        Your app will be available at <span className="font-mono text-blue-400">{appName || 'your-app'}.galaxyhvh.com</span>
+                      </p>
+                      <p className="text-xs text-white/50 mt-2">
+                        You can add a custom domain (e.g., example.com) after deployment from the app&apos;s <strong>Domains</strong> tab.
+                        Custom domains require DNS verification before activation.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
@@ -1001,12 +1006,10 @@ const AppDeploymentSelect = () => {
                         {autoDeploy ? '✓ Enabled' : 'Disabled'}
                       </span>
                     </div>
-                    {customDomain && (
-                      <div className="flex justify-between">
-                        <span className="text-white/60">Custom Domain:</span>
-                        <span className="text-white">{customDomain}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Platform URL:</span>
+                      <span className="text-blue-400 font-mono text-sm">{appName || 'your-app'}.galaxyhvh.com</span>
+                    </div>
                     {envVars.length > 0 && (
                       <div>
                         <div className="text-white/60 mb-2">Environment Variables:</div>
