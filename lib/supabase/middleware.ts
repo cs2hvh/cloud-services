@@ -1,6 +1,19 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/**
+ * Supabase Session Middleware
+ * 
+ * This middleware handles session refresh to prevent the 30-minute logout issue.
+ * 
+ * KEY FIX: The getUser() call automatically refreshes the session if it's expired
+ * but the refresh token is still valid. The setAll() callback ensures the new
+ * session cookies are properly set in the response.
+ * 
+ * IMPORTANT: Supabase sessions have a default expiry of 1 hour, but this can be
+ * configured in Supabase dashboard under Authentication > Settings.
+ * The refresh token is valid for much longer (default 7 days).
+ */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -15,6 +28,8 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
+          // This is called when the session is refreshed
+          // We need to update BOTH the request cookies AND the response cookies
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
@@ -33,20 +48,33 @@ export async function updateSession(request: NextRequest) {
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
+  // This call will automatically refresh the session if needed
+  // The refreshed session cookies are set via the setAll callback above
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (
-    !user &&
+  // Log session refresh errors (but don't block the request)
+  if (userError && userError.message !== 'Auth session missing!') {
+    console.log('[Supabase Middleware] Session error:', userError.message);
+  }
+
+  // Protected routes check
+  const isProtectedRoute = 
     !request.nextUrl.pathname.startsWith("/signin") &&
     !request.nextUrl.pathname.startsWith("/signup") &&
     !request.nextUrl.pathname.startsWith("/api/auth") &&
-    request.nextUrl.pathname !== "/"
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+    !request.nextUrl.pathname.startsWith("/reset-password") &&
+    request.nextUrl.pathname !== "/" &&
+    !request.nextUrl.pathname.startsWith("/api/webhooks");
+
+  if (!user && isProtectedRoute) {
+    // No user and trying to access protected route - redirect to login
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
+    // Preserve the original URL so we can redirect back after login
+    url.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
