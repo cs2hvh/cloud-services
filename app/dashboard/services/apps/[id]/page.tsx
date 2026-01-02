@@ -565,7 +565,6 @@ export default function AppDetailPage() {
           <TabsContent value="domains">
             <CustomDomainsManager
               appId={app.id}
-              appName={app.name}
               appStatus={app.status}
               platformDomain={domain}
             />

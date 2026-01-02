@@ -49,18 +49,20 @@ interface CustomDomain {
   is_primary: boolean;
   last_error: string | null;
   created_at: string;
+  dns_ready: boolean;
+  dns_message: string;
+  dns_resolved_ips: string[];
+  dns_expected_ips: string[];
 }
 
 interface CustomDomainsManagerProps {
   appId: string;
-  appName: string;
   appStatus: string;
   platformDomain: string;
 }
 
 export function CustomDomainsManager({ 
   appId, 
-  appName, 
   appStatus,
   platformDomain 
 }: CustomDomainsManagerProps) {
@@ -214,6 +216,38 @@ export function CustomDomainsManager({
     } finally {
       setRemovingId(null);
     }
+  };
+
+  const renderDnsStatus = (domain: CustomDomain) => {
+    if (domain.status === 'removed') return null;
+
+    const expected = domain.dns_expected_ips?.length
+      ? domain.dns_expected_ips.join(', ')
+      : 'platform ingress IP';
+    const resolved = domain.dns_resolved_ips?.length
+      ? domain.dns_resolved_ips.join(', ')
+      : 'No records detected yet';
+
+    return (
+      <div
+        className={`mt-3 rounded-lg border p-3 text-sm ${
+          domain.dns_ready
+            ? 'border-green-500/30 bg-green-500/5 text-green-300'
+            : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-200'
+        }`}
+      >
+        <div className="text-xs uppercase tracking-wide text-white/60 mb-1">DNS Routing</div>
+        <p className="text-sm font-medium">{domain.dns_message}</p>
+        <div className="text-xs text-white/60 mt-2 space-y-1">
+          <p>
+            <span className="text-white/40">Expected:</span> {expected}
+          </p>
+          <p>
+            <span className="text-white/40">Resolved:</span> {resolved}
+          </p>
+        </div>
+      </div>
+    );
   };
 
   const handleSetPrimary = async (domainId: string) => {
@@ -471,6 +505,8 @@ export function CustomDomainsManager({
                 </div>
               </div>
 
+              {renderDnsStatus(domain)}
+
               {/* Verification Instructions for pending domains */}
               {domain.status === 'pending' && (
                 <Alert className="bg-yellow-500/10 border-yellow-500/30">
@@ -531,7 +567,16 @@ export function CustomDomainsManager({
                   <Button
                     size="sm"
                     onClick={() => handleActivateDomain(domain.id)}
-                    disabled={activatingId === domain.id || appStatus !== 'running'}
+                    disabled={
+                      activatingId === domain.id ||
+                      appStatus !== 'running' ||
+                      !domain.dns_ready
+                    }
+                    title={
+                      !domain.dns_ready
+                        ? 'Update the domain DNS to point to the platform ingress IP before activating.'
+                        : undefined
+                    }
                     className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     {activatingId === domain.id ? (
@@ -541,6 +586,15 @@ export function CustomDomainsManager({
                     )}
                     Activate
                   </Button>
+                )}
+                {domain.status === 'verified' && !domain.dns_ready && (
+                  <span className="text-xs text-yellow-300">
+                    Point the domain to{' '}
+                    {domain.dns_expected_ips?.length
+                      ? domain.dns_expected_ips.join(', ')
+                      : 'the platform ingress IP'}
+                    {' '}before activating.
+                  </span>
                 )}
 
                 {domain.status === 'active' && !domain.is_primary && (

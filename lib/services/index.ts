@@ -12,4 +12,12 @@ export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";
 export type { AppMetrics, AppHealth, PodMetrics } from "./prometheus";
 export type { AutoDeployConfig, AutoDeployResult } from "./auto-deploy";
-export type { CustomDomain, DomainStatus, SSLStatus, DomainVerificationResult, AddDomainResult } from "./custom-domain";
+export type {
+  CustomDomain,
+  CustomDomainWithStatus,
+  DomainStatus,
+  SSLStatus,
+  DomainVerificationResult,
+  DomainRoutingStatus,
+  AddDomainResult,
+} from "./custom-domain";

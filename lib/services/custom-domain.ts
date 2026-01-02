@@ -9,7 +9,6 @@
  */
 import { createServiceClient } from "@/lib/supabase/server";
 import { randomBytes } from "crypto";
-import dns from "dns/promises";
 import { Resolver } from "dns";
 
 // Use public DNS servers to avoid local resolver/firewall issues
@@ -19,6 +18,13 @@ customResolver.setServers(["8.8.8.8", "1.1.1.1"]);
 // Domain status types
 export type DomainStatus = 'pending' | 'verified' | 'active' | 'failed' | 'removed';
 export type SSLStatus = 'pending' | 'issuing' | 'active' | 'failed';
+
+export interface DomainRoutingStatus {
+  ready: boolean;
+  resolved_ips: string[];
+  expected_ips: string[];
+  message: string;
+}
 
 export interface CustomDomain {
   id: string;
@@ -39,6 +45,13 @@ export interface CustomDomain {
   updated_at: string;
 }
 
+export type CustomDomainWithStatus = CustomDomain & {
+  dns_ready: boolean;
+  dns_message: string;
+  dns_resolved_ips: string[];
+  dns_expected_ips: string[];
+};
+
 export interface DomainVerificationResult {
   verified: boolean;
   error?: string;
@@ -47,7 +60,7 @@ export interface DomainVerificationResult {
 
 export interface AddDomainResult {
   success: boolean;
-  domain?: CustomDomain;
+  domain?: CustomDomainWithStatus;
   error?: string;
   verification_instructions?: {
     record_type: string;
@@ -159,9 +172,11 @@ export class CustomDomainService {
 
     console.log(`[CustomDomainService] ✅ Added domain ${cleanDomain} for app ${appId}`);
 
+    const domainWithStatus = await this.decorateDomainWithRouting(newDomain as CustomDomain);
+
     return {
       success: true,
-      domain: newDomain as CustomDomain,
+      domain: domainWithStatus,
       verification_instructions: {
         record_type: 'TXT',
         record_name: `galaxyhvh-verify.${cleanDomain}`,
@@ -294,6 +309,14 @@ export class CustomDomainService {
     const app = domainRecord.platform_apps;
     if (app.status !== 'running') {
       return { success: false, error: 'App must be running before activating custom domain' };
+    }
+
+    // Ensure DNS is already routing to the platform before kicking off ingress changes
+    try {
+      await this.ensureDomainPointsToPlatform(domainRecord.domain);
+    } catch (dnsError: unknown) {
+      const message = dnsError instanceof Error ? dnsError.message : 'Domain DNS not pointing to platform ingress';
+      return { success: false, error: message };
     }
 
     // Update SSL status to issuing
@@ -442,7 +465,7 @@ export class CustomDomainService {
   /**
    * List all custom domains for an app
    */
-  static async listDomains(appId: string, userId: string): Promise<CustomDomain[]> {
+  static async listDomains(appId: string, userId: string): Promise<CustomDomainWithStatus[]> {
     const supabase = await createServiceClient();
 
     const { data, error } = await supabase
@@ -453,18 +476,20 @@ export class CustomDomainService {
       .neq('status', 'removed')
       .order('created_at', { ascending: true });
 
-    if (error) {
+    if (error || !data) {
       console.error('[CustomDomainService] Error listing domains:', error);
       return [];
     }
 
-    return data as CustomDomain[];
+    return Promise.all(
+      data.map(async (domain) => this.decorateDomainWithRouting(domain as CustomDomain))
+    );
   }
 
   /**
    * Get a single domain by ID
    */
-  static async getDomain(domainId: string, userId: string): Promise<CustomDomain | null> {
+  static async getDomain(domainId: string, userId: string): Promise<CustomDomainWithStatus | null> {
     const supabase = await createServiceClient();
 
     const { data, error } = await supabase
@@ -478,7 +503,7 @@ export class CustomDomainService {
       return null;
     }
 
-    return data as CustomDomain;
+    return this.decorateDomainWithRouting(data as CustomDomain);
   }
 
   /**
@@ -557,5 +582,146 @@ export class CustomDomainService {
     }
 
     return data.map(d => d.domain);
+  }
+
+  /**
+   * Ensure the domain's DNS already resolves to the platform ingress IP before activation
+   */
+  private static async ensureDomainPointsToPlatform(domain: string): Promise<void> {
+    const status = await this.getDomainRoutingStatus(domain);
+    if (!status.ready) {
+      throw new Error(status.message || `DNS for ${domain} is not pointing to the platform ingress yet.`);
+    }
+  }
+
+  private static getExpectedIngressIps(): string[] {
+    const ingressIpRaw = process.env.KUBE_IP?.trim();
+
+    if (!ingressIpRaw) {
+      throw new Error('Platform ingress IP (KUBE_IP) is not configured. Please contact support.');
+    }
+
+    const expectedIps = ingressIpRaw.split(',').map(ip => ip.trim()).filter(Boolean);
+
+    if (expectedIps.length === 0) {
+      throw new Error('Platform ingress IP (KUBE_IP) is misconfigured. Please contact support.');
+    }
+
+    return expectedIps;
+  }
+
+  private static async resolveDomainIps(domain: string): Promise<string[]> {
+    const ipv4 = await this.resolveWithCustomResolver(domain, 4);
+    const ipv6 = await this.resolveWithCustomResolver(domain, 6);
+    return [...ipv4, ...ipv6];
+  }
+
+  private static resolveWithCustomResolver(
+    domain: string,
+    family: 4 | 6
+  ): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const handler = (err: NodeJS.ErrnoException | null, addresses: string[]) => {
+        if (err) {
+          if (err.code === 'ENOTFOUND' || err.code === 'ENODATA' || err.code === 'EAI_AGAIN') {
+            return resolve([]);
+          }
+          return reject(err);
+        }
+        resolve(addresses || []);
+      };
+
+      try {
+        if (family === 4) {
+          customResolver.resolve4(domain, handler);
+        } else {
+          customResolver.resolve6(domain, handler);
+        }
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  private static async getDomainRoutingStatus(domain: string): Promise<DomainRoutingStatus> {
+    const expectedIps = this.getExpectedIngressIps();
+
+    try {
+      const resolvedIps = await this.resolveDomainIps(domain);
+
+      if (resolvedIps.length === 0) {
+        return {
+          ready: false,
+          resolved_ips: [],
+          expected_ips: expectedIps,
+          message: `No DNS records detected yet. Point ${domain} to ${expectedIps.join(', ')} and wait for propagation.`,
+        };
+      }
+
+      const matches = resolvedIps.some((ip) => expectedIps.includes(ip));
+      if (matches) {
+        return {
+          ready: true,
+          resolved_ips: resolvedIps,
+          expected_ips: expectedIps,
+          message: `DNS is correctly pointing to the platform ingress.`,
+        };
+      }
+
+      return {
+        ready: false,
+        resolved_ips: resolvedIps,
+        expected_ips: expectedIps,
+        message: `DNS currently resolves to ${resolvedIps.join(', ')}. Update the record to ${expectedIps.join(', ')} before activation.`,
+      };
+    } catch (error: unknown) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === 'ENOTFOUND' || err?.code === 'EAI_AGAIN') {
+        return {
+          ready: false,
+          resolved_ips: [],
+          expected_ips: expectedIps,
+          message: `Unable to resolve ${domain}. Make sure the domain points to ${expectedIps.join(', ')}.`,
+        };
+      }
+
+      console.error('[CustomDomainService] DNS routing check failed:', error);
+      return {
+        ready: false,
+        resolved_ips: [],
+        expected_ips: expectedIps,
+        message: err?.message || 'Failed to check DNS routing. Please try again later.',
+      };
+    }
+  }
+
+  private static async decorateDomainWithRouting(domain: CustomDomain): Promise<CustomDomainWithStatus> {
+    try {
+      const status = await this.getDomainRoutingStatus(domain.domain);
+      return {
+        ...domain,
+        dns_ready: status.ready,
+        dns_message: status.message,
+        dns_resolved_ips: status.resolved_ips,
+        dns_expected_ips: status.expected_ips,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to validate DNS';
+      const expectedIps = (() => {
+        try {
+          return this.getExpectedIngressIps();
+        } catch {
+          return [];
+        }
+      })();
+
+      return {
+        ...domain,
+        dns_ready: false,
+        dns_message: message,
+        dns_resolved_ips: [],
+        dns_expected_ips: expectedIps,
+      };
+    }
   }
 }
