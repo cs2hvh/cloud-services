@@ -14,6 +14,9 @@ import {
   Trash2,
   Star,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -75,6 +78,7 @@ export function CustomDomainsManager({
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showGuide, setShowGuide] = useState(true);
   const [verificationInstructions, setVerificationInstructions] = useState<{
     record_type: string;
     record_name: string;
@@ -424,7 +428,164 @@ export function CustomDomainsManager({
           </Dialog>
         </div>
       </CardHeader>
+
       <CardContent className="space-y-4">
+        {/* Step-by-Step Guide */}
+        <div className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-500/5 to-purple-500/5 overflow-hidden">
+          <button
+            onClick={() => setShowGuide(!showGuide)}
+            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <BookOpen className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="text-left">
+                <h3 className="text-sm font-semibold text-white">How to Configure Your Custom Domain</h3>
+                <p className="text-xs text-white/50">Step-by-step guide to connect your own domain</p>
+              </div>
+            </div>
+            {showGuide ? (
+              <ChevronUp className="w-5 h-5 text-white/50" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-white/50" />
+            )}
+          </button>
+          
+          {showGuide && (
+            <div className="px-4 pb-4 space-y-4">
+              <div className="h-px bg-white/10" />
+              
+              {/* Step 1 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-blue-400">i</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">Add Your Domain</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Click the <span className="text-blue-400 font-medium">&quot;Add Domain&quot;</span> button above and enter your domain name 
+                    (e.g., <span className="font-mono text-white/80">example.com</span> or <span className="font-mono text-white/80">app.example.com</span>). 
+                    Don&apos;t include <span className="font-mono text-white/80">http://</span> or <span className="font-mono text-white/80">https://</span>.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-yellow-400">ii</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">Add TXT Record for Verification</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Go to your domain registrar&apos;s DNS settings (e.g., GoDaddy, Namecheap, Cloudflare) and add a <span className="font-mono text-yellow-400">TXT</span> record 
+                    with the name and value we provide. This proves you own the domain.
+                  </p>
+                  <div className="mt-2 p-2 rounded bg-black/30 border border-white/5">
+                    <p className="text-xs text-white/50">Example TXT Record:</p>
+                    <p className="text-xs font-mono text-white/80 mt-1">
+                      Name: <span className="text-yellow-400">galaxyhvh-verify.yourdomain.com</span>
+                    </p>
+                    <p className="text-xs font-mono text-white/80">
+                      Value: <span className="text-yellow-400">[verification-token]</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-purple-400">iii</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">Verify Domain Ownership</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    After adding the TXT record, wait a few minutes for DNS propagation (can take up to 24-48 hours, but usually 5-15 minutes). 
+                    Then click the <span className="text-purple-400 font-medium">&quot;Verify&quot;</span> button on your pending domain.
+                  </p>
+                  <p className="text-xs text-white/40 mt-1 italic">
+                    💡 Tip: Use <a href="https://dnschecker.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">dnschecker.org</a> to check if your TXT record has propagated.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 4 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-orange-400">iv</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">Point Domain to Platform (A/CNAME Record)</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Once verified, add an <span className="font-mono text-orange-400">A</span> record or <span className="font-mono text-orange-400">CNAME</span> record 
+                    to point your domain to our platform. You&apos;ll see the required IP address in the DNS Routing section below your domain.
+                  </p>
+                  <div className="mt-2 p-2 rounded bg-black/30 border border-white/5">
+                    <p className="text-xs text-white/50">For root domain (example.com):</p>
+                    <p className="text-xs font-mono text-white/80 mt-1">
+                      Type: <span className="text-orange-400">A</span> | Name: <span className="text-orange-400">@</span> | Value: <span className="text-orange-400">[Platform IP]</span>
+                    </p>
+                    <p className="text-xs text-white/50 mt-2">For subdomain (app.example.com):</p>
+                    <p className="text-xs font-mono text-white/80 mt-1">
+                      Type: <span className="text-orange-400">A</span> | Name: <span className="text-orange-400">app</span> | Value: <span className="text-orange-400">[Platform IP]</span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 5 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-green-400">v</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">Activate Your Domain</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Once the DNS is pointing correctly (shown as &quot;DNS Ready&quot; in green), click the <span className="text-green-400 font-medium">&quot;Activate&quot;</span> button. 
+                    We&apos;ll automatically provision an SSL certificate for your domain.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 6 */}
+              <div className="flex gap-4">
+                <div className="flex-shrink-0">
+                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
+                    <span className="text-xs font-bold text-emerald-400">vi</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-medium text-white mb-1">You&apos;re Live! 🎉</h4>
+                  <p className="text-xs text-white/60 leading-relaxed">
+                    Your custom domain is now active with HTTPS enabled. You can optionally set it as your <span className="text-emerald-400 font-medium">Primary Domain</span> 
+                    using the &quot;Set Primary&quot; button. The primary domain will be used for redirects and canonical URLs.
+                  </p>
+                </div>
+              </div>
+
+              {/* Help Note */}
+              <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10">
+                <p className="text-xs text-white/60">
+                  <span className="text-white/80 font-medium">Need help?</span> DNS changes can take time to propagate. 
+                  If verification fails, wait 15-30 minutes and try again. Make sure you&apos;ve saved the DNS record in your registrar&apos;s panel.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Platform Domain (Always shown) */}
         <div className="p-4 bg-black/30 rounded-lg border border-white/5">
           <div className="flex items-center justify-between">
@@ -513,7 +674,7 @@ export function CustomDomainsManager({
                   <AlertCircle className="h-4 w-4 text-yellow-400" />
                   <AlertTitle className="text-yellow-400 text-sm">Verification Required</AlertTitle>
                   <AlertDescription className="text-white/70 text-xs space-y-2">
-                    <p>Add this TXT record to verify ownership:</p>
+                    <p>Add this TXT record in the DNS settings of your domain to verify ownership:</p>
                     <div className="bg-black/30 rounded p-2 font-mono text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-white/50">Name:</span>

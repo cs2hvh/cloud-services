@@ -1,4 +1,4 @@
-'use client';
+"use client";
 import { useState, useEffect, useCallback } from "react";
 import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 import { Label } from "@/components/ui/label";
@@ -46,7 +46,7 @@ interface Repository {
   defaultBranch: string;
   language: string;
   updatedAt: string;
-  provider: 'github' | 'gitlab' | 'bitbucket';
+  provider: "github" | "gitlab" | "bitbucket";
 }
 
 interface Branch {
@@ -56,7 +56,7 @@ interface Branch {
 }
 
 interface GitProvider {
-  id: 'github' | 'gitlab' | 'bitbucket';
+  id: "github" | "gitlab" | "bitbucket";
   name: string;
   icon: string;
   connected: boolean;
@@ -69,48 +69,135 @@ interface ProviderConnection {
 
 // Framework detection and build settings
 const frameworkConfigs = {
-  'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
-  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
-  'Angular': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Angular CLI)' },
-  'SvelteKit': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Node adapter)' },
-  'Svelte': { buildCommand: 'npm run build', outputDir: 'public/build', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
-  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Needs Dockerfile in repo' },
-  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
-  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
+  "simple-test": {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "",
+    description: "Test pipeline - no deployment",
+  },
+  "Next.js": {
+    buildCommand: "npm run build",
+    outputDir: ".next",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  "Nuxt.js": {
+    buildCommand: "npm run build",
+    outputDir: ".output",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  "Vite-React": {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Vite)",
+  },
+  React: {
+    buildCommand: "npm run build",
+    outputDir: "build",
+    installCommand: "npm install",
+    description: "Needs Dockerfile in repo",
+  },
+  "Vue.js": {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Vite)",
+  },
+  Angular: {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Angular CLI)",
+  },
+  SvelteKit: {
+    buildCommand: "npm run build",
+    outputDir: "build",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Node adapter)",
+  },
+  Svelte: {
+    buildCommand: "npm run build",
+    outputDir: "public/build",
+    installCommand: "npm install",
+    description: "Needs Dockerfile in repo",
+  },
+  "Node.js": {
+    buildCommand: "npm run build",
+    outputDir: ".",
+    installCommand: "npm install",
+    description: "Needs Dockerfile in repo",
+  },
+  express: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "npm ci --only=production",
+    description: "Auto-generates Dockerfile",
+  },
+  python: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  django: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  flask: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  fastapi: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  Static: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "",
+    description: "Static files only",
+  },
 };
 
 const AppDeploymentSelect = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(null); // Track which provider is being connected
+  const [connectionError, setConnectionError] = useState<{ provider: string; message: string } | null>(null); // Inline error
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [gitProviders, setGitProviders] = useState<GitProvider[]>([
-    { id: 'github', name: 'GitHub', icon: '/github.png', connected: false },
-    { id: 'gitlab', name: 'GitLab', icon: '/gitlab.png', connected: false },
-    { id: 'bitbucket', name: 'Bitbucket', icon: '/BitBucket.png', connected: false },
+    { id: "github", name: "GitHub", icon: "/github.png", connected: false },
+    { id: "gitlab", name: "GitLab", icon: "/gitlab.png", connected: false },
+    {
+      id: "bitbucket",
+      name: "Bitbucket",
+      icon: "/BitBucket.png",
+      connected: false,
+    },
   ]);
   const [loadingProviders, setLoadingProviders] = useState(true);
-  
+
   // Form state
-  const [selectedProvider, setSelectedProvider] = useState<string>('');
-  const [selectedRepo, setSelectedRepo] = useState<string>('');
-  const [selectedBranch, setSelectedBranch] = useState<string>('');
-  const [appName, setAppName] = useState('');
-  const [framework, setFramework] = useState<string>('');
-  const [buildCommand, setBuildCommand] = useState<string>('');
-  const [outputDir, setOutputDir] = useState<string>('');
+  const [selectedProvider, setSelectedProvider] = useState<string>("");
+  const [selectedRepo, setSelectedRepo] = useState<string>("");
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [appName, setAppName] = useState("");
+  const [framework, setFramework] = useState<string>("");
+  const [buildCommand, setBuildCommand] = useState<string>("");
+  const [outputDir, setOutputDir] = useState<string>("");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
-  const [size, setSize] = useState<string>('small');
+  const [size, setSize] = useState<string>("small");
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
@@ -119,21 +206,26 @@ const AppDeploymentSelect = () => {
   const fetchProviderStatus = useCallback(async () => {
     setLoadingProviders(true);
     try {
-      const response = await fetch('/api/auth/providers');
+      const response = await fetch("/api/auth/providers");
       if (response.ok) {
         const data = await response.json();
         const providers = data.providers || [];
-        
+
         // Update git providers with real connection status - replace 'any' with proper type
-        setGitProviders(prev => prev.map(provider => ({
-          ...provider,
-          connected: providers.find((p: ProviderConnection) => p.provider === provider.id)?.status || false
-        })));
+        setGitProviders((prev) =>
+          prev.map((provider) => ({
+            ...provider,
+            connected:
+              providers.find(
+                (p: ProviderConnection) => p.provider === provider.id
+              )?.status || false,
+          }))
+        );
       } else {
-        toast.error('Failed to fetch provider status');
+        toast.error("Failed to fetch provider status");
       }
     } catch {
-      toast.error('Failed to check provider connections');
+      toast.error("Failed to check provider connections");
     } finally {
       setLoadingProviders(false);
     }
@@ -141,11 +233,11 @@ const AppDeploymentSelect = () => {
 
   // Fetch repositories from API when provider is selected
   const fetchRepositories = useCallback(async (provider: string) => {
-    const supportedProviders = ['github', 'gitlab', 'bitbucket'];
-    
+    const supportedProviders = ["github", "gitlab", "bitbucket"];
+
     if (!supportedProviders.includes(provider)) {
       setRepositories([]);
-      toast.error('Provider not supported yet');
+      toast.error("Provider not supported yet");
       return;
     }
 
@@ -153,13 +245,15 @@ const AppDeploymentSelect = () => {
     try {
       const apiEndpoint = `/api/${provider}/repositories`;
       const response = await fetch(apiEndpoint);
-      
+
       if (response.ok) {
         const data = await response.json();
         setRepositories(data.repositories || []);
-        
+
         if (data.repositories?.length === 0) {
-          toast.info(`No repositories found in your ${provider.charAt(0).toUpperCase() + provider.slice(1)} account`);
+          toast.info(
+            `No repositories found in your ${provider.charAt(0).toUpperCase() + provider.slice(1)} account`
+          );
         } else if (data.note) {
           toast.success(data.note);
         } else if (data.warning) {
@@ -169,19 +263,22 @@ const AppDeploymentSelect = () => {
         }
       } else {
         const errorData = await response.json();
-        console.error('Repository fetch error:', errorData);
-        
+        console.error("Repository fetch error:", errorData);
+
         if (response.status === 400 && errorData.needsAppAuth) {
           // Show GitHub App connect option
           setRepositories([]);
-          toast.error(errorData.message || `${provider.charAt(0).toUpperCase() + provider.slice(1)} App connection required for private repositories`);
+          toast.error(
+            errorData.message ||
+              `${provider.charAt(0).toUpperCase() + provider.slice(1)} App connection required for private repositories`
+          );
         } else {
-          toast.error(errorData.message || 'Failed to fetch repositories');
+          toast.error(errorData.message || "Failed to fetch repositories");
           setRepositories([]);
         }
       }
     } catch {
-      toast.error('Network error while fetching repositories');
+      toast.error("Network error while fetching repositories");
       setRepositories([]);
     } finally {
       setLoadingRepos(false);
@@ -189,122 +286,128 @@ const AppDeploymentSelect = () => {
   }, []);
 
   // Fetch branches from API when repository is selected
-  const fetchBranches = useCallback(async (provider: string, repo: Repository) => {
-    if (!provider || !repo) {
-      setBranches([]);
-      return;
-    }
-
-    setLoadingBranches(true);
-    try {
-      let apiEndpoint = '';
-      
-      if (provider === 'github') {
-        apiEndpoint = `/api/github/branches?repo=${encodeURIComponent(repo.fullName)}`;
-      } else if (provider === 'gitlab') {
-        apiEndpoint = `/api/gitlab/branches?project_id=${encodeURIComponent(repo.id)}`;
-      } else if (provider === 'bitbucket') {
-        apiEndpoint = `/api/bitbucket/branches?repo=${encodeURIComponent(repo.fullName)}`;
-      } else {
+  const fetchBranches = useCallback(
+    async (provider: string, repo: Repository) => {
+      if (!provider || !repo) {
         setBranches([]);
-        toast.error('Provider not supported for branch fetching');
         return;
       }
 
-      const response = await fetch(apiEndpoint);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setBranches(data.branches || []);
-        
-        if (data.branches?.length === 0) {
-          toast.info(`No branches found in the selected repository`);
-        } else if (data.note) {
-          toast.success(data.note);
+      setLoadingBranches(true);
+      try {
+        let apiEndpoint = "";
+
+        if (provider === "github") {
+          apiEndpoint = `/api/github/branches?repo=${encodeURIComponent(repo.fullName)}`;
+        } else if (provider === "gitlab") {
+          apiEndpoint = `/api/gitlab/branches?project_id=${encodeURIComponent(repo.id)}`;
+        } else if (provider === "bitbucket") {
+          apiEndpoint = `/api/bitbucket/branches?repo=${encodeURIComponent(repo.fullName)}`;
+        } else {
+          setBranches([]);
+          toast.error("Provider not supported for branch fetching");
+          return;
         }
-      } else {
-        const errorData = await response.json();
-        console.error('Branch fetch error:', errorData);
-        toast.error(errorData.message || 'Failed to fetch branches');
+
+        const response = await fetch(apiEndpoint);
+
+        if (response.ok) {
+          const data = await response.json();
+          setBranches(data.branches || []);
+
+          if (data.branches?.length === 0) {
+            toast.info(`No branches found in the selected repository`);
+          } else if (data.note) {
+            toast.success(data.note);
+          }
+        } else {
+          const errorData = await response.json();
+          console.error("Branch fetch error:", errorData);
+          toast.error(errorData.message || "Failed to fetch branches");
+          setBranches([]);
+        }
+      } catch {
+        toast.error("Network error while fetching branches");
         setBranches([]);
+      } finally {
+        setLoadingBranches(false);
       }
-    } catch {
-      toast.error('Network error while fetching branches');
-      setBranches([]);
-    } finally {
-      setLoadingBranches(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   // Detect framework from repository files
-  const detectFramework = useCallback(async (provider: string, repo: Repository, branch: string) => {
-    if (!provider || !repo) {
-      return;
-    }
+  const detectFramework = useCallback(
+    async (provider: string, repo: Repository, branch: string) => {
+      if (!provider || !repo) {
+        return;
+      }
 
-    try {
-      const response = await fetch('/api/detect-framework', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          provider,
-          repoFullName: repo.fullName,
-          branch
-        })
-      });
+      try {
+        const response = await fetch("/api/detect-framework", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            provider,
+            repoFullName: repo.fullName,
+            branch,
+          }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.framework) {
-          // Normalize framework name to match our configs
-          let normalizedFramework = data.framework;
-          
-          // Map detected frameworks to our config keys
-          const frameworkMap: Record<string, string> = {
-            'Next.js': 'Next.js',
-            'Nuxt.js': 'Nuxt.js',
-            'Vite-React': 'Vite-React',
-            'React': 'React',
-            'Vue.js': 'Vue.js',
-            'Angular': 'Angular',
-            'SvelteKit': 'SvelteKit',
-            'Svelte': 'Svelte',
-            'Express': 'express',
-            'Node.js': 'Node.js',
-            'Django': 'django',
-            'Flask': 'flask',
-            'FastAPI': 'fastapi',
-            'Laravel': 'Static',
-            'Symfony': 'Static',
-            'Ruby on Rails': 'Static',
-            'PHP': 'Static',
-            'Python': 'python',
-            'python': 'python',
-            'Ruby': 'Static',
-            'Static': 'Static'
-          };
-          
-          normalizedFramework = frameworkMap[data.framework] || 'Static';
-          
-          setFramework(normalizedFramework);
-          
-          // Use additional detection metadata
-          if (data.hasDockerfile) {
-            console.log('Repository has Dockerfile');
-            // Could set a Docker-specific deployment option here
-          }
-          
-          if (data.buildSystem) {
-            console.log('Detected build system:', data.buildSystem);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.framework) {
+            // Normalize framework name to match our configs
+            let normalizedFramework = data.framework;
+
+            // Map detected frameworks to our config keys
+            const frameworkMap: Record<string, string> = {
+              "Next.js": "Next.js",
+              "Nuxt.js": "Nuxt.js",
+              "Vite-React": "Vite-React",
+              React: "React",
+              "Vue.js": "Vue.js",
+              Angular: "Angular",
+              SvelteKit: "SvelteKit",
+              Svelte: "Svelte",
+              Express: "express",
+              "Node.js": "Node.js",
+              Django: "django",
+              Flask: "flask",
+              FastAPI: "fastapi",
+              Laravel: "Static",
+              Symfony: "Static",
+              "Ruby on Rails": "Static",
+              PHP: "Static",
+              Python: "python",
+              python: "python",
+              Ruby: "Static",
+              Static: "Static",
+            };
+
+            normalizedFramework = frameworkMap[data.framework] || "Static";
+
+            setFramework(normalizedFramework);
+
+            // Use additional detection metadata
+            if (data.hasDockerfile) {
+              console.log("Repository has Dockerfile");
+              // Could set a Docker-specific deployment option here
+            }
+
+            if (data.buildSystem) {
+              console.log("Detected build system:", data.buildSystem);
+            }
           }
         }
+      } catch (error) {
+        console.error("Framework detection error:", error);
       }
-    } catch (error) {
-      console.error('Framework detection error:', error);
-    }
-  }, []);
+    },
+    []
+  );
 
   // Load provider status on component mount
   useEffect(() => {
@@ -321,13 +424,17 @@ const AppDeploymentSelect = () => {
     }
     // Clear branches when provider changes
     setBranches([]);
-    setSelectedBranch('');
+    setSelectedBranch("");
   }, [selectedProvider, fetchRepositories]);
 
   // Auto-fill build settings when framework is selected
   useEffect(() => {
-    if (framework && frameworkConfigs[framework as keyof typeof frameworkConfigs]) {
-      const config = frameworkConfigs[framework as keyof typeof frameworkConfigs];
+    if (
+      framework &&
+      frameworkConfigs[framework as keyof typeof frameworkConfigs]
+    ) {
+      const config =
+        frameworkConfigs[framework as keyof typeof frameworkConfigs];
       setBuildCommand(config.buildCommand);
       setOutputDir(config.outputDir);
     }
@@ -336,7 +443,7 @@ const AppDeploymentSelect = () => {
   // Auto-fill app name when repository is selected
   useEffect(() => {
     if (selectedRepo) {
-      const repo = repositories.find(r => r.id === selectedRepo);
+      const repo = repositories.find((r) => r.id === selectedRepo);
       if (repo) {
         setAppName(repo.name);
         setSelectedBranch(repo.defaultBranch);
@@ -347,51 +454,79 @@ const AppDeploymentSelect = () => {
       }
     } else {
       setBranches([]);
-      setSelectedBranch('');
+      setSelectedBranch("");
     }
-  }, [selectedRepo, repositories, selectedProvider, fetchBranches, detectFramework]);
+  }, [
+    selectedRepo,
+    repositories,
+    selectedProvider,
+    fetchBranches,
+    detectFramework,
+  ]);
 
-  const { connectProvider: performConnection } = useProviderConnection();
+  const { connectProvider: performConnection } = useProviderConnection({
+    returnTo: '/dashboard/services/apps/new'
+  });
 
   const connectProvider = async (providerId: string) => {
     setIsLoading(true);
+    setConnectingProvider(providerId);
+    setConnectionError(null); // Clear previous errors
     try {
-      await performConnection(providerId, 'connect');
+      const result = await performConnection(providerId, "connect");
+      if (!result.success && result.error) {
+        setConnectionError({ provider: providerId, message: result.error });
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Connection failed';
+      setConnectionError({ provider: providerId, message: errorMessage });
     } finally {
       setIsLoading(false);
+      setConnectingProvider(null);
     }
   };
 
+  // Auto-refresh provider status when window regains focus (after OAuth redirect)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Refresh provider status when user returns from OAuth
+      fetchProviderStatus();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [fetchProviderStatus]);
+
   const handleNextStep = () => {
     if (currentStep === 1 && !selectedProvider) {
-      toast.error('Please select a Git provider');
+      toast.error("Please select a Git provider");
       return;
     }
     if (currentStep === 2 && !selectedRepo) {
-      toast.error('Please select a repository');
+      toast.error("Please select a repository");
       return;
     }
     if (currentStep === 3) {
       if (!appName.trim()) {
-        toast.error('Please enter an app name');
+        toast.error("Please enter an app name");
         return;
       }
       if (!framework) {
-        toast.error('Please select a framework');
+        toast.error("Please select a framework");
         return;
       }
       // Validate app name format
       const normalizedName = appName.toLowerCase().trim();
       if (normalizedName.length < 3) {
-        toast.error('App name must be at least 3 characters long');
+        toast.error("App name must be at least 3 characters long");
         return;
       }
       if (normalizedName.length > 63) {
-        toast.error('App name must be at most 63 characters long');
+        toast.error("App name must be at most 63 characters long");
         return;
       }
     }
-    
+
     if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     }
@@ -407,15 +542,15 @@ const AppDeploymentSelect = () => {
 
   const onSubmit = async () => {
     if (!selectedRepo || !selectedProvider || !appName || !framework) {
-      toast.error('Please fill in all required fields');
+      toast.error("Please fill in all required fields");
       return;
     }
 
     setIsLoading(true);
     try {
-      const selectedRepoData = repositories.find(r => r.id === selectedRepo);
+      const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
       if (!selectedRepoData) {
-        toast.error('Selected repository not found');
+        toast.error("Selected repository not found");
         setIsLoading(false);
         return;
       }
@@ -423,17 +558,18 @@ const AppDeploymentSelect = () => {
       // Normalize app name to meet validation requirements
       const normalizedName = appName
         .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
-        .replace(/-+/g, '-'); // Replace multiple hyphens with single hyphen
+        .replace(/[^a-z0-9-]/g, "-")
+        .replace(/^-+|-+$/g, "") // Remove leading/trailing hyphens
+        .replace(/-+/g, "-"); // Replace multiple hyphens with single hyphen
 
       // Ensure name starts and ends with alphanumeric
-      const validName = normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/) 
-        ? normalizedName 
-        : `app-${normalizedName}`.replace(/^-+|-+$/g, '');
+      const validName =
+        normalizedName.match(/^[a-z0-9]/) && normalizedName.match(/[a-z0-9]$/)
+          ? normalizedName
+          : `app-${normalizedName}`.replace(/^-+|-+$/g, "");
 
       if (validName.length < 3) {
-        toast.error('App name must be at least 3 characters long');
+        toast.error("App name must be at least 3 characters long");
         setIsLoading(false);
         return;
       }
@@ -447,41 +583,58 @@ const AppDeploymentSelect = () => {
 
       const payload = {
         name: validName,
-        git_provider: selectedProvider as 'github' | 'gitlab' | 'bitbucket',
+        git_provider: selectedProvider as "github" | "gitlab" | "bitbucket",
         repository_id: selectedRepoData.id,
         repository_name: selectedRepoData.fullName,
-        repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
-        branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
-        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static',
+        repository_url:
+          repoUrlMap[selectedProvider] ||
+          `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+        branch: selectedBranch || selectedRepoData.defaultBranch || "main",
+        framework: framework as
+          | "simple-test"
+          | "Next.js"
+          | "React"
+          | "Vue.js"
+          | "Node.js"
+          | "express"
+          | "python"
+          | "django"
+          | "flask"
+          | "fastapi"
+          | "Static",
         build_command: buildCommand || undefined,
         output_directory: outputDir || undefined,
-        env_vars: envVars.filter(ev => ev.key && ev.value),
-        size: size || 'small',
+        env_vars: envVars.filter((ev) => ev.key && ev.value),
+        size: size || "small",
         auto_deploy: autoDeploy,
-        deploy_branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
+        deploy_branch:
+          selectedBranch || selectedRepoData.defaultBranch || "main",
       };
 
-      const response = await fetch('/api/services/platform-apps/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/services/platform-apps/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create application');
+        throw new Error(data.error || "Failed to create application");
       }
 
-      toast.success('Application deployment started successfully!');
-      
+      toast.success("Application deployment started successfully!");
+
       // Redirect to apps list page after a short delay
       setTimeout(() => {
-        router.push('/dashboard/services/apps');
+        router.push("/dashboard/services/apps");
       }, 1500);
     } catch (error: unknown) {
-      console.error('Deployment error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to start deployment. Please try again.';
+      console.error("Deployment error:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to start deployment. Please try again.";
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -495,8 +648,10 @@ const AppDeploymentSelect = () => {
     { id: 4, name: "Deploy" },
   ];
 
-  const selectedRepoData = repositories.find(r => r.id === selectedRepo);
-  const selectedProviderData = gitProviders.find(p => p.id === selectedProvider);
+  const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
+  const selectedProviderData = gitProviders.find(
+    (p) => p.id === selectedProvider
+  );
 
   return (
     <div className="py-4">
@@ -508,19 +663,28 @@ const AppDeploymentSelect = () => {
               <div className="flex items-center w-full">
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
-                    currentStep > step.id ? "bg-blue-600 text-white" : 
-                    currentStep === step.id ? "bg-blue-500 text-white" : "bg-white/10 text-white/50"
+                    currentStep > step.id
+                      ? "bg-blue-600 text-white"
+                      : currentStep === step.id
+                        ? "bg-blue-500 text-white"
+                        : "bg-white/10 text-white/50"
                   }`}
                 >
                   {currentStep > step.id ? <CheckCircle2 size={16} /> : step.id}
                 </div>
                 {index < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 transition-colors duration-300 ${
-                    currentStep > step.id ? 'bg-blue-600' : 'bg-white/10'
-                  }`}></div>
+                  <div
+                    className={`flex-1 h-0.5 transition-colors duration-300 ${
+                      currentStep > step.id ? "bg-blue-600" : "bg-white/10"
+                    }`}
+                  ></div>
                 )}
               </div>
-              <p className={`mt-2 text-xs ${currentStep >= step.id ? 'text-white' : 'text-white/50'}`}>{step.name}</p>
+              <p
+                className={`mt-2 text-xs ${currentStep >= step.id ? "text-white" : "text-white/50"}`}
+              >
+                {step.name}
+              </p>
             </div>
           ))}
         </div>
@@ -533,36 +697,64 @@ const AppDeploymentSelect = () => {
           {currentStep === 1 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Select Git Provider</CardTitle>
+                <CardTitle className="text-white">
+                  Select Git Provider
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingProviders ? (
                   <div className="text-center py-8">
                     <Loader2 className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
-                    <p className="text-white/60">Checking connected providers...</p>
+                    <p className="text-white/60">
+                      Checking connected providers...
+                    </p>
                   </div>
                 ) : (
-                  <RadioGroup value={selectedProvider} onValueChange={setSelectedProvider} className="grid grid-cols-1 gap-4">
+                  <RadioGroup
+                    value={selectedProvider}
+                    onValueChange={setSelectedProvider}
+                    className="grid grid-cols-1 gap-4"
+                  >
                     {gitProviders.map((provider) => (
                       <div key={provider.id}>
-                        <RadioGroupItem value={provider.id} id={provider.id} className="peer sr-only" disabled={!provider.connected} />
-                        <Label htmlFor={provider.id} className="flex items-center gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed">
+                        <RadioGroupItem
+                          value={provider.id}
+                          id={provider.id}
+                          className="peer sr-only"
+                          disabled={!provider.connected}
+                        />
+                        <Label
+                          htmlFor={provider.id}
+                          className="flex items-center gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15 peer-disabled:opacity-50 peer-disabled:cursor-not-allowed"
+                        >
                           <div className="flex items-center gap-3">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              selectedProvider === provider.id 
-                                ? 'border-blue-500 bg-blue-500' 
-                                : 'border-white/30'
-                            }`}>
+                            <div
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                selectedProvider === provider.id
+                                  ? "border-blue-500 bg-blue-500"
+                                  : "border-white/30"
+                              }`}
+                            >
                               {selectedProvider === provider.id && (
                                 <div className="w-2 h-2 rounded-full bg-white"></div>
                               )}
                             </div>
-                            <Image src={provider.icon} alt={provider.name} width={32} height={32} className="rounded" />
+                            <Image
+                              src={provider.icon}
+                              alt={provider.name}
+                              width={32}
+                              height={32}
+                              className="rounded"
+                            />
                           </div>
                           <div className="flex-1">
-                            <div className="font-semibold text-white">{provider.name}</div>
+                            <div className="font-semibold text-white">
+                              {provider.name}
+                            </div>
                             <div className="text-sm text-white/60">
-                              {provider.connected ? 'Connected and ready to use' : 'Not connected'}
+                              {provider.connected
+                                ? "Connected and ready to use"
+                                : "Not connected"}
                             </div>
                           </div>
                           {provider.connected ? (
@@ -570,14 +762,35 @@ const AppDeploymentSelect = () => {
                               Connected
                             </Badge>
                           ) : (
-                            <Button
-                              onClick={() => connectProvider(provider.id)}
-                              size="sm"
-                              className="bg-white text-black hover:bg-gray-200"
-                              disabled={isLoading}
-                            >
-                              Connect
-                            </Button>
+                            <div className="flex flex-col items-end gap-1">
+                              <Button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  connectProvider(provider.id);
+                                }}
+                                size="sm"
+                                style={{backgroundColor:"white"}}
+                                className={`${isLoading || connectingProvider !== null ? 
+                                  "bg-white text-black hover:bg-gray-200" : "cursor-pointer bg-white text-black hover:bg-gray-200"}`
+                                }
+                                disabled={isLoading || connectingProvider !== null}
+                              >
+                                {connectingProvider === provider.id ? (
+                                  <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Connecting...
+                                  </>
+                                ) : (
+                                  "Connect"
+                                )}
+                              </Button>
+                              {connectionError?.provider === provider.id && (
+                                <span className="text-xs text-red-400 max-w-[150px] text-right">
+                                  {connectionError.message}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </Label>
                       </div>
@@ -598,14 +811,14 @@ const AppDeploymentSelect = () => {
                     {loadingProviders ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      'Refresh Status'
+                      "Refresh Status"
                     )}
                   </Button>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end">
-                <Button 
-                  onClick={handleNextStep} 
+                <Button
+                  onClick={handleNextStep}
                   disabled={loadingProviders || !selectedProvider}
                   className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
                 >
@@ -625,7 +838,9 @@ const AppDeploymentSelect = () => {
                 {loadingRepos ? (
                   <div className="text-center py-8">
                     <Loader2 className="w-8 h-8 text-blue-400 mx-auto mb-4 animate-spin" />
-                    <p className="text-white/60">Loading repositories from {selectedProviderData?.name}...</p>
+                    <p className="text-white/60">
+                      Loading repositories from {selectedProviderData?.name}...
+                    </p>
                   </div>
                 ) : repositories.length > 0 ? (
                   <div>
@@ -640,59 +855,99 @@ const AppDeploymentSelect = () => {
                       />
                     </div>
                     <div>
-                      <RadioGroup value={selectedRepo} onValueChange={setSelectedRepo} className="grid grid-cols-1 gap-4">
+                      <RadioGroup
+                        value={selectedRepo}
+                        onValueChange={setSelectedRepo}
+                        className="grid grid-cols-1 gap-4"
+                      >
                         {repositories
-                          .slice((currentPage - 1) * reposPerPage, currentPage * reposPerPage)
+                          .slice(
+                            (currentPage - 1) * reposPerPage,
+                            currentPage * reposPerPage
+                          )
                           .map((repo) => (
-                          <div key={repo.id}>
-                            <RadioGroupItem value={repo.id} id={repo.id} className="peer sr-only" />
-                            <Label htmlFor={repo.id} className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15">
-                              <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
-                                selectedRepo === repo.id 
-                                  ? 'border-blue-500 bg-blue-500' 
-                                  : 'border-white/30'
-                              }`}>
-                                {selectedRepo === repo.id && (
-                                  <div className="w-2 h-2 rounded-full bg-white"></div>
-                                )}
-                              </div>
-                              <Code className="w-6 h-6 text-blue-400 mt-1" />
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-semibold text-white">{repo.name}</div>
-                                  {repo.private && (
-                                    <Badge variant="outline" className="text-xs text-white/70 border-white/30">
-                                      Private
-                                    </Badge>
+                            <div key={repo.id}>
+                              <RadioGroupItem
+                                value={repo.id}
+                                id={repo.id}
+                                className="peer sr-only"
+                              />
+                              <Label
+                                htmlFor={repo.id}
+                                className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                              >
+                                <div
+                                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
+                                    selectedRepo === repo.id
+                                      ? "border-blue-500 bg-blue-500"
+                                      : "border-white/30"
+                                  }`}
+                                >
+                                  {selectedRepo === repo.id && (
+                                    <div className="w-2 h-2 rounded-full bg-white"></div>
                                   )}
                                 </div>
-                                <div className="text-sm text-white/60 mt-1">{repo.fullName}</div>
-                                {repo.description && (
-                                  <div className="text-xs text-white/50 mt-1">{repo.description}</div>
-                                )}
-                                <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
-                                  <span>{repo.language}</span>
-                                  <span>Updated {new Date(repo.updatedAt).toLocaleDateString()}</span>
-                                  <span>Default: {repo.defaultBranch}</span>
+                                <Code className="w-6 h-6 text-blue-400 mt-1" />
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="font-semibold text-white">
+                                      {repo.name}
+                                    </div>
+                                    {repo.private && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs text-white/70 border-white/30"
+                                      >
+                                        Private
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="text-sm text-white/60 mt-1">
+                                    {repo.fullName}
+                                  </div>
+                                  {repo.description && (
+                                    <div className="text-xs text-white/50 mt-1">
+                                      {repo.description}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
+                                    <span>{repo.language}</span>
+                                    <span>
+                                      Updated{" "}
+                                      {new Date(
+                                        repo.updatedAt
+                                      ).toLocaleDateString()}
+                                    </span>
+                                    <span>Default: {repo.defaultBranch}</span>
+                                  </div>
                                 </div>
-                              </div>
-                            </Label>
-                          </div>
-                        ))}
+                              </Label>
+                            </div>
+                          ))}
                       </RadioGroup>
-                      
+
                       {/* Pagination Controls */}
                       {repositories.length > reposPerPage && (
                         <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-white/10">
-                          {Array.from({ length: Math.ceil(repositories.length / reposPerPage) }, (_, i) => i + 1).map((pageNum) => (
+                          {Array.from(
+                            {
+                              length: Math.ceil(
+                                repositories.length / reposPerPage
+                              ),
+                            },
+                            (_, i) => i + 1
+                          ).map((pageNum) => (
                             <Button
                               key={pageNum}
                               onClick={() => setCurrentPage(pageNum)}
-                              variant={currentPage === pageNum ? "default" : "outline"}
+                              variant={
+                                currentPage === pageNum ? "default" : "outline"
+                              }
                               size="sm"
-                              className={currentPage === pageNum 
-                                ? "cursor-pointer bg-white/90 text-black hover:bg-white/90" 
-                                : "cursor-pointer border-white/20 text-white hover:bg-white/10"
+                              className={
+                                currentPage === pageNum
+                                  ? "cursor-pointer bg-white/90 text-black hover:bg-white/90"
+                                  : "cursor-pointer border-white/20 text-white hover:bg-white/10"
                               }
                             >
                               {pageNum}
@@ -707,28 +962,27 @@ const AppDeploymentSelect = () => {
                     <Code className="w-12 h-12 text-white/30 mx-auto mb-4" />
                     <p className="text-white/60 mb-4">No repositories found</p>
                     <p className="text-sm text-white/50 mb-4">
-                      {selectedProvider === 'github' 
-                        ? 'For private repository access, connect GitHub App with repository permissions'
-                        : `Make sure you have repositories in your connected ${selectedProviderData?.name} account`
-                      }
+                      {selectedProvider === "github"
+                        ? "For private repository access, connect GitHub App with repository permissions"
+                        : `Make sure you have repositories in your connected ${selectedProviderData?.name} account`}
                     </p>
                     <div className="flex gap-2 justify-center">
-                      <Button 
+                      <Button
                         onClick={() => fetchRepositories(selectedProvider)}
                         className="bg-white text-black hover:bg-gray-200"
                       >
                         Refresh Repositories
                       </Button>
-                      {selectedProvider === 'github' && (
-                        <Button 
-                          onClick={() => connectProvider('github')}
+                      {selectedProvider === "github" && (
+                        <Button
+                          onClick={() => connectProvider("github")}
                           className="bg-blue-500 text-white hover:bg-blue-600"
                           disabled={isLoading}
                         >
                           {isLoading ? (
                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                           ) : (
-                            'Connect GitHub App'
+                            "Connect GitHub App"
                           )}
                         </Button>
                       )}
@@ -737,8 +991,20 @@ const AppDeploymentSelect = () => {
                 )}
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} disabled={loadingRepos} className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  disabled={loadingRepos}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -747,7 +1013,9 @@ const AppDeploymentSelect = () => {
           {currentStep === 3 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Configure Deployment</CardTitle>
+                <CardTitle className="text-white">
+                  Configure Deployment
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -765,11 +1033,16 @@ const AppDeploymentSelect = () => {
                     {loadingBranches ? (
                       <div className="flex items-center gap-2 p-3 bg-white/10 rounded-md">
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-white/60 text-sm">Loading branches...</span>
+                        <span className="text-white/60 text-sm">
+                          Loading branches...
+                        </span>
                       </div>
                     ) : branches.length > 0 ? (
                       <div className="space-y-2">
-                        <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                        <Select
+                          value={selectedBranch}
+                          onValueChange={setSelectedBranch}
+                        >
                           <SelectTrigger className="bg-white/10 border-white/20 text-white">
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
@@ -779,7 +1052,10 @@ const AppDeploymentSelect = () => {
                                 <div className="flex items-center gap-2">
                                   <span>{branch.name}</span>
                                   {branch.protected && (
-                                    <Badge variant="outline" className="text-xs text-yellow-400 border-yellow-400/30">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs text-yellow-400 border-yellow-400/30"
+                                    >
                                       Protected
                                     </Badge>
                                   )}
@@ -788,14 +1064,19 @@ const AppDeploymentSelect = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button 
-                          onClick={() => selectedRepoData && fetchBranches(selectedProvider, selectedRepoData)}
-                          variant="outline" 
+                        <Button
+                          onClick={() =>
+                            selectedRepoData &&
+                            fetchBranches(selectedProvider, selectedRepoData)
+                          }
+                          variant="outline"
                           size="sm"
                           className="border-white/20 text-white hover:bg-white/10"
                           disabled={loadingBranches}
                         >
-                          <Loader2 className={`w-4 h-4 mr-2 ${loadingBranches ? 'animate-spin' : 'hidden'}`} />
+                          <Loader2
+                            className={`w-4 h-4 mr-2 ${loadingBranches ? "animate-spin" : "hidden"}`}
+                          />
                           Refresh Branches
                         </Button>
                       </div>
@@ -807,14 +1088,19 @@ const AppDeploymentSelect = () => {
                           placeholder="main"
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                         />
-                        <Button 
-                          onClick={() => selectedRepoData && fetchBranches(selectedProvider, selectedRepoData)}
-                          variant="outline" 
+                        <Button
+                          onClick={() =>
+                            selectedRepoData &&
+                            fetchBranches(selectedProvider, selectedRepoData)
+                          }
+                          variant="outline"
                           size="sm"
                           className="border-white/20 text-white hover:bg-white/10"
                           disabled={loadingBranches}
                         >
-                          <Loader2 className={`w-4 h-4 mr-2 ${loadingBranches ? 'animate-spin' : 'hidden'}`} />
+                          <Loader2
+                            className={`w-4 h-4 mr-2 ${loadingBranches ? "animate-spin" : "hidden"}`}
+                          />
                           Refresh Branches
                         </Button>
                       </div>
@@ -823,7 +1109,9 @@ const AppDeploymentSelect = () => {
                 </div>
 
                 <div>
-                  <Label className="text-white">Framework / Pipeline Type</Label>
+                  <Label className="text-white">
+                    Framework / Pipeline Type
+                  </Label>
                   <div className="flex gap-2">
                     <Select value={framework} onValueChange={setFramework}>
                       <SelectTrigger className="bg-white/10 border-white/20 text-white flex-1">
@@ -832,43 +1120,91 @@ const AppDeploymentSelect = () => {
                       <SelectContent>
                         {/* Test Pipeline */}
                         <SelectItem value="simple-test">
-                           Simple Test (No Build/Deploy)
+                          Simple Test (No Build/Deploy)
                         </SelectItem>
-                        
+
                         {/* Node.js Frameworks - Auto Dockerfile */}
-                        <SelectItem value="Next.js"> Next.js (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="Nuxt.js"> Nuxt.js (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="Vite-React"> React + Vite (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="Vue.js"> Vue.js (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="Angular"> Angular (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="SvelteKit"> SvelteKit (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="express"> Express.js (auto-Dockerfile)</SelectItem>
-                        
+                        <SelectItem value="Next.js">
+                          {" "}
+                          Next.js (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Nuxt.js">
+                          {" "}
+                          Nuxt.js (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Vite-React">
+                          {" "}
+                          React + Vite (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Vue.js">
+                          {" "}
+                          Vue.js (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Angular">
+                          {" "}
+                          Angular (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="SvelteKit">
+                          {" "}
+                          SvelteKit (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="express">
+                          {" "}
+                          Express.js (auto-Dockerfile)
+                        </SelectItem>
+
                         {/* Node.js Frameworks - Bring Dockerfile */}
-                        <SelectItem value="React"> React CRA (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Svelte"> Svelte (bring Dockerfile)</SelectItem>
-                        <SelectItem value="Node.js"> Node.js (bring Dockerfile)</SelectItem>
-                        
+                        <SelectItem value="React">
+                          {" "}
+                          React CRA (bring Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Svelte">
+                          {" "}
+                          Svelte (bring Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="Node.js">
+                          {" "}
+                          Node.js (bring Dockerfile)
+                        </SelectItem>
+
                         {/* Python Frameworks */}
-                        <SelectItem value="python"> Python (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="django"> Django (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="flask"> Flask (auto-Dockerfile)</SelectItem>
-                        <SelectItem value="fastapi"> FastAPI (auto-Dockerfile)</SelectItem>
-                        
+                        <SelectItem value="python">
+                          {" "}
+                          Python (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="django">
+                          {" "}
+                          Django (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="flask">
+                          {" "}
+                          Flask (auto-Dockerfile)
+                        </SelectItem>
+                        <SelectItem value="fastapi">
+                          {" "}
+                          FastAPI (auto-Dockerfile)
+                        </SelectItem>
+
                         {/* Static */}
                         <SelectItem value="Static">Static Site</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button 
-                      onClick={() => selectedRepoData && detectFramework(selectedProvider, selectedRepoData, selectedBranch)}
-                      variant="outline" 
+                    <Button
+                      onClick={() =>
+                        selectedRepoData &&
+                        detectFramework(
+                          selectedProvider,
+                          selectedRepoData,
+                          selectedBranch
+                        )
+                      }
+                      variant="outline"
                       size="sm"
                       className="border-white/20 text-white hover:bg-white/10"
                     >
                       Detect
                     </Button>
                   </div>
-                  
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -891,7 +1227,7 @@ const AppDeploymentSelect = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="mt-4">
                   <Label className="text-white">Instance Size</Label>
                   <div className="mt-2">
@@ -900,9 +1236,15 @@ const AppDeploymentSelect = () => {
                         <SelectValue placeholder="Select size" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="small">Small — 250m CPU / 256Mi RAM / 1 replica</SelectItem>
-                        <SelectItem value="medium">Medium — 500m CPU / 512Mi RAM / 2 replicas</SelectItem>
-                        <SelectItem value="large">Large — 1 CPU / 1Gi RAM / 3 replicas</SelectItem>
+                        <SelectItem value="small">
+                          Small — 250m CPU / 256Mi RAM / 1 replica
+                        </SelectItem>
+                        <SelectItem value="medium">
+                          Medium — 500m CPU / 512Mi RAM / 2 replicas
+                        </SelectItem>
+                        <SelectItem value="large">
+                          Large — 1 CPU / 1Gi RAM / 3 replicas
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -912,9 +1254,14 @@ const AppDeploymentSelect = () => {
                 <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
                   <div className="flex items-center justify-between">
                     <div className="space-y-1">
-                      <Label className="text-white font-medium">Auto-Deploy on Git Push</Label>
+                      <Label className="text-white font-medium">
+                        Auto-Deploy on Git Push
+                      </Label>
                       <p className="text-xs text-white/60">
-                        Automatically deploy when you push to the <span className="font-mono text-blue-400">{selectedBranch || 'selected branch'}</span>
+                        Automatically deploy when you push to the{" "}
+                        <span className="font-mono text-blue-400">
+                          {selectedBranch || "selected branch"}
+                        </span>
                       </p>
                     </div>
                     <Switch
@@ -926,7 +1273,8 @@ const AppDeploymentSelect = () => {
                   {autoDeploy && (
                     <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
                       <p className="text-xs text-blue-300">
-                        ✓ A webhook will be created in your repository to trigger deployments automatically when you push commits.
+                        ✓ A webhook will be created in your repository to
+                        trigger deployments automatically when you push commits.
                       </p>
                     </div>
                   )}
@@ -942,21 +1290,39 @@ const AppDeploymentSelect = () => {
                       <span className="text-blue-400">🌐</span>
                     </div>
                     <div>
-                      <Label className="text-white font-medium">Custom Domain</Label>
+                      <Label className="text-white font-medium">
+                        Custom Domain
+                      </Label>
                       <p className="text-xs text-white/60 mt-1">
-                        Your app will be available at <span className="font-mono text-blue-400">{appName || 'your-app'}.galaxyhvh.com</span>
+                        Your app will be available at{" "}
+                        <span className="font-mono text-blue-400">
+                          {appName || "your-app"}.galaxyhvh.com
+                        </span>
                       </p>
                       <p className="text-xs text-white/50 mt-2">
-                        You can add a custom domain (e.g., example.com) after deployment from the app&apos;s <strong>Domains</strong> tab.
-                        Custom domains require DNS verification before activation.
+                        You can add a custom domain (e.g., example.com) after
+                        deployment from the app&apos;s <strong>Domains</strong>{" "}
+                        tab. Custom domains require DNS verification before
+                        activation.
                       </p>
                     </div>
                   </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
-                <Button onClick={handleNextStep} className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90">Next <ChevronRight size={16} className="ml-2" /></Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
+                <Button
+                  onClick={handleNextStep}
+                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                >
+                  Next <ChevronRight size={16} className="ml-2" />
+                </Button>
               </CardFooter>
             </Card>
           )}
@@ -978,7 +1344,9 @@ const AppDeploymentSelect = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Repository:</span>
-                      <span className="text-white">{selectedRepoData?.fullName}</span>
+                      <span className="text-white">
+                        {selectedRepoData?.fullName}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Branch:</span>
@@ -994,29 +1362,41 @@ const AppDeploymentSelect = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Build Command:</span>
-                      <span className="text-white font-mono text-sm">{buildCommand || 'None'}</span>
+                      <span className="text-white font-mono text-sm">
+                        {buildCommand || "None"}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Output Directory:</span>
-                      <span className="text-white font-mono text-sm">{outputDir}</span>
+                      <span className="text-white font-mono text-sm">
+                        {outputDir}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Auto-Deploy:</span>
-                      <span className={autoDeploy ? "text-green-400" : "text-white/60"}>
-                        {autoDeploy ? '✓ Enabled' : 'Disabled'}
+                      <span
+                        className={
+                          autoDeploy ? "text-green-400" : "text-white/60"
+                        }
+                      >
+                        {autoDeploy ? "✓ Enabled" : "Disabled"}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Platform URL:</span>
-                      <span className="text-blue-400 font-mono text-sm">{appName || 'your-app'}.galaxyhvh.com</span>
+                      <span className="text-blue-400 font-mono text-sm">
+                        {appName || "your-app"}.galaxyhvh.com
+                      </span>
                     </div>
                     {envVars.length > 0 && (
                       <div>
-                        <div className="text-white/60 mb-2">Environment Variables:</div>
+                        <div className="text-white/60 mb-2">
+                          Environment Variables:
+                        </div>
                         <div className="ml-4 space-y-1">
                           {envVars.map((env, index) => (
                             <div key={index} className="text-sm text-white/70">
-                              {env.key}: {env.value ? '***' : 'Not set'}
+                              {env.key}: {env.value ? "***" : "Not set"}
                             </div>
                           ))}
                         </div>
@@ -1029,20 +1409,36 @@ const AppDeploymentSelect = () => {
 
                 {/* Deployment Info */}
                 <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <h4 className="text-white font-medium mb-2">What happens next?</h4>
+                  <h4 className="text-white font-medium mb-2">
+                    What happens next?
+                  </h4>
                   <ul className="text-sm text-white/70 space-y-1">
                     <li>• Your repository will be cloned and built</li>
-                    <li>• Application will be deployed to our global infrastructure</li>
+                    <li>
+                      • Application will be deployed to our global
+                      infrastructure
+                    </li>
                     <li>• SSL certificate will be automatically provisioned</li>
-                    <li>• You&apos;ll receive a deployment URL to access your app</li>
+                    <li>
+                      • You&apos;ll receive a deployment URL to access your app
+                    </li>
                     {autoDeploy && (
-                      <li className="text-green-400">• A webhook will be set up to auto-deploy on push to <span className="font-mono">{selectedBranch}</span></li>
+                      <li className="text-green-400">
+                        • A webhook will be set up to auto-deploy on push to{" "}
+                        <span className="font-mono">{selectedBranch}</span>
+                      </li>
                     )}
                   </ul>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10">Back</Button>
+                <Button
+                  variant="outline"
+                  onClick={handlePrevStep}
+                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                >
+                  Back
+                </Button>
                 <Button
                   onClick={onSubmit}
                   disabled={isLoading}
@@ -1054,7 +1450,7 @@ const AppDeploymentSelect = () => {
                       Deploying...
                     </>
                   ) : (
-                    'Deploy Application'
+                    "Deploy Application"
                   )}
                 </Button>
               </CardFooter>
@@ -1071,20 +1467,24 @@ const AppDeploymentSelect = () => {
             <CardContent className="space-y-4">
               <div>
                 <div className="text-sm text-white/60">Git Provider</div>
-                <div className="text-white">{selectedProviderData?.name || 'Not selected'}</div>
+                <div className="text-white">
+                  {selectedProviderData?.name || "Not selected"}
+                </div>
               </div>
-              
+
               {selectedRepoData && (
                 <div>
                   <div className="text-sm text-white/60">Repository</div>
                   <div className="text-white">{selectedRepoData.name}</div>
-                  <div className="text-xs text-white/60">{selectedRepoData.language}</div>
+                  <div className="text-xs text-white/60">
+                    {selectedRepoData.language}
+                  </div>
                 </div>
               )}
 
               <div>
                 <div className="text-sm text-white/60">Application Name</div>
-                <div className="text-white">{appName || 'Not set'}</div>
+                <div className="text-white">{appName || "Not set"}</div>
               </div>
 
               {framework && (
@@ -1096,15 +1496,17 @@ const AppDeploymentSelect = () => {
 
               <div>
                 <div className="text-sm text-white/60">Deploy Branch</div>
-                <div className="text-white">{selectedBranch || 'Not set'}</div>
+                <div className="text-white">{selectedBranch || "Not set"}</div>
               </div>
 
               <Separator className="bg-white/10" />
-              
+
               <div className="text-center">
                 <div className="text-sm text-white/60">Deployment</div>
                 <div className="text-lg font-bold text-green-400">FREE</div>
-                <div className="text-xs text-white/60">Included with platform</div>
+                <div className="text-xs text-white/60">
+                  Included with platform
+                </div>
               </div>
             </CardContent>
           </Card>
