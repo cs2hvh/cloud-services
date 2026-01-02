@@ -15,7 +15,6 @@ export function createSvelteKitPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',

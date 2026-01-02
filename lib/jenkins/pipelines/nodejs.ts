@@ -8,7 +8,6 @@ export function createNodeJsPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
@@ -229,7 +228,7 @@ COPY package*.json ./
 
 COPY . .
 
-EXPOSE ${nodePort}
+EXPOSE 3000
 
 CMD ["npm", "start"]
 DOCKERFILE_END
