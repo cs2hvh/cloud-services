@@ -25,6 +25,9 @@ export function createNuxtJsPipeline(
   nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  appId: string = '',
+  webhookBaseUrl: string = '',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
@@ -85,7 +88,26 @@ export function createNuxtJsPipeline(
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>COMMIT_SHA</name>
+          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
+          <defaultValue></defaultValue>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
   </properties>
+
+  <triggers>
+    <hudson.triggers.SCMTrigger>
+      <spec>H/1 * * * *</spec>
+      <ignorePostCommitHooks>false</ignorePostCommitHooks>
+    </hudson.triggers.SCMTrigger>
+  </triggers>
+
+  <disabled>false</disabled>
 
   <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps@2.94">
     <script><![CDATA[
@@ -104,7 +126,12 @@ pipeline {
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
-    DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    PLATFORM_APP_ID = '${appId}'
+    WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    DEPLOY_TRIGGER = '${deployTrigger}'
+
+    DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
+    DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
     ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -114,7 +141,22 @@ pipeline {
     stage('Checkout Repo') {
       steps {
         container('git') {
-          git branch: '${branch}', url: '${gitUrl}'
+          sh '''
+            echo "Cloning repository..."
+            git clone --branch ${branch} ${gitUrl} .
+            git config --global --add safe.directory "$(pwd)"
+            
+            # If COMMIT_SHA parameter is provided, checkout that specific commit
+            if [ -n "\${COMMIT_SHA}" ]; then
+              echo "Checking out specific commit: \${COMMIT_SHA}"
+              git checkout \${COMMIT_SHA}
+            else
+              echo "Using branch HEAD"
+            fi
+            
+            echo "Current commit:"
+            git log -1 --oneline
+          '''
         }
       }
     }
@@ -198,7 +240,9 @@ EOF
               /kaniko/executor \
                 --context=$WORKSPACE \
                 --dockerfile=Dockerfile \
-                --destination=$DOCKER_IMAGE
+                --destination=$DOCKER_IMAGE_VERSION \\
+                --destination=$DOCKER_IMAGE_LATEST \\
+                --digest-file=image-digest.txt
             '''
           }
         }
@@ -253,7 +297,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE}
+        image: \${DOCKER_IMAGE_VERSION}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
@@ -376,19 +420,121 @@ INGRESS_EOF
 
   post {
     success {
-      sh '''
-        echo "PIPELINE: Success"
-        echo "Nuxt.js deployment completed successfully for $APP_NAME"
-        echo "Service URL: https://$DOMAIN"
-      '''
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Success"
+            echo "Deployment completed successfully for $APP_NAME"
+            echo "Service URL: https://$DOMAIN"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
+                -H "content-type: application/json" \\
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \\
+                --header="content-type: application/json" \\
+                --post-data="$PAYLOAD" \\
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
+        }
+      }
     }
     
     failure {
-      sh '''
-        echo "PIPELINE: Failure"
-        echo "Nuxt.js deployment failed for $APP_NAME"
-        echo "Check build logs and ensure Nuxt 3 project structure is correct"
-      '''
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Failure"
+            echo "Deployment failed for $APP_NAME"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
+                -H "content-type: application/json" \\
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \\
+                --header="content-type: application/json" \\
+                --post-data="$PAYLOAD" \\
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
+        }
+      }
+    }
+    
+    always {
+      script {
+        echo 'PIPELINE: Cleanup'
+        echo 'Cleanup completed - temporary files removed during pod termination'
+      }
     }
   }
 }
