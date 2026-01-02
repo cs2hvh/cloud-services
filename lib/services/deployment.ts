@@ -148,7 +148,6 @@ export class DeploymentService {
           app.id,
           jenkinsRepoUrl,
           config.branch,
-          containerPort,
           config.framework,
           config.size || 'small',
           'manual',
@@ -249,7 +248,10 @@ export class DeploymentService {
         throw new Error("Unauthorized");
       }
 
-      // Delete from database first
+      // Clean up custom domains BEFORE database deletion (to avoid cascade)
+      await this.cleanupCustomDomains(appId, app.name);
+
+      // Delete from database (will cascade to platform_app_domains)
       await Platform_Apps.delete(appId, userId);
       console.log(`[DeploymentService] Database record deleted`);
 
@@ -261,6 +263,65 @@ export class DeploymentService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[DeploymentService] ❌ Deletion failed:`, errorMessage);
       throw error;
+    }
+  }
+
+  /**
+   * Clean up custom domains (Ingress + DNS) before app deletion
+   */
+  private static async cleanupCustomDomains(appId: string, appName: string): Promise<void> {
+    try {
+      const { createServiceClient } = await import('@/lib/supabase/server');
+      const supabase = await createServiceClient();
+
+      // Get all active custom domains for this app
+      const { data: customDomains, error } = await supabase
+        .from('platform_app_domains')
+        .select('id, domain, status')
+        .eq('app_id', appId)
+        .in('status', ['verified', 'active']);
+
+      if (error) {
+        console.error('[DeploymentService] Error fetching custom domains:', error);
+        return; // Don't fail deletion if custom domains fetch fails
+      }
+
+      if (!customDomains || customDomains.length === 0) {
+        console.log('[DeploymentService] No custom domains to clean up');
+        return;
+      }
+
+      console.log(`[DeploymentService] Cleaning up ${customDomains.length} custom domain(s)`);
+
+      // Clean up each custom domain (Ingress + DNS)
+      for (const domain of customDomains) {
+        try {
+          // Remove from Kubernetes Ingress if active
+          if (domain.status === 'active') {
+            const { KubernetesCustomDomainService } = await import('./kubernetes-custom-domain');
+            await KubernetesCustomDomainService.removeCustomDomainFromIngress(appName, domain.domain);
+            console.log(`[DeploymentService] ✅ Removed ${domain.domain} from Ingress`);
+          }
+
+          // Delete DNS record for custom domain
+          try {
+            const { DNSService } = await import('./dns');
+            await DNSService.deleteCustomDomainRecord(domain.domain);
+            console.log(`[DeploymentService] ✅ Deleted DNS record for ${domain.domain}`);
+          } catch (dnsError) {
+            console.error(`[DeploymentService] Failed to delete DNS for ${domain.domain}:`, dnsError);
+            // Continue even if DNS cleanup fails
+          }
+        } catch (domainError) {
+          console.error(`[DeploymentService] Failed to cleanup custom domain ${domain.domain}:`, domainError);
+          // Continue with other domains even if one fails
+        }
+      }
+
+      console.log('[DeploymentService] ✅ Custom domains cleanup completed');
+    } catch (error) {
+      console.error('[DeploymentService] Error during custom domains cleanup:', error);
+      // Don't fail the entire deletion if custom domain cleanup fails
     }
   }
 

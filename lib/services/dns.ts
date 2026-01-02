@@ -102,4 +102,41 @@ export class DNSService {
 
     return exists;
   }
+
+  /**
+   * Delete DNS record for a custom domain (full domain name)
+   * Used when removing custom domains from apps
+   */
+  static async deleteCustomDomainRecord(customDomain: string): Promise<void> {
+    if (!process.env.CLOUDFLARE_ZONE_ID) {
+      throw new Error("CLOUDFLARE_ZONE_ID not configured");
+    }
+
+    console.log(`[DNSService] Deleting DNS for custom domain: ${customDomain}`);
+
+    const records = await cloudflare.dns.records.list({
+      zone_id: process.env.CLOUDFLARE_ZONE_ID,
+    });
+
+    const matchingRecords = records.result?.filter((record: { name: string }) =>
+      record.name === customDomain
+    ) || [];
+
+    console.log(`[DNSService] Found ${matchingRecords.length} matching DNS records for ${customDomain}`);
+
+    if (matchingRecords.length === 0) {
+      console.log(`[DNSService] No DNS records to delete for ${customDomain}`);
+      return;
+    }
+
+    for (const record of matchingRecords) {
+      console.log(`[DNSService] Deleting record ID: ${record.id} (${record.type} ${record.name})`);
+      await cloudflare.dns.records.delete(record.id, {
+        zone_id: process.env.CLOUDFLARE_ZONE_ID,
+      });
+      console.log(`[DNSService] ✅ Deleted record ID: ${record.id}`);
+    }
+
+    console.log(`[DNSService] ✅ Deleted ${matchingRecords.length} DNS record(s) for ${customDomain}`);
+  }
 }

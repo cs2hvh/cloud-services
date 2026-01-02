@@ -175,7 +175,6 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       repositoryUrl: app.repository_url,
       branch: targetBranch,
       framework: app.framework,
-      port: app.port || 3000,
       size: app.size || 'small',
       commitSha: payload.commit.sha,
       deliveryId: deliveryId,  // For idempotency

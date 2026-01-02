@@ -80,7 +80,6 @@ export class JenkinsService {
     appId: string,
     githubUrl: string,
     branch: string,
-    port: number,
     framework?: string,
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
@@ -475,7 +474,6 @@ export class JenkinsService {
     appId: string,
     githubUrl: string,
     branch: string,
-    port: number,
     framework?: string,
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' = 'webhook'

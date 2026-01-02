@@ -23,7 +23,6 @@ export interface AutoDeployConfig {
   repositoryUrl: string;  // Clean URL without token
   branch: string;
   framework: string;
-  port: number;
   size?: string;
   commitSha?: string;
   deliveryId?: string;  // For idempotency tracking
@@ -48,7 +47,7 @@ export class AutoDeployService {
    * Handles token refresh, job update, and build triggering
    */
   static async deploy(config: AutoDeployConfig): Promise<AutoDeployResult> {
-    const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, port, size, commitSha, deliveryId } = config;
+    const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, size, commitSha, deliveryId } = config;
 
     console.log(`[AutoDeploy] Starting auto-deploy for ${appName}`);
     console.log(`[AutoDeploy] Provider: ${gitProvider}, Branch: ${branch}, Commit: ${commitSha?.substring(0, 7) || 'unknown'}`);
@@ -96,7 +95,6 @@ export class AutoDeployService {
           appId,
           authenticatedUrl,
           branch,
-          port,
           framework,
           size || 'small',
           'webhook'
