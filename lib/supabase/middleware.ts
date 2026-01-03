@@ -36,9 +36,17 @@ export async function updateSession(request: NextRequest) {
           supabaseResponse = NextResponse.next({
             request,
           });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            // Extend cookie maxAge to 7 days (604800 seconds) to prevent early expiration
+            // The Supabase refresh token is valid for 7 days by default
+            const extendedOptions = {
+              ...options,
+              maxAge: options?.maxAge || 604800, // 7 days in seconds
+              sameSite: options?.sameSite || 'lax' as const,
+              secure: process.env.NODE_ENV === 'production',
+            };
+            supabaseResponse.cookies.set(name, value, extendedOptions);
+          });
         },
       },
     },

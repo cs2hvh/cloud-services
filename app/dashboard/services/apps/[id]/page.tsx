@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   GitBranch,
+  GitCommit,
   Terminal,
   Activity,
   Settings,
@@ -25,12 +26,17 @@ import {
   Copy,
   Check,
   Link2,
+  Play,
+  Plus,
+  X,
+  Save,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
@@ -124,7 +130,17 @@ export default function AppDetailPage() {
     status: string;
     started_at: string;
     duration?: number;
+    commit_sha?: string;
+    commit_message?: string;
   }>>([]);
+
+  // Environment variables editing state
+  const [editedEnvVars, setEditedEnvVars] = useState<Array<{ key: string; value: string }>>([]);
+  const [envVarsModified, setEnvVarsModified] = useState(false);
+  const [savingEnvVars, setSavingEnvVars] = useState(false);
+  const [redeploying, setRedeploying] = useState(false);
+  const [envVarError, setEnvVarError] = useState<string | null>(null);
+  const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
 
   // Fetch detailed K8s info
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -238,6 +254,120 @@ export default function AppDetailPage() {
       return () => clearInterval(interval);
     }
   }, [app?.status, app?.name, buildInfo?.building, buildInfo?.number, fetchApp, fetchBuildInfo, fetchBuildLogs]);
+
+  // Initialize edited env vars when app data loads
+  useEffect(() => {
+    if (app?.env_vars) {
+      setEditedEnvVars(app.env_vars.map(env => ({ ...env })));
+    }
+  }, [app?.env_vars]);
+
+  // Handle env var changes
+  const handleEnvVarChange = (index: number, field: 'key' | 'value', newValue: string) => {
+    const updated = [...editedEnvVars];
+    updated[index] = { ...updated[index], [field]: newValue };
+    setEditedEnvVars(updated);
+    setEnvVarsModified(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+  };
+
+  const handleAddEnvVar = () => {
+    setEditedEnvVars([...editedEnvVars, { key: '', value: '' }]);
+    setEnvVarsModified(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+  };
+
+  const handleRemoveEnvVar = (index: number) => {
+    setEditedEnvVars(editedEnvVars.filter((_, i) => i !== index));
+    setEnvVarsModified(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+  };
+
+  const handleSaveEnvVars = async () => {
+    if (!app) return;
+    
+    // Filter out empty entries and validate
+    const validEnvVars = editedEnvVars.filter(env => env.key.trim() !== '');
+    
+    // Check for duplicate keys
+    const keys = validEnvVars.map(e => e.key.trim());
+    const uniqueKeys = new Set(keys);
+    if (keys.length !== uniqueKeys.size) {
+      setEnvVarError('Duplicate environment variable keys are not allowed');
+      return;
+    }
+
+    setSavingEnvVars(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+
+    try {
+      const res = await fetch('/api/services/platform-apps/env-vars/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_id: app.id,
+          env_vars: validEnvVars.map(env => ({
+            key: env.key.trim(),
+            value: env.value,
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to save environment variables');
+      }
+
+      setEnvVarSuccess('Environment variables saved successfully');
+      setEnvVarsModified(false);
+      
+      // Update local app state
+      setApp(prev => prev ? { ...prev, env_vars: validEnvVars } : null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save environment variables';
+      setEnvVarError(message);
+    } finally {
+      setSavingEnvVars(false);
+    }
+  };
+
+  const handleRedeploy = async () => {
+    if (!app) return;
+
+    setRedeploying(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+
+    try {
+      const res = await fetch('/api/services/platform-apps/redeploy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to trigger redeploy');
+      }
+
+      const data = await res.json();
+      setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
+      
+      // Update status and refresh
+      setApp(prev => prev ? { ...prev, status: 'building' } : null);
+      fetchApp();
+      fetchDeployments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to trigger redeploy';
+      setEnvVarError(message);
+    } finally {
+      setRedeploying(false);
+    }
+  };
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -611,31 +741,49 @@ export default function AppDetailPage() {
                     {deployments.map((deployment, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-3 bg-black/30 rounded-lg"
+                        className="flex flex-col p-3 bg-black/30 rounded-lg gap-2"
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-mono text-white">
-                            #{deployment.build_number}
-                          </span>
-                          <Badge className={
-                            deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
-                            deployment.status === 'FAILURE' ? 'bg-red-500/20 text-red-400' :
-                            'bg-yellow-500/20 text-yellow-400'
-                          }>
-                            {deployment.status}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-white/50">
-                          {deployment.duration && (
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {Math.round(deployment.duration / 1000)}s
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-mono text-white">
+                              #{deployment.build_number}
                             </span>
-                          )}
-                          <span>
-                            {new Date(deployment.started_at).toLocaleString()}
-                          </span>
+                            <Badge className={
+                              deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
+                              deployment.status === 'FAILURE' ? 'bg-red-500/20 text-red-400' :
+                              'bg-yellow-500/20 text-yellow-400'
+                            }>
+                              {deployment.status}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-white/50">
+                            {deployment.duration && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {Math.round(deployment.duration / 1000)}s
+                              </span>
+                            )}
+                            <span>
+                              {new Date(deployment.started_at).toLocaleString()}
+                            </span>
+                          </div>
                         </div>
+                        {/* Commit Info Row */}
+                        {(deployment.commit_sha || deployment.commit_message) && (
+                          <div className="flex items-center gap-2 text-xs text-white/60 pl-1">
+                            <GitCommit className="w-3 h-3 text-white/40" />
+                            {deployment.commit_sha && (
+                              <code className="px-1.5 py-0.5 bg-white/10 rounded text-blue-400 font-mono">
+                                {deployment.commit_sha}
+                              </code>
+                            )}
+                            {deployment.commit_message && (
+                              <span className="truncate max-w-[300px]" title={deployment.commit_message}>
+                                {deployment.commit_message}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -653,10 +801,29 @@ export default function AppDetailPage() {
           <TabsContent value="settings">
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  App Settings
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    App Settings
+                  </CardTitle>
+                  <Button
+                    onClick={handleRedeploy}
+                    disabled={redeploying || app.status === 'building' || app.status === 'deleting'}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {redeploying ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Redeploying...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4 mr-2" />
+                        Redeploy
+                      </>
+                    )}
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -674,21 +841,92 @@ export default function AppDetailPage() {
                   </div>
                 </div>
 
-                {/* Environment Variables */}
+                {/* Environment Variables - Editable */}
                 <div>
-                  <p className="text-xs text-white/40 mb-2">Environment Variables</p>
-                  {app.env_vars && app.env_vars.length > 0 ? (
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-white/40">Environment Variables</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddEnvVar}
+                      className="h-7 text-xs border-white/20 text-white hover:bg-white/10"
+                    >
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add Variable
+                    </Button>
+                  </div>
+
+                  {/* Success/Error Messages */}
+                  {envVarError && (
+                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
+                      {envVarError}
+                    </div>
+                  )}
+                  {envVarSuccess && (
+                    <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      {envVarSuccess}
+                    </div>
+                  )}
+
+                  {editedEnvVars.length > 0 ? (
                     <div className="space-y-2">
-                      {app.env_vars.map((env: { key: string; value: string }, idx: number) => (
+                      {editedEnvVars.map((env, idx) => (
                         <div key={idx} className="flex items-center gap-2 bg-black/30 p-2 rounded">
-                          <span className="text-sm font-mono text-blue-400">{env.key}</span>
+                          <Input
+                            type="text"
+                            value={env.key}
+                            onChange={(e) => handleEnvVarChange(idx, 'key', e.target.value)}
+                            placeholder="KEY"
+                            className="flex-1 max-w-[200px] h-8 text-sm font-mono bg-black/50 border-white/10 text-blue-400 placeholder:text-white/30"
+                          />
                           <span className="text-white/30">=</span>
-                          <span className="text-sm font-mono text-white/70">••••••••</span>
+                          <Input
+                            type="text"
+                            value={env.value}
+                            onChange={(e) => handleEnvVarChange(idx, 'value', e.target.value)}
+                            placeholder="value"
+                            className="flex-1 h-8 text-sm font-mono bg-black/50 border-white/10 text-white placeholder:text-white/30"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveEnvVar(idx)}
+                            className="h-8 w-8 p-0 text-white/50 hover:text-red-400 hover:bg-red-500/10"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-white/50">No environment variables configured</p>
+                    <p className="text-sm text-white/50">No environment variables configured. Click "Add Variable" to add one.</p>
+                  )}
+
+                  {/* Save Button */}
+                  {envVarsModified && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={handleSaveEnvVars}
+                        disabled={savingEnvVars}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {savingEnvVars ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            Save Changes
+                          </>
+                        )}
+                      </Button>
+                      <span className="text-xs text-white/50">
+                        Note: After saving, click "Redeploy" to apply changes to your app.
+                      </span>
+                    </div>
                   )}
                 </div>
 

@@ -10,6 +10,8 @@ interface BuildInfo {
   started_at: string;
   duration?: number;
   result?: string;
+  commit_sha?: string;
+  commit_message?: string;
 }
 
 /**
@@ -68,12 +70,72 @@ export async function GET(req: NextRequest) {
         const buildPromises = jobInfo.builds.slice(0, 10).map(async (build: { number: number }) => {
           try {
             const buildInfo = await jenkins.build.get(jobName, build.number);
+            
+            // Extract commit info from Jenkins build
+            // Jenkins stores Git info in multiple places depending on plugin versions
+            let commitSha: string | undefined;
+            let commitMessage: string | undefined;
+            
+            // Method 1: Check actions array for various Git plugin data
+            if (buildInfo.actions && Array.isArray(buildInfo.actions)) {
+              for (const action of buildInfo.actions) {
+                // Look for BuildData which contains lastBuiltRevision
+                if (action._class?.includes('BuildData') && action.lastBuiltRevision) {
+                  commitSha = action.lastBuiltRevision.SHA1?.substring(0, 7);
+                }
+                // Look for git.util.BuildData
+                if (action.buildsByBranchName) {
+                  const branchData = Object.values(action.buildsByBranchName)[0] as { revision?: { SHA1?: string } };
+                  if (branchData?.revision?.SHA1) {
+                    commitSha = branchData.revision.SHA1.substring(0, 7);
+                  }
+                }
+                // Look for ChangeLogSet for commit message
+                if (action._class?.includes('ChangeLogSet') && action.items && action.items.length > 0) {
+                  commitMessage = action.items[0].msg || action.items[0].comment;
+                }
+                // Check parameters for COMMIT_SHA that was passed to the build
+                if (action._class?.includes('ParametersAction') && action.parameters) {
+                  for (const param of action.parameters) {
+                    if (param.name === 'COMMIT_SHA' && param.value) {
+                      commitSha = param.value.substring(0, 7);
+                    }
+                  }
+                }
+              }
+            }
+            
+            // Method 2: Check changeSet at build level
+            if (!commitMessage && buildInfo.changeSet?.items?.length > 0) {
+              commitMessage = buildInfo.changeSet.items[0].msg || buildInfo.changeSet.items[0].comment;
+              if (!commitSha && buildInfo.changeSet.items[0].commitId) {
+                commitSha = buildInfo.changeSet.items[0].commitId.substring(0, 7);
+              }
+            }
+            
+            // Method 3: Check changeSets array (newer Jenkins versions)
+            if (!commitSha && buildInfo.changeSets && Array.isArray(buildInfo.changeSets)) {
+              for (const changeSet of buildInfo.changeSets) {
+                if (changeSet.items && changeSet.items.length > 0) {
+                  const item = changeSet.items[0];
+                  if (!commitSha && item.commitId) {
+                    commitSha = item.commitId.substring(0, 7);
+                  }
+                  if (!commitMessage) {
+                    commitMessage = item.msg || item.comment;
+                  }
+                }
+              }
+            }
+            
             return {
               build_number: buildInfo.number,
               status: buildInfo.building ? 'BUILDING' : (buildInfo.result || 'UNKNOWN'),
               started_at: new Date(buildInfo.timestamp).toISOString(),
               duration: buildInfo.duration,
               result: buildInfo.result,
+              commit_sha: commitSha,
+              commit_message: commitMessage,
             };
           } catch {
             return {

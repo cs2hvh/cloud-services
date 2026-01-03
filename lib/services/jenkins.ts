@@ -43,17 +43,13 @@ export class JenkinsService {
         throw new Error(`Job ${jobName} does not exist`);
       }
 
-      // Trigger the build with optional commit SHA parameter
-      if (commitSha) {
-        // Build with parameters - pass COMMIT_SHA to ensure exact commit is checked out
-        await jenkins.job.build({
-          name: jobName,
-          parameters: { COMMIT_SHA: commitSha },
-        });
-      } else {
-        // Build without parameters (uses branch HEAD)
-        await jenkins.job.build(jobName);
-      }
+      // Trigger the build with parameters
+      // IMPORTANT: Jobs with parameter definitions MUST use buildWithParameters
+      // Passing empty COMMIT_SHA uses branch HEAD (default behavior)
+      await jenkins.job.build({
+        name: jobName,
+        parameters: { COMMIT_SHA: commitSha || '' },
+      });
       
       // Wait a moment for build to be registered
       await new Promise(resolve => setTimeout(resolve, 2000));

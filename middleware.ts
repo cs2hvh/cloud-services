@@ -112,6 +112,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/detect-framework') ||
     pathname.startsWith('/api/admin/proxmox') ||
     pathname.startsWith('/api/services/platform-apps');
+   
 
   // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, or git provider APIs
   if (isApiRoute && !isAuthCallback && !isWebhook && !isPublicApi && !isGitProviderApi) {
