@@ -5,6 +5,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService, type DeploymentConfig } from "@/lib/services";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -251,6 +252,7 @@ export async function POST(req: NextRequest) {
       size: (appData as { size?: string }).size || 'small',
       auto_deploy: appData.auto_deploy || false,
       deploy_branch: appData.deploy_branch || appData.branch || 'main',
+      project_id: appData.project_id,
     };
 
     // Deploy using the deployment service
@@ -261,6 +263,20 @@ export async function POST(req: NextRequest) {
         { error: result.error || "Deployment failed" },
         { status: 500 }
       );
+    }
+
+    // Add project log if project_id is provided
+    if (appData.project_id && result.app_id) {
+      try {
+        await Projects.add_log({
+          project_id: appData.project_id,
+          event: "Platform App Created",
+          text: `Deployed "${appData.name}" from ${appData.git_provider}/${appData.repository_name} (branch: ${appData.branch || 'main'})`,
+        });
+      } catch (logError) {
+        console.warn('[platform-apps/create] Failed to add project log:', logError);
+        // Don't fail the deployment, just log the warning
+      }
     }
 
     // If auto_deploy is enabled, register webhook for the app

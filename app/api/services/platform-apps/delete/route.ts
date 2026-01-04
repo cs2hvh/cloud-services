@@ -5,6 +5,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService } from "@/lib/services";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -45,9 +47,29 @@ export async function POST(req: NextRequest) {
       isAdminUser = true;
     }
 
+    // Get app details before deletion for logging
+    const appDetails = await Platform_Apps.get(app_id);
+    const appName = appDetails.success ? appDetails.data?.name : 'Unknown';
+    const projectId = appDetails.success ? appDetails.data?.project_id : null;
+    const repoName = appDetails.success ? appDetails.data?.repository_name : 'Unknown';
+
     // Delete using deployment service
     try {
       await DeploymentService.delete(app_id, auth.user!.id, isAdminUser);
+
+      // Add project log if project_id exists
+      if (projectId) {
+        try {
+          await Projects.add_log({
+            project_id: projectId,
+            event: "Platform App Deleted",
+            text: `Deleted app "${appName}" (${repoName})`,
+          });
+        } catch (logError) {
+          console.warn('[platform-apps/delete] Failed to add project log:', logError);
+        }
+      }
+
       return NextResponse.json({ message: "App deleted successfully" });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";

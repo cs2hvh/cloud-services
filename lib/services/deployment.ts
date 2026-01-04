@@ -29,6 +29,7 @@ export interface DeploymentConfig {
   size?: string;
   auto_deploy?: boolean;
   deploy_branch?: string;
+  project_id?: string;
 }
 
 export interface DeploymentResult {
@@ -95,6 +96,7 @@ export class DeploymentService {
         auto_deploy: config.auto_deploy || false,
         deploy_branch: config.deploy_branch || config.branch,
         size: config.size || 'small', // Store size for redeployments
+        project_id: config.project_id || null,
       };
 
       const result = await Platform_Apps.create(appPayload);

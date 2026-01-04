@@ -10,6 +10,7 @@ import { GameServers } from "@/lib/supabase/queries/gameservers";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
+import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 // import { Separator } from "@/components/ui/separator";
 
 const DashboardSuspense = async () => {
@@ -24,6 +25,7 @@ const DashboardSuspense = async () => {
   const kubernetes_clusters = await Clusters.get_by_user_id(user.id);
   const spectrum_apps = await Spectrum_Apps.list_by_owner(user.id);
   const object_storage=await ObjectSpaces.get_buckets(user.id);
+  const platform_apps = await Platform_Apps.list_by_owner(user.id);
   const logs=await Projects.get_logs_by_user(user.id)||[]
   //spectrum apps , object storage ,
    
@@ -42,6 +44,7 @@ const DashboardSuspense = async () => {
         kubernetes_clusters: kubernetes_clusters,
         spectrum_apps:spectrum_apps,
         object_storage:object_storage,
+        platform_apps: platform_apps,
         project_logs:logs
       }}
     />

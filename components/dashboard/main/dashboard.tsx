@@ -20,12 +20,13 @@ import {
   Ban,
   GamepadIcon,
   Box,
+  Rocket,
 
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 // import { createClient } from "@/lib/supabase/client";
-import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
+import { ObjectSpaceBucket, Tables, PlatformApp } from "@/lib/supabase/types";
 import { KubernetesIcon } from "@/components/ui/kubernetes";
 import { DatabaseIcon } from "../database/database-icon";
 import { dbLocations } from "@/config/locations";
@@ -44,6 +45,7 @@ interface PageProps {
     kubernetes_clusters: Tables<"clusters_get">[];
     spectrum_apps: Tables<"spectrum_apps">[];
     object_storage:ObjectSpaceBucket[];
+    platform_apps: PlatformApp[];
     project_logs:Tables<"project_logs">[];
 }
 
@@ -88,6 +90,7 @@ const Dashboard = ({
   const readyK8sClusters = data.kubernetes_clusters.filter(k8s => k8s.status === 'ready').length;
   const spectrum_apps = data.spectrum_apps.filter(app => app.status === 'updated'||'created').length;
   const object_storage = data.object_storage.filter(object=>object.status==='active').length;
+  const runningPlatformApps = data.platform_apps.filter(app => app.status === 'running').length;
 
   const stats = [
     {
@@ -110,9 +113,15 @@ const Dashboard = ({
     },
     {
       title: "Active Services",
-      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage).toString(),
+      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage + runningPlatformApps).toString(),
       icon: ShieldCheck,
       color: "bg-gradient-to-br from-purple-600 to-blue-600",
+    },
+    {
+      title: "Platform Apps",
+      value: data.platform_apps.length.toString(),
+      icon: Rocket,
+      color: "bg-gradient-to-br from-emerald-500 to-teal-600",
     },
     {
       title: "Spectrum Apps",
@@ -184,9 +193,10 @@ const Dashboard = ({
     { name: 'Game', value: data.game_servers.length },
     { name: 'DB', value: data.database_clusters.length },
     { name: 'K8s', value: data.kubernetes_clusters.length },
+    { name: 'Apps', value: data.platform_apps.length },
     { name: 'Bucket', value: object_storage  },
     { name: 'Network-ddos', value: spectrum_apps },
-    { name: 'Active', value: activeGameServers + onlineDatabases + readyK8sClusters+spectrum_apps+object_storage },
+    { name: 'Active', value: activeGameServers + onlineDatabases + readyK8sClusters + spectrum_apps + object_storage + runningPlatformApps },
   ];
 
   return (
@@ -747,6 +757,143 @@ const Dashboard = ({
                 <Link href="/dashboard/object-storage/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
                   <Plus className="-ml-1 mr-2 h-5 w-5" />
                   New Space Bucket
+                </Link>
+              </div>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Platform Apps Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="mt-8 bg-white/5 p-6 rounded-lg"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Platform Apps</h2>
+            <Link href="/dashboard/services/apps" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
+              View all
+            </Link>
+          </div>
+          {data.platform_apps.length > 0 ? (
+            <div className="flow-root">
+              <div className="-mx-6 -my-2 overflow-x-auto">
+                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                  <table className="w-full">
+                    <thead className="bg-neutral-800/50 border-b border-neutral-800">
+                      <tr>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Name
+                        </th>
+                        <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Repository
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Provider
+                        </th>
+                        <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-800">
+                      {data.platform_apps.map((app) => (
+                        <tr
+                          key={app.id}
+                          className="hover:bg-neutral-800/30 transition-colors"
+                        >
+                          {/* Name */}
+                          <td className="px-4 sm:px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <Rocket className="h-4 w-4 text-emerald-400 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <div className="font-medium text-white text-sm truncate">
+                                  {app.name}
+                                </div>
+                                <div className="text-xs text-neutral-500 truncate">
+                                  {app.id}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Repository - Hidden on mobile */}
+                          <td className="hidden md:table-cell px-4 sm:px-6 py-4">
+                            <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
+                              {app.repository_name}
+                            </code>
+                          </td>
+
+                          {/* Status */}
+                          <td className="px-4 sm:px-6 py-4">
+                            {app.status === "running" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-emerald-950/50 text-emerald-400 border border-emerald-900">
+                                <CheckCircle className="h-3 w-3" />
+                                Running
+                              </span>
+                            ) : app.status === "deploying" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-yellow-950/50 text-yellow-400 border border-yellow-900">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Deploying
+                              </span>
+                            ) : app.status === "stopped" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-neutral-950/50 text-neutral-400 border border-neutral-700">
+                                <Ban className="h-3 w-3" />
+                                Stopped
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-950/50 text-red-400 border border-red-900">
+                                <Ban className="h-3 w-3" />
+                                {app.status}
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Provider - Hidden on tablet and below */}
+                          <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-neutral-400">
+                            <span className="capitalize">
+                              {app.git_provider || "github"}
+                            </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 sm:px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="cursor-pointer h-8 px-2 sm:px-3 hover:bg-neutral-700"
+                                asChild
+                              >
+                                <Link
+                                  href={`/dashboard/services/apps/${app.id}`}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  <span className="hidden sm:inline ml-1">View</span>
+                                </Link>
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
+              <Rocket className="mx-auto h-12 w-12 text-white/30" />
+              <h3 className="mt-2 text-sm font-semibold">No Platform Apps</h3>
+              <p className="mt-1 text-sm text-white/50">Get started by deploying your first app.</p>
+              <div className="mt-6">
+                <Link href="/dashboard/services/apps/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
+                  <Plus className="-ml-1 mr-2 h-5 w-5" />
+                  Deploy New App
                 </Link>
               </div>
             </div>

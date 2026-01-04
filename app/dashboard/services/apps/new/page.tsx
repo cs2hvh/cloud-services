@@ -1,9 +1,21 @@
 import AppDeploymentSelect from "@/components/dashboard/apps/new";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { Suspense } from "react";
+import { getUser } from "@/lib/supabase/auth";
+import { notFound } from "next/navigation";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 const AppDeploymentNewSuspense = async () => {
-  return <AppDeploymentSelect />;
+  const user = await getUser();
+  
+  if (!user) {
+    notFound();
+  }
+
+  // Fetch user's projects
+  const projects = await Projects.get_all_by_user(user.id);
+
+  return <AppDeploymentSelect projects={projects} />;
 };
 
 const AppDeploymentNewPage = () => {

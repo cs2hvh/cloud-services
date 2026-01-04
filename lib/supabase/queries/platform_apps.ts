@@ -3,6 +3,7 @@
  * Handles CRUD operations for platform_apps and platform_app_webhooks tables
  */
 import { createServiceClient } from "../server";
+import { PlatformApp } from "@/lib/supabase/types";
 
 // ============================================
 // Platform Apps Queries
@@ -95,7 +96,7 @@ export const Platform_Apps = {
     }
   },
 
-  list_by_owner: async (user_id: string) => {
+  list_by_owner: async (user_id: string): Promise<PlatformApp[]> => {
     try {
       const supabase = await createServiceClient();
       const { data, error } = await supabase
@@ -110,6 +111,25 @@ export const Platform_Apps = {
       return data || [];
     } catch (err) {
       console.error(`[Platform_Apps] Error listing apps: ${err}`);
+      return [];
+    }
+  },
+
+  get_by_project_id: async (project_id: string): Promise<PlatformApp[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("platform_apps")
+        .select("*")
+        .eq("project_id", project_id)
+        .order("created_at", { ascending: false });
+      if (error) {
+        console.error(`[Platform_Apps] Error getting apps by project: ${error.message}`);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error(`[Platform_Apps] Error getting apps by project: ${err}`);
       return [];
     }
   },

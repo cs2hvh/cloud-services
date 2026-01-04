@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Code,
   Loader2,
+  FolderKanban,
   // GitBranch,
   // Globe,
   // Settings,
@@ -36,6 +37,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { Tables } from "@/lib/supabase/types";
 
 interface Repository {
   id: string;
@@ -167,7 +169,11 @@ const frameworkConfigs = {
   },
 };
 
-const AppDeploymentSelect = () => {
+interface PageProps {
+  projects: Tables<"projects">[];
+}
+
+const AppDeploymentSelect = ({ projects }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null); // Track which provider is being connected
@@ -192,6 +198,7 @@ const AppDeploymentSelect = () => {
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [selectedRepo, setSelectedRepo] = useState<string>("");
   const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [selectedProject, setSelectedProject] = useState<string>("");
   const [appName, setAppName] = useState("");
   const [framework, setFramework] = useState<string>("");
   const [buildCommand, setBuildCommand] = useState<string>("");
@@ -609,6 +616,7 @@ const AppDeploymentSelect = () => {
         auto_deploy: autoDeploy,
         deploy_branch:
           selectedBranch || selectedRepoData.defaultBranch || "main",
+        project_id: selectedProject && selectedProject !== "none" ? selectedProject : undefined,
       };
 
       const response = await fetch("/api/services/platform-apps/create", {
@@ -1018,6 +1026,32 @@ const AppDeploymentSelect = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Project Selection */}
+                <div>
+                  <Label className="text-white flex items-center gap-2">
+                    <FolderKanban className="w-4 h-4" />
+                    Select Project
+                  </Label>
+                  <Select value={selectedProject} onValueChange={setSelectedProject}>
+                    <SelectTrigger className="bg-white/10 border-white/20 text-white mt-2">
+                      <SelectValue placeholder="Select a project (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No Project</SelectItem>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-white/50 mt-1">
+                    Associate this app with a project to track activity logs
+                  </p>
+                </div>
+
+                <Separator className="bg-white/10" />
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-white">Application Name</Label>
@@ -1338,6 +1372,14 @@ const AppDeploymentSelect = () => {
                 <div>
                   <Label className="text-white">Deployment Summary</Label>
                   <div className="mt-4 space-y-3 p-4 bg-white/10 rounded-lg">
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Project:</span>
+                      <span className="text-white">
+                        {selectedProject && selectedProject !== "none"
+                          ? projects.find(p => p.id === selectedProject)?.name || "Unknown"
+                          : "No project"}
+                      </span>
+                    </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Application Name:</span>
                       <span className="text-white">{appName}</span>

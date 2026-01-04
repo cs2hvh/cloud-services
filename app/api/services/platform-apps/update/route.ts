@@ -4,6 +4,7 @@ import { updatePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -44,6 +45,20 @@ export async function POST(req: NextRequest) {
     
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+
+    // Add project log if project_id exists
+    if (existing.data.project_id) {
+      try {
+        const changedFields = Object.keys(updateData).filter(k => k !== 'app_id').join(', ');
+        await Projects.add_log({
+          project_id: existing.data.project_id,
+          event: "Platform App Updated",
+          text: `Updated app "${existing.data.name}" - Changed: ${changedFields || 'settings'}`,
+        });
+      } catch (logError) {
+        console.warn('[platform-apps/update] Failed to add project log:', logError);
+      }
     }
 
     return NextResponse.json(result.data);

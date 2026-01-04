@@ -126,6 +126,31 @@ export type Admin_PlatformApp = {
   project_id: string | null;
 }
 
+// User-facing platform app type (without admin fields)
+export type PlatformApp = {
+  id: string;
+  name: string;
+  slug: string;
+  repository_url: string;
+  repository_name: string;
+  repository_id: string;
+  branch: string;
+  framework: string | null;
+  port: number | null;
+  ip: string | null;
+  status: string;
+  git_provider: "github" | "gitlab" | "bitbucket";
+  auto_deploy: boolean;
+  deploy_branch: string | null;
+  build_command: string | null;
+  output_directory: string | null;
+  size: string | null;
+  user_id: string;
+  project_id: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export type Rule = {
   uuid: string;
   cluster_uuid: string;

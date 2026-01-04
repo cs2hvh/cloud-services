@@ -18,6 +18,7 @@ import {
   ObjectSpaceBucket,
   Admin_KubernetesCluster,
   Admin_PlatformApp,
+  PlatformApp,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
@@ -2742,7 +2743,7 @@ export const Platform_Apps = {
     }
   },
 
-  list_by_owner: async (user_id: string) => {
+  list_by_owner: async (user_id: string): Promise<PlatformApp[]> => {
     try {
       const supabase = await createServiceClient();
       const { data, error } = await supabase
@@ -2754,7 +2755,7 @@ export const Platform_Apps = {
         console.error(`[Platform_Apps] Error listing apps: ${error.message}`);
         return [];
       }
-      return data || [];
+      return data as PlatformApp[] || [];
     } catch (err) {
       console.error(`[Platform_Apps] Error listing apps: ${err}`);
       return [];

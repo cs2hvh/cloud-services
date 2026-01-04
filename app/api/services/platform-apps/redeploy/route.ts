@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 
 const redeploySchema = z.object({
@@ -75,6 +76,19 @@ export async function POST(req: NextRequest) {
       const buildNumber = await JenkinsService.triggerBuild(app.name);
 
       console.log(`[Redeploy] Triggered build #${buildNumber} for app: ${app.name}`);
+
+      // Add project log if project_id exists
+      if (app.project_id) {
+        try {
+          await Projects.add_log({
+            project_id: app.project_id,
+            event: "Platform App Redeployed",
+            text: `Triggered redeploy for "${app.name}" (build #${buildNumber})`,
+          });
+        } catch (logError) {
+          console.warn('[platform-apps/redeploy] Failed to add project log:', logError);
+        }
+      }
 
       return NextResponse.json({
         message: "Redeploy triggered successfully",
