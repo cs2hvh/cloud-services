@@ -1,15 +1,20 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
-import { Rocket } from "lucide-react";
+import { Rocket, Server } from "lucide-react";
 import { Admin_PlatformApp } from "@/lib/supabase/types";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import AppsListTab from "@/components/admin/platform-apps/apps-list-tab";
+import ClusterUsageTab from "@/components/admin/platform-apps/cluster-usage-tab";
 
 interface PageProps {
   all_apps: Admin_PlatformApp[];
 }
 
 export default function AdminPlatformApps({ all_apps }: PageProps) {
+  const [activeTab, setActiveTab] = useState("deployed-apps");
+
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
       <motion.div
@@ -34,8 +39,33 @@ export default function AdminPlatformApps({ all_apps }: PageProps) {
           </div>
         </div>
 
-        {/* Apps List */}
-        <AppsListTab all_apps={all_apps} />
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full grid grid-cols-2 gap-2 bg-transparent p-0 h-auto mb-6">
+            <TabsTrigger
+              value="deployed-apps"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Rocket className="h-4 w-4 mr-2" />
+              Deployed Apps
+            </TabsTrigger>
+            <TabsTrigger
+              value="cluster-usage"
+              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+            >
+              <Server className="h-4 w-4 mr-2" />
+              Cluster Usage
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="deployed-apps" className="mt-0">
+            <AppsListTab all_apps={all_apps} />
+          </TabsContent>
+
+          <TabsContent value="cluster-usage" className="mt-0">
+            <ClusterUsageTab />
+          </TabsContent>
+        </Tabs>
       </motion.div>
     </div>
   );

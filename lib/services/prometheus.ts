@@ -276,4 +276,222 @@ export class PrometheusService {
       return false;
     }
   }
+
+  // ============================================
+  // Cluster-wide metrics (for Admin dashboard)
+  // ============================================
+
+  /**
+   * Get cluster-wide CPU usage
+   * Returns: { used: cores, total: cores, percentage: 0-100 }
+   */
+  static async getClusterCpuUsage(): Promise<{ used: number; total: number; percentage: number }> {
+    try {
+      // Total CPU capacity across all nodes (in cores)
+      const totalQuery = `sum(kube_node_status_allocatable{resource="cpu"})`;
+      // Current CPU usage across all nodes (in cores)
+      const usedQuery = `sum(rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m]))`;
+
+      const [totalResult, usedResult] = await Promise.all([
+        this.query(totalQuery).catch(() => []),
+        this.query(usedQuery).catch(() => []),
+      ]);
+
+      const total = totalResult.length > 0 ? parseFloat(totalResult[0].value[1]) || 0 : 0;
+      const used = usedResult.length > 0 ? parseFloat(usedResult[0].value[1]) || 0 : 0;
+      const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+
+      return { used, total, percentage };
+    } catch {
+      return { used: 0, total: 0, percentage: 0 };
+    }
+  }
+
+  /**
+   * Get cluster-wide memory usage
+   * Returns: { used: bytes, total: bytes, percentage: 0-100 }
+   */
+  static async getClusterMemoryUsage(): Promise<{ used: number; total: number; percentage: number }> {
+    try {
+      // Total memory capacity across all nodes (in bytes)
+      const totalQuery = `sum(kube_node_status_allocatable{resource="memory"})`;
+      // Current memory usage across all nodes (in bytes)
+      const usedQuery = `sum(container_memory_working_set_bytes{container!="POD",container!=""})`;
+
+      const [totalResult, usedResult] = await Promise.all([
+        this.query(totalQuery).catch(() => []),
+        this.query(usedQuery).catch(() => []),
+      ]);
+
+      const total = totalResult.length > 0 ? parseFloat(totalResult[0].value[1]) || 0 : 0;
+      const used = usedResult.length > 0 ? parseFloat(usedResult[0].value[1]) || 0 : 0;
+      const percentage = total > 0 ? Math.round((used / total) * 100) : 0;
+
+      return { used, total, percentage };
+    } catch {
+      return { used: 0, total: 0, percentage: 0 };
+    }
+  }
+
+  /**
+   * Get total running pods in cluster
+   */
+  static async getClusterPodCount(): Promise<{ running: number; total: number }> {
+    try {
+      // Running pods
+      const runningQuery = `count(kube_pod_status_phase{phase="Running"})`;
+      // All pods (any phase)
+      const totalQuery = `count(kube_pod_info)`;
+
+      const [runningResult, totalResult] = await Promise.all([
+        this.query(runningQuery).catch(() => []),
+        this.query(totalQuery).catch(() => []),
+      ]);
+
+      return {
+        running: runningResult.length > 0 ? parseInt(runningResult[0].value[1]) || 0 : 0,
+        total: totalResult.length > 0 ? parseInt(totalResult[0].value[1]) || 0 : 0,
+      };
+    } catch {
+      return { running: 0, total: 0 };
+    }
+  }
+
+  /**
+   * Get node information with per-node metrics
+   */
+  static async getClusterNodes(): Promise<NodeMetrics[]> {
+    try {
+      // Get node names and status
+      const nodeQuery = `kube_node_info`;
+      // CPU per node
+      const cpuTotalQuery = `kube_node_status_allocatable{resource="cpu"}`;
+      const cpuUsedQuery = `sum(rate(container_cpu_usage_seconds_total{container!="POD",container!=""}[5m])) by (node)`;
+      // Memory per node
+      const memTotalQuery = `kube_node_status_allocatable{resource="memory"}`;
+      const memUsedQuery = `sum(container_memory_working_set_bytes{container!="POD",container!=""}) by (node)`;
+      // Node ready status
+      const readyQuery = `kube_node_status_condition{condition="Ready",status="true"}`;
+
+      const [nodeResult, cpuTotalResult, cpuUsedResult, memTotalResult, memUsedResult, readyResult] = await Promise.all([
+        this.query(nodeQuery).catch(() => []),
+        this.query(cpuTotalQuery).catch(() => []),
+        this.query(cpuUsedQuery).catch(() => []),
+        this.query(memTotalQuery).catch(() => []),
+        this.query(memUsedQuery).catch(() => []),
+        this.query(readyQuery).catch(() => []),
+      ]);
+
+      // Build node map
+      const nodeMap = new Map<string, NodeMetrics>();
+
+      // Initialize from node info
+      nodeResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        if (nodeName) {
+          nodeMap.set(nodeName, {
+            name: nodeName,
+            status: 'Unknown',
+            cpuTotal: 0,
+            cpuUsed: 0,
+            cpuPercentage: 0,
+            memoryTotal: 0,
+            memoryUsed: 0,
+            memoryPercentage: 0,
+          });
+        }
+      });
+
+      // Add CPU total
+      cpuTotalResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        const node = nodeMap.get(nodeName);
+        if (node) {
+          node.cpuTotal = parseFloat(item.value[1]) || 0;
+        }
+      });
+
+      // Add CPU used
+      cpuUsedResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        const node = nodeMap.get(nodeName);
+        if (node) {
+          node.cpuUsed = parseFloat(item.value[1]) || 0;
+          node.cpuPercentage = node.cpuTotal > 0 ? Math.round((node.cpuUsed / node.cpuTotal) * 100) : 0;
+        }
+      });
+
+      // Add memory total
+      memTotalResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        const node = nodeMap.get(nodeName);
+        if (node) {
+          node.memoryTotal = parseFloat(item.value[1]) || 0;
+        }
+      });
+
+      // Add memory used
+      memUsedResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        const node = nodeMap.get(nodeName);
+        if (node) {
+          node.memoryUsed = parseFloat(item.value[1]) || 0;
+          node.memoryPercentage = node.memoryTotal > 0 ? Math.round((node.memoryUsed / node.memoryTotal) * 100) : 0;
+        }
+      });
+
+      // Add ready status
+      readyResult.forEach((item: PrometheusResult) => {
+        const nodeName = item.metric.node;
+        const node = nodeMap.get(nodeName);
+        if (node) {
+          node.status = 'Ready';
+        }
+      });
+
+      return Array.from(nodeMap.values());
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Get complete cluster metrics for admin dashboard
+   */
+  static async getClusterMetrics(): Promise<ClusterMetrics> {
+    const [cpu, memory, pods, nodes] = await Promise.all([
+      this.getClusterCpuUsage(),
+      this.getClusterMemoryUsage(),
+      this.getClusterPodCount(),
+      this.getClusterNodes(),
+    ]);
+
+    return {
+      cpu,
+      memory,
+      pods,
+      nodes,
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+// Cluster metrics types
+export interface NodeMetrics {
+  name: string;
+  status: string;
+  cpuTotal: number;
+  cpuUsed: number;
+  cpuPercentage: number;
+  memoryTotal: number;
+  memoryUsed: number;
+  memoryPercentage: number;
+}
+
+export interface ClusterMetrics {
+  cpu: { used: number; total: number; percentage: number };
+  memory: { used: number; total: number; percentage: number };
+  pods: { running: number; total: number };
+  nodes: NodeMetrics[];
+  timestamp: string;
 }
