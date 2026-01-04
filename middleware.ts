@@ -111,7 +111,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/bitbucket/branches') ||
     pathname.startsWith('/api/detect-framework') ||
     pathname.startsWith('/api/admin/proxmox') ||
-    pathname.startsWith('/api/services/platform-apps');
+    pathname.startsWith('/api/admin') ||
+    pathname.startsWith('/api/services/');
    
 
   // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, or git provider APIs

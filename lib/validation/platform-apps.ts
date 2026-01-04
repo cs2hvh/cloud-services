@@ -92,6 +92,7 @@ export type UpdatePlatformAppPayload = z.infer<typeof updatePlatformAppSchema>;
 
 export const deletePlatformAppSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
+  is_admin: z.boolean().optional().default(false),
 });
 
 export type DeletePlatformAppPayload = z.infer<typeof deletePlatformAppSchema>;

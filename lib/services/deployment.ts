@@ -231,9 +231,12 @@ export class DeploymentService {
 
   /**
    * Delete an application and its infrastructure
+   * @param appId - The app ID to delete
+   * @param userId - The user ID requesting deletion
+   * @param isAdmin - If true, bypass ownership check (for admin operations)
    */
-  static async delete(appId: string, userId: string): Promise<boolean> {
-    console.log(`[DeploymentService] Starting deletion for app: ${appId}`);
+  static async delete(appId: string, userId: string, isAdmin: boolean = false): Promise<boolean> {
+    console.log(`[DeploymentService] Starting deletion for app: ${appId}${isAdmin ? ' (admin override)' : ''}`);
 
     try {
       // Get app details
@@ -244,13 +247,13 @@ export class DeploymentService {
 
       const app = appResult.data;
 
-      // Verify ownership
-      if (app.user_id !== userId) {
+      // Verify ownership (skip if admin)
+      if (!isAdmin && app.user_id !== userId) {
         throw new Error("Unauthorized");
       }
 
-      // Delete from database first
-      await Platform_Apps.delete(appId, userId);
+      // Delete from database - use app owner's ID for the query
+      await Platform_Apps.delete(appId, app.user_id);
       console.log(`[DeploymentService] Database record deleted`);
 
       // Clean up infrastructure (now waits for completion)

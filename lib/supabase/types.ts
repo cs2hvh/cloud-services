@@ -108,6 +108,24 @@ export type Admin_KubernetesCluster = {
   workers: { public_ip: string; private_ip: string; droplet_id: string }[] | null;
 }
 
+export type Admin_PlatformApp = {
+  id: string;
+  name: string;
+  slug: string;
+  repository_url: string;
+  branch: string;
+  framework: string | null;
+  port: number;
+  status: string;
+  git_provider: "github" | "gitlab" | "bitbucket";
+  auto_deploy: boolean;
+  owner_id: string;
+  owner_email: string | null;
+  owner_username: string | null;
+  created_at: string | null;
+  project_id: string | null;
+}
+
 export type Rule = {
   uuid: string;
   cluster_uuid: string;

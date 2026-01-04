@@ -17,6 +17,7 @@ import {
   Admin_SpectrumApp,
   ObjectSpaceBucket,
   Admin_KubernetesCluster,
+  Admin_PlatformApp,
 } from "./types";
 // import { createClient as clientWorker } from "@supabase/supabase-js";
 
@@ -2774,6 +2775,98 @@ export const Platform_Apps = {
       return data || [];
     } catch (err) {
       console.error(`[Platform_Apps] Error listing all apps: ${err}`);
+      return [];
+    }
+  },
+
+  // Admin method - get all apps with owner info
+  get_all_for_admin: async (): Promise<Admin_PlatformApp[]> => {
+    try {
+      const supabase = await createServiceClient();
+
+      // Get all platform apps (no join - platform_apps doesn't have FK to user_profiles)
+      const { data: apps, error } = await supabase
+        .from("platform_apps")
+        .select(`
+          id,
+          name,
+          slug,
+          repository_url,
+          branch,
+          framework,
+          port,
+          status,
+          git_provider,
+          auto_deploy,
+          user_id,
+          created_at,
+          project_id
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error(`[Platform_Apps] Error getting all apps for admin: ${error.message}`);
+        return [];
+      }
+
+      if (!apps || apps.length === 0) return [];
+
+      // Get unique user IDs
+      const uniqueUserIds = [...new Set(apps.map((a) => a.user_id).filter(Boolean))];
+
+      // Fetch user profiles separately
+      const usernameMap = new Map<string, string>();
+      if (uniqueUserIds.length > 0) {
+        const { data: profiles, error: profileError } = await supabase
+          .from("user_profiles")
+          .select("id, username")
+          .in("id", uniqueUserIds);
+
+        if (!profileError && profiles) {
+          profiles.forEach((p) => {
+            if (p.id && p.username) usernameMap.set(p.id, p.username);
+          });
+        }
+      }
+
+      // Get auth users for emails
+      const emailMap = new Map<string, string>();
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+
+      if (!authError && authUsers?.users) {
+        authUsers.users
+          .filter((u) => uniqueUserIds.includes(u.id))
+          .forEach((u) => {
+            if (u.id && u.email) emailMap.set(u.id, u.email);
+          });
+      }
+
+      // Map and merge data with proper typing
+      const merged: Admin_PlatformApp[] = apps
+        .map((app) => {
+          return {
+            id: app.id ?? "",
+            name: app.name ?? "",
+            slug: app.slug ?? "",
+            repository_url: app.repository_url ?? "",
+            branch: app.branch ?? "",
+            framework: app.framework ?? null,
+            port: app.port ?? 3000,
+            status: app.status ?? "pending",
+            git_provider: app.git_provider ?? "github",
+            auto_deploy: app.auto_deploy ?? false,
+            owner_id: app.user_id ?? "",
+            owner_email: emailMap.get(app.user_id ?? "") ?? null,
+            owner_username: usernameMap.get(app.user_id ?? "") ?? null,
+            created_at: app.created_at ?? null,
+            project_id: app.project_id ?? null,
+          } as Admin_PlatformApp;
+        })
+        .filter((item): item is Admin_PlatformApp => Boolean(item));
+
+      return merged;
+    } catch (err) {
+      console.error(`[Platform_Apps] Error getting all apps for admin: ${err}`);
       return [];
     }
   },

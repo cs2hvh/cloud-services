@@ -4,6 +4,7 @@ import { deletePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService } from "@/lib/services";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -29,9 +30,24 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(deletePlatformAppSchema, body);
     if (!validation.success) return validation.response;
 
+    const { app_id, is_admin } = validation.data;
+
+    // If admin flag is set, verify the user is actually an admin
+    let isAdminUser = false;
+    if (is_admin) {
+      const adminCheck = await requireAdmin();
+      if (!adminCheck.ok) {
+        return NextResponse.json(
+          { error: "Admin privileges required" },
+          { status: 403 }
+        );
+      }
+      isAdminUser = true;
+    }
+
     // Delete using deployment service
     try {
-      await DeploymentService.delete(validation.data.app_id, auth.user!.id);
+      await DeploymentService.delete(app_id, auth.user!.id, isAdminUser);
       return NextResponse.json({ message: "App deleted successfully" });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
