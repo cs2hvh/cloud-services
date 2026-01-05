@@ -17,6 +17,7 @@
  * - Production command: node .output/server/index.mjs
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateNuxtjsDockerfileStage } from '../dockerfiles';
 
 export function createNuxtJsPipeline(
   name: string,
@@ -164,52 +165,7 @@ pipeline {
       steps {
         container('git') {
           sh '''
-            if [ -f Dockerfile ]; then
-              echo "Using existing Dockerfile"
-            else
-              echo "Creating Nuxt.js Dockerfile (Nuxt 3 with Nitro)"
-
-cat > Dockerfile << 'EOF'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Install dependencies first (better caching)
-COPY package*.json ./
-RUN npm install
-
-# Copy source and build
-COPY . .
-
-# Build Nuxt 3 app (creates .output directory)
-RUN npm run build
-
-# ---- Production Stage ----
-FROM node:20-alpine AS runner
-WORKDIR /app
-
-# Create non-root user for security
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nuxt
-
-# Copy built output from builder
-COPY --from=builder --chown=nuxt:nodejs /app/.output ./.output
-
-# Switch to non-root user
-USER nuxt
-
-# Nuxt 3 Nitro server runs on port 3000
-EXPOSE 3000
-
-# Set environment variables
-ENV HOST=0.0.0.0
-ENV PORT=3000
-ENV NODE_ENV=production
-
-# Start Nitro server
-CMD ["node", ".output/server/index.mjs"]
-EOF
-            fi
+${generateNuxtjsDockerfileStage()}
           '''
         }
       }

@@ -10,6 +10,7 @@
  * 3. Deploy to Kubernetes stage
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateSveltekitDockerfileStage } from '../dockerfiles';
 
 export function createSvelteKitPipeline(
   name: string,
@@ -208,69 +209,10 @@ pipeline {
         container('git') {
           script {
             echo 'STAGE: Prepare Dockerfile'
-            sh(
-              script: '''
-                if [ -f Dockerfile ]; then
-                  echo 'Using existing Dockerfile'
-                else
-                  echo 'Generating default SvelteKit Dockerfile'
-                  cat > Dockerfile << 'DOCKERFILE_END'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN if [ -f package-lock.json ]; then \\
-      npm ci; \\
-    else \\
-      npm install; \\
-    fi
-
-# Copy source code
-COPY . .
-
-# Build the SvelteKit application
-RUN npm run build
-
-# ---- Production Stage ----
-FROM node:20-alpine AS production
-WORKDIR /app
-
-# Copy built application from builder stage
-# SvelteKit with adapter-node outputs to 'build' directory
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/package*.json ./
-
-# Install production dependencies only
-RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
-
-# Expose port
-EXPOSE 3000
-
-# Set environment variables
-ENV PORT=3000
-ENV HOST=0.0.0.0
-ENV NODE_ENV=production
-
-# Run the Node.js server
-CMD ["node", "build"]
-DOCKERFILE_END
-                  echo 'Dockerfile generated successfully'
-                fi
-                
-                if ! grep -q "FROM" Dockerfile; then
-                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                  exit 1
-                fi
-                
-                echo 'Dockerfile preparation completed'
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+${generateSveltekitDockerfileStage()}
+            '''
+            echo 'Dockerfile preparation completed'
           }
         }
       }

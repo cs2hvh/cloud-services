@@ -4,6 +4,7 @@
  * Uses Kubernetes Secrets for environment variables (secure)
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateStaticSiteDockerfileStage } from '../dockerfiles';
 
 export function createViteReactPipeline(
   name: string,
@@ -202,62 +203,10 @@ pipeline {
         container('git') {
           script {
             echo 'STAGE: Prepare Dockerfile'
-            sh(
-              script: '''
-                if [ -f Dockerfile ]; then
-                  echo 'Using existing Dockerfile'
-                else
-                  echo 'Generating default Vite React Dockerfile'
-                  cat > Dockerfile << 'DOCKERFILE_END'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN if [ -f package-lock.json ]; then \\
-      npm ci; \\
-    else \\
-      npm install; \\
-    fi
-
-# Copy source code
-COPY . .
-
-# Build the Vite application
-RUN npm run build
-
-# ---- Production Stage ----
-FROM node:20-alpine AS production
-WORKDIR /app
-
-# Install serve globally for static file serving
-RUN npm install -g serve
-
-# Copy built assets from builder stage
-COPY --from=builder /app/dist ./dist
-
-# Expose port
-EXPOSE 3000
-
-# Serve the static files
-CMD ["serve", "-s", "dist", "-l", "3000"]
-DOCKERFILE_END
-                  echo 'Dockerfile generated successfully'
-                fi
-                
-                if ! grep -q "FROM" Dockerfile; then
-                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                  exit 1
-                fi
-                
-                echo 'Dockerfile preparation completed'
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+${generateStaticSiteDockerfileStage('dist')}
+            '''
+            echo 'Dockerfile preparation completed'
           }
         }
       }

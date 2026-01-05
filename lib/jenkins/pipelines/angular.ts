@@ -9,6 +9,7 @@
  * 3. Deploy to Kubernetes stage
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateAngularDockerfileStage } from '../dockerfiles';
 
 export function createAngularPipeline(
   name: string,
@@ -207,75 +208,10 @@ pipeline {
         container('git') {
           script {
             echo 'STAGE: Prepare Dockerfile'
-            sh(
-              script: '''
-                if [ -f Dockerfile ]; then
-                  echo 'Using existing Dockerfile'
-                else
-                  echo 'Generating default Angular Dockerfile'
-                  
-                  cat > Dockerfile << 'DOCKERFILE_END'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN if [ -f package-lock.json ]; then \
-      npm ci; \
-    else \
-      npm install; \
-    fi
-
-# Copy source code
-COPY . .
-
-# Build the Angular application
-RUN npm run build
-
-# ---- Production Stage ----
-FROM node:20-alpine AS production
-WORKDIR /app
-
-# Install serve globally for static file serving
-RUN npm install -g serve
-
-# Copy built assets from builder stage
-# Angular 17+ outputs to dist/<project-name>/browser
-# Find and copy the browser directory or fall back to dist
-RUN mkdir -p /app/dist
-COPY --from=builder /app/dist/ /app/temp-dist/
-
-# Move browser contents if exists, otherwise use dist directly
-RUN if [ -d /app/temp-dist/*/browser ]; then \
-      cp -r /app/temp-dist/*/browser/* /app/dist/; \
-    elif [ -d /app/temp-dist/*/ ]; then \
-      cp -r /app/temp-dist/*/* /app/dist/; \
-    else \
-      cp -r /app/temp-dist/* /app/dist/; \
-    fi && rm -rf /app/temp-dist
-
-# Expose port
-EXPOSE 3000
-
-# Serve the static files
-CMD ["serve", "-s", "dist", "-l", "3000"]
-DOCKERFILE_END
-                  echo 'Dockerfile generated successfully'
-                fi
-                
-                if ! grep -q "FROM" Dockerfile; then
-                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                  exit 1
-                fi
-                
-                echo 'Dockerfile preparation completed'
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+${generateAngularDockerfileStage()}
+            '''
+            echo 'Dockerfile preparation completed'
           }
         }
       }
