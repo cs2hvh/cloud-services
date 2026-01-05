@@ -120,3 +120,12 @@ export const rollbackPlatformAppSchema = z.object({
 });
 
 export type RollbackPlatformAppPayload = z.infer<typeof rollbackPlatformAppSchema>;
+
+export const resizePlatformAppSchema = z.object({
+  app_id: z.string().uuid("App ID must be a valid UUID"),
+  new_size: z.enum(["small", "medium", "large"], {
+    errorMap: () => ({ message: "Size must be small, medium, or large" }),
+  }),
+});
+
+export type ResizePlatformAppPayload = z.infer<typeof resizePlatformAppSchema>;

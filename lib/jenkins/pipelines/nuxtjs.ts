@@ -49,16 +49,16 @@ export function createNuxtJsPipeline(
   let replicas = 1;
 
   if (sizeKey === 'medium') {
+    cpuRequest = '500m';
+    cpuLimit = '1';
+    memoryRequest = '512Mi';
+    memoryLimit = '1Gi';
+    replicas = 2;
+  } else if (sizeKey === 'large') {
     cpuRequest = '1';
     cpuLimit = '2';
     memoryRequest = '1Gi';
     memoryLimit = '2Gi';
-    replicas = 2;
-  } else if (sizeKey === 'large') {
-    cpuRequest = '1.5';
-    cpuLimit = '3';
-    memoryRequest = '2Gi';
-    memoryLimit = '3Gi';
     replicas = 3;
   }
 

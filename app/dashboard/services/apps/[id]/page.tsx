@@ -30,6 +30,8 @@ import {
   Plus,
   X,
   Save,
+  ArrowUpCircle,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,7 +65,17 @@ interface AppDetail {
   build_command?: string;
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
+  size?: string;
 }
+
+// Size specifications
+const SIZE_SPECS = {
+  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1, price: "$5/mo" },
+  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2, price: "$15/mo" },
+  large: { cpu: "2 CPU", memory: "2GB", replicas: 3, price: "$30/mo" },
+} as const;
+
+type SizeKey = keyof typeof SIZE_SPECS;
 
 function getStatusBadge(status: string, building?: boolean) {
   if (building) {
@@ -141,6 +153,12 @@ export default function AppDetailPage() {
   const [redeploying, setRedeploying] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
+
+  // Resize state
+  const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
+  const [resizing, setResizing] = useState(false);
+  const [resizeError, setResizeError] = useState<string | null>(null);
+  const [resizeSuccess, setResizeSuccess] = useState<string | null>(null);
 
   // Fetch detailed K8s info
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -366,6 +384,41 @@ export default function AppDetailPage() {
       setEnvVarError(message);
     } finally {
       setRedeploying(false);
+    }
+  };
+
+  const handleResize = async () => {
+    if (!app || !selectedSize) return;
+
+    setResizing(true);
+    setResizeError(null);
+    setResizeSuccess(null);
+
+    try {
+      const res = await fetch('/api/services/platform-apps/resize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, new_size: selectedSize }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Failed to resize app');
+      }
+
+      setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
+      setSelectedSize(null);
+      
+      // Update local state
+      setApp(prev => prev ? { ...prev, status: 'building', size: selectedSize } : null);
+      fetchApp();
+      fetchDeployments();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to resize app';
+      setResizeError(message);
+    } finally {
+      setResizing(false);
     }
   };
 
@@ -841,8 +894,121 @@ export default function AppDetailPage() {
                   </div>
                 </div>
 
+                {/* Instance Size - Resize Section */}
+                <div className="border-t border-white/10 pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Zap className="w-4 h-4 text-yellow-400" />
+                    <p className="text-sm font-medium text-white">Instance Size</p>
+                  </div>
+
+                  {/* Resize Messages */}
+                  {resizeError && (
+                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
+                      {resizeError}
+                    </div>
+                  )}
+                  {resizeSuccess && (
+                    <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" />
+                      {resizeSuccess}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(Object.keys(SIZE_SPECS) as SizeKey[]).map((size) => {
+                      const specs = SIZE_SPECS[size];
+                      const currentSize = (app.size || 'small') as SizeKey;
+                      const isCurrent = size === currentSize;
+                      const isUpgrade = SIZE_SPECS[size] && 
+                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(size) > 
+                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(currentSize);
+                      const isSelected = selectedSize === size;
+                      const isDisabled = !isUpgrade || app.status === 'building' || app.status === 'deleting';
+
+                      return (
+                        <div
+                          key={size}
+                          onClick={() => !isDisabled && setSelectedSize(isSelected ? null : size)}
+                          className={`relative p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'border-blue-500 bg-blue-500/10'
+                              : isSelected
+                              ? 'border-green-500 bg-green-500/10'
+                              : isUpgrade
+                              ? 'border-white/20 bg-white/5 hover:border-white/40'
+                              : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
+                          }`}
+                        >
+                          {isCurrent && (
+                            <Badge className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs">
+                              Current
+                            </Badge>
+                          )}
+                          {isUpgrade && !isCurrent && (
+                            <Badge className="absolute -top-2 -right-2 bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                              <ArrowUpCircle className="w-3 h-3 mr-1" />
+                              Upgrade
+                            </Badge>
+                          )}
+
+                          <h4 className="text-lg font-semibold text-white capitalize mb-2">{size}</h4>
+                          
+                          <div className="space-y-1 text-sm">
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Cpu className="w-3 h-3" />
+                              <span>{specs.cpu}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <HardDrive className="w-3 h-3" />
+                              <span>{specs.memory}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-white/70">
+                              <Layers className="w-3 h-3" />
+                              <span>{specs.replicas} replica{specs.replicas > 1 ? 's' : ''}</span>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-sm font-medium text-white/90">{specs.price}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {selectedSize && (
+                    <div className="mt-4 flex items-center gap-3">
+                      <Button
+                        onClick={handleResize}
+                        disabled={resizing || app.status === 'building'}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {resizing ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Resizing...
+                          </>
+                        ) : (
+                          <>
+                            <ArrowUpCircle className="w-4 h-4 mr-2" />
+                            Resize & Redeploy
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedSize(null)}
+                        className="border-white/20 text-white hover:bg-white/10"
+                      >
+                        Cancel
+                      </Button>
+                      <span className="text-xs text-white/50">
+                        Your app will be redeployed with new resources.
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {/* Environment Variables - Editable */}
-                <div>
+                <div className="border-t border-white/10 pt-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs text-white/40">Environment Variables</p>
                     <Button

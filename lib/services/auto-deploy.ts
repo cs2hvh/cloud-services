@@ -88,6 +88,15 @@ export class AutoDeployService {
       
       console.log(`[AutoDeploy] Step 2/4: Token ${accessToken ? '✅ injected' : '⚠️ not available'}`);
 
+      // Fetch environment variables for the app
+      const envVarsData = await Platform_Apps.get_env_vars(appId);
+      const envVars = envVarsData.map((ev: { key: string; value: string }) => ({ 
+        key: ev.key, 
+        value: ev.value 
+      }));
+      
+      console.log(`[AutoDeploy] Found ${envVars.length} environment variables`);
+
       // Step 4: Update Jenkins job configuration with fresh token
       console.log(`[AutoDeploy] Step 3/4: Updating Jenkins job config...`);
       try {
@@ -99,7 +108,8 @@ export class AutoDeployService {
           port,
           framework,
           size || 'small',
-          'webhook'
+          'webhook',
+          envVars
         );
         console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
       } catch (updateError: unknown) {

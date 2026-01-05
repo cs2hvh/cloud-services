@@ -112,6 +112,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/detect-framework') ||
     pathname.startsWith('/api/admin/proxmox') ||
     pathname.startsWith('/api/admin') ||
+    pathname.startsWith('/api/auth/signout') ||
     pathname.startsWith('/api/services/');
    
 

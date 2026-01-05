@@ -475,7 +475,8 @@ export class JenkinsService {
     port: number,
     framework?: string,
     size: string = 'small',
-    deployTrigger: 'manual' | 'webhook' | 'rollback' = 'webhook'
+    deployTrigger: 'manual' | 'webhook' | 'rollback' = 'webhook',
+    envVars: Array<{ key: string; value: string }> = []
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -485,6 +486,7 @@ export class JenkinsService {
     
     console.log(`[JenkinsService] Updating job config: ${jobName}`);
     console.log(`[JenkinsService] New Git URL: ${githubUrl.replace(/https:\/\/[^@]+@/, 'https://***@')}`);
+    console.log(`[JenkinsService] Size: ${size}, EnvVars: ${envVars.length}`);
 
     // Generate new pipeline with updated config
     const pipeline = JenkinsService.selectPipeline(
@@ -495,7 +497,8 @@ export class JenkinsService {
       port.toString(), 
       framework, 
       size,
-      deployTrigger
+      deployTrigger,
+      envVars
     );
 
     try {
