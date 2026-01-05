@@ -4,12 +4,12 @@
  * Uses Kubernetes Secrets for environment variables (secure)
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateNodejsDockerfileStage } from '../dockerfiles';
 
 export function createExpressPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
@@ -197,38 +197,7 @@ pipeline {
             echo 'STAGE: Prepare Dockerfile'
             sh(
               script: '''
-                if [ -f Dockerfile ]; then
-                echo 'Using existing Dockerfile'
-                # Patch any RUN ... npm ci lines to be conditional when lockfile missing
-                if grep -q "npm ci" Dockerfile && [ ! -f package-lock.json ]; then
-                  echo 'WARNING: Dockerfile uses npm ci but package-lock.json is missing'
-                  echo 'Patching Dockerfile to use conditional install (npm ci if lockfile exists, otherwise npm install)'
-                  awk '/[Rr][Uu][Nn].*npm ci/ { print "RUN if [ -f package-lock.json ]; then npm ci --only=production; else npm install --production; fi"; next } { print }' Dockerfile > Dockerfile.tmp && mv Dockerfile.tmp Dockerfile
-                fi
-              else
-                echo 'Generating default Express Dockerfile'
-                cat > Dockerfile << 'DOCKERFILE_END'
-FROM node:18-alpine
-
-WORKDIR /app
-
-COPY package*.json ./
-
-                # Use npm install if package-lock.json doesn't exist
-                RUN if [ -f package-lock.json ]; then \
-                      npm ci --only=production; \
-                    else \
-                      npm install --production; \
-                    fi
-
-COPY . .
-
-EXPOSE ${nodePort}
-
-CMD ["npm", "start"]
-DOCKERFILE_END
-                  echo 'Dockerfile generated successfully'
-                fi
+${generateNodejsDockerfileStage()}
                 
                 if ! grep -q "FROM" Dockerfile; then
                   echo 'ERROR: Invalid Dockerfile - missing FROM instruction'

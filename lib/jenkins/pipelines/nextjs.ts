@@ -1,10 +1,10 @@
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateNextjsDockerfileStage } from '../dockerfiles';
 
 export function createNextJsPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
@@ -132,38 +132,7 @@ pipeline {
       steps {
         container('git') {
           sh '''
-            if [ -f Dockerfile ]; then
-              echo "Using existing Dockerfile"
-            else
-              echo "Creating default Next.js Dockerfile (Node 20 required)"
-
-cat > Dockerfile << 'EOF'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm install
-
-COPY . .
-RUN npm run build
-
-# ---- Run Stage ----
-FROM node:20-alpine
-WORKDIR /app
-
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/public ./public
-
-RUN npm install --only=production
-
-# Next.js listens on container port 3000
-EXPOSE 3000
-ENV PORT=3000
-CMD ["npm", "start"]
-EOF
-            fi
+${generateNextjsDockerfileStage()}
           '''
         }
       }

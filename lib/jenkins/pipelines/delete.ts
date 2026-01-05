@@ -88,12 +88,20 @@ spec:
             echo 'Deleting application resources...'
             
             sh """
+              # Delete main resources
               kubectl delete deployment \${APP_NAME} --namespace=default --ignore-not-found=true
               kubectl delete service \${SERVICE_NAME} --namespace=default --ignore-not-found=true
               kubectl delete ingress \${INGRESS_NAME} --namespace=default --ignore-not-found=true
               kubectl delete certificate \${CERT_NAME} --namespace=default --ignore-not-found=true
               kubectl delete secret \${TLS_SECRET_NAME} --namespace=default --ignore-not-found=true
               kubectl delete secret \${ENV_SECRET_NAME} --namespace=default --ignore-not-found=true
+              
+              # Delete custom domain certificates and secrets (if any)
+              # Pattern: app-name-custom-*-tls
+              echo "Cleaning up custom domain certificates and secrets..."
+              kubectl get certificates -n default -o name | grep "^certificate/${name}-custom-" | xargs -r kubectl delete -n default || true
+              kubectl get secrets -n default -o name | grep "^secret/${name}-custom-.*-tls" | xargs -r kubectl delete -n default || true
+              echo "Custom domain cleanup completed"
             """
           }
         }

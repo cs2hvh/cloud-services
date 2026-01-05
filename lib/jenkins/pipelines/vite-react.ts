@@ -4,14 +4,17 @@
  * Uses Kubernetes Secrets for environment variables (secure)
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateStaticSiteDockerfileStage } from '../dockerfiles';
 
 export function createViteReactPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
+  appId: string = '',
+  webhookBaseUrl: string = '',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
 ): string {
   const domain = `${name}.${appDomain}`;
@@ -68,6 +71,16 @@ export function createViteReactPipeline(
     <com.coravy.hudson.plugins.github.GithubProjectProperty plugin="github@1.34.4">
       <projectUrl>${cleanUrl}</projectUrl>
     </com.coravy.hudson.plugins.github.GithubProjectProperty>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>COMMIT_SHA</name>
+          <description>Specific commit SHA to checkout (optional, defaults to branch HEAD)</description>
+          <defaultValue></defaultValue>
+          <trim>true</trim>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
   </properties>
 
   <triggers>
@@ -97,7 +110,12 @@ pipeline {
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
     CONTAINER_PORT = '${containerPort}'
-    DOCKER_IMAGE = "hav0ky/${appName}:latest"
+    PLATFORM_APP_ID = '${appId}'
+    WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    DEPLOY_TRIGGER = '${deployTrigger}'
+
+    DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
+    DOCKER_IMAGE_LATEST  = "hav0ky/${appName}:latest"
     ENV_SECRET_NAME = '${secretName}'
     KUBECONFIG = credentials('kubeconfig_file')
   }
@@ -125,15 +143,22 @@ pipeline {
           script {
             echo 'STAGE: Checkout Repository'
             echo 'Fetching source code from repository'
-            git branch: '${branch}', url: '${gitUrl}'
-            sh(
-              script: '''
-                git config --global --add safe.directory "$(pwd)"
-                git log -1 --oneline
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+              echo "Cloning repository..."
+              git clone --branch ${branch} ${gitUrl} .
+              git config --global --add safe.directory "$(pwd)"
+              
+              # If COMMIT_SHA parameter is provided, checkout that specific commit
+              if [ -n "\${COMMIT_SHA}" ]; then
+                echo "Checking out specific commit: \${COMMIT_SHA}"
+                git checkout \${COMMIT_SHA}
+              else
+                echo "Using branch HEAD"
+              fi
+              
+              echo "Current commit:"
+              git log -1 --oneline
+            '''
             echo 'Source code checkout completed'
           }
         }
@@ -178,62 +203,10 @@ pipeline {
         container('git') {
           script {
             echo 'STAGE: Prepare Dockerfile'
-            sh(
-              script: '''
-                if [ -f Dockerfile ]; then
-                  echo 'Using existing Dockerfile'
-                else
-                  echo 'Generating default Vite React Dockerfile'
-                  cat > Dockerfile << 'DOCKERFILE_END'
-# ---- Build Stage ----
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN if [ -f package-lock.json ]; then \\
-      npm ci; \\
-    else \\
-      npm install; \\
-    fi
-
-# Copy source code
-COPY . .
-
-# Build the Vite application
-RUN npm run build
-
-# ---- Production Stage ----
-FROM node:20-alpine AS production
-WORKDIR /app
-
-# Install serve globally for static file serving
-RUN npm install -g serve
-
-# Copy built assets from builder stage
-COPY --from=builder /app/dist ./dist
-
-# Expose port
-EXPOSE 3000
-
-# Serve the static files
-CMD ["serve", "-s", "dist", "-l", "3000"]
-DOCKERFILE_END
-                  echo 'Dockerfile generated successfully'
-                fi
-                
-                if ! grep -q "FROM" Dockerfile; then
-                  echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                  exit 1
-                fi
-                
-                echo 'Dockerfile preparation completed'
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+${generateStaticSiteDockerfileStage('dist')}
+            '''
+            echo 'Dockerfile preparation completed'
           }
         }
       }
@@ -269,7 +242,9 @@ EOF
                   /kaniko/executor \\
                     --context=\${WORKSPACE} \\
                     --dockerfile=Dockerfile \\
-                    --destination=\${DOCKER_IMAGE}
+                    --destination=\${DOCKER_IMAGE_VERSION} \\
+                    --destination=\${DOCKER_IMAGE_LATEST} \\
+                    --digest-file=image-digest.txt
                   
                   echo 'Image build completed successfully'
                 ''',
@@ -342,7 +317,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE}
+        image: \${DOCKER_IMAGE_VERSION}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}
@@ -502,17 +477,113 @@ INGRESS_EOF
   
   post {
     success {
-      script {
-        echo 'PIPELINE: Success'
-        echo "Deployment completed successfully for \${env.APP_NAME}"
-        echo "Service URL: https://\${env.DOMAIN}"
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Success"
+            echo "Deployment completed successfully for $APP_NAME"
+            echo "Service URL: https://$DOMAIN"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"success","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
+                -H "content-type: application/json" \\
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \\
+                --header="content-type: application/json" \\
+                --post-data="$PAYLOAD" \\
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
+        }
       }
     }
     
     failure {
-      script {
-        echo 'PIPELINE: Failure'
-        echo "Deployment failed for \${env.APP_NAME}"
+      container('kubectl') {
+        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
+          sh '''
+            echo "PIPELINE: Failure"
+            echo "Deployment failed for $APP_NAME"
+
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+              exit 0
+            fi
+
+            DEPLOYMENT_RECORD_URL="\${WEBHOOK_BASE_URL%/}/api/webhooks/platform-apps/deployment-record"
+            COMMIT_SHA=""
+            IMAGE_DIGEST=""
+            
+            # Try to get commit SHA from git if available
+            if command -v git >/dev/null 2>&1 && [ -d .git ]; then
+              COMMIT_SHA=$(git rev-parse HEAD 2>/dev/null || true)
+            fi
+            
+            # Try to read image digest if file exists
+            if [ -f image-digest.txt ]; then 
+              IMAGE_DIGEST=$(cat image-digest.txt | tr -d '\\n')
+            fi
+
+            PAYLOAD=$(cat <<JSON
+{"app_id":"$PLATFORM_APP_ID","build_number":$BUILD_NUMBER,"commit_sha":"$COMMIT_SHA","image_tag":"$DOCKER_IMAGE_VERSION","image_digest":"$IMAGE_DIGEST","status":"failed","trigger":"$DEPLOY_TRIGGER"}
+JSON
+)
+
+            echo "Sending deployment record to: $DEPLOYMENT_RECORD_URL"
+            echo "Payload: $PAYLOAD"
+
+            # kubectl container has curl available
+            if command -v curl >/dev/null 2>&1; then
+              RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \\
+                -H "content-type: application/json" \\
+                --data "$PAYLOAD" 2>&1) || true
+              HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+              BODY=$(echo "$RESPONSE" | sed '$d')
+              echo "Response (HTTP $HTTP_CODE): $BODY"
+            elif command -v wget >/dev/null 2>&1; then
+              wget -qO- \\
+                --header="content-type: application/json" \\
+                --post-data="$PAYLOAD" \\
+                "$DEPLOYMENT_RECORD_URL" || true
+            else
+              echo "WARN: curl/wget not available; skipping deployment record"
+            fi
+          '''
+        }
       }
     }
     

@@ -9,12 +9,12 @@
  * 3. Deploy to Kubernetes stage
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generatePythonDockerfileStage } from '../dockerfiles';
 
 export function createPythonPipeline(
   name: string,
   gitUrl: string,
   branch: string,
-  nodePort: string,
   size: string = 'small',
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
@@ -175,42 +175,10 @@ pipeline {
         container('git') {
           script {
             echo 'STAGE: Prepare Dockerfile'
-            sh(
-              script: '''
-                if [ -f Dockerfile ]; then
-                echo 'Using existing Dockerfile'
-                # If Dockerfile installs dependencies via pip/npm-like steps that may fail, consider patching here if needed
-                # (For Python we check for requirements usage; no change required by default)
-              else
-                echo 'Generating default Python Dockerfile'
-                cat > Dockerfile << 'DOCKERFILE_END'
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-
-EXPOSE ${containerPort}
-
-CMD ["python", "app.py"]
-DOCKERFILE_END
-                echo 'Dockerfile generated successfully'
-              fi
-              
-              if ! grep -q "FROM" Dockerfile; then
-                echo 'ERROR: Invalid Dockerfile - missing FROM instruction'
-                exit 1
-              fi
-              
-              echo 'Dockerfile preparation completed'
-              ''',
-              returnStatus: false,
-              returnStdout: false
-            )
+            sh '''
+${generatePythonDockerfileStage()}
+            '''
+            echo 'Dockerfile prepared successfully'
           }
         }
       }

@@ -71,6 +71,22 @@ interface ProviderConnection {
 
 // Framework detection and build settings
 const frameworkConfigs = {
+  'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
+  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
+  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (CRA)' },
+  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
+  'Angular': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Angular CLI)' },
+  'SvelteKit': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Node adapter)' },
+  'Svelte': { buildCommand: 'npm run build', outputDir: 'public/build', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
+  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
+  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
+  'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
   "simple-test": {
     buildCommand: "",
     outputDir: ".",
@@ -173,6 +189,10 @@ interface PageProps {
   projects: Tables<"projects">[];
 }
 
+interface PageProps {
+  projects: Tables<"projects">[];
+}
+
 const AppDeploymentSelect = ({ projects }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -206,6 +226,7 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [size, setSize] = useState<string>("small");
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
+  const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
 
@@ -363,58 +384,53 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
           }),
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          if (data.framework) {
-            // Normalize framework name to match our configs
-            let normalizedFramework = data.framework;
-
-            // Map detected frameworks to our config keys
-            const frameworkMap: Record<string, string> = {
-              "Next.js": "Next.js",
-              "Nuxt.js": "Nuxt.js",
-              "Vite-React": "Vite-React",
-              React: "React",
-              "Vue.js": "Vue.js",
-              Angular: "Angular",
-              SvelteKit: "SvelteKit",
-              Svelte: "Svelte",
-              Express: "express",
-              "Node.js": "Node.js",
-              Django: "django",
-              Flask: "flask",
-              FastAPI: "fastapi",
-              Laravel: "Static",
-              Symfony: "Static",
-              "Ruby on Rails": "Static",
-              PHP: "Static",
-              Python: "python",
-              python: "python",
-              Ruby: "Static",
-              Static: "Static",
-            };
-
-            normalizedFramework = frameworkMap[data.framework] || "Static";
-
-            setFramework(normalizedFramework);
-
-            // Use additional detection metadata
-            if (data.hasDockerfile) {
-              console.log("Repository has Dockerfile");
-              // Could set a Docker-specific deployment option here
-            }
-
-            if (data.buildSystem) {
-              console.log("Detected build system:", data.buildSystem);
-            }
+      if (response.ok) {
+        const data = await response.json();
+        if (data.framework) {
+          // Normalize framework name to match our configs
+          let normalizedFramework = data.framework;
+          
+          // Map detected frameworks to our config keys
+          const frameworkMap: Record<string, string> = {
+            'Next.js': 'Next.js',
+            'Nuxt.js': 'Nuxt.js',
+            'Vite-React': 'Vite-React',
+            'React': 'React',
+            'Vue.js': 'Vue.js',
+            'Angular': 'Angular',
+            'SvelteKit': 'SvelteKit',
+            'Svelte': 'Svelte',
+            'Express': 'express',
+            'Node.js': 'Node.js',
+            'Django': 'django',
+            'Flask': 'flask',
+            'FastAPI': 'fastapi',
+            'Laravel': 'Static',
+            'Symfony': 'Static',
+            'Ruby on Rails': 'Static',
+            'PHP': 'Static',
+            'Python': 'python',
+            'python': 'python',
+            'Ruby': 'Static',
+            'Static': 'Static'
+          };
+          
+          normalizedFramework = frameworkMap[data.framework] || 'Static';
+          
+          setFramework(normalizedFramework);
+          
+          // Store Dockerfile detection result
+          setHasDockerfile(data.hasDockerfile || false);
+          
+          if (data.buildSystem) {
+            console.log('Detected build system:', data.buildSystem);
           }
         }
-      } catch (error) {
-        console.error("Framework detection error:", error);
       }
-    },
-    []
-  );
+    } catch (error) {
+      console.error('Framework detection error:', error);
+    }
+  }, []);
 
   // Load provider status on component mount
   useEffect(() => {
@@ -433,19 +449,6 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
     setBranches([]);
     setSelectedBranch("");
   }, [selectedProvider, fetchRepositories]);
-
-  // Auto-fill build settings when framework is selected
-  useEffect(() => {
-    if (
-      framework &&
-      frameworkConfigs[framework as keyof typeof frameworkConfigs]
-    ) {
-      const config =
-        frameworkConfigs[framework as keyof typeof frameworkConfigs];
-      setBuildCommand(config.buildCommand);
-      setOutputDir(config.outputDir);
-    }
-  }, [framework]);
 
   // Auto-fill app name when repository is selected
   useEffect(() => {
@@ -593,26 +596,11 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
         git_provider: selectedProvider as "github" | "gitlab" | "bitbucket",
         repository_id: selectedRepoData.id,
         repository_name: selectedRepoData.fullName,
-        repository_url:
-          repoUrlMap[selectedProvider] ||
-          `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
-        branch: selectedBranch || selectedRepoData.defaultBranch || "main",
-        framework: framework as
-          | "simple-test"
-          | "Next.js"
-          | "React"
-          | "Vue.js"
-          | "Node.js"
-          | "express"
-          | "python"
-          | "django"
-          | "flask"
-          | "fastapi"
-          | "Static",
-        build_command: buildCommand || undefined,
-        output_directory: outputDir || undefined,
-        env_vars: envVars.filter((ev) => ev.key && ev.value),
-        size: size || "small",
+        repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+        branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
+        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static',
+        env_vars: envVars.filter(ev => ev.key && ev.value),
+        size: size || 'small',
         auto_deploy: autoDeploy,
         deploy_branch:
           selectedBranch || selectedRepoData.defaultBranch || "main",
@@ -1241,27 +1229,84 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-white">Build Command</Label>
-                    <Input
-                      value={buildCommand}
-                      onChange={(e) => setBuildCommand(e.target.value)}
-                      placeholder="npm run build"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
+                {/* Build Configuration Info */}
+                {framework && frameworkConfigs[framework as keyof typeof frameworkConfigs] && (
+                  <div className={`p-4 border rounded-lg ${
+                    hasDockerfile 
+                      ? 'bg-green-500/10 border-green-500/20' 
+                      : 'bg-blue-500/10 border-blue-500/20'
+                  }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
+                        hasDockerfile
+                          ? 'bg-green-500/20'
+                          : 'bg-blue-500/20'
+                      }`}>
+                        {hasDockerfile ? (
+                          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-white font-medium mb-1">Build & Deployment</h3>
+                        
+                        {/* Show Dockerfile status */}
+                        {hasDockerfile ? (
+                          <div className="mb-3">
+                            <p className="text-sm text-green-300 font-medium mb-1">
+                              ✓ Using your repository&apos;s Dockerfile
+                            </p>
+                            <p className="text-xs text-white/60">
+                              Your custom Dockerfile will be used for the build. The platform defaults below are for reference only.
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-white/70 mb-3">
+                            {frameworkConfigs[framework as keyof typeof frameworkConfigs].description}
+                          </p>
+                        )}
+                        
+                        {/* Show build defaults (for reference or actual use) */}
+                        {frameworkConfigs[framework as keyof typeof frameworkConfigs].buildCommand && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-white/60 min-w-[120px]">
+                                {hasDockerfile ? 'Platform default:' : 'Build command:'}
+                              </span>
+                              <code className={`px-2 py-1 rounded font-mono ${
+                                hasDockerfile ? 'text-white/50 bg-white/5' : 'text-blue-400 bg-white/5'
+                              }`}>
+                                {frameworkConfigs[framework as keyof typeof frameworkConfigs].buildCommand}
+                              </code>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-white/60 min-w-[120px]">
+                                {hasDockerfile ? 'Platform default:' : 'Output directory:'}
+                              </span>
+                              <code className={`px-2 py-1 rounded font-mono ${
+                                hasDockerfile ? 'text-white/50 bg-white/5' : 'text-blue-400 bg-white/5'
+                              }`}>
+                                {frameworkConfigs[framework as keyof typeof frameworkConfigs].outputDir}
+                              </code>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {!hasDockerfile && (
+                          <p className="text-xs text-white/50 mt-3">
+                            💡 For full control over the build process, add a <code className="text-blue-300">Dockerfile</code> to your repository.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-white">Output Directory</Label>
-                    <Input
-                      value={outputDir}
-                      onChange={(e) => setOutputDir(e.target.value)}
-                      placeholder="dist"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                </div>
-
+                )}
+                
                 <div className="mt-4">
                   <Label className="text-white">Instance Size</Label>
                   <div className="mt-2">
@@ -1400,19 +1445,7 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Instance Size:</span>
-                      <span className="text-white">{size}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60">Build Command:</span>
-                      <span className="text-white font-mono text-sm">
-                        {buildCommand || "None"}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-white/60">Output Directory:</span>
-                      <span className="text-white font-mono text-sm">
-                        {outputDir}
-                      </span>
+                      <span className="text-white capitalize">{size}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Auto-Deploy:</span>
