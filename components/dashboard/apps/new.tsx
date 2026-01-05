@@ -125,8 +125,6 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
   const [selectedProject, setSelectedProject] = useState<string>("");
   const [appName, setAppName] = useState("");
   const [framework, setFramework] = useState<string>("");
-  const [buildCommand, setBuildCommand] = useState<string>("");
-  const [outputDir, setOutputDir] = useState<string>("");
   const [envVars, setEnvVars] = useState<EnvVar[]>([]);
   const [size, setSize] = useState<string>("small");
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push

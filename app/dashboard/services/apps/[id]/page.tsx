@@ -44,6 +44,7 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
+import api from '@/lib/axios/axios';
 
 // Extended App type for detail page (includes all fields from API)
 interface AppDetail {
@@ -175,25 +176,14 @@ export default function AppDetailPage() {
 
   const fetchApp = useCallback(async () => {
     try {
-      const res = await fetch('/api/services/platform-apps/get', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_id: appId }),
-      });
+      const res = await api.post('/services/platform-apps/get', { app_id: appId });
       
-      if (!res.ok) {
-        if (res.status === 404) {
-          setError('App not found');
-        } else if (res.status === 403) {
-          setError('You do not have permission to view this app');
-        } else {
-          setError('Failed to load app');
-        }
+      if (!res.data) {
+        setError('Failed to load app');
         return;
       }
 
-      const data = await res.json();
-      setApp(data);
+      setApp(res.data);
     } catch (err) {
       console.error('Error fetching app:', err);
       setError('Failed to load app');
@@ -204,10 +194,9 @@ export default function AppDetailPage() {
 
   const fetchBuildInfo = useCallback(async (appName: string) => {
     try {
-      const res = await fetch(`/api/jenkins/build-info?app=${appName}`);
-      if (res.ok) {
-        const data = await res.json();
-        setBuildInfo(data);
+      const res = await api.get(`/jenkins/build-info?app=${appName}`);
+      if (res.data) {
+        setBuildInfo(res.data);
       }
     } catch (error) {
       console.error('Error fetching build info:', error);
@@ -216,12 +205,11 @@ export default function AppDetailPage() {
 
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
-      const res = await fetch(
-        `/api/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
+      const res = await api.get(
+        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setBuildLogs(data.logs || 'No logs available');
+      if (res.data) {
+        setBuildLogs(res.data.logs || 'No logs available');
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
@@ -230,10 +218,9 @@ export default function AppDetailPage() {
 
   const fetchDeployments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/services/platform-apps/deployments?app_id=${appId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDeployments(data.deployments || []);
+      const res = await api.get(`/services/platform-apps/deployments?app_id=${appId}`);
+      if (res.data) {
+        setDeployments(res.data.deployments || []);
       }
     } catch (error) {
       console.error('Error fetching deployments:', error);
@@ -1066,7 +1053,7 @@ export default function AppDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-white/50">No environment variables configured. Click "Add Variable" to add one.</p>
+                    <p className="text-sm text-white/50">No environment variables configured. Click &quot;Add Variable&quot; to add one.</p>
                   )}
 
                   {/* Save Button */}
@@ -1090,7 +1077,7 @@ export default function AppDetailPage() {
                         )}
                       </Button>
                       <span className="text-xs text-white/50">
-                        Note: After saving, click "Redeploy" to apply changes to your app.
+                        Note: After saving, click &quot;Redeploy&quot; to apply changes to your app.
                       </span>
                     </div>
                   )}

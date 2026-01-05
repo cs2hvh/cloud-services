@@ -205,7 +205,6 @@ export async function POST(req: NextRequest) {
         app.id,
         authenticatedUrl,
         app.branch || "main",
-        app.port || 3000,
         app.framework || undefined,
         new_size,
         "manual",

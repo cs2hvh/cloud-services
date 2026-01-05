@@ -14,6 +14,7 @@ import {
   GitProviders,
   HowItWorks,
 } from '@/components/dashboard/apps';
+import api from '@/lib/axios/axios';
 
 export default function ApplicationDeploymentPage() {
   const [deployedApps, setDeployedApps] = useState<App[]>([]);
@@ -27,11 +28,11 @@ export default function ApplicationDeploymentPage() {
 
   const fetchApps = useCallback(async () => {
     try {
-      const res = await fetch('/api/services/platform-apps/list');
-      const data = await res.json();
+      const res = await api.get('/services/platform-apps/list');
+      const data = res.data;
       setDeployedApps((prev) => {
         const deletingAppIds = prev.filter((app) => app.status === 'deleting').map((app) => app.id);
-        const newApps = data.apps || [];
+        const newApps = data?.apps || [];
         const deletingApps = prev.filter(
           (app) => app.status === 'deleting' && !newApps.some((a: App) => a.id === app.id)
         );
@@ -51,10 +52,9 @@ export default function ApplicationDeploymentPage() {
 
   const fetchBuildInfo = useCallback(async (appName: string) => {
     try {
-      const res = await fetch(`/api/jenkins/build-info?app=${appName}`);
-      if (res.ok) {
-        const data = await res.json();
-        setBuildInfo((prev) => ({ ...prev, [appName]: data }));
+      const res = await api.get(`/jenkins/build-info?app=${appName}`);
+      if (res.data) {
+        setBuildInfo((prev) => ({ ...prev, [appName]: res.data }));
       }
     } catch (error) {
       console.error(`Error fetching build info for ${appName}:`, error);
@@ -63,12 +63,11 @@ export default function ApplicationDeploymentPage() {
 
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
-      const res = await fetch(
-        `/api/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
+      const res = await api.get(
+        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setBuildLogs((prev) => ({ ...prev, [appName]: data.logs }));
+      if (res.data) {
+        setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
       }
     } catch (error) {
       console.error(`Error fetching build logs for ${appName}:`, error);
