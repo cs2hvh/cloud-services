@@ -23,8 +23,9 @@ export class JenkinsService {
    * Used by webhooks for auto-deploy
    * @param appName - The application name
    * @param commitSha - Optional specific commit SHA to checkout
+   * @param resizeOnly - If true, skips build stages and only updates K8s deployment
    */
-  static async triggerBuild(appName: string, commitSha?: string): Promise<number> {
+  static async triggerBuild(appName: string, commitSha?: string, resizeOnly: boolean = false): Promise<number> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
     }
@@ -34,6 +35,9 @@ export class JenkinsService {
     console.log(`[JenkinsService] Triggering build for: ${jobName}`);
     if (commitSha) {
       console.log(`[JenkinsService] Target commit: ${commitSha}`);
+    }
+    if (resizeOnly) {
+      console.log(`[JenkinsService] Resize mode: Skipping build stages`);
     }
 
     try {
@@ -46,9 +50,13 @@ export class JenkinsService {
       // Trigger the build with parameters
       // IMPORTANT: Jobs with parameter definitions MUST use buildWithParameters
       // Passing empty COMMIT_SHA uses branch HEAD (default behavior)
+      // RESIZE_ONLY=true skips checkout, dockerfile prep, and build stages
       await jenkins.job.build({
         name: jobName,
-        parameters: { COMMIT_SHA: commitSha || '' },
+        parameters: { 
+          COMMIT_SHA: commitSha || '',
+          RESIZE_ONLY: resizeOnly,
+        },
       });
       
       // Wait a moment for build to be registered
@@ -57,7 +65,7 @@ export class JenkinsService {
       // Get the build number
       const buildNumber = await this.getLatestBuildNumber(appName) || 1;
       
-      console.log(`[JenkinsService] ✅ Build #${buildNumber} triggered for: ${jobName}`);
+      console.log(`[JenkinsService] ✅ Build #${buildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
       console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${buildNumber}/`);
       
       return buildNumber;

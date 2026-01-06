@@ -96,6 +96,11 @@ export function createNuxtJsPipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>RESIZE_ONLY</name>
+          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
+          <defaultValue>false</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -139,6 +144,9 @@ pipeline {
   stages {
 
     stage('Checkout Repo') {
+      when {
+        expression { return !params.RESIZE_ONLY }
+      }
       steps {
         container('git') {
           sh '''
@@ -162,6 +170,9 @@ pipeline {
     }
 
     stage('Prepare Dockerfile') {
+      when {
+        expression { return !params.RESIZE_ONLY }
+      }
       steps {
         container('git') {
           sh '''
@@ -172,6 +183,9 @@ ${generateNuxtjsDockerfileStage()}
     }
 
     stage('Build Image with Kaniko') {
+      when {
+        expression { return !params.RESIZE_ONLY }
+      }
       steps {
         container('kaniko') {
           withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
@@ -229,6 +243,15 @@ SECRET_EOF
           sh '''
             echo "STAGE: Deploy to Kubernetes"
             
+            # Use latest image for resize operations, new build image otherwise
+            if [ "\${RESIZE_ONLY}" = "true" ]; then
+              DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
+              echo "Resize mode: Using existing latest image"
+            else
+              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
+              echo "Full deploy: Using newly built image"
+            fi
+            
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
@@ -252,7 +275,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE_VERSION}
+        image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}

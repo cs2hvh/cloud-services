@@ -79,6 +79,11 @@ export function createViteReactPipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
+        <hudson.model.BooleanParameterDefinition>
+          <name>RESIZE_ONLY</name>
+          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
+          <defaultValue>false</defaultValue>
+        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -138,6 +143,7 @@ pipeline {
     }
 
     stage('Checkout Repository') {
+      when { expression { return !params.RESIZE_ONLY } }
       steps {
         container('git') {
           script {
@@ -199,6 +205,7 @@ pipeline {
     }
 
     stage('Prepare Dockerfile') {
+      when { expression { return !params.RESIZE_ONLY } }
       steps {
         container('git') {
           script {
@@ -213,6 +220,7 @@ ${generateStaticSiteDockerfileStage('dist')}
     }
 
     stage('Build Docker Image') {
+      when { expression { return !params.RESIZE_ONLY } }
       steps {
         container('kaniko') {
           script {
@@ -296,6 +304,15 @@ SECRET_EOF
             
             sh(
               script: '''
+              # Use latest image for resize operations, new build image otherwise
+              if [ "\${RESIZE_ONLY}" = "true" ]; then
+                DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
+                echo "Resize mode: Using existing latest image"
+              else
+                DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
+                echo "Full deploy: Using newly built image"
+              fi
+
               echo 'Generating Kubernetes deployment manifest'
               cat > deployment.yaml << DEPLOY_EOF
 apiVersion: apps/v1
@@ -317,7 +334,7 @@ spec:
     spec:
       containers:
       - name: \${APP_NAME}
-        image: \${DOCKER_IMAGE_VERSION}
+        image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
         - containerPort: ${containerPort}

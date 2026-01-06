@@ -212,8 +212,8 @@ export async function POST(req: NextRequest) {
         envVars
       );
 
-      // Trigger a new build
-      const buildNumber = await JenkinsService.triggerBuild(app.name);
+      // Trigger a resize-only build (skips checkout, dockerfile, and build stages)
+      const buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
 
