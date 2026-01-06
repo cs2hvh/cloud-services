@@ -6,6 +6,9 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService, type DeploymentConfig } from "@/lib/services";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { getRatesForPlatformApp } from "@/config/pricing";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -54,6 +57,26 @@ export async function POST(req: NextRequest) {
     if (!validation.success) return validation.response;
 
     const { env_vars, ...appData } = validation.data;
+
+    // Get instance size for billing (default to 'small')
+    const instanceSize = ((appData as { size?: string }).size || 'small') as "small" | "medium" | "large";
+
+    // Billing: Get rates based on instance size
+    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForPlatformApp(instanceSize);
+
+    // Check balance BEFORE creating resources
+    const balCheck = await ensureBalance(auth.user!.id, INITIAL_COST);
+    if (!balCheck.ok) {
+      return NextResponse.json(
+        { 
+          error: "Insufficient credits", 
+          balance: balCheck.balance, 
+          required: INITIAL_COST,
+          message: `You need at least $${INITIAL_COST.toFixed(2)} credits to deploy this app. Current balance: $${(balCheck.balance || 0).toFixed(2)}`
+        },
+        { status: 402 }
+      );
+    }
 
     // Check app limit per user (max 10 apps)
     const MAX_APPS_PER_USER = 10;
@@ -350,12 +373,40 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Post-provision billing: deduct upfront cost and register for hourly billing
+    if (result.app_id) {
+      try {
+        await postProvisionBilling({
+          userId: auth.user!.id,
+          initialCost: INITIAL_COST,
+          hourlyRate: HOURLY_RATE,
+          serviceId: result.app_id,
+          addActive: Billing.add_active_platform_app,
+        });
+        console.log('[platform-apps/create] ✅ Billing registered successfully', {
+          userId: auth.user!.id,
+          appId: result.app_id,
+          initialCost: INITIAL_COST,
+          hourlyRate: HOURLY_RATE,
+        });
+      } catch (billingError) {
+        console.error('[platform-apps/create] ⚠️ Billing registration failed:', billingError);
+        // Note: App is already deployed, so we log but don't fail
+        // The billing team should be notified of orphaned resources
+      }
+    }
+
     return NextResponse.json({
       message: 'Created App Successfully!',
       app_id: result.app_id,
       deployment_url: result.deployment_url,
       port: result.port,
       auto_deploy: appData.auto_deploy || false,
+      billing: {
+        initial_cost: INITIAL_COST,
+        hourly_rate: HOURLY_RATE,
+        instance_size: instanceSize,
+      },
     }, { status: 201 });
   } catch (err: unknown) {
     console.error('[platform-apps/create] Error:', err);

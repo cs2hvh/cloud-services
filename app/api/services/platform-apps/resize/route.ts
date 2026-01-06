@@ -6,6 +6,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
+import { BuildPollingService } from "@/lib/services/build-polling";
 import { GitHubProvider } from "@/lib/providers/github";
 
 // Size order for validation (upsize only)
@@ -205,7 +206,6 @@ export async function POST(req: NextRequest) {
         app.id,
         authenticatedUrl,
         app.branch || "main",
-        app.port || 3000,
         app.framework || undefined,
         new_size,
         "manual",
@@ -216,6 +216,13 @@ export async function POST(req: NextRequest) {
       const buildNumber = await JenkinsService.triggerBuild(app.name);
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
+
+      // Start background polling for build status
+      BuildPollingService.startPolling({
+        appId: app.id,
+        appName: app.name,
+        buildNumber: buildNumber,
+      });
 
       // Add project log if project_id exists
       if (app.project_id) {

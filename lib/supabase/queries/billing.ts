@@ -248,6 +248,26 @@ export const Billing = {
       throw new Error(`Failed to insert active_spectrum: ${error.message}`);
   },
 
+  add_active_platform_app: async (params: {
+    userId: string;
+    serviceId: string;
+    hourlyRate: number;
+  }) => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_platform_apps")
+      .insert({
+        user_id: params.userId,
+        service_id: params.serviceId,
+        hourly_rate: params.hourlyRate,
+        status: "active",
+        last_billed_at: new Date().toISOString(),
+      });
+    if (error)
+      throw new Error(`Failed to insert active_platform_apps: ${error.message}`);
+  },
+
   // Internal helper: compute prorated charge for remaining fraction of hour
   _computeProratedCharge: (
     hourlyRate: number | string,
@@ -281,7 +301,7 @@ export const Billing = {
 
   // Generic closer for active services in billing schema
   close_active_service: async (
-    type: "database" | "kubernetes" | "objectspace" | "spectrum",
+    type: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps",
     params: { userId: string; serviceId: string; failOnInsufficient?: boolean }
   ): Promise<{ charged: number; newBalance: number | null }> => {
     const supabase = await createServiceClient();
@@ -290,6 +310,7 @@ export const Billing = {
       kubernetes: "active_kubernetes",
       objectspace: "active_objectspace",
       spectrum: "active_spectrum",
+      platform_apps: "active_platform_apps",
     };
     const table = tableMap[type];
     if (!table) {

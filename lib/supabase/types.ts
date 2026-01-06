@@ -1173,7 +1173,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
-      product_type: "vps" | "vds" | "game" | "database" | "object-storage" | "kubernetes" | "network-ddos";
+      product_type: "vps" | "vds" | "game" | "database" | "object-storage" | "kubernetes" | "network-ddos" | "platform-apps";
       user_role:
         | "member"
         | "admin"

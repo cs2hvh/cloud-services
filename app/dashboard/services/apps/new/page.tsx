@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { getUser } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { getAllPlatformAppRates } from "@/config/pricing";
 
 const AppDeploymentNewSuspense = async () => {
   const user = await getUser();
@@ -12,10 +13,13 @@ const AppDeploymentNewSuspense = async () => {
     notFound();
   }
 
-  // Fetch user's projects
-  const projects = await Projects.get_all_by_user(user.id);
+  // Fetch user's projects and pricing data in parallel
+  const [projects, pricing] = await Promise.all([
+    Projects.get_all_by_user(user.id),
+    getAllPlatformAppRates(),
+  ]);
 
-  return <AppDeploymentSelect projects={projects} />;
+  return <AppDeploymentSelect projects={projects} pricing={pricing} />;
 };
 
 const AppDeploymentNewPage = () => {

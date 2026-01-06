@@ -89,15 +89,25 @@ const frameworkConfigs = {
   'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
 };
 
-interface PageProps {
-  projects: Tables<"projects">[];
+// Instance size configurations with resource specs
+const instanceSizeConfigs = {
+  small: { cpu: '250m', ram: '256Mi', replicas: 1 },
+  medium: { cpu: '500m', ram: '512Mi', replicas: 2 },
+  large: { cpu: '1', ram: '1Gi', replicas: 3 },
+};
+
+interface PricingRates {
+  initialCost: number;
+  hourlyRate: number;
+  price: number; // Monthly price
 }
 
 interface PageProps {
   projects: Tables<"projects">[];
+  pricing?: Record<string, PricingRates>;
 }
 
-const AppDeploymentSelect = ({ projects }: PageProps) => {
+const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null); // Track which provider is being connected
@@ -1213,24 +1223,71 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
                 
                 <div className="mt-4">
                   <Label className="text-white">Instance Size</Label>
-                  <div className="mt-2">
-                    <Select value={size} onValueChange={setSize}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white w-48">
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="small">
-                          Small — 250m CPU / 256Mi RAM / 1 replica
-                        </SelectItem>
-                        <SelectItem value="medium">
-                          Medium — 500m CPU / 512Mi RAM / 2 replicas
-                        </SelectItem>
-                        <SelectItem value="large">
-                          Large — 1 CPU / 1Gi RAM / 3 replicas
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <p className="text-xs text-white/50 mt-1 mb-3">
+                    Select the resources for your application. You can resize anytime.
+                  </p>
+                  <RadioGroup
+                    value={size}
+                    onValueChange={setSize}
+                    className="grid grid-cols-1 gap-3"
+                  >
+                    {(["small", "medium", "large"] as const).map((sizeOption) => {
+                      const config = instanceSizeConfigs[sizeOption];
+                      const sizePrice = pricing?.[sizeOption];
+                      const monthlyPrice = sizePrice?.price ?? 0;
+                      const hourlyRate = sizePrice?.hourlyRate ?? 0;
+                      
+                      return (
+                        <div key={sizeOption}>
+                          <RadioGroupItem
+                            value={sizeOption}
+                            id={`size-${sizeOption}`}
+                            className="peer sr-only"
+                          />
+                          <Label
+                            htmlFor={`size-${sizeOption}`}
+                            className="flex items-center justify-between p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div
+                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                  size === sizeOption
+                                    ? "border-blue-500 bg-blue-500"
+                                    : "border-white/30"
+                                }`}
+                              >
+                                {size === sizeOption && (
+                                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                                )}
+                              </div>
+                              <div>
+                                <div className="font-semibold text-white capitalize">
+                                  {sizeOption}
+                                </div>
+                                <div className="text-xs text-white/60">
+                                  {config.cpu} CPU / {config.ram} RAM / {config.replicas} replica{config.replicas > 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              {monthlyPrice > 0 ? (
+                                <>
+                                  <div className="font-bold text-white">
+                                    ${monthlyPrice.toFixed(2)}<span className="text-xs text-white/60">/mo</span>
+                                  </div>
+                                  <div className="text-xs text-white/50">
+                                    ${(hourlyRate * 24 * 30).toFixed(2)}/mo based on usage
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="font-bold text-green-400">Free</div>
+                              )}
+                            </div>
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
                 </div>
 
                 {/* Auto-Deploy Toggle */}
@@ -1349,7 +1406,21 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Instance Size:</span>
-                      <span className="text-white capitalize">{size}</span>
+                      <span className="text-white capitalize">
+                        {size} ({instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.cpu} CPU / {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.ram} RAM)
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-white/60">Estimated Cost:</span>
+                      <span className="text-white">
+                        {(() => {
+                          const sizePrice = pricing?.[size];
+                          const monthlyPrice = sizePrice?.price ?? 0;
+                          return monthlyPrice > 0 
+                            ? `$${monthlyPrice.toFixed(2)}/mo` 
+                            : "Free";
+                        })()}
+                      </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-white/60">Auto-Deploy:</span>
@@ -1478,14 +1549,49 @@ const AppDeploymentSelect = ({ projects }: PageProps) => {
                 <div className="text-white">{selectedBranch || "Not set"}</div>
               </div>
 
+              <div>
+                <div className="text-sm text-white/60">Instance Size</div>
+                <div className="text-white capitalize">{size}</div>
+                <div className="text-xs text-white/60">
+                  {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.cpu} CPU / {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.ram} RAM
+                </div>
+              </div>
+
               <Separator className="bg-white/10" />
 
               <div className="text-center">
-                <div className="text-sm text-white/60">Deployment</div>
-                <div className="text-lg font-bold text-green-400">FREE</div>
-                <div className="text-xs text-white/60">
-                  Included with platform
-                </div>
+                <div className="text-sm text-white/60">Estimated Cost</div>
+                {(() => {
+                  const sizePrice = pricing?.[size];
+                  const monthlyPrice = sizePrice?.price ?? 0;
+                  const initialCost = sizePrice?.initialCost ?? 0;
+                  
+                  if (monthlyPrice > 0) {
+                    return (
+                      <>
+                        <div className="text-lg font-bold text-white">
+                          ${monthlyPrice.toFixed(2)}<span className="text-sm text-white/60">/mo</span>
+                        </div>
+                        {initialCost > 0 && (
+                          <div className="text-xs text-white/60">
+                            + ${initialCost.toFixed(2)} setup fee
+                          </div>
+                        )}
+                        <div className="text-xs text-white/50 mt-1">
+                          Billed hourly based on usage
+                        </div>
+                      </>
+                    );
+                  }
+                  return (
+                    <>
+                      <div className="text-lg font-bold text-green-400">FREE</div>
+                      <div className="text-xs text-white/60">
+                        Included with platform
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </CardContent>
           </Card>

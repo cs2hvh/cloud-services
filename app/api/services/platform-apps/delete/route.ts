@@ -7,6 +7,7 @@ import { DeploymentService } from "@/lib/services";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -56,6 +57,23 @@ export async function POST(req: NextRequest) {
     // Delete using deployment service
     try {
       await DeploymentService.delete(app_id, auth.user!.id, isAdminUser);
+
+      // Close active billing for this app (prorated final charge)
+      try {
+        const billingResult = await Billing.close_active_service("platform_apps", {
+          userId: auth.user!.id,
+          serviceId: app_id,
+          failOnInsufficient: false, // Don't prevent deletion if user has no balance
+        });
+        console.log('[platform-apps/delete] Billing closed:', {
+          appId: app_id,
+          charged: billingResult.charged,
+          newBalance: billingResult.newBalance,
+        });
+      } catch (billingError) {
+        console.warn('[platform-apps/delete] Failed to close billing:', billingError);
+        // Don't fail the deletion, billing cleanup can be handled separately
+      }
 
       // Add project log if project_id exists
       if (projectId) {
