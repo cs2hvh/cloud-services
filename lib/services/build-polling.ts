@@ -10,6 +10,7 @@ export interface BuildPollConfig {
   appId: string;
   appName: string;
   buildNumber: number;
+  trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
   maxPolls?: number;
   pollInterval?: number;
   startupWait?: number;
@@ -40,13 +41,14 @@ export class BuildPollingService {
       appId,
       appName,
       buildNumber,
+      trigger = 'manual',
       maxPolls = this.DEFAULT_MAX_POLLS,
       pollInterval = this.DEFAULT_POLL_INTERVAL,
       startupWait = this.DEFAULT_STARTUP_WAIT,
       buildStartTimeout = this.DEFAULT_BUILD_START_TIMEOUT,
     } = config;
 
-    console.log(`[BuildPolling] Starting polling for ${appName} build #${buildNumber}`);
+    console.log(`[BuildPolling] Starting polling for ${appName} build #${buildNumber} (trigger: ${trigger})`);
     console.log(`[BuildPolling] Config: max=${maxPolls} polls, interval=${pollInterval}ms, startup=${startupWait}ms`);
 
     // Wait before first poll to give Jenkins time to start the build
@@ -55,6 +57,7 @@ export class BuildPollingService {
         appId,
         appName,
         buildNumber,
+        trigger,
         maxPolls,
         pollInterval,
         buildStartTimeout,
@@ -71,20 +74,21 @@ export class BuildPollingService {
     appId: string;
     appName: string;
     buildNumber: number;
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     maxPolls: number;
     pollInterval: number;
     buildStartTimeout: number;
     pollCount: number;
     buildFound: boolean;
   }): Promise<void> {
-    const { appId, appName, buildNumber, maxPolls, pollInterval } = context;
+    const { appId, appName, buildNumber, trigger, maxPolls, pollInterval } = context;
     let { pollCount, buildFound } = context;
 
     pollCount++;
 
     // Check for timeout
     if (pollCount > maxPolls) {
-      await this.handleTimeout(appId, appName, pollCount, pollInterval, buildNumber);
+      await this.handleTimeout(appId, appName, pollCount, pollInterval, buildNumber, trigger);
       return;
     }
 
@@ -102,7 +106,7 @@ export class BuildPollingService {
 
       // Check if build is complete
       if (!buildStatus.building) {
-        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber);
+        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber, trigger);
         return;
       }
 
@@ -134,7 +138,7 @@ export class BuildPollingService {
     appName: string,
     buildStatus: { status: string; result: string | null; building: boolean },
     buildNumber?: number,
-    trigger: 'manual' | 'webhook' | 'rollback' = 'manual'
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual'
   ): Promise<void> {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
@@ -293,7 +297,8 @@ export class BuildPollingService {
     appName: string,
     pollCount: number,
     pollInterval: number,
-    buildNumber?: number
+    buildNumber?: number,
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual'
   ): Promise<void> {
     const timeoutMinutes = Math.floor((pollCount * pollInterval) / 60000);
     const failureReason = `Build timeout: No response after ${timeoutMinutes} minutes`;
@@ -314,7 +319,7 @@ export class BuildPollingService {
       app_id: appId,
       build_number: buildNumber || null,
       status: 'failed',
-      trigger: 'manual',
+      trigger,
       failure_reason: failureReason,
     });
   }
@@ -328,6 +333,7 @@ export class BuildPollingService {
       appId: string;
       appName: string;
       buildNumber: number;
+      trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
       maxPolls: number;
       pollInterval: number;
       buildStartTimeout: number;

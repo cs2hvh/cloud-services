@@ -87,8 +87,8 @@ export async function POST(req: NextRequest) {
     // Record deployment in history (for rollback capability)
     if (status === 'running' || status === 'failed') {
       const deploymentStatus = status === 'running' ? 'success' : 'failed';
-      const validTrigger = ['manual', 'webhook', 'rollback'].includes(trigger) 
-        ? trigger as 'manual' | 'webhook' | 'rollback'
+      const validTrigger = ['manual', 'webhook', 'rollback', 'resize'].includes(trigger) 
+        ? trigger as 'manual' | 'webhook' | 'rollback' | 'resize'
         : 'webhook';
 
       const deploymentResult = await Platform_App_Deployments.create({

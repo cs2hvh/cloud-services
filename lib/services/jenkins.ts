@@ -47,6 +47,11 @@ export class JenkinsService {
         throw new Error(`Job ${jobName} does not exist`);
       }
 
+      // Get the current latest build number BEFORE triggering
+      // This ensures we know what the next build number will be
+      const currentBuildNumber = await this.getLatestBuildNumber(appName) || 0;
+      const expectedBuildNumber = currentBuildNumber + 1;
+
       // Trigger the build with parameters
       // IMPORTANT: Jobs with parameter definitions MUST use buildWithParameters
       // Passing empty COMMIT_SHA uses branch HEAD (default behavior)
@@ -59,16 +64,10 @@ export class JenkinsService {
         },
       });
       
-      // Wait a moment for build to be registered
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log(`[JenkinsService] ✅ Build #${expectedBuildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
+      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${expectedBuildNumber}/`);
       
-      // Get the build number
-      const buildNumber = await this.getLatestBuildNumber(appName) || 1;
-      
-      console.log(`[JenkinsService] ✅ Build #${buildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
-      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${buildNumber}/`);
-      
-      return buildNumber;
+      return expectedBuildNumber;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] ❌ Error triggering build for ${jobName}:`, errorMessage);

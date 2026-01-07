@@ -2960,7 +2960,7 @@ export const Platform_App_Deployments = {
     image_tag?: string | null;
     image_digest?: string | null;
     status: 'success' | 'failed';
-    trigger: 'manual' | 'webhook' | 'rollback';
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     failure_reason?: string | null;
   }) => {
     try {

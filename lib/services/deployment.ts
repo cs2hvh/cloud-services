@@ -162,6 +162,7 @@ export class DeploymentService {
           appId: app.id,
           appName: config.name,
           buildNumber: 1, // First build for new job
+          trigger: 'manual',
         });
         
       } catch (jenkinsError: unknown) {
