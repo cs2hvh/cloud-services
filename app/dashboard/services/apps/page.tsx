@@ -28,11 +28,11 @@ export default function ApplicationDeploymentPage() {
 
   const fetchApps = useCallback(async () => {
     try {
-      const res = await fetch('/api/services/platform-apps/list');
-      const data = await res.json();
+      const res = await api.get('/services/platform-apps/list');
+      const data = res.data;
       setDeployedApps((prev) => {
         const deletingAppIds = prev.filter((app) => app.status === 'deleting').map((app) => app.id);
-        const newApps = data.apps || [];
+        const newApps = data?.apps || [];
         const deletingApps = prev.filter(
           (app) => app.status === 'deleting' && !newApps.some((a: App) => a.id === app.id)
         );

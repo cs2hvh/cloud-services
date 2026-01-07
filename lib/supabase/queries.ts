@@ -2961,6 +2961,7 @@ export const Platform_App_Deployments = {
     image_digest?: string | null;
     status: 'success' | 'failed';
     trigger: 'manual' | 'webhook' | 'rollback';
+    failure_reason?: string | null;
   }) => {
     try {
       const supabase = await createServiceClient();
@@ -2974,6 +2975,7 @@ export const Platform_App_Deployments = {
           image_digest: payload.image_digest ?? null,
           status: payload.status,
           trigger: payload.trigger,
+          failure_reason: payload.failure_reason ?? null,
         })
         .select('*')
         .single();

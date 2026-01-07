@@ -32,6 +32,8 @@ import {
   Save,
   ArrowUpCircle,
   Zap,
+  Server,
+  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +44,8 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
+import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
+import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
@@ -67,6 +71,8 @@ interface AppDetail {
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
   size?: string;
+  // Failure tracking
+  last_failure_reason?: string | null;
 }
 
 // Size specifications
@@ -145,6 +151,8 @@ export default function AppDetailPage() {
     duration?: number;
     commit_sha?: string;
     commit_message?: string;
+    trigger?: string;
+    failure_reason?: string | null;
   }>>([]);
 
   // Environment variables editing state
@@ -177,25 +185,14 @@ export default function AppDetailPage() {
 
   const fetchApp = useCallback(async () => {
     try {
-      const res = await fetch('/api/services/platform-apps/get', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_id: appId }),
-      });
+      const res = await api.post('/services/platform-apps/get', { app_id: appId });
       
-      if (!res.ok) {
-        if (res.status === 404) {
-          setError('App not found');
-        } else if (res.status === 403) {
-          setError('You do not have permission to view this app');
-        } else {
-          setError('Failed to load app');
-        }
+      if (!res.data) {
+        setError('Failed to load app');
         return;
       }
 
-      const data = await res.json();
-      setApp(data);
+      setApp(res.data);
     } catch (err) {
       console.error('Error fetching app:', err);
       setError('Failed to load app');
@@ -230,10 +227,9 @@ export default function AppDetailPage() {
 
   const fetchDeployments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/services/platform-apps/deployments?app_id=${appId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setDeployments(data.deployments || []);
+      const res = await api.get(`/services/platform-apps/deployments?app_id=${appId}`);
+      if (res.data) {
+        setDeployments(res.data.deployments || []);
       }
     } catch (error) {
       console.error('Error fetching deployments:', error);
@@ -498,6 +494,13 @@ export default function AppDetailPage() {
               <h1 className="text-2xl font-bold">{app.name}</h1>
               {getStatusBadge(app.status, buildInfo?.building)}
             </div>
+            {/* Show failure reason if app failed */}
+            {app.status === 'failed' && app.last_failure_reason && (
+              <div className="flex items-center gap-2 text-sm text-red-400 mb-2 bg-red-500/10 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span>{app.last_failure_reason}</span>
+              </div>
+            )}
             <a
               href={`https://${domain}`}
               target="_blank"
@@ -581,7 +584,7 @@ export default function AppDetailPage() {
         transition={{ delay: 0.2 }}
       >
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="bg-white/5 border border-white/10">
+          <TabsList className="bg-white/5 border border-white/10 flex-wrap">
             <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">
               <Activity className="w-4 h-4 mr-2" />
               Overview
@@ -590,9 +593,17 @@ export default function AppDetailPage() {
               <Link2 className="w-4 h-4 mr-2" />
               Domains
             </TabsTrigger>
-            <TabsTrigger value="logs" className="data-[state=active]:bg-white/10">
+            <TabsTrigger value="build-logs" className="data-[state=active]:bg-white/10">
               <Terminal className="w-4 h-4 mr-2" />
-              Logs
+              Build Logs
+            </TabsTrigger>
+            <TabsTrigger value="runtime-logs" className="data-[state=active]:bg-white/10">
+              <Server className="w-4 h-4 mr-2" />
+              Runtime Logs
+            </TabsTrigger>
+            <TabsTrigger value="issues" className="data-[state=active]:bg-white/10">
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              Issues
             </TabsTrigger>
             <TabsTrigger value="deployments" className="data-[state=active]:bg-white/10">
               <Layers className="w-4 h-4 mr-2" />
@@ -768,8 +779,8 @@ export default function AppDetailPage() {
             />
           </TabsContent>
 
-          {/* Logs Tab */}
-          <TabsContent value="logs">
+          {/* Build Logs Tab */}
+          <TabsContent value="build-logs">
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -792,6 +803,24 @@ export default function AppDetailPage() {
                 </pre>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Runtime Logs Tab */}
+          <TabsContent value="runtime-logs">
+            <RuntimeLogs
+              appId={app.id}
+              appName={app.name}
+              appStatus={app.status}
+            />
+          </TabsContent>
+
+          {/* Issues Tab */}
+          <TabsContent value="issues">
+            <AppIssues
+              appId={app.id}
+              appName={app.name}
+              appStatus={app.status}
+            />
           </TabsContent>
 
           {/* Deployments Tab */}
@@ -850,6 +879,21 @@ export default function AppDetailPage() {
                                 {deployment.commit_message}
                               </span>
                             )}
+                          </div>
+                        )}
+                        {/* Failure Reason Row */}
+                        {deployment.status === 'FAILURE' && deployment.failure_reason && (
+                          <div className="flex items-center gap-2 text-xs text-red-400/80 pl-1 bg-red-500/10 rounded px-2 py-1.5">
+                            <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                            <span>{deployment.failure_reason}</span>
+                          </div>
+                        )}
+                        {/* Trigger Badge */}
+                        {deployment.trigger && (
+                          <div className="flex items-center gap-2 text-xs text-white/40 pl-1">
+                            <Badge variant="outline" className="text-xs capitalize">
+                              {deployment.trigger}
+                            </Badge>
                           </div>
                         )}
                       </div>
@@ -1083,7 +1127,7 @@ export default function AppDetailPage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-white/50">No environment variables configured. Click "Add Variable" to add one.</p>
+                    <p className="text-sm text-white/50">No environment variables configured. Click &quot;Add Variable&quot; to add one.</p>
                   )}
 
                   {/* Save Button */}
@@ -1107,7 +1151,7 @@ export default function AppDetailPage() {
                         )}
                       </Button>
                       <span className="text-xs text-white/50">
-                        Note: After saving, click "Redeploy" to apply changes to your app.
+                        Note: After saving, click &quot;Redeploy&quot; to apply changes to your app.
                       </span>
                     </div>
                   )}
