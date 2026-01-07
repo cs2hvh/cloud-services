@@ -268,6 +268,33 @@ export const Billing = {
       throw new Error(`Failed to insert active_platform_apps: ${error.message}`);
   },
 
+  /**
+   * Update the hourly rate for an active platform app (used during resize)
+   * This ensures the user is charged the correct rate after resizing
+   */
+  update_active_platform_app_rate: async (params: {
+    serviceId: string;
+    newHourlyRate: number;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("active_platform_apps")
+      .update({
+        hourly_rate: params.newHourlyRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active");
+
+    if (error) {
+      console.error(`[Billing] Failed to update platform app rate:`, error.message);
+      throw new Error(`Failed to update hourly rate: ${error.message}`);
+    }
+
+    console.log(`[Billing] Updated platform app ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+  },
+
   // Internal helper: compute prorated charge for remaining fraction of hour
   _computeProratedCharge: (
     hourlyRate: number | string,

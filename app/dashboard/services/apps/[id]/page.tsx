@@ -160,6 +160,7 @@ export default function AppDetailPage() {
   const [resizing, setResizing] = useState(false);
   const [resizeError, setResizeError] = useState<string | null>(null);
   const [resizeSuccess, setResizeSuccess] = useState<string | null>(null);
+  const [sizePrices, setSizePrices] = useState<Record<string, number>>({});
 
   // Fetch detailed K8s info
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -278,6 +279,21 @@ export default function AppDetailPage() {
       setEditedEnvVars(app.env_vars.map(env => ({ ...env })));
     }
   }, [app?.env_vars]);
+
+  // Fetch platform app prices from products table
+  useEffect(() => {
+    const fetchPrices = async () => {
+      try {
+        const res = await api.get('/services/platform-apps/prices');
+        if (res.data) {
+          setSizePrices(res.data.prices || {});
+        }
+      } catch (error) {
+        console.error('Error fetching platform app prices:', error);
+      }
+    };
+    fetchPrices();
+  }, []);
 
   // Handle env var changes
   const handleEnvVarChange = (index: number, field: 'key' | 'value', newValue: string) => {
@@ -967,7 +983,9 @@ export default function AppDetailPage() {
                             </div>
                           </div>
 
-                          <p className="mt-3 text-sm font-medium text-white/90">{specs.price}</p>
+                          <p className="mt-3 text-sm font-medium text-white/90">
+                            {sizePrices[size] ? `$${sizePrices[size]}/mo` : specs.price}
+                          </p>
                         </div>
                       );
                     })}

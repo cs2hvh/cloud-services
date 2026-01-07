@@ -5,9 +5,11 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { GitHubProvider } from "@/lib/providers/github";
+import { getRatesForPlatformApp } from "@/config/pricing";
 
 // Size order for validation (upsize only)
 const SIZE_ORDER: Record<string, number> = {
@@ -216,6 +218,19 @@ export async function POST(req: NextRequest) {
       const buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
+
+      // Update billing hourly rate for the new size
+      try {
+        const { hourlyRate: newHourlyRate } = await getRatesForPlatformApp(new_size as "small" | "medium" | "large");
+        await Billing.update_active_platform_app_rate({
+          serviceId: app.id,
+          newHourlyRate: newHourlyRate,
+        });
+        console.log(`[Resize] Updated billing rate to ${newHourlyRate}/hr for ${app.name}`);
+      } catch (billingError) {
+        // Log but don't fail the resize if billing update fails
+        console.error("[platform-apps/resize] Failed to update billing rate:", billingError);
+      }
 
       // Start background polling for build status
       BuildPollingService.startPolling({

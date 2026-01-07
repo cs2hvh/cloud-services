@@ -3,9 +3,10 @@ import { type NextRequest } from "next/server";
 import { NextResponse } from "next/server"; // added
 
 // ---------- IP cooldown config ----------
+const IS_DEV = process.env.NODE_ENV === 'development';
 const WINDOW_MS = 60_000; // 1 minute window
-const MAX_REQUESTS = 30; // allow 20 requests per IP per window
-const COOLDOWN_MS = 5 * 60_000; // 5 minutes cooldown when exceeded
+const MAX_REQUESTS = IS_DEV ? 500 : 30; // Higher limit in dev, stricter in production
+const COOLDOWN_MS = IS_DEV ? 30_000 : 5 * 60_000; // 30s dev, 5min production
 
 type IpRecord = {
   count: number;
@@ -28,12 +29,14 @@ function getClientIp(req: NextRequest): string {
 function applyIpCooldown(req: NextRequest): NextResponse | null {
   const ip = getClientIp(req);
   const now = Date.now();
+  const path = req.nextUrl.pathname;
 
   const rec = ipStore.get(ip);
 
   // still cooling down?
   if (rec?.cooldownUntil && now < rec.cooldownUntil) {
     const msLeft = rec.cooldownUntil - now;
+    console.log(`[RATE-LIMIT] IP ${ip} still in cooldown (${msLeft}ms left). Blocked path: ${path}`);
     return new NextResponse(
       JSON.stringify({
         error: "Too many requests. Try again later.",
@@ -62,6 +65,7 @@ function applyIpCooldown(req: NextRequest): NextResponse | null {
   if (rec.count > MAX_REQUESTS) {
     rec.cooldownUntil = now + COOLDOWN_MS;
     ipStore.set(ip, rec);
+    console.log(`[RATE-LIMIT] IP ${ip} exceeded limit (${rec.count} requests). Last path: ${path}`);
     return new NextResponse(
       JSON.stringify({
         error: "Too many requests. Try again later.",
