@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import jenkins from "@/lib/jenkins";
+
+// Limit for deployment history - matches UI pagination and reduces API calls
+const DEPLOYMENT_HISTORY_LIMIT = 10;
 
 interface BuildInfo {
   build_number: number;
@@ -12,6 +15,8 @@ interface BuildInfo {
   result?: string;
   commit_sha?: string;
   commit_message?: string;
+  trigger?: string;
+  failure_reason?: string | null;
 }
 
 /**
@@ -61,13 +66,22 @@ export async function GET(req: NextRequest) {
     const jobName = `${app.name}-job`;
     const deployments: BuildInfo[] = [];
 
+    // First, get deployment records from database (has failure_reason)
+    const dbDeployments = await Platform_App_Deployments.list_by_app(appId, DEPLOYMENT_HISTORY_LIMIT);
+    const dbDeploymentMap = new Map<number, typeof dbDeployments[0]>();
+    for (const dep of dbDeployments) {
+      if (dep.build_number) {
+        dbDeploymentMap.set(dep.build_number, dep);
+      }
+    }
+
     try {
       // Get job info which includes build history
       const jobInfo = await jenkins.job.get(jobName);
       
       if (jobInfo && jobInfo.builds && Array.isArray(jobInfo.builds)) {
-        // Get details for each build (limit to last 10)
-        const buildPromises = jobInfo.builds.slice(0, 10).map(async (build: { number: number }) => {
+        // Get details for each build
+        const buildPromises = jobInfo.builds.slice(0, DEPLOYMENT_HISTORY_LIMIT).map(async (build: { number: number }) => {
           try {
             const buildInfo = await jenkins.build.get(jobName, build.number);
             
@@ -128,20 +142,29 @@ export async function GET(req: NextRequest) {
               }
             }
             
+            // Get additional info from database (failure_reason, trigger)
+            const dbRecord = dbDeploymentMap.get(buildInfo.number);
+            
             return {
               build_number: buildInfo.number,
               status: buildInfo.building ? 'BUILDING' : (buildInfo.result || 'UNKNOWN'),
               started_at: new Date(buildInfo.timestamp).toISOString(),
               duration: buildInfo.duration,
               result: buildInfo.result,
-              commit_sha: commitSha,
+              commit_sha: commitSha || dbRecord?.commit_sha?.substring(0, 7),
               commit_message: commitMessage,
+              trigger: dbRecord?.trigger,
+              failure_reason: dbRecord?.failure_reason,
             };
           } catch {
+            // Even on Jenkins error, try to get info from DB
+            const dbRecord = dbDeploymentMap.get(build.number);
             return {
               build_number: build.number,
-              status: 'UNKNOWN',
-              started_at: new Date().toISOString(),
+              status: dbRecord?.status === 'success' ? 'SUCCESS' : dbRecord?.status === 'failed' ? 'FAILURE' : 'UNKNOWN',
+              started_at: dbRecord?.created_at || new Date().toISOString(),
+              trigger: dbRecord?.trigger,
+              failure_reason: dbRecord?.failure_reason,
             };
           }
         });

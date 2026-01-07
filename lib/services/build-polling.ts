@@ -3,7 +3,7 @@
  * Handles background polling of Jenkins build status
  */
 import { JenkinsService } from "./jenkins";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import { PrometheusService } from "./prometheus";
 
 export interface BuildPollConfig {
@@ -84,7 +84,7 @@ export class BuildPollingService {
 
     // Check for timeout
     if (pollCount > maxPolls) {
-      await this.handleTimeout(appId, appName, pollCount, pollInterval);
+      await this.handleTimeout(appId, appName, pollCount, pollInterval, buildNumber);
       return;
     }
 
@@ -102,7 +102,7 @@ export class BuildPollingService {
 
       // Check if build is complete
       if (!buildStatus.building) {
-        await this.handleBuildComplete(appId, appName, buildStatus);
+        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber);
         return;
       }
 
@@ -127,18 +127,45 @@ export class BuildPollingService {
   /**
    * Handle build completion
    * If build succeeded, verify the app is actually healthy before marking as 'running'
+   * Records deployment history for rollback capability
    */
   private static async handleBuildComplete(
     appId: string,
     appName: string,
-    buildStatus: { status: string; result: string | null; building: boolean }
+    buildStatus: { status: string; result: string | null; building: boolean },
+    buildNumber?: number,
+    trigger: 'manual' | 'webhook' | 'rollback' = 'manual'
   ): Promise<void> {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
 
     // If build failed, mark as failed immediately
     if (buildStatus.status === 'failed' || buildStatus.result !== 'SUCCESS') {
-      await Platform_Apps.update(appId, { status: "failed" });
+      const failureReason = `Build failed: ${buildStatus.result || 'Unknown error'}`;
+      
+      const updateResult = await Platform_Apps.update(appId, { 
+        status: "failed",
+        last_failure_reason: failureReason,
+      });
+
+      if (!updateResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to update app status to failed: ${updateResult.error}`);
+      }
+      
+      // Record failed deployment
+      const deploymentResult = await Platform_App_Deployments.create({
+        app_id: appId,
+        build_number: buildNumber || null,
+        status: 'failed',
+        trigger,
+        failure_reason: failureReason,
+      });
+
+      if (!deploymentResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to create failed deployment record: ${deploymentResult.error}`);
+      }
+      
+      console.log(`[BuildPolling] 📝 Recorded failed deployment: ${failureReason}`);
       return;
     }
 
@@ -149,10 +176,66 @@ export class BuildPollingService {
     
     if (isHealthy) {
       console.log(`[BuildPolling] ✅ App ${appName} is healthy and running`);
-      await Platform_Apps.update(appId, { status: "running" });
+      const updateResult = await Platform_Apps.update(appId, { 
+        status: "running",
+        last_failure_reason: null, // Clear any previous failure
+      });
+
+      if (!updateResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to update app status to running: ${updateResult.error}`);
+      } else {
+        console.log(`[BuildPolling] ✅ App status updated to 'running' in DB`);
+      }
+      
+      // Record successful deployment
+      const deploymentResult = await Platform_App_Deployments.create({
+        app_id: appId,
+        build_number: buildNumber || null,
+        image_tag: `${appName}-app:build-${buildNumber || 'latest'}`,
+        status: 'success',
+        trigger,
+      });
+
+      if (!deploymentResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to create successful deployment record: ${deploymentResult.error}`);
+      }
+      
+      // Set as active deployment
+      if (deploymentResult.success && deploymentResult.data) {
+        const activeResult = await Platform_App_Deployments.set_active_for_app(appId, deploymentResult.data.id);
+        if (!activeResult.success) {
+          console.error(`[BuildPolling] ❌ Failed to set active deployment: ${activeResult.error}`);
+        }
+      }
+      
+      console.log(`[BuildPolling] 📝 Recorded successful deployment`);
     } else {
+      const failureReason = 'Health check failed: Pods not ready after build';
+      
       console.log(`[BuildPolling] ❌ App ${appName} failed health check - pods not ready`);
-      await Platform_Apps.update(appId, { status: "failed" });
+      const updateResult = await Platform_Apps.update(appId, { 
+        status: "failed",
+        last_failure_reason: failureReason,
+      });
+
+      if (!updateResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to update app status to failed (health check): ${updateResult.error}`);
+      }
+      
+      // Record failed deployment (build succeeded but health check failed)
+      const deploymentResult = await Platform_App_Deployments.create({
+        app_id: appId,
+        build_number: buildNumber || null,
+        status: 'failed',
+        trigger,
+        failure_reason: failureReason,
+      });
+
+      if (!deploymentResult.success) {
+        console.error(`[BuildPolling] ❌ Failed to create failed deployment record: ${deploymentResult.error}`);
+      }
+      
+      console.log(`[BuildPolling] 📝 Recorded failed deployment: ${failureReason}`);
     }
   }
 
@@ -209,12 +292,31 @@ export class BuildPollingService {
     appId: string,
     appName: string,
     pollCount: number,
-    pollInterval: number
+    pollInterval: number,
+    buildNumber?: number
   ): Promise<void> {
     const timeoutMinutes = Math.floor((pollCount * pollInterval) / 60000);
+    const failureReason = `Build timeout: No response after ${timeoutMinutes} minutes`;
+    
     console.log(`[BuildPolling] ⚠️ Timeout for ${appName} after ${timeoutMinutes} minutes`);
     
-    await Platform_Apps.update(appId, { status: "failed" });
+    const updateResult = await Platform_Apps.update(appId, { 
+      status: "failed",
+      last_failure_reason: failureReason,
+    });
+
+    if (!updateResult.success) {
+      console.error(`[BuildPolling] ❌ Failed to update app status to timeout: ${updateResult.error}`);
+    }
+    
+    // Record failed deployment
+    await Platform_App_Deployments.create({
+      app_id: appId,
+      build_number: buildNumber || null,
+      status: 'failed',
+      trigger: 'manual',
+      failure_reason: failureReason,
+    });
   }
 
   /**

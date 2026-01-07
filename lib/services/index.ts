@@ -7,11 +7,13 @@ export { PrometheusService } from "./prometheus";
 export { AutoDeployService } from "./auto-deploy";
 export { CustomDomainService } from "./custom-domain";
 export { KubernetesCustomDomainService } from "./kubernetes-custom-domain";
+export { RuntimeLogsService } from "./runtime-logs";
 
 export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";
 export type { AppMetrics, AppHealth, PodMetrics } from "./prometheus";
 export type { AutoDeployConfig, AutoDeployResult } from "./auto-deploy";
+export type { PodSummary, LogEntry, K8sEvent, LogOptions, StreamOptions } from "./runtime-logs";
 export type {
   CustomDomain,
   CustomDomainWithStatus,
