@@ -44,6 +44,7 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
+import api from '@/lib/axios/axios';
 
 // Extended App type for detail page (includes all fields from API)
 interface AppDetail {
@@ -204,10 +205,9 @@ export default function AppDetailPage() {
 
   const fetchBuildInfo = useCallback(async (appName: string) => {
     try {
-      const res = await fetch(`/api/jenkins/build-info?app=${appName}`);
-      if (res.ok) {
-        const data = await res.json();
-        setBuildInfo(data);
+       const res = await api.get(`/jenkins/build-info?app=${appName}`);
+      if (res.data) {
+        setBuildInfo(res.data);
       }
     } catch (error) {
       console.error('Error fetching build info:', error);
@@ -216,12 +216,11 @@ export default function AppDetailPage() {
 
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
-      const res = await fetch(
-        `/api/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
+       const res = await api.get(
+        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setBuildLogs(data.logs || 'No logs available');
+        if (res.data) {
+        setBuildLogs(res.data.logs || 'No logs available');
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
