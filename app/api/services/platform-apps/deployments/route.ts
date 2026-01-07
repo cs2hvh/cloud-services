@@ -62,6 +62,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // For pending apps, return empty deployments list with helpful message
+    if (app.status === 'pending') {
+      return NextResponse.json({
+        app_id: appId,
+        app_name: app.name,
+        deployments: [],
+        total_builds: 0,
+        message: "Deployment is being initialized...",
+        pending: true,
+      });
+    }
+
     // Get build history from Jenkins
     const jobName = `${app.name}-job`;
     const deployments: BuildInfo[] = [];
