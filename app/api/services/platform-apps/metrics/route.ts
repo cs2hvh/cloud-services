@@ -47,6 +47,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // For non-running apps, return empty metrics with helpful message
+    if (app.status !== 'running' && app.status !== 'degraded') {
+      return NextResponse.json({
+        app_id: appId,
+        app_name: app.name,
+        status: app.status,
+        message: `Metrics not available - app is ${app.status}`,
+        metrics: null,
+      });
+    }
+
     // Get metrics from Prometheus
     const metrics = await PrometheusService.getAppMetrics(app.name);
 

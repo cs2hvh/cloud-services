@@ -84,6 +84,9 @@ export class RuntimeLogsService {
   /**
    * List all pods for an application
    * Returns pods matching the app's label selector
+   * 
+   * NOTE: Filters out terminating pods (deletionTimestamp set) and completed pods
+   * to show only active replicas. This prevents showing extra pods during rollouts.
    */
   static async listPods(appName: string, namespace = DEFAULT_NAMESPACE): Promise<PodSummary[]> {
     try {
@@ -95,7 +98,30 @@ export class RuntimeLogsService {
         labelSelector,
       });
 
-      return response.items.map((pod: V1Pod) => this.podToSummary(pod));
+      // Filter out terminating pods (being deleted) and completed/failed pods
+      // This ensures we only show active replicas, not old pods during rollouts
+      const activePods = response.items.filter((pod: V1Pod) => {
+        // Exclude pods that are being deleted (terminating)
+        if (pod.metadata?.deletionTimestamp) return false;
+        
+        // Exclude completed/succeeded pods (jobs that finished)
+        if (pod.status?.phase === 'Succeeded') return false;
+        
+        // Exclude Pending pods - they haven't started yet and have no logs
+        // This prevents showing stuck pods from failed rollouts
+        if (pod.status?.phase === 'Pending') return false;
+        
+        // Exclude pods in Failed state that aren't restarting
+        if (pod.status?.phase === 'Failed') {
+          const containerStatuses = pod.status?.containerStatuses || [];
+          const hasRestartPolicy = containerStatuses.some(c => c.restartCount > 0);
+          if (!hasRestartPolicy) return false;
+        }
+        
+        return true;
+      });
+
+      return activePods.map((pod: V1Pod) => this.podToSummary(pod));
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[RuntimeLogsService] listPods error for ${appName}:`, errorMessage);

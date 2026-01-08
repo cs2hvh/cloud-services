@@ -9,7 +9,7 @@ type DeploymentRecordPayload = {
   image_tag?: string | null;
   image_digest?: string | null;
   status: 'success' | 'failed';
-  trigger: 'manual' | 'webhook' | 'rollback';
+  trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
 };
 
 function normalizeInt(value: unknown): number | null {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Invalid status: ${String(body.status)}` }, { status: 400 });
     }
 
-    if (body.trigger !== 'manual' && body.trigger !== 'webhook' && body.trigger !== 'rollback') {
+    if (body.trigger !== 'manual' && body.trigger !== 'webhook' && body.trigger !== 'rollback' && body.trigger !== 'resize') {
       return NextResponse.json({ error: `Invalid trigger: ${String(body.trigger)}` }, { status: 400 });
     }
 

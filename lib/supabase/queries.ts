@@ -2960,7 +2960,7 @@ export const Platform_App_Deployments = {
     image_tag?: string | null;
     image_digest?: string | null;
     status: 'success' | 'failed';
-    trigger: 'manual' | 'webhook' | 'rollback';
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     failure_reason?: string | null;
   }) => {
     try {
@@ -3441,6 +3441,7 @@ export const GitLab_Tokens = {
 // Re-export from the queries folder for backward compatibility
 export { Billing } from "./queries/billing";
 export { Promocodes } from "./queries/promocodes";
+export { Database_Integrations } from "./queries/database_integrations";
 
 // Export the queries object for backward compatibility
 const api = {

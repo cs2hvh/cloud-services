@@ -50,6 +50,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    // Skip log fetching for apps that are pending (no Jenkins job yet)
+    if (app.status === 'pending') {
+      return NextResponse.json({
+        app_id: appId,
+        app_name: app.name,
+        build_number: null,
+        logs: "Deployment is being initialized. Build logs will appear shortly...",
+        has_more: false,
+        next_start: 0,
+        pending: true,
+      });
+    }
+
     const jobName = `${app.name}-job`;
     let logs = "";
     let hasMore = false;
@@ -70,6 +83,9 @@ export async function GET(req: NextRequest) {
         logs = await JenkinsService.getBuildLog(app.name, build, start);
         nextStart = start + logs.length;
         hasMore = logs.length > 0; // If we got content, there might be more
+      } else {
+        // No builds yet
+        logs = "Build is starting. Logs will appear shortly...";
       }
     } catch (jenkinsError) {
       console.error(`[API] Error fetching Jenkins logs for ${jobName}:`, jenkinsError);

@@ -6,7 +6,8 @@ import { RuntimeLogsService } from "@/lib/services/runtime-logs";
 import { 
   translateToIssues, 
   calculateSummary, 
-  getActionableIssues 
+  getActionableIssues,
+  filterResolvedIssues,
 } from "@/lib/services/issue-translator";
 
 /**
@@ -67,9 +68,22 @@ export async function GET(req: NextRequest) {
     // Get events from Kubernetes (internal only)
     const rawEvents = await RuntimeLogsService.getEvents(app.name);
 
+    // Get pods to check if app is healthy
+    const pods = await RuntimeLogsService.listPods(app.name);
+    const isAppHealthy = pods.length > 0 && pods.every(p => p.status === 'Running' && p.ready);
+    
+    // Extract success event reasons to filter resolved issues
+    const successEvents = rawEvents
+      .filter(e => e.type === 'Normal')
+      .map(e => e.reason);
+
     // TRANSLATE to customer-friendly issues
     // Raw K8s events are NEVER sent to the frontend
-    const issues = translateToIssues(rawEvents);
+    const allIssues = translateToIssues(rawEvents);
+    
+    // Filter out stale/resolved issues based on current health
+    const issues = filterResolvedIssues(allIssues, isAppHealthy, successEvents);
+    
     const summary = calculateSummary(issues);
     const actionableIssues = getActionableIssues(issues);
 

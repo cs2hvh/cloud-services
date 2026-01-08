@@ -135,6 +135,7 @@ export class AutoDeployService {
         appId,
         appName,
         buildNumber,
+        trigger: 'webhook',
       });
 
       // Mark delivery as successful

@@ -4,6 +4,8 @@ import { JenkinsService } from "@/lib/services/jenkins";
 /**
  * GET /api/jenkins/build-info?app=myapp&build=1
  * Get detailed Jenkins build information
+ * 
+ * Returns 404 gracefully when no builds exist (common during initial deployment)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -20,11 +22,29 @@ export async function GET(req: NextRequest) {
 
     if (!buildNumber) {
       // Get latest build number if not specified
-      const latestBuild = await JenkinsService.getLatestBuildNumber(appName);
+      let latestBuild: number | null = null;
+      try {
+        latestBuild = await JenkinsService.getLatestBuildNumber(appName);
+      } catch {
+        // Job might not exist yet or has no builds
+        console.log(`[API] No builds available yet for ${appName}`);
+        return NextResponse.json(
+          { 
+            error: "No builds found for this app",
+            message: "The build may still be initializing. Please wait a moment.",
+            pending: true
+          },
+          { status: 404 }
+        );
+      }
       
       if (!latestBuild) {
         return NextResponse.json(
-          { error: "No builds found for this app" },
+          { 
+            error: "No builds found for this app",
+            message: "The build may still be initializing. Please wait a moment.",
+            pending: true
+          },
           { status: 404 }
         );
       }
@@ -54,6 +74,19 @@ export async function GET(req: NextRequest) {
   } catch (error: unknown) {
     console.error("[API] Error getting build info:", error);
     const errorMessage = error instanceof Error ? error.message : "Failed to get build info";
+    
+    // If it's a "not found" type error, return 404 with helpful message
+    if (errorMessage.includes('not found') || errorMessage.includes('does not exist')) {
+      return NextResponse.json(
+        { 
+          error: errorMessage,
+          message: "Build not found. It may still be initializing.",
+          pending: true
+        },
+        { status: 404 }
+      );
+    }
+    
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }

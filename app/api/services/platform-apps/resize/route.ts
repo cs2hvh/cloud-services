@@ -237,6 +237,7 @@ export async function POST(req: NextRequest) {
         appId: app.id,
         appName: app.name,
         buildNumber: buildNumber,
+        trigger: 'resize',
       });
 
       // Add project log if project_id exists

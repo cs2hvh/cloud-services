@@ -194,6 +194,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       appId: app.id,
       appName: app.name,
       buildNumber,
+      trigger: 'webhook',
     }).catch(() => undefined);
 
     // 13. Record successful trigger

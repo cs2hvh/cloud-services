@@ -1376,3 +1376,49 @@ export interface Coupon {
   created_at: string;
   redemption_count?: number;
 }
+
+// ============================================
+// DATABASE INTEGRATION TYPES
+// ============================================
+
+export type IntegrationStatus = 'pending' | 'linked' | 'failed' | 'unlinked';
+
+export interface DatabaseIntegration {
+  id: string;
+  database_cluster_id: string;
+  platform_app_id: string;
+  user_id: string;
+  project_id: string | null;
+  status: IntegrationStatus;
+  injected_env_keys: string[];
+  env_prefix: string;
+  created_at: string;
+  updated_at: string;
+  unlinked_at: string | null;
+  unlinked_by: string | null;
+  error_message: string | null;
+}
+
+export interface DatabaseIntegrationInsert {
+  database_cluster_id: string;
+  platform_app_id: string;
+  user_id: string;
+  project_id?: string | null;
+  status?: IntegrationStatus;
+  injected_env_keys?: string[];
+  env_prefix?: string;
+}
+
+export interface DatabaseIntegrationUpdate {
+  status?: IntegrationStatus;
+  injected_env_keys?: string[];
+  unlinked_at?: string | null;
+  unlinked_by?: string | null;
+  error_message?: string | null;
+}
+
+// Environment variable generation result
+export interface GeneratedEnvVars {
+  vars: Array<{ key: string; value: string }>;
+  keys: string[];
+}

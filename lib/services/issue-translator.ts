@@ -282,3 +282,49 @@ export function calculateSummary(issues: PlatformIssue[]): IssuesSummary {
 export function getActionableIssues(issues: PlatformIssue[]): PlatformIssue[] {
   return issues.filter(i => i.severity === 'critical' || i.severity === 'warning');
 }
+
+/**
+ * Filter out stale/resolved issues based on current app state
+ * 
+ * Some K8s events persist even after the issue is resolved.
+ * For example, FailedScheduling events remain after pods are successfully scheduled.
+ * This function filters those out when we know the app is healthy.
+ * 
+ * @param issues - All translated issues
+ * @param isAppHealthy - Whether all pods are running and ready
+ * @param successEvents - List of success event reasons (Started, Pulled, etc.)
+ */
+export function filterResolvedIssues(
+  issues: PlatformIssue[],
+  isAppHealthy: boolean,
+  successEvents: string[] = []
+): PlatformIssue[] {
+  // Issues that are resolved when app is healthy
+  const resolvedWhenHealthy = ['FailedScheduling', 'Unhealthy'];
+  
+  // Issues that are resolved when we see success events
+  const resolvedBySuccess: Record<string, string[]> = {
+    'FailedScheduling': ['Started', 'Created'],
+    'ImagePullBackOff': ['Pulled'],
+    'Unhealthy': ['Started'],
+  };
+  
+  return issues.filter(issue => {
+    // Keep critical issues always (crash loops, OOM, etc.)
+    if (issue.severity === 'critical') return true;
+    
+    // If app is healthy, filter out warnings that are clearly resolved
+    if (isAppHealthy && resolvedWhenHealthy.includes(issue.id)) {
+      return false;
+    }
+    
+    // Check if we have success events that resolve this issue
+    const resolvingEvents = resolvedBySuccess[issue.id];
+    if (resolvingEvents && resolvingEvents.some(e => successEvents.includes(e))) {
+      // Only filter if the success event is more recent than the issue
+      return false;
+    }
+    
+    return true;
+  });
+}

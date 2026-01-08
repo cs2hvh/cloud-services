@@ -180,6 +180,16 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             data: supabase_data.data,
+            // Include unencrypted connection info for immediate use
+            // (only returned on create, subsequent reads use encrypted data)
+            connection: {
+              host: database.data.database.connection.host,
+              port: database.data.database.connection.port,
+              user: database.data.database.connection.user,
+              password: database.data.database.connection.password,
+              database: database.data.database.connection.database || 'defaultdb',
+              uri: database.data.database.connection.uri,
+            },
             message: "database creation started",
           },
           { status: 200 }

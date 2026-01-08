@@ -44,33 +44,33 @@ export default function ApplicationDeploymentPage() {
         ];
       });
     } catch (error) {
-      console.error('Error fetching apps:', error);
+      console.log('[fetchApps] Failed to fetch apps list:', error);
     } finally {
       setLoading(false);
     }
   }, []);
 
-   const fetchBuildInfo = useCallback(async (appName: string) => {
+  // Fetch build info using axios - only called for apps with valid status
+  const fetchBuildInfo = useCallback(async (appName: string) => {
     try {
       const res = await api.get(`/jenkins/build-info?app=${appName}`);
-      if (res.data) {
+      if (res?.data && !res.data.error) {
         setBuildInfo((prev) => ({ ...prev, [appName]: res.data }));
       }
     } catch (error) {
-      console.error(`Error fetching build info for ${appName}:`, error);
+      console.log(`[fetchBuildInfo] Build info not available for ${appName}:`, error);
     }
   }, []);
 
+  // Fetch build logs using axios - only called when user expands logs
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
-      const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
-      );
-      if (res.data) {
+      const res = await api.get(`/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`);
+      if (res?.data?.logs) {
         setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
       }
     } catch (error) {
-      console.error(`Error fetching build logs for ${appName}:`, error);
+      console.log(`[fetchBuildLogs] Logs not available for ${appName} build #${buildNumber}:`, error);
     }
   }, []);
 
@@ -85,9 +85,13 @@ export default function ApplicationDeploymentPage() {
     return () => clearInterval(interval);
   }, [fetchApps, hasDeleting]);
 
-  // Fetch build info for each app (only once per app)
+  // Fetch build info for each app (only once per app, skip for pending/deleting apps)
   useEffect(() => {
     deployedApps.forEach((app) => {
+      // Skip fetching build info for apps that are pending or deleting (no Jenkins job yet)
+      if (app.status === 'pending' || app.status === 'deleting') {
+        return;
+      }
       if (!fetchedBuilds.has(app.name)) {
         fetchBuildInfo(app.name);
         setFetchedBuilds((prev) => new Set(prev).add(app.name));
