@@ -46,6 +46,7 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
+import { AppIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
@@ -589,6 +590,10 @@ export default function AppDetailPage() {
               <Activity className="w-4 h-4 mr-2" />
               Overview
             </TabsTrigger>
+            <TabsTrigger value="integrations" className="data-[state=active]:bg-white/10">
+              <Zap className="w-4 h-4 mr-2" />
+              Integrations
+            </TabsTrigger>
             <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
               <Link2 className="w-4 h-4 mr-2" />
               Domains
@@ -768,6 +773,15 @@ export default function AppDetailPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Integrations Tab */}
+          <TabsContent value="integrations" className="space-y-4">
+            <AppIntegrationsSection 
+              appId={app.id} 
+              appName={app.name} 
+              projectId={app.project_id || ''} 
+            />
           </TabsContent>
 
           {/* Domains Tab */}

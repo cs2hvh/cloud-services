@@ -3441,6 +3441,7 @@ export const GitLab_Tokens = {
 // Re-export from the queries folder for backward compatibility
 export { Billing } from "./queries/billing";
 export { Promocodes } from "./queries/promocodes";
+export { Database_Integrations } from "./queries/database_integrations";
 
 // Export the queries object for backward compatibility
 const api = {

@@ -4,6 +4,7 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { DatabaseIntegrationService } from "@/lib/services/database-integration";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -14,11 +15,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    const { force } = body; // Optional: force delete even with active integrations
 
     // Get cluster details before deletion for logging
     const clusterData = await Database_Clusters.read(body.id);
     const clusterName = clusterData.success ? clusterData.data.name : 'Unknown';
     const projectId = clusterData.success ? clusterData.data.project_id : null;
+
+    // ========================================
+    // Check for active integrations
+    // ========================================
+    const integrationCheck = await DatabaseIntegrationService.canDeleteDatabase(body.id);
+    
+    if (!integrationCheck.canDelete && !force) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Cannot delete database with active integrations",
+          code: "DATABASE_HAS_ACTIVE_LINKS",
+          linked_apps_count: integrationCheck.linkedApps,
+          linked_app_names: integrationCheck.linkedAppNames,
+          hint: "Unlink all apps first, or use force=true to auto-unlink",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Force delete: auto-unlink all apps first
+    if (force && integrationCheck.linkedApps > 0) {
+      console.log(`[deleteDatabase] Force delete: unlinking ${integrationCheck.linkedApps} apps`);
+      const unlinkResult = await DatabaseIntegrationService.unlinkAllFromDatabase(
+        body.id, 
+        auth.user.id
+      );
+      console.log(`[deleteDatabase] Unlinked ${unlinkResult.unlinked_count} apps`);
+    }
 
     // Close billing (prorated deduction + remove active row)
     try {

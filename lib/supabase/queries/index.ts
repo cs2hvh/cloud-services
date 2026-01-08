@@ -8,6 +8,7 @@ export { Locations } from "./locations";
 export { OTPs } from "./otps";
 export { Clusters } from "./clusters";
 export { Database_Clusters } from "./database_clusters";
+export { Database_Integrations } from "./database_integrations"; // Database-App integration tracking
 export { Activities } from "./activities";
 export { ObjectSpaces } from "./object_spaces";
 export { Spectrum_Apps } from "./spectrum_apps";
