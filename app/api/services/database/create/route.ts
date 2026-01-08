@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             data: supabase_data.data,
-            message: "database creation started",
+            message: "database creation started (issue-fix)",
           },
           { status: 200 }
         );
