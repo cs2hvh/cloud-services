@@ -28,6 +28,13 @@ describe('POST /api/services/spectrum/apps/update', () => {
     vi.clearAllMocks();
     await mockAuthenticatedUser();
     await mockRateLimitAllow();
+
+    // Setup default mock for updateSpectrumApp
+    const { updateSpectrumApp } = await import('@/config/spectrum-functions');
+    vi.mocked(updateSpectrumApp).mockResolvedValue({
+      cloudflare: mockCloudflareSpectrumApp as any,
+      local: mockSpectrumApp as any,
+    });
   });
 
   describe('Authentication', () => {
@@ -46,15 +53,9 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
   describe('Rate Limiting', () => {
     it('should allow requests within rate limit', async () => {
-      const { updateSpectrumApp } = await import('@/config/spectrum-functions');
-      vi.mocked(updateSpectrumApp).mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp as any,
-        local: mockSpectrumApp as any,
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -78,7 +79,7 @@ describe('POST /api/services/spectrum/apps/update', () => {
     it('should reject missing app_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { origin_direct: ['1.2.3.4'] }
+        { origin_direct: ['1.2.3.4'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -108,15 +109,9 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
   describe('Authorization', () => {
     it('should allow owner to update their app', async () => {
-      const { updateSpectrumApp } = await import('@/config/spectrum-functions');
-      vi.mocked(updateSpectrumApp).mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp as any,
-        local: mockSpectrumApp as any,
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['1.2.3.4'] }
+        { app_id: 'test-id', origin_direct: ['1.2.3.4'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -131,7 +126,7 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['1.2.3.4'] }
+        { app_id: 'test-id', origin_direct: ['1.2.3.4'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -143,14 +138,10 @@ describe('POST /api/services/spectrum/apps/update', () => {
     it('should update app in Cloudflare successfully', async () => {
       const { updateSpectrumApp } = await import('@/config/spectrum-functions');
       const updateMock = vi.mocked(updateSpectrumApp);
-      updateMock.mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp as any,
-        local: mockSpectrumApp as any,
-      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       await PUT(request as NextRequest);
@@ -166,14 +157,10 @@ describe('POST /api/services/spectrum/apps/update', () => {
     it('should persist update to database', async () => {
       const { updateSpectrumApp } = await import('@/config/spectrum-functions');
       const updateMock = vi.mocked(updateSpectrumApp);
-      updateMock.mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp as any,
-        local: mockSpectrumApp as any,
-      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       await PUT(request as NextRequest);
@@ -182,15 +169,9 @@ describe('POST /api/services/spectrum/apps/update', () => {
     });
 
     it('should return 200 with updated data', async () => {
-      const { updateSpectrumApp } = await import('@/config/spectrum-functions');
-      vi.mocked(updateSpectrumApp).mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp,
-        local: mockSpectrumApp,
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -207,7 +188,7 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'nonexistent-id', origin_direct: ['1.2.3.4'] }
+        { app_id: 'nonexistent-id', origin_direct: ['1.2.3.4'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -222,7 +203,7 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -237,7 +218,7 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['2.3.4.5'] }
+        { app_id: 'test-id', origin_direct: ['2.3.4.5'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -247,15 +228,9 @@ describe('POST /api/services/spectrum/apps/update', () => {
 
   describe('Partial Updates', () => {
     it('should allow updating only origin_direct', async () => {
-      const { updateSpectrumApp } = await import('@/config/spectrum-functions');
-      vi.mocked(updateSpectrumApp).mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp,
-        local: mockSpectrumApp,
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['3.3.3.3'] }
+        { app_id: 'test-id', origin_direct: ['3.3.3.3'], argo_smart_routing: true }
       );
 
       const response = await PUT(request as NextRequest);
@@ -265,14 +240,10 @@ describe('POST /api/services/spectrum/apps/update', () => {
     it('should preserve unchanged fields', async () => {
       const { updateSpectrumApp } = await import('@/config/spectrum-functions');
       const updateMock = vi.mocked(updateSpectrumApp);
-      updateMock.mockResolvedValue({
-        cloudflare: mockCloudflareSpectrumApp,
-        local: mockSpectrumApp,
-      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/update',
-        { app_id: 'test-id', origin_direct: ['4.4.4.4'] }
+        { app_id: 'test-id', origin_direct: ['4.4.4.4'], argo_smart_routing: true }
       );
 
       await PUT(request as NextRequest);

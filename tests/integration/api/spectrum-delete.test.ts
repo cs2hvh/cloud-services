@@ -11,7 +11,10 @@ import {
 } from '../../utils/test-helpers';
 
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/spectrum_apps');
+vi.mock('@/lib/supabase/queries/billing');
+vi.mock('@/lib/supabase/auth');
+vi.mock('@/config/spectrum-functions');
 vi.mock('axios');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/app/api/admin/network-ddos/apps/delete/route', () => ({
@@ -19,10 +22,22 @@ vi.mock('@/app/api/admin/network-ddos/apps/delete/route', () => ({
 }));
 
 describe('POST /api/services/spectrum/apps/delete', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     mockAuthenticatedUser();
     mockRateLimitAllow();
+
+    // Mock requireAdmin to return non-admin by default
+    const { requireAdmin } = await import('@/lib/supabase/auth');
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: false });
+
+    // Mock Billing.close_active_service
+    const { Billing } = await import('@/lib/supabase/queries/billing');
+    vi.mocked(Billing.close_active_service).mockResolvedValue({ success: true });
+
+    // Mock deleteSpectrumApp function
+    const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
+    vi.mocked(deleteSpectrumApp).mockResolvedValue({ success: true, message: 'App deleted' });
   });
 
    describe('Authentication', () => {
@@ -41,7 +56,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
 
   describe('Rate Limiting', () => {
     it('should allow requests within rate limit', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
         data: mockSpectrumApp,
@@ -59,7 +74,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       const response = await POST(request as NextRequest);
@@ -93,7 +108,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
     it('should reject invalid app_id format', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: '', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: '', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       const response = await POST(request as NextRequest);
@@ -103,7 +118,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
 
   describe('Authorization', () => {
     it('should allow owner to delete their app', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
         data: mockSpectrumApp,
@@ -121,7 +136,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       const response = await POST(request as NextRequest);
@@ -129,15 +144,15 @@ describe('POST /api/services/spectrum/apps/delete', () => {
     });
 
     it('should prevent non-owner from deleting app', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
-        data: { ...mockSpectrumApp, owner_id: 'different-user' },
+        data: { ...mockSpectrumApp, owner_id: '550e8400-e29b-41d4-a716-446655440001' },
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: 'different-user' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440001', id: 'test-service-id' }
       );
 
       const response = await POST(request as NextRequest);
@@ -147,7 +162,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
 
   describe('Success Cases', () => {
     it('should delete app from Cloudflare successfully', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
         data: mockSpectrumApp,
@@ -157,48 +172,40 @@ describe('POST /api/services/spectrum/apps/delete', () => {
         data: [],
       });
 
-      const axios = await import('axios');
-      const deleteMock = vi.mocked(axios.default.delete);
+      const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
+      const deleteMock = vi.mocked(deleteSpectrumApp);
       deleteMock.mockResolvedValue({
-        status: 200,
-        data: { success: true },
+        success: true,
+        message: 'App deleted',
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       await POST(request as NextRequest);
 
-      expect(deleteMock).toHaveBeenCalledWith(
-        expect.stringContaining('spectrum/apps'),
-        expect.any(Object)
-      );
+      expect(deleteMock).toHaveBeenCalledWith('test-id');
     });
 
     it('should delete app from database after Cloudflare deletion', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
         data: mockSpectrumApp,
       });
 
-      const deleteMock = vi.mocked(Spectrum_Apps.delete);
+      const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
+      const deleteMock = vi.mocked(deleteSpectrumApp);
       deleteMock.mockResolvedValue({
         success: true,
-        data: [],
-      });
-
-      const axios = await import('axios');
-      vi.mocked(axios.default.delete).mockResolvedValue({
-        status: 200,
-        data: { success: true },
+        message: 'App deleted',
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       await POST(request as NextRequest);
@@ -207,7 +214,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
     });
 
     it('should return 200 on successful deletion', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
+      const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
         data: mockSpectrumApp,
@@ -217,15 +224,9 @@ describe('POST /api/services/spectrum/apps/delete', () => {
         data: [],
       });
 
-      const axios = await import('axios');
-      vi.mocked(axios.default.delete).mockResolvedValue({
-        status: 200,
-        data: { success: true },
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
-        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000' }
+        { app_id: 'test-id', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
       );
 
       const response = await POST(request as NextRequest);

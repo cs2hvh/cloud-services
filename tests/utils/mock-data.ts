@@ -217,6 +217,7 @@ export const mockCreateDatabasePayload = {
   region: 'nyc1',
   project_id: mockProject.id,
   owner_id: mockUser.id,
+  plan_id: '550e8400-e29b-41d4-a716-446655440010', // Required for billing
 };
 
 export const mockInvalidPayloads = {

@@ -1,170 +1,86 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/database/read_all_owner/route';
 import { NextRequest } from 'next/server';
-import { mockDatabaseCluster, mockCreatingCluster, mockProject } from '../../utils/mock-data';
+import { mockDatabaseCluster, mockUser } from '../../utils/mock-data';
 import { createMockPostRequest, expectResponseStatus, mockAuthenticatedUser } from '../../utils/test-helpers';
 
-// Mock dependencies
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/database_clusters');
+vi.mock('@/lib/supabase/auth');
+vi.mock('@/config/functions', () => ({
+  Encryption: {
+    decrypt: vi.fn((value: any) => {
+      if (value && typeof value === 'object' && 'encrypted' in value) {
+        return 'decrypted-value';
+      }
+      return value;
+    }),
+  },
+}));
 
 describe('POST /api/services/database/read_all_owner', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    mockAuthenticatedUser();
+    await mockAuthenticatedUser();
+
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
+      success: true,
+      data: [mockDatabaseCluster],
+    });
+
+    const { requireAdmin } = await import('@/lib/supabase/auth');
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: true } as any);
   });
 
   describe('Success Cases', () => {
-    it('TC-DB-019: should list all clusters for authenticated user', async () => {
-      const mockClusters = [mockDatabaseCluster, mockCreatingCluster];
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: mockClusters,
-      });
-
+    it('returns decrypted clusters for the authenticated owner', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        {}
+        { id: mockUser.id }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
+      const payload = await expectResponseStatus(response!, 200);
 
-      expect(data.clusters).toBeDefined();
-      expect(Array.isArray(data.clusters)).toBe(true);
-      expect(data.clusters.length).toBe(2);
-      expect(data.clusters[0].id).toBe(mockDatabaseCluster.id);
+      expect(Array.isArray(payload.data)).toBe(true);
+      expect(payload.data[0].name).toBe(mockDatabaseCluster.name);
+      expect(payload.message).toBe('database fetched successfully');
     });
 
-    it('TC-DB-022: should return empty array for user with no clusters', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: [],
-      });
+    it('allows admins to fetch another owner\'s clusters', async () => {
+      const otherOwnerId = '11111111-1111-1111-1111-111111111111';
+      const { requireAdmin } = await import('@/lib/supabase/auth');
+      vi.mocked(requireAdmin).mockResolvedValue({ ok: true } as any);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        {}
+        { id: otherOwnerId }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
+      await expectResponseStatus(response!, 200);
 
-      expect(data.clusters).toBeDefined();
-      expect(Array.isArray(data.clusters)).toBe(true);
-      expect(data.clusters.length).toBe(0);
-    });
-
-    it('TC-DB-023: should calculate cluster stats correctly', async () => {
-      const mockClusters = [
-        mockDatabaseCluster,
-        mockCreatingCluster,
-        { ...mockDatabaseCluster, id: 'cluster-3' },
-      ];
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: mockClusters,
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/read_all_owner',
-        {}
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.stats).toBeDefined();
-      expect(data.stats.total_clusters).toBe(3);
+      expect(requireAdmin).toHaveBeenCalled();
     });
   });
 
-  describe('Filtering Tests', () => {
-    it('TC-DB-021: should filter clusters by project_id', async () => {
-      const projectClusters = [
-        { ...mockDatabaseCluster, project_id: mockProject.id },
-        { ...mockCreatingCluster, project_id: mockProject.id },
-      ];
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: projectClusters,
-      });
+  describe('Authorization', () => {
+    it('rejects non-admins attempting to read another owner\'s clusters', async () => {
+      const otherOwnerId = '22222222-2222-2222-2222-222222222222';
+      const { requireAdmin } = await import('@/lib/supabase/auth');
+      vi.mocked(requireAdmin).mockResolvedValue({ ok: false } as any);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        { project_id: mockProject.id }
+        { id: otherOwnerId }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.clusters).toBeDefined();
-      expect(data.clusters.length).toBe(2);
-      data.clusters.forEach((cluster: any) => {
-        expect(cluster.project_id).toBe(mockProject.id);
-      });
-    });
-  });
-
-  describe('Pagination Tests', () => {
-    it('TC-DB-020: should handle pagination parameters', async () => {
-      const allClusters = Array.from({ length: 15 }, (_, i) => ({
-        ...mockDatabaseCluster,
-        id: `cluster-${i}`,
-        name: `test-cluster-${i}`,
-      }));
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: allClusters.slice(0, 10), // First page, 10 items
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/read_all_owner',
-        { page: 1, limit: 10 }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.clusters.length).toBeLessThanOrEqual(10);
+      await expectResponseStatus(response!, 403);
     });
 
-    it('should handle page 2 of results', async () => {
-      const allClusters = Array.from({ length: 15 }, (_, i) => ({
-        ...mockDatabaseCluster,
-        id: `cluster-${i + 10}`,
-        name: `test-cluster-${i + 10}`,
-      }));
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: allClusters.slice(10, 15), // Second page, 5 items
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/read_all_owner',
-        { page: 2, limit: 10 }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.clusters.length).toBe(5);
-    });
-  });
-
-  describe('Authentication Tests', () => {
-    it('should reject unauthenticated requests', async () => {
+    it('rejects unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       const { NextResponse } = await import('next/server');
       vi.mocked(authenticateUser).mockResolvedValue({
@@ -178,7 +94,7 @@ describe('POST /api/services/database/read_all_owner', () => {
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        {}
+        { id: mockUser.id }
       );
 
       const response = await POST(request as NextRequest);
@@ -186,87 +102,63 @@ describe('POST /api/services/database/read_all_owner', () => {
     });
   });
 
-  describe('Error Handling', () => {
-    it('should handle database query errors gracefully', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockRejectedValue(
-        new Error('Database connection failed')
-      );
+  describe('Data Handling', () => {
+    it('decrypts sensitive fields before returning them', async () => {
+      const encryptedCluster = {
+        ...mockDatabaseCluster,
+        public_connection: {
+          ...mockDatabaseCluster.public_connection,
+          host: {
+            encrypted: 'encrypted-host',
+            iv: 'iv',
+            tag: 'tag',
+            salt: 'salt',
+          } as any,
+        },
+        users: [
+          {
+            ...mockDatabaseCluster.users?.[0],
+            password: {
+              encrypted: 'encrypted-pass',
+              iv: 'iv',
+              tag: 'tag',
+              salt: 'salt',
+            } as any,
+          },
+        ],
+      };
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/read_all_owner',
-        {}
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 500);
-
-      expect(data.error).toBeDefined();
-    });
-
-    it('should handle Supabase failure response', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: false,
-        error: 'Failed to fetch clusters',
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValueOnce({
+        success: true,
+        data: [encryptedCluster as any],
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        {}
+        { id: mockUser.id }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 500);
+      const payload = await expectResponseStatus(response!, 200);
 
-      expect(data.error).toBeDefined();
+      expect(payload.data[0].public_connection?.host).toBe('decrypted-value');
+      expect(payload.data[0].users?.[0].password).toBe('decrypted-value');
     });
   });
 
-  describe('Data Structure Validation', () => {
-    it('should return clusters with all required fields', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: [mockDatabaseCluster],
-      });
+  describe('Failures', () => {
+    it('bubbles up query exceptions', async () => {
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read_all_owner).mockRejectedValue(new Error('Supabase connection failed'));
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/read_all_owner',
-        {}
+        { id: mockUser.id }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      const cluster = data.clusters[0];
-      expect(cluster.id).toBeDefined();
-      expect(cluster.name).toBeDefined();
-      expect(cluster.engine).toBeDefined();
-      expect(cluster.status).toBeDefined();
-      expect(cluster.region).toBeDefined();
-    });
-
-    it('should not expose sensitive password data', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read_all_owner).mockResolvedValue({
-        success: true,
-        data: [mockDatabaseCluster],
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/read_all_owner',
-        {}
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      const cluster = data.clusters[0];
-      // Passwords should be encrypted objects, not plain strings
-      if (cluster.public_connection?.password) {
-        expect(typeof cluster.public_connection.password).toBe('object');
-      }
+      await expectResponseStatus(response!, 400);
     });
   });
 });

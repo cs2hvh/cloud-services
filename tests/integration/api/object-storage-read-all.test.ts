@@ -15,9 +15,9 @@ import {
   mockRateLimitAllow,
 } from '../../utils/test-helpers';
 
-// Mock dependencies
+// Mock dependencies with correct paths
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/object_spaces');
 vi.mock('@/config/functions');
 vi.mock('@/lib/cooldown/userbased');
 
@@ -38,7 +38,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
 
   describe('Success Cases', () => {
     it('should list all user buckets', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([
         mockObjectSpaceBucket,
         mockPublicBucket,
@@ -60,7 +60,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
     });
 
     it('should return empty array for user with no buckets', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([]);
 
       const request = createMockPostRequest(
@@ -78,7 +78,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
 
     // TODO: Fix endpoint decryption assertion
     it.skip('should decrypt bucket endpoints', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([mockObjectSpaceBucket]);
 
       const { Encryption } = await import('@/config/functions');
@@ -99,7 +99,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
     });
 
     it('should handle decryption failures gracefully', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([
         {
           ...mockObjectSpaceBucket,
@@ -176,7 +176,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
 
   describe('Error Handling', () => {
     it('should handle database errors gracefully', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockRejectedValue(
         new Error('Database connection failed')
       );
@@ -193,7 +193,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
     });
 
     it('should handle unexpected errors', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockImplementation(() => {
         throw new Error('Unexpected error');
       });

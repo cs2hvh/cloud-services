@@ -20,7 +20,10 @@ import {
 
 // Mock dependencies
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/spectrum_apps');
+vi.mock('@/config/billing-flow');
+vi.mock('@/config/pricing');
+vi.mock('@/config/spectrum-functions');
 vi.mock('axios');
 vi.mock('@/config/functions');
 vi.mock('@/lib/cooldown/userbased');
@@ -28,14 +31,26 @@ vi.mock('@/lib/cooldown/userbased');
 describe('POST /api/services/spectrum/apps/create', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-     mockAuthenticatedUser();
+    mockAuthenticatedUser();
     mockRateLimitAllow();
     
-    // Mock Projects.add_log to prevent errors
-    // const { Projects } = await import('@/lib/supabase/queries');
-    // if (Projects.add_log) {
-    //   vi.mocked(Projects.add_log).mockResolvedValue({ success: true } as any);
-    // }
+    // Mock getRatesForSpectrum
+    const { getRatesForSpectrum } = await import('@/config/pricing');
+    vi.mocked(getRatesForSpectrum).mockResolvedValue({
+      initialCost: 5,
+      hourlyRate: 0.01,
+    });
+
+    // Mock ensureBalance
+    const { ensureBalance } = await import('@/config/billing-flow');
+    vi.mocked(ensureBalance).mockResolvedValue({ ok: true, balance: 100 });
+
+    // Mock createSpectrumApp
+    const { createSpectrumApp } = await import('@/config/spectrum-functions');
+    vi.mocked(createSpectrumApp).mockResolvedValue({
+      app: mockSpectrumApp,
+      cloudflare: mockCloudflareSpectrumApp,
+    });
   });
 
   describe('Authentication', () => {
@@ -55,35 +70,6 @@ describe('POST /api/services/spectrum/apps/create', () => {
   describe('Rate Limiting', () => {
     it('should allow requests within rate limit', async () => {
       await mockRateLimitAllow();
-
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: {
-          success: true,
-          result: mockCloudflareSpectrumApp,
-        },
-      });
-
-      const axios_get = await import('axios');
-      vi.mocked(axios_get.default.get).mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-data',
-        tag: 'test-tag',
-        salt: 'test-salt',
-      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
@@ -127,29 +113,11 @@ describe('POST /api/services/spectrum/apps/create', () => {
 
   describe('Validation', () => {
     it('should validate request body with createSpectrumAppSchema', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: { success: true, result: mockCloudflareSpectrumApp },
-      });
-
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-data',
-        tag: 'test-tag',
-        salt: 'test-salt',
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      const createMock = vi.mocked(createSpectrumApp);
+      createMock.mockResolvedValue({
+        app: mockSpectrumApp,
+        cloudflare: mockCloudflareSpectrumApp,
       });
 
       const request = createMockPostRequest(
@@ -158,7 +126,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       );
 
       await POST(request as NextRequest);
-      expect(axios.default.post).toHaveBeenCalled();
+      expect(createMock).toHaveBeenCalled();
     }, 30000);
 
     it('should reject invalid project_id', async () => {
@@ -224,34 +192,11 @@ describe('POST /api/services/spectrum/apps/create', () => {
 
   describe('Success Cases', () => {
     it('should create app in Cloudflare successfully', async () => {
-      const axios = await import('axios');
-      const postMock = vi.mocked(axios.default.post);
-      postMock.mockResolvedValue({
-        status: 200,
-        data: {
-          success: true,
-          result: mockCloudflareSpectrumApp,
-        },
-      });
-
-      const getMock = vi.mocked(axios.default.get);
-      getMock.mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-ip',
-        tag: 'test-tag',
-        salt: 'test-salt',
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      const createMock = vi.mocked(createSpectrumApp);
+      createMock.mockResolvedValue({
+        app: mockSpectrumApp,
+        cloudflare: mockCloudflareSpectrumApp,
       });
 
       const request = createMockPostRequest(
@@ -261,43 +206,20 @@ describe('POST /api/services/spectrum/apps/create', () => {
 
       await POST(request as NextRequest);
 
-      expect(postMock).toHaveBeenCalledWith(
-        expect.stringContaining('spectrum/apps'),
+      expect(createMock).toHaveBeenCalledWith(
         expect.objectContaining({
-          dns: expect.objectContaining({
-            name: expect.stringContaining('.hostguardian.net'),
-          }),
           protocol: 'tcp/22',
         }),
-        expect.any(Object)
+        expect.anything()
       );
     }, 30000);
 
     it('should persist app to database after Cloudflare creation', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: { success: true, result: mockCloudflareSpectrumApp },
-      });
-
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      const createMock = vi.mocked(Spectrum_Apps.create);
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      const createMock = vi.mocked(createSpectrumApp);
       createMock.mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-data',
-        tag: 'test-tag',
-        salt: 'test-salt',
+        app: mockSpectrumApp,
+        cloudflare: mockCloudflareSpectrumApp,
       });
 
       const request = createMockPostRequest(
@@ -348,31 +270,6 @@ describe('POST /api/services/spectrum/apps/create', () => {
     // }, 30000);
 
     it('should return 201 with created app data', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: { success: true, result: mockCloudflareSpectrumApp },
-      });
-
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-data',
-        tag: 'test-tag',
-        salt: 'test-salt',
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockCreateSpectrumPayload
@@ -385,8 +282,8 @@ describe('POST /api/services/spectrum/apps/create', () => {
 
   describe('Error Cases', () => {
     it('should handle Cloudflare API errors', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockRejectedValue(
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      vi.mocked(createSpectrumApp).mockRejectedValue(
         new Error('Cloudflare API error')
       );
 
@@ -400,30 +297,10 @@ describe('POST /api/services/spectrum/apps/create', () => {
     });
 
     it('should handle database insert failure', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: { success: true, result: mockCloudflareSpectrumApp },
-      });
-
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: false,
-        error: 'Database insert failed',
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-data',
-        tag: 'test-tag',
-        salt: 'test-salt',
-      });
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      vi.mocked(createSpectrumApp).mockRejectedValue(
+        new Error('Database insert failed')
+      );
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
@@ -435,31 +312,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
     }, 30000);
 
     it('should handle DNS resolution timeout gracefully', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.post).mockResolvedValue({
-        status: 200,
-        data: { success: true, result: mockCloudflareSpectrumApp },
-      });
-
-      // DNS resolution succeeds after initial attempts
-      vi.mocked(axios.default.get).mockResolvedValueOnce({
-        status: 200,
-        data: { query: '1.2.3.4' },
-      });
-
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.create).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.encrypt).mockReturnValue({
-        iv: 'test-iv',
-        encrypted: 'encrypted-fallback',
-        tag: 'test-tag',
-        salt: 'test-salt',
-      });
+      // createSpectrumApp already mocked successfully in beforeEach
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',

@@ -10,10 +10,12 @@ import {
   mockRateLimitAllow,
 } from '../../utils/test-helpers';
 
-// Mock dependencies
+// Mock dependencies with correct paths
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/config/object-storage-functions');
 vi.mock('@/lib/cooldown/userbased');
+vi.mock('@/lib/supabase/auth');
+vi.mock('@/lib/supabase/queries/billing');
 
 describe('DELETE /api/services/object-storage/buckets/delete', () => {
   beforeEach(async () => {
@@ -22,6 +24,14 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
 
     // Mock rate limiting to allow requests
     await mockRateLimitAllow();
+
+    // Mock admin check (non-admin by default)
+    const { requireAdmin } = await import('@/lib/supabase/auth');
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: false } as any);
+
+    // Mock billing close
+    const { Billing } = await import('@/lib/supabase/queries/billing');
+    vi.mocked(Billing.close_active_service).mockResolvedValue({ success: true } as any);
   });
 
   describe('Success Cases', () => {

@@ -13,9 +13,9 @@ import {
   mockRateLimitAllow,
 } from '../../utils/test-helpers';
 
-// Mock dependencies
+// Mock dependencies with correct paths
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/object_spaces');
 vi.mock('@/lib/aws/s3-client');
 vi.mock('@/lib/aws/s3-operations');
 vi.mock('@/lib/cooldown/userbased');
@@ -31,7 +31,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
 
   describe('POST /api/services/object-storage/buckets/settings/update-acl', () => {
     it('should update ACL to public-read', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -62,7 +62,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should update ACL to private', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -100,7 +100,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should reject unauthorized user', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue({
         ...mockObjectSpaceBucket,
         owner_id: 'different-user',
@@ -121,7 +121,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should reject bucket not found', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
       const request = createMockPostRequest(
@@ -139,7 +139,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
 
   describe('POST /api/services/object-storage/buckets/settings/update-cors', () => {
     it('should enable CORS', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -170,7 +170,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should disable CORS', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -211,7 +211,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
 
   describe('POST /api/services/object-storage/buckets/settings/update-versioning', () => {
     it('should enable versioning', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -242,7 +242,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should disable versioning', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -269,7 +269,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
 
   describe('POST /api/services/object-storage/buckets/settings/update-project', () => {
     it('should update project_id', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 
@@ -293,7 +293,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
     });
 
     it('should set project_id to null', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
 

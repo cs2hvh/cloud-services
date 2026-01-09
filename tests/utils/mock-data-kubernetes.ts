@@ -127,6 +127,7 @@ export const mockCreateKubernetesPayload = {
   ips: ['1.2.3.4', '1.2.3.5'],
   ownerId: mockKubernetesUser.id,
   projectId: mockKubernetesProject.id,
+  planId: '550e8400-e29b-41d4-a716-446655440010', // Required for kubernetes create
 };
 
 export const mockInvalidKubernetesPayloads = {

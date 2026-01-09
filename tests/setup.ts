@@ -10,6 +10,9 @@ process.env.ENCRYPTION_KEY = 'test-encryption-key-32-characters';
 process.env.CLOUDFLARE_ZONE_ID = 'test-zone-id-123456';
 process.env.CLOUDFLARE_API_TOKEN = 'test-cloudflare-api-token';
 process.env.PARENT_DOMAIN = '.hostguardian.net';
+process.env.JENKINS_URL = 'http://localhost:8080';
+process.env.JENKINS_USER = 'test-user';
+process.env.JENKINS_TOKEN = 'test-token';
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({

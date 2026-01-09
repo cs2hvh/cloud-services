@@ -8,10 +8,12 @@ import {
   expectResponseStatus
 } from '../../utils/test-helpers';
 
-// Mock dependencies
+// Mock dependencies with correct paths
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/supabase/server');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/object_spaces');
+vi.mock('@/lib/supabase/queries/billing');
+vi.mock('@/lib/supabase/auth');
 vi.mock('@/config/object-storage-functions');
 
 describe('Admin Object Storage APIs', () => {
@@ -52,7 +54,7 @@ describe('Admin Object Storage APIs', () => {
     });
 
     it('should list all buckets for admin', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue(mockAdminBuckets as any);
 
       const response = await AdminReadAll();
@@ -66,7 +68,7 @@ describe('Admin Object Storage APIs', () => {
     });
 
     it('should return empty array when no buckets exist', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue([]);
 
       const response = await AdminReadAll();
@@ -77,7 +79,7 @@ describe('Admin Object Storage APIs', () => {
     });
 
     it('should include owner information', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue([mockAdminBuckets[0]] as any);
 
       const response = await AdminReadAll();

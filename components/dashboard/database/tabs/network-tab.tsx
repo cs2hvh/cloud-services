@@ -195,7 +195,7 @@ export const NetworkTab = ({
 
   // Initial load
   useEffect(() => {
-    if (initialNetworkRules?.rules) {
+    if (initialNetworkRules?.rules && Array.isArray(initialNetworkRules.rules)) {
       setRules(initialNetworkRules.rules);
       setLoading(false);
     } else {
@@ -332,7 +332,7 @@ export const NetworkTab = ({
           </Button>
         </div>
 
-        {rules.length === 0 ? (
+        {!rules || rules.length === 0 ? (
           <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 text-center">
             <div className="max-w-md mx-auto">
               <div className="mx-auto w-16 h-16 rounded-full bg-slate-500/20 flex items-center justify-center mb-4">
@@ -349,7 +349,7 @@ export const NetworkTab = ({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence mode="popLayout">
-              {rules.map((rule, index) => (
+              {rules?.map((rule, index) => (
                 <motion.div
                   key={rule.uuid}
                   initial={{ opacity: 0, scale: 0.9 }}

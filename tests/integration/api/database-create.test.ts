@@ -4,15 +4,30 @@ import { NextRequest } from 'next/server';
 import { mockCreateDatabasePayload, mockDigitalOceanCluster, mockInvalidPayloads } from '../../utils/mock-data';
 import { createMockPostRequest, expectResponseStatus, mockAuthenticatedUser } from '../../utils/test-helpers';
 
-// Mock dependencies
+// Mock dependencies - use exact paths as imported in the route
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/queries/database_clusters');
+vi.mock('@/lib/supabase/queries/billing');
+vi.mock('@/config/billing-flow');
+vi.mock('@/config/pricing');
 vi.mock('axios');
 
 describe('POST /api/services/database/create', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
-    mockAuthenticatedUser();
+    await mockAuthenticatedUser();
+
+    // Mock billing flow - ensureBalance
+    const { ensureBalance, postProvisionBilling } = await import('@/config/billing-flow');
+    vi.mocked(ensureBalance).mockResolvedValue({ ok: true });
+    vi.mocked(postProvisionBilling).mockResolvedValue(undefined);
+
+    // Mock pricing - getRatesForDatabase
+    const { getRatesForDatabase } = await import('@/config/pricing');
+    vi.mocked(getRatesForDatabase).mockResolvedValue({
+      initialCost: 10,
+      hourlyRate: 0.02,
+    });
   });
 
   describe('Success Cases', () => {
@@ -25,7 +40,7 @@ describe('POST /api/services/database/create', () => {
       });
 
       // Mock Supabase insert
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.create).mockResolvedValue({
         success: true,
         data: { id: 'test-cluster-id' },
@@ -37,9 +52,11 @@ describe('POST /api/services/database/create', () => {
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response, 201);
+      const data = await expectResponseStatus(response, 200);
 
-      expect(data.message).toContain('created successfully');
+      expect(data.message).toBe('database creation started');
+      expect(data.data).toBeDefined();
+      expect(data.connection).toBeDefined();
       expect(axios.default.post).toHaveBeenCalledWith(
         'https://api.digitalocean.com/v2/databases',
         mockCreateDatabasePayload,
@@ -66,7 +83,7 @@ describe('POST /api/services/database/create', () => {
         },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.create).mockResolvedValue({
         success: true,
         data: { id: 'test-pg-cluster' },
@@ -78,7 +95,7 @@ describe('POST /api/services/database/create', () => {
       );
 
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response, 201);
+      await expectResponseStatus(response, 200);
     });
 
     it('should encrypt passwords before storing', async () => {
@@ -88,7 +105,7 @@ describe('POST /api/services/database/create', () => {
         data: mockDigitalOceanCluster,
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       const createMock = vi.fn().mockResolvedValue({
         success: true,
         data: { id: 'test-cluster-id' },
@@ -103,10 +120,63 @@ describe('POST /api/services/database/create', () => {
 
       await POST(request as NextRequest);
 
-      // Verify encryption was called for passwords
+      // Verify create was called with encrypted password in public_connection
       expect(createMock).toHaveBeenCalled();
       const callArg = createMock.mock.calls[0][0];
-      expect(callArg.connection.password).toHaveProperty('encryptedData');
+      expect(callArg.public_connection.password).toHaveProperty('encrypted');
+      expect(callArg.public_connection.password).toHaveProperty('iv');
+    });
+
+    it('should trigger billing after successful creation', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.post).mockResolvedValue({
+        status: 201,
+        data: mockDigitalOceanCluster,
+      });
+
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.create).mockResolvedValue({
+        success: true,
+        data: { id: 'test-cluster-id' },
+      });
+
+      const { postProvisionBilling } = await import('@/config/billing-flow');
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/create',
+        mockCreateDatabasePayload
+      );
+
+      await POST(request as NextRequest);
+
+      expect(postProvisionBilling).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockCreateDatabasePayload.owner_id,
+          initialCost: 10,
+          hourlyRate: 0.02,
+        })
+      );
+    });
+  });
+
+  describe('Billing Checks', () => {
+    it('should return 402 when insufficient balance', async () => {
+      const { ensureBalance } = await import('@/config/billing-flow');
+      vi.mocked(ensureBalance).mockResolvedValue({
+        ok: false,
+        balance: 5,
+      });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/create',
+        mockCreateDatabasePayload
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 402);
+
+      expect(data.error).toBe('Insufficient credits');
+      expect(data.balance).toBe(5);
     });
   });
 
@@ -185,6 +255,18 @@ describe('POST /api/services/database/create', () => {
       const response = await POST(request as NextRequest);
       await expectResponseStatus(response, 400);
     });
+
+    it('should reject missing plan_id', async () => {
+      const { plan_id, ...payloadWithoutPlanId } = mockCreateDatabasePayload;
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/create',
+        payloadWithoutPlanId
+      );
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response, 400);
+    });
   });
 
   describe('Authentication & Authorization', () => {
@@ -234,7 +316,7 @@ describe('POST /api/services/database/create', () => {
         data: mockDigitalOceanCluster,
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.create).mockResolvedValue({
         success: false,
         error: 'Database write failed',

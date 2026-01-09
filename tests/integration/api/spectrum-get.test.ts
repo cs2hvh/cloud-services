@@ -11,7 +11,8 @@ import {
 } from '../../utils/test-helpers';
 
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/supabase/auth');
+vi.mock('@/config/spectrum-functions');
 vi.mock('@/config/functions');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('axios');
@@ -24,6 +25,18 @@ describe('POST /api/services/spectrum/apps/get', () => {
     vi.clearAllMocks();
     await mockAuthenticatedUser();
     await mockRateLimitAllow();
+
+    // Mock requireAdmin to return non-admin by default
+    const { requireAdmin } = await import('@/lib/supabase/auth');
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: false });
+
+    // Mock getSpectrumApp
+    const { getSpectrumApp } = await import('@/config/spectrum-functions');
+    vi.mocked(getSpectrumApp).mockResolvedValue({
+      cloudflare: mockSpectrumApp,
+      local: mockSpectrumApp,
+      decryptedIp: 'decrypted-dns.hostguardian.net',
+    });
   });
 
   describe('Authentication', () => {
@@ -42,25 +55,6 @@ describe('POST /api/services/spectrum/apps/get', () => {
 
   describe('Rate Limiting', () => {
     it('should allow requests within rate limit', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.get).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.decrypt).mockReturnValue('decrypted-dns.hostguardian.net');
-
-      const axios = await import('axios');
-      const getMock = vi.spyOn(axios.default, 'get');
-      getMock.mockResolvedValue({
-        status: 200,
-        data: {
-          success: true,
-          result: mockSpectrumApp,
-        },
-      } as any);
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -107,25 +101,6 @@ describe('POST /api/services/spectrum/apps/get', () => {
 
   describe('Authorization', () => {
     it('should allow owner to view their app', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.get).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.decrypt).mockReturnValue('test-dns.hostguardian.net');
-
-      const axios = await import('axios');
-      const getMock = vi.spyOn(axios.default, 'get');
-      getMock.mockResolvedValue({
-        status: 200,
-        data: {
-          success: true,
-          result: mockSpectrumApp,
-        },
-      } as any);
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -136,15 +111,9 @@ describe('POST /api/services/spectrum/apps/get', () => {
     });
 
     it('should prevent non-owner from viewing app', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.get).mockResolvedValue({
-        success: true,
-        data: { ...mockSpectrumApp, owner_id: 'different-user' },
-      });
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
-        { app_id: 'test-id', user_id: 'different-user' }
+        { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440001' }
       );
 
       const response = await POST(request as NextRequest);
@@ -187,25 +156,6 @@ describe('POST /api/services/spectrum/apps/get', () => {
     // });
 
     it('should include all app properties', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.get).mockResolvedValue({
-        success: true,
-        data: mockSpectrumApp,
-      });
-
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.decrypt).mockReturnValue('test-dns.hostguardian.net');
-
-      const axios = await import('axios');
-      const getMock = vi.spyOn(axios.default, 'get');
-      getMock.mockResolvedValue({
-        status: 200,
-        data: {
-          success: true,
-          result: mockSpectrumApp,
-        },
-      } as any);
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -258,8 +208,8 @@ describe('POST /api/services/spectrum/apps/get', () => {
     // });
 
     it('should handle database query errors', async () => {
-      const { Spectrum_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Spectrum_Apps.get).mockRejectedValue(
+      const { getSpectrumApp } = await import('@/config/spectrum-functions');
+      vi.mocked(getSpectrumApp).mockRejectedValue(
         new Error('Database error')
       );
 
