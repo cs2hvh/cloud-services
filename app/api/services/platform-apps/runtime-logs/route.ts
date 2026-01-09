@@ -67,12 +67,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
-    // Check app status - must be deployed
-    if (app.status !== 'running' && app.status !== 'degraded') {
+    // Check app status - allow logs for any deployed state
+    // Users need to see logs to debug issues, even when status is 'failed' or 'building'
+    const nonDeployedStates = ['pending'];
+    if (nonDeployedStates.includes(app.status)) {
       return NextResponse.json(
         { 
-          error: "App not running",
-          message: `App is in '${app.status}' state. Runtime logs are only available when the app is running.`,
+          error: "App not deployed yet",
+          message: `App is in '${app.status}' state. Runtime logs will be available after deployment starts.`,
           status: app.status,
         },
         { status: 400 }

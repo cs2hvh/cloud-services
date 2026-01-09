@@ -346,11 +346,11 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_linked(integration.id, generated.keys);
 
       // ========================================
-      // Step 10: Update K8s Secret and trigger rolling restart if app is running
-      // This properly updates env vars in K8s (~5-10 seconds)
+      // Step 10: Update K8s Secret and trigger rolling restart
+      // This applies to running apps OR failed apps (to help them recover)
       // ========================================
       let redeployTriggered = false;
-      if (app.status === "running") {
+      if (app.status === "running" || app.status === "failed") {
         try {
           // Update K8s Secret with ALL env vars (merged) then restart pods
           const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
@@ -361,6 +361,14 @@ export class DatabaseIntegrationService {
           
           if (restartResult.success) {
             console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
+            
+            // Sync status from K8s after restart (single source of truth)
+            // Wait 5s for pods to stabilize, then check actual K8s state
+            const { AppStatusService } = await import('./app-status');
+            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+            if (syncResult.changed) {
+              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+            }
           } else {
             console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
           }
@@ -470,11 +478,11 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_unlinked(integration.id, user_id);
 
       // ========================================
-      // Step 6: Update K8s Secret and trigger rolling restart if app is running
+      // Step 6: Update K8s Secret and trigger rolling restart if app is running or failed
       // This properly removes env vars from K8s (~5-10 seconds)
       // ========================================
       let redeployTriggered = false;
-      if (app.status === "running") {
+      if (app.status === "running" || app.status === "failed") {
         try {
           // Update K8s Secret with filtered env vars (database vars removed) then restart
           const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
@@ -485,6 +493,14 @@ export class DatabaseIntegrationService {
           
           if (restartResult.success) {
             console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
+            
+            // Sync status from K8s after restart (single source of truth)
+            // Wait 5s for pods to stabilize, then check actual K8s state
+            const { AppStatusService } = await import('./app-status');
+            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+            if (syncResult.changed) {
+              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+            }
           } else {
             console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
           }

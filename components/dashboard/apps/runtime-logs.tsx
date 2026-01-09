@@ -64,7 +64,8 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
 
   // Fetch instances list (masked pod names)
   const fetchInstances = useCallback(async () => {
-    if (appStatus !== 'running' && appStatus !== 'degraded') return;
+    // Allow fetching instances for any deployed state - users need to see logs to debug
+    if (appStatus === 'pending') return;
     
     try {
       const res = await fetch(`/api/services/platform-apps/pods?app_id=${appId}`);
@@ -78,8 +79,9 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
 
   // Fetch logs (non-streaming)
   const fetchLogs = useCallback(async () => {
-    if (appStatus !== 'running' && appStatus !== 'degraded') {
-      setError('App is not running. Logs are only available when the app is deployed.');
+    // Allow logs for any deployed state - users need to see logs to debug issues
+    if (appStatus === 'pending') {
+      setError('App not deployed yet. Logs will be available after deployment starts.');
       setLoading(false);
       return;
     }
@@ -228,13 +230,15 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
   // Check if any instance has restarted
   const hasRestartedInstances = logs.some(inst => inst.restartCount > 0 && inst.previousLogs);
 
-  if (appStatus !== 'running' && appStatus !== 'degraded') {
+  // Only block logs for 'pending' state (never deployed)
+  // Users need to see logs for 'failed', 'stopped', 'building' etc. to debug issues
+  if (appStatus === 'pending') {
     return (
       <Card className="bg-white/5 border-white/10">
         <CardContent className="py-8">
           <div className="text-center text-white/50">
             <Terminal className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>Runtime logs are only available when the app is running.</p>
+            <p>Runtime logs will be available after deployment starts.</p>
             <p className="text-sm mt-1">Current status: {appStatus}</p>
           </div>
         </CardContent>

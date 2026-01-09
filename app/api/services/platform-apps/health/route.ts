@@ -3,10 +3,13 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { PrometheusService } from "@/lib/services/prometheus";
+import { AppStatusService } from "@/lib/services/app-status";
 
 /**
  * GET /api/services/platform-apps/health?app_id=xxx
  * Get health status for an app
+ * 
+ * This also syncs the app status from K8s (single source of truth)
  */
 export async function GET(req: NextRequest) {
   const auth = await authenticateUser();
@@ -50,10 +53,16 @@ export async function GET(req: NextRequest) {
     // Get health from Prometheus
     const health = await PrometheusService.getAppHealth(app.name);
 
+    // Sync status from K8s to DB (single source of truth)
+    // This ensures DB status matches actual K8s state
+    const syncResult = await AppStatusService.syncStatus(appId, app.name, app.status as "running" | "failed" | "pending" | "building" | "stopped");
+    
     return NextResponse.json({
       app_id: appId,
       app_name: app.name,
       status: health.status,
+      db_status: syncResult.currentStatus, // The synced DB status
+      status_changed: syncResult.changed,
       pods: {
         ready: health.podsReady,
         total: health.podsTotal,

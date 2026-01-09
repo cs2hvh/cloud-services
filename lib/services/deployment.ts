@@ -6,6 +6,7 @@ import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
 import { InfrastructureCleanupService } from "./infrastructure-cleanup";
+import { AppStatusService } from "./app-status";
 import { randomBytes } from "crypto";
 
 // Generate a random ID
@@ -136,7 +137,8 @@ export class DeploymentService {
       // Step 5: Create Jenkins job and start build monitoring
       try {
         // Update status to 'building' before triggering Jenkins
-        await Platform_Apps.update(app.id, { status: "building" });
+        // Use AppStatusService for consistent status management
+        await AppStatusService.setStatus(app.id, "building");
         console.log(`[DeploymentService] Step 5/5: Status updated to 'building'`);
         
         // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL

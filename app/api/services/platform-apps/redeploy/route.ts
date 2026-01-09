@@ -6,6 +6,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
+import { AppStatusService } from "@/lib/services/app-status";
 
 const redeploySchema = z.object({
   app_id: z.string().uuid(),
@@ -68,8 +69,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update status to building
-    await Platform_Apps.update(app_id, { status: 'building' });
+    // Update status to building using AppStatusService for consistency
+    await AppStatusService.setStatus(app_id, "building");
 
     try {
       // Trigger a new build using JenkinsService
@@ -97,8 +98,8 @@ export async function POST(req: NextRequest) {
         app_name: app.name,
       });
     } catch (jenkinsError: unknown) {
-      // Revert status if Jenkins fails
-      await Platform_Apps.update(app_id, { status: app.status || 'failed' });
+      // Revert status if Jenkins fails - use AppStatusService
+      await AppStatusService.setStatus(app_id, "failed", "Jenkins trigger failed");
       
       const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : "Unknown error";
       console.error(`[Redeploy] Jenkins error for ${app.name}:`, errorMessage);
