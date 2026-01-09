@@ -208,7 +208,7 @@ export function LinkDatabaseModal({
   }, []);
 
   // Poll database status for newly created databases
-  const pollDatabaseStatus = useCallback(async (dbId: string) => {
+  const pollDatabaseStatus = useCallback(async (dbId: string, engine?: string) => {
     const checkStatus = async () => {
       try {
         const res = await fetch('/api/services/database/read', {
@@ -223,6 +223,22 @@ export function LinkDatabaseModal({
           setDatabaseStatus(status);
           
           if (status === 'online') {
+            // Update env configs with real connection info when database is ready
+            const conn = data.data?.public_connection;
+            if (conn && engine) {
+              setEnvConfigs(generateDefaultEnvConfigs(
+                engine,
+                {
+                  host: conn.host || dbId,
+                  port: conn.port || (engine === 'mongodb' ? 27017 : engine === 'mysql' ? 3306 : 5432),
+                  user: conn.user || 'doadmin',
+                  password: conn.password || '(encrypted)',
+                  database: conn.database || 'defaultdb',
+                  uri: conn.uri || '(connection string)',
+                },
+                'DATABASE'
+              ));
+            }
             return true; // Stop polling
           }
         }
@@ -274,23 +290,58 @@ export function LinkDatabaseModal({
         
       case 'select-existing':
         if (selectedDb) {
-          // Generate env configs from selected database
-          // We'll fetch connection info and generate configs
-          setStep('configure-env');
-          // For existing db, we need to get connection info
-          // For now, use placeholder - actual values come from link API
-          setEnvConfigs(generateDefaultEnvConfigs(
-            selectedDb.engine,
-            {
-              host: `${selectedDb.cluster_id}.db.example.com`,
-              port: selectedDb.engine === 'mongodb' ? 27017 : selectedDb.engine === 'mysql' ? 3306 : 5432,
-              user: 'doadmin',
-              password: '••••••••',
-              database: 'defaultdb',
-              uri: `${selectedDb.engine}://doadmin:****@${selectedDb.cluster_id}.db.example.com/${selectedDb.name}`,
-            },
-            'DATABASE'
-          ));
+          // Fetch real connection info from database before showing env config
+          setIsCreating(true); // Reuse loading state
+          setError(null);
+          try {
+            const res = await fetch('/api/services/database/read', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: selectedDb.cluster_id }),
+            });
+            
+            if (!res.ok) {
+              throw new Error('Failed to fetch database details');
+            }
+            
+            const dbData = await res.json();
+            const conn = dbData.data?.public_connection;
+            
+            if (conn) {
+              // Use real connection data
+              setEnvConfigs(generateDefaultEnvConfigs(
+                selectedDb.engine,
+                {
+                  host: conn.host || selectedDb.cluster_id,
+                  port: conn.port || (selectedDb.engine === 'mongodb' ? 27017 : selectedDb.engine === 'mysql' ? 3306 : 5432),
+                  user: conn.user || 'doadmin',
+                  password: conn.password || '(encrypted)', // Show actual password if available
+                  database: conn.database || 'defaultdb',
+                  uri: conn.uri || '(will be generated)', // Use actual URI from connection
+                },
+                'DATABASE'
+              ));
+            } else {
+              // Fallback if no connection info yet
+              setEnvConfigs(generateDefaultEnvConfigs(
+                selectedDb.engine,
+                {
+                  host: '(fetching...)',
+                  port: selectedDb.engine === 'mongodb' ? 27017 : selectedDb.engine === 'mysql' ? 3306 : 5432,
+                  user: 'doadmin',
+                  password: '••••••••',
+                  database: 'defaultdb',
+                  uri: '(will be generated)',
+                },
+                'DATABASE'
+              ));
+            }
+            setStep('configure-env');
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to fetch database info');
+          } finally {
+            setIsCreating(false);
+          }
         }
         break;
         
@@ -334,7 +385,7 @@ export function LinkDatabaseModal({
             // Start polling for database status if we have an ID
             if (result.database_id) {
               setDatabaseStatus('creating');
-              pollDatabaseStatus(result.database_id);
+              pollDatabaseStatus(result.database_id, createData.engine);
             }
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to create database');

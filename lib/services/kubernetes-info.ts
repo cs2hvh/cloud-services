@@ -285,7 +285,96 @@ export class KubernetesInfoService {
       }
 
       // ========================================
-      // Step 4: Trigger rolling restart
+      // Step 4: Check if deployment has envFrom referencing our secret
+      // If not, we need to add it so the pods can read the env vars
+      // ========================================
+      const deployment = await apps.readNamespacedDeployment({
+        name: deploymentName,
+        namespace,
+      });
+
+      const containers = deployment.spec?.template?.spec?.containers || [];
+      const mainContainer = containers[0];
+      
+      // Check if envFrom already references our secret
+      let hasEnvFrom = false;
+      if (mainContainer?.envFrom) {
+        hasEnvFrom = mainContainer.envFrom.some(
+          ef => ef.secretRef?.name === secretName
+        );
+      }
+
+      // ========================================
+      // Step 5: Patch deployment to add envFrom if missing and we have env vars
+      // ========================================
+      if (envVars.length > 0 && !hasEnvFrom) {
+        console.log(`[KubernetesInfoService] Adding envFrom to deployment (was not referencing secret)`);
+        
+        // Use JSON patch to add envFrom
+        // If envFrom doesn't exist, we add it as an array
+        // If it exists but doesn't have our secret, we append to it
+        const envFromPatch = mainContainer?.envFrom 
+          ? [
+              // Append to existing envFrom array
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom/-',
+                value: { secretRef: { name: secretName } },
+              },
+            ]
+          : [
+              // Create new envFrom array
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom',
+                value: [{ secretRef: { name: secretName } }],
+              },
+            ];
+
+        await apps.patchNamespacedDeployment({
+          name: deploymentName,
+          namespace,
+          body: envFromPatch,
+          fieldManager: 'cloud-services',
+          // @ts-expect-error - headers option is valid but not in type definition
+          headers: {
+            'Content-Type': 'application/json-patch+json',
+          },
+        });
+        console.log(`[KubernetesInfoService] ✅ Added envFrom secretRef to deployment`);
+      } else if (envVars.length === 0 && hasEnvFrom) {
+        // Remove envFrom reference if no env vars
+        console.log(`[KubernetesInfoService] Removing envFrom from deployment (no env vars)`);
+        
+        // Find the index of our secret in envFrom array
+        const envFromArray = mainContainer?.envFrom || [];
+        const secretIndex = envFromArray.findIndex(
+          ef => ef.secretRef?.name === secretName
+        );
+        
+        if (secretIndex !== -1) {
+          // If this is the only entry, remove the entire envFrom
+          // Otherwise, remove just this entry
+          const removePatch = envFromArray.length === 1
+            ? [{ op: 'remove', path: '/spec/template/spec/containers/0/envFrom' }]
+            : [{ op: 'remove', path: `/spec/template/spec/containers/0/envFrom/${secretIndex}` }];
+
+          await apps.patchNamespacedDeployment({
+            name: deploymentName,
+            namespace,
+            body: removePatch,
+            fieldManager: 'cloud-services',
+            // @ts-expect-error - headers option is valid but not in type definition
+            headers: {
+              'Content-Type': 'application/json-patch+json',
+            },
+          });
+          console.log(`[KubernetesInfoService] ✅ Removed envFrom secretRef from deployment`);
+        }
+      }
+
+      // ========================================
+      // Step 6: Trigger rolling restart
       // Patch the restartedAt annotation to force pods to restart
       // ========================================
       const jsonPatch = [
