@@ -205,6 +205,207 @@ export class KubernetesInfoService {
   }
 
   /**
+   * Update K8s Secret with new environment variables and trigger rolling restart.
+   * 
+   * This is the proper way to update env vars without a full rebuild:
+   * 1. Replace the K8s Secret with new env vars
+   * 2. Trigger rolling restart so pods pick up new secret values
+   * 
+   * @param appName - The application name (secret: {appName}-env-secret, deployment: {appName}-app)
+   * @param envVars - Array of environment variables to set
+   * @param namespace - K8s namespace (default: 'default')
+   * @returns Success status and optional error message
+   */
+  static async updateEnvVarsAndRestart(
+    appName: string,
+    envVars: Array<{ key: string; value: string }>,
+    namespace = 'default'
+  ): Promise<{ success: boolean; error?: string }> {
+    const secretName = `${appName}-env-secret`;
+    const deploymentName = `${appName}-app`;
+
+    console.log(`[KubernetesInfoService] Updating env vars for ${appName} (${envVars.length} vars)`);
+
+    try {
+      const { core, apps } = this.getApis();
+
+      // ========================================
+      // Step 1: Build the new Secret data
+      // Ensure all values are strings (K8s stringData requires string values)
+      // ========================================
+      const stringData: Record<string, string> = {};
+      for (const env of envVars) {
+        // Safety check: convert any non-string values to string
+        const value = typeof env.value === 'string' 
+          ? env.value 
+          : typeof env.value === 'object' 
+            ? JSON.stringify(env.value) 
+            : String(env.value);
+        stringData[env.key] = value;
+      }
+
+      // ========================================
+      // Step 2: Check if secret exists
+      // ========================================
+      let secretExists = false;
+      try {
+        await core.readNamespacedSecret({ name: secretName, namespace });
+        secretExists = true;
+      } catch {
+        // Secret doesn't exist
+        secretExists = false;
+      }
+
+      // ========================================
+      // Step 3: Create or Replace the Secret
+      // Delete and recreate to avoid K8s API issues with stringData on replace
+      // ========================================
+      if (secretExists) {
+        // Delete existing secret first
+        await core.deleteNamespacedSecret({ name: secretName, namespace });
+        console.log(`[KubernetesInfoService] Deleted old secret ${secretName}`);
+      }
+
+      if (envVars.length > 0) {
+        // Create new secret with env vars
+        await core.createNamespacedSecret({
+          namespace,
+          body: {
+            apiVersion: 'v1',
+            kind: 'Secret',
+            metadata: {
+              name: secretName,
+              namespace,
+            },
+            type: 'Opaque',
+            stringData,
+          },
+        });
+        console.log(`[KubernetesInfoService] ✅ Created secret ${secretName} with ${envVars.length} vars`);
+      }
+
+      // ========================================
+      // Step 4: Check if deployment has envFrom referencing our secret
+      // If not, we need to add it so the pods can read the env vars
+      // ========================================
+      const deployment = await apps.readNamespacedDeployment({
+        name: deploymentName,
+        namespace,
+      });
+
+      const containers = deployment.spec?.template?.spec?.containers || [];
+      const mainContainer = containers[0];
+      
+      // Check if envFrom already references our secret
+      let hasEnvFrom = false;
+      if (mainContainer?.envFrom) {
+        hasEnvFrom = mainContainer.envFrom.some(
+          ef => ef.secretRef?.name === secretName
+        );
+      }
+
+      // ========================================
+      // Step 5: Patch deployment to add envFrom if missing and we have env vars
+      // ========================================
+      if (envVars.length > 0 && !hasEnvFrom) {
+        console.log(`[KubernetesInfoService] Adding envFrom to deployment (was not referencing secret)`);
+        
+        // Use JSON patch to add envFrom
+        // If envFrom doesn't exist, we add it as an array
+        // If it exists but doesn't have our secret, we append to it
+        const envFromPatch = mainContainer?.envFrom 
+          ? [
+              // Append to existing envFrom array
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom/-',
+                value: { secretRef: { name: secretName } },
+              },
+            ]
+          : [
+              // Create new envFrom array
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom',
+                value: [{ secretRef: { name: secretName } }],
+              },
+            ];
+
+        await apps.patchNamespacedDeployment({
+          name: deploymentName,
+          namespace,
+          body: envFromPatch,
+          fieldManager: 'cloud-services',
+          // @ts-expect-error - headers option is valid but not in type definition
+          headers: {
+            'Content-Type': 'application/json-patch+json',
+          },
+        });
+        console.log(`[KubernetesInfoService] ✅ Added envFrom secretRef to deployment`);
+      } else if (envVars.length === 0 && hasEnvFrom) {
+        // Remove envFrom reference if no env vars
+        console.log(`[KubernetesInfoService] Removing envFrom from deployment (no env vars)`);
+        
+        // Find the index of our secret in envFrom array
+        const envFromArray = mainContainer?.envFrom || [];
+        const secretIndex = envFromArray.findIndex(
+          ef => ef.secretRef?.name === secretName
+        );
+        
+        if (secretIndex !== -1) {
+          // If this is the only entry, remove the entire envFrom
+          // Otherwise, remove just this entry
+          const removePatch = envFromArray.length === 1
+            ? [{ op: 'remove', path: '/spec/template/spec/containers/0/envFrom' }]
+            : [{ op: 'remove', path: `/spec/template/spec/containers/0/envFrom/${secretIndex}` }];
+
+          await apps.patchNamespacedDeployment({
+            name: deploymentName,
+            namespace,
+            body: removePatch,
+            fieldManager: 'cloud-services',
+            // @ts-expect-error - headers option is valid but not in type definition
+            headers: {
+              'Content-Type': 'application/json-patch+json',
+            },
+          });
+          console.log(`[KubernetesInfoService] ✅ Removed envFrom secretRef from deployment`);
+        }
+      }
+
+      // ========================================
+      // Step 6: Trigger rolling restart
+      // Patch the restartedAt annotation to force pods to restart
+      // ========================================
+      const jsonPatch = [
+        {
+          op: 'add',
+          path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
+          value: new Date().toISOString(),
+        },
+      ];
+
+      await apps.patchNamespacedDeployment({
+        name: deploymentName,
+        namespace,
+        body: jsonPatch,
+        fieldManager: 'cloud-services',
+        // @ts-expect-error - headers option is valid but not in type definition
+        headers: {
+          'Content-Type': 'application/json-patch+json',
+        },
+      });
+
+      console.log(`[KubernetesInfoService] ✅ Rolling restart triggered for ${deploymentName}`);
+      return { success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] updateEnvVarsAndRestart error:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
    * Get container images from the Deployment spec (what Kubernetes is configured to run)
    */
   static async getDeploymentImages(appName: string, namespace = 'default'): Promise<ContainerImageInfo[]> {
