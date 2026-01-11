@@ -38,16 +38,21 @@ export async function GET(request: NextRequest) {
             // We should NOT set expires_at for these tokens, or set it far in the future
             const { error: upsertError } = await supabase
               .from("github_tokens")
-              .upsert({
-                user_id: user.id,
-                access_token: data.session.provider_token,
-                github_username: githubUser.login,
-                github_user_id: githubUser.id,
-                scopes: "repo user:email",
-                refresh_token: data.session.provider_refresh_token || null, // Usually null for linkIdentity
-                expires_at: null, // GitHub OAuth tokens don't expire - DON'T use Supabase session expiry
-                updated_at: new Date().toISOString(),
-              });
+              .upsert(
+                {
+                  user_id: user.id,
+                  access_token: data.session.provider_token,
+                  github_username: githubUser.login,
+                  github_user_id: githubUser.id,
+                  scopes: "repo user:email",
+                  refresh_token: data.session.provider_refresh_token || null, // Usually null for linkIdentity
+                  expires_at: null, // GitHub OAuth tokens don't expire - DON'T use Supabase session expiry
+                  updated_at: new Date().toISOString(),
+                },
+                {
+                  onConflict: 'user_id', // Specify the unique constraint column for conflict resolution
+                }
+              );
 
             if (upsertError) {
               console.error("Failed to upsert GitHub token:", upsertError);
@@ -91,16 +96,21 @@ export async function GET(request: NextRequest) {
             // Store the GitLab token for repository access
             const { error: upsertError } = await supabase
               .from("gitlab_tokens")
-              .upsert({
-                user_id: user.id,
-                access_token: data.session.provider_token,
-                gitlab_username: gitlabUser.username,
-                gitlab_user_id: gitlabUser.id,
-                scopes: "api read_user",
-                refresh_token: data.session.provider_refresh_token || null, // Critical for GitLab!
-                expires_at: expiresAt, // GitLab tokens DO expire - typically 2 hours
-                updated_at: new Date().toISOString(),
-              });
+              .upsert(
+                {
+                  user_id: user.id,
+                  access_token: data.session.provider_token,
+                  gitlab_username: gitlabUser.username,
+                  gitlab_user_id: gitlabUser.id,
+                  scopes: "api read_user",
+                    refresh_token: data.session.provider_refresh_token || null, // Critical for GitLab!
+                  expires_at: expiresAt, // GitLab tokens DO expire - typically 2 hours
+                  updated_at: new Date().toISOString(),
+                },
+                {
+                  onConflict: 'user_id', // Specify the unique constraint column for conflict resolution
+                }
+              );
 
             if (upsertError) {
               console.error("Failed to upsert GitLab token:", upsertError);
@@ -149,16 +159,21 @@ export async function GET(request: NextRequest) {
             // Store the Bitbucket token for repository access
             const { error: upsertError } = await supabase
               .from("bitbucket_tokens")
-              .upsert({
-                user_id: user.id,
-                access_token: data.session.provider_token,
-                bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
-                bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
-                scopes: "repository account",
-                refresh_token: data.session.provider_refresh_token || null, // Critical for Bitbucket!
-                expires_at: expiresAt, // Bitbucket tokens DO expire - typically 1 hour
-                updated_at: new Date().toISOString(),
-              });
+              .upsert(
+                {
+                  user_id: user.id,
+                  access_token: data.session.provider_token,
+                  bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
+                  bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
+                  scopes: "repository account",
+                  refresh_token: data.session.provider_refresh_token || null, // Critical for Bitbucket!
+                  expires_at: expiresAt, // Bitbucket tokens DO expire - typically 1 hour
+                  updated_at: new Date().toISOString(),
+                },
+                {
+                  onConflict: 'user_id', // Specify the unique constraint column for conflict resolution
+                }
+              );
 
             if (upsertError) {
               console.error("Failed to upsert Bitbucket token:", upsertError);

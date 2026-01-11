@@ -255,17 +255,19 @@ ${defaultEnvYaml}
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
         readinessProbe:
-          httpGet:
-            path: /
-            port: ${containerPort}
-          initialDelaySeconds: 5
-          periodSeconds: 10
-        livenessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: ${containerPort}
           initialDelaySeconds: 15
-          periodSeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          tcpSocket:
+            port: ${containerPort}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
 DEPLOY_EOF
 
             echo "Generating Kubernetes service manifest"
@@ -331,7 +333,14 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh 'kubectl rollout restart deployment/\${APP_NAME} -n default'
+          sh '''
+            if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
+              echo "Restarting deployment to pull new image"
+              kubectl rollout restart deployment/\${APP_NAME} -n default
+            else
+              echo "First deployment - skipping rollout restart"
+            fi
+          '''
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
           sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'

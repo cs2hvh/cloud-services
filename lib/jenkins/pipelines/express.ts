@@ -360,21 +360,19 @@ ${defaultEnvYaml}
             cpu: ${cpuLimit}
             memory: ${memoryLimit}
         livenessProbe:
-          httpGet:
-            path: /health
+          tcpSocket:
             port: ${containerPort}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: ${containerPort}
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 3
+          failureThreshold: 6
 DEPLOY_EOF
 
               echo 'Generating Kubernetes service manifest'
@@ -447,9 +445,17 @@ INGRESS_EOF
               returnStatus: false
             )
             
-            echo 'Restarting deployment to pull new image'
+            // Only restart if this is an update (RESIZE_ONLY mode or subsequent builds)
+            // For new deployments, kubectl apply is sufficient
             sh(
-              script: 'kubectl rollout restart deployment/\${APP_NAME} -n default',
+              script: '''
+                if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
+                  echo "Restarting deployment to pull new image"
+                  kubectl rollout restart deployment/\${APP_NAME} -n default
+                else
+                  echo "First deployment - skipping rollout restart"
+                fi
+              ''',
               returnStatus: false
             )
             

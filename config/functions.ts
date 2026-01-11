@@ -312,3 +312,103 @@ export function createCertificateFile(certText:string, filename = "certificate.c
   // File constructor is widely supported in browsers
   return new File([blob], filename, { type: mime });
 }
+
+/**
+ * Utility class to update user passwords in database connection strings.
+ * Use-case: When a database user's password is reset (e.g., via DigitalOcean API),
+ * the connection URIs (public_connection.uri, private_connection.uri) and password fields
+ * need to be updated with the new password.
+ * 
+ * Supported formats:
+ * - MongoDB: mongodb+srv://user:password@host/db
+ * - PostgreSQL: postgresql://user:password@host:port/db
+ * - MySQL: mysql://user:password@host:port/db
+ */
+export class ConnectionPasswordUpdater {
+  /**
+   * Updates the password in a database connection URI.
+   * Handles two cases:
+   * 1. URI has existing password: mongodb+srv://user:oldPass@host → mongodb+srv://user:newPass@host
+   * 2. URI has no password: mongodb+srv://user@host → mongodb+srv://user:newPass@host
+   * 
+   * @param uri - The connection URI (decrypted)
+   * @param username - The username whose password is being updated
+   * @param newPassword - The new password (plaintext)
+   * @returns The updated URI with the new password
+   */
+  static updatePasswordInUri(uri: string, username: string, newPassword: string): string {
+    // Escape special regex characters in username
+    const escapedUsername = username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Pattern 1: URI has existing password - ://username:anyPassword@
+    const patternWithPassword = new RegExp(`(:\/\/${escapedUsername}:)[^@]*(@)`);
+    
+    // Pattern 2: URI has no password - ://username@ (no colon after username)
+    const patternWithoutPassword = new RegExp(`(:\/\/${escapedUsername})(@)`);
+    
+    // First, try to replace existing password
+    if (patternWithPassword.test(uri)) {
+      return uri.replace(patternWithPassword, `$1${newPassword}$2`);
+    }
+    
+    // If no existing password, insert password after username
+    if (patternWithoutPassword.test(uri)) {
+      return uri.replace(patternWithoutPassword, `$1:${newPassword}$2`);
+    }
+    
+    // URI format doesn't match expected patterns, return original
+    console.warn("[ConnectionPasswordUpdater] URI format not recognized, returning original");
+    return uri;
+  }
+
+  /**
+   * Checks if the value is an encrypted data object
+   */
+  static isEncryptedData(value: unknown): value is EncryptedData {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'encrypted' in value &&
+      'iv' in value &&
+      'tag' in value &&
+      'salt' in value
+    );
+  }
+
+  /**
+   * Updates password in a URI (encrypted or plain string) and returns the new encrypted URI.
+   * @param uri - The URI (can be EncryptedData object or plain string)
+   * @param username - The username whose password is being updated
+   * @param newPassword - The new password (plaintext)
+   * @param encryptionKey - The encryption key
+   * @returns The new encrypted URI object, or null if URI format is invalid
+   */
+  static updateEncryptedUri(
+    uri: EncryptedData | string,
+    username: string,
+    newPassword: string,
+    encryptionKey: string
+  ): EncryptedData | null {
+    try {
+      let decryptedUri: string;
+
+      // Check if URI is already encrypted or is a plain string
+      if (this.isEncryptedData(uri)) {
+        decryptedUri = Encryption.decrypt(uri, encryptionKey);
+      } else if (typeof uri === 'string') {
+        // URI is stored as plain string (shouldn't happen but handle gracefully)
+        console.log("[ConnectionPasswordUpdater] URI is plain string, not encrypted");
+        decryptedUri = uri;
+      } else {
+        console.error("[ConnectionPasswordUpdater] Invalid URI format:", typeof uri);
+        return null;
+      }
+
+      const updatedUri = this.updatePasswordInUri(decryptedUri, username, newPassword);
+      return Encryption.encrypt(updatedUri, encryptionKey);
+    } catch (error) {
+      console.error("[ConnectionPasswordUpdater] Error updating URI:", error);
+      return null;
+    }
+  }
+}

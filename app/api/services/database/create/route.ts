@@ -92,18 +92,32 @@ export async function POST(req: NextRequest) {
       // );
       // console.log(encryptedPassword,"...........encrypted password in create database api...........");
 
-      // Encrypt public connection password
-      const encryptedPublicPassword = Encryption.encrypt(
-        database.data.database.connection.password,
-        encryptionKey
-      );
+      // Helper function to extract password from URI if not provided directly
+      const extractPasswordFromUri = (uri: string): string | null => {
+        if (!uri) return null;
+        const uriMatch = uri.match(/:\/\/[^:]+:([^@]+)@/);
+        if (uriMatch) {
+          return decodeURIComponent(uriMatch[1]);
+        }
+        return null;
+      };
+
+      // Get passwords - fallback to extracting from URI for MongoDB which may not provide separate password field
+      const publicPassword = database.data.database.connection?.password 
+        || extractPasswordFromUri(database.data.database.connection?.uri);
+      const privatePassword = database.data.database.private_connection?.password 
+        || extractPasswordFromUri(database.data.database.private_connection?.uri);
+
+      // Encrypt public connection password (if available)
+      const encryptedPublicPassword = publicPassword
+        ? Encryption.encrypt(publicPassword, encryptionKey)
+        : null;
       // console.log(encryptedPublicPassword,"...........encrypted public password in create database api...........");
 
-      // Encrypt private connection password
-      const encryptedPrivatePassword = Encryption.encrypt(
-        database.data.database.private_connection.password,
-        encryptionKey
-      );
+      // Encrypt private connection password (if available)
+      const encryptedPrivatePassword = privatePassword
+        ? Encryption.encrypt(privatePassword, encryptionKey)
+        : null;
 
       //console.log(encryptedPrivatePassword,"...........encrypted private password in create database api...........");
 

@@ -60,15 +60,33 @@ export async function POST(req: NextRequest) {
     const encryptedPublicHost = Encryption.encrypt(finalPublicHost, encryptionKey);
     const encryptedPrivateHost = Encryption.encrypt(finalPrivateHost, encryptionKey);
     
-    // Encrypt passwords
-    const encryptedPublicPassword = Encryption.encrypt(
-      body.public_connection.password,
-      encryptionKey
-    );
-    const encryptedPrivatePassword = Encryption.encrypt(
-      body.private_connection.password,
-      encryptionKey
-    );
+    // Encrypt passwords (handle empty passwords - DigitalOcean MongoDB may not provide separate password field)
+    // If password is not provided, try to extract it from the URI
+    let publicPassword = body.public_connection.password;
+    let privatePassword = body.private_connection.password;
+    
+    // Extract password from URI if not provided directly
+    if (!publicPassword && body.public_connection.uri) {
+      const uriMatch = body.public_connection.uri.match(/:\/\/[^:]+:([^@]+)@/);
+      if (uriMatch) {
+        publicPassword = decodeURIComponent(uriMatch[1]);
+        console.log("[update_status] Extracted public password from URI");
+      }
+    }
+    if (!privatePassword && body.private_connection.uri) {
+      const uriMatch = body.private_connection.uri.match(/:\/\/[^:]+:([^@]+)@/);
+      if (uriMatch) {
+        privatePassword = decodeURIComponent(uriMatch[1]);
+        console.log("[update_status] Extracted private password from URI");
+      }
+    }
+    
+    const encryptedPublicPassword = publicPassword 
+      ? Encryption.encrypt(publicPassword, encryptionKey)
+      : null;
+    const encryptedPrivatePassword = privatePassword
+      ? Encryption.encrypt(privatePassword, encryptionKey)
+      : null;
 
     // Encrypt URIs (with IP addresses)
     const encryptedPublicUri = Encryption.encrypt(public_uri_with_ip, encryptionKey);

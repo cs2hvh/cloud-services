@@ -128,6 +128,35 @@ export class DatabaseIntegrationService {
    * @param prefix - Environment variable prefix (default: DATABASE)
    * @returns Generated environment variables and their keys
    */
+  /**
+   * Extract credentials from a database URI
+   * Handles mongodb://, mongodb+srv://, postgresql://, mysql:// formats
+   * URI format: protocol://user:password@host:port/database
+   */
+  private static extractCredentialsFromUri(uri: string): { user?: string; password?: string; host?: string; port?: number; database?: string } {
+    if (!uri) return {};
+    
+    try {
+      // Match pattern: protocol://user:password@host:port/database
+      // Also handles mongodb+srv:// which doesn't have port
+      const match = uri.match(/^([^:]+):\/\/([^:]+):([^@]+)@([^:\/]+)(?::(\d+))?\/([^?]+)/);
+      
+      if (match) {
+        return {
+          user: decodeURIComponent(match[2]),
+          password: decodeURIComponent(match[3]),
+          host: match[4],
+          port: match[5] ? parseInt(match[5], 10) : undefined,
+          database: match[6],
+        };
+      }
+    } catch (err) {
+      console.error("[DatabaseIntegrationService] Failed to extract credentials from URI:", err);
+    }
+    
+    return {};
+  }
+
   static generateEnvVars(
     connection: Database_Connection,
     engine: string,
@@ -137,7 +166,26 @@ export class DatabaseIntegrationService {
     
     // Decrypt sensitive fields
     const host = this.decryptIfNeeded(connection.host);
-    const password = this.decryptIfNeeded(connection.password);
+    let password = this.decryptIfNeeded(connection.password);
+    const user = this.decryptIfNeeded(connection.user);
+    const database = this.decryptIfNeeded(connection.database);
+    const uri = this.decryptIfNeeded(connection.uri);
+    const port = typeof connection.port === 'number' ? connection.port : parseInt(String(connection.port), 10) || 5432;
+    
+    // For MongoDB and other databases: If password is empty but URI exists,
+    // try to extract password from URI (DigitalOcean may only provide credentials in URI)
+    if (!password && uri) {
+      const extracted = this.extractCredentialsFromUri(uri);
+      if (extracted.password) {
+        password = extracted.password;
+        console.log(`[DatabaseIntegrationService] Extracted password from URI for ${engine}`);
+      }
+    }
+    
+    // Warn if password is still empty (this will cause connection errors)
+    if (!password) {
+      console.warn(`[DatabaseIntegrationService] WARNING: Password is empty for ${engine} database. Connection may fail.`);
+    }
     
     // Build connection URL based on engine
     let connectionUrl = connection.uri;

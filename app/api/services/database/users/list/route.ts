@@ -46,14 +46,34 @@ export async function POST(req: NextRequest) {
       const users = response.data.users;
       const encryptionKey = process.env.ENCRYPTION_KEY!;
 
-      // Format users for Supabase with encrypted passwords
-      const formattedUsers = users.map((user: { name: string; role?: string; password?: string }) => ({
-        id: user.name,
-        name: user.name,
-        role: user.role || "normal",
-        password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
-        created_at: new Date().toISOString(),
-      }));
+      // Get existing users from Supabase to preserve passwords (MongoDB doesn't return passwords in list)
+      const existingUsersResult = await Database_Clusters.get_users(validatedData.cluster_id);
+      const existingUsers = existingUsersResult.success && Array.isArray(existingUsersResult.data) 
+        ? existingUsersResult.data 
+        : [];
+      
+      // Create a map of existing passwords by username
+      const existingPasswordMap = new Map<string, unknown>();
+      existingUsers.forEach((u: { name: string; password?: unknown }) => {
+        if (u.password) {
+          existingPasswordMap.set(u.name, u.password);
+        }
+      });
+
+      // Format users for Supabase - preserve existing encrypted passwords if DO doesn't return one
+      const formattedUsers = users.map((user: { name: string; role?: string; password?: string }) => {
+        const existingPassword = existingPasswordMap.get(user.name);
+        return {
+          id: user.name,
+          name: user.name,
+          role: user.role || "normal",
+          // Use new password from DO if available, otherwise preserve existing encrypted password
+          password: user.password 
+            ? Encryption.encrypt(user.password, encryptionKey) 
+            : existingPassword,
+          created_at: new Date().toISOString(),
+        };
+      });
 
       // Sync users with Supabase
       const supabase_result = await Database_Clusters.update_users(

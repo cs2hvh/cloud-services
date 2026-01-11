@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Encryption } from "@/config/functions";
+import { Encryption, ConnectionPasswordUpdater, EncryptedData } from "@/config/functions";
 import { resetUserPasswordSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
@@ -42,27 +42,96 @@ export async function POST(req: NextRequest) {
     );
 
     if (response.status === 200) {
-      console.log("[resetDatabaseUserPassword] Password reset successfully:", response.data.user);
-
       const user = response.data.user;
       const encryptionKey = process.env.ENCRYPTION_KEY!;
 
-      // Optional: Update user password in Supabase with encryption
-      // Get current users and update the specific user's password
+      // Update user password in Supabase with encryption
       const usersResult = await Database_Clusters.get_users(validatedData.cluster_id);
       
       if (usersResult.success && Array.isArray(usersResult.data)) {
         const updatedUsers = usersResult.data.map((u) => {
           if (u.name === validatedData.username) {
-            return {
-              ...u,
-              password: user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined,
-            };
+            // For MongoDB: initial user may not have password field
+            const updatedUser = { ...u };
+            if (user.password) {
+              updatedUser.password = Encryption.encrypt(user.password, encryptionKey);
+            }
+            return updatedUser;
           }
           return u;
         });
 
         await Database_Clusters.update_users(validatedData.cluster_id, updatedUsers);
+      }
+
+      // Update connection URIs if the default user (connection user) password is reset
+      // The connection URI uses the default admin user's credentials
+      if (user.password) {
+        const clusterResult = await Database_Clusters.read(validatedData.cluster_id);
+
+        if (clusterResult.success && clusterResult.data) {
+          const cluster = clusterResult.data;
+          const connectionUser = cluster.public_connection?.user;
+
+          // Only update connections if the reset user is the connection user (e.g., doadmin)
+          if (connectionUser === validatedData.username) {
+            console.log("[resetPassword] Updating connection URIs for user:", validatedData.username);
+            console.log("[resetPassword] Public URI type:", typeof cluster.public_connection?.uri);
+            console.log("[resetPassword] Public URI value:", cluster.public_connection?.uri);
+            
+            const updatedPublicConnection = { ...cluster.public_connection };
+            const updatedPrivateConnection = { ...cluster.private_connection };
+
+            // Update public_connection URI and password
+            if (updatedPublicConnection.uri) {
+              console.log("[resetPassword] Updating public_connection.uri");
+              const newUri = ConnectionPasswordUpdater.updateEncryptedUri(
+                updatedPublicConnection.uri as EncryptedData,
+                validatedData.username,
+                user.password,
+                encryptionKey
+              );
+              if (newUri) {
+                updatedPublicConnection.uri = newUri;
+              } else {
+                console.error("[resetPassword] Failed to update public_connection.uri");
+              }
+            }
+            if (updatedPublicConnection.password) {
+              console.log("[resetPassword] Updating public_connection.password");
+              updatedPublicConnection.password = Encryption.encrypt(user.password, encryptionKey);
+            }
+
+            // Update private_connection URI and password
+            if (updatedPrivateConnection.uri) {
+              console.log("[resetPassword] Updating private_connection.uri");
+              const newUri = ConnectionPasswordUpdater.updateEncryptedUri(
+                updatedPrivateConnection.uri as EncryptedData,
+                validatedData.username,
+                user.password,
+                encryptionKey
+              );
+              if (newUri) {
+                updatedPrivateConnection.uri = newUri;
+              } else {
+                console.error("[resetPassword] Failed to update private_connection.uri");
+              }
+            }
+            if (updatedPrivateConnection.password) {
+              console.log("[resetPassword] Updating private_connection.password");
+              updatedPrivateConnection.password = Encryption.encrypt(user.password, encryptionKey);
+            }
+
+            // Update connections in Supabase
+            console.log("[resetPassword] Saving updated connections to Supabase");
+            await Database_Clusters.update_connections(
+              validatedData.cluster_id,
+              updatedPublicConnection,
+              updatedPrivateConnection
+            );
+            console.log("[resetPassword] Connections updated successfully");
+          }
+        }
       }
 
       return NextResponse.json(
@@ -78,9 +147,17 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (err: unknown) {
+    // Log full error for debugging
+    console.error("[resetDatabaseUserPassword] Full error:", err);
+    
+    if (err instanceof Error) {
+      console.error("[resetDatabaseUserPassword] Error message:", err.message);
+      console.error("[resetDatabaseUserPassword] Error stack:", err.stack);
+    }
+    
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;
-      console.error("[resetDatabaseUserPassword] Error:", message);
+      console.error("[resetDatabaseUserPassword] API Error:", message);
       return NextResponse.json(
         { error: message ?? "Invalid request" },
         { status: 400 }

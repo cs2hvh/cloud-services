@@ -11,15 +11,24 @@ export async function createClient() {
     process.env.SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      auth: {
+        autoRefreshToken: true, // Enable auto-refresh to prevent session expiry
+        persistSession: true,
+      },
       cookies: {
         getAll() {
           return cookieStore.getAll();
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options),
-            );
+            cookiesToSet.forEach(({ name, value, options }) => {
+              // Extend cookie maxAge to match refresh token validity (7 days)
+              const extendedOptions = {
+                ...options,
+                maxAge: options?.maxAge || 604800, // 7 days in seconds
+              };
+              cookieStore.set(name, value, extendedOptions);
+            });
           } catch {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing

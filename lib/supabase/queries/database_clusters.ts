@@ -82,6 +82,30 @@ export const Database_Clusters = {
     return { success: true, data: data };
   },
 
+  // Update public and private connection details (used when user password is reset)
+  update_connections: async (
+    cluster_id: string,
+    public_connection: Database_Connection,
+    private_connection: Database_Connection
+  ) => {
+    const supabase = await createWorkerClient();
+    const { data, error } = await supabase
+      .from("database_cluster")
+      .update({
+        public_connection,
+        private_connection,
+      })
+      .eq("cluster_id", cluster_id)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[update_connections] update failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, data: data };
+  },
+
   read: async (id: string) => {
     const supabase = await createSSRClient();
     const { data, error } = await supabase
@@ -252,7 +276,6 @@ export const Database_Clusters = {
   },
 
   update_users: async (cluster_id: string, users: DatabaseUser[]) => {
-    // console.log(users, "...........in updateDatabaseUsers........");
     const supabase = await createWorkerClient();
 
     const { data, error } = await supabase
@@ -263,7 +286,7 @@ export const Database_Clusters = {
       .single();
 
     if (error) {
-      // console.error("[updateDatabaseUsers] update failed:", error.message);
+       console.error("[updateDatabaseUsers] update failed:", error.message);
       return { success: false, error: error.message };
     }
 
