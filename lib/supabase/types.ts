@@ -1422,3 +1422,43 @@ export interface GeneratedEnvVars {
   vars: Array<{ key: string; value: string }>;
   keys: string[];
 }
+
+// ============================================
+// OBJECT STORAGE INTEGRATION TYPES
+// ============================================
+
+export type ObjectStorageIntegrationStatus = 'pending' | 'linked' | 'failed' | 'unlinked';
+
+export interface ObjectStorageIntegration {
+  id: string;
+  object_space_id: string;
+  platform_app_id: string;
+  user_id: string;
+  project_id: string | null;
+  status: ObjectStorageIntegrationStatus;
+  injected_env_keys: string[];
+  env_prefix: string;
+  created_at: string;
+  updated_at: string;
+  unlinked_at: string | null;
+  unlinked_by: string | null;
+  error_message: string | null;
+}
+
+export interface ObjectStorageIntegrationInsert {
+  object_space_id: string;
+  platform_app_id: string;
+  user_id: string;
+  project_id?: string | null;
+  status?: ObjectStorageIntegrationStatus;
+  injected_env_keys?: string[];
+  env_prefix?: string;
+}
+
+export interface ObjectStorageIntegrationUpdate {
+  status?: ObjectStorageIntegrationStatus;
+  injected_env_keys?: string[];
+  unlinked_at?: string | null;
+  unlinked_by?: string | null;
+  error_message?: string | null;
+}
