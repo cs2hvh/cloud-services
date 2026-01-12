@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { LinkedStorageCard } from './linked-storage-card';
 import { LinkStorageModal } from './link-storage-modal';
+import { UnlinkConfirmationModal } from './unlink-confirmation-modal';
 import { createClient } from '@/lib/supabase/client';
 import type { 
   LinkedBucket, 
@@ -37,7 +38,9 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<LinkedBucket | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Get current user ID
@@ -197,13 +200,35 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
     }
   };
 
-  // Handle unlink bucket
+  // Open unlink confirmation modal
   const handleUnlink = async (bucketId: string): Promise<void> => {
-    if (!confirm('Are you sure you want to unlink this bucket? S3 credentials will be removed from your app.')) {
-      return;
+    const bucket = linkedBuckets.find(b => b.bucket_id === bucketId);
+    if (bucket) {
+      setUnlinkTarget(bucket);
+      setUnlinkModalOpen(true);
     }
+  };
 
-    setUnlinkingId(bucketId);
+  // Handle modal close
+  const handleUnlinkModalClose = (open: boolean) => {
+    setUnlinkModalOpen(open);
+    if (!open) {
+      setUnlinkTarget(null);
+    }
+  };
+
+  // Confirm and execute unlink
+  const confirmUnlink = async (): Promise<void> => {
+    if (!unlinkTarget) return;
+
+    const targetId = unlinkTarget.bucket_id;
+    
+    // Close modal immediately
+    setUnlinkModalOpen(false);
+    setUnlinkTarget(null);
+    
+    // Execute unlink in background
+    setUnlinkingId(targetId);
 
     try {
       const res = await fetch('/api/services/platform-apps/integrations/storage/unlink', {
@@ -211,7 +236,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           app_id: appId,
-          bucket_id: bucketId,
+          bucket_id: targetId,
         }),
       });
 
@@ -320,6 +345,17 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
         onLink={handleLink}
         onCreateBucket={handleCreateBucket}
         onSuccess={fetchLinkedBuckets}
+      />
+
+      {/* Unlink Confirmation Modal */}
+      <UnlinkConfirmationModal
+        open={unlinkModalOpen}
+        onOpenChange={handleUnlinkModalClose}
+        onConfirm={confirmUnlink}
+        isUnlinking={unlinkingId === unlinkTarget?.bucket_id}
+        resourceType="bucket"
+        resourceName={unlinkTarget?.bucket_name || ''}
+        injectedVars={unlinkTarget?.injected_vars || []}
       />
     </>
   );
