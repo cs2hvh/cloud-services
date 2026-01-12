@@ -9,7 +9,6 @@ import {
   Loader2, 
   RefreshCw,
   AlertTriangle,
-  Link2
 } from 'lucide-react';
 import { LinkedStorageCard } from './linked-storage-card';
 import { LinkStorageModal } from './link-storage-modal';
@@ -18,6 +17,7 @@ import type {
   LinkedBucket, 
   AvailableBucket, 
   LinkStorageResponse,
+  EnvVarConfig,
 } from './types';
 
 interface StorageIntegrationsSectionProps {
@@ -172,7 +172,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
   // Handle link bucket
   const handleLink = async (
     bucketId: string, 
-    envPrefix: string,
+    envConfigs: EnvVarConfig[],
     force: boolean
   ): Promise<LinkStorageResponse> => {
     try {
@@ -182,7 +182,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
         body: JSON.stringify({
           app_id: appId,
           bucket_id: bucketId,
-          env_prefix: envPrefix,
+          env_configs: envConfigs,
           force,
         }),
       });

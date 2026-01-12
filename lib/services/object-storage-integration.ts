@@ -34,7 +34,8 @@ export interface StorageLinkRequest {
   bucket_id: string;  // This is object_spaces.id (UUID)
   user_id: string;
   force?: boolean;      // Overwrite existing env vars
-  env_prefix?: string;  // Custom prefix (default: S3)
+  env_configs?: Array<{ originalKey: string; customKey: string; value?: string }>;  // Custom env configs
+  env_prefix?: string;  // Fallback to prefix mode (for backward compatibility)
 }
 
 export interface StorageLinkResult {
@@ -165,7 +166,7 @@ export class ObjectStorageIntegrationService {
    * It performs validation, creates env vars, and triggers redeploy.
    */
   static async link(request: StorageLinkRequest): Promise<StorageLinkResult> {
-    const { app_id, bucket_id, user_id, force = false, env_prefix = "S3" } = request;
+    const { app_id, bucket_id, user_id, force = false, env_configs, env_prefix = "S3" } = request;
     
     console.log(`[ObjectStorageIntegrationService] Linking bucket ${bucket_id} to app ${app_id}`);
 
@@ -235,7 +236,34 @@ export class ObjectStorageIntegrationService {
       // ========================================
       // Step 5: Generate environment variables
       // ========================================
-      const generated = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix);
+      let generated: GeneratedEnvVars;
+      
+      if (env_configs && env_configs.length > 0) {
+        // Use custom env configurations
+        const standardVars = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix);
+        const customVars: Array<{ key: string; value: string }> = [];
+        const customKeys: string[] = [];
+
+        // Map custom keys to actual values
+        env_configs.forEach(config => {
+          const standardVar = standardVars.vars.find(v => v.key === config.originalKey);
+          if (standardVar) {
+            customVars.push({
+              key: config.customKey,
+              value: standardVar.value,
+            });
+            customKeys.push(config.customKey);
+          }
+        });
+
+        generated = {
+          vars: customVars,
+          keys: customKeys,
+        };
+      } else {
+        // Fallback to prefix-based generation
+        generated = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix);
+      }
 
       // ========================================
       // Step 6: Check for env var conflicts
@@ -256,13 +284,15 @@ export class ObjectStorageIntegrationService {
       // ========================================
       // Step 7: Create integration record (status: pending)
       // ========================================
+      const actualPrefix = env_configs && env_configs.length > 0 ? 'CUSTOM' : env_prefix;
+      
       const integrationResult = await ObjectStorage_Integrations.create({
         object_space_id: bucket_id,
         platform_app_id: app_id,
         user_id,
         project_id: app.project_id || bucket.project_id || null,
         status: "pending",
-        env_prefix,
+        env_prefix: actualPrefix,
       });
 
       if (!integrationResult.success) {

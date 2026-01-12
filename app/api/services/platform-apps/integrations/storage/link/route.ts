@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       bucket_id?: string;
       force?: boolean;
       env_prefix?: string;
+      env_configs?: Array<{ originalKey: string; customKey: string; value?: string }>;
     };
 
     try {
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { app_id, bucket_id, force, env_prefix } = body;
+    const { app_id, bucket_id, force, env_prefix, env_configs } = body;
 
     // Validate required fields
     if (!app_id) {
@@ -111,6 +112,7 @@ export async function POST(req: NextRequest) {
       bucket_id,
       user_id: user.id,
       force: force === true,
+      env_configs,
       env_prefix: env_prefix || "S3",
     });
 

@@ -19,7 +19,6 @@ import {
   Check,
   MapPin,
   ChevronRight,
-  Plus,
   Search,
   ArrowLeft,
   ArrowRight,
@@ -31,7 +30,8 @@ import {
   Lock,
   Info,
 } from 'lucide-react';
-import type { AvailableBucket, LinkStorageResponse } from './types';
+import { EnvConfigStep } from './env-config-step';
+import type { AvailableBucket, LinkStorageResponse, EnvVarConfig } from './types';
 
 interface LinkStorageModalProps {
   open: boolean;
@@ -40,7 +40,7 @@ interface LinkStorageModalProps {
   projectId: string;
   buckets: AvailableBucket[];
   loadingBuckets: boolean;
-  onLink: (bucketId: string, envPrefix: string, force: boolean) => Promise<LinkStorageResponse>;
+  onLink: (bucketId: string, envConfigs: EnvVarConfig[], force: boolean) => Promise<LinkStorageResponse>;
   onCreateBucket?: (data: CreateBucketData) => Promise<CreateBucketResponse>;
   onSuccess: () => void;
 }
@@ -68,6 +68,91 @@ const BUCKET_NAME_RULES = {
   pattern: /^[a-z0-9][a-z0-9.-]*[a-z0-9]$/,
   description: 'Must start/end with letter or number, can contain hyphens and periods',
 };
+
+// Generate default env configs for Object Storage
+function generateDefaultStorageEnvConfigs(
+  bucketName: string,
+  region: string,
+  prefix: string = 'S3'
+): EnvVarConfig[] {
+  const configs: EnvVarConfig[] = [];
+
+  // S3-compatible env vars with custom prefix
+  configs.push({
+    originalKey: `${prefix}_BUCKET`,
+    customKey: `${prefix}_BUCKET`,
+    value: bucketName,
+    description: 'Bucket name',
+  });
+
+  configs.push({
+    originalKey: `${prefix}_BUCKET_NAME`,
+    customKey: `${prefix}_BUCKET_NAME`,
+    value: bucketName,
+    description: 'Bucket name (alias)',
+  });
+
+  configs.push({
+    originalKey: `${prefix}_ENDPOINT`,
+    customKey: `${prefix}_ENDPOINT`,
+    value: '••••••••••••••••••••••••',
+    description: 'S3 endpoint URL',
+  });
+
+  configs.push({
+    originalKey: `${prefix}_REGION`,
+    customKey: `${prefix}_REGION`,
+    value: region,
+    description: 'Storage region',
+  });
+
+  configs.push({
+    originalKey: `${prefix}_ACCESS_KEY_ID`,
+    customKey: `${prefix}_ACCESS_KEY_ID`,
+    value: '••••••••••••••••••••••••',
+    description: 'Access key ID',
+  });
+
+  configs.push({
+    originalKey: `${prefix}_SECRET_ACCESS_KEY`,
+    customKey: `${prefix}_SECRET_ACCESS_KEY`,
+    value: '••••••••••••••••••••••••••••••••••••••••••••',
+    description: 'Secret access key',
+  });
+
+  // AWS SDK compatible names (only if prefix is not AWS)
+  if (prefix !== 'AWS') {
+    configs.push({
+      originalKey: 'AWS_ACCESS_KEY_ID',
+      customKey: 'AWS_ACCESS_KEY_ID',
+      value: '••••••••••••••••••••••••',
+      description: 'AWS SDK access key',
+    });
+
+    configs.push({
+      originalKey: 'AWS_SECRET_ACCESS_KEY',
+      customKey: 'AWS_SECRET_ACCESS_KEY',
+      value: '••••••••••••••••••••••••••••••••••••••••••••',
+      description: 'AWS SDK secret key',
+    });
+
+    configs.push({
+      originalKey: 'AWS_REGION',
+      customKey: 'AWS_REGION',
+      value: region,
+      description: 'AWS SDK region',
+    });
+
+    configs.push({
+      originalKey: 'AWS_ENDPOINT_URL',
+      customKey: 'AWS_ENDPOINT_URL',
+      value: '••••••••••••••••••••••••',
+      description: 'AWS SDK endpoint',
+    });
+  }
+
+  return configs;
+}
 
 // Available regions for object storage
 const STORAGE_REGIONS = [
@@ -125,7 +210,7 @@ export function LinkStorageModal({
   const nameCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Env configuration
-  const [envPrefix, setEnvPrefix] = useState('S3');
+  const [envConfigs, setEnvConfigs] = useState<EnvVarConfig[]>([]);
   const [force, setForce] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>([]);
   
@@ -156,7 +241,7 @@ export function LinkStorageModal({
     setIsCheckingName(false);
     setNameAvailable(null);
     setNameError(null);
-    setEnvPrefix('S3');
+    setEnvConfigs([]);
     setForce(false);
     setConflicts([]);
     setIsCreating(false);
@@ -284,6 +369,13 @@ export function LinkStorageModal({
         
       case 'select-existing':
         if (selectedBucket) {
+          // Generate env configs for existing bucket
+          const configs = generateDefaultStorageEnvConfigs(
+            selectedBucket.name,
+            selectedBucket.region,
+            'S3'
+          );
+          setEnvConfigs(configs);
           setStep('configure-env');
         }
         break;
@@ -353,6 +445,13 @@ export function LinkStorageModal({
 
       if (response.success && response.bucket_id) {
         setCreatedBucketId(response.bucket_id);
+        // Generate env configs for new bucket
+        const configs = generateDefaultStorageEnvConfigs(
+          newBucketName,
+          newBucketRegion,
+          'S3'
+        );
+        setEnvConfigs(configs);
         setStep('configure-env');
       } else {
         setError(response.error || 'Failed to create bucket');
@@ -367,13 +466,13 @@ export function LinkStorageModal({
   // Link bucket to app
   const handleLink = async (forceLink = false) => {
     const bucketId = selectedBucket?.id || createdBucketId;
-    if (!bucketId) return;
+    if (!bucketId || envConfigs.length === 0) return;
 
     setIsLinking(true);
     setError(null);
 
     try {
-      const response = await onLink(bucketId, envPrefix, forceLink || force);
+      const response = await onLink(bucketId, envConfigs, forceLink || force);
 
       if (response.success) {
         setResult(response);
@@ -392,22 +491,6 @@ export function LinkStorageModal({
     }
   };
 
-  // Preview of env vars that will be injected
-  const previewEnvVars = [
-    `${envPrefix}_BUCKET`,
-    `${envPrefix}_BUCKET_NAME`,
-    `${envPrefix}_ENDPOINT`,
-    `${envPrefix}_REGION`,
-    `${envPrefix}_ACCESS_KEY_ID`,
-    `${envPrefix}_SECRET_ACCESS_KEY`,
-    ...(envPrefix !== 'AWS' ? [
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY',
-      'AWS_REGION',
-      'AWS_ENDPOINT_URL',
-    ] : []),
-  ];
-
   // Can proceed to next step?
   const canProceed = () => {
     switch (step) {
@@ -424,7 +507,7 @@ export function LinkStorageModal({
           !isCheckingName
         );
       case 'configure-env':
-        return envPrefix.length >= 1;
+        return envConfigs.length > 0;
       default:
         return false;
     }
@@ -441,8 +524,8 @@ export function LinkStorageModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg bg-[#0a0a0f] border-white/10">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] bg-[#0a0a0f] border-white/10 flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">
             <HardDrive className="w-5 h-5 text-purple-400" />
             {stepTitles[step]}
@@ -456,7 +539,7 @@ export function LinkStorageModal({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Choose Source */}
+        <div className="flex-1 overflow-y-auto pr-2 -mr-2">{/* Scrollable content area */}
         {step === 'choose-source' && (
           <div className="space-y-4">
             {/* Existing Bucket Option */}
@@ -477,7 +560,7 @@ export function LinkStorageModal({
                     Use Existing Bucket
                   </h3>
                   <p className="text-sm text-white/50">
-                    Connect to a bucket you've already created
+                    Connect to a bucket you&apos;ve already created
                   </p>
                   {buckets.length > 0 && (
                     <p className="text-xs text-white/40 mt-2">
@@ -810,64 +893,22 @@ export function LinkStorageModal({
               </div>
             </div>
 
-            {/* Environment Prefix */}
-            <div className="space-y-2">
-              <Label htmlFor="env-prefix" className="text-white/70">
-                Environment Variable Prefix
-              </Label>
-              <Input
-                id="env-prefix"
-                value={envPrefix}
-                onChange={(e) => setEnvPrefix(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
-                placeholder="S3"
-                className="bg-white/5 border-white/10 text-white"
-              />
-              <p className="text-xs text-white/40">
-                Variables will be named like {envPrefix}_BUCKET, {envPrefix}_ACCESS_KEY_ID, etc.
-              </p>
-            </div>
-
-            {/* Preview */}
-            <div className="space-y-2">
-              <Label className="text-white/70">Environment Variables to Inject</Label>
-              <div className="flex flex-wrap gap-2 p-3 rounded-lg bg-black/30 max-h-[100px] overflow-y-auto">
-                {previewEnvVars.map((key) => (
-                  <code 
-                    key={key} 
-                    className="text-xs bg-purple-500/10 text-purple-400 px-2 py-1 rounded"
-                  >
-                    {key}
-                  </code>
-                ))}
-              </div>
-            </div>
-
-            {/* Conflicts */}
-            {conflicts.length > 0 && (
-              <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
-                <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium text-amber-400 mb-1">Conflict Detected</h4>
-                    <p className="text-sm text-white/70 mb-2">
-                      The following variables already exist. Force to overwrite.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {conflicts.map((key) => (
-                        <code key={key} className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded">
-                          {key}
-                        </code>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Environment Variable Configuration */}
+            <EnvConfigStep
+              envVarConfigs={envConfigs}
+              onChange={setEnvConfigs}
+              conflicts={conflicts}
+              onResolveConflicts={() => setForce(true)}
+              disabled={isLinking}
+            />
 
             {/* Error */}
             {error && !conflicts.length && (
               <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/30">
-                <p className="text-sm text-red-400">{error}</p>
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
               </div>
             )}
 
@@ -878,7 +919,7 @@ export function LinkStorageModal({
                 Back
               </Button>
               <div className="flex gap-2">
-                {conflicts.length > 0 && (
+                {conflicts.length > 0 && !force && (
                   <Button
                     onClick={() => handleLink(true)}
                     disabled={isLinking}
@@ -952,6 +993,7 @@ export function LinkStorageModal({
             </Button>
           </div>
         )}
+        </div>{/* End scrollable content area */}
       </DialogContent>
     </Dialog>
   );

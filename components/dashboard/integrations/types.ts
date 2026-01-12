@@ -160,6 +160,7 @@ export interface LinkStorageRequest {
   app_id: string;
   bucket_id: string;
   force?: boolean;
+  env_configs?: EnvVarConfig[];  // Updated to support custom env configs
   env_prefix?: string;
 }
 
