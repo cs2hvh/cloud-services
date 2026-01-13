@@ -140,7 +140,7 @@ async function createBucketCredentials(bucketName: string): Promise<{
 }
 
 /**
- * Processes and encrypts the bucket endpoint with DNS resolution
+ * Processes and encrypts the bucket endpoint
  * @param bucketName Name of the bucket
  * @param region Region of the bucket
  * @param encryptionKey Key for encryption
@@ -151,26 +151,11 @@ async function processAndEncryptEndpoint(
   region: string, 
   encryptionKey: string
 ): Promise<string> {
-  const originalEndpoint = getBucketUrl(bucketName, region as any);
-  let endpointToEncrypt = originalEndpoint;
+  // Use the domain-based endpoint for SSL compatibility
+  // SSL certificates cannot validate IP addresses
+  const endpoint = getBucketUrl(bucketName, region as any);
 
-  try {
-    const doSpacesDomain = `${bucketName}.${region}.digitaloceanspaces.com`;
-    const resolveResult = await resolveHost(doSpacesDomain);
-
-    if (resolveResult.records.length > 0) {
-      const aRecord = resolveResult.records.find((r) => r.type === "A");
-      if (aRecord && aRecord.records.length > 0) {
-        const ip = aRecord.records[0] as string;
-        endpointToEncrypt = originalEndpoint.replace(doSpacesDomain, ip);
-      }
-    }
-  } catch (error) {
-    // Fallback to original endpoint if DNS resolution fails
-    console.warn("DNS resolution failed, using original endpoint");
-  }
-
-  return JSON.stringify(Encryption.encrypt(endpointToEncrypt, encryptionKey));
+  return JSON.stringify(Encryption.encrypt(endpoint, encryptionKey));
 }
 
 /**
