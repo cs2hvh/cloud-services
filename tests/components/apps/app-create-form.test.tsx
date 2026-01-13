@@ -77,13 +77,18 @@ describe('AppCreateForm', () => {
     const user = userEvent.setup();
     render(<AppCreateForm />);
 
+    // Step 1: Select provider
     await user.click(screen.getByText('GitHub'));
     await user.click(screen.getByText('Next'));
+    
+    // Step 2: Enter repository and branch
     await user.type(screen.getByTestId('repository-input'), 'user/repo');
     await user.type(screen.getByTestId('branch-input'), 'main');
-    await user.click(screen.getAllByText('Next')[0]);
+    await user.click(screen.getByText('Next'));
+    
+    // Step 3: Select framework and go to step 4
     await user.selectOptions(screen.getByTestId('framework-select'), 'Next.js');
-    await user.click(screen.getAllByText('Next')[1]);
+    await user.click(screen.getByText('Next'));
 
     expect(screen.getByText(/Step 4/)).toBeInTheDocument();
     expect(screen.getByText(/Environment Variables/i)).toBeInTheDocument();
@@ -94,13 +99,20 @@ describe('AppCreateForm', () => {
     const onSuccess = vi.fn();
     render(<AppCreateForm onSuccess={onSuccess} />);
 
+    // Step 1: Select provider
     await user.click(screen.getByText('GitHub'));
     await user.click(screen.getByText('Next'));
+    
+    // Step 2: Enter repository and branch
     await user.type(screen.getByTestId('repository-input'), 'user/repo');
     await user.type(screen.getByTestId('branch-input'), 'main');
-    await user.click(screen.getAllByText('Next')[0]);
+    await user.click(screen.getByText('Next'));
+    
+    // Step 3: Select framework
     await user.selectOptions(screen.getByTestId('framework-select'), 'Next.js');
-    await user.click(screen.getAllByText('Next')[1]);
+    await user.click(screen.getByText('Next'));
+    
+    // Step 4: Click deploy
     await user.click(screen.getByTestId('deploy-button'));
 
     expect(onSuccess).toHaveBeenCalledWith('app-123');
