@@ -42,6 +42,108 @@ export {
   validSizes,
 } from '../../../utils/mock-data-platform-apps';
 
+/**
+ * Mock Deployments list for deployment history
+ */
+export const mockDeployments = [
+  {
+    id: 'deploy-1',
+    app_id: 'app-123',
+    build_number: 5,
+    status: 'success',
+    started_at: '2025-01-12T10:00:00Z',
+    completed_at: '2025-01-12T10:02:00Z',
+    duration: 120000,
+    commit_sha: 'abc123def456',
+    commit_message: 'feat: add new feature',
+    trigger: 'manual',
+    failure_reason: null,
+  },
+  {
+    id: 'deploy-2',
+    app_id: 'app-123',
+    build_number: 4,
+    status: 'success',
+    started_at: '2025-01-11T15:30:00Z',
+    completed_at: '2025-01-11T15:32:00Z',
+    duration: 115000,
+    commit_sha: 'def456abc789',
+    commit_message: 'fix: resolve bug in auth',
+    trigger: 'auto',
+    failure_reason: null,
+  },
+  {
+    id: 'deploy-3',
+    app_id: 'app-123',
+    build_number: 3,
+    status: 'failed',
+    started_at: '2025-01-11T14:00:00Z',
+    completed_at: '2025-01-11T14:01:00Z',
+    duration: 45000,
+    commit_sha: 'ghi789jkl012',
+    commit_message: 'chore: update dependencies',
+    trigger: 'manual',
+    failure_reason: 'npm install error',
+  },
+];
+
+/**
+ * Mock Domains list
+ */
+export const mockDomains = [
+  {
+    id: 'domain-1',
+    app_id: 'app-123',
+    domain: 'custom.example.com',
+    status: 'verified',
+    ssl_status: 'active',
+    is_primary: true,
+    created_at: '2025-01-01T00:00:00Z',
+  },
+  {
+    id: 'domain-2',
+    app_id: 'app-123',
+    domain: 'api.example.com',
+    status: 'pending',
+    ssl_status: 'pending',
+    is_primary: false,
+    created_at: '2025-01-10T00:00:00Z',
+  },
+];
+
+/**
+ * Mock Build Logs
+ */
+export const mockBuildLogs = `
+[INFO] Starting build process...
+[INFO] Cloning repository...
+[INFO] Repository cloned successfully
+[INFO] Installing dependencies...
+[INFO] Running npm install...
+[SUCCESS] Dependencies installed
+[INFO] Running build command...
+[INFO] Building Next.js application...
+[SUCCESS] Build completed successfully
+[INFO] Creating Docker image...
+[SUCCESS] Docker image created
+[INFO] Deploying to Kubernetes...
+[SUCCESS] Deployment successful
+[INFO] Build completed in 2m 15s
+`;
+
+/**
+ * Mock Runtime Logs
+ */
+export const mockRuntimeLogs = `
+2025-01-12T12:00:01.123Z [INFO] Application starting...
+2025-01-12T12:00:01.456Z [INFO] Connected to database
+2025-01-12T12:00:01.789Z [INFO] Server listening on port 3000
+2025-01-12T12:00:15.234Z [INFO] GET /api/health 200 - 5ms
+2025-01-12T12:00:30.567Z [INFO] GET /api/users 200 - 12ms
+2025-01-12T12:01:00.890Z [ERROR] POST /api/auth/login 500 - 45ms
+2025-01-12T12:01:15.123Z [WARN] High memory usage detected
+`;
+
 // Additional E2E-specific test data
 
 /**

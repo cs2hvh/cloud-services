@@ -124,15 +124,28 @@ export class ApiMocks {
   /**
    * Mock custom domain endpoints
    */
-  async mockDomainAdd(domain: any, status = 200) {
+  async mockDomainAdd(status = 200) {
     await this.page.route('**/api/services/platform-apps/domains/add', async (route) => {
       await route.fulfill({
         status,
         contentType: 'application/json',
-        body: JSON.stringify({
-          message: 'Domain added successfully',
-          domain,
-        }),
+        body: JSON.stringify(
+          status === 200
+            ? { message: 'Domain added successfully' }
+            : status === 409
+            ? { error: 'Domain already exists' }
+            : { error: 'Failed to add domain' }
+        ),
+      });
+    });
+  }
+
+  async mockDomainsList(domains: any[], status = 200) {
+    await this.page.route('**/api/services/platform-apps/domains*', async (route) => {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify({ domains }),
       });
     });
   }
@@ -188,6 +201,13 @@ export class ApiMocks {
   }
 
   /**
+   * Mock deployments list endpoint (alias for compatibility)
+   */
+  async mockDeploymentsList(deployments: any[], status = 200) {
+    return this.mockDeployments(deployments, status);
+  }
+
+  /**
    * Mock rollback endpoint
    */
   async mockRollback(buildNumber = 4, status = 200) {
@@ -201,6 +221,13 @@ export class ApiMocks {
         }),
       });
     });
+  }
+
+  /**
+   * Mock rollback endpoint (alias for compatibility)
+   */
+  async mockAppRollback(status = 200) {
+    return this.mockRollback(4, status);
   }
 
   /**
@@ -324,6 +351,13 @@ export class ApiMocks {
         body: JSON.stringify(metrics),
       });
     });
+  }
+
+  /**
+   * Mock app metrics endpoint (alias for compatibility)
+   */
+  async mockAppMetrics(metrics: any, status = 200) {
+    return this.mockMetrics(metrics, status);
   }
 
   /**
