@@ -13,6 +13,8 @@ import { JenkinsService } from './jenkins';
 import { BuildPollingService } from './build-polling';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
+import { gitlabTokenManager } from '@/lib/providers/gitlab/token-manager';
+import { bitbucketTokenManager } from '@/lib/providers/bitbucket/token-manager';
 import { KubernetesInfoService } from './kubernetes-info';
 
 export interface AutoDeployConfig {
@@ -169,6 +171,7 @@ export class AutoDeployService {
 
   /**
    * Get fresh access token for the specified provider
+   * Uses the new token managers which handle auto-refresh
    */
   private static async getAccessToken(
     userId: string, 
@@ -182,19 +185,23 @@ export class AutoDeployService {
       }
 
       if (provider === 'gitlab') {
-        // GitLab tokens expire in 2 hours, use refresh logic
-        const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
-        return await getValidGitLabToken(userId);
+        // Use the new token manager with auto-refresh (returns string directly)
+        const token = await gitlabTokenManager.getToken(userId);
+        if (!token) {
+          console.warn(`[AutoDeploy] No GitLab token found for user ${userId}`);
+          return null;
+        }
+        return token;
       }
 
       if (provider === 'bitbucket') {
-        try {
-          const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
-          return await getValidBitbucketToken(userId);
-        } catch {
-          console.log(`[AutoDeploy] Bitbucket token refresh not available`);
+        // Use the new token manager with auto-refresh (returns string directly)
+        const token = await bitbucketTokenManager.getToken(userId);
+        if (!token) {
+          console.warn(`[AutoDeploy] No Bitbucket token found for user ${userId}`);
           return null;
         }
+        return token;
       }
 
       return null;
