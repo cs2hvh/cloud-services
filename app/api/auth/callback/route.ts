@@ -11,10 +11,14 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     // If successful, store provider tokens for repository access
+    // NOTE: We only store GitHub tokens from Supabase Auth because they don't expire.
+    // For GitLab/Bitbucket, users must explicitly "Connect" via /api/gitlab/app-auth or /api/bitbucket/app-auth
+    // to get tokens that we can refresh with our own OAuth credentials.
     if (!error && data.session) {
       const user = data.session.user;
       
       // Handle GitHub token storage
+      // GitHub is special: tokens from Supabase Auth don't expire, so we can store them
       const githubIdentity = user.identities?.find(
         (identity) => identity.provider === "github"
       );
@@ -33,9 +37,7 @@ export async function GET(request: NextRequest) {
             const githubUser = await userResponse.json();
 
             // Store the GitHub token for repository access
-            // NOTE: GitHub OAuth tokens from Supabase linkIdentity do NOT expire (they are classic OAuth tokens)
-            // The data.session.expires_at is the Supabase SESSION expiration, NOT the GitHub token expiration
-            // We should NOT set expires_at for these tokens, or set it far in the future
+            // NOTE: GitHub OAuth tokens from Supabase Auth do NOT expire (they are classic OAuth tokens)
             const { error: upsertError } = await supabase
               .from("github_tokens")
               .upsert({
@@ -44,8 +46,8 @@ export async function GET(request: NextRequest) {
                 github_username: githubUser.login,
                 github_user_id: githubUser.id,
                 scopes: "repo user:email",
-                refresh_token: data.session.provider_refresh_token || null, // Usually null for linkIdentity
-                expires_at: null, // GitHub OAuth tokens don't expire - DON'T use Supabase session expiry
+                refresh_token: data.session.provider_refresh_token || null,
+                expires_at: null, // GitHub OAuth tokens don't expire
                 updated_at: new Date().toISOString(),
               });
 
@@ -64,121 +66,15 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Handle GitLab token storage
-      // IMPORTANT: GitLab tokens expire after 2 hours (7200 seconds)
-      // We MUST store the refresh_token to be able to get new access tokens
-      const gitlabIdentity = user.identities?.find(
-        (identity) => identity.provider === "gitlab"
-      );
-
-      if (gitlabIdentity && data.session.provider_token) {
-        try {
-          // Get GitLab user info
-          const userResponse = await fetch("https://gitlab.com/api/v4/user", {
-            headers: {
-              Authorization: `Bearer ${data.session.provider_token}`,
-              Accept: "application/json",
-            },
-          });
-
-          if (userResponse.ok) {
-            const gitlabUser = await userResponse.json();
-
-            // GitLab tokens expire in 7200 seconds (2 hours) by default
-            // Calculate expiration time - use 7200 seconds (2 hours) as per GitLab docs
-            const expiresAt = new Date(Date.now() + 7200 * 1000).toISOString();
-
-            // Store the GitLab token for repository access
-            const { error: upsertError } = await supabase
-              .from("gitlab_tokens")
-              .upsert({
-                user_id: user.id,
-                access_token: data.session.provider_token,
-                gitlab_username: gitlabUser.username,
-                gitlab_user_id: gitlabUser.id,
-                scopes: "api read_user",
-                refresh_token: data.session.provider_refresh_token || null, // Critical for GitLab!
-                expires_at: expiresAt, // GitLab tokens DO expire - typically 2 hours
-                updated_at: new Date().toISOString(),
-              });
-
-            if (upsertError) {
-              console.error("Failed to upsert GitLab token:", upsertError);
-            } else {
-              console.log(
-                "Stored GitLab token for repository access:",
-                gitlabUser.username
-              );
-              if (!data.session.provider_refresh_token) {
-                console.warn(
-                  "Warning: No refresh token received for GitLab. Token will expire in 2 hours."
-                );
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Failed to store GitLab token:", error);
-          // Don't fail the auth flow if token storage fails
-        }
-      }
-
-      // Handle Bitbucket token storage
-      // IMPORTANT: Bitbucket tokens expire after 1-2 hours
-      // We MUST store the refresh_token to be able to get new access tokens
-      const bitbucketIdentity = user.identities?.find(
-        (identity) => identity.provider === "bitbucket"
-      );
-
-      if (bitbucketIdentity && data.session.provider_token) {
-        try {
-          // Get Bitbucket user info
-          const userResponse = await fetch("https://api.bitbucket.org/2.0/user", {
-            headers: {
-              Authorization: `Bearer ${data.session.provider_token}`,
-              Accept: "application/json",
-            },
-          });
-
-          if (userResponse.ok) {
-            const bitbucketUser = await userResponse.json();
-
-            // Bitbucket tokens expire in ~3600 seconds (1 hour) typically
-            // Calculate expiration time - use 3600 seconds (1 hour) as per Bitbucket docs
-            const expiresAt = new Date(Date.now() + 3600 * 1000).toISOString();
-
-            // Store the Bitbucket token for repository access
-            const { error: upsertError } = await supabase
-              .from("bitbucket_tokens")
-              .upsert({
-                user_id: user.id,
-                access_token: data.session.provider_token,
-                bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
-                bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
-                scopes: "repository account",
-                refresh_token: data.session.provider_refresh_token || null, // Critical for Bitbucket!
-                expires_at: expiresAt, // Bitbucket tokens DO expire - typically 1 hour
-                updated_at: new Date().toISOString(),
-              });
-
-            if (upsertError) {
-              console.error("Failed to upsert Bitbucket token:", upsertError);
-            } else {
-              console.log(
-                "Stored Bitbucket token for repository access:",
-                bitbucketUser.username || bitbucketUser.nickname
-              );
-              if (!data.session.provider_refresh_token) {
-                console.warn(
-                  "Warning: No refresh token received for Bitbucket. Token will expire in ~1 hour."
-                );
-              }
-            }
-          }
-        } catch (error) {
-          console.error("Failed to store Bitbucket token:", error);
-          // Don't fail the auth flow if token storage fails
-        }
-      }
+      // GitLab and Bitbucket: NOT stored here!
+      // Reason: Supabase-sourced tokens expire (2hrs for GitLab, 1hr for Bitbucket)
+      // and we can't refresh them with our credentials (they were issued by Supabase's OAuth app).
+      // 
+      // Users should:
+      // 1. Sign in with email/password or GitHub for authentication
+      // 2. Explicitly "Connect GitLab" or "Connect Bitbucket" in dashboard for repository access
+      //    - This uses /api/gitlab/app-auth or /api/bitbucket/app-auth
+      //    - Gives us tokens we can refresh infinitely with our OAuth credentials
     }
 
     if (!error) {

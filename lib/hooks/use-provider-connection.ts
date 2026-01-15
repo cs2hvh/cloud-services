@@ -36,7 +36,12 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
         // Use provided returnTo or default to current page
         const returnPath = options?.returnTo || (typeof window !== 'undefined' ? window.location.pathname : '/dashboard');
 
-        const response = await fetch('/api/auth/link', {
+        // Use direct OAuth for GitLab and Bitbucket to enable infinite token refresh
+        // GitHub uses Supabase Auth since those tokens don't expire anyway
+        const useDirectOAuth = provider === 'gitlab' || provider === 'bitbucket';
+        const endpoint = useDirectOAuth ? `/api/${provider}/app-auth` : '/api/auth/link';
+
+        const response = await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',

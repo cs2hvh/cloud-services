@@ -1,18 +1,17 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { NextResponse } from "next/server";
 
 /**
- * GitLab OAuth callback handler
+ * Bitbucket OAuth callback handler
  * Exchanges the authorization code for access and refresh tokens
  * 
- * GitLab token response format:
+ * Bitbucket token response format:
  * {
  *   "access_token": "...",
  *   "token_type": "bearer",
- *   "expires_in": 7200,  // 2 hours
+ *   "expires_in": 3600,  // 1 hour
  *   "refresh_token": "...",
- *   "created_at": 1607635748
+ *   "scopes": "repository account"
  * }
  */
 export async function GET(request: NextRequest) {
@@ -28,19 +27,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${domain}/dashboard/settings?error=missing_code`);
     }
 
-    // Extract user ID and returnTo from state
-    // State format: userId|timestamp|returnPath (base64 encoded)
+    // Decode state to extract userId, timestamp, and returnTo path
     let userId: string;
     let returnTo = '/dashboard/settings';
     try {
-      const stateData = Buffer.from(state, 'base64').toString('utf-8');
-      const [id, , path] = stateData.split('|');
-      userId = id;
-      returnTo = path || '/dashboard/settings';
+      const decoded = Buffer.from(state, 'base64').toString('utf-8');
+      const parts = decoded.split('|');
+      userId = parts[0];
+      returnTo = parts[2] || '/dashboard/settings';
     } catch {
-      // Fallback for old state format: userId-timestamp
+      // Fallback for old state format
       userId = state.split('-')[0];
-      returnTo = '/dashboard/settings';
     }
     
     const supabase = await createClient();
@@ -52,54 +49,57 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${domain}${returnTo}?error=invalid_user`);
     }
 
-    const clientId = process.env.GITLAB_CLIENT_ID;
-    const clientSecret = process.env.GITLAB_CLIENT_SECRET;
-    const redirectUri = `${domain}/api/gitlab/callback`;
+    const clientId = process.env.BITBUCKET_CLIENT_ID;
+    const clientSecret = process.env.BITBUCKET_CLIENT_SECRET;
+    const redirectUri = `${domain}/api/bitbucket/callback`;
 
     if (!clientId || !clientSecret) {
-      console.error('GitLab OAuth credentials not configured');
+      console.error('Bitbucket OAuth credentials not configured');
       return NextResponse.redirect(`${domain}${returnTo}?error=config_error`);
     }
 
+    // Create Basic Auth header (Bitbucket requires Basic Auth for token exchange)
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
     // Exchange code for access token
-    const tokenResponse = await fetch('https://gitlab.com/oauth/token', {
+    // IMPORTANT: Bitbucket requires the same redirect_uri used in authorization
+    const tokenResponse = await fetch('https://bitbucket.org/site/oauth2/access_token', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Basic ${basicAuth}`,
       },
       body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        code: code,
         grant_type: 'authorization_code',
+        code: code,
         redirect_uri: redirectUri,
       }),
     });
 
     if (!tokenResponse.ok) {
-      console.error('GitLab token exchange failed with status:', tokenResponse.status);
+      console.error('Bitbucket token exchange failed with status:', tokenResponse.status);
       return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
     }
 
     const tokenData = await tokenResponse.json();
     
     if (tokenData.error) {
-      console.error('GitLab token error:', tokenData.error);
+      console.error('Bitbucket token error:', tokenData.error);
       return NextResponse.redirect(`${domain}${returnTo}?error=${tokenData.error}`);
     }
 
     const accessToken = tokenData.access_token;
     const refreshToken = tokenData.refresh_token;
-    const expiresIn = tokenData.expires_in || 7200; // Default 2 hours
+    const expiresIn = tokenData.expires_in || 3600; // Default 1 hour
     
     if (!accessToken) {
-      console.error('No access token received from GitLab');
+      console.error('No access token received from Bitbucket');
       return NextResponse.redirect(`${domain}${returnTo}?error=no_token`);
     }
 
-    // Get GitLab user info to store username
-    const userResponse = await fetch('https://gitlab.com/api/v4/user', {
+    // Get Bitbucket user info to store username
+    const userResponse = await fetch('https://api.bitbucket.org/2.0/user', {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
@@ -107,27 +107,27 @@ export async function GET(request: NextRequest) {
     });
 
     if (!userResponse.ok) {
-      console.error('Failed to get GitLab user info');
+      console.error('Failed to get Bitbucket user info');
       return NextResponse.redirect(`${domain}${returnTo}?error=user_info_failed`);
     }
 
-    const gitlabUser = await userResponse.json();
+    const bitbucketUser = await userResponse.json();
 
     // Calculate expiration time
     const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
 
-    // Store the GitLab access token in database
+    // Store the Bitbucket access token in database
     // IMPORTANT: auth_source='direct' means we issued this token with OUR OAuth credentials
     // and can refresh it ourselves (unlike Supabase-sourced tokens)
     const { error: insertError } = await supabase
-      .from('gitlab_tokens')
+      .from('bitbucket_tokens')
       .upsert({
         user_id: user.id,
         access_token: accessToken,
-        gitlab_username: gitlabUser.username,
-        gitlab_user_id: gitlabUser.id,
-        scopes: 'api read_user',
-        refresh_token: refreshToken, // Critical for GitLab - tokens expire in 2 hours!
+        bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
+        bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
+        scopes: 'repository account',
+        refresh_token: refreshToken, // Critical for Bitbucket - tokens expire in 1 hour!
         expires_at: expiresAt,
         auth_source: 'direct', // Mark as direct OAuth - we can refresh this!
         created_at: new Date().toISOString(),
@@ -135,21 +135,20 @@ export async function GET(request: NextRequest) {
       });
 
     if (insertError) {
-      console.error('Failed to store GitLab token:', insertError);
+      console.error('Failed to store Bitbucket token:', insertError);
       return NextResponse.redirect(`${domain}${returnTo}?error=token_storage_failed`);
     }
 
     if (!refreshToken) {
-      console.warn('Warning: No refresh token received from GitLab. Token will expire in 2 hours.');
+      console.warn('Warning: No refresh token received from Bitbucket. Token will expire in 1 hour.');
     }
 
-    // Redirect back to the return path with success
-    const separator = returnTo.includes('?') ? '&' : '?';
-    return NextResponse.redirect(`${domain}${returnTo}${separator}gitlab_connected=true`);
+    // Redirect back to the page where the user initiated the connection
+    return NextResponse.redirect(`${domain}${returnTo}?bitbucket_connected=true`);
 
   } catch (error) {
-    console.error("[GitLab Callback] Error:", error);
-    const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
-    return NextResponse.redirect(`${domain}/dashboard/settings?error=unknown`);
+    console.error("[Bitbucket Callback] Error:", error);
+    const returnTo = '/dashboard/settings'; // Default fallback
+    return NextResponse.redirect(`${domain}${returnTo}?error=unknown`);
   }
 }
