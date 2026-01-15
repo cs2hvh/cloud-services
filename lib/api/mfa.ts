@@ -1,3 +1,5 @@
+import api from "@/lib/axios/axios";
+
 /**
  * Client-side API wrapper for MFA operations
  * This provides a cleaner abstraction over the MFA API endpoints
@@ -45,17 +47,13 @@ export interface APIError {
  * Enroll a new TOTP factor
  */
 export async function enrollMFA(): Promise<MFAEnrollResponse> {
-  const response = await fetch("/api/auth/mfa/enroll", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-
-  if (!response.ok) {
-    const error: APIError = await response.json();
-    throw new Error(error.error || "Failed to enroll MFA");
+  try {
+    const response = await api.post("/auth/mfa/enroll");
+    return response.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to enroll MFA";
+    throw new Error(message);
   }
-
-  return response.json();
 }
 
 /**
@@ -65,66 +63,49 @@ export async function verifyMFA(
   factorId: string,
   code: string
 ): Promise<MFAVerifyResponse> {
-  const response = await fetch("/api/auth/mfa/verify", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ factorId, code }),
-  });
-
-  if (!response.ok) {
-    const error: APIError = await response.json();
-    throw new Error(error.error || "Failed to verify MFA");
+  try {
+    const response = await api.post("/auth/mfa/verify", { factorId, code });
+    return response.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to verify MFA";
+    throw new Error(message);
   }
-
-  return response.json();
 }
 
 /**
  * Unenroll/disable a TOTP factor
  */
 export async function unenrollMFA(factorId?: string): Promise<MFAUnenrollResponse> {
-  const response = await fetch("/api/auth/mfa/unenroll", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ factorId }),
-  });
-
-  if (!response.ok) {
-    const error: APIError = await response.json();
-    throw new Error(error.error || "Failed to unenroll MFA");
+  try {
+    const response = await api.post("/auth/mfa/unenroll", { factorId });
+    return response.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to unenroll MFA";
+    throw new Error(message);
   }
-
-  return response.json();
 }
 
 /**
  * Get current MFA status
  */
 export async function getMFAStatus(): Promise<MFAStatusResponse> {
-  const response = await fetch("/api/auth/mfa/status", {
-    method: "GET",
-  });
-
-  if (!response.ok) {
-    const error: APIError = await response.json();
-    throw new Error(error.error || "Failed to get MFA status");
+  try {
+    const response = await api.get("/auth/mfa/status");
+    return response.data;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to get MFA status";
+    throw new Error(message);
   }
-
-  return response.json();
 }
 
 /**
  * Update 2FA enabled status in user profile
  */
 export async function update2FAStatus(enabled: boolean): Promise<void> {
-  const response = await fetch("/api/profile/twofa", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ two_factor_enabled: enabled }),
-  });
-
-  if (!response.ok) {
-    const error: APIError = await response.json();
-    throw new Error(error.error || "Failed to update 2FA status");
+  try {
+    await api.put("/profile/twofa", { two_factor_enabled: enabled });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to update 2FA status";
+    throw new Error(message);
   }
 }
