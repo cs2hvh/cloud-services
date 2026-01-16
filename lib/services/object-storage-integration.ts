@@ -135,7 +135,7 @@ export class ObjectStorageIntegrationService {
         url.hostname = url.hostname.substring(bucketName.length + 1);
       }
       return url.toString();
-    } catch (e) {
+    } catch {
       // Invalid URL, return as-is
       return endpoint;
     }
