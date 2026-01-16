@@ -103,9 +103,16 @@ export async function middleware(request: NextRequest) {
   const isPublicApi = request.nextUrl.pathname.startsWith('/api/auth/providers') ||
                       request.nextUrl.pathname.startsWith('/api/auth/link');
   
+  // Git provider OAuth routes - these handle direct OAuth flows for infinite token refresh
+  const pathname = request.nextUrl.pathname;
+  const isGitProviderOAuth = 
+    pathname.startsWith('/api/gitlab/app-auth') ||
+    pathname.startsWith('/api/gitlab/callback') ||
+    pathname.startsWith('/api/bitbucket/app-auth') ||
+    pathname.startsWith('/api/bitbucket/callback');
+  
   // Git provider APIs - these are called from the app deployment wizard (new.tsx)
   // using fetch() without the x-client-secret header
-  const pathname = request.nextUrl.pathname;
   const isGitProviderApi = 
     pathname.startsWith('/api/github/repositories') ||
     pathname.startsWith('/api/github/branches') ||
@@ -120,8 +127,8 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/services/');
    
 
-  // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, or git provider APIs
-  if (isApiRoute && !isAuthCallback && !isWebhook && !isPublicApi && !isGitProviderApi) {
+  // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, OAuth flows, or git provider APIs
+  if (isApiRoute && !isAuthCallback && !isWebhook && !isPublicApi && !isGitProviderOAuth && !isGitProviderApi) {
     if (
       request?.headers?.get("x-client-secret") !==
       process.env.NEXT_PUBLIC_CLIENT_SECRET

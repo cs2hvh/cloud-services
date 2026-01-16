@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { LinkedDatabaseCard } from './linked-database-card';
 import { LinkDatabaseModal } from './link-database-modal-v2';
+import { UnlinkConfirmationModal } from './unlink-confirmation-modal';
 import { createClient } from '@/lib/supabase/client';
 import type { 
   LinkedDatabase, 
@@ -43,7 +44,9 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
   const [loadingPlans, setLoadingPlans] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+  const [unlinkTarget, setUnlinkTarget] = useState<LinkedDatabase | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Get current user ID
@@ -276,13 +279,35 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
     }
   };
 
-  // Handle unlink database
+  // Open unlink confirmation modal
   const handleUnlink = async (databaseId: string): Promise<void> => {
-    if (!confirm('Are you sure you want to unlink this database? Environment variables will be removed.')) {
-      return;
+    const db = linkedDatabases.find(d => d.database_cluster_id === databaseId);
+    if (db) {
+      setUnlinkTarget(db);
+      setUnlinkModalOpen(true);
     }
+  };
 
-    setUnlinkingId(databaseId);
+  // Handle modal close
+  const handleUnlinkModalClose = (open: boolean) => {
+    setUnlinkModalOpen(open);
+    if (!open) {
+      setUnlinkTarget(null);
+    }
+  };
+
+  // Confirm and execute unlink
+  const confirmUnlink = async (): Promise<void> => {
+    if (!unlinkTarget) return;
+
+    const targetId = unlinkTarget.database_cluster_id;
+    
+    // Close modal immediately
+    setUnlinkModalOpen(false);
+    setUnlinkTarget(null);
+    
+    // Execute unlink in background
+    setUnlinkingId(targetId);
 
     try {
       const res = await fetch('/api/services/platform-apps/integrations/unlink', {
@@ -290,7 +315,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           app_id: appId,
-          database_id: databaseId,
+          database_id: targetId,
         }),
       });
 
@@ -402,6 +427,17 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
         onLink={handleLink}
         onCreateDatabase={handleCreateDatabase}
         onSuccess={fetchLinkedDatabases}
+      />
+
+      {/* Unlink Confirmation Modal */}
+      <UnlinkConfirmationModal
+        open={unlinkModalOpen}
+        onOpenChange={handleUnlinkModalClose}
+        onConfirm={confirmUnlink}
+        isUnlinking={unlinkingId === unlinkTarget?.database_cluster_id}
+        resourceType="database"
+        resourceName={unlinkTarget?.database_name || ''}
+        injectedVars={unlinkTarget?.injected_env_keys || []}
       />
     </>
   );

@@ -6,9 +6,8 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { GitLabWebhookHandler } from '@/lib/webhooks/gitlab';
-import { Platform_Apps, Platform_App_Webhooks } from '@/lib/supabase/queries';
-import { JenkinsService } from '@/lib/services/jenkins';
-import { BuildPollingService } from '@/lib/services/build-polling';
+import { Platform_App_Webhooks } from '@/lib/supabase/queries';
+import { AutoDeployService } from '@/lib/services/auto-deploy';
 import { KubernetesInfoService } from '@/lib/services/kubernetes-info';
 import type { WebhookResult } from '@/lib/webhooks/types';
 
@@ -158,46 +157,39 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       });
     }
 
-    // 11. Trigger Jenkins build
+    // 11. Trigger deployment via AutoDeployService (handles token refresh)
     console.log(`[GitLab Webhook] Triggering deployment for ${app.name}...`);
 
-    let buildNumber: number;
-    try {
-      buildNumber = await JenkinsService.triggerBuild(app.name);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[GitLab Webhook] Failed to trigger build:', errorMessage);
+    const deployResult = await AutoDeployService.deploy({
+      appId: app.id,
+      appName: app.name,
+      userId: app.user_id,
+      gitProvider: 'gitlab',
+      repositoryUrl: app.repository_url,
+      branch: payload.branch,
+      framework: app.framework,
+      size: app.size || 'small',
+      commitSha: payload.commit.sha,
+      deliveryId: deliveryId || undefined,
+    });
 
-      await Platform_App_Webhooks.record_trigger(app.webhook_id, errorMessage);
+    if (!deployResult.success) {
+      console.error('[GitLab Webhook] Failed to trigger build:', deployResult.error);
+
+      await Platform_App_Webhooks.record_trigger(app.webhook_id, deployResult.error);
 
       return NextResponse.json(
         {
           success: false,
           action: 'error',
-          message: `Failed to trigger build: ${errorMessage}`,
+          message: `Failed to trigger build: ${deployResult.error}`,
           app_name: app.name,
         },
         { status: 500 }
       );
     }
 
-    // 12. Update app status
-    await Platform_Apps.update(app.id, {
-      status: 'building',
-      last_deploy_trigger: 'webhook',
-      last_deploy_commit: payload.commit.sha,
-    });
-
-    // Start background polling so we can log the NEW Kubernetes image after rollout.
-    // This runs async and does not slow down the webhook response.
-    BuildPollingService.startPolling({
-      appId: app.id,
-      appName: app.name,
-      buildNumber,
-      trigger: 'webhook',
-    }).catch(() => undefined);
-
-    // 13. Record successful trigger
+    // 12. Record successful trigger
     await Platform_App_Webhooks.record_trigger(app.webhook_id);
 
     const duration = Date.now() - startTime;
@@ -205,7 +197,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       `[GitLab Webhook] Deployment triggered for ${app.name} (${duration}ms)`
     );
     console.log(
-      `[GitLab Webhook] Build #${buildNumber} - Commit: ${payload.commit.sha.substring(
+      `[GitLab Webhook] Build #${deployResult.buildNumber} - Commit: ${payload.commit.sha.substring(
         0,
         7
       )}`
@@ -218,7 +210,7 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       app_name: app.name,
       branch: payload.branch,
       commit_sha: payload.commit.sha,
-      build_number: buildNumber,
+      build_number: deployResult.buildNumber,
     });
   } catch (error: unknown) {
     console.error('[GitLab Webhook] Unexpected error:', error);

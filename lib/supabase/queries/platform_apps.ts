@@ -170,6 +170,17 @@ export const Platform_Apps = {
   // Environment variables
   set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
     try {
+      // ✅ Validate: Check for duplicate keys in the input array
+      const keys = env_vars.map(ev => ev.key);
+      const uniqueKeys = new Set(keys);
+      if (keys.length !== uniqueKeys.size) {
+        const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
+        return { 
+          success: false, 
+          error: `Duplicate environment variable keys: ${[...new Set(duplicates)].join(', ')}` 
+        };
+      }
+
       const supabase = await createServiceClient();
       
       // Delete existing env vars for this app

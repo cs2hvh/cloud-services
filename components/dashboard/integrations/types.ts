@@ -157,3 +157,60 @@ export const DATABASE_VERSIONS: Record<DatabaseEngineType, string[]> = {
   mysql: ['8'],
   mongodb: ['7', '6'],
 };
+
+// ============================================
+// OBJECT STORAGE INTEGRATION TYPES
+// ============================================
+
+export interface LinkedBucket {
+  integration_id: string;
+  bucket_id: string;
+  bucket_name: string;
+  region: string;
+  status: IntegrationStatus;
+  env_prefix: string;
+  injected_vars: string[];
+  linked_at: string;
+}
+
+export interface AvailableBucket {
+  id: string;
+  name: string;
+  region: string;
+  status: string;
+  created_at?: string;
+  object_count?: number;
+  size?: number;
+}
+
+export interface LinkStorageRequest {
+  app_id: string;
+  bucket_id: string;
+  force?: boolean;
+  env_configs?: EnvVarConfig[];  // Updated to support custom env configs
+  env_prefix?: string;
+  includeAwsVars?: boolean;  // Include AWS_* vars (default false to avoid conflicts)
+}
+
+export interface LinkStorageResponse {
+  success: boolean;
+  integration_id?: string;
+  injected_vars?: string[];
+  redeploy_triggered?: boolean;
+  conflicts?: string[];
+  error?: string;
+  code?: string;
+}
+
+export interface UnlinkStorageRequest {
+  app_id: string;
+  bucket_id: string;
+}
+
+export interface UnlinkStorageResponse {
+  success: boolean;
+  removed_vars?: string[];
+  redeploy_triggered?: boolean;
+  error?: string;
+  code?: string;
+}

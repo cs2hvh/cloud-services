@@ -130,7 +130,10 @@ function ProviderRow({
       <button
         type="button"
         disabled={loading}
-        onClick={() => btnAction(item.provider as OAuthProvider)}
+        onClick={() => {
+          console.log('[ProviderRow] Button clicked:', { provider: item.provider, isLinked, btnText });
+          btnAction(item.provider as OAuthProvider);
+        }}
         className={twMerge(
           "px-3 py-2 rounded-lg text-sm font-medium border",
           "focus:outline-none focus:ring-2 focus:ring-offset-2",
@@ -147,38 +150,91 @@ function ProviderRow({
 }
 
 const Accounts = () => {
-  // local state for optimistic UI & per-provider loading
-  const [loading, setLoading] = useState(false);
-  const [providers, setProviders] = useState([
-    { provider: "google" as OAuthProvider, status: false },
-  ]);
-  // const [items, setItems] = useState<ProviderItem[]>(providers);
-  const [hitprovider, sethitprovider] = useState(false);
+  // Per-provider loading state for better UX
+  const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
+  const [providers, setProviders] = useState<ProviderItem[]>([]);
 
-  const handleProviders = async () => {
-    const response = await api.get("/auth/providers");
-    if (response.status === 200) {
-      setProviders(response.data.providers);
+  const fetchProviders = async () => {
+    try {
+      console.log('[Accounts] Fetching providers from API...');
+      const response = await api.get("/auth/providers");
+      console.log('[Accounts] API Response status:', response.status);
+      if (response.status === 200) {
+        console.log('[Accounts] Providers received:', response.data.providers);
+        setProviders(response.data.providers);
+        
+        // Log each provider status
+        response.data.providers.forEach((p: ProviderItem) => {
+          console.log(`[Accounts] Provider ${p.provider}: ${p.status ? 'CONNECTED' : 'NOT CONNECTED'}`);
+        });
+      }
+    } catch (error) {
+      console.error('[Accounts] Failed to fetch providers:', error);
     }
   };
 
   const { connectProvider: performConnection } = useProviderConnection();
 
-  const handleConnect = async (provider: OAuthProvider, method: string) => {
-    setLoading(true);
+  const handleConnect = async (provider: OAuthProvider) => {
+    console.log('[Accounts] handleConnect called:', { provider, method: 'connect' });
+    setLoadingProvider(provider);
     try {
-      const result = await performConnection(provider, method as 'connect' | 'disconnect');
-      if (result.success && method === 'disconnect') {
-        sethitprovider(!hitprovider);
+      const result = await performConnection(provider, 'connect');
+      console.log('[Accounts] performConnection result:', result);
+      // Connect will redirect, so no need to refetch
+    } catch (error) {
+      console.error('[Accounts] Connect failed:', error);
+      setLoadingProvider(null);
+    }
+  };
+
+  const handleDisconnect = async (provider: OAuthProvider) => {
+    console.log('[Accounts] handleDisconnect called:', { provider, method: 'disconnect' });
+    setLoadingProvider(provider);
+    try {
+      const result = await performConnection(provider, 'disconnect');
+      console.log('[Accounts] performConnection result:', result);
+      
+      if (result.success) {
+        console.log('[Accounts] Disconnect successful, updating UI for:', provider);
+        // Optimistically update UI
+        setProviders(prev => prev.map(p => 
+          p.provider === provider ? { ...p, status: false } : p
+        ));
+        console.log('[Accounts] Optimistic update complete');
+        
+        // Refetch to confirm
+        console.log('[Accounts] Refetching providers from API...');
+        await fetchProviders();
       }
+    } catch (error) {
+      console.error('[Accounts] Disconnect failed:', error);
     } finally {
-      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
   useEffect(() => {
-    handleProviders();
-  }, [hitprovider]);
+    console.log('[Accounts] Component mounted, checking URL params...');
+    const params = new URLSearchParams(window.location.search);
+    console.log('[Accounts] URL params:', window.location.search);
+    
+    fetchProviders();
+    
+    // Check if we just returned from OAuth and refetch
+    if (params.get('gitlab_connected') === 'true' || params.get('bitbucket_connected') === 'true') {
+      console.log('[Accounts] ✅ OAuth success detected! Refetching providers in 500ms...');
+      // Remove the query parameter from URL
+      window.history.replaceState({}, '', window.location.pathname);
+      // Force a refetch after a brief delay to ensure token is stored
+      setTimeout(() => {
+        console.log('[Accounts] Now refetching after OAuth success...');
+        fetchProviders();
+      }, 500);
+    } else {
+      console.log('[Accounts] No OAuth success param found');
+    }
+  }, []);
 
   return (
     // Updated class to remove max-width constraint to match dashboard spacing
@@ -208,12 +264,12 @@ const Accounts = () => {
       >
         {providers?.map((item, index) => (
           <ProviderRow
-            key={index}
+            key={item.provider}
             index={index}
             item={item}
-            loading={loading}
-            onConnect={() => handleConnect(item?.provider, "connect")}
-            onDisconnect={() => handleConnect(item?.provider, "disconnect")}
+            loading={loadingProvider === item.provider}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
           />
         ))}
       </motion.div>

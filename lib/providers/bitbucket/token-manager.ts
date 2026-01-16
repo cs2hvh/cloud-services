@@ -92,7 +92,7 @@ export class BitbucketTokenManager {
       // Get stored token from database
       const { data: tokenData, error } = await supabase
         .from('bitbucket_tokens')
-        .select('access_token, refresh_token, expires_at')
+        .select('access_token, refresh_token, expires_at, auth_source')
         .eq('user_id', userId)
         .single();
 
@@ -119,6 +119,16 @@ export class BitbucketTokenManager {
 
       // Token has expired or will expire soon or failed validation - try to refresh
       console.log('[Bitbucket Token Manager] Token expired/expiring, attempting refresh for user:', userId);
+      console.log('[Bitbucket Token Manager] Token auth_source:', tokenData.auth_source || 'unknown (legacy)');
+
+      // Check if this token came from Supabase Auth - we cannot refresh it with our credentials
+      if (tokenData.auth_source === 'supabase') {
+        console.log('[Bitbucket Token Manager] Token from Supabase Auth - cannot refresh with app credentials');
+        console.log('[Bitbucket Token Manager] User should refresh their Supabase session or re-connect Bitbucket');
+        // Delete the expired token - user needs to re-authenticate
+        await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
+        return null;
+      }
 
       if (!tokenData.refresh_token) {
         console.log('[Bitbucket Token Manager] No refresh token available, user needs to re-authenticate');

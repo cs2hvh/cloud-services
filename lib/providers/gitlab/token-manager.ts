@@ -43,7 +43,8 @@ export class GitLabTokenManager {
       }
 
       // GitLab requires redirect_uri to match the original authorization request
-      const redirectUri = `${process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL}/api/auth/callback`;
+      // IMPORTANT: Must match the redirect_uri used in /api/gitlab/callback/route.ts
+      const redirectUri = `${process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL}/api/gitlab/callback`;
 
       const response = await fetch('https://gitlab.com/oauth/token', {
         method: 'POST',
@@ -97,7 +98,7 @@ export class GitLabTokenManager {
       // Get stored token from database
       const { data: tokenData, error } = await supabase
         .from('gitlab_tokens')
-        .select('access_token, refresh_token, expires_at')
+        .select('access_token, refresh_token, expires_at, auth_source')
         .eq('user_id', userId)
         .single();
 
@@ -124,6 +125,16 @@ export class GitLabTokenManager {
 
       // Token has expired or will expire soon or failed validation - try to refresh
       console.log('[GitLab Token Manager] Token expired/expiring, attempting refresh for user:', userId);
+      console.log('[GitLab Token Manager] Token auth_source:', tokenData.auth_source || 'unknown (legacy)');
+
+      // Check if this token came from Supabase Auth - we cannot refresh it with our credentials
+      if (tokenData.auth_source === 'supabase') {
+        console.log('[GitLab Token Manager] Token from Supabase Auth - cannot refresh with app credentials');
+        console.log('[GitLab Token Manager] User should refresh their Supabase session or re-connect GitLab');
+        // Delete the expired token - user needs to re-authenticate
+        await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
+        return null;
+      }
 
       if (!tokenData.refresh_token) {
         console.log('[GitLab Token Manager] No refresh token available, user needs to re-authenticate');

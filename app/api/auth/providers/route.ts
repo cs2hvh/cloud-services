@@ -40,34 +40,45 @@ export async function GET(request: Request) {
   // These are different from Supabase identity providers
   const tokenChecks = await Promise.all([
     // Check github_tokens table
-    supabase.from('github_tokens').select('id').eq('user_id', user.id).maybeSingle(),
-    // Check gitlab_tokens table (if exists)
-    supabase.from('gitlab_tokens').select('id').eq('user_id', user.id).maybeSingle(),
-    // Check bitbucket_tokens table (if exists)
-    supabase.from('bitbucket_tokens').select('id').eq('user_id', user.id).maybeSingle(),
+    supabase.from('github_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
+    // Check gitlab_tokens table
+    supabase.from('gitlab_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
+    // Check bitbucket_tokens table
+    supabase.from('bitbucket_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
   ]);
 
   const hasGitHubToken = tokenChecks[0]?.data !== null;
   const hasGitLabToken = tokenChecks[1]?.data !== null;
   const hasBitbucketToken = tokenChecks[2]?.data !== null;
 
+
   // Build the array of { provider, status }
   // Status is true if:
-  // 1. Provider is linked via Supabase identity (for auth providers like google, email)
-  // 2. OR user has an OAuth token stored (for git providers like github, gitlab, bitbucket)
+  // 1. For GitLab/Bitbucket: ONLY check token tables (direct OAuth for API access)
+  // 2. For GitHub: Check both identity and token (backwards compatibility)
+  // 3. For other providers (google, email): Only check Supabase identities
   const providers = allProviders.map((provider) => {
-    let status = linkedProviders.includes(provider);
+    // For GitLab and Bitbucket, ONLY check token tables (direct OAuth for API access)
+    // We don't want to show them as "connected" if they were used for sign-in but no longer have API tokens
+    if (provider === 'gitlab') {
+      return { provider, status: hasGitLabToken };
+    }
+    if (provider === 'bitbucket') {
+      return { provider, status: hasBitbucketToken };
+    }
     
-    // Also check our OAuth tokens table for git providers
-    if (provider === 'github' && hasGitHubToken) status = true;
-    if (provider === 'gitlab' && hasGitLabToken) status = true;
-    if (provider === 'bitbucket' && hasBitbucketToken) status = true;
+    // For GitHub, check both identity and token (backwards compatibility)
+    if (provider === 'github') {
+      return { provider, status: linkedProviders.includes(provider) || hasGitHubToken };
+    }
     
+    // For other providers (google, email), only check Supabase identities
     return {
       provider,
-      status,
+      status: linkedProviders.includes(provider),
     };
   });
+  
 
   return NextResponse.json({
     user_id: user.id,

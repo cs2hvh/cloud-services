@@ -1,13 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * GitLab App OAuth flow for repository access
- * This provides a direct OAuth flow when the session token is not available
+ * Bitbucket App OAuth flow for repository access
+ * This provides a direct OAuth flow for infinite token refresh
  * 
- * GitLab OAuth Notes:
- * - Tokens expire after 2 hours (7200 seconds)
+ * Bitbucket OAuth Notes:
+ * - Tokens expire after 1-2 hours
  * - Refresh tokens must be stored and used to get new access tokens
- * - Required scopes: api (full access) or read_api (read-only)
+ * - Required scopes: repository, account
  */
 export async function POST(request: Request) {
   try {
@@ -27,60 +27,59 @@ export async function POST(request: Request) {
     const { method, returnTo } = await request.json().catch(() => ({ method: 'connect', returnTo: '/dashboard/settings' }));
     if (method === 'disconnect') {
       const { error: deleteError } = await supabase
-        .from('gitlab_tokens')
+        .from('bitbucket_tokens')
         .delete()
         .eq('user_id', user.id);
       
       if (deleteError) {
         return Response.json(
-          { message: "Failed to disconnect GitLab" },
+          { message: "Failed to disconnect Bitbucket" },
           { status: 500 }
         );
       }
       
-      return Response.json({ success: true, message: "GitLab disconnected" }, { status: 200 });
+      return Response.json({ success: true, message: "Bitbucket disconnected" }, { status: 200 });
     }
 
-    // GitLab App OAuth flow for repository access
-    const clientId = process.env.GITLAB_CLIENT_ID;
+    // Bitbucket App OAuth flow for repository access
+    const clientId = process.env.BITBUCKET_CLIENT_ID;
     const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
-    const redirectUri = `${domain}/api/gitlab/callback`;
+    const redirectUri = `${domain}/api/bitbucket/callback`;
     
     if (!clientId) {
       return Response.json(
-        { message: "GitLab OAuth not configured" },
+        { message: "Bitbucket OAuth not configured" },
         { status: 500 }
       );
     }
     
     // Scopes needed for private repository access
-    // - api: Complete read/write access to the API
-    // - read_user: Read user profile
-    const scopes = 'api read_user';
+    // - repository: Read access to repositories
+    // - account: Read user info
+    const scopes = 'repository account';
     
-    // Generate state parameter for CSRF protection and return path
-    // Format: userId-timestamp-returnPath (base64 encoded)
+    // Generate state parameter for CSRF protection + returnTo path
     const returnPath = returnTo || '/dashboard/settings';
     const stateData = `${user.id}|${Date.now()}|${returnPath}`;
     const state = Buffer.from(stateData).toString('base64');
     
-    // Build GitLab authorization URL
-    const gitlabAuthUrl = `https://gitlab.com/oauth/authorize?` +
+    // Build Bitbucket authorization URL
+    const bitbucketAuthUrl = `https://bitbucket.org/site/oauth2/authorize?` +
       `client_id=${clientId}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `response_type=code&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `state=${state}`;
 
     return Response.json({ 
-      url: gitlabAuthUrl,
+      url: bitbucketAuthUrl,
       state: state 
     }, { status: 200 });
 
   } catch (error) {
-    console.error("[GitLab App Auth] Error:", error);
+    console.error("[Bitbucket App Auth] Error:", error);
     return Response.json(
-      { message: "Failed to generate GitLab authorization URL" },
+      { message: "Failed to generate Bitbucket authorization URL" },
       { status: 500 }
     );
   }

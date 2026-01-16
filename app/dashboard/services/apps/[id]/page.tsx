@@ -46,7 +46,7 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
-import { AppIntegrationsSection } from '@/components/dashboard/integrations';
+import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
@@ -781,6 +781,11 @@ export default function AppDetailPage() {
               appId={app.id} 
               appName={app.name} 
               projectId={app.project_id || ''} 
+            />
+            <StorageIntegrationsSection
+              appId={app.id}
+              appName={app.name}
+              projectId={app.project_id || ''}
             />
           </TabsContent>
 
