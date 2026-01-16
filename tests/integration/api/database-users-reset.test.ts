@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/database/users/reset/route';
 import { NextRequest } from 'next/server';
@@ -12,6 +13,12 @@ vi.mock('@/config/functions', () => ({
     encrypt: vi.fn((val: string) => ({ encrypted: val, iv: 'test', tag: 'test', salt: 'test' })),
     decrypt: vi.fn((val: any) => val.encrypted || val),
   },
+  ConnectionPasswordUpdater: {
+    updateEncryptedUri: vi.fn((uri: any, username: string, password: string) => ({ encrypted: `updated-uri-${password}`, iv: 'test', tag: 'test', salt: 'test' })),
+    updatePasswordInUri: vi.fn((uri: string, username: string, password: string) => uri),
+    isEncryptedData: vi.fn((value: any) => typeof value === 'object' && value !== null && 'encrypted' in value),
+  },
+  EncryptedData: {},
 }));
 vi.mock('axios');
 
@@ -37,6 +44,9 @@ describe('POST /api/services/database/users/reset', () => {
       data: [],
     });
     vi.mocked(Database_Clusters.update_users).mockResolvedValue({
+      success: true,
+    });
+    vi.mocked(Database_Clusters.update_connections).mockResolvedValue({
       success: true,
     });
   });

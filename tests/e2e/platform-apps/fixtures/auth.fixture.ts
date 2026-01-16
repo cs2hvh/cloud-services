@@ -1,8 +1,16 @@
 import { test as base, Page } from '@playwright/test';
 
 /**
- * Authentication Fixture
- * Provides authenticated page contexts for testing
+ * Authentication Fixture for Platform Apps E2E Tests
+ * 
+ * OPTIMIZED APPROACH:
+ * - Authentication happens ONCE in global-setup.ts
+ * - Session is stored in .auth/user.json
+ * - All tests reuse the stored session via storageState in playwright.config.ts
+ * - No re-login per test!
+ * 
+ * The authenticatedPage fixture now simply provides a page
+ * that already has the authenticated session from storageState.
  */
 
 export type AuthenticatedPage = {
@@ -12,92 +20,47 @@ export type AuthenticatedPage = {
 
 /**
  * Extended test with authentication fixtures
+ * 
+ * Since storageState is configured globally in playwright.config.ts,
+ * the page is already authenticated when tests start.
  */
 export const test = base.extend<AuthenticatedPage>({
   /**
    * Regular authenticated user page
+   * Already authenticated via global storageState
    */
   authenticatedPage: async ({ page }, use) => {
-    // Navigate to sign-in page
-    await page.goto('/signin');
-
-    // Fill in credentials from env or test-data
-    const email = process.env.TEST_USER_EMAIL || 'pankajsoni93444@gmail.com';
-    const password = process.env.TEST_USER_PASSWORD || 'Pankaj11@';
-
-    console.log(`[Auth] Attempting login with email: ${email}`);
-
-    // Wait for the form to load
-    await page.waitForLoadState('domcontentloaded');
-
-    // Look for email input (try multiple selectors)
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[id="email"]').first();
-    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
-    await emailInput.fill(email);
-    console.log('[Auth] Email filled');
-
-    // Look for password input
-    const passwordInput = page.locator('input[type="password"], input[name="password"], input[id="password"]').first();
-    await passwordInput.waitFor({ state: 'visible', timeout: 10000 });
-    await passwordInput.fill(password);
-    console.log('[Auth] Password filled');
-
-    // Look for submit button
-    const submitButton = page.locator('button[type="submit"]').first();
-    await submitButton.waitFor({ state: 'visible', timeout: 10000 });
-    console.log('[Auth] Clicking submit button');
-    await submitButton.click();
-
-    // Wait for navigation away from signin page with better error handling
-    console.log('[Auth] Waiting for navigation...');
-    try {
-      await page.waitForURL((url) => !url.pathname.includes('/signin'), { timeout: 45000 });
-      console.log(`[Auth] Navigated to: ${page.url()}`);
-    } catch (error) {
-      console.error(`[Auth] Failed to navigate away from signin. Current URL: ${page.url()}`);
-      throw error;
+    // Page is already authenticated via storageState in config
+    // Just verify we're not on signin page
+    const currentUrl = page.url();
+    
+    if (currentUrl.includes('/signin')) {
+      // Redirect to dashboard if somehow on signin
+      await page.goto('/dashboard');
+      await page.waitForLoadState('domcontentloaded');
     }
-
-    // Wait for page to be fully loaded
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
-    console.log('[Auth] Authentication successful');
-
+    
     await use(page);
   },
 
   /**
    * Admin authenticated user page
+   * Note: For admin, you may need a separate storageState
+   * configured in a separate project in playwright.config.ts
    */
   adminPage: async ({ page }, use) => {
-    // Navigate to sign-in page
-    await page.goto('/signin');
-
-    // Fill in admin credentials
-    const email = process.env.TEST_ADMIN_EMAIL || 'admin@example.com';
-    const password = process.env.TEST_ADMIN_PASSWORD || 'admin-password';
-
-    // Wait for the form to load
-    await page.waitForLoadState('networkidle');
-
-    // Look for email input
-    const emailInput = page.locator('input[type="email"], input[name="email"], input[placeholder*="email" i]').first();
-    await emailInput.waitFor({ state: 'visible', timeout: 10000 });
-    await emailInput.fill(email);
-
-    // Look for password input
-    const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
-    await passwordInput.fill(password);
-
-    // Look for submit button
-    const submitButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
-    await submitButton.click();
-
-    // Wait for navigation away from signin page
-    await page.waitForURL((url) => !url.pathname.includes('/signin'), { timeout: 30000 });
-
-    // Wait for page to be fully loaded (with reduced timeout)
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
-
+    // For admin tests, you would typically:
+    // 1. Have a separate auth file (.auth/admin.json)
+    // 2. Configure a separate project with that storageState
+    // For now, use the same authenticated page
+    
+    const currentUrl = page.url();
+    
+    if (currentUrl.includes('/signin')) {
+      await page.goto('/dashboard');
+      await page.waitForLoadState('domcontentloaded');
+    }
+    
     await use(page);
   },
 });

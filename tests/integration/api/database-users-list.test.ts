@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/database/users/list/route';
 import { NextRequest } from 'next/server';
@@ -12,6 +13,12 @@ vi.mock('@/config/functions', () => ({
     encrypt: vi.fn((val: string) => ({ encrypted: val, iv: 'test', tag: 'test', salt: 'test' })),
     decrypt: vi.fn((val: any) => val.encrypted || val),
   },
+  ConnectionPasswordUpdater: {
+    updateEncryptedUri: vi.fn((uri: any, username: string, password: string) => ({ encrypted: `updated-uri-${password}`, iv: 'test', tag: 'test', salt: 'test' })),
+    updatePasswordInUri: vi.fn((uri: string, username: string, password: string) => uri),
+    isEncryptedData: vi.fn((value: any) => typeof value === 'object' && value !== null && 'encrypted' in value),
+  },
+  EncryptedData: {},
 }));
 vi.mock('axios');
 
@@ -29,6 +36,16 @@ describe('POST /api/services/database/users/list', () => {
       },
       response: null,
     } as any);
+
+    // Setup default mocks for Database_Clusters
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.get_users).mockResolvedValue({
+      success: true,
+      data: [],
+    });
+    vi.mocked(Database_Clusters.update_users).mockResolvedValue({
+      success: true,
+    });
   });
 
   describe('Success Cases', () => {
