@@ -176,7 +176,8 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
   const handleLink = async (
     bucketId: string, 
     envConfigs: EnvVarConfig[],
-    force: boolean
+    force: boolean,
+    includeAwsVars: boolean = false
   ): Promise<LinkStorageResponse> => {
     try {
       const res = await fetch('/api/services/platform-apps/integrations/storage/link', {
@@ -187,6 +188,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
           bucket_id: bucketId,
           env_configs: envConfigs,
           force,
+          includeAwsVars,
         }),
       });
 

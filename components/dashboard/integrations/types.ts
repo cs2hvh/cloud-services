@@ -162,6 +162,7 @@ export interface LinkStorageRequest {
   force?: boolean;
   env_configs?: EnvVarConfig[];  // Updated to support custom env configs
   env_prefix?: string;
+  includeAwsVars?: boolean;  // Include AWS_* vars (default false to avoid conflicts)
 }
 
 export interface LinkStorageResponse {

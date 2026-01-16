@@ -40,7 +40,7 @@ interface LinkStorageModalProps {
   projectId: string;
   buckets: AvailableBucket[];
   loadingBuckets: boolean;
-  onLink: (bucketId: string, envConfigs: EnvVarConfig[], force: boolean) => Promise<LinkStorageResponse>;
+  onLink: (bucketId: string, envConfigs: EnvVarConfig[], force: boolean, includeAwsVars: boolean) => Promise<LinkStorageResponse>;
   onCreateBucket?: (data: CreateBucketData) => Promise<CreateBucketResponse>;
   onSuccess: () => void;
 }
@@ -70,14 +70,16 @@ const BUCKET_NAME_RULES = {
 };
 
 // Generate default env configs for Object Storage
+// By default, AWS_* vars are NOT included to prevent conflicts when linking multiple buckets
 function generateDefaultStorageEnvConfigs(
   bucketName: string,
   region: string,
-  prefix: string = 'S3'
+  prefix: string = 'S3',
+  includeAwsVars: boolean = false
 ): EnvVarConfig[] {
   const configs: EnvVarConfig[] = [];
 
-  // S3-compatible env vars with custom prefix
+  // S3-compatible env vars with custom prefix (always included)
   configs.push({
     originalKey: `${prefix}_BUCKET`,
     customKey: `${prefix}_BUCKET`,
@@ -120,34 +122,35 @@ function generateDefaultStorageEnvConfigs(
     description: 'Secret access key',
   });
 
-  // AWS SDK compatible names (only if prefix is not AWS)
-  if (prefix !== 'AWS') {
+  // AWS SDK compatible names - ONLY if explicitly requested
+  // This prevents conflicts when linking multiple buckets to the same app
+  if (includeAwsVars && prefix !== 'AWS') {
     configs.push({
       originalKey: 'AWS_ACCESS_KEY_ID',
       customKey: 'AWS_ACCESS_KEY_ID',
       value: '••••••••••••••••••••••••',
-      description: 'AWS SDK access key',
+      description: 'AWS SDK access key (optional)',
     });
 
     configs.push({
       originalKey: 'AWS_SECRET_ACCESS_KEY',
       customKey: 'AWS_SECRET_ACCESS_KEY',
       value: '••••••••••••••••••••••••••••••••••••••••••••',
-      description: 'AWS SDK secret key',
+      description: 'AWS SDK secret key (optional)',
     });
 
     configs.push({
       originalKey: 'AWS_REGION',
       customKey: 'AWS_REGION',
       value: region,
-      description: 'AWS SDK region',
+      description: 'AWS SDK region (optional)',
     });
 
     configs.push({
       originalKey: 'AWS_ENDPOINT_URL',
       customKey: 'AWS_ENDPOINT_URL',
       value: '••••••••••••••••••••••••',
-      description: 'AWS SDK endpoint',
+      description: 'AWS SDK endpoint (optional)',
     });
   }
 
@@ -213,6 +216,7 @@ export function LinkStorageModal({
   const [envConfigs, setEnvConfigs] = useState<EnvVarConfig[]>([]);
   const [force, setForce] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>([]);
+  const [includeAwsVars, setIncludeAwsVars] = useState(false);  // Optional AWS_* vars
   
   // Loading/success states
   const [isCreating, setIsCreating] = useState(false);
@@ -244,6 +248,7 @@ export function LinkStorageModal({
     setEnvConfigs([]);
     setForce(false);
     setConflicts([]);
+    setIncludeAwsVars(false);
     setIsCreating(false);
     setIsLinking(false);
     setError(null);
@@ -369,11 +374,12 @@ export function LinkStorageModal({
         
       case 'select-existing':
         if (selectedBucket) {
-          // Generate env configs for existing bucket
+          // Generate env configs for existing bucket (includeAwsVars based on state)
           const configs = generateDefaultStorageEnvConfigs(
             selectedBucket.name,
             selectedBucket.region,
-            'S3'
+            'S3',
+            includeAwsVars
           );
           setEnvConfigs(configs);
           setStep('configure-env');
@@ -445,11 +451,12 @@ export function LinkStorageModal({
 
       if (response.success && response.bucket_id) {
         setCreatedBucketId(response.bucket_id);
-        // Generate env configs for new bucket
+        // Generate env configs for new bucket (includeAwsVars based on state)
         const configs = generateDefaultStorageEnvConfigs(
           newBucketName,
           newBucketRegion,
-          'S3'
+          'S3',
+          includeAwsVars
         );
         setEnvConfigs(configs);
         setStep('configure-env');
@@ -472,7 +479,7 @@ export function LinkStorageModal({
     setError(null);
 
     try {
-      const response = await onLink(bucketId, envConfigs, forceLink || force);
+      const response = await onLink(bucketId, envConfigs, forceLink || force, includeAwsVars);
 
       if (response.success) {
         setResult(response);
@@ -890,6 +897,32 @@ export function LinkStorageModal({
                     {selectedBucket?.region || newBucketRegion}
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* AWS SDK Variables Toggle */}
+            <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-white/70">Include AWS SDK Variables</Label>
+                  <p className="text-xs text-white/40 mt-1">
+                    Add AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, etc.
+                    <br />
+                    <span className="text-amber-400/70">⚠️ Only enable for single bucket apps to avoid conflicts</span>
+                  </p>
+                </div>
+                <Switch
+                  checked={includeAwsVars}
+                  onCheckedChange={(checked) => {
+                    setIncludeAwsVars(checked);
+                    // Regenerate env configs with new setting
+                    const bucketName = selectedBucket?.name || newBucketName;
+                    const bucketRegion = selectedBucket?.region || newBucketRegion;
+                    const configs = generateDefaultStorageEnvConfigs(bucketName, bucketRegion, 'S3', checked);
+                    setEnvConfigs(configs);
+                  }}
+                  disabled={isLinking}
+                />
               </div>
             </div>
 

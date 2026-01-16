@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
       force?: boolean;
       env_prefix?: string;
       env_configs?: Array<{ originalKey: string; customKey: string; value?: string }>;
+      includeAwsVars?: boolean;
     };
 
     try {
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { app_id, bucket_id, force, env_prefix, env_configs } = body;
+    const { app_id, bucket_id, force, env_prefix, env_configs, includeAwsVars } = body;
 
     // Validate required fields
     if (!app_id) {
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
       force: force === true,
       env_configs,
       env_prefix: env_prefix || "S3",
+      includeAwsVars: includeAwsVars === true,
     });
 
     // Handle specific error codes

@@ -36,6 +36,7 @@ export interface StorageLinkRequest {
   force?: boolean;      // Overwrite existing env vars
   env_configs?: Array<{ originalKey: string; customKey: string; value?: string }>;  // Custom env configs
   env_prefix?: string;  // Fallback to prefix mode (for backward compatibility)
+  includeAwsVars?: boolean;  // Include AWS_* vars (default false to avoid conflicts with multiple buckets)
 }
 
 export interface StorageLinkResult {
@@ -119,38 +120,66 @@ export class ObjectStorageIntegrationService {
   }
 
   /**
+   * Extract base endpoint from bucket-specific endpoint
+   * Converts https://bucket-name.region.provider.com to https://region.provider.com
+   * This ensures S3 SDKs can correctly construct virtual-hosted URLs
+   */
+  private static extractBaseEndpoint(endpoint: string, bucketName: string): string {
+    if (!endpoint || !bucketName) return endpoint;
+    
+    try {
+      const url = new URL(endpoint);
+      // Check if hostname starts with bucket name (bucket-specific endpoint)
+      if (url.hostname.startsWith(`${bucketName}.`)) {
+        // Strip bucket name to get base endpoint
+        url.hostname = url.hostname.substring(bucketName.length + 1);
+      }
+      return url.toString();
+    } catch (e) {
+      // Invalid URL, return as-is
+      return endpoint;
+    }
+  }
+
+  /**
    * Generate environment variables from bucket info
    * 
    * @param bucket - The object storage bucket
    * @param prefix - Environment variable prefix (default: S3)
+   * @param includeAwsVars - Whether to include AWS_* variables (default: false to avoid conflicts with multiple buckets)
    * @returns Generated environment variables and their keys
    */
   static generateEnvVars(
     bucket: ObjectSpaceBucket,
-    prefix: string = "S3"
+    prefix: string = "S3",
+    includeAwsVars: boolean = false
   ): GeneratedEnvVars {
     const vars: Array<{ key: string; value: string }> = [];
     
     // Decrypt credentials
-    const endpoint = this.decryptJsonField(bucket.endpoint);
+    const fullEndpoint = this.decryptJsonField(bucket.endpoint);
     const accessKeyId = this.decryptJsonField(bucket.key_id);
     const secretAccessKey = this.decryptJsonField(bucket.secret_key);
     
-    // S3-compatible env vars with custom prefix
+    // Extract base endpoint for S3 SDK compatibility
+    // This ensures virtual-hosted style URLs work correctly
+    const baseEndpoint = this.extractBaseEndpoint(fullEndpoint, bucket.name);
+    
+    // S3-compatible env vars with custom prefix (always included)
     vars.push({ key: `${prefix}_BUCKET`, value: bucket.name });
     vars.push({ key: `${prefix}_BUCKET_NAME`, value: bucket.name });
-    vars.push({ key: `${prefix}_ENDPOINT`, value: endpoint });
+    vars.push({ key: `${prefix}_ENDPOINT`, value: baseEndpoint });
     vars.push({ key: `${prefix}_REGION`, value: bucket.region });
     vars.push({ key: `${prefix}_ACCESS_KEY_ID`, value: accessKeyId });
     vars.push({ key: `${prefix}_SECRET_ACCESS_KEY`, value: secretAccessKey });
     
-    // AWS SDK compatible names (many libraries expect these)
-    // Only add if prefix is not already AWS
-    if (prefix !== "AWS") {
+    // AWS SDK compatible names - ONLY add if explicitly requested
+    // This prevents conflicts when linking multiple buckets to the same app
+    if (includeAwsVars && prefix !== "AWS") {
       vars.push({ key: `AWS_ACCESS_KEY_ID`, value: accessKeyId });
       vars.push({ key: `AWS_SECRET_ACCESS_KEY`, value: secretAccessKey });
       vars.push({ key: `AWS_REGION`, value: bucket.region });
-      vars.push({ key: `AWS_ENDPOINT_URL`, value: endpoint });
+      vars.push({ key: `AWS_ENDPOINT_URL`, value: baseEndpoint });
     }
 
     return {
@@ -166,7 +195,7 @@ export class ObjectStorageIntegrationService {
    * It performs validation, creates env vars, and triggers redeploy.
    */
   static async link(request: StorageLinkRequest): Promise<StorageLinkResult> {
-    const { app_id, bucket_id, user_id, force = false, env_configs, env_prefix = "S3" } = request;
+    const { app_id, bucket_id, user_id, force = false, env_configs, env_prefix = "S3", includeAwsVars = false } = request;
     
     console.log(`[ObjectStorageIntegrationService] Linking bucket ${bucket_id} to app ${app_id}`);
 
@@ -239,8 +268,9 @@ export class ObjectStorageIntegrationService {
       let generated: GeneratedEnvVars;
       
       if (env_configs && env_configs.length > 0) {
-        // Use custom env configurations
-        const standardVars = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix);
+        // Use custom env configurations from frontend
+        // Frontend generates a full list with includeAwsVars already applied
+        const standardVars = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix, includeAwsVars);
         const customVars: Array<{ key: string; value: string }> = [];
         const customKeys: string[] = [];
 
@@ -261,8 +291,8 @@ export class ObjectStorageIntegrationService {
           keys: customKeys,
         };
       } else {
-        // Fallback to prefix-based generation
-        generated = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix);
+        // Fallback to prefix-based generation (includeAwsVars controlled by request)
+        generated = this.generateEnvVars(bucket as ObjectSpaceBucket, env_prefix, includeAwsVars);
       }
 
       // ========================================
