@@ -5,6 +5,7 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateStaticSiteDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createViteReactPipeline(
   name: string,
@@ -204,6 +205,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when { expression { return !params.RESIZE_ONLY } }
       steps {
@@ -288,6 +291,8 @@ SECRET_EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Deploy to Kubernetes') {
       steps {

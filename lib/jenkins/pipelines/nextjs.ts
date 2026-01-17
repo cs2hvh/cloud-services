@@ -1,5 +1,6 @@
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateNextjsDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createNextJsPipeline(
   name: string,
@@ -136,6 +137,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when {
         expression { return !params.RESIZE_ONLY }
@@ -184,6 +187,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {

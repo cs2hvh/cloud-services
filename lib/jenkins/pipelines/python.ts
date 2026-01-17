@@ -10,6 +10,7 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generatePythonDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createPythonPipeline(
   name: string,
@@ -178,6 +179,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'python' })}
+
     stage('Prepare Dockerfile') {
       when {
         expression { return !params.RESIZE_ONLY }
@@ -242,6 +245,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'python' })}
 
     stage('Create Environment Secret') {
       when {

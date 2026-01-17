@@ -11,6 +11,7 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateSveltekitDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createSvelteKitPipeline(
   name: string,
@@ -210,6 +211,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when { expression { return !params.RESIZE_ONLY } }
       steps {
@@ -270,6 +273,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {

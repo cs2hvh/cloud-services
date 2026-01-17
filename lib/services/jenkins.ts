@@ -407,7 +407,8 @@ export class JenkinsService {
     envVars: Array<{ key: string; value: string }> = []
   ): string {
     const fw = framework?.toLowerCase();
-    const webhookBaseUrl = process.env.NEXT_PUBLIC_WEBHOOK_URL || process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
+    // Priority: WEBHOOK_BASE_URL (ngrok) > DOMAIN > NEXT_PUBLIC_WEBHOOK_URL (localhost for dev)
+    const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || process.env.NEXT_PUBLIC_WEBHOOK_URL || '';
 
     switch (fw) {
       case 'simple-test':
