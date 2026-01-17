@@ -2900,6 +2900,7 @@ export const Platform_Apps = {
       
       // Insert new env vars
       if (env_vars.length > 0) {
+        //encrypt env values here  and store encrypted values in db.
         const { error } = await supabase
           .from("platform_app_env_vars")
           .insert(env_vars.map(ev => ({ app_id, key: ev.key, value: ev.value })));
@@ -2920,6 +2921,7 @@ export const Platform_Apps = {
         .from("platform_app_env_vars")
         .select("*")
         .eq("app_id", app_id);
+        //decrypt env values here before returning to caller.
       if (error) {
         console.error(`[Platform_Apps] Error getting env vars: ${error.message}`);
         return [];

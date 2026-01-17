@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 /**
  * GET /api/jenkins/build-info?app=myapp&build=1
@@ -56,6 +57,14 @@ export async function GET(req: NextRequest) {
         ...buildInfo,
       });
     }
+
+
+    const auth = await authenticateUser();
+if (!auth.authenticated) {
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
+// Verify the requesting user owns an app with this name
 
     const buildNum = parseInt(buildNumber, 10);
     if (isNaN(buildNum)) {

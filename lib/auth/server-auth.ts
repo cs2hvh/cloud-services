@@ -75,7 +75,7 @@ export async function authenticateUserFromHeader(req: NextRequest) {
     }
 
     // Create a Supabase client with the provided token
-    console.log("reached here with token:", token);
+   // console.log("reached here with token:", token);
     const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
