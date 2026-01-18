@@ -37,7 +37,6 @@ interface LinkDatabaseModalProps {
 export function LinkDatabaseModal({
   open,
   onOpenChange,
-  appId,
   appName,
   databases,
   loadingDatabases = false,

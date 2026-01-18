@@ -10,7 +10,6 @@ import {
   Key,
   ChevronDown,
   ChevronUp,
-  RefreshCw
 } from 'lucide-react';
 import { IntegrationBadge } from './integration-badge';
 import type { LinkedDatabase } from './types';
@@ -31,7 +30,7 @@ export function LinkedDatabaseCard({
 }: LinkedDatabaseCardProps) {
   const [showEnvVars, setShowEnvVars] = useState(false);
 
-  const getEngineIcon = (engine?: string) => {
+  const getEngineIcon = () => {
     // Could add specific icons per engine type
     return <Database className="w-5 h-5 text-blue-400" />;
   };
@@ -60,7 +59,7 @@ export function LinkedDatabaseCard({
           {/* Database Info */}
           <div className="flex items-start gap-3 flex-1">
             <div className="p-2 rounded-lg bg-blue-500/10">
-              {getEngineIcon(database.engine)}
+              {getEngineIcon()}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">

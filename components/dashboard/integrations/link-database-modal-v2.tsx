@@ -31,8 +31,6 @@ import type {
   CreateDatabaseData,
   EnvVarConfig,
   DatabasePlan,
-  DATABASE_ENGINES,
-  DatabaseEngineType,
 } from './types';
 
 interface LinkDatabaseModalProps {
@@ -136,7 +134,6 @@ function generateDefaultEnvConfigs(
 export function LinkDatabaseModal({
   open,
   onOpenChange,
-  appId,
   appName,
   projectId,
   databases,
@@ -158,7 +155,7 @@ export function LinkDatabaseModal({
   // Create database form
   const [createData, setCreateData] = useState<CreateDatabaseData | null>(null);
   const [createdDatabaseId, setCreatedDatabaseId] = useState<string | null>(null);
-  const [createdEngine, setCreatedEngine] = useState<string>('');
+  const [ ,setCreatedEngine] = useState<string>('');
   
   // Env configuration
   const [envConfigs, setEnvConfigs] = useState<EnvVarConfig[]>([]);
@@ -173,7 +170,7 @@ export function LinkDatabaseModal({
   
   // Database status tracking for newly created databases
   const [databaseStatus, setDatabaseStatus] = useState<string>('creating');
-  const [isPollingStatus, setIsPollingStatus] = useState(false);
+  const [, setIsPollingStatus] = useState(false);
 
   // Filter databases by search
   const filteredDatabases = databases.filter(db => 

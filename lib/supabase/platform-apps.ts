@@ -33,14 +33,14 @@ export const Platform_Apps = {
   /**
    * Count apps by owner
    */
-  async count_by_owner(userId: string): Promise<number> {
+  async count_by_owner(): Promise<number> {
     return 0;
   },
 
   /**
    * Check if app name exists for user
    */
-  async check_name_exists(userId: string, name: string): Promise<boolean> {
+  async check_name_exists(): Promise<boolean> {
     return false;
   },
 
@@ -106,14 +106,14 @@ export const Platform_Apps = {
   /**
    * List apps by owner
    */
-  async list_by_owner(userId: string): Promise<PlatformApp[]> {
+  async list_by_owner(): Promise<PlatformApp[]> {
     return [];
   },
 
   /**
    * Delete platform app
    */
-  async delete(appId: string): Promise<QueryResult<void>> {
+  async delete(): Promise<QueryResult<void>> {
     return {
       success: true,
     };
@@ -122,7 +122,7 @@ export const Platform_Apps = {
   /**
    * Set environment variables
    */
-  async set_env_vars(appId: string, envVars: EnvVar[]): Promise<QueryResult<void>> {
+  async set_env_vars(): Promise<QueryResult<void>> {
     return {
       success: true,
     };
@@ -131,7 +131,7 @@ export const Platform_Apps = {
   /**
    * Get environment variables
    */
-  async get_env_vars(appId: string): Promise<EnvVar[]> {
+  async get_env_vars(): Promise<EnvVar[]> {
     return [];
   },
 };

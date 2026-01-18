@@ -10,7 +10,7 @@ export interface AppCreateFormProps {
 /**
  * AppCreateForm - Multi-step deployment wizard (stub)
  */
-export function AppCreateForm({ onSuccess, onCancel }: AppCreateFormProps) {
+export function AppCreateForm({ onSuccess }: AppCreateFormProps) {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     provider: '',

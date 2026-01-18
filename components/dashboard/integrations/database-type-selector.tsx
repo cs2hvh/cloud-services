@@ -1,6 +1,6 @@
 'use client';
 
-import { Database } from 'lucide-react';
+// import { Database } from 'lucide-react';
 import { DATABASE_ENGINES, type DatabaseEngineType } from './types';
 
 interface DatabaseTypeSelectorProps {

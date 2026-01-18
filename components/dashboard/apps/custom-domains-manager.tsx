@@ -9,7 +9,7 @@ export interface CustomDomainsManagerProps {
 /**
  * CustomDomainsManager - Manage custom domains (stub)
  */
-export function CustomDomainsManager({ appId }: CustomDomainsManagerProps) {
+export function CustomDomainsManager({}: CustomDomainsManagerProps) {
   const [domains] = React.useState([
     { id: '1', domain: 'example.com', status: 'active', is_primary: true },
   ]);

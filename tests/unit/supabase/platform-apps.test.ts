@@ -13,19 +13,19 @@ describe('Platform_Apps Queries', () => {
 
   describe('count_by_owner', () => {
     it('TC-PA-U050: should return count of user apps', async () => {
-      const count = await Platform_Apps.count_by_owner('user-123');
+      const count = await Platform_Apps.count_by_owner();
       expect(count).toBeGreaterThanOrEqual(0);
     });
   });
 
   describe('check_name_exists', () => {
     it('TC-PA-U051: should check if app name exists', async () => {
-      const exists = await Platform_Apps.check_name_exists('user-123', 'my-app');
+      const exists = await Platform_Apps.check_name_exists();
       expect(typeof exists).toBe('boolean');
     });
 
     it('TC-PA-U052: should return false for new app name', async () => {
-      const exists = await Platform_Apps.check_name_exists('user-123', 'new-app');
+      const exists = await Platform_Apps.check_name_exists();
       expect(exists).toBe(false);
     });
   });
@@ -69,30 +69,28 @@ describe('Platform_Apps Queries', () => {
 
   describe('list_by_owner', () => {
     it('TC-PA-U057: should list user apps', async () => {
-      const apps = await Platform_Apps.list_by_owner('user-123');
+      const apps = await Platform_Apps.list_by_owner();
       expect(Array.isArray(apps)).toBe(true);
     });
   });
 
   describe('delete', () => {
     it('TC-PA-U058: should delete app', async () => {
-      const result = await Platform_Apps.delete('app-123');
+      const result = await Platform_Apps.delete();
       expect(result.success).toBe(true);
     });
   });
 
   describe('set_env_vars', () => {
     it('TC-PA-U059: should set environment variables', async () => {
-      const result = await Platform_Apps.set_env_vars('app-123', [
-        { key: 'API_KEY', value: 'secret' },
-      ]);
+      const result = await Platform_Apps.set_env_vars();
       expect(result.success).toBe(true);
     });
   });
 
   describe('get_env_vars', () => {
     it('TC-PA-U060: should get environment variables', async () => {
-      const envVars = await Platform_Apps.get_env_vars('app-123');
+      const envVars = await Platform_Apps.get_env_vars();
       expect(Array.isArray(envVars)).toBe(true);
     });
   });

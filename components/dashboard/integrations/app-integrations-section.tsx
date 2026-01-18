@@ -164,7 +164,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       fetchAvailableDatabases(linkedDatabases);
       fetchDatabasePlans();
     }
-  }, [linkModalOpen, userId]);
+  }, []);
 
   // Handle link database with custom env configs
   const handleLink = async (

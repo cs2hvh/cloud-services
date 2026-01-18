@@ -167,10 +167,10 @@ export class DatabaseIntegrationService {
     // Decrypt sensitive fields
     const host = this.decryptIfNeeded(connection.host);
     let password = this.decryptIfNeeded(connection.password);
-    const user = this.decryptIfNeeded(connection.user);
-    const database = this.decryptIfNeeded(connection.database);
+    // const user = this.decryptIfNeeded(connection.user);
+    // const database = this.decryptIfNeeded(connection.database);
     const uri = this.decryptIfNeeded(connection.uri);
-    const port = typeof connection.port === 'number' ? connection.port : parseInt(String(connection.port), 10) || 5432;
+    // const port = typeof connection.port === 'number' ? connection.port : parseInt(String(connection.port), 10) || 5432;
     
     // For MongoDB and other databases: If password is empty but URI exists,
     // try to extract password from URI (DigitalOcean may only provide credentials in URI)
