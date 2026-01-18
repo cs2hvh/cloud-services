@@ -1,4 +1,4 @@
-// import { Encryption } from "@/config/functions";
+import { Encryption } from "@/config/functions";
 // import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
@@ -33,6 +33,38 @@ type  Clusters = Tables<"clusters">;
 type  ClustersGet = Tables<"clusters_get">;
 type Database = Tables<"database_clusters">;
 type Activity = Tables<"activities">;
+
+// ============================================
+// Encryption Helper Functions for Platform App Environment Variables
+// ============================================
+
+// Get encryption key from environment
+const getEncryptionKey = (): string => {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error("ENCRYPTION_KEY environment variable is not configured");
+  }
+  return key;
+};
+
+// Encrypt environment variable value
+const encryptEnvValue = (value: string): string => {
+  const key = getEncryptionKey();
+  const encrypted = Encryption.encrypt(value, key);
+  return JSON.stringify(encrypted);
+};
+
+// Decrypt environment variable value
+const decryptEnvValue = (encryptedValue: string): string => {
+  try {
+    const key = getEncryptionKey();
+    const encryptedData: EncryptedData = JSON.parse(encryptedValue);
+    return Encryption.decrypt(encryptedData, key);
+  } catch {
+    // If decryption fails, return the original value (for backwards compatibility with unencrypted data)
+    return encryptedValue;
+  }
+};
 
 
 export const Users = {
@@ -2890,6 +2922,17 @@ export const Platform_Apps = {
   // Environment variables
   set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
     try {
+      // Validate: Check for duplicate keys in the input array
+      const keys = env_vars.map(ev => ev.key);
+      const uniqueKeys = new Set(keys);
+      if (keys.length !== uniqueKeys.size) {
+        const duplicates = keys.filter((key, index) => keys.indexOf(key) !== index);
+        return { 
+          success: false, 
+          error: `Duplicate environment variable keys: ${[...new Set(duplicates)].join(', ')}` 
+        };
+      }
+
       const supabase = await createServiceClient();
       
       // Delete existing env vars for this app
@@ -2898,12 +2941,17 @@ export const Platform_Apps = {
         .delete()
         .eq("app_id", app_id);
       
-      // Insert new env vars
+      // Insert new env vars with encrypted values
       if (env_vars.length > 0) {
-        //encrypt env values here  and store encrypted values in db.
+        const encryptedEnvVars = env_vars.map(ev => ({
+          app_id,
+          key: ev.key,
+          value: encryptEnvValue(ev.value), // Encrypt the value before storing
+        }));
+        
         const { error } = await supabase
           .from("platform_app_env_vars")
-          .insert(env_vars.map(ev => ({ app_id, key: ev.key, value: ev.value })));
+          .insert(encryptedEnvVars);
         
         if (error) return { success: false, error: error.message };
       }
@@ -2921,12 +2969,18 @@ export const Platform_Apps = {
         .from("platform_app_env_vars")
         .select("*")
         .eq("app_id", app_id);
-        //decrypt env values here before returning to caller.
       if (error) {
         console.error(`[Platform_Apps] Error getting env vars: ${error.message}`);
         return [];
       }
-      return data || [];
+      
+      // Decrypt values before returning
+      const decryptedData = (data || []).map(ev => ({
+        ...ev,
+        value: decryptEnvValue(ev.value), // Decrypt the value
+      }));
+      
+      return decryptedData;
     } catch (err) {
       console.error(`[Platform_Apps] Error getting env vars: ${err}`);
       return [];

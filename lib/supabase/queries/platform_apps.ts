@@ -4,6 +4,35 @@
  */
 import { createServiceClient } from "../server";
 import { PlatformApp } from "@/lib/supabase/types";
+import { Encryption, EncryptedData } from "@/config/functions";
+
+// Get encryption key from environment
+const getEncryptionKey = (): string => {
+  const key = process.env.ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error("ENCRYPTION_KEY environment variable is not configured");
+  }
+  return key;
+};
+
+// Encrypt environment variable value
+const encryptEnvValue = (value: string): string => {
+  const key = getEncryptionKey();
+  const encrypted = Encryption.encrypt(value, key);
+  return JSON.stringify(encrypted);
+};
+
+// Decrypt environment variable value
+const decryptEnvValue = (encryptedValue: string): string => {
+  try {
+    const key = getEncryptionKey();
+    const encryptedData: EncryptedData = JSON.parse(encryptedValue);
+    return Encryption.decrypt(encryptedData, key);
+  } catch {
+    // If decryption fails, return the original value (for backwards compatibility with unencrypted data)
+    return encryptedValue;
+  }
+};
 
 // ============================================
 // Platform Apps Queries
@@ -189,11 +218,17 @@ export const Platform_Apps = {
         .delete()
         .eq("app_id", app_id);
       
-      // Insert new env vars
+      // Insert new env vars with encrypted values
       if (env_vars.length > 0) {
+        const encryptedEnvVars = env_vars.map(ev => ({
+          app_id,
+          key: ev.key,
+          value: encryptEnvValue(ev.value), // Encrypt the value before storing
+        }));
+        
         const { error } = await supabase
           .from("platform_app_env_vars")
-          .insert(env_vars.map(ev => ({ app_id, key: ev.key, value: ev.value })));
+          .insert(encryptedEnvVars);
         
         if (error) return { success: false, error: error.message };
       }
@@ -215,7 +250,14 @@ export const Platform_Apps = {
         console.error(`[Platform_Apps] Error getting env vars: ${error.message}`);
         return [];
       }
-      return data || [];
+      
+      // Decrypt values before returning
+      const decryptedData = (data || []).map(ev => ({
+        ...ev,
+        value: decryptEnvValue(ev.value), // Decrypt the value
+      }));
+      
+      return decryptedData;
     } catch (err) {
       console.error(`[Platform_Apps] Error getting env vars: ${err}`);
       return [];

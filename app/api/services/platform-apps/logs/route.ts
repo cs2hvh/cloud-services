@@ -1,3 +1,5 @@
+//used for test-cases api-mocks-fixture.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -69,12 +71,57 @@ export async function GET(req: NextRequest) {
     let nextStart = 0;
     let build = buildNumber ? parseInt(buildNumber) : null;
 
+    // Validate build number is a positive integer if provided
+    if (buildNumber !== null && buildNumber !== undefined) {
+      const parsedBuild = parseInt(buildNumber);
+      if (isNaN(parsedBuild) || parsedBuild < 1 || parsedBuild > 10000) {
+        return NextResponse.json(
+          { error: "Invalid build number. Must be a positive integer between 1 and 10000." },
+          { status: 400 }
+        );
+      }
+      build = parsedBuild;
+    }
+
     try {
+      // Get job info to validate build number belongs to this app
+      const jobInfo = await jenkins.job.get(jobName).catch(() => null);
+      
+      // If job doesn't exist yet, return appropriate message
+      if (!jobInfo) {
+        return NextResponse.json({
+          app_id: appId,
+          app_name: app.name,
+          build_number: null,
+          logs: "Jenkins job is being created. Build logs will appear shortly...",
+          has_more: false,
+          next_start: 0,
+          pending: true,
+        });
+      }
+
       // If no build number specified, get the latest build
       if (!build) {
-        const jobInfo = await jenkins.job.get(jobName);
-        if (jobInfo && jobInfo.lastBuild) {
+        if (jobInfo.lastBuild) {
           build = jobInfo.lastBuild.number;
+        }
+      } else {
+        // Validate that the requested build number exists and is within valid range for this job
+        const maxBuildNumber = jobInfo.lastBuild?.number || 0;
+        const firstBuildNumber = jobInfo.firstBuild?.number || 1;
+        
+        if (build > maxBuildNumber) {
+          return NextResponse.json(
+            { error: `Build #${build} does not exist. Latest build is #${maxBuildNumber}.` },
+            { status: 404 }
+          );
+        }
+        
+        if (build < firstBuildNumber) {
+          return NextResponse.json(
+            { error: `Build #${build} is no longer available. Earliest available build is #${firstBuildNumber}.` },
+            { status: 404 }
+          );
         }
       }
 

@@ -1,7 +1,7 @@
 /**
  * Deployment Service - Orchestrates app deployment
  */
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
