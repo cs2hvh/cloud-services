@@ -2,9 +2,11 @@
  * Express.js Pipeline - Express, Node.js Backend
  * Auto-creates Dockerfile, builds with Kaniko
  * Uses Kubernetes Secrets for environment variables (secure)
+ * Includes security scanning: secrets, dependencies, dockerfile, image
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateNodejsDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createExpressPipeline(
   name: string,
@@ -201,6 +203,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when {
         expression { return !params.RESIZE_ONLY }
@@ -275,6 +279,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {

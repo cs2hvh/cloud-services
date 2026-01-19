@@ -6,10 +6,10 @@
  * DEPLOYMENT CONTRACT:
  * 1. Build stage
  * 2. Create Environment Secret stage
- * 3. Deploy to Kubernetes stage
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateAngularDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createAngularPipeline(
   name: string,
@@ -214,6 +214,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when {
         expression { return !params.RESIZE_ONLY }
@@ -278,6 +280,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {

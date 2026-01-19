@@ -1,9 +1,11 @@
 /**
  * Node.js Pipeline - Plain Node.js Applications
  * Auto-creates Dockerfile, builds with Kaniko
+ * Includes security scanning: secrets, dependencies, dockerfile, image
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
 import { generateNodejsDockerfileStage } from '../dockerfiles';
+import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createNodeJsPipeline(
   name: string,
@@ -201,6 +203,8 @@ pipeline {
       }
     }
 
+${generateSecurityStages({ language: 'node' })}
+
     stage('Prepare Dockerfile') {
       when {
         expression { return !params.RESIZE_ONLY }
@@ -275,6 +279,8 @@ EOF
         }
       }
     }
+
+${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
