@@ -263,6 +263,7 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
 
 /**
  * Generate Dockerfile for Angular (handles browser subfolder)
+ * Uses runtime detection inside Dockerfile (more reliable!)
  */
 export function getAngularDockerfile(): string {
   return `
@@ -271,7 +272,11 @@ FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN if [ -f package-lock.json ]; then \
+      npm ci --legacy-peer-deps || (echo "⚠️  WARNING: npm ci failed, falling back to npm install (lockfile may be outdated)" && npm install --legacy-peer-deps); \\
+    else \
+      npm install --legacy-peer-deps; \
+    fi
 
 COPY . .
 RUN npm run build
@@ -286,15 +291,35 @@ RUN mkdir -p /app/dist
 COPY --from=builder /app/dist/ /app/temp-dist/
 
 # Angular 17+ outputs to dist/<project>/browser, older to dist/<project>
-# Use explicit first-directory detection to avoid glob ambiguity
-RUN PROJECT_DIR=$(ls -d /app/temp-dist/*/ 2>/dev/null | head -1 | xargs -I{} basename {} 2>/dev/null || echo "") && \\
-    if [ -n "$PROJECT_DIR" ] && [ -d "/app/temp-dist/$PROJECT_DIR/browser" ]; then \\
-      cp -r /app/temp-dist/$PROJECT_DIR/browser/* /app/dist/; \\
-    elif [ -n "$PROJECT_DIR" ] && [ -d "/app/temp-dist/$PROJECT_DIR" ]; then \\
-      cp -r /app/temp-dist/$PROJECT_DIR/* /app/dist/; \\
+# Some projects output directly to dist/ root
+RUN echo "=== Debugging dist structure ===" && \\
+    ls -la /app/temp-dist/ && \\
+    echo "=== Detecting build output location ===" && \\
+    if [ -f /app/temp-dist/index.html ]; then \\
+      echo "Build output in root - copying from /app/temp-dist/ (Angular 14-16 dist root)..." && \\
+      cp -r /app/temp-dist/* /app/dist/; \\
     else \\
-      cp -r /app/temp-dist/* /app/dist/ 2>/dev/null || true; \\
-    fi && rm -rf /app/temp-dist
+      PROJECT_DIR=$(ls -d /app/temp-dist/*/ 2>/dev/null | grep -v '/assets/$' | head -1 | xargs -I{} basename {} 2>/dev/null || echo "") && \\
+      echo "Found project directory: $PROJECT_DIR" && \\
+      if [ -n "$PROJECT_DIR" ] && [ -d "/app/temp-dist/$PROJECT_DIR/browser" ]; then \\
+        echo "Copying from browser subfolder (Angular 17+)..." && \\
+        cp -r /app/temp-dist/$PROJECT_DIR/browser/* /app/dist/; \\
+      elif [ -n "$PROJECT_DIR" ] && [ -d "/app/temp-dist/$PROJECT_DIR" ] && [ -f "/app/temp-dist/$PROJECT_DIR/index.html" ]; then \\
+        echo "Copying from project folder (Angular 14-16)..." && \\
+        ls -la /app/temp-dist/$PROJECT_DIR/ && \\
+        cp -r /app/temp-dist/$PROJECT_DIR/* /app/dist/; \\
+      else \\
+        echo "WARNING: Could not detect standard Angular output, using fallback..." && \\
+        cp -r /app/temp-dist/* /app/dist/ 2>/dev/null || true; \\
+      fi; \\
+    fi && \\
+    echo "=== Final dist contents ===" && \\
+    ls -la /app/dist/ && \\
+    if [ ! -f /app/dist/index.html ]; then \\
+      echo "ERROR: index.html not found in /app/dist!" && \\
+      exit 1; \\
+    fi && \\
+    rm -rf /app/temp-dist
 
 EXPOSE 3000
 CMD ["serve", "-s", "dist", "-l", "3000"]
