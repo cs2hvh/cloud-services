@@ -1,0 +1,244 @@
+{
+  "inJenkins": {
+    "git": {
+      "name": "git",
+      "image": "alpine/git:latest",
+      "inJenkins": true,
+      "resources": {
+        "requests": {
+          "memory": "128Mi",
+          "cpu": "100m"
+        },
+        "limits": {
+          "memory": "256Mi",
+          "cpu": "500m"
+        }
+      },
+      "purpose": "Git operations, shell scripting",
+      "usedBySecurityStages": [
+        "SECRET-SCAN",
+        "DEPENDENCY-SCAN",
+        "DOCKERFILE-LINT",
+        "STATIC-ANALYSIS",
+        "K8S-VALIDATION"
+      ]
+    },
+    "kaniko": {
+      "name": "kaniko",
+      "image": "gcr.io/kaniko-project/executor:v1.24.0-debug",
+      "inJenkins": true,
+      "resources": {
+        "requests": {
+          "memory": "2Gi",
+          "cpu": "500m"
+        },
+        "limits": {
+          "memory": "3Gi",
+          "cpu": "1"
+        }
+      },
+      "purpose": "Docker image building (rootless)",
+      "usedBySecurityStages": []
+    },
+    "kubectl": {
+      "name": "kubectl",
+      "image": "alpine/k8s:1.28.0",
+      "inJenkins": true,
+      "resources": {
+        "requests": {
+          "memory": "128Mi",
+          "cpu": "100m"
+        },
+        "limits": {
+          "memory": "256Mi",
+          "cpu": "500m"
+        }
+      },
+      "purpose": "Kubernetes deployments",
+      "usedBySecurityStages": []
+    },
+    "trivy": {
+      "name": "trivy",
+      "image": "aquasec/trivy:0.48.0",
+      "inJenkins": true,
+      "resources": {
+        "requests": {
+          "memory": "512Mi",
+          "cpu": "250m"
+        },
+        "limits": {
+          "memory": "1Gi",
+          "cpu": "500m"
+        }
+      },
+      "purpose": "Container image vulnerability scanning",
+      "usedBySecurityStages": [
+        "IMAGE-SCAN"
+      ]
+    },
+    "jnlp": {
+      "name": "jnlp",
+      "image": "jenkins/inbound-agent",
+      "inJenkins": true,
+      "resources": {
+        "requests": {
+          "memory": "256Mi",
+          "cpu": "100m"
+        },
+        "limits": {
+          "memory": "512Mi",
+          "cpu": "500m"
+        }
+      },
+      "purpose": "Jenkins agent communication",
+      "usedBySecurityStages": []
+    },
+    "hadolint": {
+      "name": "hadolint",
+      "image": "hadolint/hadolint:v2.12.0-alpine",
+      "inJenkins": false,
+      "recommended": true,
+      "resources": {
+        "requests": {
+          "memory": "64Mi",
+          "cpu": "50m"
+        },
+        "limits": {
+          "memory": "128Mi",
+          "cpu": "200m"
+        }
+      },
+      "purpose": "Dockerfile security linting",
+      "usedBySecurityStages": [
+        "DOCKERFILE-LINT"
+      ],
+      "migration": {
+        "current": "Downloads hadolint v2.12.0 into git container at runtime",
+        "benefit": "Faster builds (no download), better supply-chain security, version pinning",
+        "jenkinsConfig": {
+          "containerTemplate": {
+            "name": "hadolint",
+            "image": "hadolint/hadolint:v2.12.0-alpine",
+            "command": "cat",
+            "ttyEnabled": true,
+            "workingDir": "/home/jenkins/agent"
+          },
+          "rawYaml": "    - name: hadolint\n      resources:\n        requests:\n          memory: \"64Mi\"\n          cpu: \"50m\"\n        limits:\n          memory: \"128Mi\"\n          cpu: \"200m\""
+        }
+      }
+    },
+    "gitleaks": {
+      "name": "gitleaks",
+      "image": "zricethezav/gitleaks:v8.18.0",
+      "inJenkins": false,
+      "recommended": true,
+      "resources": {
+        "requests": {
+          "memory": "128Mi",
+          "cpu": "100m"
+        },
+        "limits": {
+          "memory": "256Mi",
+          "cpu": "300m"
+        }
+      },
+      "purpose": "Secret detection in source code",
+      "usedBySecurityStages": [
+        "SECRET-SCAN"
+      ],
+      "migration": {
+        "current": "Downloads gitleaks v8.18.0 into git container at runtime",
+        "benefit": "Faster builds, better security, no checksum verification needed",
+        "jenkinsConfig": {
+          "containerTemplate": {
+            "name": "gitleaks",
+            "image": "zricethezav/gitleaks:v8.18.0",
+            "command": "cat",
+            "ttyEnabled": true,
+            "workingDir": "/home/jenkins/agent"
+          },
+          "rawYaml": "    - name: gitleaks\n      resources:\n        requests:\n          memory: \"128Mi\"\n          cpu: \"100m\"\n        limits:\n          memory: \"256Mi\"\n          cpu: \"300m\""
+        }
+      }
+    }
+  },
+  "stageMapping": {
+    "SECRET-SCAN": {
+      "primary": "git",
+      "downloads": [
+        "gitleaks"
+      ],
+      "recommended": "gitleaks",
+      "notes": "Currently downloads gitleaks at runtime. Consider dedicated container for faster builds."
+    },
+    "STATIC-ANALYSIS": {
+      "primary": "git",
+      "downloads": [
+        "bandit (Python)",
+        "eslint (if not in package.json)"
+      ],
+      "recommended": null,
+      "notes": "Uses git container with Node.js/Python tools. Works well as-is."
+    },
+    "DEPENDENCY-SCAN": {
+      "primary": "git",
+      "downloads": [
+        "pip-audit (Python)"
+      ],
+      "recommended": null,
+      "notes": "npm audit uses existing npm. pip-audit installed via pip. Works well."
+    },
+    "DOCKERFILE-LINT": {
+      "primary": "git",
+      "downloads": [
+        "hadolint"
+      ],
+      "recommended": "hadolint",
+      "notes": "Currently downloads hadolint v2.12.0. Dedicated container would be faster."
+    },
+    "IMAGE-SCAN": {
+      "primary": "trivy",
+      "downloads": [],
+      "recommended": null,
+      "notes": "Uses dedicated trivy container (1Gi memory). Working perfectly."
+    },
+    "K8S-VALIDATION": {
+      "primary": "git",
+      "downloads": [],
+      "recommended": null,
+      "notes": "Manual pattern checks in git container. No external tools needed."
+    }
+  },
+  "recommendations": [
+    {
+      "action": "ADD_TO_JENKINS",
+      "container": "hadolint",
+      "benefit": "Faster builds (no download), better supply-chain security, version pinning",
+      "jenkinsConfig": {
+        "containerTemplate": {
+          "name": "hadolint",
+          "image": "hadolint/hadolint:v2.12.0-alpine",
+          "command": "cat",
+          "ttyEnabled": true,
+          "workingDir": "/home/jenkins/agent"
+        },
+        "rawYaml": "    - name: hadolint\n      resources:\n        requests:\n          memory: \"64Mi\"\n          cpu: \"50m\"\n        limits:\n          memory: \"128Mi\"\n          cpu: \"200m\""
+      }
+    },
+    {
+      "action": "ADD_TO_JENKINS",
+      "container": "gitleaks",
+      "benefit": "Faster builds, better security, no checksum verification needed",
+      "jenkinsConfig": {
+        "containerTemplate": {
+          "name": "gitleaks",
+          "image": "zricethezav/gitleaks:v8.18.0",
+          "command": "cat",
+          "ttyEnabled": true,
+          "workingDir": "/home/jenkins/agent"
+        },
+        "rawYaml": "    - name: gitleaks\n      resources:\n        requests:\n          memory: \"128Mi\"\n          cpu: \"100m\"\n        limits:\n          memory: \"256Mi\"\n          cpu: \"300m\""
+      }
+    }
+  ]
+}
