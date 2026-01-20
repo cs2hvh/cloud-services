@@ -61,7 +61,15 @@ export function createAngularPipeline(
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
-
+  // Generate build args for Kaniko (build-time env injection - Vercel style)
+  const buildArgs = envVars.length > 0
+    ? envVars.map(e => {
+        // Escape special characters for shell
+        const escapedValue = e.value.replace(/"/g, '\\\\"').replace(/\$/g, '\\\\$');
+        return `--build-arg ${e.key}="${escapedValue}"`;
+      }).join(' \\\\\n                    ')
+    : '';
+  const buildArgsLine = buildArgs ? `\\\\\n                    ${buildArgs}` : '';
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
@@ -225,7 +233,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateAngularDockerfileStage()}
+${generateAngularDockerfileStage(envVars)}
             '''
             echo 'Dockerfile preparation completed'
           }
@@ -267,7 +275,7 @@ EOF
                     --context=\${WORKSPACE} \\
                     --dockerfile=Dockerfile \\
                     --destination=\${DOCKER_IMAGE_VERSION} \\
-                    --destination=\${DOCKER_IMAGE_LATEST} \\
+                    --destination=\${DOCKER_IMAGE_LATEST}${buildArgsLine} \\
                     --digest-file=image-digest.txt
                   
                   echo 'Image build completed successfully'

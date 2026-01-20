@@ -263,23 +263,45 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
 
 /**
  * Generate Dockerfile for Angular (handles browser subfolder)
- * Uses runtime detection inside Dockerfile (more reliable!)
+ * Supports build-time environment variable injection via sed replacement
+ * ⚠️ Build args are NOT secrets - use Kubernetes Secrets for sensitive data
+ * ⚠️ Only for static SPA builds (environment.prod.ts placeholders). Not for SSR/Nx/runtime config.
+ * Users can use __VAR_NAME__ placeholders in environment.prod.ts
  */
-export function getAngularDockerfile(): string {
+export function getAngularDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  // Generate ARG directives for build-time env vars
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => `ARG ${e.key}`).join('\\n') + '\\n'
+    : '';
+
+  // Generate sed commands to replace __KEY__ placeholders in environment files
+  const sedCommands = envVars.length > 0
+    ? envVars.map(e => `sed -i "s|__${e.key}__|$${e.key}|g" src/environments/environment.prod.ts 2>/dev/null || true`).join(' && ')
+    : '';
+
+  const envInjection = envVars.length > 0
+    ? `# Inject env vars into Angular environment files (replace __VAR__ placeholders)
+# ⚠️ Only works for static builds with environment.prod.ts - NOT for SSR/Universal
+RUN ${sedCommands}
+
+`
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
-RUN if [ -f package-lock.json ]; then \
-      npm ci --legacy-peer-deps || (echo "⚠️  WARNING: npm ci failed, falling back to npm install (lockfile may be outdated)" && npm install --legacy-peer-deps); \\
-    else \
-      npm install --legacy-peer-deps; \
+${argDirectives}COPY package*.json ./
+RUN if [ -f package-lock.json ]; then \\\\
+      npm ci --legacy-peer-deps || (echo "⚠️  WARNING: npm ci failed, falling back to npm install (lockfile may be outdated)" && npm install --legacy-peer-deps); \\\\
+    else \\\\
+      npm install --legacy-peer-deps; \\\\
     fi
 
 COPY . .
-RUN npm run build
+
+${envInjection}RUN npm run build
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -643,9 +665,9 @@ fi
 /**
  * Generate complete "Prepare Dockerfile" stage for Angular
  */
-export function generateAngularDockerfileStage(): string {
+export function generateAngularDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const detection = getNodeVersionDetectionScript(20);
-  const dockerfile = getAngularDockerfile();
+  const dockerfile = getAngularDockerfile(envVars);
   
   return `
 if [ -f Dockerfile ]; then
