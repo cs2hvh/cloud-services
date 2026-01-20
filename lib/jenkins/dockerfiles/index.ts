@@ -165,18 +165,31 @@ CMD ["npm", "start"]
 
 /**
  * Generate Dockerfile for Next.js (standard mode)
+ * Supports build-time env vars for NEXT_PUBLIC_* variables
  */
-export function getNextjsStandardDockerfile(): string {
+export function getNextjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+    : '';
+
+  // Generate ENV directives to pass ARGs to Next.js build
+  const envDirectives = envVars.length > 0
+    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+${argDirectives}COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build
+
+# Pass build args as environment variables for Next.js
+${envDirectives}RUN npm run build
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -198,18 +211,31 @@ CMD ["npm", "start"]
 
 /**
  * Generate Dockerfile for Next.js (standalone mode)
+ * Supports build-time env vars for NEXT_PUBLIC_* variables
  */
-export function getNextjsStandaloneDockerfile(): string {
+export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+    : '';
+
+  // Generate ENV directives to pass ARGs to Next.js build
+  const envDirectives = envVars.length > 0
+    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+${argDirectives}COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build
+
+# Pass build args as environment variables for Next.js
+${envDirectives}RUN npm run build
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -375,18 +401,31 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
 
 /**
  * Generate Dockerfile for Nuxt.js (Nitro server)
+ * Supports build-time env vars for NUXT_PUBLIC_* and VITE_* variables
  */
-export function getNuxtjsDockerfile(): string {
+export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  // Generate ARG directives for client-side env vars
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+    : '';
+
+  // Generate ENV directives to pass ARGs to Nuxt build
+  const envDirectives = envVars.length > 0
+    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+${argDirectives}COPY package*.json ./
 RUN npm install
 
 COPY . .
-RUN npm run build
+
+# Pass build args as environment variables for Nuxt
+${envDirectives}RUN npm run build
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -410,18 +449,31 @@ CMD ["node", ".output/server/index.mjs"]
 
 /**
  * Generate Dockerfile for SvelteKit (adapter-node)
+ * Supports build-time env vars for PUBLIC_* variables
  */
-export function getSveltekitDockerfile(): string {
+export function getSveltekitDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  // Generate ARG directives for client-side env vars (PUBLIC_*)
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+    : '';
+
+  // Generate ENV directives to pass ARGs to SvelteKit build
+  const envDirectives = envVars.length > 0
+    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+${argDirectives}COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY . .
-RUN npm run build
+
+# Pass build args as environment variables for SvelteKit
+${envDirectives}RUN npm run build
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -502,11 +554,11 @@ fi
 /**
  * Generate complete "Prepare Dockerfile" stage for Next.js
  */
-export function generateNextjsDockerfileStage(): string {
+export function generateNextjsDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const nodeDetection = getNodeVersionDetectionScript(20);
   const standaloneDetection = getNextjsStandaloneDetectionScript();
-  const standardDockerfile = getNextjsStandardDockerfile();
-  const standaloneDockerfile = getNextjsStandaloneDockerfile();
+  const standardDockerfile = getNextjsDockerfile(envVars);
+  const standaloneDockerfile = getNextjsStandaloneDockerfile(envVars);
   
   return `
 if [ -f Dockerfile ]; then
@@ -720,9 +772,9 @@ fi
 /**
  * Generate complete "Prepare Dockerfile" stage for Nuxt.js
  */
-export function generateNuxtjsDockerfileStage(): string {
+export function generateNuxtjsDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const detection = getNodeVersionDetectionScript(20);
-  const dockerfile = getNuxtjsDockerfile();
+  const dockerfile = getNuxtjsDockerfile(envVars);
   
   return `
 if [ -f Dockerfile ]; then
@@ -748,9 +800,9 @@ fi
 /**
  * Generate complete "Prepare Dockerfile" stage for SvelteKit
  */
-export function generateSveltekitDockerfileStage(): string {
+export function generateSveltekitDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const detection = getNodeVersionDetectionScript(20);
-  const dockerfile = getSveltekitDockerfile();
+  const dockerfile = getSveltekitDockerfile(envVars);
   
   return `
 if [ -f Dockerfile ]; then

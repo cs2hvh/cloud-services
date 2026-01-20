@@ -59,10 +59,24 @@ export function createSvelteKitPipeline(
   // SvelteKit with adapter-node serves on port 3000 by default
   const containerPort = 3000;
 
-  // Generate Kubernetes Secret for environment variables (secure approach)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  // Split env vars: PUBLIC_* → build-time, others → runtime K8s Secrets
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
+  const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
+
+  // Generate Kubernetes Secret for SERVER-SIDE environment variables only
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, serverEnvVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+
+  // Generate build args for CLIENT-SIDE vars (PUBLIC_*)
+  // ⚠️ Build args are visible in logs - only use for public configuration!
+  const buildArgs = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => {
+        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+        return `--build-arg ${e.key}="${escapedValue}"`;
+      }).join(' \\\\\n                    ')
+    : '';
+  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -220,7 +234,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateSveltekitDockerfileStage()}
+${generateSveltekitDockerfileStage(clientEnvVars)}
             '''
             echo 'Dockerfile preparation completed'
           }
@@ -260,7 +274,7 @@ EOF
                     --context=\${WORKSPACE} \\
                     --dockerfile=Dockerfile \\
                     --destination=\${DOCKER_IMAGE_VERSION} \\
-                    --destination=\${DOCKER_IMAGE_LATEST} \\
+                    --destination=\${DOCKER_IMAGE_LATEST}${buildArgsLine} \\
                     --digest-file=image-digest.txt
                   
                   echo 'Image build completed successfully'
