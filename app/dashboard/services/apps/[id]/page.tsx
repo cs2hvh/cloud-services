@@ -50,6 +50,7 @@ import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
+import { toast } from 'sonner';
 
 // Extended App type for detail page (includes all fields from API)
 interface AppDetail {
@@ -347,12 +348,28 @@ export default function AppDetailPage() {
         }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
         throw new Error(data.error || 'Failed to save environment variables');
       }
 
-      setEnvVarSuccess('Environment variables saved successfully');
+      // Handle different response types
+      if (data.requiresRedeploy) {
+        setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
+        toast.warning(data.reason || 'Redeploy required', {
+          description: 'Click the Redeploy button to apply changes',
+          duration: 5000,
+        });
+      } else if (data.appliedLive) {
+        setEnvVarSuccess(data.message);
+        toast.success('Changes applied instantly!', {
+          description: data.hint || 'Environment variables updated without rebuild',
+        });
+      } else {
+        setEnvVarSuccess(data.message || 'Environment variables saved successfully');
+      }
+      
       setEnvVarsModified(false);
       
       // Update local app state
