@@ -79,16 +79,17 @@ async function detectFromPackageJson(context: DetectionContext): Promise<Partial
     // Check for Vite in devDependencies (common for Vite projects)
     const hasVite = devDeps.vite || deps.vite;
     
-    if (deps.next) {
-      return { framework: "Next.js", version: deps.next, language: "JavaScript" };
-    } else if (deps.nuxt) {
-      return { framework: "Nuxt.js", version: deps.nuxt, language: "JavaScript" };
-    } else if (deps.react) {
+    if (deps.next || devDeps.next) {
+      return { framework: "Next.js", version: deps.next || devDeps.next, language: "JavaScript" };
+    } else if (deps.nuxt || devDeps.nuxt) {
+      return { framework: "Nuxt.js", version: deps.nuxt || devDeps.nuxt, language: "JavaScript" };
+    } else if (deps.react || devDeps.react) {
       // Check if it's React with Vite
+      const reactVersion = deps.react || devDeps.react;
       if (hasVite) {
-        return { framework: "Vite-React", version: deps.react, language: "JavaScript", buildSystem: "Vite" };
+        return { framework: "Vite-React", version: reactVersion, language: "JavaScript", buildSystem: "Vite" };
       }
-      return { framework: "React", version: deps.react, language: "JavaScript" };
+      return { framework: "React", version: reactVersion, language: "JavaScript" };
     } else if (deps.vue || devDeps.vue) {
       // Vue 3 typically uses Vite, but check anyway (check both deps and devDeps)
       return { framework: "Vue.js", version: deps.vue || devDeps.vue, language: "JavaScript", buildSystem: hasVite ? "Vite" : "Vue CLI" };
@@ -99,8 +100,8 @@ async function detectFromPackageJson(context: DetectionContext): Promise<Partial
       const hasSvelteKit = deps['@sveltejs/kit'] || devDeps['@sveltejs/kit'];
       const svelteVersion = deps.svelte || devDeps.svelte || deps['@sveltejs/kit'] || devDeps['@sveltejs/kit'];
       return { framework: hasSvelteKit ? "SvelteKit" : "Svelte", version: svelteVersion, language: "JavaScript" };
-    } else if (deps.express) {
-      return { framework: "Express", version: deps.express, language: "JavaScript" };
+    } else if (deps.express || devDeps.express) {
+      return { framework: "Express", version: deps.express || devDeps.express, language: "JavaScript" };
     } else if (Object.keys(deps).length > 0 || Object.keys(devDeps).length > 0) {
       return { framework: "Node.js", language: "JavaScript" };
     }

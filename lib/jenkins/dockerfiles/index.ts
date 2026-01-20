@@ -71,6 +71,30 @@ echo "Detected Python version: $PYTHON_VERSION"
 }
 
 /**
+ * Shell function to detect package manager from lockfile
+ * Returns: PACKAGE_MANAGER variable (npm, pnpm, or yarn)
+ */
+export function getPackageManagerDetectionScript(): string {
+  return `
+# Detect package manager from lockfile
+PACKAGE_MANAGER="npm"
+if [ -f pnpm-lock.yaml ]; then
+  PACKAGE_MANAGER="pnpm"
+  echo "Detected pnpm from pnpm-lock.yaml"
+elif [ -f yarn.lock ]; then
+  PACKAGE_MANAGER="yarn"
+  echo "Detected yarn from yarn.lock"
+elif [ -f package-lock.json ]; then
+  PACKAGE_MANAGER="npm"
+  echo "Detected npm from package-lock.json"
+else
+  echo "No lockfile found, defaulting to npm"
+fi
+export PACKAGE_MANAGER
+`.trim();
+}
+
+/**
  * Shell function to detect Next.js standalone mode
  * Returns: NEXTJS_STANDALONE variable (true/false)
  */
@@ -273,7 +297,7 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
     ? envVars.map(e => {
         const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
         return `ARG ${key}`;
-      }).join('\\n') + '\\n'
+      }).join('\n') + '\n'
     : '';
 
   // Generate ENV directives to pass ARGs to build process
@@ -281,7 +305,7 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
     ? envVars.map(e => {
         const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
         return `ENV ${key}=$${key}`;
-      }).join('\\n') + '\\n'
+      }).join('\n') + '\n'
     : '';
 
   return `
@@ -322,7 +346,7 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
 export function getAngularDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   // Generate ARG directives for build-time env vars
   const argDirectives = envVars.length > 0 
-    ? envVars.map(e => `ARG ${e.key}`).join('\\n') + '\\n'
+    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
   // Generate sed commands to replace __KEY__ placeholders in environment files
@@ -400,16 +424,18 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
 }
 
 /**
- * Generate Dockerfile for Nuxt.js (Nitro server)
+ * Generate Dockerfile for Nuxt.js (Nuxt 3)
  * Supports build-time env vars for NUXT_PUBLIC_* and VITE_* variables
+ * Uses Nitro server output (.output/server/index.mjs)
+ * Supports npm, pnpm, and yarn package managers
  */
 export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
-  // Generate ARG directives for client-side env vars
+  // Generate ARG directives for client-side env vars (NUXT_PUBLIC_*, VITE_*)
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
-  // Generate ENV directives to pass ARGs to Nuxt build
+  // Generate ENV directives to pass ARGs to build process
   const envDirectives = envVars.length > 0
     ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
@@ -419,13 +445,36 @@ export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}>
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN npm install
+# Install package manager based on PACKAGE_MANAGER_PLACEHOLDER
+RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
+      npm install -g pnpm@latest; \\
+    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
+      npm install -g yarn; \\
+    fi
+
+${argDirectives}# Copy package files (support all package managers)
+COPY package*.json pnpm-lock.yaml* yarn.lock* ./
+
+# Install dependencies based on package manager
+RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
+      pnpm install --frozen-lockfile; \\
+    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
+      yarn install --frozen-lockfile; \\
+    else \\
+      npm ci || npm install; \\
+    fi
 
 COPY . .
 
 # Pass build args as environment variables for Nuxt
-${envDirectives}RUN npm run build
+${envDirectives}# Build with appropriate package manager
+RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
+      pnpm run build; \\
+    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
+      yarn build; \\
+    else \\
+      npm run build; \\
+    fi
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -773,7 +822,8 @@ fi
  * Generate complete "Prepare Dockerfile" stage for Nuxt.js
  */
 export function generateNuxtjsDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
-  const detection = getNodeVersionDetectionScript(20);
+  const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
   const dockerfile = getNuxtjsDockerfile(envVars);
   
   return `
@@ -782,16 +832,20 @@ if [ -f Dockerfile ]; then
 else
   echo "Generating Nuxt.js Dockerfile with auto-detection"
   
-  ${detection}
+  ${nodeDetection}
+  ${pmDetection}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace version placeholder
+  # Replace placeholders
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
+  sed -i "s/PACKAGE_MANAGER_PLACEHOLDER/$PACKAGE_MANAGER/g" Dockerfile 2>/dev/null || sed -i '' "s/PACKAGE_MANAGER_PLACEHOLDER/$PACKAGE_MANAGER/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER"
   cat Dockerfile
 fi
 `.trim();
