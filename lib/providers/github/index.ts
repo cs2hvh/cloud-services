@@ -157,13 +157,13 @@ export class GitHubProvider implements BaseProvider {
             };
           }
 
-          if (pkg.dependencies?.['vue']) {
+          if (pkg.dependencies?.['vue'] || pkg.devDependencies?.['vue']) {
             return {
               framework: 'Vue.js',
               buildCommand: 'npm run build',
               outputDir: 'dist',
               installCommand: 'npm install',
-              description: 'Needs Dockerfile in repo',
+              description: 'Auto-generates Dockerfile (Vite)',
             };
           }
 

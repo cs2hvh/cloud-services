@@ -7,6 +7,7 @@ import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { AppStatusService } from "@/lib/services/app-status";
+import { BuildPollingService } from "@/lib/services/build-polling";
 
 const redeploySchema = z.object({
   app_id: z.string().uuid(),
@@ -73,10 +74,49 @@ export async function POST(req: NextRequest) {
     await AppStatusService.setStatus(app_id, "building");
 
     try {
+      // Fetch environment variables from database
+      const envVarsData = await Platform_Apps.get_env_vars(app_id);
+      const envVars = envVarsData.map((ev: { key: string; value: string }) => ({ 
+        key: ev.key, 
+        value: ev.value 
+      }));
+      
+      console.log(`[Redeploy] Found ${envVars.length} environment variables for ${app.name}`);
+
+      // Get repository URL (database uses repository_url, not git_url)
+      const gitUrl = (app as any).repository_url || (app as any).git_url;
+
+      // If env vars exist, update the pipeline XML to include them
+      if (envVars.length > 0 && gitUrl) {
+        console.log(`[Redeploy] Updating pipeline XML with latest env vars`);
+        
+        await JenkinsService.updateJobConfig(
+          app.name,
+          app.id,
+          gitUrl,
+          app.branch || "main",
+          app.framework || undefined,
+          app.size || "small",
+          "manual",
+          envVars
+        );
+        console.log(`[Redeploy] Pipeline XML updated successfully`);
+      } else if (envVars.length > 0 && !gitUrl) {
+        console.warn(`[Redeploy] Cannot update pipeline: repository_url is missing for ${app.name}`);
+      }
+      
       // Trigger a new build using JenkinsService
       const buildNumber = await JenkinsService.triggerBuild(app.name);
 
       console.log(`[Redeploy] Triggered build #${buildNumber} for app: ${app.name}`);
+
+      // Start background polling for build status
+      BuildPollingService.startPolling({
+        appId: app.id,
+        appName: app.name,
+        buildNumber: buildNumber,
+        trigger: 'manual',
+      });
 
       // Add project log if project_id exists
       if (app.project_id) {

@@ -89,9 +89,9 @@ async function detectFromPackageJson(context: DetectionContext): Promise<Partial
         return { framework: "Vite-React", version: deps.react, language: "JavaScript", buildSystem: "Vite" };
       }
       return { framework: "React", version: deps.react, language: "JavaScript" };
-    } else if (deps.vue) {
-      // Vue 3 typically uses Vite, but check anyway
-      return { framework: "Vue.js", version: deps.vue, language: "JavaScript", buildSystem: hasVite ? "Vite" : "Vue CLI" };
+    } else if (deps.vue || devDeps.vue) {
+      // Vue 3 typically uses Vite, but check anyway (check both deps and devDeps)
+      return { framework: "Vue.js", version: deps.vue || devDeps.vue, language: "JavaScript", buildSystem: hasVite ? "Vite" : "Vue CLI" };
     } else if (deps['@angular/core'] || devDeps['@angular/core']) {
       return { framework: "Angular", version: deps['@angular/core'] || devDeps['@angular/core'], language: "JavaScript" };
     } else if (deps.svelte || deps['@sveltejs/kit'] || devDeps.svelte || devDeps['@sveltejs/kit']) {

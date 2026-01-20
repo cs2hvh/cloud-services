@@ -232,19 +232,44 @@ CMD ["node", "server.js"]
 }
 
 /**
- * Generate Dockerfile for static sites (Vite, Vue, React, Angular)
+ * Generate Dockerfile for Vite-based apps (React, Vue, Svelte) and static sites
+ * Supports optional build-time environment variable injection
+ * 
+ * ⚠️ Only for static SPA builds. Vite requires VITE_ prefix for public env vars.
+ * ⚠️ Build args are visible in Docker logs - DO NOT use for secrets!
+ * 
+ * Users can access env vars via import.meta.env.VITE_API_URL in their code
+ * If no env vars provided, generates a standard static site Dockerfile
  */
-export function getStaticSiteDockerfile(outputDir: string = 'dist'): string {
+export function getViteDockerfile(envVars: Array<{key: string, value: string}> = [], outputDir: string = 'dist'): string {
+  // Generate ARG directives for build-time env vars
+  const argDirectives = envVars.length > 0 
+    ? envVars.map(e => {
+        const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
+        return `ARG ${key}`;
+      }).join('\\n') + '\\n'
+    : '';
+
+  // Generate ENV directives to pass ARGs to build process
+  const envDirectives = envVars.length > 0
+    ? envVars.map(e => {
+        const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
+        return `ENV ${key}=$${key}`;
+      }).join('\\n') + '\\n'
+    : '';
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-COPY package*.json ./
+${argDirectives}COPY package*.json ./
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 COPY . .
-RUN npm run build
+
+# Pass build args as environment variables for Vite
+${envDirectives}RUN npm run build
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -635,11 +660,13 @@ fi
 }
 
 /**
- * Generate complete "Prepare Dockerfile" stage for static sites (Vite, Vue)
+ * Generate complete "Prepare Dockerfile" stage for static sites (Vite, Vue, React)
+ * Always uses Vite-style Dockerfile for consistency (supports optional env vars)
  */
-export function generateStaticSiteDockerfileStage(outputDir: string = 'dist'): string {
+export function generateStaticSiteDockerfileStage(outputDir: string = 'dist', envVars: Array<{key: string, value: string}> = []): string {
   const detection = getNodeVersionDetectionScript(20);
-  const dockerfile = getStaticSiteDockerfile(outputDir);
+  // Always use getViteDockerfile() for consistency - it handles both cases (with/without env vars)
+  const dockerfile = getViteDockerfile(envVars, outputDir);
   
   return `
 if [ -f Dockerfile ]; then

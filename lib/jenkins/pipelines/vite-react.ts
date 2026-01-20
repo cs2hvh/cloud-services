@@ -58,6 +58,19 @@ export function createViteReactPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
+  // Generate build args for Kaniko (build-time env injection)
+  // ⚠️ Build args are visible in logs - DO NOT use for secrets!
+  // Vite requires VITE_ prefix for env vars: import.meta.env.VITE_API_URL
+  const buildArgs = envVars.length > 0
+    ? envVars.map(e => {
+        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+        // Add VITE_ prefix if not already present
+        const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
+        return `--build-arg ${key}="${escapedValue}"`;
+      }).join(' \\\\\n                    ')
+    : '';
+  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
+
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
   <actions/>
@@ -214,7 +227,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateStaticSiteDockerfileStage('dist')}
+${generateStaticSiteDockerfileStage('dist', envVars)}
             '''
             echo 'Dockerfile preparation completed'
           }
@@ -254,7 +267,7 @@ EOF
                     --context=\${WORKSPACE} \\
                     --dockerfile=Dockerfile \\
                     --destination=\${DOCKER_IMAGE_VERSION} \\
-                    --destination=\${DOCKER_IMAGE_LATEST} \\
+                    --destination=\${DOCKER_IMAGE_LATEST}${buildArgsLine} \\
                     --digest-file=image-digest.txt
                   
                   echo 'Image build completed successfully'

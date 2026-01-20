@@ -405,8 +405,8 @@ export class RuntimeLogsService {
 
       // Sort by last timestamp (most recent first)
       relevantEvents.sort((a: CoreV1Event, b: CoreV1Event) => {
-        const timeA = a.lastTimestamp?.getTime() || a.eventTime?.getTime() || 0;
-        const timeB = b.lastTimestamp?.getTime() || b.eventTime?.getTime() || 0;
+        const timeA = a.lastTimestamp?.getTime() || (a.eventTime ? new Date(a.eventTime as string).getTime() : 0);
+        const timeB = b.lastTimestamp?.getTime() || (b.eventTime ? new Date(b.eventTime as string).getTime() : 0);
         return timeB - timeA;
       });
 
@@ -417,7 +417,7 @@ export class RuntimeLogsService {
         message: event.message || '',
         count: event.count || 1,
         firstTimestamp: event.firstTimestamp?.toISOString() || null,
-        lastTimestamp: event.lastTimestamp?.toISOString() || event.eventTime?.toISOString() || null,
+        lastTimestamp: event.lastTimestamp?.toISOString() || (event.eventTime ? new Date(event.eventTime as string).toISOString() : null),
         source: event.source?.component || 'unknown',
       }));
     } catch (error: unknown) {
