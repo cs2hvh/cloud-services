@@ -4,6 +4,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateBucketProjectSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -62,6 +63,26 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("✅ Bucket project assignment updated successfully");
+
+    // Create success notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'success',
+          action: 'updated',
+          serviceType: 'object_storage',
+          serviceName: bucket.name,
+          serviceId: bucket_id,
+          metadata: {
+            updateType: 'bucket_project',
+            projectId: project_id
+          }
+        })
+      );
+    } catch (notifErr) {
+      console.error('[updateBucketProject] Failed to create notification:', notifErr);
+    }
 
     return NextResponse.json(
       {

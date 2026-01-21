@@ -223,6 +223,18 @@ export function createServiceNotification(params: {
       case 'firewall_deleted':
         message = `Firewall rule removed from ${serviceName}: ${metadata.ipAddress}`;
         break;
+      case 'bucket_project':
+        message = `${serviceLabel} "${serviceName}" project assignment updated.`;
+        break;
+      case 'bucket_acl':
+        message = `${serviceLabel} "${serviceName}" ACL updated to "${metadata.acl}".`;
+        break;
+      case 'bucket_cors':
+        message = `${serviceLabel} "${serviceName}" CORS ${metadata.enabled ? 'enabled' : 'disabled'}.`;
+        break;
+      case 'bucket_versioning':
+        message = `${serviceLabel} "${serviceName}" versioning ${metadata.enabled ? 'enabled' : 'disabled'}.`;
+        break;
       default:
         message = `${serviceLabel} "${serviceName}" has been ${verb} successfully.`;
     }

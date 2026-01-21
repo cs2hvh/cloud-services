@@ -6,6 +6,7 @@ import { updateBucketCORS } from "@/lib/aws/s3-operations";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateBucketCorsSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -72,6 +73,26 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("✅ Bucket CORS updated successfully");
+
+    // Create success notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'success',
+          action: 'updated',
+          serviceType: 'object_storage',
+          serviceName: bucket.name,
+          serviceId: bucket_id,
+          metadata: {
+            updateType: 'bucket_cors',
+            enabled: enabled
+          }
+        })
+      );
+    } catch (notifErr) {
+      console.error('[updateBucketCORS] Failed to create notification:', notifErr);
+    }
 
     return NextResponse.json(
       {

@@ -78,6 +78,17 @@ export function NotificationItem({ notification, onMarkAsRead }: NotificationIte
         <p className="text-xs text-slate-500 mt-1">
           {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
         </p>
+        <p className="text-xs text-slate-600 mt-0.5">
+          {new Date(notification.created_at).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+          })} at {new Date(notification.created_at).toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          })}
+        </p>
       </div>
     </div>
   );
