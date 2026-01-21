@@ -57,11 +57,16 @@ export function createAngularPipeline(
   // Angular apps serve on port 3000 in production via serve
   const containerPort = 3000;
 
-  // Generate Kubernetes Secret for environment variables (secure approach)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
-  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  // Angular static builds: All env vars are build-time (no runtime env injection)
+  // BUT we still need to be careful about secrets in build logs
+  // Generate empty secret for consistency (Angular doesn't use runtime env vars)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
+  const envFromSection = generateEnvFromSection(secretName, false); // No secret needed
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
-  // Generate build args for Kaniko (build-time env injection - Vercel style)
+  
+  // Generate build args for ALL env vars (Angular requires build-time injection)
+  // ⚠️ WARNING: All Angular env vars will be visible in build logs!
+  // ⚠️ DO NOT use sensitive data - use Kubernetes Secrets for backend APIs instead
   const buildArgs = envVars.length > 0
     ? envVars.map(e => {
         // Escape special characters for shell

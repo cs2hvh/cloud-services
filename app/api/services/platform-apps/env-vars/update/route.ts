@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { updateEnvVarsSchema } from "@/lib/validation/platform-apps";
+import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
@@ -93,6 +94,29 @@ export async function POST(req: NextRequest) {
     }
     if (existing.data.user_id !== auth.user!.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
+
+    // Validate environment variables according to framework rules (Vercel approach)
+    const app = existing.data;
+    if (env_vars && env_vars.length > 0 && app.framework) {
+      const envValidation = validateEnvVars(app.framework, env_vars);
+      
+      // Hard fail on errors (security risks like NEXT_PUBLIC_DATABASE_URL)
+      if (!envValidation.isValid) {
+        return NextResponse.json(
+          {
+            error: 'Environment variable validation failed',
+            errors: envValidation.errors,
+            warnings: envValidation.warnings
+          },
+          { status: 400 }
+        );
+      }
+      
+      // Log warnings but allow update (e.g., non-VITE_ vars in Vue.js)
+      if (envValidation.warnings.length > 0) {
+        console.log('[env-vars/update] Environment variable warnings:', envValidation.warnings);
+      }
     }
 
     // Save to database

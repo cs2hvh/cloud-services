@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
+import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { DeploymentService, type DeploymentConfig } from "@/lib/services";
@@ -58,6 +59,28 @@ export async function POST(req: NextRequest) {
 
     const { env_vars, ...appData } = validation.data;
 
+    // Validate environment variables according to framework rules (Vercel approach)
+    if (env_vars && env_vars.length > 0) {
+      const envValidation = validateEnvVars(appData.framework, env_vars);
+      
+      // Hard fail on errors (security risks like NEXT_PUBLIC_DATABASE_URL)
+      if (!envValidation.isValid) {
+        return NextResponse.json(
+          {
+            error: 'Environment variable validation failed',
+            errors: envValidation.errors,
+            warnings: envValidation.warnings
+          },
+          { status: 400 }
+        );
+      }
+      
+      // Log warnings but allow deployment (e.g., non-VITE_ vars in Vue.js)
+      if (envValidation.warnings.length > 0) {
+        console.log('[platform-apps/create] Environment variable warnings:', envValidation.warnings);
+      }
+    }
+
     // Get instance size for billing (default to 'small')
     const instanceSize = ((appData as { size?: string }).size || 'small') as "small" | "medium" | "large";
 
@@ -79,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Check app limit per user (max 10 apps)
-    const MAX_APPS_PER_USER = 10;
+    const MAX_APPS_PER_USER = 20;
     const currentAppCount = await Platform_Apps.count_by_owner(auth.user!.id);
     if (currentAppCount >= MAX_APPS_PER_USER) {
       return NextResponse.json(

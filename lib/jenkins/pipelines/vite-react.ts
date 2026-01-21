@@ -53,20 +53,23 @@ export function createViteReactPipeline(
   // Vite apps serve on port 3000 in production
   const containerPort = 3000;
 
-  // Generate Kubernetes Secret for environment variables (secure approach)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
-  const envFromSection = generateEnvFromSection(secretName, hasSecret);
+  // Vite React: Only VITE_* prefixed variables are accessible in code
+  // Variable name IS the contract (Vercel approach) - no auto-prefixing
+  // Non-VITE_ vars will be ignored (client-only framework, no server runtime)
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('VITE_'));
+
+  // Generate empty Kubernetes Secret (Vite React doesn't support runtime server vars)
+  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
+  const envFromSection = generateEnvFromSection(secretName, false);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
-  // Generate build args for Kaniko (build-time env injection)
-  // ⚠️ Build args are visible in logs - DO NOT use for secrets!
-  // Vite requires VITE_ prefix for env vars: import.meta.env.VITE_API_URL
-  const buildArgs = envVars.length > 0
-    ? envVars.map(e => {
+  // Generate build args for VITE_* prefixed vars only
+  // ⚠️ Build args are visible in logs - only use for public configuration!
+  // Vite requires VITE_ prefix: import.meta.env.VITE_API_URL
+  const buildArgs = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => {
         const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-        // Add VITE_ prefix if not already present
-        const key = e.key.startsWith('VITE_') ? e.key : `VITE_${e.key}`;
-        return `--build-arg ${key}="${escapedValue}"`;
+        return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';
   // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
@@ -231,7 +234,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateStaticSiteDockerfileStage('dist', envVars)}
+${generateStaticSiteDockerfileStage('dist', clientEnvVars)}
             '''
             echo 'Dockerfile preparation completed'
           }
