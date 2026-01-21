@@ -167,10 +167,10 @@ export class DatabaseIntegrationService {
     // Decrypt sensitive fields
     const host = this.decryptIfNeeded(connection.host);
     let password = this.decryptIfNeeded(connection.password);
-    // const user = this.decryptIfNeeded(connection.user);
-    // const database = this.decryptIfNeeded(connection.database);
+    const user = this.decryptIfNeeded(connection.user);
+    const database = this.decryptIfNeeded(connection.database);
     const uri = this.decryptIfNeeded(connection.uri);
-    // const port = typeof connection.port === 'number' ? connection.port : parseInt(String(connection.port), 10) || 5432;
+    const port = typeof connection.port === 'number' ? connection.port : parseInt(String(connection.port), 10) || 5432;
     
     // For MongoDB and other databases: If password is empty but URI exists,
     // try to extract password from URI (DigitalOcean may only provide credentials in URI)
@@ -187,8 +187,8 @@ export class DatabaseIntegrationService {
       console.warn(`[DatabaseIntegrationService] WARNING: Password is empty for ${engine} database. Connection may fail.`);
     }
     
-    // Build connection URL based on engine
-    let connectionUrl = connection.uri;
+    // Build connection URL based on engine (use decrypted URI if available)
+    let connectionUrl = uri;
     if (!connectionUrl) {
       // Build it manually if URI not provided
       const protocol = engine === "mongodb" ? "mongodb" : 
@@ -196,7 +196,7 @@ export class DatabaseIntegrationService {
                        engine === "pg" ? "postgresql" : 
                        engine === "kafka" ? "kafka" : engine;
       
-      connectionUrl = `${protocol}://${connection.user}:${password}@${host}:${connection.port}/${connection.database}`;
+      connectionUrl = `${protocol}://${user}:${password}@${host}:${port}/${database}`;
       
       if (connection.ssl) {
         connectionUrl += "?sslmode=require";
@@ -209,10 +209,10 @@ export class DatabaseIntegrationService {
 
     // Individual components
     vars.push({ key: `${prefix}_HOST`, value: host });
-    vars.push({ key: `${prefix}_PORT`, value: String(connection.port) });
-    vars.push({ key: `${prefix}_USER`, value: connection.user });
+    vars.push({ key: `${prefix}_PORT`, value: String(port) });
+    vars.push({ key: `${prefix}_USER`, value: user });
     vars.push({ key: `${prefix}_PASSWORD`, value: password });
-    vars.push({ key: `${prefix}_NAME`, value: connection.database });
+    vars.push({ key: `${prefix}_NAME`, value: database });
     
     if (connection.ssl) {
       vars.push({ key: `${prefix}_SSL`, value: "true" });

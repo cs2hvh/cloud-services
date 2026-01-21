@@ -678,11 +678,15 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                   connectProvider(provider.id);
                                 }}
                                 size="sm"
-                                style={{backgroundColor:"white"}}
-                                className={`${isLoading || connectingProvider !== null ? 
-                                  "bg-white text-black hover:bg-gray-200" : "cursor-pointer bg-white text-black hover:bg-gray-200"}`
+                                style={{ backgroundColor: "white" }}
+                                className={`${
+                                  isLoading || connectingProvider !== null
+                                    ? "bg-white text-black hover:bg-gray-200"
+                                    : "cursor-pointer bg-white text-black hover:bg-gray-200"
+                                }`}
+                                disabled={
+                                  isLoading || connectingProvider !== null
                                 }
-                                disabled={isLoading || connectingProvider !== null}
                               >
                                 {connectingProvider === provider.id ? (
                                   <>
@@ -771,7 +775,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         {repositories
                           .slice(
                             (currentPage - 1) * reposPerPage,
-                            currentPage * reposPerPage
+                            currentPage * reposPerPage,
                           )
                           .map((repo) => (
                             <div key={repo.id}>
@@ -823,7 +827,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                     <span>
                                       Updated{" "}
                                       {new Date(
-                                        repo.updatedAt
+                                        repo.updatedAt,
                                       ).toLocaleDateString()}
                                     </span>
                                     <span>Default: {repo.defaultBranch}</span>
@@ -836,31 +840,47 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
                       {/* Pagination Controls */}
                       {repositories.length > reposPerPage && (
-                        <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-white/10">
-                          {Array.from(
-                            {
-                              length: Math.ceil(
-                                repositories.length / reposPerPage
-                              ),
-                            },
-                            (_, i) => i + 1
-                          ).map((pageNum) => (
-                            <Button
-                              key={pageNum}
-                              onClick={() => setCurrentPage(pageNum)}
-                              variant={
-                                currentPage === pageNum ? "default" : "outline"
-                              }
-                              size="sm"
-                              className={
-                                currentPage === pageNum
-                                  ? "cursor-pointer bg-white/90 text-black hover:bg-white/90"
-                                  : "cursor-pointer border-white/20 text-white hover:bg-white/10"
-                              }
-                            >
-                              {pageNum}
-                            </Button>
-                          ))}
+                        <div className="mt-4 pt-4 border-t border-white/10">
+                          <div
+                            className="
+    flex items-center justify-center gap-2
+    flex-wrap
+    sm:flex-nowrap
+    overflow-x-auto
+    scrollbar-hide
+    px-2
+  "
+                          >
+                            {Array.from(
+                              {
+                                length: Math.ceil(
+                                  repositories.length / reposPerPage,
+                                ),
+                              },
+                              (_, i) => i + 1,
+                            ).map((pageNum) => (
+                              <Button
+                                key={pageNum}
+                                onClick={() => setCurrentPage(pageNum)}
+                                variant={
+                                  currentPage === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                className={`
+          min-w-[40px]
+          ${
+            currentPage === pageNum
+              ? "bg-white/90 text-black hover:bg-white/90"
+              : "border-white/20 text-white hover:bg-white/10"
+          }
+        `}
+                              >
+                                {pageNum}
+                              </Button>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -932,7 +952,10 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     <FolderKanban className="w-4 h-4" />
                     Select Project
                   </Label>
-                  <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <Select
+                    value={selectedProject}
+                    onValueChange={setSelectedProject}
+                  >
                     <SelectTrigger className="bg-white/10 border-white/20 text-white mt-2">
                       <SelectValue placeholder="Select a project (optional)" />
                     </SelectTrigger>
@@ -1129,7 +1152,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         detectFramework(
                           selectedProvider,
                           selectedRepoData,
-                          selectedBranch
+                          selectedBranch,
                         )
                       }
                       variant="outline"
@@ -1142,149 +1165,217 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 </div>
 
                 {/* Build Configuration Info */}
-                {framework && frameworkConfigs[framework as keyof typeof frameworkConfigs] && (
-                  <div className={`p-4 border rounded-lg ${
-                    hasDockerfile 
-                      ? 'bg-green-500/10 border-green-500/20' 
-                      : 'bg-blue-500/10 border-blue-500/20'
-                  }`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
+                {framework &&
+                  frameworkConfigs[
+                    framework as keyof typeof frameworkConfigs
+                  ] && (
+                    <div
+                      className={`p-4 border rounded-lg ${
                         hasDockerfile
-                          ? 'bg-green-500/20'
-                          : 'bg-blue-500/20'
-                      }`}>
-                        {hasDockerfile ? (
-                          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-white font-medium mb-1">Build & Deployment</h3>
-                        
-                        {/* Show Dockerfile status */}
-                        {hasDockerfile ? (
-                          <div className="mb-3">
-                            <p className="text-sm text-green-300 font-medium mb-1">
-                              ✓ Using your repository&apos;s Dockerfile
-                            </p>
-                            <p className="text-xs text-white/60">
-                              Your custom Dockerfile will be used for the build. The platform defaults below are for reference only.
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-white/70 mb-3">
-                            {frameworkConfigs[framework as keyof typeof frameworkConfigs].description}
-                          </p>
-                        )}
-                        
-                        {/* Show build defaults (for reference or actual use) */}
-                        {frameworkConfigs[framework as keyof typeof frameworkConfigs].buildCommand && (
-                          <div className="space-y-2">
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-white/60 min-w-[120px]">
-                                {hasDockerfile ? 'Platform default:' : 'Build command:'}
-                              </span>
-                              <code className={`px-2 py-1 rounded font-mono ${
-                                hasDockerfile ? 'text-white/50 bg-white/5' : 'text-blue-400 bg-white/5'
-                              }`}>
-                                {frameworkConfigs[framework as keyof typeof frameworkConfigs].buildCommand}
-                              </code>
+                          ? "bg-green-500/10 border-green-500/20"
+                          : "bg-blue-500/10 border-blue-500/20"
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
+                            hasDockerfile ? "bg-green-500/20" : "bg-blue-500/20"
+                          }`}
+                        >
+                          {hasDockerfile ? (
+                            <svg
+                              className="w-4 h-4 text-green-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-4 h-4 text-blue-400"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                              />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="text-white font-medium mb-1">
+                            Build & Deployment
+                          </h3>
+
+                          {/* Show Dockerfile status */}
+                          {hasDockerfile ? (
+                            <div className="mb-3">
+                              <p className="text-sm text-green-300 font-medium mb-1">
+                                ✓ Using your repository&apos;s Dockerfile
+                              </p>
+                              <p className="text-xs text-white/60">
+                                Your custom Dockerfile will be used for the
+                                build. The platform defaults below are for
+                                reference only.
+                              </p>
                             </div>
-                            <div className="flex items-center gap-2 text-sm">
-                              <span className="text-white/60 min-w-[120px]">
-                                {hasDockerfile ? 'Platform default:' : 'Output directory:'}
-                              </span>
-                              <code className={`px-2 py-1 rounded font-mono ${
-                                hasDockerfile ? 'text-white/50 bg-white/5' : 'text-blue-400 bg-white/5'
-                              }`}>
-                                {frameworkConfigs[framework as keyof typeof frameworkConfigs].outputDir}
-                              </code>
+                          ) : (
+                            <p className="text-sm text-white/70 mb-3">
+                              {
+                                frameworkConfigs[
+                                  framework as keyof typeof frameworkConfigs
+                                ].description
+                              }
+                            </p>
+                          )}
+
+                          {/* Show build defaults (for reference or actual use) */}
+                          {frameworkConfigs[
+                            framework as keyof typeof frameworkConfigs
+                          ].buildCommand && (
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-white/60 min-w-[120px]">
+                                  {hasDockerfile
+                                    ? "Platform default:"
+                                    : "Build command:"}
+                                </span>
+                                <code
+                                  className={`px-2 py-1 rounded font-mono ${
+                                    hasDockerfile
+                                      ? "text-white/50 bg-white/5"
+                                      : "text-blue-400 bg-white/5"
+                                  }`}
+                                >
+                                  {
+                                    frameworkConfigs[
+                                      framework as keyof typeof frameworkConfigs
+                                    ].buildCommand
+                                  }
+                                </code>
+                              </div>
+                              <div className="flex items-center gap-2 text-sm">
+                                <span className="text-white/60 min-w-[120px]">
+                                  {hasDockerfile
+                                    ? "Platform default:"
+                                    : "Output directory:"}
+                                </span>
+                                <code
+                                  className={`px-2 py-1 rounded font-mono ${
+                                    hasDockerfile
+                                      ? "text-white/50 bg-white/5"
+                                      : "text-blue-400 bg-white/5"
+                                  }`}
+                                >
+                                  {
+                                    frameworkConfigs[
+                                      framework as keyof typeof frameworkConfigs
+                                    ].outputDir
+                                  }
+                                </code>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        
-                        {!hasDockerfile && (
-                          <p className="text-xs text-white/50 mt-3">
-                            💡 For full control over the build process, add a <code className="text-blue-300">Dockerfile</code> to your repository.
-                          </p>
-                        )}
+                          )}
+
+                          {!hasDockerfile && (
+                            <p className="text-xs text-white/50 mt-3">
+                              💡 For full control over the build process, add a{" "}
+                              <code className="text-blue-300">Dockerfile</code>{" "}
+                              to your repository.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                
+                  )}
+
                 <div className="mt-4">
                   <Label className="text-white">Instance Size</Label>
                   <p className="text-xs text-white/50 mt-1 mb-3">
-                    Select the resources for your application. You can resize anytime.
+                    Select the resources for your application. You can resize
+                    anytime.
                   </p>
                   <RadioGroup
                     value={size}
                     onValueChange={setSize}
                     className="grid grid-cols-1 gap-3"
                   >
-                    {(["small", "medium", "large"] as const).map((sizeOption) => {
-                      const config = instanceSizeConfigs[sizeOption];
-                      const sizePrice = pricing?.[sizeOption];
-                      const monthlyPrice = sizePrice?.price ?? 0;
-                      const hourlyRate = sizePrice?.hourlyRate ?? 0;
-                      
-                      return (
-                        <div key={sizeOption}>
-                          <RadioGroupItem
-                            value={sizeOption}
-                            id={`size-${sizeOption}`}
-                            className="peer sr-only"
-                          />
-                          <Label
-                            htmlFor={`size-${sizeOption}`}
-                            className="flex items-center justify-between p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div
-                                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                  size === sizeOption
-                                    ? "border-blue-500 bg-blue-500"
-                                    : "border-white/30"
-                                }`}
-                              >
-                                {size === sizeOption && (
-                                  <div className="w-2 h-2 rounded-full bg-white"></div>
+                    {(["small", "medium", "large"] as const).map(
+                      (sizeOption) => {
+                        const config = instanceSizeConfigs[sizeOption];
+                        const sizePrice = pricing?.[sizeOption];
+                        const monthlyPrice = sizePrice?.price ?? 0;
+                        const hourlyRate = sizePrice?.hourlyRate ?? 0;
+
+                        return (
+                          <div key={sizeOption}>
+                            <RadioGroupItem
+                              value={sizeOption}
+                              id={`size-${sizeOption}`}
+                              className="peer sr-only"
+                            />
+                            <Label
+                              htmlFor={`size-${sizeOption}`}
+                              className="flex items-center justify-between p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div
+                                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                    size === sizeOption
+                                      ? "border-blue-500 bg-blue-500"
+                                      : "border-white/30"
+                                  }`}
+                                >
+                                  {size === sizeOption && (
+                                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-white capitalize">
+                                    {sizeOption}
+                                  </div>
+                                  <div className="text-xs text-white/60">
+                                    {config.cpu} CPU / {config.ram} RAM /{" "}
+                                    {config.replicas} replica
+                                    {config.replicas > 1 ? "s" : ""}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                {monthlyPrice > 0 ? (
+                                  <>
+                                    <div className="font-bold text-white">
+                                      ${monthlyPrice.toFixed(2)}
+                                      <span className="text-xs text-white/60">
+                                        /mo
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-white/50">
+                                      ${(hourlyRate * 24 * 30).toFixed(2)}/mo
+                                      based on usage
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="font-bold text-green-400">
+                                    Free
+                                  </div>
                                 )}
                               </div>
-                              <div>
-                                <div className="font-semibold text-white capitalize">
-                                  {sizeOption}
-                                </div>
-                                <div className="text-xs text-white/60">
-                                  {config.cpu} CPU / {config.ram} RAM / {config.replicas} replica{config.replicas > 1 ? 's' : ''}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              {monthlyPrice > 0 ? (
-                                <>
-                                  <div className="font-bold text-white">
-                                    ${monthlyPrice.toFixed(2)}<span className="text-xs text-white/60">/mo</span>
-                                  </div>
-                                  <div className="text-xs text-white/50">
-                                    ${(hourlyRate * 24 * 30).toFixed(2)}/mo based on usage
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="font-bold text-green-400">Free</div>
-                              )}
-                            </div>
-                          </Label>
-                        </div>
-                      );
-                    })}
+                            </Label>
+                          </div>
+                        );
+                      },
+                    )}
                   </RadioGroup>
                 </div>
 
@@ -1380,7 +1471,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       <span className="text-white/60">Project:</span>
                       <span className="text-white">
                         {selectedProject && selectedProject !== "none"
-                          ? projects.find(p => p.id === selectedProject)?.name || "Unknown"
+                          ? projects.find((p) => p.id === selectedProject)
+                              ?.name || "Unknown"
                           : "No project"}
                       </span>
                     </div>
@@ -1405,7 +1497,19 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     <div className="flex justify-between">
                       <span className="text-white/60">Instance Size:</span>
                       <span className="text-white capitalize">
-                        {size} ({instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.cpu} CPU / {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.ram} RAM)
+                        {size} (
+                        {
+                          instanceSizeConfigs[
+                            size as keyof typeof instanceSizeConfigs
+                          ]?.cpu
+                        }{" "}
+                        CPU /{" "}
+                        {
+                          instanceSizeConfigs[
+                            size as keyof typeof instanceSizeConfigs
+                          ]?.ram
+                        }{" "}
+                        RAM)
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1414,8 +1518,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         {(() => {
                           const sizePrice = pricing?.[size];
                           const monthlyPrice = sizePrice?.price ?? 0;
-                          return monthlyPrice > 0 
-                            ? `$${monthlyPrice.toFixed(2)}/mo` 
+                          return monthlyPrice > 0
+                            ? `$${monthlyPrice.toFixed(2)}/mo`
                             : "Free";
                         })()}
                       </span>
@@ -1551,7 +1655,18 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 <div className="text-sm text-white/60">Instance Size</div>
                 <div className="text-white capitalize">{size}</div>
                 <div className="text-xs text-white/60">
-                  {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.cpu} CPU / {instanceSizeConfigs[size as keyof typeof instanceSizeConfigs]?.ram} RAM
+                  {
+                    instanceSizeConfigs[
+                      size as keyof typeof instanceSizeConfigs
+                    ]?.cpu
+                  }{" "}
+                  CPU /{" "}
+                  {
+                    instanceSizeConfigs[
+                      size as keyof typeof instanceSizeConfigs
+                    ]?.ram
+                  }{" "}
+                  RAM
                 </div>
               </div>
 
@@ -1563,12 +1678,13 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                   const sizePrice = pricing?.[size];
                   const monthlyPrice = sizePrice?.price ?? 0;
                   const initialCost = sizePrice?.initialCost ?? 0;
-                  
+
                   if (monthlyPrice > 0) {
                     return (
                       <>
                         <div className="text-lg font-bold text-white">
-                          ${monthlyPrice.toFixed(2)}<span className="text-sm text-white/60">/mo</span>
+                          ${monthlyPrice.toFixed(2)}
+                          <span className="text-sm text-white/60">/mo</span>
                         </div>
                         {initialCost > 0 && (
                           <div className="text-xs text-white/60">
@@ -1583,7 +1699,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                   }
                   return (
                     <>
-                      <div className="text-lg font-bold text-green-400">FREE</div>
+                      <div className="text-lg font-bold text-green-400">
+                        FREE
+                      </div>
                       <div className="text-xs text-white/60">
                         Included with platform
                       </div>

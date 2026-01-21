@@ -164,7 +164,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       fetchAvailableDatabases(linkedDatabases);
       fetchDatabasePlans();
     }
-  }, []);
+  }, [linkModalOpen, userId, fetchAvailableDatabases, fetchDatabasePlans, linkedDatabases]);
 
   // Handle link database with custom env configs
   const handleLink = async (
@@ -259,6 +259,10 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       // Note: Connection info may not be immediately available as DB is provisioning
       // Use the unencrypted 'connection' field returned on create (not the encrypted data.public_connection)
       const conn = result.connection || result.data?.public_connection;
+      
+      // Refresh available databases list to include the newly created one
+      fetchAvailableDatabases(linkedDatabases);
+      
       return {
         success: true,
         database_id: result.data?.cluster_id || result.data?.id,
