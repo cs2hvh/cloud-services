@@ -21,20 +21,6 @@ const SECURITY_TOOL_VERSIONS = {
  * - Pod spec includes: git, kaniko, kubectl, trivy, jnlp (auto-added)
  */
 
-interface ContainerResources {
-  requests: { memory: string; cpu: string };
-  limits: { memory: string; cpu: string };
-}
-
-interface ContainerInfo {
-  name: string;
-  image: string;
-  inJenkins: boolean;
-  resources: ContainerResources;
-  purpose: string;
-  usedBySecurityStages: readonly string[];
-}
-
 const JENKINS_CONTAINERS = {
   git: {
     name: 'git',

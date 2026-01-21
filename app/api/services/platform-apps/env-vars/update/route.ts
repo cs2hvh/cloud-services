@@ -127,7 +127,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine if we need rebuild or can just update K8s Secret + restart pods
-    const app = existing.data;
     const rebuildCheck = requiresRebuildForEnvVars(app.framework, env_vars);
 
     if (rebuildCheck.needsRebuild) {
