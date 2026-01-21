@@ -5,7 +5,7 @@
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
-import { generateNodejsDockerfileStage } from '../dockerfiles';
+import { generateNodejsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createExpressPipeline(
@@ -261,12 +261,16 @@ ${generateNodejsDockerfileStage()}
 }
 EOF
 
+                # Re-detect package manager (shell vars don't persist across stages)
+${getPackageManagerDetectionScript()}
+
                 echo 'Executing Kaniko build'
                 /kaniko/executor \\
                   --context=\${WORKSPACE} \\
                   --dockerfile=Dockerfile \\
                   --destination=\${DOCKER_IMAGE_VERSION} \\
                   --destination=\${DOCKER_IMAGE_LATEST} \\
+                  --build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER \\
                   --digest-file=image-digest.txt
                 
                 echo 'Image build completed successfully'

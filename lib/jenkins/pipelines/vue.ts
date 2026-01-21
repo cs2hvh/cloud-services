@@ -4,7 +4,7 @@
  * Uses Kubernetes Secrets for environment variables (secure)
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
-import { generateStaticSiteDockerfileStage } from '../dockerfiles';
+import { generateStaticSiteDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createVuePipeline(
@@ -69,7 +69,11 @@ export function createVuePipeline(
         return `--build-arg ${key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';
-  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
+  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
+  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
+  const buildArgsLine = buildArgs
+    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
+    : ` \\\\\n                    ${pmBuildArg}`;
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -263,6 +267,9 @@ ${generateStaticSiteDockerfileStage('dist', envVars)}
   }
 }
 EOF
+
+                  # Re-detect package manager (shell vars don't persist across stages)
+${getPackageManagerDetectionScript()}
 
                   echo 'Executing Kaniko build'
                   /kaniko/executor \\

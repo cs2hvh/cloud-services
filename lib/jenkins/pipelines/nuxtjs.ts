@@ -17,7 +17,7 @@
  * - Production command: node .output/server/index.mjs
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
-import { generateNuxtjsDockerfileStage } from '../dockerfiles';
+import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateImageScanStage } from '../security';
 
 /**
@@ -144,7 +144,11 @@ export function createNuxtJsPipeline(
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';
-  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
+  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
+  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
+  const buildArgsLine = buildArgs
+    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
+    : ` \\\\\n                    ${pmBuildArg}`;
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -294,6 +298,8 @@ ${generateNuxtjsDockerfileStage(clientEnvVars)}
   }
 }
 EOF
+              # Re-detect package manager (shell vars don't persist across stages)
+${getPackageManagerDetectionScript()}
 
               /kaniko/executor \
                 --context=$WORKSPACE \

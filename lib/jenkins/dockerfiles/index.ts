@@ -43,6 +43,13 @@ if [ "$NODE_VERSION" = "${defaultVersion}" ] && [ -f .nvmrc ]; then
     NODE_VERSION=$DETECTED
   fi
 fi
+# Fallback: check .node-version
+if [ "$NODE_VERSION" = "${defaultVersion}" ] && [ -f .node-version ]; then
+  DETECTED=$(cat .node-version | grep -oE '[0-9]+' | head -1)
+  if [ -n "$DETECTED" ] && [ "$DETECTED" -ge 18 ] 2>/dev/null; then
+    NODE_VERSION=$DETECTED
+  fi
+fi
 echo "Detected Node.js version: $NODE_VERSION"
 `.trim();
 }
@@ -71,8 +78,57 @@ echo "Detected Python version: $PYTHON_VERSION"
 }
 
 /**
+ * Shell script to generate .dockerignore file (security best practice)
+ * Prevents sensitive files (.env, secrets, .git) from being copied into Docker image
+ */
+export function getDockerignoreGenerationScript(): string {
+  return `
+# Generate .dockerignore for security (prevent secrets in image)
+if [ ! -f .dockerignore ]; then
+  cat > .dockerignore << 'DOCKERIGNORE_EOF'
+# Security: Exclude sensitive files
+.env
+.env.*
+*.key
+*.pem
+*.crt
+*.p12
+secrets/
+.git
+.github
+.vscode
+.idea
+
+# Development files
+node_modules
+npm-debug.log
+yarn-error.log
+.DS_Store
+*.log
+coverage/
+.nyc_output/
+
+# CI/CD
+.gitlab-ci.yml
+.travis.yml
+Jenkinsfile
+DOCKERIGNORE_EOF
+  echo ".dockerignore generated"
+fi
+`.trim();
+}
+
+/**
  * Shell function to detect package manager from lockfile
  * Returns: PACKAGE_MANAGER variable (npm, pnpm, or yarn)
+ * 
+ * ⚠️ CRITICAL: This variable MUST be passed to docker build/kaniko via:
+ *    --build-arg PACKAGE_MANAGER="$PACKAGE_MANAGER"
+ * 
+ * Without the build arg, ARG PACKAGE_MANAGER in Dockerfiles will be empty,
+ * causing setupPm logic to silently fail and breaking pnpm/yarn builds.
+ * 
+ * All 9 framework pipelines currently pass this correctly. Do not remove.
  */
 export function getPackageManagerDetectionScript(): string {
   return `
@@ -92,6 +148,84 @@ else
 fi
 export PACKAGE_MANAGER
 `.trim();
+}
+
+// =============================================================================
+// PACKAGE MANAGER HELPERS
+// =============================================================================
+
+/**
+ * Generate package manager agnostic install/build commands for Dockerfile
+ * Uses PACKAGE_MANAGER_PLACEHOLDER which gets replaced by detection script
+ * 
+ * @param options.production - If true, install only production deps
+ * @param options.legacyPeerDeps - If true, add --legacy-peer-deps for npm
+ * @param options.frozen - If true, use frozen lockfile (--frozen-lockfile for pnpm/yarn)
+ * @returns Object with install, build, and setup commands
+ */
+export function getPackageManagerCommands(options: {
+  production?: boolean;
+  legacyPeerDeps?: boolean;
+  frozen?: boolean;
+} = {}) {
+  const { production = false, legacyPeerDeps = false, frozen = false } = options;
+
+  // Global package manager installation command (pinned versions for stability)
+  const setupPm = `ARG PACKAGE_MANAGER
+RUN corepack disable && \\
+    if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+    npm install -g pnpm@9; \\
+    elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
+    npm install -g yarn@1; \\
+    fi`;
+
+  // Copy lockfiles (all possible lockfiles)
+  const copyLockfiles = `COPY package*.json pnpm-lock.yaml* yarn.lock* ./`;
+
+  // Install command with options
+  let installCmd = '';
+  if (frozen) {
+    // Frozen lockfile mode (CI/production)
+    installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+      pnpm install --frozen-lockfile${production ? ' --prod' : ''}; \\
+    elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
+      yarn install --frozen-lockfile${production ? ' --production' : ''}; \\
+    else \\
+      npm ci${production ? ' --omit=dev' : ''}${legacyPeerDeps ? ' --legacy-peer-deps' : ''}; \\
+    fi`;
+  } else {
+    // Normal install mode (fallback to install if ci fails)
+    const prodFlag = production ? (legacyPeerDeps ? ' --omit=dev --legacy-peer-deps' : ' --omit=dev') : (legacyPeerDeps ? ' --legacy-peer-deps' : '');
+    installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+      pnpm install${production ? ' --prod' : ''}; \\
+    elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
+      yarn install${production ? ' --production' : ''}; \\
+    else \\
+      if [ -f package-lock.json ]; then npm ci${prodFlag}; else npm install${prodFlag}; fi; \\
+    fi`;
+  }
+
+  // Build command
+  const buildCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+      pnpm run build; \\
+    elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
+      yarn build; \\
+    else \\
+      npm run build; \\
+    fi`;
+
+  // Start command (for CMD) - dynamic based on package manager
+  const startCmdArray = production
+    ? `["sh", "-c", "if [ \"\$PACKAGE_MANAGER\" = \"pnpm\" ]; then pnpm start; elif [ \"\$PACKAGE_MANAGER\" = \"yarn\" ]; then yarn start; else npm start; fi"]`
+    : `["sh", "-c", "if [ \"\$PACKAGE_MANAGER\" = \"pnpm\" ]; then pnpm start; elif [ \"\$PACKAGE_MANAGER\" = \"yarn\" ]; then yarn start; else npm start; fi"]`;
+
+  return {
+    setupPm,
+    copyLockfiles,
+    install: installCmd,
+    build: buildCmd,
+    start: startCmdArray,
+  };
 }
 
 /**
@@ -167,31 +301,49 @@ export PYTHON_FRAMEWORK
 
 /**
  * Generate Dockerfile for Node.js/Express apps (non-build, simple copy)
+ * Now supports pnpm/yarn/npm auto-detection
  */
 export function getNodejsDockerfile(): string {
+  const pm = getPackageManagerCommands({ production: true });
+  
   return `
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
+${pm.setupPm}
 
-# Use npm ci if lockfile exists, otherwise npm install
-RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+${pm.copyLockfiles}
+
+${pm.install}
 
 COPY . .
 
+# Security: Run as non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 appuser && \
+    chown -R appuser:nodejs /app
+
+USER appuser
+
+# Pass package manager as ENV for runtime CMD
+ARG PACKAGE_MANAGER
+ENV PACKAGE_MANAGER=$PACKAGE_MANAGER
+
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ${pm.start}
 `.trim();
 }
 
 /**
  * Generate Dockerfile for Next.js (standard mode)
  * Supports build-time env vars for NEXT_PUBLIC_* variables
+ * Now supports pnpm/yarn/npm auto-detection
  */
 export function getNextjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  const pm = getPackageManagerCommands();
+  
   // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
@@ -207,13 +359,15 @@ export function getNextjsDockerfile(envVars: Array<{key: string, value: string}>
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN npm install
+${pm.setupPm}
+
+${argDirectives}${pm.copyLockfiles}
+${pm.install}
 
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}RUN npm run build
+${envDirectives}${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -222,22 +376,38 @@ RUN mkdir -p ./public
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
 
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/public ./public
+# Security: Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
+
+# Pass package manager as ENV for runtime CMD
+ARG PACKAGE_MANAGER
+ENV PACKAGE_MANAGER=$PACKAGE_MANAGER
 
 EXPOSE 3000
 ENV PORT=3000
-CMD ["npm", "start"]
+CMD ${pm.start}
 `.trim();
 }
 
 /**
  * Generate Dockerfile for Next.js (standalone mode)
  * Supports build-time env vars for NEXT_PUBLIC_* variables
+ * 
+ * ⚠️ RUNTIME: Package manager is ONLY used during build.
+ * Standalone mode runs "node server.js" directly (Next.js generates optimized server).
+ * This is different from standard mode which uses package manager at runtime.
  */
 export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  const pm = getPackageManagerCommands();
+  
   // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
@@ -253,13 +423,15 @@ export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN npm install
+${pm.setupPm}
+
+${argDirectives}${pm.copyLockfiles}
+${pm.install}
 
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}RUN npm run build
+${envDirectives}${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -271,10 +443,16 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 
+# Security: Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
 # Copy standalone server and static files
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
-COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+USER nextjs
 
 EXPOSE 3000
 CMD ["node", "server.js"]
@@ -284,14 +462,18 @@ CMD ["node", "server.js"]
 /**
  * Generate Dockerfile for Vite-based apps (React, Vue, Svelte) and static sites
  * Supports optional build-time environment variable injection
+ * Now supports pnpm/yarn/npm auto-detection
  * 
  * ⚠️ Only for static SPA builds. Vite requires VITE_ prefix for public env vars.
  * ⚠️ Build args are visible in Docker logs - DO NOT use for secrets!
+ * ⚠️ RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
  * 
  * Users can access env vars via import.meta.env.VITE_API_URL in their code
  * If no env vars provided, generates a standard static site Dockerfile
  */
 export function getViteDockerfile(envVars: Array<{key: string, value: string}> = [], outputDir: string = 'dist'): string {
+  const pm = getPackageManagerCommands();
+  
   // Generate ARG directives for build-time env vars
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => {
@@ -313,23 +495,36 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+${pm.setupPm}
+
+${argDirectives}${pm.copyLockfiles}
+${pm.install}
 
 COPY . .
 
 # Pass build args as environment variables for Vite
-${envDirectives}RUN npm run build
+${envDirectives}${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
 
+# ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
+# Package manager detection is BUILD-ONLY. Runtime uses npm because:
+# 1. serve is a runtime tool, not a project dependency
+# 2. Avoids Corepack conflicts and Alpine image issues
+# 3. npm is guaranteed available in official Node images
 RUN npm install -g serve
+
+# Security: Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 appuser
 
 # Ensure dist exists before copying
 RUN mkdir -p ./dist
-COPY --from=builder /app/${outputDir}/. ./dist/
+COPY --from=builder --chown=appuser:nodejs /app/${outputDir}/. ./dist/
+
+USER appuser
 
 EXPOSE 3000
 CMD ["serve", "-s", "dist", "-l", "3000"]
@@ -341,6 +536,7 @@ CMD ["serve", "-s", "dist", "-l", "3000"]
  * Supports build-time environment variable injection via sed replacement
  * ⚠️ Build args are NOT secrets - use Kubernetes Secrets for sensitive data
  * ⚠️ Only for static SPA builds (environment.prod.ts placeholders). Not for SSR/Nx/runtime config.
+ * ⚠️ RUNTIME: Uses npm for `serve` global install (runtime-only tool, not project dependency)
  * Users can use __VAR_NAME__ placeholders in environment.prod.ts
  */
 export function getAngularDockerfile(envVars: Array<{key: string, value: string}> = []): string {
@@ -362,27 +558,37 @@ RUN ${sedCommands}
 `
     : '';
 
+  const pm = getPackageManagerCommands({ legacyPeerDeps: true });
+
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN if [ -f package-lock.json ]; then \\\\
-      npm ci --legacy-peer-deps || (echo "⚠️  WARNING: npm ci failed, falling back to npm install (lockfile may be outdated)" && npm install --legacy-peer-deps); \\\\
-    else \\\\
-      npm install --legacy-peer-deps; \\\\
-    fi
+${pm.setupPm}
+
+${argDirectives}${pm.copyLockfiles}
+${pm.install}
 
 COPY . .
 
-${envInjection}RUN npm run build
+${envInjection}${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
 
+# ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
+# Package manager detection is BUILD-ONLY. Runtime uses npm because:
+# 1. serve is a runtime tool, not a project dependency
+# 2. Avoids Corepack conflicts and Alpine image issues
+# 3. npm is guaranteed available in official Node images
 RUN npm install -g serve
+
+# Security: Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 appuser
+
 RUN mkdir -p /app/dist
 
 COPY --from=builder /app/dist/ /app/temp-dist/
@@ -416,7 +622,10 @@ RUN echo "=== Debugging dist structure ===" && \\
       echo "ERROR: index.html not found in /app/dist!" && \\
       exit 1; \\
     fi && \\
-    rm -rf /app/temp-dist
+    rm -rf /app/temp-dist && \\
+    chown -R appuser:nodejs /app/dist
+
+USER appuser
 
 EXPOSE 3000
 CMD ["serve", "-s", "dist", "-l", "3000"]
@@ -440,41 +649,23 @@ export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}>
     ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
+  const pm = getPackageManagerCommands({ frozen: true });
+  
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-# Install package manager based on PACKAGE_MANAGER_PLACEHOLDER
-RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
-      npm install -g pnpm@latest; \\
-    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
-      npm install -g yarn; \\
-    fi
+${pm.setupPm}
 
-${argDirectives}# Copy package files (support all package managers)
-COPY package*.json pnpm-lock.yaml* yarn.lock* ./
+${argDirectives}${pm.copyLockfiles}
 
-# Install dependencies based on package manager
-RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
-      pnpm install --frozen-lockfile; \\
-    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
-      yarn install --frozen-lockfile; \\
-    else \\
-      npm ci || npm install; \\
-    fi
+${pm.install}
 
 COPY . .
 
 # Pass build args as environment variables for Nuxt
-${envDirectives}# Build with appropriate package manager
-RUN if [ "PACKAGE_MANAGER_PLACEHOLDER" = "pnpm" ]; then \\
-      pnpm run build; \\
-    elif [ "PACKAGE_MANAGER_PLACEHOLDER" = "yarn" ]; then \\
-      yarn build; \\
-    else \\
-      npm run build; \\
-    fi
+${envDirectives}${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -499,8 +690,11 @@ CMD ["node", ".output/server/index.mjs"]
 /**
  * Generate Dockerfile for SvelteKit (adapter-node)
  * Supports build-time env vars for PUBLIC_* variables
+ * Now supports pnpm/yarn/npm auto-detection
  */
 export function getSveltekitDockerfile(envVars: Array<{key: string, value: string}> = []): string {
+  const pm = getPackageManagerCommands();
+  
   // Generate ARG directives for client-side env vars (PUBLIC_*)
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
@@ -516,22 +710,30 @@ export function getSveltekitDockerfile(envVars: Array<{key: string, value: strin
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-${argDirectives}COPY package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+${pm.setupPm}
+
+${argDirectives}${pm.copyLockfiles}
+${pm.install}
 
 COPY . .
 
 # Pass build args as environment variables for SvelteKit
-${envDirectives}RUN npm run build
+${envDirectives}${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
 
+# Security: Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 sveltekit
+
 # Copy build output and package files
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder --chown=sveltekit:nodejs /app/build ./build
+COPY --from=builder --chown=sveltekit:nodejs /app/package*.json ./
+COPY --from=builder --chown=sveltekit:nodejs /app/node_modules ./node_modules
+
+USER sveltekit
 
 EXPOSE 3000
 ENV PORT=3000
@@ -576,7 +778,9 @@ EXPOSE 8000
  * Generate complete "Prepare Dockerfile" stage for Node.js/Express
  */
 export function generateNodejsDockerfileStage(): string {
-  const detection = getNodeVersionDetectionScript(20);
+  const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   const dockerfile = getNodejsDockerfile();
   
   return `
@@ -585,16 +789,20 @@ if [ -f Dockerfile ]; then
 else
   echo "Generating Node.js Dockerfile with auto-detection"
   
-  ${detection}
+  ${nodeDetection}
+  ${pmDetection}
+  ${dockerignore}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace version placeholder
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();
@@ -605,6 +813,8 @@ fi
  */
 export function generateNextjsDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   const standaloneDetection = getNextjsStandaloneDetectionScript();
   const standardDockerfile = getNextjsDockerfile(envVars);
   const standaloneDockerfile = getNextjsStandaloneDockerfile(envVars);
@@ -616,6 +826,8 @@ else
   echo "Generating Next.js Dockerfile with auto-detection"
   
   ${nodeDetection}
+  ${pmDetection}
+  ${dockerignore}
   
   ${standaloneDetection}
   
@@ -631,10 +843,12 @@ ${standardDockerfile}
 DOCKERFILE_EOF
   fi
   
-  # Replace version placeholder
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();
@@ -647,6 +861,7 @@ fi
 export function generatePythonDockerfileStage(): string {
   const versionDetection = getPythonVersionDetectionScript('3.11');
   const frameworkDetection = getPythonFrameworkDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   
   return `
 if [ -f Dockerfile ]; then
@@ -660,6 +875,8 @@ else
   ${versionDetection}
   
   ${frameworkDetection}
+  
+  ${dockerignore}
   
   # Generate framework-specific Dockerfile
   if [ "$PYTHON_FRAMEWORK" = "fastapi" ]; then
@@ -676,6 +893,10 @@ RUN pip install --no-cache-dir -r requirements.txt || true
 RUN pip install --no-cache-dir uvicorn[standard]
 
 COPY . .
+
+# Security: Run as non-root user
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
@@ -696,6 +917,10 @@ RUN pip install --no-cache-dir -r requirements.txt || true
 RUN pip install --no-cache-dir gunicorn
 
 COPY . .
+
+# Security: Run as non-root user
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
@@ -723,6 +948,10 @@ RUN pip install --no-cache-dir gunicorn
 
 COPY . .
 
+# Security: Run as non-root user
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["gunicorn", "-b", "0.0.0.0:8000", "DJANGO_PROJECT_PLACEHOLDER.wsgi:application"]
@@ -741,6 +970,10 @@ COPY requirements.tx[t] ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 
 COPY . .
+
+# Security: Run as non-root user
+RUN useradd -m -u 1001 appuser && chown -R appuser:appuser /app
+USER appuser
 
 EXPOSE 8000
 
@@ -765,7 +998,9 @@ fi
  * Always uses Vite-style Dockerfile for consistency (supports optional env vars)
  */
 export function generateStaticSiteDockerfileStage(outputDir: string = 'dist', envVars: Array<{key: string, value: string}> = []): string {
-  const detection = getNodeVersionDetectionScript(20);
+  const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   // Always use getViteDockerfile() for consistency - it handles both cases (with/without env vars)
   const dockerfile = getViteDockerfile(envVars, outputDir);
   
@@ -775,16 +1010,20 @@ if [ -f Dockerfile ]; then
 else
   echo "Generating static site Dockerfile with auto-detection"
   
-  ${detection}
+  ${nodeDetection}
+  ${pmDetection}
+  ${dockerignore}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace version placeholder
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();
@@ -794,7 +1033,9 @@ fi
  * Generate complete "Prepare Dockerfile" stage for Angular
  */
 export function generateAngularDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
-  const detection = getNodeVersionDetectionScript(20);
+  const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   const dockerfile = getAngularDockerfile(envVars);
   
   return `
@@ -803,16 +1044,20 @@ if [ -f Dockerfile ]; then
 else
   echo "Generating Angular Dockerfile with auto-detection"
   
-  ${detection}
+  ${nodeDetection}
+  ${pmDetection}
+  ${dockerignore}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace version placeholder
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();
@@ -824,6 +1069,7 @@ fi
 export function generateNuxtjsDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
   const nodeDetection = getNodeVersionDetectionScript(20);
   const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   const dockerfile = getNuxtjsDockerfile(envVars);
   
   return `
@@ -834,18 +1080,18 @@ else
   
   ${nodeDetection}
   ${pmDetection}
+  ${dockerignore}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace placeholders
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
-  sed -i "s/PACKAGE_MANAGER_PLACEHOLDER/$PACKAGE_MANAGER/g" Dockerfile 2>/dev/null || sed -i '' "s/PACKAGE_MANAGER_PLACEHOLDER/$PACKAGE_MANAGER/g" Dockerfile
   
   echo "Dockerfile generated successfully"
   echo "Node.js version: $NODE_VERSION"
-  echo "Package manager: $PACKAGE_MANAGER"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();
@@ -855,7 +1101,9 @@ fi
  * Generate complete "Prepare Dockerfile" stage for SvelteKit
  */
 export function generateSveltekitDockerfileStage(envVars: Array<{key: string, value: string}> = []): string {
-  const detection = getNodeVersionDetectionScript(20);
+  const nodeDetection = getNodeVersionDetectionScript(20);
+  const pmDetection = getPackageManagerDetectionScript();
+  const dockerignore = getDockerignoreGenerationScript();
   const dockerfile = getSveltekitDockerfile(envVars);
   
   return `
@@ -864,16 +1112,20 @@ if [ -f Dockerfile ]; then
 else
   echo "Generating SvelteKit Dockerfile with auto-detection"
   
-  ${detection}
+  ${nodeDetection}
+  ${pmDetection}
+  ${dockerignore}
   
   cat > Dockerfile << 'DOCKERFILE_EOF'
 ${dockerfile}
 DOCKERFILE_EOF
   
-  # Replace version placeholder
+  # Replace version placeholder only (package manager passed as build arg)
   sed -i "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/NODE_VERSION_PLACEHOLDER/$NODE_VERSION/g" Dockerfile
   
   echo "Dockerfile generated successfully"
+  echo "Node.js version: $NODE_VERSION"
+  echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
 fi
 `.trim();

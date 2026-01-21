@@ -10,7 +10,7 @@
  * 3. Deploy to Kubernetes stage
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
-import { generateSveltekitDockerfileStage } from '../dockerfiles';
+import { generateSveltekitDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createSvelteKitPipeline(
@@ -76,7 +76,11 @@ export function createSvelteKitPipeline(
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';
-  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
+  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
+  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
+  const buildArgsLine = buildArgs
+    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
+    : ` \\\\\n                    ${pmBuildArg}`;
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -268,6 +272,9 @@ ${generateSveltekitDockerfileStage(clientEnvVars)}
   }
 }
 EOF
+
+                  # Re-detect package manager (shell vars don't persist across stages)
+${getPackageManagerDetectionScript()}
 
                   echo 'Executing Kaniko build'
                   /kaniko/executor \\
