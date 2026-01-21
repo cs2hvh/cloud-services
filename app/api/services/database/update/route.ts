@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects as ProjectQueries } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -44,6 +45,25 @@ export async function PUT(req: NextRequest) {
         text: `Database cluster '${clusterData.data.name}' moved to this project`
       });
       console.log(`[updateProject] ✅ Activity log added for project assignment`);
+    }
+
+    // Create notification for project assignment
+    if (clusterData.success) {
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: clusterData.data.owner_id,
+            type: 'info',
+            action: 'updated',
+            serviceType: 'database',
+            serviceName: clusterData.data.name,
+            serviceId: body.cluster_id,
+            metadata: { updateType: 'project', projectName: projectData?.name }
+          })
+        );
+      } catch (notifErr) {
+        console.error('[updateProject] Failed to create notification:', notifErr);
+      }
     }
 
     return NextResponse.json(

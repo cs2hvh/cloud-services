@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { upsizeStorageSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -132,6 +133,26 @@ export async function PUT(req: NextRequest) {
           text: `Database storage upsized to: ${(validatedData.storage_size_mib / 1024).toFixed(0)} GiB`
         });
         console.log(`[upsize-storage] ✅ Activity log added for storage upsize`);
+      }
+
+      // Create notification for storage upsize
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: clusterData.data.owner_id,
+            type: 'info',
+            action: 'updated',
+            serviceType: 'database',
+            serviceName: clusterData.data.name,
+            serviceId: validatedData.database_id,
+            metadata: { 
+              updateType: 'storage_upsize', 
+              newStorageGiB: (validatedData.storage_size_mib / 1024).toFixed(0)
+            }
+          })
+        );
+      } catch (notifErr) {
+        console.error('[upsize-storage] Failed to create notification:', notifErr);
       }
 
       return NextResponse.json(

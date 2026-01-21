@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -63,8 +64,37 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await deleteSpectrumApp(validation.data.app_id);
+
+    // Create notification
+    await NotificationService.create(
+      createServiceNotification({
+        userId: auth.user!.id,
+        type: 'success',
+        action: 'deleted',
+        serviceType: 'network_ddos',
+        serviceName: 'Spectrum App',
+        serviceId: validation.data.app_id,
+      })
+    );
+
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'deleted',
+          serviceType: 'network_ddos',
+          serviceName: 'Spectrum App',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
     console.error("Spectrum app delete error:", errorMessage);
     

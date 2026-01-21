@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteDbSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 interface database_error {
   response: {
@@ -60,6 +61,25 @@ export async function POST(req: NextRequest) {
             text: `Database '${validatedData.db_name}' deleted from cluster`
           });
           console.log(`[deleteDatabase] ✅ Activity log added for database deletion`);
+        }
+
+        // Create notification for database deletion
+        if (clusterData.success) {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: clusterData.data.owner_id,
+                type: 'info',
+                action: 'updated',
+                serviceType: 'database',
+                serviceName: clusterData.data.name,
+                serviceId: validatedData.cluster_id,
+                metadata: { updateType: 'database_deleted', dbName: validatedData.db_name }
+              })
+            );
+          } catch (notifErr) {
+            console.error('[deleteDatabase] Failed to create notification:', notifErr);
+          }
         }
         
         return NextResponse.json(

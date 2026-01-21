@@ -5,6 +5,7 @@ import { Projects,  } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import axios from "axios";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { createServiceNotification, NotificationService } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -142,6 +143,18 @@ export async function POST(req: NextRequest) {
       console.log(`[deleteKubernetesCluster] ✅ Activity log added for cluster deletion`);
     }
 
+    // Create notification
+    await NotificationService.create(
+      createServiceNotification({
+        userId: auth.user!.id,
+        type: 'success',
+        action: 'deleted',
+        serviceType: 'kubernetes',
+        serviceName: clusterName,
+        serviceId: json.cluster_id,
+      })
+    );
+
     return NextResponse.json(
       {
         message: "cluster deleted successfully",
@@ -150,6 +163,22 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'deleted',
+          serviceType: 'kubernetes',
+          serviceName: 'Kubernetes Cluster',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     if (err instanceof Error) {
       return NextResponse.json(
         { error: err.message ?? "Invalid request" },

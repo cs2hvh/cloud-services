@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -88,11 +89,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Create success notification
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'success',
+          action: 'deleted',
+          serviceType: 'platform_app',
+          serviceName: appName,
+          serviceId: app_id,
+        })
+      );
+
       return NextResponse.json({ message: "App deleted successfully" });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       const statusCode = errorMsg === "App not found" ? 404 :
                         errorMsg === "Unauthorized" ? 403 : 400;
+      
+      // Create failure notification
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: auth.user!.id,
+            type: 'error',
+            action: 'failed',
+            serviceType: 'platform_app',
+            serviceName: appName,
+            error: `Deletion failed: ${errorMsg}`,
+          })
+        );
+      } catch (notifError) {
+        console.error('[platform-apps/delete] Failed to create error notification:', notifError);
+      }
+      
       return NextResponse.json({ error: errorMsg }, { status: statusCode });
     }
   } catch (err: unknown) {

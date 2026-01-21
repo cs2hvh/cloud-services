@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
@@ -127,8 +128,36 @@ export async function POST(req: NextRequest) {
 }
 
 
+    // Create notification
+    await NotificationService.create(
+      createServiceNotification({
+        userId: targetOwnerId,
+        type: 'success',
+        action: 'created',
+        serviceType: 'object_storage',
+        serviceName: validatedData.name,
+        serviceId: result.data?.id ?? validatedData.name,
+      })
+    );
+
     return NextResponse.json({ success: true, data: result.data, message: result.message }, { status: 201 });
   } catch (error) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'created',
+          serviceType: 'object_storage',
+          serviceName: 'Object Storage Bucket',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     // Generic error handling - no sensitive details exposed
     const errorMessage =
       error instanceof Error ? error.message : "An unexpected error occurred";

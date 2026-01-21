@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { createSpectrumApp } from "@/config/spectrum-functions";
 import { ensureBalance } from "@/config/billing-flow";
 import { authenticateUser } from "@/lib/auth/server-auth";
@@ -49,6 +50,18 @@ export async function POST(req: NextRequest) {
 
     const result = await createSpectrumApp(validation.data, body.role);
 
+    // Create notification
+    await NotificationService.create(
+      createServiceNotification({
+        userId: ownerId,
+        type: 'success',
+        action: 'created',
+        serviceType: 'network_ddos',
+        serviceName: validation.data.protocol || 'Spectrum App',
+        serviceId: result?.app?.id || result?.cloudflare?.id || 'unknown',
+      })
+    );
+
     // Insert into billing.active_spectrum (use local row id as service_id)
 //     try {
 //       const serviceId = (result?.app?.id as string) || (result?.cloudflare?.id as string);
@@ -76,6 +89,22 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'created',
+          serviceType: 'network_ddos',
+          serviceName: 'Spectrum App',
+          error: error instanceof Error ? error.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
     console.error("Spectrum app create error:", errorMessage);
     

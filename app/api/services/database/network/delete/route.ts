@@ -6,6 +6,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { Rule } from "@/lib/supabase/types";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -115,6 +116,25 @@ export async function POST(req: NextRequest) {
               text: `Removed firewall rule: ${deletedRuleValue}`
             });
             console.log(`[deleteNetworkRule] ✅ Activity log added for firewall rule deletion`);
+          }
+
+          // Create notification for firewall rule deletion
+          if (clusterData.success) {
+            try {
+              await NotificationService.create(
+                createServiceNotification({
+                  userId: clusterData.data.owner_id,
+                  type: 'info',
+                  action: 'updated',
+                  serviceType: 'database',
+                  serviceName: clusterData.data.name,
+                  serviceId: validatedData.id,
+                  metadata: { updateType: 'firewall_deleted', ipAddress: deletedRuleValue }
+                })
+              );
+            } catch (notifErr) {
+              console.error('[deleteNetworkRule] Failed to create notification:', notifErr);
+            }
           }
           
           return NextResponse.json(

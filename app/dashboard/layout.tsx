@@ -2,6 +2,7 @@ import { AppSidebar } from "@/components/dashboard/sidebar";
 import { requireAuthProfile } from "@/lib/supabase/auth";
 import { SessionProvider } from "./provider";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { NotificationBell } from "@/components/dashboard/notifications";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -18,9 +19,15 @@ export default async function DashboardLayout({
     <SessionProvider initialUser={user} initialProjects={projects}>
       <div className="flex h-screen bg-black">
         <AppSidebar projects={projects} user={user}  />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Dashboard Header with Notifications */}
+          <header className="h-14 border-b border-slate-800/50 flex items-center justify-end px-4 sm:px-6 bg-black/50 backdrop-blur-sm">
+            <NotificationBell />
+          </header>
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
+        </div>
       </div>
     </SessionProvider>
   );

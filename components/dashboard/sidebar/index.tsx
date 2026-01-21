@@ -24,6 +24,7 @@ import {
   Users,
   Network,
   Ticket,
+  Rocket,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -477,6 +478,20 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     >
                       <Box className="w-4 h-4 mr-2" />
                       <span className="text-sm">Kubernetes</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/platform-apps"
+                      className={`
+    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+    ${
+      pathname.startsWith("/dashboard/admin/platform-apps")
+        ? "bg-slate-700 text-white font-medium"
+        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+    }
+  `}
+                    >
+                      <Rocket className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Platform-apps</span>
                     </Link>
                     <Link
                       href="/dashboard/admin/coupons"

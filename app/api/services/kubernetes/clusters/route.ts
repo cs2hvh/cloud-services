@@ -9,6 +9,7 @@ import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 
 
@@ -130,6 +131,18 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     return NextResponse.json({ error: "Post-provision billing failed", details: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
+
+  // Create notification
+  await NotificationService.create(
+    createServiceNotification({
+      userId: parsed.data.ownerId,
+      type: 'success',
+      action: 'created',
+      serviceType: 'kubernetes',
+      serviceName: parsed.data.cluster.name,
+      serviceId: clusterId,
+    })
+  );
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

@@ -12,6 +12,7 @@ import {
   validateEngineVersion,
 } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { DatabaseUser } from "@/lib/supabase/types";
 import { getRatesForDatabase } from "@/config/pricing";
 
@@ -191,6 +192,18 @@ export async function POST(req: NextRequest) {
             { status: 500 }
           );
         }
+        // Create notification
+        await NotificationService.create(
+          createServiceNotification({
+            userId: body.owner_id,
+            type: 'success',
+            action: 'created',
+            serviceType: 'database',
+            serviceName: validatedData.name,
+            serviceId: supabase_data.data?.id ?? database.data.database.id,
+          })
+        );
+
         return NextResponse.json(
           {
             data: supabase_data.data,
@@ -230,6 +243,22 @@ export async function POST(req: NextRequest) {
       }, { status: 503 });
     }
   } catch (err: unknown) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'created',
+          serviceType: 'database',
+          serviceName: 'Database Cluster',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     if (err as database_error) {
       const message = (err as database_error)?.response?.data?.message;
       console.log(message, "..............error...........");

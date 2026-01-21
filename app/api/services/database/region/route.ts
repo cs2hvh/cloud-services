@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { migrateRegionSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -68,6 +69,25 @@ export async function PUT(req: NextRequest) {
           text: `Database cluster migrating to region: ${validatedData.region}`
         });
        //console.log(`[migrateRegion] ✅ Activity log added for region migration`);
+      }
+
+      // Create notification for region migration
+      if (clusterData.success) {
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: clusterData.data.owner_id,
+              type: 'info',
+              action: 'migrated',
+              serviceType: 'database',
+              serviceName: clusterData.data.name,
+              serviceId: validatedData.database_id,
+              metadata: { updateType: 'region', newRegion: validatedData.region }
+            })
+          );
+        } catch (notifErr) {
+          console.error('[migrateRegion] Failed to create notification:', notifErr);
+        }
       }
 
       return NextResponse.json(

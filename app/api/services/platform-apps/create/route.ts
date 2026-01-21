@@ -9,6 +9,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { getRatesForPlatformApp } from "@/config/pricing";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -396,6 +397,23 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Create success notification
+    await NotificationService.create(
+      createServiceNotification({
+        userId: auth.user!.id,
+        type: 'success',
+        action: 'created',
+        serviceType: 'platform_app',
+        serviceName: appData.name,
+        serviceId: result.app_id,
+        metadata: { 
+          framework: appData.framework,
+          repository: appData.repository_name,
+          branch: appData.branch || 'main'
+        }
+      })
+    );
+
     return NextResponse.json({
       message: 'Created App Successfully!',
       app_id: result.app_id,
@@ -411,6 +429,23 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     console.error('[platform-apps/create] Error:', err);
     const errorMessage = err instanceof Error ? err.message : 'Something went wrong.';
+    
+    // Create failure notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'failed',
+          serviceType: 'platform_app',
+          serviceName: 'Application',
+          error: errorMessage,
+        })
+      );
+    } catch (notifError) {
+      console.error('[platform-apps/create] Failed to create error notification:', notifError);
+    }
+    
     return NextResponse.json({ 
       error: errorMessage
     }, { status: 500 });

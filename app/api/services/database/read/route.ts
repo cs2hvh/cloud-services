@@ -8,6 +8,7 @@ import { DatabaseUser, EncryptedData } from "@/lib/supabase/types";
 import { readDatabaseSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { resolveHost } from "@/config/hosttoip";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -221,6 +222,23 @@ export async function POST(req: NextRequest) {
                 text: `Database cluster '${updatedRead.data.name}' is now online`
               });
               console.log(`[checkStatus] ✅ Activity log added for cluster going online`);
+            }
+
+            // Create notification for database cluster going online
+            try {
+              await NotificationService.create(
+                createServiceNotification({
+                  userId: updatedRead.data.owner_id,
+                  type: 'success',
+                  action: 'deployed',
+                  serviceType: 'database',
+                  serviceName: updatedRead.data.name,
+                  serviceId: validatedData.id,
+                })
+              );
+              console.log(`[checkStatus] ✅ Notification sent for cluster going online`);
+            } catch (notifErr) {
+              console.error('[checkStatus] Failed to create notification:', notifErr);
             }
           }
         }

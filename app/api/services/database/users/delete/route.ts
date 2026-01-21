@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 interface database_error {
   response: {
@@ -59,6 +60,25 @@ export async function POST(req: NextRequest) {
             text: `Database user '${validatedData.username}' deleted`
           });
           console.log(`[deleteDatabaseUser] ✅ Activity log added for user deletion`);
+        }
+
+        // Create notification for user deletion
+        if (clusterData.success) {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: clusterData.data.owner_id,
+                type: 'info',
+                action: 'updated',
+                serviceType: 'database',
+                serviceName: clusterData.data.name,
+                serviceId: validatedData.cluster_id,
+                metadata: { updateType: 'user_deleted', userName: validatedData.username }
+              })
+            );
+          } catch (notifErr) {
+            console.error('[deleteDatabaseUser] Failed to create notification:', notifErr);
+          }
         }
         
         return NextResponse.json(

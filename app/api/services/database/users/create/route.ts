@@ -7,6 +7,7 @@ import { Encryption } from "@/config/functions";
 import { createDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseUser } from "@/lib/supabase/types";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 interface database_error {
   response: {
@@ -78,6 +79,25 @@ export async function POST(req: NextRequest) {
             text: `Database user '${validatedData.name}' created`
           });
           // console.log(`[createDatabaseUser] ✅ Activity log added for user creation`);
+        }
+
+        // Create notification for user creation
+        if (clusterData.success) {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: clusterData.data.owner_id,
+                type: 'info',
+                action: 'updated',
+                serviceType: 'database',
+                serviceName: clusterData.data.name,
+                serviceId: validatedData.cluster_id,
+                metadata: { updateType: 'user_created', userName: validatedData.name }
+              })
+            );
+          } catch (notifErr) {
+            console.error('[createDatabaseUser] Failed to create notification:', notifErr);
+          }
         }
         
         return NextResponse.json(

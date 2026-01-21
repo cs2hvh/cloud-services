@@ -6,6 +6,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { updateNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { Rule } from "@/lib/supabase/types";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -123,6 +124,25 @@ export async function POST(req: NextRequest) {
             text: `Added firewall rule: ${validatedData.ip_address}`
           });
           console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
+        }
+
+        // Create notification for firewall rule addition
+        if (clusterData.success) {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: clusterData.data.owner_id,
+                type: 'info',
+                action: 'updated',
+                serviceType: 'database',
+                serviceName: clusterData.data.name,
+                serviceId: validatedData.id,
+                metadata: { updateType: 'firewall', ipAddress: validatedData.ip_address }
+              })
+            );
+          } catch (notifErr) {
+            console.error('[updateNetworkRules] Failed to create notification:', notifErr);
+          }
         }
         
         return NextResponse.json(

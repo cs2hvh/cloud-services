@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { DatabaseIntegrationService } from "@/lib/services/database-integration";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -105,6 +106,24 @@ export async function POST(req: NextRequest) {
         });
         console.log(`[deleteDatabase] ✅ Activity log added for cluster deletion`);
       }
+
+      // Create success notification
+      if (clusterData.success) {
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: clusterData.data.owner_id,
+              type: 'success',
+              action: 'deleted',
+              serviceType: 'database',
+              serviceName: clusterName,
+              serviceId: body.id,
+            })
+          );
+        } catch (notifErr) {
+          console.error('[deleteDatabase] Failed to create notification:', notifErr);
+        }
+      }
       
       return NextResponse.json(
         {
@@ -119,6 +138,22 @@ export async function POST(req: NextRequest) {
       );
     }
   } catch (err: unknown) {
+    // Create error notification
+    try {
+      await NotificationService.create(
+        createServiceNotification({
+          userId: auth.user!.id,
+          type: 'error',
+          action: 'deleted',
+          serviceType: 'database',
+          serviceName: 'Database Cluster',
+          error: err instanceof Error ? err.message : 'Unknown error',
+        })
+      );
+    } catch (notifErr) {
+      console.error('Failed to create error notification:', notifErr);
+    }
+
     if (err instanceof Error) {
       return NextResponse.json(
         { error: err.message ?? "Invalid request" },

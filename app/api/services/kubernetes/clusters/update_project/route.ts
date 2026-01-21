@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     // Get current cluster data for logging
     const { data: clusterData, error: readError } = await supabase
       .from("clusters")
-      .select("cluster_name, project_id")
+      .select("cluster_name, project_id, owner_id")
       .eq("cluster_id", cluster_id)
       .single();
 
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
 
     const oldProjectId = clusterData?.project_id;
     const clusterName = clusterData?.cluster_name || "Unknown";
+    const ownerId = clusterData?.owner_id;
 
     // Update the cluster's project_id
     const { error: updateError } = await supabase
@@ -64,6 +66,28 @@ export async function POST(req: NextRequest) {
     });
 
     console.log(`[updateClusterProject] ✅ Cluster project updated successfully`);
+
+    // Create notification for project update
+    if (ownerId) {
+      try {
+        // Get project name for better notification message
+        const projectData = await Projects.get_by_id(project_id);
+        
+        await NotificationService.create(
+          createServiceNotification({
+            userId: ownerId,
+            type: 'info',
+            action: 'updated',
+            serviceType: 'kubernetes',
+            serviceName: clusterName,
+            serviceId: cluster_id,
+            metadata: { updateType: 'project', projectName: projectData?.name }
+          })
+        );
+      } catch (notifErr) {
+        console.error('[updateClusterProject] Failed to create notification:', notifErr);
+      }
+    }
 
     return NextResponse.json(
       {
