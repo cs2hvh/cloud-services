@@ -377,13 +377,26 @@ export class KubernetesInfoService {
       // Step 6: Trigger rolling restart
       // Patch the restartedAt annotation to force pods to restart
       // ========================================
-      const jsonPatch = [
-        {
-          op: 'add',
-          path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
-          value: new Date().toISOString(),
-        },
-      ];
+      const hasAnnotations = deployment.spec?.template?.metadata?.annotations;
+      const restartTimestamp = new Date().toISOString();
+      
+      const jsonPatch = hasAnnotations
+        ? [
+            // Replace existing annotation or add if it exists
+            {
+              op: 'replace',
+              path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
+              value: restartTimestamp,
+            },
+          ]
+        : [
+            // Create annotations object first, then add our annotation
+            {
+              op: 'add',
+              path: '/spec/template/metadata/annotations',
+              value: { 'kubectl.kubernetes.io/restartedAt': restartTimestamp },
+            },
+          ];
 
       await apps.patchNamespacedDeployment({
         name: deploymentName,

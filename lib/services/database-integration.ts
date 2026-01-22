@@ -21,6 +21,7 @@ import {
 } from "@/lib/supabase/queries";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
+import { KubernetesInfoService } from "./kubernetes-info";
 import { Encryption } from "@/config/functions";
 import type { 
   Database_Connection, 
@@ -187,10 +188,31 @@ export class DatabaseIntegrationService {
       console.warn(`[DatabaseIntegrationService] WARNING: Password is empty for ${engine} database. Connection may fail.`);
     }
     
-    // Build connection URL based on engine (use decrypted URI if available)
-    let connectionUrl = uri;
-    if (!connectionUrl) {
-      // Build it manually if URI not provided
+    // Build connection URL based on engine
+    let connectionUrl: string;
+    
+    if (uri) {
+      // URI provided by cloud provider - need to modify query params for SSL
+      if (connection.ssl && engine === "pg") {
+        // Don't use URL parser to avoid double-encoding credentials
+        // Just replace/append the sslmode query parameter
+        if (uri.includes('?')) {
+          // Has query params - replace sslmode if exists, otherwise append
+          if (uri.includes('sslmode=')) {
+            connectionUrl = uri.replace(/sslmode=[^&]*/, 'sslmode=no-verify');
+          } else {
+            connectionUrl = uri + '&sslmode=no-verify';
+          }
+        } else {
+          // No query params - add sslmode
+          connectionUrl = uri + '?sslmode=no-verify';
+        }
+        console.log("[DatabaseIntegrationService] Modified PostgreSQL URI to use sslmode=no-verify for self-signed certs");
+      } else {
+        connectionUrl = uri;
+      }
+    } else {
+      // Build URI manually from components
       const protocol = engine === "mongodb" ? "mongodb" : 
                        engine === "mysql" ? "mysql" : 
                        engine === "pg" ? "postgresql" : 
@@ -198,8 +220,9 @@ export class DatabaseIntegrationService {
       
       connectionUrl = `${protocol}://${user}:${password}@${host}:${port}/${database}`;
       
-      if (connection.ssl) {
-        connectionUrl += "?sslmode=require";
+      // Add SSL query params for PostgreSQL
+      if (connection.ssl && engine === "pg") {
+        connectionUrl += "?sslmode=no-verify";
       }
     }
 
@@ -293,9 +316,48 @@ export class DatabaseIntegrationService {
       }
 
       // ========================================
-      // Step 5: Generate environment variables
+      // Step 5: Fetch FRESH credentials from DigitalOcean
       // ========================================
-      const connection = database.public_connection;
+      // CRITICAL: Don't use stale stored credentials - fetch current password from DO API
+      console.log("[DatabaseIntegrationService] Fetching fresh credentials from DigitalOcean API...");
+      
+      let connection = database.public_connection;
+      
+      try {
+        const axios = (await import('axios')).default;
+        const response = await axios.get(
+          `https://api.digitalocean.com/v2/databases/${database_id}`,
+          {
+            headers: {
+              Authorization: process.env.DIGITAL_OCEAN_TOKEN!,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        if (response.status === 200) {
+          const dbData = response.data.database;
+          console.log("[DatabaseIntegrationService] ✅ Using fresh credentials from DigitalOcean API");
+          
+          // Use fresh connection from DO (not encrypted, direct from API)
+          connection = {
+            host: dbData.connection.host,
+            port: dbData.connection.port,
+            user: dbData.connection.user,
+            password: dbData.connection.password, // Fresh password!
+            database: dbData.connection.database,
+            uri: dbData.connection.uri,
+            ssl: dbData.connection.ssl || true,
+            protocol: dbData.connection.protocol,
+          };
+        } else {
+          console.warn("[DatabaseIntegrationService] ⚠️ Could not fetch from DO, using stored credentials");
+        }
+      } catch (apiError) {
+        console.warn("[DatabaseIntegrationService] ⚠️ DigitalOcean API error, using stored credentials:", apiError);
+        // Fall back to stored credentials if API fails
+      }
+
       if (!connection) {
         return { 
           success: false, 
@@ -360,14 +422,16 @@ export class DatabaseIntegrationService {
       const integration = integrationResult.data!;
 
       // ========================================
-      // Step 8: Inject env vars into app
+      // Step 8: Inject env vars into app (database only)
       // ========================================
+      let mergedVars: Array<{ key: string; value: string }>;
       try {
         // Merge with existing (filter out conflicts if force=true)
-        const mergedVars = force 
+        mergedVars = force 
           ? [...existingEnvVars.filter(ev => !conflicts.includes(ev.key)), ...generated.vars]
           : [...existingEnvVars, ...generated.vars];
 
+        // Save to database
         const setResult = await Platform_Apps.set_env_vars(app_id, mergedVars);
         if (!setResult.success) {
           throw new Error(setResult.error || "Failed to set env vars");
@@ -391,23 +455,32 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_linked(integration.id, generated.keys);
 
       // ========================================
-      // Step 10: Trigger redeploy if app is running
+      // Step 10: Update K8s Secret and trigger rolling restart
       // ========================================
       let redeployTriggered = false;
-      if (app.status === "running") {
+      if (app.status === "running" || app.status === "failed") {
         try {
-          const buildNumber = await JenkinsService.triggerBuild(app.name);
-          BuildPollingService.startPolling({
-            appId: app_id,
-            appName: app.name,
-            buildNumber,
-            trigger: "manual", // Using 'manual' as closest match
-          });
-          redeployTriggered = true;
-          console.log(`[DatabaseIntegrationService] Redeploy triggered: build #${buildNumber}`);
+          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
+            app.name,
+            mergedVars
+          );
+          redeployTriggered = restartResult.success;
+          
+          if (restartResult.success) {
+            console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
+            
+            // Sync status from K8s after restart
+            const { AppStatusService } = await import('./app-status');
+            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+            if (syncResult.changed) {
+              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+            }
+          } else {
+            console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
+          }
         } catch (deployError) {
-          console.error(`[DatabaseIntegrationService] Redeploy failed:`, deployError);
-          // Don't fail the link - env vars are saved, will apply on next deploy
+          console.error(`[DatabaseIntegrationService] K8s update failed:`, deployError);
+          // Don't fail the link - env vars saved to DB, will apply on next full deploy
         }
       }
 
@@ -511,23 +584,32 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_unlinked(integration.id, user_id);
 
       // ========================================
-      // Step 6: Trigger redeploy if app is running
+      // Step 6: Update K8s Secret and trigger rolling restart (NOT full rebuild)
       // ========================================
       let redeployTriggered = false;
-      if (app.status === "running") {
+      if (app.status === "running" || app.status === "failed") {
         try {
-          const buildNumber = await JenkinsService.triggerBuild(app.name);
-          BuildPollingService.startPolling({
-            appId: app_id,
-            appName: app.name,
-            buildNumber,
-            trigger: "manual",
-          });
-          redeployTriggered = true;
-          console.log(`[DatabaseIntegrationService] Redeploy triggered: build #${buildNumber}`);
+          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
+            app.name,
+            filteredVars
+          );
+          redeployTriggered = restartResult.success;
+          
+          if (restartResult.success) {
+            console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
+            
+            // Sync status from K8s after restart
+            const { AppStatusService } = await import('./app-status');
+            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+            if (syncResult.changed) {
+              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+            }
+          } else {
+            console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
+          }
         } catch (deployError) {
-          console.error(`[DatabaseIntegrationService] Redeploy failed:`, deployError);
-          // Don't fail - env vars are removed, will apply on next deploy
+          console.error(`[DatabaseIntegrationService] K8s update failed:`, deployError);
+          // Don't fail the unlink - env vars removed from DB, will apply on next full deploy
         }
       }
 
