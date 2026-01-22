@@ -19,8 +19,6 @@ import {
   Database_Clusters, 
   Projects 
 } from "@/lib/supabase/queries";
-import { JenkinsService } from "./jenkins";
-import { BuildPollingService } from "./build-polling";
 import { KubernetesInfoService } from "./kubernetes-info";
 import { Encryption } from "@/config/functions";
 import type { 
