@@ -160,6 +160,17 @@ export async function POST(req: NextRequest) {
 
       console.log(`[env-vars/update] ✅ ${app.name}: Env vars updated and pods restarted`);
       
+      // Sync app status from K8s after restart
+      try {
+        const { AppStatusService } = await import('@/lib/services/app-status');
+        const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+        if (syncResult.changed) {
+          console.log(`[env-vars/update] Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+        }
+      } catch (syncError) {
+        console.error(`[env-vars/update] Status sync failed (non-critical):`, syncError);
+      }
+      
       return NextResponse.json({
         message: "Environment variables updated and applied successfully",
         requiresRedeploy: false,

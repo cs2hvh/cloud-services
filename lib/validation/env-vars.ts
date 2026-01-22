@@ -115,9 +115,13 @@ function startsWithAnyPrefix(key: string, prefixes: readonly string[]): boolean 
 
 /**
  * Normalize framework name to internal key format
+ * Handles: "Next.js" → "nextjs", "Nuxt.js" → "nuxtjs", "Vue.js" → "vue", etc.
  */
 function normalizeFrameworkKey(framework: string): keyof typeof FRAMEWORK_RULES {
-  return (FRAMEWORK_KEY_MAP[framework] || framework) as keyof typeof FRAMEWORK_RULES;
+  // First normalize: lowercase and remove dots/spaces
+  const normalized = framework.toLowerCase().replace(/[.\s]/g, '');
+  // Then apply custom mappings
+  return (FRAMEWORK_KEY_MAP[normalized] || normalized) as keyof typeof FRAMEWORK_RULES;
 }
 
 /**

@@ -65,6 +65,12 @@ export async function POST(req: NextRequest) {
       
       // Hard fail on errors (security risks like NEXT_PUBLIC_DATABASE_URL)
       if (!envValidation.isValid) {
+        console.error('[platform-apps/create] Environment variable validation failed:', {
+          framework: appData.framework,
+          env_vars: env_vars.map(v => v.key),
+          errors: envValidation.errors,
+          warnings: envValidation.warnings
+        });
         return NextResponse.json(
           {
             error: 'Environment variable validation failed',
