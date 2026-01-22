@@ -192,37 +192,54 @@ export class DatabaseIntegrationService {
     let connectionUrl: string;
     
     if (uri) {
-      // URI provided by cloud provider - need to modify query params for SSL
-      if (connection.ssl && engine === "pg") {
-        // Don't use URL parser to avoid double-encoding credentials
-        // Just replace/append the sslmode query parameter
-        if (uri.includes('?')) {
-          // Has query params - replace sslmode if exists, otherwise append
-          if (uri.includes('sslmode=')) {
-            connectionUrl = uri.replace(/sslmode=[^&]*/, 'sslmode=no-verify');
+      // URI provided by cloud provider - may need to modify SSL params
+      connectionUrl = uri;
+      
+      if (connection.ssl) {
+        if (engine === "pg") {
+          // PostgreSQL: Use sslmode=no-verify for self-signed certs
+          if (uri.includes('?')) {
+            if (uri.includes('sslmode=')) {
+              connectionUrl = uri.replace(/sslmode=[^&]*/, 'sslmode=no-verify');
+            } else {
+              connectionUrl = uri + '&sslmode=no-verify';
+            }
           } else {
-            connectionUrl = uri + '&sslmode=no-verify';
+            connectionUrl = uri + '?sslmode=no-verify';
           }
-        } else {
-          // No query params - add sslmode
-          connectionUrl = uri + '?sslmode=no-verify';
+          console.log("[DatabaseIntegrationService] Modified PostgreSQL URI to use sslmode=no-verify");
+        } else if (engine === "mysql") {
+          // MySQL: Add ssl param if not present (DigitalOcean already handles this)
+          // MySQL2 driver accepts ssl=true in connection string
+          if (!uri.includes('ssl=')) {
+            connectionUrl = uri.includes('?') ? uri + '&ssl=true' : uri + '?ssl=true';
+            console.log("[DatabaseIntegrationService] Added ssl=true to MySQL URI");
+          }
         }
-        console.log("[DatabaseIntegrationService] Modified PostgreSQL URI to use sslmode=no-verify for self-signed certs");
-      } else {
-        connectionUrl = uri;
+        // MongoDB: SSL is handled via mongodb+srv:// protocol (automatic) or tls=true param
+        // Redis: SSL is handled separately via TLS options, not in URI
+        // Kafka: Uses separate SSL configuration, not in connection string
       }
     } else {
       // Build URI manually from components
       const protocol = engine === "mongodb" ? "mongodb" : 
                        engine === "mysql" ? "mysql" : 
                        engine === "pg" ? "postgresql" : 
+                       engine === "redis" ? "redis" :
                        engine === "kafka" ? "kafka" : engine;
       
       connectionUrl = `${protocol}://${user}:${password}@${host}:${port}/${database}`;
       
-      // Add SSL query params for PostgreSQL
-      if (connection.ssl && engine === "pg") {
-        connectionUrl += "?sslmode=no-verify";
+      // Add SSL query params based on engine
+      if (connection.ssl) {
+        if (engine === "pg") {
+          connectionUrl += "?sslmode=no-verify";
+        } else if (engine === "mysql") {
+          connectionUrl += "?ssl=true";
+        } else if (engine === "mongodb") {
+          connectionUrl += "?tls=true&tlsAllowInvalidCertificates=true";
+        }
+        // Redis and Kafka handle SSL via separate config options
       }
     }
 

@@ -377,26 +377,41 @@ export class KubernetesInfoService {
       // Step 6: Trigger rolling restart
       // Patch the restartedAt annotation to force pods to restart
       // ========================================
-      const hasAnnotations = deployment.spec?.template?.metadata?.annotations;
+      const annotations = deployment.spec?.template?.metadata?.annotations;
+      const hasAnnotations = !!annotations;
+      const hasRestartAnnotation = annotations?.['kubectl.kubernetes.io/restartedAt'] !== undefined;
       const restartTimestamp = new Date().toISOString();
       
-      const jsonPatch = hasAnnotations
-        ? [
-            // Replace existing annotation or add if it exists
-            {
-              op: 'replace',
-              path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
-              value: restartTimestamp,
-            },
-          ]
-        : [
-            // Create annotations object first, then add our annotation
-            {
-              op: 'add',
-              path: '/spec/template/metadata/annotations',
-              value: { 'kubectl.kubernetes.io/restartedAt': restartTimestamp },
-            },
-          ];
+      let jsonPatch: Array<{ op: string; path: string; value: string | Record<string, string> }>;
+      
+      if (!hasAnnotations) {
+        // Create annotations object with our annotation
+        jsonPatch = [
+          {
+            op: 'add',
+            path: '/spec/template/metadata/annotations',
+            value: { 'kubectl.kubernetes.io/restartedAt': restartTimestamp },
+          },
+        ];
+      } else if (hasRestartAnnotation) {
+        // Replace existing restartedAt annotation
+        jsonPatch = [
+          {
+            op: 'replace',
+            path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
+            value: restartTimestamp,
+          },
+        ];
+      } else {
+        // Annotations exist but restartedAt doesn't - add the annotation
+        jsonPatch = [
+          {
+            op: 'add',
+            path: '/spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt',
+            value: restartTimestamp,
+          },
+        ];
+      }
 
       await apps.patchNamespacedDeployment({
         name: deploymentName,
