@@ -41,10 +41,10 @@ if (format === 'json') {
   console.log('\n\n# Recommended containers to add:');
   
   Object.entries(report.inJenkins)
-    .filter(([_, config]) => !config.inJenkins && config.recommended)
+    .filter(([_, config]) => !config.inJenkins && 'recommended' in config && (config as { recommended?: boolean }).recommended)
     .forEach(([name, config]) => {
       console.log(`\n# ${config.name} - ${config.purpose}`);
-      console.log(`# Benefit: ${(config as any).migration?.benefit}`);
+      console.log(`# Benefit: ${(config as { migration?: { benefit?: string } }).migration?.benefit || 'N/A'}`);
       console.log(`- name: ${config.name}`);
       console.log(`  image: ${config.image}`);
       console.log(`  resources:`);
@@ -75,9 +75,9 @@ if (format === 'json') {
   console.log('|-----------|-------|--------------|-----------|---------|---------|');
   
   Object.entries(report.inJenkins)
-    .filter(([_, config]) => !config.inJenkins && config.recommended)
+    .filter(([_, config]) => !config.inJenkins && 'recommended' in config && (config as { recommended?: boolean }).recommended)
     .forEach(([name, config]) => {
-      const benefit = (config as any).migration?.benefit || '';
+      const benefit = (config as { migration?: { benefit?: string } }).migration?.benefit || '';
       console.log(`| ${config.name} | ${config.image} | ${config.resources.limits.memory} | ${config.resources.limits.cpu} | ${config.purpose} | ${benefit} |`);
     });
   

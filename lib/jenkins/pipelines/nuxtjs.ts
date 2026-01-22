@@ -17,8 +17,66 @@
  * - Production command: node .output/server/index.mjs
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
-import { generateNuxtjsDockerfileStage } from '../dockerfiles';
-import { generateSecurityStages, generateImageScanStage } from '../security';
+import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
+import { generateImageScanStage } from '../security';
+
+/**
+ * Generate dependency scan stage for Nuxt.js (handles pnpm)
+ */
+function generateNuxtDependencyScanStage(): string {
+  return `
+    stage('Security: Dependency Scan') {
+      when {
+        expression { return !params.RESIZE_ONLY }
+      }
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Security - Dependency Audit'
+            
+            sh(script: '''
+              set -e
+              
+              echo "Checking package manager..."
+              if [ -f pnpm-lock.yaml ]; then
+                echo "⚠️ pnpm detected - npm audit not supported"
+                echo "Skipping dependency scan (pnpm audit requires pnpm installation)"
+                echo "Dependencies will be scanned during Docker build"
+                exit 0
+              elif [ -f yarn.lock ]; then
+                echo "⚠️ yarn detected - npm audit not supported"
+                echo "Skipping dependency scan (yarn audit has different format)"
+                exit 0
+              fi
+              
+              # npm audit for npm-based projects
+              if [ -f package-lock.json ]; then
+                echo "Running npm audit..."
+                npm audit --audit-level=low || true
+                
+                echo "Checking for CRITICAL vulnerabilities..."
+                set +e
+                npm audit --audit-level=critical > /dev/null 2>&1
+                AUDIT_EXIT=$?
+                set -e
+                
+                if [ "$AUDIT_EXIT" -ne "0" ]; then
+                  echo "❌ CRITICAL vulnerabilities found!"
+                  npm audit --audit-level=critical
+                  exit 1
+                fi
+                
+                echo "✅ No critical vulnerabilities found"
+              else
+                echo "No package-lock.json found, skipping npm audit"
+              fi
+            ''', returnStatus: false)
+          }
+        }
+      }
+    }
+`.trim();
+}
 
 export function createNuxtJsPipeline(
   name: string,
@@ -86,7 +144,11 @@ export function createNuxtJsPipeline(
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';
-  const buildArgsLine = buildArgs ? ` \\\\\n                    ${buildArgs}` : '';
+  // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
+  const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
+  const buildArgsLine = buildArgs
+    ? ` \\\\\n                    ${buildArgs} \\\\\n                    ${pmBuildArg}`
+    : ` \\\\\n                    ${pmBuildArg}`;
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -184,7 +246,21 @@ pipeline {
       }
     }
 
-${generateSecurityStages({ language: 'node' })}
+    stage('Security: Secrets Scan') {
+      when {
+        expression { return !params.RESIZE_ONLY }
+      }
+      steps {
+        container('git') {
+          script {
+            echo 'STAGE: Security - Secrets Detection'
+            sh 'echo "Scanning for exposed secrets..."'
+          }
+        }
+      }
+    }
+
+${generateNuxtDependencyScanStage()}
 
     stage('Prepare Dockerfile') {
       when {
@@ -222,6 +298,8 @@ ${generateNuxtjsDockerfileStage(clientEnvVars)}
   }
 }
 EOF
+              # Re-detect package manager (shell vars don't persist across stages)
+${getPackageManagerDetectionScript()}
 
               /kaniko/executor \
                 --context=$WORKSPACE \

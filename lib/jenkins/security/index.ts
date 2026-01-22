@@ -21,20 +21,6 @@ const SECURITY_TOOL_VERSIONS = {
  * - Pod spec includes: git, kaniko, kubectl, trivy, jnlp (auto-added)
  */
 
-interface ContainerResources {
-  requests: { memory: string; cpu: string };
-  limits: { memory: string; cpu: string };
-}
-
-interface ContainerInfo {
-  name: string;
-  image: string;
-  inJenkins: boolean;
-  resources: ContainerResources;
-  purpose: string;
-  usedBySecurityStages: readonly string[];
-}
-
 const JENKINS_CONTAINERS = {
   git: {
     name: 'git',
@@ -730,7 +716,7 @@ ${generateLoggingHelpers()}
                 # Check if baseline file exists (for excluding known false positives)
                 if [ -f ".gitleaks-baseline.json" ]; then
                   echo "Using .gitleaks-baseline.json to exclude known false positives"
-                  BASELINE_ARG="--baseline .gitleaks-baseline.json"
+                  BASELINE_ARG="--baseline-path .gitleaks-baseline.json"
                 else
                   echo "No baseline found. Create .gitleaks-baseline.json to exclude false positives:"
                   echo "  gitleaks detect --report-path .gitleaks-baseline.json"

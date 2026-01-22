@@ -36,14 +36,16 @@ console.log('\n⚠️  CONTAINERS DOWNLOADED AT RUNTIME (NOT IN JENKINS):\n');
 Object.entries(report.inJenkins)
   .filter(([_, config]) => !config.inJenkins)
   .forEach(([name, config]) => {
-    console.log(`❌ ${config.name} (${config.recommended ? 'RECOMMENDED TO ADD' : 'OPTIONAL'})`);
+    const isRecommended = 'recommended' in config && (config as { recommended?: boolean }).recommended;
+    console.log(`❌ ${config.name} (${isRecommended ? 'RECOMMENDED TO ADD' : 'OPTIONAL'})`);
     console.log(`   Image: ${config.image}`);
     console.log(`   Resources: ${config.resources.limits.memory} / ${config.resources.limits.cpu} CPU`);
     console.log(`   Purpose: ${config.purpose}`);
     console.log(`   🔒 Security Stages: ${config.usedBySecurityStages.join(', ')}`);
-    if ((config as any).migration) {
-      console.log(`   📊 Current: ${(config as any).migration.current}`);
-      console.log(`   💡 Benefit: ${(config as any).migration.benefit}`);
+    const migration = (config as { migration?: { current?: string; benefit?: string } }).migration;
+    if (migration) {
+      console.log(`   📊 Current: ${migration.current || 'N/A'}`);
+      console.log(`   💡 Benefit: ${migration.benefit || 'N/A'}`);
     }
     console.log('');
   });

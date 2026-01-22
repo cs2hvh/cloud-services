@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       console.log(`[Redeploy] Found ${envVars.length} environment variables for ${app.name}`);
 
       // Get repository URL (database uses repository_url, not git_url)
-      const gitUrl = (app as any).repository_url || (app as any).git_url;
+      const gitUrl = (app as { repository_url?: string; git_url?: string }).repository_url || (app as { repository_url?: string; git_url?: string }).git_url;
 
       // If env vars exist, update the pipeline XML to include them
       if (envVars.length > 0 && gitUrl) {
