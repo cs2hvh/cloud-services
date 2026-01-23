@@ -852,51 +852,103 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           ))}
                       </RadioGroup>
 
-                      {/* Pagination Controls */}
-                      {filteredRepositories.length > reposPerPage && (
-                        <div className="mt-4 pt-4 border-t border-white/10">
-                          <div
-                            className="
-    flex items-center justify-center gap-2
-    flex-wrap
-    sm:flex-nowrap
-    overflow-x-auto
-    scrollbar-hide
-    px-2
-  "
-                          >
-                            {Array.from(
-                              {
-                                length: Math.ceil(
-                                  filteredRepositories.length / reposPerPage,
-                                ),
-                              },
-                              (_, i) => i + 1,
-                            ).map((pageNum) => (
+                      {/* Repository List Pagination */}
+                      {filteredRepositories.length > reposPerPage && (() => {
+                        const totalPages = Math.ceil(filteredRepositories.length / reposPerPage);
+                        
+                        // Generate page numbers with ellipsis for large page counts
+                        const getPageNumbers = () => {
+                          const pages: (number | string)[] = [];
+                          
+                          if (totalPages <= 7) {
+                            // Show all pages if 7 or fewer
+                            for (let i = 1; i <= totalPages; i++) {
+                              pages.push(i);
+                            }
+                          } else {
+                            // Always show first page
+                            pages.push(1);
+                            
+                            if (currentPage > 3) {
+                              pages.push('...');
+                            }
+                            
+                            // Show pages around current page
+                            const start = Math.max(2, currentPage - 1);
+                            const end = Math.min(totalPages - 1, currentPage + 1);
+                            
+                            for (let i = start; i <= end; i++) {
+                              pages.push(i);
+                            }
+                            
+                            if (currentPage < totalPages - 2) {
+                              pages.push('...');
+                            }
+                            
+                            // Always show last page
+                            pages.push(totalPages);
+                          }
+                          
+                          return pages;
+                        };
+                        
+                        return (
+                          <div className="mt-4 pt-4 border-t border-white/10">
+                            <p className="text-xs text-white/40 text-center mb-2">
+                              Page {currentPage} of {totalPages} • {filteredRepositories.length} repositories
+                            </p>
+                            <div className="flex items-center justify-center gap-1">
+                              {/* Previous Page */}
                               <Button
-                                key={pageNum}
-                                onClick={() => setCurrentPage(pageNum)}
-                                variant={
-                                  currentPage === pageNum
-                                    ? "default"
-                                    : "outline"
-                                }
+                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                disabled={currentPage === 1}
+                                variant="ghost"
                                 size="sm"
-                                className={`
-          min-w-[40px]
-          ${
-            currentPage === pageNum
-              ? "bg-white/90 text-black hover:bg-white/90"
-              : "border-white/20 text-white hover:bg-white/10"
-          }
-        `}
+                                className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
                               >
-                                {pageNum}
+                                ←
                               </Button>
-                            ))}
+
+                              {/* Page Numbers */}
+                              <div className="flex items-center gap-1">
+                                {getPageNumbers().map((pageNum, idx) => (
+                                  pageNum === '...' ? (
+                                    <span key={`ellipsis-${idx}`} className="px-2 text-white/40">...</span>
+                                  ) : (
+                                    <Button
+                                      key={pageNum}
+                                      onClick={() => setCurrentPage(pageNum as number)}
+                                      variant="ghost"
+                                      size="sm"
+                                      className={`
+                                        min-w-[32px] h-8
+                                        ${
+                                          currentPage === pageNum
+                                            ? "bg-white/20 text-white"
+                                            : "text-white/50 hover:text-white hover:bg-white/10"
+                                        }
+                                      `}
+                                    >
+                                      {pageNum}
+                                    </Button>
+                                  )
+                                ))}
+                              </div>
+
+                              {/* Next Page */}
+                              <Button
+                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                disabled={currentPage === totalPages}
+                                variant="ghost"
+                                size="sm"
+                                className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                →
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </div>
                     ) : (
                       <div className="text-center py-8">
