@@ -7,6 +7,8 @@ import { deleteBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -62,6 +64,30 @@ export async function POST(req: NextRequest) {
       // proceed with deletion even if billing fails, per failOnInsufficient=false
     }
 
+    // Get bucket details for audit log
+    const bucketData = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id);
+
+    // Create audit log before deletion
+    const auditContext = getAuditContext(req);
+    
+    if (bucketData) {
+      await AuditLogService.create({
+        user_id: auth.user!.id,
+        user_role: isAdmin ? 'admin' : 'user',
+        user_email: auth.user?.email,
+        action: 'delete',
+        service_type: 'object_storage',
+        service_id: bucket_id,
+        service_name: bucket_id,
+        before_state: bucketData,
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        metadata: {
+          force,
+        },
+      });
+    }
 
     const result = await ObjectStorageFunctions.deleteBucket({
       bucket_id,

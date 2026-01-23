@@ -6,6 +6,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createDbSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 interface database_error {
   response: {
@@ -87,6 +89,26 @@ export async function POST(req: NextRequest) {
             text: `Database '${validatedData.name}' created in cluster`
           });
           console.log(`[createDatabase] ✅ Activity log added for database creation`);
+        }
+
+        // Create audit log
+        if (clusterData.success) {
+          try {
+            const context = getAuditContext(req);
+            await AuditLogService.create({
+              user_id: clusterData.data.owner_id,
+              user_role: 'user',
+              action: 'create',
+              service_type: 'database',
+              service_id: validatedData.cluster_id,
+              service_name: clusterData.data.name,
+              after_state: { database_name: validatedData.name },
+              metadata: { operation: 'database_created' },
+              ...context,
+            });
+          } catch (auditErr) {
+            console.error('[createDatabase] Failed to create audit log:', auditErr);
+          }
         }
 
         // Create notification for database creation

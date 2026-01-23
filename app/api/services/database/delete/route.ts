@@ -6,6 +6,8 @@ import { Billing } from "@/lib/supabase/queries/billing";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { DatabaseIntegrationService } from "@/lib/services/database-integration";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -92,6 +94,31 @@ export async function POST(req: NextRequest) {
     const sendData = {
       cluster_id: body.id,
     };
+
+    // Create audit log before deletion
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    const userRole = adminCheck.ok ? 'admin' : 'user';
+
+    if (clusterData) {
+      await AuditLogService.create({
+        user_id: auth.user.id,
+        user_role: userRole,
+        user_email: auth.user.email,
+        action: 'delete',
+        service_type: 'database',
+        service_id: body.id,
+        service_name: clusterName,
+        before_state: clusterData,
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        metadata: {
+          project_id: projectId,
+        },
+      });
+    }
+
     const supabase_delete = await Database_Clusters.mark_as_deleted(sendData.cluster_id);
 
    // console.log(supabase_delete,"...........supabase delete response........");

@@ -8,6 +8,8 @@ import { createDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseUser } from "@/lib/supabase/types";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 interface database_error {
   response: {
@@ -79,6 +81,26 @@ export async function POST(req: NextRequest) {
             text: `Database user '${validatedData.name}' created`
           });
           // console.log(`[createDatabaseUser] ✅ Activity log added for user creation`);
+        }
+
+        // Create audit log
+        if (clusterData.success) {
+          try {
+            const context = getAuditContext(req);
+            await AuditLogService.create({
+              user_id: clusterData.data.owner_id,
+              user_role: 'user',
+              action: 'create',
+              service_type: 'database',
+              service_id: validatedData.cluster_id,
+              service_name: clusterData.data.name,
+              after_state: { user_name: validatedData.name, role: user.role },
+              metadata: { operation: 'user_created' },
+              ...context,
+            });
+          } catch (auditErr) {
+            console.error('[createDatabaseUser] Failed to create audit log:', auditErr);
+          }
         }
 
         // Create notification for user creation

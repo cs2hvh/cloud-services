@@ -27,6 +27,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server";
 import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(req: NextRequest) {
   try {
@@ -146,6 +148,34 @@ export async function POST(req: NextRequest) {
     }
 
     // Success response
+    if (result.success && result.app_name && result.bucket_name) {
+      // Create audit log
+      try {
+        const context = getAuditContext(req);
+        await AuditLogService.create({
+          user_id: user.id,
+          user_role: 'user',
+          user_email: user.email,
+          action: 'update',
+          service_type: 'platform_apps',
+          service_id: app_id,
+          service_name: result.app_name,
+          after_state: { 
+            bucket_linked: bucket_id,
+            bucket_name: result.bucket_name,
+            injected_vars: result.injected_vars 
+          },
+          metadata: { 
+            operation: 'bucket_linked',
+            redeploy_triggered: result.redeploy_triggered 
+          },
+          ...context,
+        });
+      } catch (auditErr) {
+        console.error('[linkBucket] Failed to create audit log:', auditErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       integration_id: result.integration_id,

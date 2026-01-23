@@ -10,6 +10,7 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 
 
@@ -131,6 +132,37 @@ export async function POST(req: Request) {
   } catch (e: unknown) {
     return NextResponse.json({ error: "Post-provision billing failed", details: e instanceof Error ? e.message : String(e) }, { status: 500 });
   }
+
+  // Create audit log
+  const auditContext = getAuditContext(req);
+  await AuditLogService.create({
+    user_id: parsed.data.ownerId,
+    user_role: derivedRole,
+    user_email: auth.user?.email,
+    action: 'create',
+    service_type: 'kubernetes',
+    service_id: clusterId,
+    service_name: parsed.data.cluster.name,
+    after_state: {
+      cluster_id: clusterId,
+      provider: parsed.data.provider,
+      cluster_name: parsed.data.cluster.name,
+      location: parsed.data.cluster.location,
+      k8s_minor: parsed.data.cluster.k8s_minor,
+      pod_cidr: parsed.data.cluster.pod_cidr,
+      nodes: parsed.data.nodes,
+      project_id: parsed.data.projectId,
+      status: 'QUEUED',
+    },
+    ip_address: auditContext.ipAddress,
+    user_agent: auditContext.userAgent,
+    request_id: auditContext.requestId,
+    metadata: {
+      job_id: job.id,
+      initial_cost: INITIAL_COST,
+      hourly_rate: HOURLY_RATE,
+    },
+  });
 
   // Create notification
   await NotificationService.create(

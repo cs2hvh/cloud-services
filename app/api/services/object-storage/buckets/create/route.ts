@@ -10,6 +10,7 @@ import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { getRatesForObjectStorage } from "@/config/pricing";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -127,6 +128,30 @@ export async function POST(req: NextRequest) {
   );
 }
 
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: targetOwnerId,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'create',
+      service_type: 'object_storage',
+      service_id: result.data?.id ?? validatedData.name,
+      service_name: validatedData.name,
+      after_state: result.data,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        region: validatedData.region,
+        acl: validatedData.acl,
+        initial_cost: INITIAL_COST,
+        hourly_rate: HOURLY_RATE,
+      },
+    });
 
     // Create notification
     await NotificationService.create(

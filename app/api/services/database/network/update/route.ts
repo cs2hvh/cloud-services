@@ -7,6 +7,8 @@ import { updateNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { Rule } from "@/lib/supabase/types";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -124,6 +126,30 @@ export async function POST(req: NextRequest) {
             text: `Added firewall rule: ${validatedData.ip_address}`
           });
           console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
+        }
+
+        // Create audit log
+        if (clusterData.success) {
+          try {
+            const context = getAuditContext(req);
+            await AuditLogService.create({
+              user_id: clusterData.data.owner_id,
+              user_role: 'user',
+              action: 'update',
+              service_type: 'database',
+              service_id: validatedData.id,
+              service_name: clusterData.data.name,
+              before_state: { rules: existingRules },
+              after_state: { rules: read_firewall.data?.rules },
+              metadata: { 
+                operation: 'firewall_rule_added',
+                ip_address: validatedData.ip_address 
+              },
+              ...context,
+            });
+          } catch (auditErr) {
+            console.error('[updateNetworkRules] Failed to create audit log:', auditErr);
+          }
         }
 
         // Create notification for firewall rule addition

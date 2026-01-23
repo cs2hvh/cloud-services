@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -48,6 +50,30 @@ export async function POST(req: NextRequest) {
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: auth.user.id,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user.email,
+      action: 'update',
+      service_type: 'kubernetes',
+      service_id: cluster_id,
+      service_name: clusterName,
+      before_state: { project_id: oldProjectId },
+      after_state: { project_id: project_id },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        update_type: 'project',
+        old_project_id: oldProjectId,
+        new_project_id: project_id,
+      },
+    });
 
     // Add activity log to old project if it exists
     if (oldProjectId) {

@@ -7,6 +7,8 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateBucketAclSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -75,6 +77,28 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("✅ Bucket ACL updated successfully");
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'update',
+      service_type: 'object_storage',
+      service_id: bucket_id,
+      service_name: bucket.name,
+      before_state: { acl: bucket.acl },
+      after_state: { acl },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        update_type: 'bucket_acl',
+      },
+    });
 
     // Create success notification
     try {

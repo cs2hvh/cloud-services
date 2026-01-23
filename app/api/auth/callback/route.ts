@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -16,6 +18,45 @@ export async function GET(request: NextRequest) {
     // to get tokens that we can refresh with our own OAuth credentials.
     if (!error && data.session) {
       const user = data.session.user;
+      
+      // Determine OAuth provider
+      const provider = user.app_metadata?.provider || 'unknown';
+      
+      // Get user profile for username
+      let username: string | undefined;
+      try {
+        const { data: profile } = await supabase
+          .from("user_profiles")
+          .select("username")
+          .eq("id", user.id)
+          .single();
+        username = profile?.username;
+      } catch (e) {
+        console.error("Failed to fetch user profile:", e);
+      }
+      
+      // Log OAuth login
+      try {
+        const context = getAuditContext(request);
+        await AuditLogService.create({
+          user_id: user.id,
+          user_role: 'user',
+          user_email: user.email,
+          user_username: username,
+          action: 'login',
+          service_type: 'auth',
+          service_id: user.id,
+          service_name: `OAuth Login - ${provider}`,
+          metadata: {
+            login_method: 'oauth',
+            provider: provider,
+          },
+          ...context,
+        });
+      } catch (auditError) {
+        console.error('Failed to log OAuth login:', auditError);
+        // Don't fail auth flow if audit logging fails
+      }
       
       // Handle GitHub token storage
       // GitHub is special: tokens from Supabase Auth don't expire, so we can store them

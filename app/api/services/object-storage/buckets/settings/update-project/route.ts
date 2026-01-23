@@ -5,6 +5,8 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateBucketProjectSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -63,6 +65,26 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("✅ Bucket project assignment updated successfully");
+
+    // Create audit log
+    try {
+      const context = getAuditContext(req);
+      await AuditLogService.create({
+        user_id: auth.user!.id,
+        user_role: 'user',
+        user_email: auth.user!.email,
+        action: 'update',
+        service_type: 'object_storage',
+        service_id: bucket_id,
+        service_name: bucket.name,
+        before_state: { project_id: bucket.project_id },
+        after_state: { project_id: project_id || null },
+        metadata: { update_type: 'project_assignment' },
+        ...context,
+      });
+    } catch (auditErr) {
+      console.error('[updateBucketProject] Failed to create audit log:', auditErr);
+    }
 
     // Create success notification
     try {

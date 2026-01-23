@@ -8,6 +8,8 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { AppStatusService } from "@/lib/services/app-status";
 import { BuildPollingService } from "@/lib/services/build-polling";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 const redeploySchema = z.object({
   app_id: z.string().uuid(),
@@ -129,6 +131,29 @@ export async function POST(req: NextRequest) {
         } catch (logError) {
           console.warn('[platform-apps/redeploy] Failed to add project log:', logError);
         }
+      }
+
+      // Create audit log
+      try {
+        const context = getAuditContext(req);
+        await AuditLogService.create({
+          user_id: auth.user!.id,
+          user_role: 'user',
+          user_email: auth.user!.email,
+          action: 'update',
+          service_type: 'platform_apps',
+          service_id: app_id,
+          service_name: app.name,
+          metadata: { 
+            operation: 'redeploy',
+            build_number: buildNumber,
+            trigger: 'manual',
+            env_vars_count: envVars.length
+          },
+          ...context,
+        });
+      } catch (auditErr) {
+        console.error('[redeploy] Failed to create audit log:', auditErr);
       }
 
       return NextResponse.json({

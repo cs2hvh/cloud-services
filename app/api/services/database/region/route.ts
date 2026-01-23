@@ -6,6 +6,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { migrateRegionSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -69,6 +71,27 @@ export async function PUT(req: NextRequest) {
           text: `Database cluster migrating to region: ${validatedData.region}`
         });
        //console.log(`[migrateRegion] ✅ Activity log added for region migration`);
+      }
+
+      // Create audit log
+      if (clusterData.success) {
+        try {
+          const context = getAuditContext(req);
+          await AuditLogService.create({
+            user_id: clusterData.data.owner_id,
+            user_role: 'user',
+            action: 'update',
+            service_type: 'database',
+            service_id: validatedData.database_id,
+            service_name: clusterData.data.name,
+            before_state: { region: clusterData.data.region },
+            after_state: { region: validatedData.region, status: 'migrating' },
+            metadata: { update_type: 'region_migration' },
+            ...context,
+          });
+        } catch (auditErr) {
+          console.error('[migrateRegion] Failed to create audit log:', auditErr);
+        }
       }
 
       // Create notification for region migration

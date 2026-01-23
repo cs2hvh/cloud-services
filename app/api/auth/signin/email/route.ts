@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -52,6 +54,29 @@ console.log(email, "...........email in signin route.ts........");
     .select("username")
     .eq("id", data.user.id)
     .single();
+
+  // Log successful login
+  try {
+    const context = getAuditContext(request);
+    await AuditLogService.create({
+      user_id: data.user.id,
+      user_role: 'user',
+      user_email: data.user.email,
+      user_username: profile?.username,
+      action: 'login',
+      service_type: 'auth',
+      service_id: data.user.id,
+      service_name: 'Email/Password Login',
+      metadata: {
+        login_method: 'email',
+        mfa_enabled: twofastatus,
+      },
+      ...context,
+    });
+  } catch (auditError) {
+    console.error('Failed to log login action:', auditError);
+    // Don't fail login if audit logging fails
+  }
 
   return Response.json({
     message: "Signed in successfully.",

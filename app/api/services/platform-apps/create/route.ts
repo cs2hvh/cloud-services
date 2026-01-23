@@ -11,6 +11,8 @@ import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { getRatesForPlatformApp } from "@/config/pricing";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -425,6 +427,39 @@ export async function POST(req: NextRequest) {
         // The billing team should be notified of orphaned resources
       }
     }
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'create',
+      service_type: 'platform_apps',
+      service_id: result.app_id || 'unknown',
+      service_name: appData.name,
+      after_state: {
+        app_id: result.app_id,
+        name: appData.name,
+        framework: appData.framework,
+        repository_name: appData.repository_name,
+        branch: appData.branch || 'main',
+        deployment_url: result.deployment_url,
+        port: result.port,
+        instance_size: instanceSize,
+        auto_deploy: appData.auto_deploy || false,
+        project_id: appData.project_id,
+      },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        initial_cost: INITIAL_COST,
+        hourly_rate: HOURLY_RATE,
+      },
+    });
 
     // Create success notification
     await NotificationService.create(

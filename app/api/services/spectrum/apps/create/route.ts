@@ -7,6 +7,8 @@ import { ensureBalance } from "@/config/billing-flow";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getRatesForSpectrum } from "@/config/pricing";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -49,6 +51,28 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await createSpectrumApp(validation.data, body.role);
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: ownerId,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'create',
+      service_type: 'network_ddos',
+      service_id: result?.app?.id || result?.cloudflare?.id || 'unknown',
+      service_name: validation.data.protocol || 'Spectrum App',
+      after_state: result,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        protocol: validation.data.protocol,
+        initial_cost: INITIAL_COST,
+      },
+    });
 
     // Create notification
     await NotificationService.create(

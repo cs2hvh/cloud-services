@@ -8,6 +8,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -62,6 +63,23 @@ export async function POST(req: NextRequest) {
     } catch (billErr: unknown) {
       console.warn(`[deleteSpectrumApp] Billing close failed: ${billErr instanceof Error ? billErr.message : String(billErr)}`);
     }
+
+    // Create audit log before deletion
+    const auditContext = getAuditContext(req);
+    
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: authorized ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'delete',
+      service_type: 'network_ddos',
+      service_id: validation.data.app_id,
+      service_name: 'Spectrum App',
+      before_state: appRecord.data,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
 
     const result = await deleteSpectrumApp(validation.data.app_id);
 

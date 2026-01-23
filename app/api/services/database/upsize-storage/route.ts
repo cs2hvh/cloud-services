@@ -6,6 +6,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { upsizeStorageSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -133,6 +135,29 @@ export async function PUT(req: NextRequest) {
           text: `Database storage upsized to: ${(validatedData.storage_size_mib / 1024).toFixed(0)} GiB`
         });
         console.log(`[upsize-storage] ✅ Activity log added for storage upsize`);
+      }
+
+      // Create audit log
+      try {
+        const context = getAuditContext(req);
+        await AuditLogService.create({
+          user_id: clusterData.data.owner_id,
+          user_role: 'user',
+          action: 'update',
+          service_type: 'database',
+          service_id: validatedData.database_id,
+          service_name: clusterData.data.name,
+          before_state: { storage_size_mib: currentStorageMib },
+          after_state: { storage_size_mib: validatedData.storage_size_mib },
+          metadata: { 
+            update_type: 'storage_upsize',
+            old_storage_gib: (currentStorageMib / 1024).toFixed(0),
+            new_storage_gib: (validatedData.storage_size_mib / 1024).toFixed(0)
+          },
+          ...context,
+        });
+      } catch (auditErr) {
+        console.error('[upsize-storage] Failed to create audit log:', auditErr);
       }
 
       // Create notification for storage upsize

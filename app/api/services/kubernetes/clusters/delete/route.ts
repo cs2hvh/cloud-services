@@ -6,6 +6,7 @@ import { Billing } from "@/lib/supabase/queries/billing";
 import axios from "axios";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceNotification, NotificationService } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -128,6 +129,26 @@ export async function POST(req: NextRequest) {
 
     if (error)
       return NextResponse.json({ error: error.message }, { status: 400 });
+
+    // Create audit log before deletion
+    const auditContext = getAuditContext(req);
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'delete',
+      service_type: 'kubernetes',
+      service_id: json.cluster_id,
+      service_name: clusterName,
+      before_state: clusterData,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        project_id: projectId,
+        droplet_warnings: dropletDeletionErrors.length > 0 ? dropletDeletionErrors : undefined,
+      },
+    });
 
     // Add activity log for Kubernetes cluster deletion
     if (projectId) {

@@ -6,6 +6,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { deleteDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 interface database_error {
   response: {
@@ -60,6 +62,26 @@ export async function POST(req: NextRequest) {
             text: `Database user '${validatedData.username}' deleted`
           });
           console.log(`[deleteDatabaseUser] ✅ Activity log added for user deletion`);
+        }
+
+        // Create audit log
+        if (clusterData.success) {
+          try {
+            const context = getAuditContext(req);
+            await AuditLogService.create({
+              user_id: clusterData.data.owner_id,
+              user_role: 'user',
+              action: 'delete',
+              service_type: 'database',
+              service_id: validatedData.cluster_id,
+              service_name: clusterData.data.name,
+              before_state: { user_name: validatedData.username },
+              metadata: { operation: 'user_deleted' },
+              ...context,
+            });
+          } catch (auditErr) {
+            console.error('[deleteDatabaseUser] Failed to create audit log:', auditErr);
+          }
         }
 
         // Create notification for user deletion

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { AuditLogService } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -63,6 +65,30 @@ export async function POST(req: NextRequest) {
       console.log(
         `[deleteKubernetesNode] ✅ Activity log added for node deletion`
       );
+    }
+
+    // Create audit log
+    try {
+      const context = getAuditContext(req);
+      await AuditLogService.create({
+        user_id: auth.user!.id,
+        user_role: 'user',
+        user_email: auth.user!.email,
+        action: 'delete',
+        service_type: 'kubernetes',
+        service_id: json.cluster_id,
+        service_name: data.cluster_name,
+        before_state: { workers: data.workers },
+        after_state: { workers: filtered },
+        metadata: { 
+          operation: 'node_deletion',
+          droplet_id: json.droplet_id,
+          nodes_removed: 1
+        },
+        ...context,
+      });
+    } catch (auditErr) {
+      console.error('[deleteKubernetesNode] Failed to create audit log:', auditErr);
     }
 
     return NextResponse.json(

@@ -5,6 +5,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -46,6 +48,28 @@ export async function POST(req: NextRequest) {
     if (!result.success) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_email: auth.user?.email,
+      action: 'update',
+      service_type: 'platform_apps',
+      service_id: app_id,
+      service_name: existing.data.name,
+      before_state: existing.data,
+      after_state: result.data,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        changed_fields: Object.keys(updateData).filter(k => k !== 'app_id'),
+      },
+    });
 
     // Add project log if project_id exists
     if (existing.data.project_id) {

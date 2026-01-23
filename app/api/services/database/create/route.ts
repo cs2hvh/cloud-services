@@ -15,6 +15,8 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { DatabaseUser } from "@/lib/supabase/types";
 import { getRatesForDatabase } from "@/config/pricing";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 interface database_error {
   response: {
@@ -192,6 +194,33 @@ export async function POST(req: NextRequest) {
             { status: 500 }
           );
         }
+
+        // Get audit context
+        const auditContext = getAuditContext(req);
+        const adminCheck = await requireAdmin();
+        const userRole = adminCheck.ok ? 'admin' : 'user';
+
+        // Create audit log
+        await AuditLogService.create({
+          user_id: validatedData.owner_id,
+          user_role: userRole,
+          user_email: auth.user?.email,
+          action: 'create',
+          service_type: 'database',
+          service_id: supabase_data.data?.id ?? database.data.database.id,
+          service_name: validatedData.name,
+          after_state: supabase_data.data,
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+          metadata: {
+            engine: validatedData.engine,
+            version: validatedData.version,
+            region: validatedData.region,
+            size: validatedData.size,
+          },
+        });
+
         // Create notification
         await NotificationService.create(
           createServiceNotification({

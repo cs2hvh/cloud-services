@@ -3,6 +3,8 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects as ProjectQueries } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function PUT(req: NextRequest) {
   // Check authentication
@@ -21,6 +23,9 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Get before state
+    const beforeState = await Database_Clusters.read(body.cluster_id);
 
     // Update project assignment in Supabase
     const result = await Database_Clusters.update_project(
@@ -45,6 +50,34 @@ export async function PUT(req: NextRequest) {
         text: `Database cluster '${clusterData.data.name}' moved to this project`
       });
       console.log(`[updateProject] ✅ Activity log added for project assignment`);
+    }
+
+    // Create audit log
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
+    const userRole = adminCheck.ok ? 'admin' : 'user';
+
+    if (beforeState.success && clusterData.success) {
+      await AuditLogService.create({
+        user_id: auth.user.id,
+        user_role: userRole,
+        user_email: auth.user.email,
+        action: 'update',
+        service_type: 'database',
+        service_id: body.cluster_id,
+        service_name: clusterData.data.name,
+        before_state: beforeState.data,
+        after_state: clusterData.data,
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        metadata: {
+          update_type: 'project',
+          old_project_id: beforeState.data.project_id,
+          new_project_id: body.project_id,
+          project_name: projectData?.name,
+        },
+      });
     }
 
     // Create notification for project assignment
