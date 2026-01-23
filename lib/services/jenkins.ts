@@ -480,7 +480,7 @@ export class JenkinsService {
    */
   private static filterDeploymentLogs(fullLog: string): string {
     // Step 1: Clean Jenkins encoding artifacts (universal across all pipelines)
-    let cleanLog = fullLog
+    const cleanLog = fullLog
       .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')           // Jenkins hash markers
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')                // ANSI escape
       .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')              // Unicode ANSI
@@ -600,7 +600,7 @@ export class JenkinsService {
       if (/^index\.docker\.io/.test(trimmed)) continue;
 
       // Transform and add
-      let outputLine = trimmed
+      const outputLine = trimmed
         .replace('STAGE: ', '[STAGE] ')                      // Stage markers
         .replace(/INFO\[\d+\]\s*/, '')                      // Kaniko INFO prefix
         .replace(/hav0ky\//g, '')                           // Docker username

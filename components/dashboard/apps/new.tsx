@@ -141,6 +141,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
+  const [repoSearchTerm, setRepoSearchTerm] = useState<string>('');
 
   // Fetch real provider connection status
   const fetchProviderStatus = useCallback(async () => {
@@ -561,6 +562,16 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     (p) => p.id === selectedProvider
   );
 
+  // Filter repositories based on search term
+  const filteredRepositories = repositories.filter((repo) => {
+    const searchLower = repoSearchTerm.toLowerCase();
+    return (
+      repo.name.toLowerCase().includes(searchLower) ||
+      repo.fullName.toLowerCase().includes(searchLower) ||
+      (repo.description && repo.description.toLowerCase().includes(searchLower))
+    );
+  });
+
   return (
     <div className="py-4">
       {/* Progress Steps */}
@@ -760,19 +771,22 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       <input
                         type="text"
                         placeholder="Search repositories..."
-                        className="w-full bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 p-3"
-                        onChange={() => {
-                          // You can implement repository filtering here
+                        value={repoSearchTerm}
+                        onChange={(e) => {
+                          setRepoSearchTerm(e.target.value);
+                          setCurrentPage(1); // Reset to first page when searching
                         }}
+                        className="w-full bg-white/10 border border-white/20 rounded-md text-white placeholder:text-white/50 p-3 focus:outline-none focus:border-blue-500 transition-colors"
                       />
                     </div>
+                    {filteredRepositories.length > 0 ? (
                     <div>
                       <RadioGroup
                         value={selectedRepo}
                         onValueChange={setSelectedRepo}
                         className="grid grid-cols-1 gap-4"
                       >
-                        {repositories
+                        {filteredRepositories
                           .slice(
                             (currentPage - 1) * reposPerPage,
                             currentPage * reposPerPage,
@@ -839,7 +853,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       </RadioGroup>
 
                       {/* Pagination Controls */}
-                      {repositories.length > reposPerPage && (
+                      {filteredRepositories.length > reposPerPage && (
                         <div className="mt-4 pt-4 border-t border-white/10">
                           <div
                             className="
@@ -854,7 +868,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                             {Array.from(
                               {
                                 length: Math.ceil(
-                                  repositories.length / reposPerPage,
+                                  filteredRepositories.length / reposPerPage,
                                 ),
                               },
                               (_, i) => i + 1,
@@ -884,6 +898,22 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         </div>
                       )}
                     </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <Code className="w-8 h-8 text-white/20 mx-auto mb-2" />
+                        <p className="text-sm text-white/50">
+                          No repositories match &quot;{repoSearchTerm}&quot;
+                        </p>
+                        <Button
+                          onClick={() => setRepoSearchTerm('')}
+                          size="sm"
+                          variant="outline"
+                          className="mt-3 border-white/20 text-white hover:bg-white/10"
+                        >
+                          Clear Search
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8">

@@ -427,7 +427,22 @@ export function AppCard({
                     <Terminal className="w-3 h-3 mr-1.5" />
                     Build Logs {build && `#${build.number}`}
                   </h4>
-                  {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(logs || '', 'logs')}
+                      className="h-6 px-2 text-white/50 hover:text-white hover:bg-white/10"
+                      title="Copy logs"
+                    >
+                      {copiedField === 'logs' ? (
+                        <Check className="w-3 h-3 text-green-400" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </Button>
+                    {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                  </div>
                 </div>
                 <pre className="text-[11px] text-white/70 font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/30 rounded p-3 custom-scrollbar">
                   {logs || 'Loading logs...'}

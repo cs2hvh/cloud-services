@@ -35,7 +35,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const appId = searchParams.get("app_id");
     const buildNumber = searchParams.get("build");
-    const start = parseInt(searchParams.get("start") || "0");
 
     if (!appId) {
       return NextResponse.json(
@@ -70,7 +69,7 @@ export async function GET(req: NextRequest) {
     const jobName = `${app.name}-job`;
     let logs = "";
     let hasMore = false;
-    let nextStart = 0;
+    const nextStart = 0;
     let build = buildNumber ? parseInt(buildNumber) : null;
 
     // Validate build number is a positive integer if provided
