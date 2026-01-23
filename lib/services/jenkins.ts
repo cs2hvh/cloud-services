@@ -19,6 +19,21 @@ import {
 
 export class JenkinsService {
   /**
+   * Get Jenkins URL without credentials for safe logging
+   */
+  private static getSafeJenkinsUrl(): string {
+    const jenkinsUrl = process.env.JENKINS_URL || '';
+    try {
+      const url = new URL(jenkinsUrl);
+      url.username = '';
+      url.password = '';
+      return url.toString().replace(/\/$/, '');
+    } catch {
+      return jenkinsUrl.replace(/\/\/[^@]+@/, '//');
+    }
+  }
+
+  /**
    * Trigger a build for an existing Jenkins job
    * Used by webhooks for auto-deploy
    * @param appName - The application name
@@ -64,13 +79,13 @@ export class JenkinsService {
         },
       });
       
-      console.log(`[JenkinsService] ✅ Build #${expectedBuildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
-      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/${expectedBuildNumber}/`);
+      console.log(`[JenkinsService] Build #${expectedBuildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
+      console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/${expectedBuildNumber}/`);
       
       return expectedBuildNumber;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JenkinsService] ❌ Error triggering build for ${jobName}:`, errorMessage);
+      console.error(`[JenkinsService] Error triggering build for ${jobName}:`, errorMessage);
       throw new Error(`Failed to trigger build: ${errorMessage}`);
     }
   }
@@ -104,7 +119,7 @@ export class JenkinsService {
     // Create the job
     try {
       await jenkins.job.create(jobName, pipeline);
-      console.log(`[JenkinsService] ✅ Created Jenkins job: ${jobName}`);
+      console.log(`[JenkinsService] Created Jenkins job: ${jobName}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Failed to create job:`, errorMessage);
@@ -122,11 +137,11 @@ export class JenkinsService {
         name: jobName,
         parameters: { COMMIT_SHA: '' }
       });
-      console.log(`[JenkinsService] ✅ Build #1 triggered for: ${jobName}`);
-      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/`);
+      console.log(`[JenkinsService] Build #1 triggered for: ${jobName}`);
+      console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JenkinsService] ❌ Error triggering build:`, errorMessage);
+      console.error(`[JenkinsService] Error triggering build:`, errorMessage);
       // Try to delete the created job since build failed
       await jenkins.job.destroy(jobName).catch((err: unknown) => 
         console.error(`[JenkinsService] Failed to cleanup job after build failure:`, err)
@@ -155,7 +170,7 @@ export class JenkinsService {
     // Create the job
     try {
       await jenkins.job.create(jobName, pipeline);
-      console.log(`[JenkinsService] ✅ Created Jenkins deletion job: ${jobName}`);
+      console.log(`[JenkinsService] Created Jenkins deletion job: ${jobName}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Failed to create deletion job:`, errorMessage);
@@ -167,8 +182,8 @@ export class JenkinsService {
     
     try {
       await jenkins.job.build(jobName);
-      console.log(`[JenkinsService] ✅ Build triggered for deletion job: ${jobName}`);
-      console.log(`[JenkinsService] Monitor at: ${process.env.JENKINS_URL}/job/${jobName}/`);
+      console.log(`[JenkinsService] Build triggered for deletion job: ${jobName}`);
+      console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/`);
       
       // Wait a bit for the build to be registered in Jenkins
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -176,16 +191,16 @@ export class JenkinsService {
       // Get the actual build number
       const buildNumber = await this.getLatestDeleteBuildNumber(appName);
       if (buildNumber) {
-        console.log(`[JenkinsService] ✅ Build #${buildNumber} confirmed for deletion job: ${jobName}`);
+        console.log(`[JenkinsService] Build #${buildNumber} confirmed for deletion job: ${jobName}`);
         return buildNumber;
       } else {
         // Fallback to build #1 if we can't get the build number
-        console.log(`[JenkinsService] ⚠️  Could not get build number, using fallback #1 for: ${jobName}`);
+        console.log(`[JenkinsService]  Could not get build number, using fallback #1 for: ${jobName}`);
         return 1;
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JenkinsService] ❌ Error triggering deletion build:`, errorMessage);
+      console.error(`[JenkinsService] Error triggering deletion build:`, errorMessage);
       // Try to delete the created job since build failed
       await jenkins.job.destroy(jobName).catch((err: unknown) => 
         console.error(`[JenkinsService] Failed to cleanup deletion job after build failure:`, err)
@@ -204,7 +219,7 @@ export class JenkinsService {
     
     await jenkins.job.destroy(jobName);
     
-    console.log(`[JenkinsService] ✅ Deleted Jenkins job: ${jobName}`);
+    console.log(`[JenkinsService] Deleted Jenkins job: ${jobName}`);
   }
 
   /**
@@ -217,7 +232,7 @@ export class JenkinsService {
     
     await jenkins.job.destroy(jobName);
     
-    console.log(`[JenkinsService] ✅ Deleted Jenkins deletion job: ${jobName}`);
+    console.log(`[JenkinsService] Deleted Jenkins deletion job: ${jobName}`);
   }
 
   /**
@@ -304,7 +319,7 @@ export class JenkinsService {
   }
 
   /**
-   * Get build logs
+   * Get build logs (all stages)
    */
   static async getBuildLog(appName: string, buildNumber: number, start = 0): Promise<string> {
     const jobName = `${appName}-job`;
@@ -320,6 +335,301 @@ export class JenkinsService {
       console.error(`[JenkinsService] Error getting build log:`, errorMessage);
       throw error;
     }
+  }
+
+  /**
+   * Get deployment logs only using Jenkins Blue Ocean API (stage-specific logs)
+   * Falls back to filtering if Blue Ocean is not available
+   */
+  static async getDeploymentLog(appName: string, buildNumber: number): Promise<string> {
+    const jobName = `${appName}-job`;
+    
+    try {
+      // Try Blue Ocean API first for stage-specific logs
+      const stageLog = await this.getStageLogFromBlueOcean(jobName, buildNumber, ['Deploy to Kubernetes', 'Verify Deployment']);
+      if (stageLog) {
+        console.log(`[JenkinsService] Using Blue Ocean logs (filtered)`);
+        return stageLog;
+      }
+      
+      // Fallback: get full log and filter (if Blue Ocean not available)
+      console.log(`[JenkinsService] Blue Ocean API not available, using fallback filter`);
+      const fullLog = await jenkins.build.log(jobName, buildNumber, { type: 'text' });
+      console.log(`[JenkinsService] Raw log length: ${fullLog.length}, applying filter...`);
+      const filtered = this.filterDeploymentLogs(fullLog);
+      console.log(`[JenkinsService] Filtered log length: ${filtered.length}`);
+      return filtered;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[JenkinsService] Error getting deployment log:`, errorMessage);
+      throw error;
+    }
+  }
+
+  /**
+   * Get logs for specific stages using Jenkins Blue Ocean REST API
+   * Blue Ocean API: /blue/rest/organizations/jenkins/pipelines/{job}/runs/{build}/nodes/
+   */
+  private static async getStageLogFromBlueOcean(
+    jobName: string, 
+    buildNumber: number, 
+    stageNames: string[]
+  ): Promise<string | null> {
+    const jenkinsUrl = process.env.JENKINS_URL;
+    if (!jenkinsUrl) return null;
+
+    try {
+      // Strip credentials from URL (fetch doesn't allow credentials in URL)
+      const cleanUrl = jenkinsUrl.replace(/https?:\/\/[^:]+:[^@]+@/, (match) => {
+        return match.startsWith('https') ? 'https://' : 'http://';
+      });
+      
+      // Get pipeline nodes (stages) from Blue Ocean API
+      const nodesUrl = `${cleanUrl}/blue/rest/organizations/jenkins/pipelines/${jobName}/runs/${buildNumber}/nodes/`;
+      const nodesResponse = await fetch(nodesUrl, {
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!nodesResponse.ok) {
+        console.log(`[JenkinsService] Blue Ocean API returned ${nodesResponse.status}`);
+        return null;
+      }
+
+      const nodes = await nodesResponse.json() as Array<{
+        id: string;
+        displayName: string;
+        result: string;
+        state: string;
+      }>;
+
+      // Find the deployment-related stages
+      const deploymentStages = nodes.filter(node => 
+        stageNames.some(name => node.displayName.includes(name))
+      );
+
+      if (deploymentStages.length === 0) {
+        return null;
+      }
+
+      // Fetch logs for each deployment stage
+      const stageLogs: string[] = [];
+      for (const stage of deploymentStages) {
+        const logUrl = `${cleanUrl}/blue/rest/organizations/jenkins/pipelines/${jobName}/runs/${buildNumber}/nodes/${stage.id}/log/`;
+        const logResponse = await fetch(logUrl, {
+          headers: this.getAuthHeaders(),
+        });
+
+        if (logResponse.ok) {
+          const logText = await logResponse.text();
+          stageLogs.push(`=== ${stage.displayName} ===\n${logText}`);
+        }
+      }
+
+      if (stageLogs.length === 0) {
+        return null;
+      }
+
+      // Filter the Blue Ocean logs too
+      return this.filterDeploymentLogs(stageLogs.join('\n\n'));
+    } catch (error) {
+      console.log(`[JenkinsService] Blue Ocean API error:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get authentication headers for Jenkins API calls
+   */
+  private static getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+    };
+
+    // Extract credentials from JENKINS_URL if present (format: http://user:pass@host)
+    const jenkinsUrl = process.env.JENKINS_URL || '';
+    const urlMatch = jenkinsUrl.match(/https?:\/\/([^:]+):([^@]+)@/);
+    if (urlMatch) {
+      const [, username, password] = urlMatch;
+      const auth = Buffer.from(`${username}:${password}`).toString('base64');
+      headers['Authorization'] = `Basic ${auth}`;
+    }
+
+    return headers;
+  }
+
+  /**
+   * Filter logs to show only deployment-related content (fallback method)
+   */
+  /**
+   * Filter deployment logs - SIMPLE APPROACH
+   * 
+   * PRINCIPLES:
+   * 1. Pass through ALL original log content
+   * 2. Only HIDE sensitive/infrastructure details
+   * 3. Clean up Jenkins markers and ANSI codes
+   * 4. NO pattern matching for stages - just blocklist filtering
+   * 
+   * HIDDEN:
+   * - Jenkins internal markers ([Pipeline], [8mha:, etc.)
+   * - Kubernetes internal names (deployment.apps/, service/, ingress/)
+   * 
+   * SIMPLIFIED APPROACH - Framework Agnostic:
+   * Only filter Jenkins internal noise that appears in ALL pipelines.
+   * Pipeline authors control what users see via echo statements.
+   * No need to update when adding new frameworks/pipelines.
+   */
+  private static filterDeploymentLogs(fullLog: string): string {
+    // Step 1: Clean Jenkins encoding artifacts (universal across all pipelines)
+    let cleanLog = fullLog
+      .replace(/ha:\/\/\/\/[A-Za-z0-9+/=]+/g, '')           // Jenkins hash markers
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')                // ANSI escape
+      .replace(/\u001b\[[0-9;]*[a-zA-Z]/g, '')              // Unicode ANSI
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');        // Control chars
+
+    const lines = cleanLog.split('\n');
+    const outputLines: string[] = [];
+    
+    // Track state for final banner
+    let domain = '';
+    let isFinalSuccess = false;
+    let isFinalFailure = false;
+
+    // Universal blocklist - ONLY Jenkins internal noise (not framework specific)
+    // These patterns are generated by Jenkins itself, not pipeline scripts
+    const blockPatterns = [
+      // Jenkins pipeline engine markers
+      /^\[Pipeline\]/,
+      /^\[PodInfo\]/,
+      /^Started by user/,
+      /^Created Pod:/,
+      /^Agent .* is provisioned/,
+      /^Running on .* in \/home\/jenkins/,
+      /^\*{8,}/,                          // Masked credentials ********
+      /^Masking supported pattern/,
+      
+      // Kubernetes pod template YAML (always generated by k8s plugin)
+      /^(apiVersion|kind|metadata|spec|containers|volumes|initContainers|nodeSelector):/,
+      /^(dnsConfig|dnsPolicy|hostNetwork|restartPolicy|activeDeadlineSeconds):/,
+      /^(labels|annotations|namespace|nameservers|buildUrl|runUrl|label):/,
+      /^(imagePullPolicy|resources|limits|requests|volumeMounts|mountPath):/,
+      /^(workingDir|tty|env|readOnly|medium|memory|cpu|value):/,
+      /^- (name|command|mountPath|emptyDir)/i,  // YAML array items
+      /^- ".*"$/,                          // YAML array strings
+      /^---$/,
+      /^kubernetes\.io\//,
+      
+      // Pod template name/label lines (jenkins job names, workspace volumes)
+      /^jenkins(\/|:)/,                    // jenkins: "slave", jenkins/label:, jenkins/label-digest:
+      /^name:.*(-job-|workspace|jenkins)/i,
+      /^name: "(git|kaniko|kubectl|trivy|jnlp)"$/,  // Container names
+      
+      // Jenkins agent environment variables
+      /JENKINS_(SECRET|AGENT|URL|NAME|WEB_SOCKET)/,
+      /REMOTING_OPTS/,
+      /withCredentials/,
+      /kubernetes\.jenkins\.io/,
+      
+      // Container images (internal)
+      /gcr\.io\/kaniko-project/,
+      /jenkins\/inbound-agent/,
+      /alpine\/(git|k8s)/,
+      /\/jenkins-agent/,
+      /agent\.jar/,
+      
+      // Pod status messages
+      /Container \[.*\] .* waiting/,
+      /Pod \[Pending\]/,
+      /\[Containers(NotReady|NotInitialized)\]/,
+      /\[PodInitializing\]/,
+      
+      // Shell echo commands (we show the output, not the command)
+      /^\+ echo /,
+      // Other shell prefixes
+      /^\+ (?!.*STAGE:)/,
+      
+      // Credentials
+      /AUTH=/,
+      /\$DOCKER_PASS/,
+      /\$KUBECONFIG/,
+      /gh[op]_[a-zA-Z0-9]+/,              // GitHub tokens
+      
+      // HTML error pages
+      /^<[!a-zA-Z\/]/,
+      
+      // Response codes from webhooks
+      /^'\d{3}'$/,
+      /^\d{3}'$/,                          // 404' without leading quote
+      /^'$/,                               // Stray single quote
+      
+      // Progress bars
+      /^\d+\.\d+ MiB \/ \d+\.\d+ MiB/,
+      
+      // Webhook/deployment record noise
+      /^Sending deployment record/,
+      /^Payload:/,
+      /^Response \(HTTP/,
+      /%\{http_code\}/,
+      /-X POST.*webhook/,
+      /^Finished: (SUCCESS|FAILURE)$/,    // We show our own banner instead
+    ];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      
+      // Skip empty, preserve one blank line for spacing
+      if (!trimmed) {
+        if (outputLines.length > 0 && outputLines[outputLines.length - 1] !== '') {
+          outputLines.push('');
+        }
+        continue;
+      }
+
+      // Track final state
+      if (trimmed.includes('PIPELINE: Success') || trimmed.includes('Finished: SUCCESS')) isFinalSuccess = true;
+      if (trimmed.includes('PIPELINE: Failure') || trimmed.includes('Finished: FAILURE')) isFinalFailure = true;
+      
+      // Extract domain (handle both "Domain:" and "Service URL:" formats)
+      const domainMatch = trimmed.match(/(?:Domain|Service URL):\s*(?:https?:\/\/)?(\S+)/);
+      if (domainMatch) domain = domainMatch[1];
+
+      // Check blocklist
+      if (blockPatterns.some(p => p.test(trimmed))) continue;
+      
+      // Skip YAML-like lines from pod templates (key: "value" or key: value with internal refs)
+      if (/^(name|image):.*(?:jenkins|docker\.io|gcr\.io|aquasec)/i.test(trimmed)) continue;
+      if (/^index\.docker\.io/.test(trimmed)) continue;
+
+      // Transform and add
+      let outputLine = trimmed
+        .replace('STAGE: ', '[STAGE] ')                      // Stage markers
+        .replace(/INFO\[\d+\]\s*/, '')                      // Kaniko INFO prefix
+        .replace(/hav0ky\//g, '')                           // Docker username
+        .replace(/deployment\.apps\//g, '')                 // k8s prefixes
+        .replace(/service\//g, '')
+        .replace(/ingress\.networking\.k8s\.io\//g, '')
+        .replace(/certificate\.cert-manager\.io\//g, '');
+
+      outputLines.push(outputLine);
+    }
+
+    // Add final status banner
+    if (isFinalSuccess) {
+      outputLines.push('', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      outputLines.push('DEPLOYMENT SUCCESSFUL');
+      if (domain) outputLines.push(`URL: https://${domain}`);
+      outputLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    } else if (isFinalFailure) {
+      outputLines.push('', '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      outputLines.push('DEPLOYMENT FAILED');
+      outputLines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+
+    // Remove consecutive blank lines
+    const result = outputLines.filter((line, i, arr) => 
+      !(line === '' && i > 0 && arr[i - 1] === '')
+    );
+
+    return result.join('\n').trim() || 'Build in progress...';
   }
 
   /**
@@ -508,7 +818,7 @@ export class JenkinsService {
     try {
       // Update the job configuration using Jenkins API
       await jenkins.job.config(jobName, pipeline);
-      console.log(`[JenkinsService] ✅ Job config updated: ${jobName}`);
+      console.log(`[JenkinsService] Job config updated: ${jobName}`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Failed to update job config:`, errorMessage);

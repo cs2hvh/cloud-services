@@ -217,7 +217,7 @@ export default function AppDetailPage() {
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
        const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
+        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`
       );
         if (res.data) {
         setBuildLogs(res.data.logs || 'No logs available');

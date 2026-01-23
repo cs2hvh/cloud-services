@@ -65,7 +65,7 @@ export default function ApplicationDeploymentPage() {
   // Fetch build logs using axios - only called when user expands logs
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
-      const res = await api.get(`/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`);
+      const res = await api.get(`/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`);
       if (res?.data?.logs) {
         setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
       }
@@ -81,7 +81,7 @@ export default function ApplicationDeploymentPage() {
       if (!hasDeleting) {
         fetchApps();
       }
-    }, 10000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [fetchApps, hasDeleting]);
 

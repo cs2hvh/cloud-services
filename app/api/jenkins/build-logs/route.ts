@@ -36,7 +36,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const logs = await JenkinsService.getBuildLog(appName, buildNum, startOffset);
+    // Check if deployment logs are specifically requested via query param
+    const deploymentOnly = searchParams.get("deployment") === "true";
+    
+    const logs = deploymentOnly 
+      ? await JenkinsService.getDeploymentLog(appName, buildNum)
+      : await JenkinsService.getBuildLog(appName, buildNum, startOffset);
 
     return NextResponse.json({
       app_name: appName,
