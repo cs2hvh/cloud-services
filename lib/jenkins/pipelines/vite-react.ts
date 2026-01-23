@@ -64,7 +64,7 @@ export function createViteReactPipeline(
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
   // Generate build args for VITE_* prefixed vars only
-  // ⚠️ Build args are visible in logs - only use for public configuration!
+  // [WARN] Build args are visible in logs - only use for public configuration!
   // Vite requires VITE_ prefix: import.meta.env.VITE_API_URL
   const buildArgs = clientEnvVars.length > 0
     ? clientEnvVars.map(e => {
