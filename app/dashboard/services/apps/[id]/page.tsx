@@ -912,10 +912,17 @@ export default function AppDetailPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <pre className="text-xs text-white/70 font-mono overflow-x-auto max-h-[500px] overflow-y-auto bg-black/50 rounded-lg p-4">
-                  {buildLogs || 'Loading logs...'}
-                </pre>
+              <CardContent className="p-0">
+                <div className="bg-[#0c0c0c] rounded-b-lg border-t border-white/5 font-mono text-xs">
+                  <pre className="p-4 text-white/70 overflow-auto max-h-[600px] whitespace-pre [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+                    {buildLogs || (
+                      <div className="flex items-center gap-2 text-white/30 italic">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Waiting for logs...
+                      </div>
+                    )}
+                  </pre>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

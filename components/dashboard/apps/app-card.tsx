@@ -42,6 +42,8 @@ interface AppCardProps {
   app: App;
   build?: BuildInfo;
   logs?: string;
+  logsLoading?: boolean;
+  logsError?: string;
   isExpanded: boolean;
   onToggleLogs: () => void;
   onDelete: () => void;
@@ -103,6 +105,8 @@ export function AppCard({
   app,
   build,
   logs,
+  logsLoading,
+  logsError,
   isExpanded,
   onToggleLogs,
   onDelete,
@@ -444,9 +448,35 @@ export function AppCard({
                     {build?.building && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
                   </div>
                 </div>
-                <pre className="text-[11px] text-white/70 font-mono overflow-x-auto max-h-64 overflow-y-auto bg-black/30 rounded p-3 custom-scrollbar">
-                  {logs || 'Loading logs...'}
-                </pre>
+                  <div className="bg-[#0c0c0c] rounded border border-white/5 font-mono text-xs">
+                    <pre className="p-3 text-white/70 overflow-auto max-h-96 whitespace-pre w-full [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+                      {logsLoading ? (
+                        <div className="flex items-center gap-2 text-white/50 italic">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading build logs...
+                        </div>
+                      ) : logsError ? (
+                        <div className="text-red-400">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="w-4 h-4" />
+                            {logsError}
+                          </div>
+                          {build && (
+                            <button
+                              onClick={() => onFetchLogs(build.number)}
+                              className="text-xs text-blue-400 hover:text-blue-300 underline"
+                            >
+                              Click to retry
+                            </button>
+                          )}
+                        </div>
+                      ) : logs ? (
+                        logs
+                      ) : (
+                        <span className="text-white/30 italic">No logs available</span>
+                      )}
+                    </pre>
+                  </div>
               </div>
             ) : (
               /* Metrics Tab */
