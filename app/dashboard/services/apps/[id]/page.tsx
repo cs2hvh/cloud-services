@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
@@ -34,6 +34,9 @@ import {
   Zap,
   Server,
   AlertTriangle,
+  Search,
+  Download,
+  Filter,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -46,11 +49,14 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
+import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
 import { toast } from 'sonner';
+
+
 
 // Extended App type for detail page (includes all fields from API)
 interface AppDetail {
@@ -875,56 +881,12 @@ export default function AppDetailPage() {
 
           {/* Build Logs Tab */}
           <TabsContent value="build-logs">
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Terminal className="w-5 h-5" />
-                    Build Logs
-                    {buildInfo && <span className="text-white/50">#{buildInfo.number}</span>}
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => copyToClipboard(buildLogs, 'build-logs')}
-                      className="text-white/60 hover:text-white hover:bg-white/10"
-                      title="Copy logs"
-                    >
-                      {copiedField === 'build-logs' ? (
-                        <>
-                          <Check className="w-4 h-4 mr-2" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-4 h-4 mr-2" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
-                    {buildInfo?.building && (
-                      <Badge className="bg-blue-500/20 text-blue-400">
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        Building
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="bg-[#0c0c0c] rounded-b-lg border-t border-white/5 font-mono text-xs">
-                  <pre className="p-4 text-white/70 overflow-auto max-h-[600px] whitespace-pre [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
-                    {buildLogs || (
-                      <div className="flex items-center gap-2 text-white/30 italic">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Waiting for logs...
-                      </div>
-                    )}
-                  </pre>
-                </div>
-              </CardContent>
-            </Card>
+            <BuildLogsPanel 
+              buildInfo={buildInfo} 
+              buildLogs={buildLogs} 
+              appName={app.name}
+              fetchBuildLogs={fetchBuildLogs}
+            />
           </TabsContent>
 
           {/* Runtime Logs Tab */}
