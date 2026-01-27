@@ -4,12 +4,20 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { AuditLogService } from "@/lib/audit";
 import { z } from "zod";
 
+// Custom datetime validation that accepts both ISO 8601 and datetime-local format
+const datetimeString = z.string().refine((val) => {
+  // Accept formats: "2026-01-24T18:09" (datetime-local) or "2026-01-24T18:09:00Z" (ISO)
+  const dateLocalRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+  const isoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/;
+  return dateLocalRegex.test(val) || isoRegex.test(val);
+}, { message: "Invalid datetime format" });
+
 const querySchema = z.object({
   user_id: z.string().uuid().optional(),
-  service_type: z.enum(['database', 'kubernetes', 'platform_apps', 'network_ddos', 'object_storage']).optional(),
-  action: z.enum(['create', 'update', 'delete']).optional(),
-  start_date: z.string().datetime().optional(),
-  end_date: z.string().datetime().optional(),
+  service_type: z.enum(['database', 'kubernetes', 'platform_apps', 'network_ddos', 'object_storage', 'auth', 'git_webhook']).optional(),
+  action: z.enum(['create', 'update', 'delete', 'login', 'logout', 'token_expired', 'token_refreshed', 'webhook_received', 'provider_connect', 'provider_disconnect', 'password_change']).optional(),
+  start_date: datetimeString.optional(),
+  end_date: datetimeString.optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
@@ -49,6 +57,7 @@ export async function GET(req: NextRequest) {
 
     const validation = querySchema.safeParse(rawParams);
     if (!validation.success) {
+        console.log("Invalid query parameters:", validation.error.errors);
       return NextResponse.json(
         {
           error: "Invalid query parameters",

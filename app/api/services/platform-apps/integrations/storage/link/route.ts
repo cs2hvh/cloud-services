@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Success response
-    if (result.success && result.app_name && result.bucket_name) {
+    if (result.success) {
       // Create audit log
       try {
         const context = getAuditContext(req);
@@ -159,10 +159,9 @@ export async function POST(req: NextRequest) {
           action: 'update',
           service_type: 'platform_apps',
           service_id: app_id,
-          service_name: result.app_name,
+          service_name: 'Platform App Storage Integration',
           after_state: { 
             bucket_linked: bucket_id,
-            bucket_name: result.bucket_name,
             injected_vars: result.injected_vars 
           },
           metadata: { 

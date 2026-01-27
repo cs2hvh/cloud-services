@@ -56,11 +56,11 @@ const Payload = z.object({
   planId:z.string().uuid()
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   // Basic rate limiting per IP/token
   const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
   try {
-    await limiter.check(req as NextRequest, 10);
+    await limiter.check(req, 10);
   } catch {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }

@@ -11,7 +11,7 @@ import { AuditLogService } from "@/lib/audit";
  */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { logId: string } }
+  { params }: { params: Promise<{ logId: string }> }
 ) {
   // Authenticate user
   const auth = await authenticateUser();
@@ -27,11 +27,14 @@ export async function GET(
   }
 
   try {
-    const { logId } = params;
+    console.log('[audit-logs/detail] Fetching audit log detail');
+    const { logId } = await params;
+    console.log("Fetching audit log ID:", logId);
 
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(logId)) {
+        console.log("Invalid log ID format:", logId);
       return NextResponse.json(
         { error: "Invalid log ID format" },
         { status: 400 }

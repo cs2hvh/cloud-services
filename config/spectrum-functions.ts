@@ -1,6 +1,7 @@
 import axios from "axios";
 import { Encryption } from "@/config/functions";
-import { Spectrum_Apps, Projects } from "@/lib/supabase/queries/";
+import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
+import { Projects } from "@/lib/supabase/queries/projects";
 import type {
   CreateSpectrumAppPayload,
   UpdateSpectrumAppPayload,
@@ -56,8 +57,8 @@ type CreateSpectrumAppInput = Omit<CreateSpectrumAppPayload, 'tls' | 'ip_firewal
 
 // Environment configuration getter
 function getCloudflareConfig() {
-  const zoneId = process.env.CLOUDFLARE_ZONE_ID;
-  const token = process.env.CLOUDFLARE_API_TOKEN;
+  const zoneId = process.env.CLOUDFLARE_ZONE_ID_SPECTRUM;
+  const token = process.env.CLOUDFLARE_API_TOKEN_SPECTRUM;
   const encryptionKey = process.env.ENCRYPTION_KEY;
 
   if (!zoneId || !token) {
@@ -84,7 +85,7 @@ function getCloudflareHeaders(token: string) {
  */
 export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:string) {
 
-  //console.log(payload,"............................105");
+  console.log(payload,"............................105");
   
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
@@ -97,7 +98,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
 
   // Build Cloudflare payload
   const cfPayload: Record<string, unknown> = {
-    dns: { name: `${payload.dns.name}${process.env.PARENT_DOMAIN}`, type: payload.dns.type,original_name: payload.dns.name },
+    dns: { name: `${payload.dns.name}.${process.env.PARENT_DOMAIN_SPECTRUM}`, type: payload.dns.type,original_name: payload.dns.name },
     protocol: payload.protocol,
     origin_direct: payload.origin_direct,
     ip_firewall,
@@ -108,12 +109,19 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
     argo_smart_routing: true,
   };
 
+
+  console.log(`https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps`);
+  console.log(cfPayload,"..........................cfPayload");
+  console.log(token,"..........................token");
   // Create in Cloudflare
   const cfResp = await axios.post<CloudflareResponse<CloudflareSpectrumApp>>(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps`,
     cfPayload,
     { headers: getCloudflareHeaders(token) }
   );
+
+  console.log(`https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps`);
+  console.log(token,"..........................token");
 
   if (!cfResp.data?.success || !cfResp.data.result) {
     console.log(cfResp.data,"............................153");
@@ -413,6 +421,10 @@ export async function deleteSpectrumApp(appId: string) {
   // Get local data before deletion (for project logging)
   const localBefore = await Spectrum_Apps.get(appId);
 
+
+  console.log(localBefore,"...........localBefore........");
+  console.log( `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`)
+  console.log(token,"...........token........");
   // Delete from Cloudflare
   const cfResp = await axios.delete<CloudflareResponse<{ id: string }>>(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,

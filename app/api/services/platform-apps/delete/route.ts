@@ -9,7 +9,6 @@ import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
-import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();

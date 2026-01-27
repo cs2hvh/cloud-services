@@ -514,7 +514,7 @@ WORKDIR /app
 # 1. serve is a runtime tool, not a project dependency
 # 2. Avoids Corepack conflicts and Alpine image issues
 # 3. npm is guaranteed available in official Node images
-RUN npm install -g serve
+RUN npm install -g --force serve
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -583,7 +583,7 @@ WORKDIR /app
 # 1. serve is a runtime tool, not a project dependency
 # 2. Avoids Corepack conflicts and Alpine image issues
 # 3. npm is guaranteed available in official Node images
-RUN npm install -g serve
+RUN npm install -g --force serve
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \

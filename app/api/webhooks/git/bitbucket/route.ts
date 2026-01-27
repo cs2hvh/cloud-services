@@ -9,6 +9,7 @@ import { BitbucketWebhookHandler } from '@/lib/webhooks/bitbucket';
 import { Platform_App_Webhooks } from '@/lib/supabase/queries';
 import { AutoDeployService } from '@/lib/services/auto-deploy';
 import { KubernetesInfoService } from '@/lib/services/kubernetes-info';
+import { AuditLogService, getAuditContext } from '@/lib/audit';
 import type { WebhookResult } from '@/lib/webhooks/types';
 
 export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult>> {
@@ -202,6 +203,32 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
         7
       )}`
     );
+
+    // Audit log: webhook received and deployment triggered
+    const auditContext = getAuditContext(req);
+    await AuditLogService.create({
+      user_id: app.user_id,
+      user_role: 'system',
+      action: 'webhook_received',
+      service_type: 'git_webhook',
+      service_id: app.id,
+      service_name: `Bitbucket Webhook - ${app.name}`,
+      metadata: {
+        provider: 'bitbucket',
+        event: 'push',
+        delivery_id: deliveryId,
+        repository: payload.repository.full_name,
+        branch: payload.branch,
+        commit_sha: payload.commit.sha,
+        commit_message: payload.commit.message.split('\n')[0],
+        build_number: deployResult.buildNumber,
+        duration_ms: duration,
+        result: 'triggered',
+      },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
 
     return NextResponse.json({
       success: true,

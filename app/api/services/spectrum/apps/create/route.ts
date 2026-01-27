@@ -37,6 +37,9 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(createSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
+
+    console.log("reached here")
+
     // Billing: upfront and hourly (dynamic from admin pricing)
     const { initialCost: INITIAL_COST } = await getRatesForSpectrum();
 
@@ -51,6 +54,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await createSpectrumApp(validation.data, body.role);
+     console.log("reached here")
 
     // Create audit log
     const auditContext = getAuditContext(req);

@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
         service_type: 'object_storage',
         service_id: bucket_id,
         service_name: bucket_id,
-        before_state: bucketData,
+        before_state: bucketData as unknown as Record<string, unknown>,
         ip_address: auditContext.ipAddress,
         user_agent: auditContext.userAgent,
         request_id: auditContext.requestId,

@@ -37,8 +37,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: false, error: "No action taken" });
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: "Failed to mark notification as read" },
+      { error: 'Failed to fetch audit log', details: errorMessage },
       { status: 500 }
     );
   }

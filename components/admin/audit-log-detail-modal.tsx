@@ -7,13 +7,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { format } from "date-fns";
+import { type AuditLogEntry } from "@/components/admin/audit-log-table";
 
 interface AuditLogDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  log: any | null;
+  log: AuditLogEntry | null;
 }
 
 export function AuditLogDetailModal({
@@ -128,8 +129,8 @@ export function AuditLogDetailModal({
               </div>
               <div>
                 <p className="text-sm text-neutral-400">Timestamp</p>
-                <p className="text-sm text-white">
-                  {new Date(log.created_at).toLocaleString()}
+                <p suppressHydrationWarning className="text-sm text-white">
+                  {format(new Date(log.created_at), "MMM dd, yyyy HH:mm:ss")}
                 </p>
               </div>
               <div className="col-span-2">

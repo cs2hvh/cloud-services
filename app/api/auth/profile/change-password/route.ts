@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 // Shape of accepted payload
 type ChangePasswordBody = {
@@ -70,6 +71,24 @@ export async function PUT(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Audit log: password changed
+    const auditContext = getAuditContext(req);
+    await AuditLogService.create({
+      user_id: user.id,
+      user_role: 'user',
+      user_email: user.email,
+      action: 'password_change',
+      service_type: 'auth',
+      service_id: `password_${user.id}`,
+      service_name: 'Password Change',
+      metadata: { 
+        status: 'success',
+      },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
 
     return NextResponse.json(
       { message: "Password changed successfully" },

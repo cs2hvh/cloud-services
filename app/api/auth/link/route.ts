@@ -1,6 +1,7 @@
 // app/api/auth/link/route.ts
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { AuditLogService, createAuditContext } from "@/lib/audit";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -103,6 +104,31 @@ export async function POST(request: Request) {
         : error.message || "Could not start linking flow.";
       return NextResponse.json({ error: msg }, { status: 409 });
     }
+    
+    // Audit log: provider connect initiated
+    const auditContext = createAuditContext(
+      request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+      request.headers.get('user-agent') || 'unknown',
+      crypto.randomUUID()
+    );
+    await AuditLogService.create({
+      user_id: user.id,
+      user_role: 'user',
+      user_email: user.email,
+      action: 'provider_connect',
+      service_type: 'auth',
+      service_id: `${provider}_${user.id}`,
+      service_name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} OAuth`,
+      metadata: { 
+        provider,
+        method: 'connect',
+        status: 'initiated',
+      },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
+    
     return NextResponse.json({ url: data?.url }, { status: 200 });
   } else {
     // Disconnect: handle both Supabase identity and database tokens
@@ -124,6 +150,30 @@ export async function POST(request: Request) {
     } else if (provider === 'bitbucket') {
       await supabase.from('bitbucket_tokens').delete().eq('user_id', user.id);
     }
+    
+    // Audit log: provider disconnect
+    const auditContext = createAuditContext(
+      request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+      request.headers.get('user-agent') || 'unknown',
+      crypto.randomUUID()
+    );
+    await AuditLogService.create({
+      user_id: user.id,
+      user_role: 'user',
+      user_email: user.email,
+      action: 'provider_disconnect',
+      service_type: 'auth',
+      service_id: `${provider}_${user.id}`,
+      service_name: `${provider.charAt(0).toUpperCase() + provider.slice(1)} OAuth`,
+      metadata: { 
+        provider,
+        method: 'disconnect',
+        status: 'success',
+      },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
     
     // Success - provider disconnected
     return NextResponse.json(

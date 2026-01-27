@@ -13,6 +13,7 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
+import { AuditLogService, createAuditContext } from '@/lib/audit';
 
 interface GitLabTokenResponse {
   access_token: string;
@@ -133,6 +134,22 @@ export class GitLabTokenManager {
         console.log('[GitLab Token Manager] User should refresh their Supabase session or re-connect GitLab');
         // Delete the expired token - user needs to re-authenticate
         await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired
+        const auditContext = createAuditContext('system', 'GitLabTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `gitlab_token_${userId}`,
+          service_name: 'GitLab OAuth Token',
+          metadata: { reason: 'supabase_token_cannot_refresh', provider: 'gitlab' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -140,6 +157,22 @@ export class GitLabTokenManager {
         console.log('[GitLab Token Manager] No refresh token available, user needs to re-authenticate');
         // Delete the expired token
         await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired
+        const auditContext = createAuditContext('system', 'GitLabTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `gitlab_token_${userId}`,
+          service_name: 'GitLab OAuth Token',
+          metadata: { reason: 'no_refresh_token', provider: 'gitlab' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -149,6 +182,22 @@ export class GitLabTokenManager {
         console.log('[GitLab Token Manager] Failed to refresh token, user needs to re-authenticate');
         // Delete the expired/invalid token
         await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired (refresh failed)
+        const auditContext = createAuditContext('system', 'GitLabTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `gitlab_token_${userId}`,
+          service_name: 'GitLab OAuth Token',
+          metadata: { reason: 'refresh_failed', provider: 'gitlab' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -172,6 +221,24 @@ export class GitLabTokenManager {
         // Still return the new token even if we couldn't save it
       } else {
         console.log('[GitLab Token Manager] Successfully refreshed and stored new token for user:', userId);
+        
+        // Audit log: token refreshed
+        const auditContext = createAuditContext('system', 'GitLabTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_refreshed',
+          service_type: 'auth',
+          service_id: `gitlab_token_${userId}`,
+          service_name: 'GitLab OAuth Token',
+          metadata: { 
+            provider: 'gitlab',
+            expires_at: newExpiresAt,
+          },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
       }
 
       return refreshResult.accessToken;

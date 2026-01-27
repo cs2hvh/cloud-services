@@ -8,23 +8,29 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Loader2 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 export interface AuditLogEntry {
   id: string;
   user_id: string;
   user_email?: string;
+  user_username?: string;
   user_role: string;
-  action: "create" | "update" | "delete" | "login" | "logout";
+  action: "create" | "update" | "delete" | "login" | "logout" | "token_expired" | "token_refreshed" | "webhook_received" | "provider_connect" | "provider_disconnect" | "password_change";
   service_type: string;
   service_id: string;
   service_name?: string;
   created_at: string;
   ip_address?: string;
   user_agent?: string;
+  request_id?: string;
+  before_state?: Record<string, unknown> | null;
+  after_state?: Record<string, unknown> | null;
+  changes?: Record<string, { old: unknown; new: unknown }> | null;
+  metadata?: Record<string, unknown>;
+  checksum?: string;
 }
 
 interface AuditLogTableProps {
@@ -39,6 +45,12 @@ const actionColors = {
   delete: "bg-red-950/50 text-red-400 border border-red-900",
   login: "bg-purple-950/50 text-purple-400 border border-purple-900",
   logout: "bg-neutral-800 text-neutral-400 border border-neutral-700",
+  token_expired: "bg-yellow-950/50 text-yellow-400 border border-yellow-900",
+  token_refreshed: "bg-teal-950/50 text-teal-400 border border-teal-900",
+  webhook_received: "bg-indigo-950/50 text-indigo-400 border border-indigo-900",
+    provider_connect: "bg-cyan-950/50 text-cyan-400 border border-cyan-900",
+    provider_disconnect: "bg-orange-950/50 text-orange-400 border border-orange-900",
+    password_change: "bg-pink-950/50 text-pink-400 border border-pink-900",
 };
 
 const serviceTypeLabels: Record<string, string> = {
@@ -98,8 +110,10 @@ export function AuditLogTable({
           <TableRow key={log.id} className="hover:bg-neutral-800/30 transition-colors">
             <TableCell className="font-mono text-xs text-neutral-300">
               <div className="flex flex-col">
-                <span>{new Date(log.created_at).toLocaleString()}</span>
-                <span className="text-neutral-500 text-xs">
+                <span suppressHydrationWarning>
+                  {format(new Date(log.created_at), "MMM dd, yyyy HH:mm:ss")}
+                </span>
+                <span suppressHydrationWarning className="text-neutral-500 text-xs">
                   {formatDistanceToNow(new Date(log.created_at), {
                     addSuffix: true,
                   })}

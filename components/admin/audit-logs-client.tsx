@@ -6,13 +6,6 @@ import { AuditLogTable, type AuditLogEntry } from "@/components/admin/audit-log-
 import { AuditLogDetailModal } from "@/components/admin/audit-log-detail-modal";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,8 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ChevronLeft, ChevronRight, Shield, Search, X, Filter, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Shield, Search, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface AuditLogsClientProps {
@@ -39,10 +31,9 @@ export default function AuditLogsClient({
   initialPagination,
 }: AuditLogsClientProps) {
   const [logs, setLogs] = useState<AuditLogEntry[]>(initialLogs);
-  const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   
   // Filter states
   const [userId, setUserId] = useState("");

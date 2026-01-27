@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { AuditLogService, createAuditContext } from "@/lib/audit";
 
 /**
  * GitLab App OAuth flow for repository access
@@ -38,6 +39,26 @@ export async function POST(request: Request) {
         );
       }
       
+      // Audit log: GitLab disconnect
+      const auditContext = createAuditContext(
+        request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+        request.headers.get('user-agent') || 'unknown',
+        crypto.randomUUID()
+      );
+      await AuditLogService.create({
+        user_id: user.id,
+        user_role: 'user',
+        user_email: user.email || undefined,
+        action: 'provider_disconnect',
+        service_type: 'auth',
+        service_id: `gitlab_${user.id}`,
+        service_name: 'GitLab App OAuth',
+        metadata: { provider: 'gitlab', method: 'disconnect', status: 'success' },
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+      });
+      
       return Response.json({ success: true, message: "GitLab disconnected" }, { status: 200 });
     }
 
@@ -71,6 +92,26 @@ export async function POST(request: Request) {
       `response_type=code&` +
       `scope=${encodeURIComponent(scopes)}&` +
       `state=${state}`;
+
+    // Audit log: GitLab connect initiated
+    const auditContext = createAuditContext(
+      request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown',
+      request.headers.get('user-agent') || 'unknown',
+      crypto.randomUUID()
+    );
+    await AuditLogService.create({
+      user_id: user.id,
+      user_role: 'user',
+      user_email: user.email || undefined,
+      action: 'provider_connect',
+      service_type: 'auth',
+      service_id: `gitlab_${user.id}`,
+      service_name: 'GitLab App OAuth',
+      metadata: { provider: 'gitlab', method: 'connect', status: 'initiated' },
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+    });
 
     return Response.json({ 
       url: gitlabAuthUrl,

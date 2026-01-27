@@ -46,6 +46,8 @@ export interface LinkResult {
   integration_id?: string;
   injected_vars?: string[];
   redeploy_triggered?: boolean;
+  app_name?: string;
+  database_name?: string;
   conflicts?: string[];
   error?: string;
   code?: string;
@@ -429,6 +431,8 @@ export class DatabaseIntegrationService {
         integration_id: integration.id,
         injected_vars: generated.keys,
         redeploy_triggered: redeployTriggered,
+        app_name: app.name,
+        database_name: database.name,
       };
 
     } catch (error) {

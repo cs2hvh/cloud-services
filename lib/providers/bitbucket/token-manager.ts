@@ -11,6 +11,7 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
+import { AuditLogService, createAuditContext } from '@/lib/audit';
 
 interface BitbucketTokenResponse {
   access_token: string;
@@ -127,6 +128,22 @@ export class BitbucketTokenManager {
         console.log('[Bitbucket Token Manager] User should refresh their Supabase session or re-connect Bitbucket');
         // Delete the expired token - user needs to re-authenticate
         await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired
+        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `bitbucket_token_${userId}`,
+          service_name: 'Bitbucket OAuth Token',
+          metadata: { reason: 'supabase_token_cannot_refresh', provider: 'bitbucket' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -134,6 +151,22 @@ export class BitbucketTokenManager {
         console.log('[Bitbucket Token Manager] No refresh token available, user needs to re-authenticate');
         // Delete the expired token
         await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired
+        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `bitbucket_token_${userId}`,
+          service_name: 'Bitbucket OAuth Token',
+          metadata: { reason: 'no_refresh_token', provider: 'bitbucket' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -143,6 +176,22 @@ export class BitbucketTokenManager {
         console.log('[Bitbucket Token Manager] Failed to refresh token, user needs to re-authenticate');
         // Delete the expired/invalid token
         await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
+        
+        // Audit log: token expired (refresh failed)
+        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_expired',
+          service_type: 'auth',
+          service_id: `bitbucket_token_${userId}`,
+          service_name: 'Bitbucket OAuth Token',
+          metadata: { reason: 'refresh_failed', provider: 'bitbucket' },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
+        
         return null;
       }
 
@@ -166,6 +215,24 @@ export class BitbucketTokenManager {
         // Still return the new token even if we couldn't save it
       } else {
         console.log('[Bitbucket Token Manager] Successfully refreshed and stored new token for user:', userId);
+        
+        // Audit log: token refreshed
+        const auditContext = createAuditContext('system', 'BitbucketTokenManager', crypto.randomUUID());
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: 'system',
+          action: 'token_refreshed',
+          service_type: 'auth',
+          service_id: `bitbucket_token_${userId}`,
+          service_name: 'Bitbucket OAuth Token',
+          metadata: { 
+            provider: 'bitbucket',
+            expires_at: newExpiresAt,
+          },
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+        });
       }
 
       return refreshResult.accessToken;
