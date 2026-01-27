@@ -150,13 +150,19 @@ export async function GET(req: NextRequest) {
     // Non-streaming: return logs as JSON
     if (targetPod) {
       // Get logs for specific instance
-      const logs = await RuntimeLogsService.getLogs(targetPod.name, logOptions);
+      const logs = await RuntimeLogsService.getLogs(targetPod.name, logOptions).catch((err) => {
+        console.log(`[API] Failed to get logs for ${targetPod.name}:`, err.message);
+        return '';
+      });
       const podIndex = pods.findIndex(p => p.name === targetPod!.name);
       
       return NextResponse.json({
         app_id: appId,
         instance: `instance-${podIndex + 1}`,
         displayName: `Instance ${podIndex + 1}`,
+        status: targetPod.status,
+        ready: targetPod.ready,
+        restartCount: targetPod.restartCount,
         logs,
         timestamp: new Date().toISOString(),
       });
@@ -165,7 +171,10 @@ export async function GET(req: NextRequest) {
     // Get logs for all instances (+ previous logs for restarted instances)
     const instanceLogsWithPrevious = await Promise.all(
       pods.map(async (pod, index) => {
-        const currentLogs = await RuntimeLogsService.getLogs(pod.name, logOptions).catch(() => '');
+        const currentLogs = await RuntimeLogsService.getLogs(pod.name, logOptions).catch((err) => {
+          console.log(`[API] Failed to get logs for ${pod.name}:`, err.message);
+          return '';
+        });
         
         // If instance has restarted, also fetch previous container logs
         let previousLogs: string | null = null;
@@ -180,6 +189,7 @@ export async function GET(req: NextRequest) {
           restartCount: pod.restartCount,
           logs: currentLogs,
           previousLogs,
+          ready: pod.ready,
         };
       })
     );

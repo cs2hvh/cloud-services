@@ -16,6 +16,8 @@ interface AppsListProps {
   loading: boolean;
   buildInfo: Record<string, BuildInfo>;
   buildLogs: Record<string, string>;
+  logsLoading: Record<string, boolean>;
+  logsError: Record<string, string>;
   onFetchLogs: (appName: string, buildNumber: number) => void;
   onUpdateApps: (updater: (apps: App[]) => App[]) => void;
 }
@@ -25,6 +27,8 @@ export function AppsList({
   loading,
   buildInfo,
   buildLogs,
+  logsLoading,
+  logsError,
   onFetchLogs,
   onUpdateApps,
 }: AppsListProps) {
@@ -138,6 +142,8 @@ export function AppsList({
                       app={app}
                       build={buildInfo[app.name]}
                       logs={buildLogs[app.name]}
+                      logsLoading={logsLoading[app.name]}
+                      logsError={logsError[app.name]}
                       isExpanded={selectedApp === app.name}
                       onToggleLogs={() =>
                         setSelectedApp(selectedApp === app.name ? null : app.name)

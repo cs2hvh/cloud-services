@@ -65,8 +65,8 @@ export function createAngularPipeline(
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
   
   // Generate build args for ALL env vars (Angular requires build-time injection)
-  // ⚠️ WARNING: All Angular env vars will be visible in build logs!
-  // ⚠️ DO NOT use sensitive data - use Kubernetes Secrets for backend APIs instead
+  // [WARN] WARNING: All Angular env vars will be visible in build logs!
+  // [WARN] DO NOT use sensitive data - use Kubernetes Secrets for backend APIs instead
   const buildArgs = envVars.length > 0
     ? envVars.map(e => {
         // Escape special characters for shell

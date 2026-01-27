@@ -59,7 +59,7 @@ export function createNextJsPipeline(
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
   // Generate build args for CLIENT-SIDE vars (NEXT_PUBLIC_*)
-  // ⚠️ Build args are visible in logs - only use for public configuration!
+  // [WARN] Build args are visible in logs - only use for public configuration!
   const buildArgs = clientEnvVars.length > 0
     ? clientEnvVars.map(e => {
         const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');

@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const rl = await limitByUser(auth.user!.id, {
       prefix: "rl:platform-app-list",
-      limit: 10,
+      limit: 30,
       windowMs: 60_000,
     });
     if (!rl.allowed) {

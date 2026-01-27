@@ -115,12 +115,12 @@ spec:
             echo 'Verifying resources are deleted...'
             
             sh """
-              kubectl get deployment \${APP_NAME} --namespace=default 2>/dev/null && echo "⚠️ Deployment still exists" || echo "✅ Deployment deleted"
-              kubectl get service \${SERVICE_NAME} --namespace=default 2>/dev/null && echo "⚠️ Service still exists" || echo "✅ Service deleted"
-              kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "⚠️ Ingress still exists" || echo "✅ Ingress deleted"
-              kubectl get certificate \${CERT_NAME} --namespace=default 2>/dev/null && echo "⚠️ Certificate still exists" || echo "✅ Certificate deleted"
-              kubectl get secret \${TLS_SECRET_NAME} --namespace=default 2>/dev/null && echo "⚠️ TLS Secret still exists" || echo "✅ TLS Secret deleted"
-              kubectl get secret \${ENV_SECRET_NAME} --namespace=default 2>/dev/null && echo "⚠️ Env Secret still exists" || echo "✅ Env Secret deleted"
+              kubectl get deployment \${APP_NAME} --namespace=default 2>/dev/null && echo "[WARN] Deployment still exists" || echo "[PASS] Deployment deleted"
+              kubectl get service \${SERVICE_NAME} --namespace=default 2>/dev/null && echo "[WARN] Service still exists" || echo "[PASS] Service deleted"
+              kubectl get ingress \${INGRESS_NAME} --namespace=default 2>/dev/null && echo "[WARN] Ingress still exists" || echo "[PASS] Ingress deleted"
+              kubectl get certificate \${CERT_NAME} --namespace=default 2>/dev/null && echo "[WARN] Certificate still exists" || echo "[PASS] Certificate deleted"
+              kubectl get secret \${TLS_SECRET_NAME} --namespace=default 2>/dev/null && echo "[WARN] TLS Secret still exists" || echo "[PASS] TLS Secret deleted"
+              kubectl get secret \${ENV_SECRET_NAME} --namespace=default 2>/dev/null && echo "[WARN] Env Secret still exists" || echo "[PASS] Env Secret deleted"
               
               echo "Verification completed"
             """
@@ -132,11 +132,11 @@ spec:
   
   post {
     success {
-      echo "✅ Successfully deleted Kubernetes resources for ${name}"
+      echo "[PASS] Successfully deleted Kubernetes resources for ${name}"
     }
     
     failure {
-      echo "❌ Failed to delete Kubernetes resources for ${name}"
+      echo "[FAIL] Failed to delete Kubernetes resources for ${name}"
     }
   }
 }

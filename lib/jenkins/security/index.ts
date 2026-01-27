@@ -380,22 +380,22 @@ ${generateLoggingHelpers()}
                   `}
                   
                   if [ "$VULN_FOUND" -gt "0" ]; then
-                    echo "❌ SECURITY FAILURE: Found $VULN_FOUND ${severityCheck} vulnerabilities!"
+                    echo "[FAIL] SECURITY FAILURE: Found $VULN_FOUND ${severityCheck} vulnerabilities!"
                     echo "Build blocked for security reasons."
-                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "⚠️ WARNING: Review recommended but continuing build"'}
+                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended but continuing build"'}
                   else
-                    echo "✅ No ${severityCheck} vulnerabilities found"
+                    echo "[PASS] No ${severityCheck} vulnerabilities found"
                   fi
                 else
                   # Fallback: Use trivy's exit-code feature
                   if trivy image --exit-code 1 --severity ${severityCheck} --quiet \${DOCKER_IMAGE_VERSION} 2>&1 | grep -q "Total:"; then
-                    echo "❌ SECURITY FAILURE: Found ${severityCheck} vulnerabilities!"
-                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "⚠️ WARNING: Review recommended"'}
+                    echo "[FAIL] SECURITY FAILURE: Found ${severityCheck} vulnerabilities!"
+                    ${failOnCritical || failOnHigh ? 'exit 1' : 'echo "[WARN] WARNING: Review recommended"'}
                   else
-                    echo "✅ No ${severityCheck} vulnerabilities found"
+                    echo "[PASS] No ${severityCheck} vulnerabilities found"
                   fi
                 fi
-                ` : 'echo "✅ Scan completed (informational only)"'}
+                ` : 'echo "[PASS] Scan completed (informational only)"'}
                 
                 DURATION=$(end_timer $START_TIME)
                 log_timing "$STAGE_ID" "$DURATION"
@@ -441,7 +441,7 @@ ${generateLoggingHelpers()}
                 if [ -f package-lock.json ] || [ -f package.json ]; then
                   # Install npm if not present (alpine-based git container)
                   if ! command -v npm &> /dev/null; then
-                    echo "⚠️ npm not found in git container, skipping pre-build audit"
+                    echo "[WARN] npm not found in git container, skipping pre-build audit"
                     echo "Note: Dependency vulnerabilities will be caught during Docker build"
                     exit 0
                   fi
@@ -463,13 +463,13 @@ ${generateLoggingHelpers()}
                   
                   if [ "$AUDIT_EXIT" -ne "0" ]; then
                     log_security "CRITICAL" "$STAGE_ID" "CRITICAL dependency vulnerabilities found"
-                    echo "❌ SECURITY FAILURE: CRITICAL dependency vulnerabilities found!"
+                    echo "[FAIL] SECURITY FAILURE: CRITICAL dependency vulnerabilities found!"
                     echo "Run 'npm audit fix' to resolve."
                     exit 1
                   fi
                   
                   log_security "INFO" "$STAGE_ID" "No critical vulnerabilities found"
-                  echo "✅ SECURITY: No critical dependency vulnerabilities"
+                  echo "[PASS] SECURITY: No critical dependency vulnerabilities"
                   echo "(HIGH/MODERATE issues shown above as warnings)"
                 else
                   log_security "INFO" "$STAGE_ID" "No package.json found, skipping"
@@ -511,7 +511,7 @@ ${generateLoggingHelpers()}
                 if [ -f requirements.txt ]; then
                   # Check if pip is available
                   if ! command -v pip &> /dev/null; then
-                    echo "⚠️ pip not found, skipping pre-build audit"
+                    echo "[WARN] pip not found, skipping pre-build audit"
                     echo "Note: Dependency vulnerabilities will be caught during Docker build"
                     exit 0
                   fi
@@ -531,7 +531,7 @@ ${generateLoggingHelpers()}
                   if [ "$AUDIT_EXIT" -ne 0 ]; then
                     echo ""
                     log_security "WARN" "$STAGE_ID" "Vulnerable dependencies found (non-blocking)"
-                    echo "⚠️ WARNING: Vulnerable dependencies reported by pip-audit (non-blocking)"
+                    echo "[WARN] WARNING: Vulnerable dependencies reported by pip-audit (non-blocking)"
                     
                     # Display vulnerabilities in readable format
                     if command -v jq &> /dev/null && [ -f /tmp/pip_audit_output.json ]; then
@@ -545,7 +545,7 @@ ${generateLoggingHelpers()}
                     echo "Note: Only CRITICAL CVEs would block - pip-audit reports all findings"
                   else
                     log_security "INFO" "$STAGE_ID" "No vulnerabilities found"
-                    echo "✅ SECURITY: No known dependency vulnerabilities found"
+                    echo "[PASS] SECURITY: No known dependency vulnerabilities found"
                   fi
                 else
                   log_security "INFO" "$STAGE_ID" "No requirements.txt found, skipping"
@@ -603,7 +603,7 @@ ${generateLoggingHelpers()}
                     
                     # Verify checksum for security
                     echo "${hadolintSha256}  /tmp/hadolint" | sha256sum -c - || {
-                      echo "❌ SECURITY: Hadolint checksum verification failed!"
+                      echo "[FAIL] SECURITY: Hadolint checksum verification failed!"
                       rm -f /tmp/hadolint
                       exit 1
                     }
@@ -618,7 +618,7 @@ ${generateLoggingHelpers()}
                   # Note: Linting is non-blocking as many rules are stylistic rather than security-critical
                   # For stricter enforcement, remove --no-fail and add specific error codes to ignore
                   echo "Linting Dockerfile..."
-                  $HADOLINT Dockerfile --no-fail || echo "⚠️ Lint warnings found (non-blocking)"
+                  $HADOLINT Dockerfile --no-fail || echo "[WARN] Lint warnings found (non-blocking)"
                   
                   # Check for critical security issues manually
                   echo ""
@@ -626,24 +626,24 @@ ${generateLoggingHelpers()}
                   
                   # Check for USER instruction (should not run as root)
                   if ! grep -q "^USER" Dockerfile; then
-                    echo "⚠️ WARNING: No USER instruction found - container may run as root"
+                    echo "[WARN] WARNING: No USER instruction found - container may run as root"
                   else
-                    echo "✅ USER instruction found"
+                    echo "[PASS] USER instruction found"
                   fi
                   
                   # Check for latest tag usage
                   if grep -q ":latest" Dockerfile; then
-                    echo "⚠️ WARNING: Using ':latest' tag - consider pinning specific version"
+                    echo "[WARN] WARNING: Using ':latest' tag - consider pinning specific version"
                   fi
                   
                   # Check for ADD vs COPY
                   if grep -q "^ADD " Dockerfile; then
-                    echo "ℹ️ INFO: ADD instruction found - COPY is preferred unless extracting archives"
+                    echo "[INFO] INFO: ADD instruction found - COPY is preferred unless extracting archives"
                   fi
                   
                   echo ""
                   log_security "INFO" "$STAGE_ID" "Dockerfile lint completed"
-                  echo "✅ SECURITY: Dockerfile lint completed"
+                  echo "[PASS] SECURITY: Dockerfile lint completed"
                 else
                   log_security "INFO" "$STAGE_ID" "No Dockerfile found yet"
                   echo "No Dockerfile found yet (will be created in next stage)"
@@ -698,7 +698,7 @@ ${generateLoggingHelpers()}
                   
                   # Verify checksum for security
                   echo "${gitleaksSha256}  /tmp/gitleaks.tar.gz" | sha256sum -c - || {
-                    echo "❌ SECURITY: Gitleaks checksum verification failed!"
+                    echo "[FAIL] SECURITY: Gitleaks checksum verification failed!"
                     rm -f /tmp/gitleaks.tar.gz
                     exit 1
                   }
@@ -726,7 +726,7 @@ ${generateLoggingHelpers()}
                 if ! $GITLEAKS detect --source . --no-git $BASELINE_ARG -v 2>&1; then
                   echo ""
                   log_security "CRITICAL" "$STAGE_ID" "Hardcoded secrets detected - build blocked"
-                  echo "❌ SECURITY FAILURE: Hardcoded secrets detected!"
+                  echo "[FAIL] SECURITY FAILURE: Hardcoded secrets detected!"
                   echo "Remove secrets from code and use environment variables."
                   echo ""
                   echo "If these are false positives, create a baseline:"
@@ -736,7 +736,7 @@ ${generateLoggingHelpers()}
                 
                 echo ""
                 log_security "INFO" "$STAGE_ID" "No secrets detected"
-                echo "✅ SECURITY: No secrets detected"
+                echo "[PASS] SECURITY: No secrets detected"
                 
                 DURATION=$(end_timer $START_TIME)
                 log_timing "$STAGE_ID" "$DURATION"
@@ -808,27 +808,27 @@ ${generateLoggingHelpers()}
                     EVAL_RESULTS=\$(grep -r --include="*.js" --include="*.ts" "eval(" . 2>/dev/null | grep -v node_modules | head -5 || true)
                     if [ -n "\$EVAL_RESULTS" ]; then
                       echo "\$EVAL_RESULTS"
-                      echo "⚠️ WARNING: eval() usage detected - potential security risk"
+                      echo "[WARN] WARNING: eval() usage detected - potential security risk"
                     fi
                     
                     # Check for innerHTML
                     INNERHTML_RESULTS=\$(grep -r --include="*.js" --include="*.ts" --include="*.jsx" --include="*.tsx" "innerHTML" . 2>/dev/null | grep -v node_modules | head -5 || true)
                     if [ -n "\$INNERHTML_RESULTS" ]; then
                       echo "\$INNERHTML_RESULTS"
-                      echo "⚠️ WARNING: innerHTML usage detected - potential XSS risk"
+                      echo "[WARN] WARNING: innerHTML usage detected - potential XSS risk"
                     fi
                     
                     # Check for dangerouslySetInnerHTML (React)
                     DANGEROUS_RESULTS=\$(grep -r --include="*.jsx" --include="*.tsx" "dangerouslySetInnerHTML" . 2>/dev/null | grep -v node_modules | head -5 || true)
                     if [ -n "\$DANGEROUS_RESULTS" ]; then
                       echo "\$DANGEROUS_RESULTS"
-                      echo "⚠️ WARNING: dangerouslySetInnerHTML usage detected - ensure content is sanitized"
+                      echo "[WARN] WARNING: dangerouslySetInnerHTML usage detected - ensure content is sanitized"
                     fi
                   fi
                   
                   echo ""
                   log_security "INFO" "$STAGE_ID" "Static code analysis completed"
-                  echo "✅ SECURITY: Static code analysis completed"
+                  echo "[PASS] SECURITY: Static code analysis completed"
                 else
                   log_security "INFO" "$STAGE_ID" "No package.json found, skipping"
                   echo "No package.json found, skipping static analysis"
@@ -883,28 +883,28 @@ ${generateLoggingHelpers()}
                   
                   # Check for eval() usage
                   if grep -r --include="*.py" "eval(" . 2>/dev/null | grep -v venv | grep -v __pycache__ | head -5; then
-                    echo "⚠️ WARNING: eval() usage detected - potential security risk"
+                    echo "[WARN] WARNING: eval() usage detected - potential security risk"
                   fi
                   
                   # Check for exec() usage
                   if grep -r --include="*.py" "exec(" . 2>/dev/null | grep -v venv | grep -v __pycache__ | head -5; then
-                    echo "⚠️ WARNING: exec() usage detected - potential security risk"
+                    echo "[WARN] WARNING: exec() usage detected - potential security risk"
                   fi
                   
                   # Check for shell=True in subprocess
                   if grep -r --include="*.py" "shell=True" . 2>/dev/null | grep -v venv | grep -v __pycache__ | head -5; then
-                    echo "⚠️ WARNING: shell=True in subprocess - potential command injection risk"
+                    echo "[WARN] WARNING: shell=True in subprocess - potential command injection risk"
                   fi
                   
                   # Check for SQL string formatting (potential SQL injection)
                   if grep -r --include="*.py" -E "execute.*%|execute.*\\+" . 2>/dev/null | grep -v venv | grep -v __pycache__ | head -5; then
-                    echo "⚠️ WARNING: Potential SQL injection - use parameterized queries"
+                    echo "[WARN] WARNING: Potential SQL injection - use parameterized queries"
                   fi
                 fi
                 
                 echo ""
                 log_security "INFO" "$STAGE_ID" "Static code analysis completed"
-                echo "✅ SECURITY: Static code analysis completed"
+                echo "[PASS] SECURITY: Static code analysis completed"
                 
                 DURATION=$(end_timer $START_TIME)
                 log_timing "$STAGE_ID" "$DURATION"
@@ -963,7 +963,7 @@ ${generateLoggingHelpers()}
                   echo "Validating deployment template security..."
                   
                   # Check our generated manifests for common issues
-                  echo "✅ Generated manifests use:"
+                  echo "[PASS] Generated manifests use:"
                   echo "   - Non-root user (runAsUser: 1000)"
                   echo "   - Resource limits (CPU/Memory)"
                   echo "   - Liveness/Readiness probes"
@@ -987,36 +987,36 @@ ${generateLoggingHelpers()}
                     
                     # Check for privileged containers
                     if grep -q "privileged: true" "\$file"; then
-                      echo "  ❌ CRITICAL: Privileged container detected"
+                      echo "  [FAIL] CRITICAL: Privileged container detected"
                       CRITICAL_ISSUES=\$((CRITICAL_ISSUES + 1))
                     fi
                     
                     # Check for hostNetwork
                     if grep -q "hostNetwork: true" "\$file"; then
-                      echo "  ❌ CRITICAL: hostNetwork enabled"
+                      echo "  [FAIL] CRITICAL: hostNetwork enabled"
                       CRITICAL_ISSUES=\$((CRITICAL_ISSUES + 1))
                     fi
                     
                     # Check for hostPID
                     if grep -q "hostPID: true" "\$file"; then
-                      echo "  ❌ CRITICAL: hostPID enabled"
+                      echo "  [FAIL] CRITICAL: hostPID enabled"
                       CRITICAL_ISSUES=\$((CRITICAL_ISSUES + 1))
                     fi
                     
                     # Check for runAsRoot
                     if grep -q "runAsUser: 0" "\$file"; then
-                      echo "  ❌ CRITICAL: Container runs as root"
+                      echo "  [FAIL] CRITICAL: Container runs as root"
                       CRITICAL_ISSUES=\$((CRITICAL_ISSUES + 1))
                     fi
                     
                     # Check for missing resource limits
                     if ! grep -q "limits:" "\$file"; then
-                      echo "  ⚠️ WARNING: No resource limits defined"
+                      echo "  [WARN] WARNING: No resource limits defined"
                     fi
                     
                     # Check for latest tag
                     if grep -q ":latest" "\$file"; then
-                      echo "  ⚠️ WARNING: Using :latest tag"
+                      echo "  [WARN] WARNING: Using :latest tag"
                     fi
                   fi
                 done
@@ -1024,12 +1024,12 @@ ${generateLoggingHelpers()}
                 echo ""
                 if [ "\$CRITICAL_ISSUES" -gt "0" ]; then
                   log_security "CRITICAL" "\$STAGE_ID" "Found \$CRITICAL_ISSUES critical K8s security issues"
-                  echo "❌ SECURITY FAILURE: Found \$CRITICAL_ISSUES critical K8s security issues!"
+                  echo "[FAIL] SECURITY FAILURE: Found \$CRITICAL_ISSUES critical K8s security issues!"
                   echo "Fix manifest security issues before deploying."
                   exit 1
                 else
                   log_security "INFO" "\$STAGE_ID" "K8s manifest validation passed"
-                  echo "✅ SECURITY: K8s manifest validation completed"
+                  echo "[PASS] SECURITY: K8s manifest validation completed"
                 fi
                 
                 DURATION=\$(end_timer \$START_TIME)

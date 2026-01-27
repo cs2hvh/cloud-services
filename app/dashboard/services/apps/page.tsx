@@ -22,6 +22,8 @@ export default function ApplicationDeploymentPage() {
   const [buildInfo, setBuildInfo] = useState<Record<string, BuildInfo>>({});
   const [buildLogs, setBuildLogs] = useState<Record<string, string>>({});
   const [fetchedBuilds, setFetchedBuilds] = useState<Set<string>>(new Set());
+  const [logsLoading, setLogsLoading] = useState<Record<string, boolean>>({});
+  const [logsError, setLogsError] = useState<Record<string, string>>({});
 
   // Check if any app is being deleted
   const hasDeleting = deployedApps.some((app) => app.status === 'deleting');
@@ -64,13 +66,23 @@ export default function ApplicationDeploymentPage() {
 
   // Fetch build logs using axios - only called when user expands logs
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
+    // Set loading state
+    setLogsLoading((prev) => ({ ...prev, [appName]: true }));
+    setLogsError((prev) => ({ ...prev, [appName]: '' }));
+    
     try {
-      const res = await api.get(`/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`);
+      const res = await api.get(`/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`);
       if (res?.data?.logs) {
         setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
+        setLogsError((prev) => ({ ...prev, [appName]: '' }));
+      } else {
+        setLogsError((prev) => ({ ...prev, [appName]: 'No logs available' }));
       }
     } catch (error) {
-      console.log(`[fetchBuildLogs] Logs not available for ${appName} build #${buildNumber}:`, error);
+      console.error(`[fetchBuildLogs] Failed to fetch logs for ${appName}:`, error);
+      setLogsError((prev) => ({ ...prev, [appName]: 'Failed to load logs. Click to retry.' }));
+    } finally {
+      setLogsLoading((prev) => ({ ...prev, [appName]: false }));
     }
   }, []);
 
@@ -81,7 +93,7 @@ export default function ApplicationDeploymentPage() {
       if (!hasDeleting) {
         fetchApps();
       }
-    }, 10000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [fetchApps, hasDeleting]);
 
@@ -203,6 +215,8 @@ export default function ApplicationDeploymentPage() {
           loading={loading}
           buildInfo={buildInfo}
           buildLogs={buildLogs}
+          logsLoading={logsLoading}
+          logsError={logsError}
           onFetchLogs={fetchBuildLogs}
           onUpdateApps={setDeployedApps}
         />

@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     // Rate limiting
     const rl = await limitByUser(auth.user!.id, {
       prefix: "rl:platform-app-health",
-      limit: 30,
+      limit: 60,
       windowMs: 60_000,
     });
     if (!rl.allowed) {

@@ -214,10 +214,10 @@ RUN corepack disable && \\
       npm run build; \\
     fi`;
 
-  // Start command (for CMD) - dynamic based on package manager
-  const startCmdArray = production
-    ? `["sh", "-c", "if [ \"\$PACKAGE_MANAGER\" = \"pnpm\" ]; then pnpm start; elif [ \"\$PACKAGE_MANAGER\" = \"yarn\" ]; then yarn start; else npm start; fi"]`
-    : `["sh", "-c", "if [ \"\$PACKAGE_MANAGER\" = \"pnpm\" ]; then pnpm start; elif [ \"\$PACKAGE_MANAGER\" = \"yarn\" ]; then yarn start; else npm start; fi"]`;
+  // Start command (for CMD) - simplified to use npm directly
+  // At runtime, package manager doesn't matter - node_modules already installed
+  // npm is always available in node base image and runs the "start" script
+  const startCmdArray = `["npm", "start"]`;
 
   return {
     setupPm,

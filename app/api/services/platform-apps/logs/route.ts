@@ -8,8 +8,10 @@ import { JenkinsService } from "@/lib/services/jenkins";
 import jenkins from "@/lib/jenkins";
 
 /**
- * GET /api/services/platform-apps/logs?app_id=xxx&build=1&start=0
- * Get build logs for an app
+ * GET /api/services/platform-apps/logs?app_id=xxx&build=1
+ * Get filtered deployment logs for an app (Blue Ocean API or fallback filter)
+ * 
+ * NOTE: This endpoint always returns complete filtered logs (no pagination)
  */
 export async function GET(req: NextRequest) {
   const auth = await authenticateUser();
@@ -33,7 +35,6 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const appId = searchParams.get("app_id");
     const buildNumber = searchParams.get("build");
-    const start = parseInt(searchParams.get("start") || "0");
 
     if (!appId) {
       return NextResponse.json(
@@ -68,7 +69,7 @@ export async function GET(req: NextRequest) {
     const jobName = `${app.name}-job`;
     let logs = "";
     let hasMore = false;
-    let nextStart = 0;
+    const nextStart = 0;
     let build = buildNumber ? parseInt(buildNumber) : null;
 
     // Validate build number is a positive integer if provided
@@ -126,10 +127,9 @@ export async function GET(req: NextRequest) {
       }
 
       if (build) {
-        // Use JenkinsService which properly handles log retrieval
-        logs = await JenkinsService.getBuildLog(app.name, build, start);
-        nextStart = start + logs.length;
-        hasMore = logs.length > 0; // If we got content, there might be more
+        // Use JenkinsService to get deployment logs only (via Blue Ocean API or fallback filter)
+        logs = await JenkinsService.getDeploymentLog(app.name, build);
+        hasMore = false; // Blue Ocean API returns complete stage logs
       } else {
         // No builds yet
         logs = "Build is starting. Logs will appear shortly...";

@@ -39,12 +39,12 @@ function generateNuxtDependencyScanStage(): string {
               
               echo "Checking package manager..."
               if [ -f pnpm-lock.yaml ]; then
-                echo "⚠️ pnpm detected - npm audit not supported"
+                echo "[WARN] pnpm detected - npm audit not supported"
                 echo "Skipping dependency scan (pnpm audit requires pnpm installation)"
                 echo "Dependencies will be scanned during Docker build"
                 exit 0
               elif [ -f yarn.lock ]; then
-                echo "⚠️ yarn detected - npm audit not supported"
+                echo "[WARN] yarn detected - npm audit not supported"
                 echo "Skipping dependency scan (yarn audit has different format)"
                 exit 0
               fi
@@ -61,12 +61,12 @@ function generateNuxtDependencyScanStage(): string {
                 set -e
                 
                 if [ "$AUDIT_EXIT" -ne "0" ]; then
-                  echo "❌ CRITICAL vulnerabilities found!"
+                  echo "[FAIL] CRITICAL vulnerabilities found!"
                   npm audit --audit-level=critical
                   exit 1
                 fi
                 
-                echo "✅ No critical vulnerabilities found"
+                echo "[PASS] No critical vulnerabilities found"
               else
                 echo "No package-lock.json found, skipping npm audit"
               fi
@@ -137,7 +137,7 @@ export function createNuxtJsPipeline(
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
 
   // Generate build args for CLIENT-SIDE vars (NUXT_PUBLIC_* and VITE_*)
-  // ⚠️ Build args are visible in logs - only use for public configuration!
+  // [WARN] Build args are visible in logs - only use for public configuration!
   const buildArgs = clientEnvVars.length > 0
     ? clientEnvVars.map(e => {
         const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');

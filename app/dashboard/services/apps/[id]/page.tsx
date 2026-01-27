@@ -46,11 +46,14 @@ import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
+import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
 import { toast } from 'sonner';
+
+
 
 // Extended App type for detail page (includes all fields from API)
 interface AppDetail {
@@ -217,7 +220,7 @@ export default function AppDetailPage() {
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
     try {
        const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0`
+        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`
       );
         if (res.data) {
         setBuildLogs(res.data.logs || 'No logs available');
@@ -510,6 +513,13 @@ export default function AppDetailPage() {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-2xl font-bold">{app.name}</h1>
+              <button
+                onClick={() => copyToClipboard(app.name, 'app-name')}
+                className="text-white/30 hover:text-white/70 transition-colors"
+                title="Copy app name"
+              >
+                {copiedField === 'app-name' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              </button>
               {getStatusBadge(app.status, buildInfo?.building)}
             </div>
             {/* Show failure reason if app failed */}
@@ -519,16 +529,25 @@ export default function AppDetailPage() {
                 <span>{app.last_failure_reason}</span>
               </div>
             )}
-            <a
-              href={`https://${domain}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/50 hover:text-blue-400 flex items-center gap-1 transition-colors"
-            >
-              <Globe className="w-4 h-4" />
-              {domain}
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="flex items-center gap-2">
+              <a
+                href={`https://${domain}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/50 hover:text-blue-400 flex items-center gap-1 transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                {domain}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <button
+                onClick={() => copyToClipboard(`https://${domain}`, 'domain')}
+                className="text-white/30 hover:text-white/70 transition-colors"
+                title="Copy URL"
+              >
+                {copiedField === 'domain' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div className="flex gap-2">
@@ -566,6 +585,21 @@ export default function AppDetailPage() {
       >
         <Card className="bg-white/5 border-white/10">
           <CardContent className="p-4">
+            <p className="text-xs text-white/50 mb-1">App ID</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-mono text-white truncate flex-1">{app.id}</p>
+              <button
+                onClick={() => copyToClipboard(app.id, 'app-id')}
+                className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+                title="Copy app ID"
+              >
+                {copiedField === 'app-id' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-white/5 border-white/10">
+          <CardContent className="p-4">
             <p className="text-xs text-white/50 mb-1">Framework</p>
             <p className="text-sm font-medium text-white">{app.framework || 'Not specified'}</p>
           </CardContent>
@@ -582,7 +616,16 @@ export default function AppDetailPage() {
         <Card className="bg-white/5 border-white/10">
           <CardContent className="p-4">
             <p className="text-xs text-white/50 mb-1">Port</p>
-            <p className="text-sm font-mono text-white">{app.port}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-mono text-white">{app.port}</p>
+              <button
+                onClick={() => copyToClipboard(app.port.toString(), 'port')}
+                className="text-white/30 hover:text-white/70 transition-colors"
+                title="Copy port"
+              >
+                {copiedField === 'port' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </CardContent>
         </Card>
         <Card className="bg-white/5 border-white/10">
@@ -719,7 +762,16 @@ export default function AppDetailPage() {
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
                               <p className="text-xs text-white/40 mb-1">Ingress Host</p>
-                              <p className="text-xs font-mono text-white truncate">{details.network.ingressHost}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs font-mono text-white truncate flex-1">{details.network.ingressHost}</p>
+                                <button
+                                  onClick={() => copyToClipboard(details.network?.ingressHost || '', 'ingress-host')}
+                                  className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+                                  title="Copy ingress host"
+                                >
+                                  {copiedField === 'ingress-host' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                              </div>
                             </div>
                             <div>
                               <p className="text-xs text-white/40 mb-1">TLS</p>
@@ -729,7 +781,16 @@ export default function AppDetailPage() {
                             </div>
                             <div>
                               <p className="text-xs text-white/40 mb-1">Service</p>
-                              <p className="text-xs text-white">{details.network.serviceName}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs text-white truncate flex-1">{details.network.serviceName}</p>
+                                <button
+                                  onClick={() => copyToClipboard(details.network?.serviceName || '', 'service-name')}
+                                  className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
+                                  title="Copy service name"
+                                >
+                                  {copiedField === 'service-name' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                                </button>
+                              </div>
                             </div>
                             <div>
                               <p className="text-xs text-white/40 mb-1">Port</p>
@@ -817,28 +878,12 @@ export default function AppDetailPage() {
 
           {/* Build Logs Tab */}
           <TabsContent value="build-logs">
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Terminal className="w-5 h-5" />
-                    Build Logs
-                    {buildInfo && <span className="text-white/50">#{buildInfo.number}</span>}
-                  </CardTitle>
-                  {buildInfo?.building && (
-                    <Badge className="bg-blue-500/20 text-blue-400">
-                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                      Building
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <pre className="text-xs text-white/70 font-mono overflow-x-auto max-h-[500px] overflow-y-auto bg-black/50 rounded-lg p-4">
-                  {buildLogs || 'Loading logs...'}
-                </pre>
-              </CardContent>
-            </Card>
+            <BuildLogsPanel 
+              buildInfo={buildInfo} 
+              buildLogs={buildLogs} 
+              appName={app.name}
+              fetchBuildLogs={fetchBuildLogs}
+            />
           </TabsContent>
 
           {/* Runtime Logs Tab */}

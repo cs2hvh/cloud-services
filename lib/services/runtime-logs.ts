@@ -85,8 +85,8 @@ export class RuntimeLogsService {
    * List all pods for an application
    * Returns pods matching the app's label selector
    * 
-   * NOTE: Filters out terminating pods (deletionTimestamp set) and completed pods
-   * to show only active replicas. This prevents showing extra pods during rollouts.
+   * NOTE: Shows ALL pods including Pending/Failed so users can see replica status.
+   * Only filters out terminating pods (being deleted during rollouts).
    */
   static async listPods(appName: string, namespace = DEFAULT_NAMESPACE): Promise<PodSummary[]> {
     try {
@@ -98,8 +98,8 @@ export class RuntimeLogsService {
         labelSelector,
       });
 
-      // Filter out terminating pods (being deleted) and completed/failed pods
-      // This ensures we only show active replicas, not old pods during rollouts
+      // Only filter out pods that are being deleted (terminating during rollouts)
+      // Show ALL other pods (Running, Pending, Failed) so users can see full replica status
       const activePods = response.items.filter((pod: V1Pod) => {
         // Exclude pods that are being deleted (terminating)
         if (pod.metadata?.deletionTimestamp) return false;
@@ -107,17 +107,9 @@ export class RuntimeLogsService {
         // Exclude completed/succeeded pods (jobs that finished)
         if (pod.status?.phase === 'Succeeded') return false;
         
-        // Exclude Pending pods - they haven't started yet and have no logs
-        // This prevents showing stuck pods from failed rollouts
-        if (pod.status?.phase === 'Pending') return false;
-        
-        // Exclude pods in Failed state that aren't restarting
-        if (pod.status?.phase === 'Failed') {
-          const containerStatuses = pod.status?.containerStatuses || [];
-          const hasRestartPolicy = containerStatuses.some(c => c.restartCount > 0);
-          if (!hasRestartPolicy) return false;
-        }
-        
+        // Include Pending pods - users need to see stuck replicas
+        // Include Failed pods - users need to see crashed replicas
+        // Include Running pods - normal healthy replicas
         return true;
       });
 
@@ -180,6 +172,17 @@ export class RuntimeLogsService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`[RuntimeLogsService] getLogs error for ${podName}:`, errorMessage);
+      
+      // If pod doesn't have logs yet (Pending/ContainerCreating/Failed without started container)
+      // Return empty string instead of throwing - the frontend will show appropriate status
+      if (errorMessage.includes('Cannot parse content') || 
+          errorMessage.includes('ContainerCreating') ||
+          errorMessage.includes('PodInitializing') ||
+          errorMessage.includes('container') && errorMessage.includes('not found')) {
+        console.log(`[RuntimeLogsService] Pod ${podName} has no logs yet (likely Pending/Creating)`);
+        return '';
+      }
+      
       throw new Error(`Failed to get logs: ${errorMessage}`);
     }
   }
