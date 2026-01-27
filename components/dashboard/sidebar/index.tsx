@@ -25,6 +25,7 @@ import {
   Network,
   Ticket,
   Rocket,
+  ShieldCheck,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -506,6 +507,20 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     >
                       <Ticket className="w-4 h-4 mr-2" />
                       <span className="text-sm">Coupons</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/audit-logs"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${
+                          pathname === "/dashboard/admin/audit-logs"
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <ShieldCheck className="w-4 h-4 mr-2" />
+                      <span className="text-sm">Audit Logs</span>
                     </Link>
                   </div>
                 )}
