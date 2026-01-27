@@ -185,18 +185,6 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
     return filteredLogs.reduce((sum, log) => sum + (log.matchCount || 0), 0);
   }, [filteredLogs, searchTerm]);
 
-  // Highlight search matches in log text
-  const highlightMatches = useCallback((text: string) => {
-    if (!searchTerm) return text;
-    
-    const parts = text.split(new RegExp(`(${searchTerm})`, 'gi'));
-    return parts.map((part, i) => 
-      part.toLowerCase() === searchTerm.toLowerCase() 
-        ? `\x1b[43m\x1b[30m${part}\x1b[0m` // Yellow highlight
-        : part
-    ).join('');
-  }, [searchTerm]);
-
   // Copy logs to clipboard
   const copyLogs = useCallback(() => {
     const allLogs = filteredLogs.map(instanceLog => 
@@ -624,14 +612,14 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                   Clear Filters
                 </Button>
               </>
-            ) : filteredLogs.some((l: any) => l.status === 'Pending' || !l.ready) ? (
+            ) : instances.some((i) => i.status === 'Pending' || !i.ready) ? (
               <>
                 <p>Instance is starting up</p>
                 <p className="text-sm mt-1 text-yellow-400">
-                  Container is being created. Logs will appear once it's running.
+                  Container is being created. Logs will appear once it&apos;s running.
                 </p>
               </>
-            ) : filteredLogs.some((l: any) => l.status === 'Failed') ? (
+            ) : instances.some((i) => i.status === 'Failed') ? (
               <>
                 <p>Instance failed to start</p>
                 <p className="text-sm mt-1 text-red-400">
