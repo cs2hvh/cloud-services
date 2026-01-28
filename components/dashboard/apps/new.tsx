@@ -72,6 +72,7 @@ interface ProviderConnection {
 // Framework detection and build settings
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
+  'Dockerfile': { buildCommand: 'docker build', outputDir: '', installCommand: '', description: 'Uses your existing Dockerfile - supports any language/runtime' },
   'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
@@ -300,10 +301,25 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       if (response.ok) {
         const data = await response.json();
         if (data.framework) {
+          // Handle Unknown framework (no framework detected, no Dockerfile)
+          if (data.framework === 'Unknown') {
+            toast.error(
+              "Framework not detected",
+              {
+                description: "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually."
+              }
+            );
+            setFramework(""); // Don't auto-select anything
+            setHasDockerfile(false);
+            return;
+          }
+          
           // Normalize framework name to match our configs
           let normalizedFramework = data.framework;
           
           // Map detected frameworks to our config keys
+          // Note: Backend should already normalize Laravel/PHP/Ruby/Sinatra to "Dockerfile" or "Unknown"
+          // This mapping acts as a safety fallback in case backend sends raw framework names
           const frameworkMap: Record<string, string> = {
             'Next.js': 'Next.js',
             'Nuxt.js': 'Nuxt.js',
@@ -318,17 +334,19 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             'Django': 'django',
             'Flask': 'flask',
             'FastAPI': 'fastapi',
-            'Laravel': 'Static',
-            'Symfony': 'Static',
-            'Ruby on Rails': 'Static',
-            'PHP': 'Static',
+            'Dockerfile': 'Dockerfile',
             'Python': 'python',
             'python': 'python',
-            'Ruby': 'Static',
-            'Static': 'Static'
+            // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
+            'Laravel': 'Dockerfile',
+            'Symfony': 'Dockerfile',
+            'Ruby on Rails': 'Dockerfile',
+            'PHP': 'Dockerfile',
+            'Ruby': 'Dockerfile',
+            'Sinatra': 'Dockerfile',
           };
           
-          normalizedFramework = frameworkMap[data.framework] || 'Static';
+          normalizedFramework = frameworkMap[data.framework] || data.framework;
           
           setFramework(normalizedFramework);
           
@@ -1160,6 +1178,11 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         {/* Test Pipeline */}
                         <SelectItem value="simple-test">
                           Simple Test (No Build/Deploy)
+                        </SelectItem>
+
+                        {/* Dockerfile (Custom) */}
+                        <SelectItem value="Dockerfile">
+                          Dockerfile (uses your existing Dockerfile)
                         </SelectItem>
 
                         {/* Node.js Frameworks - Auto Dockerfile */}

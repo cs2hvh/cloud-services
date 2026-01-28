@@ -12,6 +12,7 @@ import { createViteReactPipeline } from './vite-react';
 import { createVuePipeline } from './vue';
 import { createAngularPipeline } from './angular';
 import { createSvelteKitPipeline } from './sveltekit';
+import { createDockerfilePipeline } from './generic-docker';
 
 export { 
   createSimpleTestPipeline, 
@@ -25,6 +26,7 @@ export {
   createVuePipeline,
   createAngularPipeline,
   createSvelteKitPipeline,
+  createDockerfilePipeline,
 };
 
 /**

@@ -15,6 +15,7 @@ import {
   createVuePipeline,
   createAngularPipeline,
   createSvelteKitPipeline,
+  createDockerfilePipeline,
 } from "@/lib/jenkins/pipelines";
 
 export class JenkinsService {
@@ -717,6 +718,7 @@ export class JenkinsService {
     envVars: Array<{ key: string; value: string }> = []
   ): string {
     const fw = framework?.toLowerCase();
+    
     // Priority: WEBHOOK_BASE_URL (ngrok) > DOMAIN > NEXT_PUBLIC_WEBHOOK_URL (localhost for dev)
     const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || process.env.NEXT_PUBLIC_WEBHOOK_URL || '';
 
@@ -725,6 +727,11 @@ export class JenkinsService {
       case 'test':
         console.log(`[JenkinsService] Using SIMPLE TEST pipeline (no Docker/K8s)`);
         return createSimpleTestPipeline(appName, githubUrl, branch);
+
+      case 'dockerfile':
+      case 'custom':
+        console.log(`[JenkinsService] Using GENERIC DOCKERFILE pipeline (existing Dockerfile)`);
+        return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars);
 
       case 'express':
       case 'express.js':

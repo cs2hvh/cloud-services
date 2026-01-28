@@ -233,6 +233,37 @@ async function runDetection(context: DetectionContext): Promise<DetectionResult>
     }
   }
   
+  // Handle "Static" framework cases:
+  // 1. If Dockerfile exists but no framework detected (Go, Elixir, Rust, etc.) → Use Dockerfile
+  // 2. If NO Dockerfile and NO framework → Mark as Unknown (requires user action)
+  if (result.framework === "Static") {
+    if (result.hasDockerfile) {
+      // Has Dockerfile but no framework → Use generic Dockerfile pipeline
+      result.framework = "Dockerfile";
+      result.language = "Docker";
+    } else {
+      // No framework AND no Dockerfile → Cannot auto-deploy
+      result.framework = "Unknown";
+      result.language = "Unknown";
+    }
+  }
+  
+  // Handle frameworks that need Dockerfile:
+  // Laravel, PHP, Ruby, Sinatra, Symfony, Ruby on Rails → Only deployable if Dockerfile exists
+  const requiresDockerfile = ["Laravel", "PHP", "Ruby", "Sinatra", "Symfony", "Ruby on Rails"];
+  
+  if (requiresDockerfile.includes(result.framework)) {
+    if (result.hasDockerfile) {
+      // Has Dockerfile → Can deploy with generic pipeline
+      result.framework = "Dockerfile";
+      result.language = "Docker";
+    } else {
+      // No Dockerfile → Cannot auto-deploy, user needs to add Dockerfile
+      result.framework = "Unknown";
+      result.language = result.language; // Keep original language (PHP, Ruby, etc.)
+    }
+  }
+  
   return result;
 }
 
