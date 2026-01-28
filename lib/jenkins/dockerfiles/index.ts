@@ -156,19 +156,21 @@ export PACKAGE_MANAGER
 
 /**
  * Generate package manager agnostic install/build commands for Dockerfile
- * Uses PACKAGE_MANAGER_PLACEHOLDER which gets replaced by detection script
+ * 
+ * INSTALL STRATEGY: Smart fallback (best of both worlds)
+ * - Tries strict mode first (npm ci / pnpm install --frozen-lockfile / yarn install --frozen-lockfile)
+ * - Falls back to forgiving mode if lockfile is broken/missing
+ * - Result: Reproducible when possible, compatible with OSS projects always
  * 
  * @param options.production - If true, install only production deps
  * @param options.legacyPeerDeps - If true, add --legacy-peer-deps for npm
- * @param options.frozen - If true, use frozen lockfile (--frozen-lockfile for pnpm/yarn)
  * @returns Object with install, build, and setup commands
  */
 export function getPackageManagerCommands(options: {
   production?: boolean;
   legacyPeerDeps?: boolean;
-  frozen?: boolean;
 } = {}) {
-  const { production = false, legacyPeerDeps = false, frozen = false } = options;
+  const { production = false, legacyPeerDeps = false } = options;
 
   // Global package manager installation command (pinned versions for stability)
   const setupPm = `ARG PACKAGE_MANAGER
@@ -195,9 +197,15 @@ RUN corepack disable && \\
       yarn install --frozen-lockfile${production ? ' --production' : ''} || \\
       (echo "Frozen lockfile failed, using standard install..." && yarn install${production ? ' --production' : ''}); \\
     else \\
-      echo "Attempting npm ci (fast & reproducible)..." && \\
-      npm ci${prodFlag} || \\
-      (echo "npm ci failed, falling back to npm install..." && npm install${prodFlag}); \\
+      echo "Detected npm; checking for package-lock.json..." && \\
+      if [ -f package-lock.json ]; then \\
+        echo "Attempting npm ci (fast & reproducible)..." && \\
+        npm ci${prodFlag} || \\
+        (echo "npm ci failed, falling back to npm install..." && npm install${prodFlag}); \\
+      else \\
+        echo "No package-lock.json found; using npm install (for compatibility)" && \\
+        npm install${prodFlag}; \\
+      fi; \\
     fi`;
 
   // Build command
@@ -306,9 +314,6 @@ FROM node:NODE_VERSION_PLACEHOLDER-alpine
 
 WORKDIR /app
 
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
-
 ${pm.setupPm}
 
 ${pm.copyLockfiles}
@@ -356,9 +361,6 @@ export function getNextjsDockerfile(envVars: Array<{key: string, value: string}>
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
-
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -423,9 +425,6 @@ export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
-
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -499,9 +498,6 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
-
 ${pm.setupPm}
 
 ${argDirectives}${pm.copyLockfiles}
@@ -571,9 +567,6 @@ RUN ${sedCommands}
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
-
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -659,15 +652,12 @@ export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}>
     ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
-  const pm = getPackageManagerCommands({ frozen: true });
+  const pm = getPackageManagerCommands();
   
   return `
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
-
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -722,9 +712,6 @@ export function getSveltekitDockerfile(envVars: Array<{key: string, value: strin
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
-
-# Install bash and git for better compatibility with build scripts
-RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
