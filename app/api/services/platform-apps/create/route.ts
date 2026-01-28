@@ -308,6 +308,7 @@ export async function POST(req: NextRequest) {
       auto_deploy: appData.auto_deploy || false,
       deploy_branch: appData.deploy_branch || appData.branch || 'main',
       project_id: appData.project_id,
+      container_port: (appData as { container_port?: number }).container_port,
     };
 
     // Deploy using the deployment service

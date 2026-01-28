@@ -12,6 +12,7 @@ export function createNextJsPipeline(
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
+  containerPort?: number,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -46,8 +47,8 @@ export function createNextJsPipeline(
     replicas = 3;
   }
 
-  // fixed container port for Next.js
-  const containerPort = 3000;
+  // Use provided container port or default to 3000
+  const port = containerPort ?? 3000;
 
   // Split env vars: NEXT_PUBLIC_* → build-time, others → runtime K8s Secrets
   const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
@@ -56,7 +57,7 @@ export function createNextJsPipeline(
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, serverEnvVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
   // Generate build args for CLIENT-SIDE vars (NEXT_PUBLIC_*)
   // [WARN] Build args are visible in logs - only use for public configuration!
@@ -116,7 +117,7 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
     DEPLOY_TRIGGER = '${deployTrigger}'
@@ -268,9 +269,8 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
-        env:
 ${defaultEnvYaml}
         resources:
           requests:
@@ -281,14 +281,14 @@ ${defaultEnvYaml}
             memory: ${memoryLimit}
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 6
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -308,7 +308,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 

@@ -138,6 +138,40 @@ async function detectDocker(context: DetectionContext): Promise<Partial<Detectio
   
   if (context.fileContents.has('Dockerfile')) {
     result.hasDockerfile = true;
+    
+    // Detect container port from Dockerfile
+    const dockerfileContent = context.fileContents.get('Dockerfile');
+    if (dockerfileContent) {
+      const lines = dockerfileContent.content.split('\n');
+      
+      // Priority 1: EXPOSE directive
+      for (const line of lines) {
+        const exposeMatch = line.match(/^\s*EXPOSE\s+(\d+)/i);
+        if (exposeMatch) {
+          const port = parseInt(exposeMatch[1], 10);
+          if (port > 0 && port <= 65535) {
+            result.detectedPort = port;
+            console.log(`[Dockerfile] Detected port from EXPOSE: ${port}`);
+            break;
+          }
+        }
+      }
+      
+      // Priority 2: ENV PORT directive (if EXPOSE not found)
+      if (!result.detectedPort) {
+        for (const line of lines) {
+          const envPortMatch = line.match(/^\s*ENV\s+PORT[=\s]+(\d+)/i);
+          if (envPortMatch) {
+            const port = parseInt(envPortMatch[1], 10);
+            if (port > 0 && port <= 65535) {
+              result.detectedPort = port;
+              console.log(`[Dockerfile] Detected port from ENV PORT: ${port}`);
+              break;
+            }
+          }
+        }
+      }
+    }
   }
   
   if (context.fileContents.has('docker-compose.yml')) {
@@ -400,6 +434,7 @@ export async function POST(request: Request) {
       version: detectionResult.version,
       language: detectionResult.language,
       hasDockerfile: detectionResult.hasDockerfile,
+      detectedPort: detectionResult.detectedPort,
       buildSystem: detectionResult.buildSystem,
       metadata: detectionResult
     }, { status: 200 });

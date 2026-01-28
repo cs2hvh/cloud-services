@@ -22,6 +22,7 @@ export function createPythonPipeline(
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
+  containerPort?: number,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -48,13 +49,13 @@ export function createPythonPipeline(
     replicas = 3;
   }
 
-  // Use standard container port (8000) for Python apps (FastAPI/Flask/Django)
-  const containerPort = 8000;
+  // Use provided container port or default to 8000 for Python apps (FastAPI/Flask/Django)
+  const port = containerPort ?? 8000;
 
   // Generate Kubernetes Secret for environment variables (secure approach)
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('python', containerPort);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('python', port);
   
   // Remove token from URL for display purposes (keep only clean URL for metadata)
   // Handle GitHub (https://token@github.com/), GitLab (https://oauth2:token@gitlab.com/), and Bitbucket (https://x-token-auth:token@bitbucket.org/) formats
@@ -320,7 +321,7 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
 ${defaultEnvYaml}
         resources:
@@ -332,14 +333,14 @@ ${defaultEnvYaml}
             memory: ${memoryLimit}
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
@@ -359,7 +360,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 

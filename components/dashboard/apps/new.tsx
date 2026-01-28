@@ -140,6 +140,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [size, setSize] = useState<string>("small");
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
   const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
+  const [containerPort, setContainerPort] = useState<number | undefined>(undefined); // User-specified port
+  const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined); // Port detected from Dockerfile
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
   const [repoSearchTerm, setRepoSearchTerm] = useState<string>('');
@@ -353,6 +355,17 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
           // Store Dockerfile detection result
           setHasDockerfile(data.hasDockerfile || false);
           
+          // Handle detected port from Dockerfile
+          if (data.detectedPort) {
+            setDetectedPort(data.detectedPort);
+            // Prefill containerPort if user hasn't manually set it
+            if (containerPort === undefined) {
+              setContainerPort(data.detectedPort);
+            }
+          } else {
+            setDetectedPort(undefined);
+          }
+          
           if (data.buildSystem) {
             console.log('Detected build system:', data.buildSystem);
           }
@@ -361,7 +374,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     } catch (error) {
       console.error('Framework detection error:', error);
     }
-  }, []);
+  }, [containerPort]);
 
   // Load provider status on component mount
   useEffect(() => {
@@ -536,6 +549,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         deploy_branch:
           selectedBranch || selectedRepoData.defaultBranch || "main",
         project_id: selectedProject && selectedProject !== "none" ? selectedProject : undefined,
+        container_port: containerPort, // Optional: only sent if user has Dockerfile
       };
 
       const response = await fetch("/api/services/platform-apps/create", {
@@ -1403,6 +1417,41 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       </div>
                     </div>
                   )}
+
+                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile */}
+                {(hasDockerfile || framework === 'Dockerfile') && (
+                  <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                    <Label className="text-white font-medium mb-2 block">
+                      Container Port
+                    </Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={containerPort ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setContainerPort(val ? parseInt(val, 10) : undefined);
+                      }}
+                      placeholder={detectedPort ? detectedPort.toString() : '3000'}
+                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
+                    />
+                    {detectedPort && (
+                      <p className="text-xs text-green-400 mt-2">
+                        ℹ️ Detected from Dockerfile: <span className="font-mono">EXPOSE {detectedPort}</span>
+                      </p>
+                    )}
+                    {!detectedPort && containerPort === undefined && (
+                      <p className="text-xs text-yellow-400 mt-2">
+                        ⚠️ Could not detect port from Dockerfile. Using framework default. Please confirm.
+                      </p>
+                    )}
+                    <p className="text-xs text-white/50 mt-2">
+                      The port your application listens on inside the container (1-65535).
+                      {!detectedPort && ' Kubernetes will route traffic to this port.'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="mt-4">
                   <Label className="text-white">Instance Size</Label>

@@ -31,6 +31,7 @@ export interface DeploymentConfig {
   auto_deploy?: boolean;
   deploy_branch?: string;
   project_id?: string;
+  container_port?: number; // User-specified or auto-detected port
 }
 
 export interface DeploymentResult {
@@ -73,9 +74,9 @@ export class DeploymentService {
     console.log(`[DeploymentService] Branch: ${config.branch}`);
 
     try {
-      // Step 1: Get standard container port based on framework (no NodePort allocation needed)
-      const containerPort = this.getContainerPort(config.framework);
-      console.log(`[DeploymentService] Step 1/5: Container port selected - ${containerPort} (NGINX Ingress handles external routing)`);
+      // Step 1: Determine container port (user-specified > detected > framework default)
+      const containerPort = config.container_port || this.getContainerPort(config.framework);
+      console.log(`[DeploymentService] Step 1/5: Container port selected - ${containerPort}${config.container_port ? ' (user-specified)' : ' (framework default)'} (NGINX Ingress handles external routing)`);
 
       // Step 2: Create database record
       const slug = `${config.name}-${generateId(6)}`;
@@ -155,7 +156,8 @@ export class DeploymentService {
           config.framework,
           config.size || 'small',
           'manual',
-          envVarsToPass
+          envVarsToPass,
+          containerPort
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 

@@ -100,6 +100,7 @@ export const createPlatformAppSchema = z.object({
   size: z.enum(["small", "medium", "large"]).optional().default("small"),
   auto_deploy: z.boolean().optional().default(false),
   deploy_branch: z.string().optional(),
+  container_port: z.number().int().min(1).max(65535).optional(),
 });
 
 export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;
@@ -132,6 +133,7 @@ export const updatePlatformAppSchema = z.object({
   output_directory: z.string().optional(),
   status: z.enum(["pending", "building", "running", "failed", "stopped"]).optional(),
   deployment_url: z.string().url().optional(),
+  container_port: z.number().int().min(1).max(65535).optional(),
 });
 
 export type UpdatePlatformAppPayload = z.infer<typeof updatePlatformAppSchema>;
@@ -172,6 +174,7 @@ export const resizePlatformAppSchema = z.object({
   new_size: z.enum(["small", "medium", "large"], {
     errorMap: () => ({ message: "Size must be small, medium, or large" }),
   }),
+  container_port: z.number().int().min(1).max(65535).optional(),
 });
 
 export type ResizePlatformAppPayload = z.infer<typeof resizePlatformAppSchema>;

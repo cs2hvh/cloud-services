@@ -18,6 +18,7 @@ export function createExpressPipeline(
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
+  containerPort?: number,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -51,13 +52,13 @@ export function createExpressPipeline(
     replicas = 3;
   }
 
-  // Use standard container port (3000) instead of NodePort
-  const containerPort = 3000;
+  // Use provided container port or default to 3000
+  const port = containerPort ?? 3000;
 
   // Generate Kubernetes Secret for environment variables (secure approach)
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
   
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -358,7 +359,7 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
         env:
 ${defaultEnvYaml}
@@ -371,14 +372,14 @@ ${defaultEnvYaml}
             memory: ${memoryLimit}
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
@@ -398,7 +399,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 

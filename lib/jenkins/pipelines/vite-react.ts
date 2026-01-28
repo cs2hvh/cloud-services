@@ -17,6 +17,7 @@ export function createViteReactPipeline(
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
+  containerPort?: number,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -50,8 +51,8 @@ export function createViteReactPipeline(
     replicas = 3;
   }
 
-  // Vite apps serve on port 3000 in production
-  const containerPort = 3000;
+  // Use provided container port or default to 3000
+  const port = containerPort ?? 3000;
 
   // Vite React: Only VITE_* prefixed variables are accessible in code
   // Variable name IS the contract (Vercel approach) - no auto-prefixing
@@ -61,7 +62,7 @@ export function createViteReactPipeline(
   // Generate empty Kubernetes Secret (Vite React doesn't support runtime server vars)
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
   const envFromSection = generateEnvFromSection(secretName, false);
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
   // Generate build args for VITE_* prefixed vars only
   // [WARN] Build args are visible in logs - only use for public configuration!
@@ -135,7 +136,7 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
     DEPLOY_TRIGGER = '${deployTrigger}'
@@ -365,7 +366,7 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
 ${defaultEnvYaml}
         resources:
@@ -377,14 +378,14 @@ ${defaultEnvYaml}
             memory: ${memoryLimit}
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
@@ -404,7 +405,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 

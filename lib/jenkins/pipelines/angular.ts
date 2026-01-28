@@ -21,6 +21,7 @@ export function createAngularPipeline(
   webhookBaseUrl: string = '',
   deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
+  containerPort?: number,
 ): string {
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
@@ -54,15 +55,15 @@ export function createAngularPipeline(
     replicas = 3;
   }
 
-  // Angular apps serve on port 3000 in production via serve
-  const containerPort = 3000;
+  // Use provided container port or default to 3000
+  const port = containerPort ?? 3000;
 
   // Angular static builds: All env vars are build-time (no runtime env injection)
   // BUT we still need to be careful about secrets in build logs
   // Generate empty secret for consistency (Angular doesn't use runtime env vars)
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
   const envFromSection = generateEnvFromSection(secretName, false); // No secret needed
-  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', containerPort);
+  const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
   
   // Generate build args for ALL env vars (Angular requires build-time injection)
   // [WARN] WARNING: All Angular env vars will be visible in build logs!
@@ -136,7 +137,7 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
     DEPLOY_TRIGGER = '${deployTrigger}'
@@ -375,7 +376,7 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
 ${defaultEnvYaml}
         resources:
@@ -387,14 +388,14 @@ ${defaultEnvYaml}
             memory: ${memoryLimit}
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
@@ -414,7 +415,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 

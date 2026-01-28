@@ -530,7 +530,8 @@ COPY --from=builder --chown=appuser:nodejs /app/${outputDir}/. ./dist/
 USER appuser
 
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+ENV PORT=3000
+CMD ["sh", "-c", "serve -s dist -l $PORT"]
 `.trim();
 }
 
@@ -631,7 +632,8 @@ RUN echo "=== Debugging dist structure ===" && \\
 USER appuser
 
 EXPOSE 3000
-CMD ["serve", "-s", "dist", "-l", "3000"]
+ENV PORT=3000
+CMD ["sh", "-c", "serve -s dist -l $PORT"]
 `.trim();
 }
 
