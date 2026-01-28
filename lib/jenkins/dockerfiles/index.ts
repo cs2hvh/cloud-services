@@ -182,28 +182,23 @@ RUN corepack disable && \\
   // Copy lockfiles (all possible lockfiles)
   const copyLockfiles = `COPY package*.json pnpm-lock.yaml* yarn.lock* ./`;
 
-  // Install command with options
-  let installCmd = '';
-  if (frozen) {
-    // Frozen lockfile mode (CI/production)
-    installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
-      pnpm install --frozen-lockfile${production ? ' --prod' : ''}; \\
+  // Smart fallback install strategy - try strict first, fall back to forgiving
+  // This matches Vercel/Railway philosophy but with production-grade reproducibility when possible
+  // BENEFITS: Strict when lockfiles are good, forgiving when they're outdated/missing
+  const prodFlag = production ? (legacyPeerDeps ? ' --omit=dev --legacy-peer-deps' : ' --omit=dev') : (legacyPeerDeps ? ' --legacy-peer-deps' : '');
+  const installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+      echo "Attempting pnpm install with frozen lockfile..." && \\
+      pnpm install --frozen-lockfile${production ? ' --prod' : ''} || \\
+      (echo "Frozen lockfile failed, using standard install..." && pnpm install${production ? ' --prod' : ''}); \\
     elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
-      yarn install --frozen-lockfile${production ? ' --production' : ''}; \\
+      echo "Attempting yarn install with frozen lockfile..." && \\
+      yarn install --frozen-lockfile${production ? ' --production' : ''} || \\
+      (echo "Frozen lockfile failed, using standard install..." && yarn install${production ? ' --production' : ''}); \\
     else \\
-      npm ci${production ? ' --omit=dev' : ''}${legacyPeerDeps ? ' --legacy-peer-deps' : ''}; \\
+      echo "Attempting npm ci (fast & reproducible)..." && \\
+      npm ci${prodFlag} || \\
+      (echo "npm ci failed, falling back to npm install..." && npm install${prodFlag}); \\
     fi`;
-  } else {
-    // Normal install mode (fallback to install if ci fails)
-    const prodFlag = production ? (legacyPeerDeps ? ' --omit=dev --legacy-peer-deps' : ' --omit=dev') : (legacyPeerDeps ? ' --legacy-peer-deps' : '');
-    installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
-      pnpm install${production ? ' --prod' : ''}; \\
-    elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
-      yarn install${production ? ' --production' : ''}; \\
-    else \\
-      if [ -f package-lock.json ]; then npm ci${prodFlag}; else npm install${prodFlag}; fi; \\
-    fi`;
-  }
 
   // Build command
   const buildCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
@@ -311,6 +306,9 @@ FROM node:NODE_VERSION_PLACEHOLDER-alpine
 
 WORKDIR /app
 
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
+
 ${pm.setupPm}
 
 ${pm.copyLockfiles}
@@ -358,6 +356,9 @@ export function getNextjsDockerfile(envVars: Array<{key: string, value: string}>
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
+
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -422,6 +423,9 @@ export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
+
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -495,6 +499,9 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
+
 ${pm.setupPm}
 
 ${argDirectives}${pm.copyLockfiles}
@@ -564,6 +571,9 @@ RUN ${sedCommands}
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
+
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -656,6 +666,9 @@ export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}>
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
 
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
+
 ${pm.setupPm}
 
 ${argDirectives}${pm.copyLockfiles}
@@ -709,6 +722,9 @@ export function getSveltekitDockerfile(envVars: Array<{key: string, value: strin
 # ---- Build Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
 WORKDIR /app
+
+# Install bash and git for better compatibility with build scripts
+RUN apk add --no-cache bash git
 
 ${pm.setupPm}
 
@@ -785,9 +801,19 @@ export function generateNodejsDockerfileStage(): string {
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating Node.js Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating Node.js Dockerfile with auto-detection"
   
   ${nodeDetection}
   ${pmDetection}
@@ -804,6 +830,7 @@ DOCKERFILE_EOF
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
+  export DOCKERFILE_EXISTS=false
 fi
 `.trim();
 }
@@ -821,9 +848,19 @@ export function generateNextjsDockerfileStage(envVars: Array<{key: string, value
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating Next.js Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating Next.js Dockerfile with auto-detection"
   
   ${nodeDetection}
   ${pmDetection}
@@ -850,6 +887,7 @@ DOCKERFILE_EOF
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
+  export DOCKERFILE_EXISTS=false
 fi
 `.trim();
 }
@@ -865,9 +903,18 @@ export function generatePythonDockerfileStage(): string {
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating Python Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating Python Dockerfile with auto-detection"
   
   # Initialize variables with defaults
   DJANGO_PROJECT="config"
@@ -1006,9 +1053,21 @@ export function generateStaticSiteDockerfileStage(outputDir: string = 'dist', en
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  
+  # Still detect package manager for metadata/logging purposes
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating static site Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating static site Dockerfile with auto-detection"
   
   ${nodeDetection}
   ${pmDetection}
@@ -1025,6 +1084,7 @@ DOCKERFILE_EOF
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
+  export DOCKERFILE_EXISTS=false
 fi
 `.trim();
 }
@@ -1040,7 +1100,17 @@ export function generateAngularDockerfileStage(envVars: Array<{key: string, valu
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
   echo "Generating Angular Dockerfile with auto-detection"
   
@@ -1074,9 +1144,19 @@ export function generateNuxtjsDockerfileStage(envVars: Array<{key: string, value
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating Nuxt.js Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating Nuxt.js Dockerfile with auto-detection"
   
   ${nodeDetection}
   ${pmDetection}
@@ -1093,6 +1173,7 @@ DOCKERFILE_EOF
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
+  export DOCKERFILE_EXISTS=false
 fi
 `.trim();
 }
@@ -1108,9 +1189,19 @@ export function generateSveltekitDockerfileStage(envVars: Array<{key: string, va
   
   return `
 if [ -f Dockerfile ]; then
-  echo "Using existing Dockerfile"
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  ${pmDetection}
+  export DOCKERFILE_EXISTS=true
 else
-  echo "Generating SvelteKit Dockerfile with auto-detection"
+  echo "No Dockerfile found - generating SvelteKit Dockerfile with auto-detection"
   
   ${nodeDetection}
   ${pmDetection}
@@ -1127,6 +1218,7 @@ DOCKERFILE_EOF
   echo "Node.js version: $NODE_VERSION"
   echo "Package manager: $PACKAGE_MANAGER (will be passed as build arg)"
   cat Dockerfile
+  export DOCKERFILE_EXISTS=false
 fi
 `.trim();
 }

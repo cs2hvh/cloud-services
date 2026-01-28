@@ -201,12 +201,12 @@ pipeline {
             sh(
               script: '''
                 if [ ! -f package.json ]; then
-                  echo 'ERROR: package.json not found'
-                  echo 'Vue.js projects require a package.json file'
+                  echo 'ERROR: No package.json found in root directory'
+                  echo 'Vue projects require package.json in the repository root'
                   exit 1
+                else
+                  echo 'package.json found'
                 fi
-                
-                echo 'package.json found'
                 
                 # Check for Vite configuration (Vue 3 default) or Vue CLI config
                 if [ -f vite.config.js ] || [ -f vite.config.ts ]; then

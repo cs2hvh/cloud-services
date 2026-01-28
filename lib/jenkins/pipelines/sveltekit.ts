@@ -205,12 +205,12 @@ pipeline {
             sh(
               script: '''
                 if [ ! -f package.json ]; then
-                  echo 'ERROR: package.json not found'
-                  echo 'SvelteKit projects require a package.json file'
+                  echo 'ERROR: No package.json found in root directory'
+                  echo 'SvelteKit projects require package.json in the repository root'
                   exit 1
+                else
+                  echo 'package.json found'
                 fi
-                
-                echo 'package.json found'
                 
                 # Check for SvelteKit configuration
                 if [ -f svelte.config.js ]; then
