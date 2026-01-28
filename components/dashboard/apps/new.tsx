@@ -142,6 +142,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
   const [containerPort, setContainerPort] = useState<number | undefined>(undefined); // User-specified port
   const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined); // Port detected from Dockerfile
+  const [detectingFramework, setDetectingFramework] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
   const [repoSearchTerm, setRepoSearchTerm] = useState<string>('');
@@ -286,7 +287,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       if (!provider || !repo) {
         return;
       }
-
+      setDetectingFramework(true);
       try {
         const response = await fetch("/api/detect-framework", {
           method: "POST",
@@ -300,80 +301,82 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
           }),
         });
 
-      if (response.ok) {
-        const data = await response.json();
-        if (data.framework) {
-          // Handle Unknown framework (no framework detected, no Dockerfile)
-          if (data.framework === 'Unknown') {
-            toast.error(
-              "Framework not detected",
-              {
-                description: "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually."
-              }
-            );
-            setFramework(""); // Don't auto-select anything
-            setHasDockerfile(false);
-            return;
-          }
-          
-          // Normalize framework name to match our configs
-          let normalizedFramework = data.framework;
-          
-          // Map detected frameworks to our config keys
-          // Note: Backend should already normalize Laravel/PHP/Ruby/Sinatra to "Dockerfile" or "Unknown"
-          // This mapping acts as a safety fallback in case backend sends raw framework names
-          const frameworkMap: Record<string, string> = {
-            'Next.js': 'Next.js',
-            'Nuxt.js': 'Nuxt.js',
-            'Vite-React': 'Vite-React',
-            'React': 'React',
-            'Vue.js': 'Vue.js',
-            'Angular': 'Angular',
-            'SvelteKit': 'SvelteKit',
-            'Svelte': 'Svelte',
-            'Express': 'express',
-            'Node.js': 'Node.js',
-            'Django': 'django',
-            'Flask': 'flask',
-            'FastAPI': 'fastapi',
-            'Dockerfile': 'Dockerfile',
-            'Python': 'python',
-            'python': 'python',
-            // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
-            'Laravel': 'Dockerfile',
-            'Symfony': 'Dockerfile',
-            'Ruby on Rails': 'Dockerfile',
-            'PHP': 'Dockerfile',
-            'Ruby': 'Dockerfile',
-            'Sinatra': 'Dockerfile',
-          };
-          
-          normalizedFramework = frameworkMap[data.framework] || data.framework;
-          
-          setFramework(normalizedFramework);
-          
-          // Store Dockerfile detection result
-          setHasDockerfile(data.hasDockerfile || false);
-          
-          // Handle detected port from Dockerfile
-          if (data.detectedPort) {
-            setDetectedPort(data.detectedPort);
-            // Prefill containerPort if user hasn't manually set it
-            if (containerPort === undefined) {
-              setContainerPort(data.detectedPort);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.framework) {
+            // Handle Unknown framework (no framework detected, no Dockerfile)
+            if (data.framework === 'Unknown') {
+              toast.error(
+                "Framework not detected",
+                {
+                  description: "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually."
+                }
+              );
+              setFramework(""); // Don't auto-select anything
+              setHasDockerfile(false);
+              return;
             }
-          } else {
-            setDetectedPort(undefined);
-          }
-          
-          if (data.buildSystem) {
-            console.log('Detected build system:', data.buildSystem);
+
+            // Normalize framework name to match our configs
+            let normalizedFramework = data.framework;
+
+            // Map detected frameworks to our config keys
+            // Note: Backend should already normalize Laravel/PHP/Ruby/Sinatra to "Dockerfile" or "Unknown"
+            // This mapping acts as a safety fallback in case backend sends raw framework names
+            const frameworkMap: Record<string, string> = {
+              'Next.js': 'Next.js',
+              'Nuxt.js': 'Nuxt.js',
+              'Vite-React': 'Vite-React',
+              'React': 'React',
+              'Vue.js': 'Vue.js',
+              'Angular': 'Angular',
+              'SvelteKit': 'SvelteKit',
+              'Svelte': 'Svelte',
+              'Express': 'express',
+              'Node.js': 'Node.js',
+              'Django': 'django',
+              'Flask': 'flask',
+              'FastAPI': 'fastapi',
+              'Dockerfile': 'Dockerfile',
+              'Python': 'python',
+              'python': 'python',
+              // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
+              'Laravel': 'Dockerfile',
+              'Symfony': 'Dockerfile',
+              'Ruby on Rails': 'Dockerfile',
+              'PHP': 'Dockerfile',
+              'Ruby': 'Dockerfile',
+              'Sinatra': 'Dockerfile',
+            };
+
+            normalizedFramework = frameworkMap[data.framework] || data.framework;
+
+            setFramework(normalizedFramework);
+
+            // Store Dockerfile detection result
+            setHasDockerfile(data.hasDockerfile || false);
+
+            // Handle detected port from Dockerfile
+            if (data.detectedPort) {
+              setDetectedPort(data.detectedPort);
+              // Prefill containerPort if user hasn't manually set it
+              if (containerPort === undefined) {
+                setContainerPort(data.detectedPort);
+              }
+            } else {
+              setDetectedPort(undefined);
+            }
+
+            if (data.buildSystem) {
+              console.log('Detected build system:', data.buildSystem);
+            }
           }
         }
+      } catch (error) {
+        console.error('Framework detection error:', error);
+      } finally {
+        setDetectingFramework(false);
       }
-    } catch (error) {
-      console.error('Framework detection error:', error);
-    }
   }, [containerPort]);
 
   // Load provider status on component mount
@@ -400,11 +403,15 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       const repo = repositories.find((r) => r.id === selectedRepo);
       if (repo) {
         setAppName(repo.name);
-        setSelectedBranch(repo.defaultBranch);
+        // Only set the deploy branch to the repo default if the user hasn't selected one
+        if (!selectedBranch) {
+          setSelectedBranch(repo.defaultBranch);
+        }
         // Fetch branches for the selected repository
         fetchBranches(selectedProvider, repo);
-        // Detect framework for the selected repository
-        detectFramework(selectedProvider, repo, repo.defaultBranch);
+        // Detect framework for the selected repository (use currently selected branch or default)
+        const branchToDetect = selectedBranch || repo.defaultBranch;
+        detectFramework(selectedProvider, repo, branchToDetect);
       }
     } else {
       setBranches([]);
@@ -412,11 +419,25 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     }
   }, [
     selectedRepo,
-    repositories,
     selectedProvider,
     fetchBranches,
     detectFramework,
+    selectedBranch,
   ]);
+
+  // Re-run framework detection whenever the selected branch changes
+  useEffect(() => {
+    if (!selectedRepo) return;
+
+    const repo = repositories.find((r) => r.id === selectedRepo);
+    if (!repo) return;
+
+    // Only attempt detection when a branch is selected
+    const branchToDetect = selectedBranch || repo.defaultBranch;
+    if (!branchToDetect) return;
+
+    detectFramework(selectedProvider, repo, branchToDetect);
+  }, [selectedBranch, selectedRepo, selectedProvider, repositories, detectFramework]);
 
   const { connectProvider: performConnection } = useProviderConnection({
     returnTo: '/dashboard/services/apps/new'
@@ -1136,10 +1157,12 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           </SelectContent>
                         </Select>
                         <Button
-                          onClick={() =>
-                            selectedRepoData &&
-                            fetchBranches(selectedProvider, selectedRepoData)
-                          }
+                          onClick={async () => {
+                            if (!selectedRepoData) return;
+                            await fetchBranches(selectedProvider, selectedRepoData);
+                            const branchToDetect = selectedBranch || selectedRepoData.defaultBranch;
+                            detectFramework(selectedProvider, selectedRepoData, branchToDetect);
+                          }}
                           variant="outline"
                           size="sm"
                           className="border-white/20 text-white hover:bg-white/10"
@@ -1160,10 +1183,12 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                         />
                         <Button
-                          onClick={() =>
-                            selectedRepoData &&
-                            fetchBranches(selectedProvider, selectedRepoData)
-                          }
+                          onClick={async () => {
+                            if (!selectedRepoData) return;
+                            await fetchBranches(selectedProvider, selectedRepoData);
+                            const branchToDetect = selectedBranch || selectedRepoData.defaultBranch;
+                            detectFramework(selectedProvider, selectedRepoData, branchToDetect);
+                          }}
                           variant="outline"
                           size="sm"
                           className="border-white/20 text-white hover:bg-white/10"
@@ -1266,19 +1291,21 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       </SelectContent>
                     </Select>
                     <Button
-                      onClick={() =>
-                        selectedRepoData &&
-                        detectFramework(
+                      onClick={async () => {
+                        if (!selectedRepoData) return;
+                        await detectFramework(
                           selectedProvider,
                           selectedRepoData,
                           selectedBranch,
-                        )
-                      }
+                        );
+                      }}
                       variant="outline"
                       size="sm"
                       className="border-white/20 text-white hover:bg-white/10"
+                      disabled={detectingFramework || !selectedRepoData}
                     >
-                      Detect
+                      <Loader2 className={`w-4 h-4 mr-2 ${detectingFramework ? "animate-spin" : "hidden"}`} />
+                      {detectingFramework ? 'Detecting...' : 'Detect'}
                     </Button>
                   </div>
                 </div>
@@ -1332,9 +1359,14 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           )}
                         </div>
                         <div className="flex-1">
-                          <h3 className="text-white font-medium mb-1">
-                            Build & Deployment
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-white font-medium mb-1">
+                              Build & Deployment
+                            </h3>
+                            {detectingFramework && (
+                              <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                            )}
+                          </div>
 
                           {/* Show Dockerfile status */}
                           {hasDockerfile ? (
