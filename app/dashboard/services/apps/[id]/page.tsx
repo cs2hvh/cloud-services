@@ -34,6 +34,8 @@ import {
   Zap,
   Server,
   AlertTriangle,
+  FolderOpen,
+  Edit2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +44,13 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
@@ -52,6 +61,7 @@ import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
 import { toast } from 'sonner';
+import { useProjects } from '@/app/dashboard/provider';
 
 
 
@@ -65,7 +75,7 @@ interface AppDetail {
   status: string;
   deployment_url?: string;
   created_at: string;
-  project_id?: string;
+  project_id?: string | null;
   // Extended fields
   framework?: string;
   branch?: string;
@@ -141,6 +151,7 @@ export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
   const appId = params.id as string;
+  const { projects } = useProjects();
 
   const [app, setApp] = useState<AppDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,6 +185,11 @@ export default function AppDetailPage() {
   const [resizeError, setResizeError] = useState<string | null>(null);
   const [resizeSuccess, setResizeSuccess] = useState<string | null>(null);
   const [sizePrices, setSizePrices] = useState<Record<string, number>>({});
+
+  // Project assignment state
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [editingProject, setEditingProject] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
 
   // Fetch detailed K8s info
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -280,6 +296,13 @@ export default function AppDetailPage() {
       setEditedEnvVars(app.env_vars.map(env => ({ ...env })));
     }
   }, [app?.env_vars]);
+
+  // Initialize project assignment when app data loads
+  useEffect(() => {
+    if (app?.project_id !== undefined) {
+      setProjectId(app.project_id || null);
+    }
+  }, [app?.project_id]);
 
   // Fetch platform app prices from products table
   useEffect(() => {
@@ -452,6 +475,48 @@ export default function AppDetailPage() {
     } finally {
       setResizing(false);
     }
+  };
+
+  const handleSaveProject = async () => {
+    if (!app) return;
+
+    setSavingProject(true);
+
+    try {
+      const res = await fetch('/api/services/platform-apps/update-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, project_id: projectId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update project assignment');
+      }
+
+      toast.success('Project assignment updated successfully');
+      setEditingProject(false);
+      
+      // Update local state
+      setApp(prev => prev ? { ...prev, project_id: projectId } : null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update project assignment';
+      toast.error(message);
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const handleCancelProjectEdit = () => {
+    setProjectId(app?.project_id || null);
+    setEditingProject(false);
+  };
+
+  const getProjectName = (projectId: string | null) => {
+    if (!projectId) return "No project assigned";
+    const project = projects.find((p) => p.id === projectId);
+    return project?.name || "Unknown project";
   };
 
   const copyToClipboard = (text: string, field: string) => {
@@ -1032,6 +1097,88 @@ export default function AppDetailPage() {
                       {app.output_directory || 'Default'}
                     </p>
                   </div>
+                </div>
+
+                {/* Project Assignment */}
+                <div className="border-t border-white/10 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-yellow-400" />
+                      <div>
+                        <p className="text-sm font-medium text-white">Project Assignment</p>
+                        <p className="text-xs text-white/50">Assign this app to a project for organization</p>
+                      </div>
+                    </div>
+                    {!editingProject && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingProject(true)}
+                        className="h-8 text-white/70 hover:bg-white/10"
+                      >
+                        <Edit2 className="w-3.5 h-3.5 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+
+                  {editingProject ? (
+                    <div className="space-y-3">
+                      <Select
+                        value={projectId || "none"}
+                        onValueChange={(value) => setProjectId(value === "none" ? null : value)}
+                      >
+                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-black border-white/10">
+                          <SelectItem value="none">No project</SelectItem>
+                          {projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          onClick={handleSaveProject}
+                          disabled={savingProject}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          size="sm"
+                        >
+                          {savingProject ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-3.5 h-3.5 mr-1" />
+                              Save
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={handleCancelProjectEdit}
+                          disabled={savingProject}
+                          className="border-white/20 text-white hover:bg-white/10"
+                          size="sm"
+                        >
+                          <X className="w-3.5 h-3.5 mr-1" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                        {getProjectName(projectId)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Instance Size - Resize Section */}
