@@ -13,6 +13,7 @@ import { createVuePipeline } from './vue';
 import { createAngularPipeline } from './angular';
 import { createSvelteKitPipeline } from './sveltekit';
 import { createDockerfilePipeline } from './generic-docker';
+import { createJavaPipeline } from './java';
 
 export { 
   createSimpleTestPipeline, 
@@ -27,6 +28,7 @@ export {
   createAngularPipeline,
   createSvelteKitPipeline,
   createDockerfilePipeline,
+  createJavaPipeline,
 };
 
 /**
@@ -44,6 +46,7 @@ export const PipelineType = {
   VUE: 'vue',
   ANGULAR: 'angular',
   SVELTEKIT: 'sveltekit',
+  JAVA: 'java',
 } as const;
 
 export type PipelineTypeValue = typeof PipelineType[keyof typeof PipelineType];
@@ -75,6 +78,8 @@ export function getPipelineGenerator(type: PipelineTypeValue) {
       return createAngularPipeline;
     case PipelineType.SVELTEKIT:
       return createSvelteKitPipeline;
+    case PipelineType.JAVA:
+      return createJavaPipeline;
     default:
       throw new Error(`Unknown pipeline type: ${type}`);
   }

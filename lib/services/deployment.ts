@@ -49,6 +49,12 @@ export class DeploymentService {
    */
   private static getContainerPort(framework: string): number {
     switch (framework?.toLowerCase()) {
+      case 'java':
+      case 'maven':
+      case 'spring':
+      case 'spring-boot':
+      case 'springboot':
+        return 8080;
       case 'python':
       case 'django':
       case 'flask':

@@ -16,6 +16,7 @@ import {
   createAngularPipeline,
   createSvelteKitPipeline,
   createDockerfilePipeline,
+  createJavaPipeline,
 } from "@/lib/jenkins/pipelines";
 
 export class JenkinsService {
@@ -737,6 +738,14 @@ export class JenkinsService {
       case 'custom':
         console.log(`[JenkinsService] Using GENERIC DOCKERFILE pipeline (existing Dockerfile)`);
         return createDockerfilePipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+
+      case 'java':
+      case 'maven':
+      case 'spring':
+      case 'spring-boot':
+      case 'springboot':
+        console.log(`[JenkinsService] Using JAVA/MAVEN pipeline (auto-Dockerfile with Maven build)`);
+        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
 
       case 'express':
       case 'express.js':

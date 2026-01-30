@@ -81,7 +81,8 @@ export const createPlatformAppSchema = z.object({
     "flask",
     "fastapi",
     "Static",
-    "Dockerfile"
+    "Dockerfile",
+    "Java"
   ], {
     errorMap: () => ({ message: "Invalid framework selection" }),
   }),
@@ -127,7 +128,8 @@ export const updatePlatformAppSchema = z.object({
     "flask",
     "fastapi",
     "Static",
-    "Dockerfile"
+    "Dockerfile",
+    "Java"
   ]).optional(),
   build_command: z.string().optional(),
   output_directory: z.string().optional(),

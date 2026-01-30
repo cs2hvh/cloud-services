@@ -1211,3 +1211,111 @@ DOCKERFILE_EOF
 fi
 `.trim();
 }
+
+// =============================================================================
+// JAVA/MAVEN DOCKERFILE GENERATION
+// =============================================================================
+
+/**
+ * Shell function to detect Java version from pom.xml or system
+ * Returns: JAVA_VERSION variable set
+ */
+export function getJavaVersionDetectionScript(defaultVersion: number = 17): string {
+  return `
+# Detect Java version
+JAVA_VERSION=${defaultVersion}
+if [ -f pom.xml ]; then
+  # Try to extract from maven.compiler.source or maven.compiler.target
+  DETECTED=$(grep -oE '<maven.compiler.(source|target)>[0-9]+' pom.xml | grep -oE '[0-9]+' | head -1)
+  if [ -n "$DETECTED" ] && [ "$DETECTED" -ge 11 ] 2>/dev/null; then
+    JAVA_VERSION=$DETECTED
+  else
+    # Try java.version property
+    DETECTED=$(grep -oE '<java.version>[0-9]+' pom.xml | grep -oE '[0-9]+' | head -1)
+    if [ -n "$DETECTED" ] && [ "$DETECTED" -ge 11 ] 2>/dev/null; then
+      JAVA_VERSION=$DETECTED
+    fi
+  fi
+fi
+echo "Detected Java version: $JAVA_VERSION"
+`.trim();
+}
+
+/**
+ * Generate production-ready Java/Maven Dockerfile
+ */
+export function getJavaDockerfile(): string {
+  return `# Multi-stage build for Java/Maven applications
+FROM maven:3.9-eclipse-temurin-JAVA_VERSION_PLACEHOLDER AS build
+
+WORKDIR /app
+
+# Copy pom.xml and download dependencies (cache layer)
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Copy source and build
+COPY src ./src
+RUN mvn clean package -DskipTests
+
+# Production stage - minimal runtime image
+FROM eclipse-temurin:JAVA_VERSION_PLACEHOLDER-jre-alpine
+
+WORKDIR /app
+
+# Copy JAR from build stage
+COPY --from=build /app/target/*.jar app.jar
+
+# Security: Run as non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \\
+  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+
+ENTRYPOINT ["java", "-jar", "app.jar"]`;
+}
+
+/**
+ * Generate complete "Prepare Dockerfile" stage for Java/Maven
+ */
+export function generateJavaDockerfileStage(): string {
+  const javaDetection = getJavaVersionDetectionScript(17);
+  const dockerignore = getDockerignoreGenerationScript();
+  const dockerfile = getJavaDockerfile();
+  
+  return `
+if [ -f Dockerfile ]; then
+  echo "========================================="
+  echo "✓ FOUND EXISTING DOCKERFILE"
+  echo "========================================="
+  echo "Using project's existing Dockerfile instead of generating one."
+  echo "This Dockerfile will be built as-is with no modifications."
+  echo ""
+  echo "Dockerfile contents:"
+  cat Dockerfile
+  echo ""
+  export DOCKERFILE_EXISTS=true
+else
+  echo "No Dockerfile found - generating Java/Maven Dockerfile with auto-detection"
+  
+  ${javaDetection}
+  ${dockerignore}
+  
+  cat > Dockerfile << 'DOCKERFILE_EOF'
+${dockerfile}
+DOCKERFILE_EOF
+  
+  # Replace version placeholder
+  sed -i "s/JAVA_VERSION_PLACEHOLDER/$JAVA_VERSION/g" Dockerfile 2>/dev/null || sed -i '' "s/JAVA_VERSION_PLACEHOLDER/$JAVA_VERSION/g" Dockerfile
+  
+  echo "Dockerfile generated successfully"
+  echo "Java version: $JAVA_VERSION"
+  cat Dockerfile
+  export DOCKERFILE_EXISTS=false
+fi
+`.trim();
+}

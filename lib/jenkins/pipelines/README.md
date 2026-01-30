@@ -211,12 +211,20 @@ All apps are exposed via NGINX Ingress Controller on ports 80/443 using ClusterI
 | `simple-test`, `test` | Simple Test | N/A |
 | `express`, `express.js` | Express | ✅ Yes |
 | `python`, `django`, `flask`, `fastapi` | Python | ✅ Yes |
+| `java`, `maven` | Dockerfile | ❌ Must exist |
 | `nodejs`, `nextjs`, `react`, `vue` | Node.js | ❌ No (must exist) |
 | Default (any other) | Node.js | ❌ No (must exist) |
 
 ## Common Requirements
 
 ### All Production Pipelines (Node.js, Express, Python)
+
+### Java/Maven Projects
+
+- Java/Maven projects are supported via the **Dockerfile pipeline**.
+- Your repository **must include a working Dockerfile** for Java/Maven apps (see `project-demos/java-test-app/` for an example).
+- The platform will auto-detect Java/Maven and select the Dockerfile pipeline for deployment.
+
 
 **Jenkins Server:**
 ```bash

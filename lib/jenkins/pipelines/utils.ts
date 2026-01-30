@@ -17,7 +17,7 @@ export interface EnvVar {
 /**
  * Supported runtime types for default environment variables
  */
-export type Runtime = 'node' | 'python';
+export type Runtime = 'node' | 'python' | 'java';
 
 /**
  * Generate Kubernetes Secret YAML for environment variables
@@ -79,7 +79,7 @@ export function generateEnvFromSection(secretName: string, hasSecret: boolean): 
  * This is the SINGLE entry point for all runtime defaults.
  * All pipelines MUST use this function.
  * 
- * @param runtime - The runtime type ('node' | 'python')
+ * @param runtime - The runtime type ('node' | 'python' | 'java')
  * @param containerPort - The container port (defaults based on runtime if not specified)
  */
 export function generateRuntimeDefaultEnvYaml(
@@ -95,6 +95,15 @@ export function generateRuntimeDefaultEnvYaml(
           value: "1"
         - name: PYTHONDONTWRITEBYTECODE
           value: "1"`;
+  }
+
+  if (runtime === 'java') {
+    const port = containerPort ?? 8080;
+    return `        env:
+        - name: PORT
+          value: "${port}"
+        - name: JAVA_OPTS
+          value: "-Xmx512m -Xms256m"`;
   }
 
   // node + frontend default (node, express, nextjs, nuxtjs, vite-react, vue, angular, sveltekit)

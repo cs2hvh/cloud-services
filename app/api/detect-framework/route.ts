@@ -67,6 +67,24 @@ async function fetchFile(provider: string, repoFullName: string, filePath: strin
 }
 
 // Detection functions
+async function detectFromPomXml(context: DetectionContext): Promise<Partial<DetectionResult>> {
+  const pomContent = context.fileContents.get('pom.xml');
+  if (!pomContent) return {};
+  // Simple check for <project> root and <groupId> or <artifactId>
+  if (pomContent.content.includes('<project') && pomContent.content.includes('<artifactId>')) {
+    return { framework: "Java", language: "Java" };
+  }
+  return {};
+}
+
+async function detectFromMainJava(context: DetectionContext): Promise<Partial<DetectionResult>> {
+  // Only check for presence, not content
+  if (context.fileContents.has('Main.java')) {
+    return { framework: "Java", language: "Java" };
+  }
+  return {};
+}
+
 async function detectFromPackageJson(context: DetectionContext): Promise<Partial<DetectionResult>> {
   const packageJsonContent = context.fileContents.get('package.json');
   if (!packageJsonContent) return {};
@@ -218,6 +236,8 @@ async function detectFromGemfile(context: DetectionContext): Promise<Partial<Det
 
 // Detection pipeline
 const detectionFunctions = [
+  detectFromPomXml,
+  detectFromMainJava,
   detectFromPackageJson,
   detectFromRequirementsTxt,
   detectDocker,
@@ -229,7 +249,7 @@ async function runDetection(context: DetectionContext): Promise<DetectionResult>
   // Collect all required files
   const allRequiredFiles = new Set<string>();
   // For simplicity, we'll check for common files
-  const commonFiles = ['package.json', 'requirements.txt', 'Dockerfile', 'docker-compose.yml', 'composer.json', 'Gemfile'];
+  const commonFiles = ['package.json', 'requirements.txt', 'Dockerfile', 'docker-compose.yml', 'composer.json', 'Gemfile', 'pom.xml', 'Main.java'];
   commonFiles.forEach(file => allRequiredFiles.add(file));
   
   // Fetch all required files
@@ -267,9 +287,11 @@ async function runDetection(context: DetectionContext): Promise<DetectionResult>
     }
   }
   
-  // Handle "Static" framework cases:
-  // 1. If Dockerfile exists but no framework detected (Go, Elixir, Rust, etc.) → Use Dockerfile
+  // Handle "Static" framework cases and Dockerfile fallbacks:
+  // 1. If Dockerfile exists but no stronger framework detected (Go, Elixir, Rust, etc.) → Use Dockerfile
   // 2. If NO Dockerfile and NO framework → Mark as Unknown (requires user action)
+  // NOTE: For Java (Maven) projects we prefer to keep framework as "Java" even when a Dockerfile
+  // is present so the frontend can present Java-specific guidance while still using the Dockerfile pipeline.
   if (result.framework === "Static") {
     if (result.hasDockerfile) {
       // Has Dockerfile but no framework → Use generic Dockerfile pipeline
