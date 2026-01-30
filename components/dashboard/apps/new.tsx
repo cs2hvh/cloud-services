@@ -73,7 +73,7 @@ interface ProviderConnection {
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
   'Dockerfile': { buildCommand: 'docker build', outputDir: '', installCommand: '', description: 'Uses your existing Dockerfile - supports any language/runtime' },
-  'Java': { buildCommand: 'mvn package', outputDir: 'target', installCommand: 'mvn install', description: 'Uses your Dockerfile for Java/Maven projects' },
+  'Java': { buildCommand: 'mvn package', outputDir: 'target', installCommand: 'mvn install', description: 'Auto-generates Dockerfile with Maven multi-stage build' },
   'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
@@ -1389,9 +1389,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                 ✓ Using your repository&apos;s Dockerfile
                               </p>
                               <p className="text-xs text-white/60">
-                                Your custom Dockerfile will be used for the
-                                build. The platform defaults below are for
-                                reference only.
+                                {framework === 'Java' 
+                                  ? 'Your custom Dockerfile will be used for the Java/Maven build.'
+                                  : 'Your custom Dockerfile will be used for the build. The platform defaults below are for reference only.'}
                               </p>
                             </div>
                           ) : (
@@ -1464,7 +1464,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     </div>
                   )}
 
-                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile */}
+                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile or Java */}
                 {(hasDockerfile || framework === 'Dockerfile' || framework === 'Java') && (
                   <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
                     <Label className="text-white font-medium mb-2 block">
