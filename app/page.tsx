@@ -3,38 +3,13 @@
 import { Navbar } from "@/components/navbar";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
 import { WorldMap } from "@/components/world-map";
+import { Hero } from "@/components/hero"; // Import new Hero component
+import { ServicesSection } from "@/components/services-section";
 import { motion } from "motion/react";
-import { ArrowRight, Server, Database, Shield, Zap, Cloud, HardDrive } from "lucide-react";
+import { ArrowRight, Shield, Zap, Cloud } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
-  const services = [
-    {
-      icon: HardDrive,
-      title: "Dedicated Servers",
-      description: "Powerful, bare-metal servers for your most demanding workloads.",
-      features: ["Full Root Access", "99.99% Uptime SLA", "24/7 Support"],
-    },
-    {
-      icon: Server,
-      title: "Virtual Private Servers",
-      description: "Flexible and scalable virtual servers with predictable pricing.",
-      features: ["Instant Provisioning", "Choice of OS", "Scalable Resources"],
-    },
-    {
-      icon: Database,
-      title: "Managed Databases",
-      description: "Fully managed database solutions with automated backups and replication.",
-      features: ["PostgreSQL, MySQL", "Auto Backups", "High Availability"],
-    },
-    {
-      icon: Shield,
-      title: "DDoS Protection",
-      description: "Always-on DDoS protection to keep your services online.",
-      features: ["Network-level Mitigation", "Real-time Monitoring", "Global Network"],
-    },
-  ];
-
   const features = [
     {
       icon: Shield,
@@ -63,55 +38,18 @@ export default function Home() {
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative z-10 min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-          >
-            <h1 className="text-5xl md:text-7xl font-bold mb-6">
-              <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                Your Vision, Our Infrastructure
-              </span>
-              <br />
-              <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Globally Delivered
-              </span>
-            </h1>
-            
-            <p className="text-xl text-gray-400 mb-8 max-w-2xl mx-auto">
-              Power your applications with our high-performance, secure, and scalable cloud infrastructure. From dedicated servers to managed databases, we have got you covered.
-            </p>
+      <Hero />
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link
-                href="/signup"
-                className="group relative inline-flex items-center justify-center px-8 py-3 font-medium text-white transition-all duration-200"
-              >
-                <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"></span>
-                <span className="relative flex items-center">
-                  Get Started Free
-                  <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </span>
-              </Link>
-              
-              <Link
-                href="/docs"
-                className="inline-flex items-center justify-center px-8 py-3 font-medium text-gray-300 bg-white/5 backdrop-blur-sm border border-white/10 rounded-lg hover:bg-white/10 transition-all duration-200"
-              >
-                View Documentation
-              </Link>
-            </div>
-          </motion.div>
-
-          {/* Stats */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-            className="grid grid-cols-3 gap-8 mt-16 pt-8 border-t border-white/10"
-          >
+      {/* Figma Services Section */}
+      <ServicesSection />
+      
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        className="grid grid-cols-3 gap-8 mt-4 pt-8 border-t border-transparent relative z-10 container mx-auto"
+      >
             <div>
               <div className="text-3xl font-bold text-white">1M+</div>
               <div className="text-sm text-gray-500">Happy Customers</div>
@@ -125,60 +63,7 @@ export default function Home() {
               <div className="text-sm text-gray-500">Uptime SLA</div>
             </div>
           </motion.div>
-        </div>
-      </section>
 
-      {/* Services Section */}
-      <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-            className="text-center mb-12"
-          >
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-              A Solution for Every Workload
-            </h2>
-            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              We offer a comprehensive suite of cloud services to meet your needs.
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            {services.map((service, index) => (
-              <motion.div
-                key={service.title}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: index * 0.1 }}
-                viewport={{ once: true }}
-                className="group relative"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative bg-black/50 backdrop-blur-sm border border-white/10 rounded-2xl p-8 hover:border-white/20 transition-all duration-300 h-full">
-                  <service.icon className="h-12 w-12 text-blue-400 mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-3">
-                    {service.title}
-                  </h3>
-                  <p className="text-gray-400 mb-4">
-                    {service.description}
-                  </p>
-                  <ul className="space-y-2">
-                    {service.features.map((feature) => (
-                      <li key={feature} className="flex items-center text-sm text-gray-500">
-                        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2"></span>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Features Section */}
       <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8 border-t border-white/5">

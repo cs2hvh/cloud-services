@@ -17,7 +17,6 @@ export function Navbar() {
   const router = useRouter();
   const supabase = createClient();
 
-  // Handle scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -26,7 +25,6 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Handle auth state
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -54,48 +52,112 @@ export function Navbar() {
     router.push("/signin");
   };
 
-  const navLinks = [
-    { name: "Products", href: "/products" },
-    { name: "Solutions", href: "/solutions" },
-    { name: "Pricing", href: "/pricing" },
-    { name: "Docs", href: "/docs" },
-  ];
-
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-        scrolled
-          ? "bg-black/30 backdrop-blur-2xl border-b border-white/10"
-          : "bg-transparent"
-      }`}
+      className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+      style={{ backgroundColor: 'transparent' }}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+      <div className="relative w-full max-w-[1440px] h-20 mx-auto" style={{ borderRadius: '4px' }}>
+        <div className="absolute inset-0 flex items-center">
           {/* Logo */}
-          <Link
-            href="/"
-            className="flex items-center group"
+          <Link 
+            href="/" 
+            className="absolute flex items-center"
+            style={{ 
+              left: '3.47%',
+              fontFamily: 'Inter, sans-serif',
+              fontSize: '24px',
+              lineHeight: '20px',
+              fontWeight: 400,
+              color: '#FFFFFF'
+            }}
           >
-            <span className="text-2xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent group-hover:from-blue-400 group-hover:to-purple-400 transition-all duration-300">
-              AhuraSense
-            </span>
+            ahura<span style={{ color: '#0095FF' }}>cloud</span>
           </Link>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
-            {navLinks.map((link) => (
-              <Link
-                key={link.name}
-                href={link.href}
-                className="px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
-              >
-                {link.name}
-              </Link>
-            ))}
+          {/* Navigation Links */}
+          <div className="hidden lg:block absolute" style={{ left: '55.14%', top: '50%', transform: 'translateY(-50%)' }}>
+            <Link
+              href="/products"
+              className="inline-flex items-center"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '12.8px',
+                lineHeight: '20px',
+                fontWeight: 400,
+                color: '#FFFFFF'
+              }}
+            >
+              Products
+            </Link>
           </div>
 
-          {/* Desktop Auth Buttons / User Menu */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="hidden lg:block absolute" style={{ left: '60.12%', top: '50%', transform: 'translateY(-50%)' }}>
+            <Link
+              href="/solutions"
+              className="inline-flex items-center"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '12.8px',
+                lineHeight: '20px',
+                fontWeight: 500,
+                color: '#FFFFFF'
+              }}
+            >
+              Solutions
+            </Link>
+          </div>
+
+          <div className="hidden lg:block absolute" style={{ left: '65.88%', top: '50%', transform: 'translateY(-50%)' }}>
+            <Link
+              href="/pricing"
+              className="inline-flex items-center"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '12.8px',
+                lineHeight: '20px',
+                fontWeight: 500,
+                color: '#FFFFFF'
+              }}
+            >
+              Pricing
+            </Link>
+          </div>
+
+          <div className="hidden lg:block absolute" style={{ left: '69.93%', top: '50%', transform: 'translateY(-50%)' }}>
+            <Link
+              href="/resources"
+              className="inline-flex items-center text-center"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '12.8px',
+                lineHeight: '20px',
+                fontWeight: 400,
+                color: '#FFFFFF'
+              }}
+            >
+              Resources
+            </Link>
+          </div>
+
+          <div className="hidden lg:block absolute" style={{ left: '75.42%', top: '50%', transform: 'translateY(-50%)' }}>
+            <Link
+              href="/docs"
+              className="inline-flex items-center"
+              style={{
+                fontFamily: 'Inter, sans-serif',
+                fontSize: '12.8px',
+                lineHeight: '20px',
+                fontWeight: 500,
+                color: '#FFFFFF'
+              }}
+            >
+              Docs
+            </Link>
+          </div>
+
+          {/* Auth Buttons */}
+          <div className="hidden lg:flex items-center absolute" style={{ left: '84.86%', top: '50%', transform: 'translateY(-50%)' }}>
             {isLoading ? (
               <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse"></div>
             ) : user ? (
@@ -119,36 +181,34 @@ export function Navbar() {
                       className="absolute right-0 mt-2 w-56 rounded-xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden z-50"
                     >
                       <div className="px-4 py-3 border-b border-white/10">
-                        <p className="text-sm font-medium text-white">
-                          {user.email}
-                        </p>
+                        <p className="text-sm font-medium text-white">{user.email}</p>
                       </div>
                       
                       <div className="py-2">
                         <button
                           onClick={() => router.push("/dashboard")}
-                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <LayoutDashboard className="w-4 h-4" />
                           <span>Dashboard</span>
                         </button>
                         <button
                           onClick={() => router.push("/dashboard/profile")}
-                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <User className="w-4 h-4" />
                           <span>Profile</span>
                         </button>
                         <button
                           onClick={() => router.push("/dashboard/settings")}
-                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <Settings className="w-4 h-4" />
                           <span>Settings</span>
                         </button>
                         <button
                           onClick={() => router.push("/dashboard/nav/billing")}
-                          className="cursor-pointer w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
                         >
                           <CreditCard className="w-4 h-4" />
                           <span>Billing</span>
@@ -172,18 +232,36 @@ export function Navbar() {
               <>
                 <Link
                   href="/signin"
-                  className="px-4 py-2 text-gray-300 hover:text-white transition-colors text-sm font-medium"
+                  className="inline-flex items-center text-center hover:opacity-80 transition-opacity"
+                  style={{
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '13.6px',
+                    lineHeight: '21px',
+                    fontWeight: 500,
+                    color: '#FFFFFF',
+                    marginRight: '12px'
+                  }}
                 >
-                  Sign in
+                  Log in
                 </Link>
                 <Link
                   href="/signup"
-                  className="relative group"
+                  className="inline-flex items-center text-center justify-center hover:opacity-90 transition-opacity"
+                  style={{
+                    background: 'rgba(95, 165, 250, 0.94)',
+                    border: '1px solid rgba(255, 255, 255, 0.31)',
+                    boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.25)',
+                    backdropFilter: 'blur(9px)',
+                    borderRadius: '3px',
+                    padding: '7.47px 16px',
+                    fontFamily: 'Inter, sans-serif',
+                    fontSize: '13.6px',
+                    lineHeight: '21px',
+                    fontWeight: 500,
+                    color: '#FFFFFF'
+                  }}
                 >
-                  <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg blur opacity-75 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
-                  <span className="relative px-6 py-2 bg-black rounded-lg leading-none flex items-center text-white text-sm font-medium ring-1 ring-white/10">
-                    Get Started
-                  </span>
+                  Sign Up
                 </Link>
               </>
             )}
@@ -192,36 +270,27 @@ export function Navbar() {
           {/* Mobile menu button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
+            className="lg:hidden absolute right-6 p-2"
           >
-            {isOpen ? (
-              <X className="w-6 h-6 text-white" />
-            ) : (
-              <Menu className="w-6 h-6 text-white" />
-            )}
+            {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
           </button>
         </div>
       </div>
 
-      {/* Mobile menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-black/50 backdrop-blur-2xl border-t border-white/10"
+            className="lg:hidden bg-[#0a0a0f]/95 backdrop-blur-xl border-t border-white/5"
           >
             <div className="px-4 py-4 space-y-2">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.name}
-                  href={link.href}
-                  className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
-                  onClick={() => setIsOpen(false)}
-                >
-                  {link.name}
-                </Link>
+              <Link href="/products" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Products</Link>
+              <Link href="/solutions" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Solutions</Link>
+              <Link href="/pricing" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Pricing</Link>
+              <Link href="/resources" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Resources</Link>
+              <Link href="/docs" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Docs</Link>/Link>
               ))}
               
               <div className="pt-4 border-t border-white/10">
@@ -229,14 +298,14 @@ export function Navbar() {
                   <>
                     <Link
                       href="/dashboard"
-                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
+                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm"
                       onClick={() => setIsOpen(false)}
                     >
                       Dashboard
                     </Link>
                     <Link
                       href="/dashboard/nav/billing"
-                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
+                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm"
                       onClick={() => setIsOpen(false)}
                     >
                       Billing
@@ -246,7 +315,7 @@ export function Navbar() {
                         handleSignOut();
                         setIsOpen(false);
                       }}
-                      className="w-full text-left px-4 py-2 text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 transition-all duration-200 text-sm font-medium"
+                      className="w-full text-left px-4 py-2 text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 transition-all duration-200 text-sm"
                     >
                       Sign out
                     </button>
@@ -255,17 +324,17 @@ export function Navbar() {
                   <>
                     <Link
                       href="/signin"
-                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm font-medium"
+                      className="block px-4 py-2 text-gray-300 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-200 text-sm"
                       onClick={() => setIsOpen(false)}
                     >
-                      Sign in
+                      Sign In
                     </Link>
                     <Link
                       href="/signup"
-                      className="block px-4 py-2 text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-center transition-all duration-200 text-sm font-medium mt-2"
-                      onClick={() => setIsOpen(false)}
+                      className="block px-4 py-2 text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-center transition-all duration-200 text-sm mt-2"
+                      Log ik={() => setIsOpen(false)}
                     >
-                      Get Started
+                      Sign Up
                     </Link>
                   </>
                 )}
@@ -275,7 +344,6 @@ export function Navbar() {
         )}
       </AnimatePresence>
 
-      {/* Click outside to close dropdown */}
       {dropdownOpen && (
         <div
           className="fixed inset-0 z-40"
