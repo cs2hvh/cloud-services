@@ -423,6 +423,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     fetchBranches,
     detectFramework,
     selectedBranch,
+    repositories,
   ]);
 
   // Re-run framework detection whenever the selected branch changes

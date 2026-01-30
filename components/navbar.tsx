@@ -10,20 +10,11 @@ import { User as SupabaseUser } from "@supabase/supabase-js";
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const router = useRouter();
   const supabase = createClient();
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   useEffect(() => {
     const getUser = async () => {
@@ -290,8 +281,7 @@ export function Navbar() {
               <Link href="/solutions" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Solutions</Link>
               <Link href="/pricing" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Pricing</Link>
               <Link href="/resources" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Resources</Link>
-              <Link href="/docs" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Docs</Link>/Link>
-              ))}
+              <Link href="/docs" className="block px-4 py-2 text-gray-300 hover:text-white text-sm" onClick={() => setIsOpen(false)}>Docs</Link>
               
               <div className="pt-4 border-t border-white/10">
                 {user ? (
@@ -332,7 +322,7 @@ export function Navbar() {
                     <Link
                       href="/signup"
                       className="block px-4 py-2 text-white bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg text-center transition-all duration-200 text-sm mt-2"
-                      Log ik={() => setIsOpen(false)}
+                      onClick={() => setIsOpen(false)}
                     >
                       Sign Up
                     </Link>

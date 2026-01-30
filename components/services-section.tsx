@@ -61,7 +61,7 @@ export function ServicesSection() {
 
           <div className="absolute left-[129px] top-[255px] flex h-[125px] w-[310px] items-center justify-center text-center text-[15px] leading-[24px]">
             <span className="bg-[linear-gradient(90deg,#ffffff_28.8%,rgba(255,255,255,0.75517)_45.71%,rgba(255,255,255,0.4)_95%)] bg-clip-text text-transparent">
-              I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click "Edit Text" or
+              I&apos;m a paragraph. Click here to add your own text and edit me. It&apos;s easy. Just click &quot;Edit Text&quot; or
               double click me to add your own content and make changes to the font.
             </span>
           </div>
