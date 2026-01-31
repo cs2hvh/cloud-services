@@ -5,8 +5,10 @@ import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect
 import { WorldMap } from "@/components/world-map";
 import { Hero } from "@/components/hero"; // Import new Hero component
 import { ServicesSection } from "@/components/services-section";
+import { ComplianceCta } from "@/components/compliance-cta";
+import { WhyTrustUs } from "@/components/why-trust-us";
 import { motion } from "motion/react";
-import { ArrowRight, Shield, Zap, Cloud } from "lucide-react";
+import { Shield, Zap, Cloud } from "lucide-react";
 import Link from "next/link";
 
 export default function Home() {
@@ -98,96 +100,86 @@ export default function Home() {
         <WorldMap />
       </section>
 
-      {/* CTA Section */}
-      <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            viewport={{ once: true }}
-          >
-            <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-              Ready to Build Something Great?
-            </h2>
-            <p className="text-gray-400 text-lg mb-8">
-              Join thousands of developers deploying with confidence.
-            </p>
-            <Link
-              href="/signup"
-              className="group relative inline-flex items-center justify-center px-8 py-4 font-medium text-white transition-all duration-200"
-            >
-              <span className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"></span>
-              <span className="relative flex items-center text-lg">
-                Start Your Free Trial
-                <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </span>
-            </Link>
-          </motion.div>
-        </div>
-      </section>
+      <WhyTrustUs />
+      <ComplianceCta />
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/5 py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="text-white font-semibold mb-4">Product</h3>
-              <ul className="space-y-2">
-                <li><Link href="/features" className="text-gray-400 hover:text-white transition-colors">Features</Link></li>
-                <li><Link href="/pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</Link></li>
-                <li><Link href="/docs" className="text-gray-400 hover:text-white transition-colors">Documentation</Link></li>
-              </ul>
+      <footer className="relative z-10 bg-[#161618]">
+        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 pt-16 pb-8">
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,200px)_1fr_minmax(0,220px)]">
+            <div className="flex items-start">
+              <div className="text-2xl font-normal tracking-tight text-white">
+                <span>ahura</span>
+                <span className="text-[#00AAFF]">cloud</span>
+              </div>
             </div>
-            <div>
-              <h3 className="text-white font-semibold mb-4">Company</h3>
-              <ul className="space-y-2">
-                <li><Link href="/about" className="text-gray-400 hover:text-white transition-colors">About</Link></li>
-                <li><Link href="/blog" className="text-gray-400 hover:text-white transition-colors">Blog</Link></li>
-                <li><Link href="/careers" className="text-gray-400 hover:text-white transition-colors">Careers</Link></li>
-              </ul>
+
+            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <h3 className="text-[15px] text-white mb-4">Company</h3>
+                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
+                  <li><Link href="#" className="hover:text-white transition-colors">Blog</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Careers</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Pricing</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Customers</Link></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-[15px] text-white mb-4">Resources</h3>
+                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
+                  <li><Link href="#" className="hover:text-white transition-colors">Documentation</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Papers</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Press</Link></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-[15px] text-white mb-4">Solutions</h3>
+                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
+                  <li><Link href="#" className="hover:text-white transition-colors">PCI Compliance</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Encryption as a Service</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Credentials Encryption</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">File Encryption</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">PII Encryption</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">HIPAA Compliance</Link></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-[15px] text-white mb-4">Legal</h3>
+                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
+                  <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Cookies Policy</Link></li>
+                  <li><Link href="#" className="hover:text-white transition-colors">Data Processing</Link></li>
+                </ul>
+              </div>
             </div>
+
             <div>
-              <h3 className="text-white font-semibold mb-4">Resources</h3>
-              <ul className="space-y-2">
-                <li><Link href="/support" className="text-gray-400 hover:text-white transition-colors">Support</Link></li>
-                <li><Link href="/status" className="text-gray-400 hover:text-white transition-colors">Status</Link></li>
-                <li><Link href="/api" className="text-gray-400 hover:text-white transition-colors">API</Link></li>
-              </ul>
-            </div>
-            <div>
-              <h3 className="text-white font-semibold mb-4">Legal</h3>
-              <ul className="space-y-2">
-                <li><Link href="/privacy" className="text-gray-400 hover:text-white transition-colors">Privacy</Link></li>
-                <li><Link href="/terms" className="text-gray-400 hover:text-white transition-colors">Terms</Link></li>
-                <li><Link href="/security" className="text-gray-400 hover:text-white transition-colors">Security</Link></li>
-              </ul>
+              <h3 className="text-[15px] text-white mb-4">Compliance</h3>
+              <div className="space-y-3 text-[13px] text-[#ACACAC] font-mono">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
+                    PCI
+                  </span>
+                  <span>PCI Level 1</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
+                    SOC
+                  </span>
+                  <span>SOC 2 Type II</span>
+                </div>
+              </div>
             </div>
           </div>
-          
-          <div className="mt-12 pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center">
-            <div className="text-gray-500 text-sm">
-              © 2024 AhuraSense. All rights reserved.
-            </div>
-            <div className="flex space-x-6 mt-4 md:mt-0">
-              <Link href="#" className="text-gray-400 hover:text-white transition-colors">
-                <span className="sr-only">Twitter</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-                </svg>
-              </Link>
-              <Link href="#" className="text-gray-400 hover:text-white transition-colors">
-                <span className="sr-only">GitHub</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clipRule="evenodd" />
-                </svg>
-              </Link>
-              <Link href="#" className="text-gray-400 hover:text-white transition-colors">
-                <span className="sr-only">LinkedIn</span>
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
-                </svg>
-              </Link>
+
+          <div className="mt-12 border-t border-[#2A2B3A] pt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[12.8px] text-[#BABCD2]">
+              © 2026 ahuracloud. All rights reserved.
+            </p>
+            <div className="flex items-center gap-2 text-[12.8px] text-[#BABCD2] font-mono">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#00AAFF]" />
+              <span>All systems normal</span>
             </div>
           </div>
         </div>
