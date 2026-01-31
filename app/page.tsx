@@ -7,6 +7,7 @@ import { Hero } from "@/components/hero"; // Import new Hero component
 import { ServicesSection } from "@/components/services-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
+import { EverythingSection } from "@/components/everything-section";
 import { motion } from "motion/react";
 import { Shield, Zap, Cloud } from "lucide-react";
 import Link from "next/link";
@@ -46,7 +47,7 @@ export default function Home() {
       <ServicesSection />
       
       {/* Stats */}
-      <motion.div
+      {/* <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.2 }}
@@ -64,7 +65,14 @@ export default function Home() {
               <div className="text-3xl font-bold text-white">99.99%</div>
               <div className="text-sm text-gray-500">Uptime SLA</div>
             </div>
-          </motion.div>
+          </motion.div> */}
+
+
+           {/*Everything you build*/}
+       <EverythingSection />
+
+
+
 
 
       {/* Features Section */}
@@ -94,6 +102,10 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+
+     
+
 
       {/* World Map Section */}
       <section className="relative z-10">
