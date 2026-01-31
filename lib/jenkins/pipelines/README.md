@@ -211,19 +211,23 @@ All apps are exposed via NGINX Ingress Controller on ports 80/443 using ClusterI
 | `simple-test`, `test` | Simple Test | N/A |
 | `express`, `express.js` | Express | ✅ Yes |
 | `python`, `django`, `flask`, `fastapi` | Python | ✅ Yes |
-| `java`, `maven` | Dockerfile | ❌ Must exist |
+| `java`, `maven`, `spring`, `spring-boot` | Java/Maven | ✅ Yes |
 | `nodejs`, `nextjs`, `react`, `vue` | Node.js | ❌ No (must exist) |
 | Default (any other) | Node.js | ❌ No (must exist) |
 
 ## Common Requirements
 
-### All Production Pipelines (Node.js, Express, Python)
+### All Production Pipelines (Node.js, Express, Python, Java)
 
 ### Java/Maven Projects
 
-- Java/Maven projects are supported via the **Dockerfile pipeline**.
-- Your repository **must include a working Dockerfile** for Java/Maven apps (see `project-demos/java-test-app/` for an example).
-- The platform will auto-detect Java/Maven and select the Dockerfile pipeline for deployment.
+- Java/Maven projects are supported via the **dedicated Java pipeline** (`java.ts`).
+- The pipeline **auto-generates a Dockerfile** if one doesn't exist, using Maven multi-stage build.
+- Automatically detects Java version from `pom.xml` (checks `maven.compiler.source`, `maven.compiler.target`, or `java.version` properties).
+- Default Java version: **17** (if not detected).
+- Default container port: **8080** (standard for Spring Boot and most Java web apps).
+- The platform will auto-detect Java/Maven from `pom.xml` and select the Java pipeline for deployment.
+- Example Java project: `project-demos/java-test-app/`
 
 
 **Jenkins Server:**

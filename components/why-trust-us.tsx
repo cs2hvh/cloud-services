@@ -1,12 +1,4 @@
 import Image from "next/image";
-import {
-  Activity,
-  Globe,
-  Layers,
-  ShieldCheck,
-  SlidersHorizontal,
-  Zap,
-} from "lucide-react";
 
 const trustFeatures = [
   {
@@ -18,7 +10,7 @@ const trustFeatures = [
         can be adapted to any type of solution.
       </>
     ),
-    icon: SlidersHorizontal,
+    iconSrc: "/images/whyTrustUs/configure.svg",
   },
   {
     title: "Volume",
@@ -29,13 +21,13 @@ const trustFeatures = [
         encryption operations every day.
       </>
     ),
-    icon: Layers,
+    iconSrc: "/images/whyTrustUs/volume.svg",
   },
   {
     title: "Write and Deploy in Seconds",
     description:
       "Built so developers spend less time and money on data security and compliance.",
-    icon: Zap,
+    iconSrc: "/images/whyTrustUs/write-and-deploy.svg",
   },
   {
     title: "Globally Distributed",
@@ -46,19 +38,19 @@ const trustFeatures = [
         multiple regions to optimize uptime.
       </>
     ),
-    icon: Globe,
+    iconSrc: "/images/whyTrustUs/gloabal.png",
   },
   {
     title: "Enclave-backed",
     description:
       "Built on isolated, hardened, and highly constrained secure enclaves.",
-    icon: ShieldCheck,
+    iconSrc: "/images/whyTrustUs/enclave-backend.svg",
   },
   {
     title: "Ultra-Low Latency",
     description:
       "Encryption and decryption operations introduce a minimal latency penalty.",
-    icon: Activity,
+    iconSrc: "/images/whyTrustUs/latency.svg",
   },
 ];
 
@@ -93,22 +85,26 @@ export function WhyTrustUs() {
 
           <div className="space-y-8">
             {trustFeatures.map((feature, index) => {
-              const Icon = feature.icon;
               return (
                 <div key={feature.title} className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Icon className="mt-1 h-5 w-5 text-[#DFE1F4]" />
-                    <div>
-                      <h3 className="text-xl sm:text-2xl lg:text-[32px] leading-tight text-white">
-                        {feature.title}
-                      </h3>
-                      <p className="mt-2 text-sm sm:text-base lg:text-[20px] leading-6 text-[#BABCD2]">
-                        {feature.description}
-                      </p>
-                    </div>
+                  <div>
+                    <h3 className="flex items-center gap-2 text-xl sm:text-2xl lg:text-[32px] leading-tight text-white">
+                      <span className="relative h-7 w-7">
+                        <Image
+                          src={feature.iconSrc}
+                          alt=""
+                          fill
+                          className="object-contain"
+                        />
+                      </span>
+                      <span>{feature.title}</span>
+                    </h3>
+                    <p className="mt-2 text-sm sm:text-base lg:text-[20px] leading-6 text-[#BABCD2]">
+                      {feature.description}
+                    </p>
                   </div>
                   {index !== trustFeatures.length - 1 && (
-                    <div className="w-full max-w-[420px] border-t-2 border-transparent [border-image:linear-gradient(90deg,#FFFFFF_0%,#007EE5_100%)_1]" />
+                    <div className="w-full max-w-[420px] border-t-[3px] border-transparent [border-image:linear-gradient(90deg,#FFFFFF_0%,#007EE5_100%)_1]" />
                   )}
                 </div>
               );
