@@ -73,6 +73,7 @@ interface ProviderConnection {
 const frameworkConfigs = {
   'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
   'Dockerfile': { buildCommand: 'docker build', outputDir: '', installCommand: '', description: 'Uses your existing Dockerfile - supports any language/runtime' },
+  'Java': { buildCommand: 'mvn package', outputDir: 'target', installCommand: 'mvn install', description: 'Auto-generates Dockerfile with Maven multi-stage build' },
   'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
   'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
@@ -340,6 +341,13 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
               'Dockerfile': 'Dockerfile',
               'Python': 'python',
               'python': 'python',
+              // Java / Maven detection: map backend values to our UI option 'Java'
+              'Java': 'Java',
+              'java': 'Java',
+              'Maven': 'Java',
+              'maven': 'Java',
+              'mvn': 'Java',
+              'Mvn': 'Java',
               // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
               'Laravel': 'Dockerfile',
               'Symfony': 'Dockerfile',
@@ -423,6 +431,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     fetchBranches,
     detectFramework,
     selectedBranch,
+    repositories,
   ]);
 
   // Re-run framework detection whenever the selected branch changes
@@ -563,7 +572,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         repository_name: selectedRepoData.fullName,
         repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
         branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
-        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static',
+        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static' | 'Java' | 'Dockerfile',
         env_vars: envVars.filter(ev => ev.key && ev.value),
         size: size || 'small',
         auto_deploy: autoDeploy,
@@ -1219,6 +1228,11 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           Simple Test (No Build/Deploy)
                         </SelectItem>
 
+
+                        {/* Java (Dockerfile) */}
+                        <SelectItem value="Java">
+                          Java (uses your Dockerfile)
+                        </SelectItem>
                         {/* Dockerfile (Custom) */}
                         <SelectItem value="Dockerfile">
                           Dockerfile (uses your existing Dockerfile)
@@ -1375,9 +1389,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                 ✓ Using your repository&apos;s Dockerfile
                               </p>
                               <p className="text-xs text-white/60">
-                                Your custom Dockerfile will be used for the
-                                build. The platform defaults below are for
-                                reference only.
+                                {framework === 'Java' 
+                                  ? 'Your custom Dockerfile will be used for the Java/Maven build.'
+                                  : 'Your custom Dockerfile will be used for the build. The platform defaults below are for reference only.'}
                               </p>
                             </div>
                           ) : (
@@ -1450,8 +1464,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     </div>
                   )}
 
-                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile */}
-                {(hasDockerfile || framework === 'Dockerfile') && (
+                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile or Java */}
+                {(hasDockerfile || framework === 'Dockerfile' || framework === 'Java') && (
                   <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
                     <Label className="text-white font-medium mb-2 block">
                       Container Port
