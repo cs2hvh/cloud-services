@@ -3,6 +3,7 @@ import { SUSE } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
+import { Navbar } from "@/components/navbar";
 
 const suse = SUSE({
   variable: "--font-suse",
@@ -22,6 +23,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${suse.variable}`}>
+        <Navbar />
         {children}
         <Toaster 
           position="top-right" 

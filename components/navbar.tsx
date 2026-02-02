@@ -49,13 +49,12 @@ export function Navbar() {
       style={{ backgroundColor: 'transparent' }}
     >
       <div className="relative w-full max-w-[1440px] h-20 mx-auto" style={{ borderRadius: '4px' }}>
-        <div className="absolute inset-0 flex items-center">
+        <div className="absolute inset-0 flex items-center px-4 sm:px-6 lg:px-8">
           {/* Logo */}
           <Link 
             href="/" 
-            className="absolute flex items-center"
+            className="flex items-center"
             style={{ 
-              left: '3.47%',
               fontFamily: 'Inter, sans-serif',
               fontSize: '24px',
               lineHeight: '20px',
@@ -66,202 +65,190 @@ export function Navbar() {
             ahura<span style={{ color: '#0095FF' }}>cloud</span>
           </Link>
 
-          {/* Navigation Links */}
-          <div className="hidden lg:block absolute" style={{ left: '55.14%', top: '50%', transform: 'translateY(-50%)' }}>
-            <Link
-              href="/products"
-              className="inline-flex items-center"
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '12.8px',
-                lineHeight: '20px',
-                fontWeight: 400,
-                color: '#FFFFFF'
-              }}
-            >
-              Products
-            </Link>
-          </div>
+          <div className="hidden lg:flex items-center ml-auto gap-10 xl:gap-25">
+            <div className="flex items-center gap-7">
+              <Link
+                href="/products"
+                className="inline-flex items-center"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12.8px',
+                  lineHeight: '20px',
+                  fontWeight: 400,
+                  color: '#FFFFFF'
+                }}
+              >
+                Products
+              </Link>
+              <Link
+                href="/solutions"
+                className="inline-flex items-center"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12.8px',
+                  lineHeight: '20px',
+                  fontWeight: 500,
+                  color: '#FFFFFF'
+                }}
+              >
+                Solutions
+              </Link>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12.8px',
+                  lineHeight: '20px',
+                  fontWeight: 500,
+                  color: '#FFFFFF'
+                }}
+              >
+                Pricing
+              </Link>
+              <Link
+                href="/resources"
+                className="inline-flex items-center text-center"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12.8px',
+                  lineHeight: '20px',
+                  fontWeight: 400,
+                  color: '#FFFFFF'
+                }}
+              >
+                Resources
+              </Link>
+              <Link
+                href="/docs"
+                className="inline-flex items-center"
+                style={{
+                  fontFamily: 'Inter, sans-serif',
+                  fontSize: '12.8px',
+                  lineHeight: '20px',
+                  fontWeight: 500,
+                  color: '#FFFFFF'
+                }}
+              >
+                Docs
+              </Link>
+            </div>
 
-          <div className="hidden lg:block absolute" style={{ left: '60.12%', top: '50%', transform: 'translateY(-50%)' }}>
-            <Link
-              href="/solutions"
-              className="inline-flex items-center"
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '12.8px',
-                lineHeight: '20px',
-                fontWeight: 500,
-                color: '#FFFFFF'
-              }}
-            >
-              Solutions
-            </Link>
-          </div>
+            <div className="flex items-center">
+              {isLoading ? (
+                <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse"></div>
+              ) : user ? (
+                <div className="relative">
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-all duration-200 group"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
+                      {user.email?.charAt(0).toUpperCase()}
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
+                  </button>
 
-          <div className="hidden lg:block absolute" style={{ left: '65.88%', top: '50%', transform: 'translateY(-50%)' }}>
-            <Link
-              href="/pricing"
-              className="inline-flex items-center"
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '12.8px',
-                lineHeight: '20px',
-                fontWeight: 500,
-                color: '#FFFFFF'
-              }}
-            >
-              Pricing
-            </Link>
-          </div>
+                  <AnimatePresence>
+                    {dropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute right-0 mt-2 w-56 rounded-xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden z-50"
+                      >
+                        <div className="px-4 py-3 border-b border-white/10">
+                          <p className="text-sm font-medium text-white">{user.email}</p>
+                        </div>
+                        
+                        <div className="py-2">
+                          <button
+                            onClick={() => router.push("/dashboard")}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          >
+                            <LayoutDashboard className="w-4 h-4" />
+                            <span>Dashboard</span>
+                          </button>
+                          <button
+                            onClick={() => router.push("/dashboard/profile")}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          >
+                            <User className="w-4 h-4" />
+                            <span>Profile</span>
+                          </button>
+                          <button
+                            onClick={() => router.push("/dashboard/settings")}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          >
+                            <Settings className="w-4 h-4" />
+                            <span>Settings</span>
+                          </button>
+                          <button
+                            onClick={() => router.push("/dashboard/nav/billing")}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
+                          >
+                            <CreditCard className="w-4 h-4" />
+                            <span>Billing</span>
+                          </button>
+                        </div>
 
-          <div className="hidden lg:block absolute" style={{ left: '69.93%', top: '50%', transform: 'translateY(-50%)' }}>
-            <Link
-              href="/resources"
-              className="inline-flex items-center text-center"
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '12.8px',
-                lineHeight: '20px',
-                fontWeight: 400,
-                color: '#FFFFFF'
-              }}
-            >
-              Resources
-            </Link>
-          </div>
-
-          <div className="hidden lg:block absolute" style={{ left: '75.42%', top: '50%', transform: 'translateY(-50%)' }}>
-            <Link
-              href="/docs"
-              className="inline-flex items-center"
-              style={{
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '12.8px',
-                lineHeight: '20px',
-                fontWeight: 500,
-                color: '#FFFFFF'
-              }}
-            >
-              Docs
-            </Link>
-          </div>
-
-          {/* Auth Buttons */}
-          <div className="hidden lg:flex items-center absolute" style={{ left: '84.86%', top: '50%', transform: 'translateY(-50%)' }}>
-            {isLoading ? (
-              <div className="w-8 h-8 rounded-full bg-white/10 animate-pulse"></div>
-            ) : user ? (
-              <div className="relative">
-                <button
-                  onClick={() => setDropdownOpen(!dropdownOpen)}
-                  className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-white/5 transition-all duration-200 group"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-semibold text-sm">
-                    {user.email?.charAt(0).toUpperCase()}
-                  </div>
-                  <ChevronDown className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
-                </button>
-
-                <AnimatePresence>
-                  {dropdownOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 10 }}
-                      className="absolute right-0 mt-2 w-56 rounded-xl bg-black/80 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden z-50"
-                    >
-                      <div className="px-4 py-3 border-b border-white/10">
-                        <p className="text-sm font-medium text-white">{user.email}</p>
-                      </div>
-                      
-                      <div className="py-2">
-                        <button
-                          onClick={() => router.push("/dashboard")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
-                        >
-                          <LayoutDashboard className="w-4 h-4" />
-                          <span>Dashboard</span>
-                        </button>
-                        <button
-                          onClick={() => router.push("/dashboard/profile")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
-                        >
-                          <User className="w-4 h-4" />
-                          <span>Profile</span>
-                        </button>
-                        <button
-                          onClick={() => router.push("/dashboard/settings")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
-                        >
-                          <Settings className="w-4 h-4" />
-                          <span>Settings</span>
-                        </button>
-                        <button
-                          onClick={() => router.push("/dashboard/nav/billing")}
-                          className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:text-white hover:bg-white/5 flex items-center space-x-3 transition-colors"
-                        >
-                          <CreditCard className="w-4 h-4" />
-                          <span>Billing</span>
-                        </button>
-                      </div>
-
-                      <div className="border-t border-white/10 py-2">
-                        <button
-                          onClick={handleSignOut}
-                          className="w-full px-4 py-2 text-left text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center space-x-3 transition-colors"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          <span>Sign out</span>
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <>
-                <Link
-                  href="/signin"
-                  className="inline-flex items-center text-center hover:opacity-80 transition-opacity"
-                  style={{
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: '13.6px',
-                    lineHeight: '21px',
-                    fontWeight: 500,
-                    color: '#FFFFFF',
-                    marginRight: '12px'
-                  }}
-                >
-                  Log in
-                </Link>
-                <Link
-                  href="/signup"
-                  className="inline-flex items-center text-center justify-center hover:opacity-90 transition-opacity"
-                  style={{
-                    background: 'rgba(95, 165, 250, 0.94)',
-                    border: '1px solid rgba(255, 255, 255, 0.31)',
-                    boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.25)',
-                    backdropFilter: 'blur(9px)',
-                    borderRadius: '3px',
-                    padding: '7.47px 16px',
-                    fontFamily: 'Inter, sans-serif',
-                    fontSize: '13.6px',
-                    lineHeight: '21px',
-                    fontWeight: 500,
-                    color: '#FFFFFF'
-                  }}
-                >
-                  Sign Up
-                </Link>
-              </>
-            )}
+                        <div className="border-t border-white/10 py-2">
+                          <button
+                            onClick={handleSignOut}
+                            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center space-x-3 transition-colors"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            <span>Sign out</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <>
+                  <Link
+                    href="/signin"
+                    className="inline-flex items-center text-center hover:opacity-80 transition-opacity"
+                    style={{
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: '13.6px',
+                      lineHeight: '21px',
+                      fontWeight: 500,
+                      color: '#FFFFFF',
+                      marginRight: '12px'
+                    }}
+                  >
+                    Log in
+                  </Link>
+                  <Link
+                    href="/signup"
+                    className="inline-flex items-center text-center justify-center hover:opacity-90 transition-opacity"
+                    style={{
+                      background: 'rgba(95, 165, 250, 0.94)',
+                      border: '1px solid rgba(255, 255, 255, 0.31)',
+                      boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.25)',
+                      backdropFilter: 'blur(9px)',
+                      borderRadius: '3px',
+                      padding: '7.47px 16px',
+                      fontFamily: 'Inter, sans-serif',
+                      fontSize: '13.6px',
+                      lineHeight: '21px',
+                      fontWeight: 500,
+                      color: '#FFFFFF'
+                    }}
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Mobile menu button */}
           <button
             onClick={() => setIsOpen(!isOpen)}
-            className="lg:hidden absolute right-6 p-2"
+            className="lg:hidden ml-auto p-2 right-6"
           >
             {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
           </button>
