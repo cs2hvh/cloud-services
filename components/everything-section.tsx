@@ -93,7 +93,7 @@ export function EverythingSection() {
   const activeTab = TABS.find((t) => t.id === activeId) ?? TABS[0];
 
   return (
-    <section className="relative z-10 px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+    <section className="select-none relative z-10 px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
       {/* Responsive background wave image */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <Image
@@ -127,7 +127,7 @@ export function EverythingSection() {
 
         {/* Tabs */}
         <div
-          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90 rounded-xl px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[786px] mx-auto overflow-x-auto"
+          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90  px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[786px] mx-auto overflow-x-auto"
           style={{
             fontFamily:
               'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -140,7 +140,7 @@ export function EverythingSection() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveId(tab.id)}
-                className={`relative inline-flex items-center px-3 sm:px-4 h-8 md:h-[34px] text-[11px] sm:text-xs md:text-sm rounded-lg whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                className={`cursor-pointer relative inline-flex items-center px-3 sm:px-4 h-8 md:h-[34px] text-[11px] sm:text-xs md:text-sm  whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive
                     ? "bg-white text-[#111827] shadow-sm"
                     : "bg-transparent text-gray-300/90 hover:text-white hover:bg-white/5"
@@ -154,7 +154,7 @@ export function EverythingSection() {
 
         {/* Content Card */}
         <div
-          className="relative max-w-5xl mx-auto rounded-2xl border border-white/10 overflow-hidden"
+          className="relative max-w-5xl mx-auto  border border-white/10 overflow-hidden"
           style={{
             backgroundColor: "#161618",
             fontFamily:
@@ -200,7 +200,7 @@ export function EverythingSection() {
 
                 <button
                   type="button"
-                  className="mt-4 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-medium text-white hover:bg-white/10 hover:border-white/30 transition-colors"
+                  className="cursor-pointer mt-4 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-medium text-white hover:bg-white/10 hover:border-white/30 transition-colors"
                 >
                   Explore {activeTab.label}
                   <ArrowRight className="h-4 w-4" />

@@ -1,16 +1,12 @@
 "use client";
-
-import { Navbar } from "@/components/navbar";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
 import { Hero } from "@/components/hero"; // Import new Hero component
 import { ServicesSection } from "@/components/services-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
-import { GlobalNetworkSection } from "@/components/global-network-section";
-import { motion } from "motion/react";
 import { Shield, Zap, Cloud } from "lucide-react";
-import Link from "next/link";
+import GlobalNetworkSection from "@/components/global-network-section";
 
 export default function Home() {
   const features = [
@@ -38,7 +34,7 @@ export default function Home() {
         <BackgroundRippleEffect rows={12} cols={30} cellSize={48} />
       </div>
       
-      <Navbar />
+      
 
       {/* Hero Section */}
       <Hero />
@@ -74,7 +70,7 @@ export default function Home() {
             <GlobalNetworkSection />
 
       {/* Features Section */}
-      <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8 border-t border-white/5">
+      {/* <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8 border-t border-white/5">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {features.map((feature, index) => (
@@ -99,7 +95,7 @@ export default function Home() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
 
      
@@ -108,87 +104,6 @@ export default function Home() {
       <WhyTrustUs />
       <ComplianceCta />
 
-      {/* Footer */}
-      <footer className="relative z-10 bg-[#161618]">
-        <div className="mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 pt-16 pb-8">
-          <div className="grid gap-12 lg:grid-cols-[minmax(0,200px)_1fr_minmax(0,220px)]">
-            <div className="flex items-start">
-              <div className="text-2xl font-normal tracking-tight text-white">
-                <span>ahura</span>
-                <span className="text-[#00AAFF]">cloud</span>
-              </div>
-            </div>
-
-            <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <h3 className="text-[15px] text-white mb-4">Company</h3>
-                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                  <li><Link href="#" className="hover:text-white transition-colors">Blog</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Careers</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Pricing</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Customers</Link></li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-[15px] text-white mb-4">Resources</h3>
-                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                  <li><Link href="#" className="hover:text-white transition-colors">Documentation</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Papers</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Press</Link></li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-[15px] text-white mb-4">Solutions</h3>
-                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                  <li><Link href="#" className="hover:text-white transition-colors">PCI Compliance</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Encryption as a Service</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Credentials Encryption</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">File Encryption</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">PII Encryption</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">HIPAA Compliance</Link></li>
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-[15px] text-white mb-4">Legal</h3>
-                <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                  <li><Link href="#" className="hover:text-white transition-colors">Terms of Service</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Cookies Policy</Link></li>
-                  <li><Link href="#" className="hover:text-white transition-colors">Data Processing</Link></li>
-                </ul>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-[15px] text-white mb-4">Compliance</h3>
-              <div className="space-y-3 text-[13px] text-[#ACACAC] font-mono">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
-                    PCI
-                  </span>
-                  <span>PCI Level 1</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
-                    SOC
-                  </span>
-                  <span>SOC 2 Type II</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-12 border-t border-[#2A2B3A] pt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12.8px] text-[#BABCD2]">
-              © 2026 ahuracloud. All rights reserved.
-            </p>
-            <div className="flex items-center gap-2 text-[12.8px] text-[#BABCD2] font-mono">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#00AAFF]" />
-              <span>All systems normal</span>
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
