@@ -87,6 +87,17 @@ function applyIpCooldown(req: NextRequest): NextResponse | null {
 // ---------------------------------------
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // STREAMING ROUTES: Completely bypass middleware to prevent response buffering
+  // These routes use Server-Sent Events (SSE) which must not be touched by middleware
+  if (pathname.startsWith('/api/ai-agents/') && pathname.endsWith('/test')) {
+    return NextResponse.next();
+  }
+  if (pathname.startsWith('/api/v1/agents/') && pathname.endsWith('/chat')) {
+    return NextResponse.next();
+  }
+
   // IP cooldown check (early return if limited)
   const limited = applyIpCooldown(request);
   if (limited) return limited;
@@ -104,7 +115,6 @@ export async function middleware(request: NextRequest) {
                       request.nextUrl.pathname.startsWith('/api/auth/link');
   
   // Git provider OAuth routes - these handle direct OAuth flows for infinite token refresh
-  const pathname = request.nextUrl.pathname;
   const isGitProviderOAuth = 
     pathname.startsWith('/api/gitlab/app-auth') ||
     pathname.startsWith('/api/gitlab/callback') ||
@@ -124,7 +134,11 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/admin/proxmox') ||
     pathname.startsWith('/api/admin') ||
     pathname.startsWith('/api/auth/signout') ||
-    pathname.startsWith('/api/services/');
+    pathname.startsWith('/api/services/') ||
+    pathname.startsWith('/api/ai-agents') ||
+    pathname.startsWith('/api/ai-model-keys') ||
+    pathname.startsWith('/api/knowledge-bases') ||
+    pathname.startsWith('/api/v1/agents');
    
 
   // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, OAuth flows, or git provider APIs

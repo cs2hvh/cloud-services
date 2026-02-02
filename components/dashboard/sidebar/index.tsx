@@ -26,6 +26,9 @@ import {
   Ticket,
   Rocket,
   ShieldCheck,
+  Bot,
+  Key,
+  BookOpen,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -46,6 +49,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [computeExpanded, setComputeExpanded] = useState(
     pathname.includes("/services/compute")
+  );
+  const [aiAgentsExpanded, setAiAgentsExpanded] = useState(
+    pathname.includes("/services/ai-agents")
   );
   const [adminExpanded, setAdminExpanded] = useState(
     pathname.includes("/admin")
@@ -156,6 +162,33 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/object-storage",
       current: pathname.includes("/services/object-storage"),
       icon: Archive,
+    },
+  ];
+
+  const aiAgentsServices = [
+    {
+      name: "All Agents",
+      href: "/dashboard/services/ai-agents",
+      current: pathname === "/dashboard/services/ai-agents",
+      icon: Bot,
+    },
+    {
+      name: "Create Agent",
+      href: "/dashboard/services/ai-agents/new",
+      current: pathname === "/dashboard/services/ai-agents/new",
+      icon: Plus,
+    },
+    {
+      name: "Knowledge Bases",
+      href: "/dashboard/services/ai-agents/knowledge-bases",
+      current: pathname.includes("/ai-agents/knowledge-bases"),
+      icon: BookOpen,
+    },
+    {
+      name: "API Keys",
+      href: "/dashboard/services/ai-agents/settings",
+      current: pathname.includes("/ai-agents/settings"),
+      icon: Key,
     },
   ];
 
@@ -349,6 +382,54 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                 </Link>
               );
             })}
+
+            {/* AI Agents with Sub-navigation */}
+            <div>
+              <button
+                onClick={() => setAiAgentsExpanded(!aiAgentsExpanded)}
+                className={`
+                  w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                  ${
+                    pathname.includes("/services/ai-agents")
+                      ? "bg-white text-black"
+                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                  }
+                `}
+              >
+                <div className="flex items-center">
+                  <Bot className="w-4 h-4 mr-3" />
+                  <span className="text-sm">AI Agents</span>
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${aiAgentsExpanded ? "" : "-rotate-90"}`}
+                />
+              </button>
+
+              {aiAgentsExpanded && (
+                <div className="mt-1 ml-3 sm:ml-4 space-y-1">
+                  {aiAgentsServices.map((service) => {
+                    const IconComponent = service.icon;
+                    return (
+                      <Link
+                        key={service.name}
+                        href={service.href}
+                        className={`
+                          flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                          ${
+                            service.current
+                              ? "bg-slate-700 text-white font-medium"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                          }
+                        `}
+                      >
+                        <IconComponent className="w-4 h-4 mr-2" />
+                        <span className="text-sm">{service.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -521,6 +602,20 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     >
                       <ShieldCheck className="w-4 h-4 mr-2" />
                       <span className="text-sm">Audit Logs</span>
+                    </Link>
+                    <Link
+                      href="/dashboard/admin/ai-agents"
+                      className={`
+                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                        ${
+                          pathname.startsWith("/dashboard/admin/ai-agents")
+                            ? "bg-slate-700 text-white font-medium"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                        }
+                      `}
+                    >
+                      <Bot className="w-4 h-4 mr-2" />
+                      <span className="text-sm">AI Agents</span>
                     </Link>
                   </div>
                 )}

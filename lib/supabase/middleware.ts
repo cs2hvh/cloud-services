@@ -74,6 +74,8 @@ export async function updateSession(request: NextRequest) {
     !request.nextUrl.pathname.startsWith("/signup") &&
     !request.nextUrl.pathname.startsWith("/api/auth") &&
     !request.nextUrl.pathname.startsWith("/reset-password") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/agents") && // Public agent API endpoints
+    !request.nextUrl.pathname.startsWith("/api/ai-agents/platform-models") && // Public platform models list
     request.nextUrl.pathname !== "/" &&
     !request.nextUrl.pathname.startsWith("/api/webhooks");
 
