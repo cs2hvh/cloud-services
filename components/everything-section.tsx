@@ -51,7 +51,7 @@ const TABS = [
       "High-fidelity 3D rendering and transcoding",
       "Jupyter Notebook and container integrations",
     ],
-    imageSrc: "/images/hero/server-stack.png",
+    imageSrc: "/images/main-page/gpu-instance.svg",
     imageAlt: "GPU server stack",
   },
   {

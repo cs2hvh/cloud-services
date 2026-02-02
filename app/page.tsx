@@ -2,12 +2,12 @@
 
 import { Navbar } from "@/components/navbar";
 import { BackgroundRippleEffect } from "@/components/ui/background-ripple-effect";
-import { WorldMap } from "@/components/world-map";
 import { Hero } from "@/components/hero"; // Import new Hero component
 import { ServicesSection } from "@/components/services-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
+import { GlobalNetworkSection } from "@/components/global-network-section";
 import { motion } from "motion/react";
 import { Shield, Zap, Cloud } from "lucide-react";
 import Link from "next/link";
@@ -71,9 +71,7 @@ export default function Home() {
            {/*Everything you build*/}
        <EverythingSection />
 
-
-
-
+            <GlobalNetworkSection />
 
       {/* Features Section */}
       <section className="relative z-10 py-20 px-4 sm:px-6 lg:px-8 border-t border-white/5">
@@ -106,11 +104,6 @@ export default function Home() {
 
      
 
-
-      {/* World Map Section */}
-      <section className="relative z-10">
-        <WorldMap />
-      </section>
 
       <WhyTrustUs />
       <ComplianceCta />

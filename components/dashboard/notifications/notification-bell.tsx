@@ -42,12 +42,12 @@ export function NotificationBell() {
   };
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu  open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
-          className="relative text-slate-400 hover:text-white hover:bg-slate-800/50"
+          className=" cursor-pointer relative text-slate-400 hover:text-white hover:bg-slate-800/50"
         >
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (

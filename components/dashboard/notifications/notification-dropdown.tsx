@@ -106,7 +106,7 @@ export function NotificationDropdown({ onClose, onRead }: NotificationDropdownPr
       </div>
 
       {/* Footer */}
-      {notifications.length > 0 && (
+      {/* {notifications.length > 0 && (
         <div className="p-2 border-t border-slate-700">
           <Button
             variant="ghost"
@@ -117,7 +117,7 @@ export function NotificationDropdown({ onClose, onRead }: NotificationDropdownPr
             View all notifications
           </Button>
         </div>
-      )}
+      )} */}
     </div>
   );
 }
