@@ -69,13 +69,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes check
-  const isProtectedRoute = 
-    !request.nextUrl.pathname.startsWith("/signin") &&
-    !request.nextUrl.pathname.startsWith("/signup") &&
-    !request.nextUrl.pathname.startsWith("/api/auth") &&
-    !request.nextUrl.pathname.startsWith("/reset-password") &&
-    request.nextUrl.pathname !== "/" &&
-    !request.nextUrl.pathname.startsWith("/api/webhooks");
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/dashboard");
 
   if (!user && isProtectedRoute) {
     // No user and trying to access protected route - redirect to login
