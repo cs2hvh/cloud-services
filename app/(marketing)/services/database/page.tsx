@@ -2,7 +2,7 @@ import { ServiceHeroSection } from "@/components/services/service-hero-section";
 
 const DatabaseHome = () => {
   return (
-    <main className="min-h-screen bg-black">
+    <main className="bg-black">
       <ServiceHeroSection
         badge="Managed Database Platform"
         title="Database"

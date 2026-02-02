@@ -2,7 +2,7 @@ import { ServiceHeroSection } from "@/components/services/service-hero-section";
 
 const ComputeHome = () => {
   return (
-    <main className="min-h-screen bg-black">
+    <main className="bg-black">
       <ServiceHeroSection
         badge="High Performance Computing"
         title="Compute"

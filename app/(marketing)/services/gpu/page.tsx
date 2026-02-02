@@ -2,7 +2,7 @@ import { ServiceHeroSection } from "@/components/services/service-hero-section";
 
 const GpuHome = () => {
   return (
-    <main className="min-h-screen bg-black">
+    <main className="bg-black">
       <ServiceHeroSection
         badge="Accelerated AI Infrastructure"
         title="GPU"

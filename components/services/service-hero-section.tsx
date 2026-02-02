@@ -44,7 +44,8 @@ export function ServiceHeroSection({
     <section
       className={cn(
         "relative w-full overflow-hidden bg-black",
-        "min-h-[640px] lg:h-[776px] lg:min-h-[776px]",
+        "min-h-[520px] h-[calc(100vh-80px)]",
+        "lg:h-[min(776px,calc(100vh-80px))] lg:min-h-0",
         className,
       )}
     >
@@ -60,7 +61,7 @@ export function ServiceHeroSection({
       </div>
 
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[1437px] px-6 lg:px-[72px]">
-        <div className="flex w-full flex-col items-start gap-12 py-20 lg:flex-row lg:items-center lg:justify-between lg:gap-[96px] lg:py-0">
+        <div className="flex w-full flex-col items-start gap-12 py-16 lg:flex-row lg:items-center lg:justify-between lg:gap-[96px] lg:py-0">
           <div className={cn("w-full max-w-[540px]", imageLeft && "lg:order-2")}>
             {badge ? (
               <div
