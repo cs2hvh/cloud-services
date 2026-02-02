@@ -63,7 +63,6 @@ export function SignInForm() {
 
   // ---- email/password sign-in
   async function onSubmit(values: InputType) {
-    debugger
     setIsLoading(true);
     const res = await api.post("/auth/signin/email", {
       email: values.email,
@@ -76,6 +75,14 @@ export function SignInForm() {
       return; // don't redirect yet
     } else if (res.status === 200) {
       toast.success(`Welcome back ${res.data?.name || ""}!`);
+      
+      // Server set the session cookie, trigger auth state change by reading and setting it
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        await supabase.auth.setSession(data.session);
+      }
+      
+      router.refresh();
       router.push("/");
     }
   }
@@ -117,6 +124,7 @@ export function SignInForm() {
 
       // Already at AAL2 (rare here) → proceed
       if (data.currentLevel === "aal2") {
+        router.refresh();
         router.replace(nextPath);
         return;
       }
@@ -144,6 +152,7 @@ export function SignInForm() {
       }
 
       // AAL2 not required → proceed
+      router.refresh();
       router.replace(nextPath);
     })();
 
@@ -174,6 +183,7 @@ export function SignInForm() {
         throw new Error(verify.error.message);
       }
 
+      router.refresh();
       router.replace(nextPath);
     } catch (err) {
       const msg =
