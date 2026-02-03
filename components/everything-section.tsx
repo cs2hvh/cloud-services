@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const TABS = [
   {
@@ -89,8 +90,11 @@ const TABS = [
 ] as const;
 
 export function EverythingSection() {
+  
   const [activeId, setActiveId] = useState<string>("gpu");
   const activeTab = TABS.find((t) => t.id === activeId) ?? TABS[0];
+
+  const router=useRouter();
 
   return (
     <section className="select-none relative z-10 px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
@@ -199,6 +203,7 @@ export function EverythingSection() {
                 </ul>
 
                 <button
+                  onClick={() => router.push(`/services/${activeTab.id}`)}
                   type="button"
                   className="cursor-pointer mt-4 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-medium text-white hover:bg-white/10 hover:border-white/30 transition-colors"
                 >

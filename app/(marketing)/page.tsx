@@ -22,7 +22,7 @@ export default function Home() {
            {/*Everything you build*/}
        <EverythingSection />
       <GlobalNetworkSection />
-      <HomeFeaturesSection />
+      {/* <HomeFeaturesSection /> */}
       <WhyTrustUs />
       <ComplianceCta />
     </div>

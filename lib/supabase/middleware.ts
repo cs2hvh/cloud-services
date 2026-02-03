@@ -69,8 +69,16 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Protected routes check
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/dashboard");
+  const isProtectedRoute = 
+    request.nextUrl.pathname.startsWith("/dashboard") &&
+    !request.nextUrl.pathname.startsWith("/signin") &&
+    !request.nextUrl.pathname.startsWith("/signup") &&
+    !request.nextUrl.pathname.startsWith("/api/auth") &&
+    !request.nextUrl.pathname.startsWith("/reset-password") &&
+    !request.nextUrl.pathname.startsWith("/api/v1/agents") && // Public agent API endpoints
+    !request.nextUrl.pathname.startsWith("/api/ai-agents/platform-models") && // Public platform models list
+    request.nextUrl.pathname !== "/" &&
+    !request.nextUrl.pathname.startsWith("/api/webhooks");
 
   if (!user && isProtectedRoute) {
     // No user and trying to access protected route - redirect to login

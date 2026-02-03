@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Disable compression to prevent SSE buffering in dev mode
+  compress: false,
   images: {
     remotePatterns: [
       {

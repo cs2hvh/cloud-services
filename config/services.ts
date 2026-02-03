@@ -14,4 +14,10 @@ export const cloudServices = [
     name: "App Platform",
     icon: "AppWindow",
   },
+  {
+    id: "ai-agents",
+    name: "AI Agents",
+    icon: "Bot",
+    description: "Create and deploy AI agents with custom knowledge bases",
+  },
 ];

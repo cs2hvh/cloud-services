@@ -2,6 +2,7 @@
 import React from 'react'
 import ServicesHomeSectionTwo from '@/components/serviceshome/section-2';
 import ServicesHomeSectionFour from '@/components/serviceshome/section-4';
+import { ServiceHeroSection } from '@/components/services/service-hero-section';
 
 const defaultItems = [
 	{
@@ -44,6 +45,15 @@ const defaultItems = [
 const CloudService = () => {
   return (
     <div>
+		 <ServiceHeroSection
+				badge="Accelerated AI Infrastructure"
+				title="GPU"
+				description="Launch dedicated NVIDIA GPU instances for model training, inference, rendering, and high-throughput data processing with on-demand scaling."
+				primaryAction={{ label: "Get Started", href: "/signup" }}
+				secondaryAction={{ label: "View Documentation", href: "/docs" }}
+				backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
+				illustration={{ src: "/images/main-page/gpu-instance.svg", alt: "GPU server" }}
+			  />
         <ServicesHomeSectionTwo 
         badge='Features' 
         title = "Powerful Capabilities" 
