@@ -9,10 +9,9 @@ import api from '@/lib/axios/axios';
 
 interface NotificationDropdownProps {
   onClose: () => void;
-  onRead: () => void;
 }
 
-export function NotificationDropdown({ onClose, onRead }: NotificationDropdownProps) {
+export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
@@ -37,7 +36,7 @@ export function NotificationDropdown({ onClose, onRead }: NotificationDropdownPr
       setNotifications(prev => 
         prev.map(n => n.id === id ? { ...n, is_read: true } : n)
       );
-      onRead();
+      // Realtime subscription handles count update automatically
     } catch (error) {
       console.error('[NotificationDropdown] Failed to mark as read:', error);
     }
@@ -48,7 +47,7 @@ export function NotificationDropdown({ onClose, onRead }: NotificationDropdownPr
     try {
       await api.post('/notifications/mark-read', { all: true });
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      onRead();
+      // Realtime subscription handles count update automatically
     } catch (error) {
       console.error('[NotificationDropdown] Failed to mark all as read:', error);
     } finally {

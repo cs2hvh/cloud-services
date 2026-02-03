@@ -422,9 +422,9 @@ export async function deleteSpectrumApp(appId: string) {
   const localBefore = await Spectrum_Apps.get(appId);
 
 
-  console.log(localBefore,"...........localBefore........");
-  console.log( `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`)
-  console.log(token,"...........token........");
+  //console.log(localBefore,"...........localBefore........");
+  //console.log( `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`)
+  //console.log(token,"...........token........");
   // Delete from Cloudflare
   const cfResp = await axios.delete<CloudflareResponse<{ id: string }>>(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,
