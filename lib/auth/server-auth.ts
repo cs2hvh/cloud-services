@@ -10,30 +10,89 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function authenticateUser() {
   const supabase = await createClient();
+  // Minimal retry/tolerance for transient network/fetch failures.
+  // If Supabase returns a retryable/network error, return 503 (service unavailable)
+  // so callers treat it as a temporary server issue instead of an auth failure.
+  function isRetryableAuthError(err: any) {
+    if (!err) return false;
+    const msg = String(err?.message || "").toLowerCase();
+    const name = String(err?.name || "").toLowerCase();
+    const causeCode = String(err?.cause?.code || "").toLowerCase();
+    return (
+      name === "authretryablefetcherror" ||
+      msg.includes("fetch failed") ||
+      msg.includes("timeout") ||
+      causeCode.includes("und_err_connect_timeout") ||
+      causeCode.includes("connect_timeout")
+    );
+  }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
+  try {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
+    if (userError) {
+      if (isRetryableAuthError(userError)) {
+        console.error('[authenticateUser] Transient auth error:', userError.message || userError);
+        return {
+          authenticated: false as const,
+          user: null,
+          response: NextResponse.json(
+            { message: 'Authentication service unavailable' },
+            { status: 503 }
+          ),
+        };
+      }
 
+      console.error('[authenticateUser] Auth error:', userError.message || userError);
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(
+          { message: 'Authentication required' },
+          { status: 401 }
+        ),
+      };
+    }
 
-  if (userError || !user) {
+    if (!user) {
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(
+          { message: 'Authentication required' },
+          { status: 401 }
+        ),
+      };
+    }
+
+    return {
+      authenticated: true as const,
+      user,
+      response: null,
+    };
+  } catch (err: any) {
+    if (isRetryableAuthError(err)) {
+      console.error('[authenticateUser] Transient fetch error:', err);
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(
+          { message: 'Authentication service unavailable' },
+          { status: 503 }
+        ),
+      };
+    }
+
+    console.error('[authenticateUser] Unexpected error:', err);
     return {
       authenticated: false as const,
       user: null,
       response: NextResponse.json(
-        { message: "Unauthorized - please login" },
+        { message: 'Authentication required' },
         { status: 401 }
       ),
     };
   }
-
-  return {
-    authenticated: true as const,
-    user,
-    response: null,
-  };
 }
 
 /**

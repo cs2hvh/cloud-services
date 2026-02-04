@@ -25,12 +25,10 @@ interface SupabaseSessionProviderProps {
 }
 
 /**
- * Session refresh interval in milliseconds.
- * We refresh every 10 minutes to ensure the session stays active.
- * Supabase sessions have a default JWT expiry of ~1 hour, but we refresh
- * more frequently to ensure uninterrupted access.
+ * Session refresh is primarily handled by middleware, which runs on every request.
+ * This provider only refreshes when the user returns to the tab (focus/visibility).
+ * The periodic interval is disabled because it's redundant with middleware refresh.
  */
-const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
 export function SessionProvider({
   initialUser = null,
@@ -40,63 +38,60 @@ export function SessionProvider({
   const [user, setUser] = useState<UserProfile | null>(initialUser);
   const [projects, setProjects] = useState<Project[]>(initialProjects);
 
-  // Periodically refresh the Supabase session to prevent logout
-  const refreshSession = useCallback(async () => {
+  /**
+   * Validates that a session exists
+   * Does NOT refresh - middleware handles that
+   * Only redirects if session is completely missing (logged out)
+   */
+  const validateSession = useCallback(async () => {
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.getSession();
-      
+
       if (error) {
-        console.log('[SessionProvider] Session refresh error:', error.message);
+        console.log('[SessionProvider] Session check error:', error.message);
         return;
       }
-      
-      if (data.session) {
-        // Session is valid, check if we need to refresh it
+
+      if (!data.session) {
+        console.log('[SessionProvider] No active session found - user logged out');
+        window.location.href = '/signin?session_expired=true';
+      } else {
         const expiresAt = data.session.expires_at;
         const now = Math.floor(Date.now() / 1000);
         const timeUntilExpiry = expiresAt ? expiresAt - now : 0;
-        
-        // If session expires in less than 20 minutes, trigger a refresh
-        if (timeUntilExpiry < 20 * 60) {
-          console.log('[SessionProvider] Session expiring soon, refreshing...');
-          await supabase.auth.refreshSession();
-        }
+        console.log('[SessionProvider] Session valid for', Math.floor(timeUntilExpiry / 60), 'more minutes');
       }
     } catch (err) {
-      console.error('[SessionProvider] Failed to refresh session:', err);
+      console.error('[SessionProvider] Failed to check session:', err);
     }
   }, []);
 
   useEffect(() => {
-    // Initial session check
-    refreshSession();
+    // Initial session check on mount
+    validateSession();
 
-    // Set up periodic session refresh
-    const intervalId = setInterval(refreshSession, SESSION_REFRESH_INTERVAL);
-
-    // Also refresh when the window regains focus (user returns to tab)
+    // Validate session when the user returns to the tab
+    // Middleware will handle the actual refresh
     const handleFocus = () => {
-      console.log('[SessionProvider] Window focused, refreshing session...');
-      refreshSession();
+      console.log('[SessionProvider] Window focused, validating session...');
+      validateSession();
     };
     window.addEventListener('focus', handleFocus);
 
-    // Also refresh when the page becomes visible (e.g., switching tabs)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('[SessionProvider] Page visible, refreshing session...');
-        refreshSession();
+        console.log('[SessionProvider] Page visible, validating session...');
+        validateSession();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(intervalId);
       window.removeEventListener('focus', handleFocus);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [refreshSession]);
+  }, [validateSession]);
 
   return (
     <SupabaseSessionContext.Provider

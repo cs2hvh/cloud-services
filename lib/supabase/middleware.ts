@@ -1,23 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-/**
- * Supabase Session Middleware
- * 
- * This middleware handles session refresh to prevent the 30-minute logout issue.
- * 
- * KEY FIX: The getUser() call automatically refreshes the session if it's expired
- * but the refresh token is still valid. The setAll() callback ensures the new
- * session cookies are properly set in the response.
- * 
- * IMPORTANT: Supabase sessions have a default expiry of 1 hour, but this can be
- * configured in Supabase dashboard under Authentication > Settings.
- * The refresh token is valid for much longer (default 7 days).
- */
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  const response = NextResponse.next();
 
   const supabase = createServerClient(
     process.env.SUPABASE_URL!,
@@ -28,63 +13,72 @@ export async function updateSession(request: NextRequest) {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
-          // This is called when the session is refreshed
-          // We need to update BOTH the request cookies AND the response cookies
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value),
-          );
-          supabaseResponse = NextResponse.next({
-            request,
-          });
           cookiesToSet.forEach(({ name, value, options }) => {
-            // Extend cookie maxAge to 7 days (604800 seconds) to prevent early expiration
-            // The Supabase refresh token is valid for 7 days by default
-            const extendedOptions = {
+            response.cookies.set(name, value, {
               ...options,
-              maxAge: options?.maxAge || 604800, // 7 days in seconds
-              sameSite: options?.sameSite || 'lax' as const,
-              secure: process.env.NODE_ENV === 'production',
-            };
-            supabaseResponse.cookies.set(name, value, extendedOptions);
+              path: "/",
+              secure: process.env.NODE_ENV === "production",
+            });
           });
         },
       },
-    },
+    }
   );
 
-  // IMPORTANT: Avoid writing any logic between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
-
-  // This call will automatically refresh the session if needed
-  // The refreshed session cookies are set via the setAll callback above
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  // Log session refresh errors (but don't block the request)
-  if (userError && userError.message !== 'Auth session missing!') {
-    console.log('[Supabase Middleware] Session error:', userError.message);
+  // Call supabase.auth.getUser() with a small retry for transient network errors
+  function isRetryableAuthError(err: any) {
+    if (!err) return false;
+    const msg = String(err?.message || "").toLowerCase();
+    const name = String(err?.name || "").toLowerCase();
+    const causeCode = String(err?.cause?.code || "").toLowerCase();
+    return (
+      name === "authretryablefetcherror" ||
+      msg.includes("fetch failed") ||
+      msg.includes("timeout") ||
+      causeCode.includes("und_err_connect_timeout") ||
+      causeCode.includes("connect_timeout")
+    );
   }
 
-  // Protected routes check
-  const isProtectedRoute =
-    request.nextUrl.pathname.startsWith("/dashboard");
+  let user = null;
+  let authError: any = null;
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await supabase.auth.getUser();
+      user = res.data.user;
+      authError = res.error;
 
-  if (!user && isProtectedRoute) {
-    // No user and trying to access protected route - redirect to login
+      // If there's no error, we're done
+      if (!authError) break;
+
+      // If non-retryable auth error, stop retrying
+      if (!isRetryableAuthError(authError)) break;
+    } catch (err: any) {
+      authError = err;
+      if (!isRetryableAuthError(authError)) break;
+    }
+
+    // small backoff before retrying
+    if (attempt < maxAttempts) {
+      console.log(`[Supabase Middleware] Transient auth error, retrying (${attempt}/${maxAttempts - 1})...`);
+      await new Promise((r) => setTimeout(r, 200 * attempt));
+    }
+  }
+
+  if (authError && !isRetryableAuthError(authError)) {
+    console.log("[Supabase Middleware] Session error:", authError.message || authError);
+  }
+
+  if (
+    !user &&
+    request.nextUrl.pathname.startsWith("/dashboard")
+  ) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
-    // Preserve the original URL so we can redirect back after login
     url.searchParams.set("redirectTo", request.nextUrl.pathname);
     return NextResponse.redirect(url);
   }
 
-  // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
-  // creating a new response object with NextResponse.next() make sure to:
-  // 1. Pass the request in it, like so: NextResponse.next({ request })
-  // 2. Copy over the cookies, like so: response.cookies.setAll(supabaseResponse.cookies.getAll())
-
-  return supabaseResponse;
+  return response;
 }
