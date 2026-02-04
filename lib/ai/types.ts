@@ -158,6 +158,7 @@ export interface KBDocument {
   content_type: string | null;
   file_size: number | null;
   raw_content: string | null;
+  storage_path: string | null;
   status: DocumentStatus;
   error_message: string | null;
   chunk_count: number;
@@ -173,6 +174,7 @@ export interface KBDocumentInsert {
   content_type?: string;
   file_size?: number;
   raw_content?: string;
+  storage_path?: string | null;
 }
 
 // ============================================================

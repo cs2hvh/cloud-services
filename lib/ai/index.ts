@@ -38,6 +38,22 @@ export {
   type Chunk,
 } from './chunking';
 
+// Document Parsers
+export {
+  parseDocument,
+  isFileSupported,
+  getContentType,
+  isBinaryFile,
+  getFileExtension,
+  getSupportedFileTypes,
+  getAcceptedExtensions,
+  SUPPORTED_EXTENSIONS,
+  SUPPORTED_MIME_TYPES,
+  MAX_FILE_SIZES,
+  type ParsedDocument,
+  type ParseOptions,
+} from './document-parsers';
+
 // RAG Pipeline
 export {
   RAGPipeline,
