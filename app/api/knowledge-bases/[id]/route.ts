@@ -10,6 +10,7 @@ import { authenticateUser } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AgentKnowledgeBases, AgentKBDocuments } from '@/lib/supabase/queries/ai_agents';
 import { KnowledgeBaseUpdate } from '@/lib/ai/types';
+import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { z } from 'zod';
 
 // Validation schema for updating a knowledge base
@@ -129,6 +130,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Create notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'knowledge_base',
+      action: 'updated',
+      serviceName: result.data?.name || existing.data.name,
+      serviceId: id,
+      metadata: {
+        updateType: 'kb_settings',
+        chunkSize: patch.chunk_size,
+        chunkOverlap: patch.chunk_overlap,
+      },
+    });
+    await NotificationService.create(notificationParams);
+
     return NextResponse.json({
       success: true,
       data: result.data,
@@ -178,11 +194,32 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const result = await AgentKnowledgeBases.delete(id, auth.user!.id);
 
     if (!result.success) {
+      // Create failure notification
+      const notificationParams = createServiceNotification({
+        userId: auth.user!.id,
+        serviceType: 'knowledge_base',
+        action: 'failed',
+        serviceName: existing.data.name,
+        serviceId: id,
+        error: result.error || 'Failed to delete knowledge base',
+      });
+      await NotificationService.create(notificationParams);
+
       return NextResponse.json(
         { error: result.error || 'Failed to delete knowledge base' },
         { status: 400 }
       );
     }
+
+    // Create success notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'knowledge_base',
+      action: 'deleted',
+      serviceName: existing.data.name,
+      serviceId: id,
+    });
+    await NotificationService.create(notificationParams);
 
     return NextResponse.json({
       success: true,

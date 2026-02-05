@@ -9,6 +9,7 @@ import { authenticateUser } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentInsert } from '@/lib/ai/types';
+import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { z } from 'zod';
 
 // Validation schema for creating an agent
@@ -160,6 +161,21 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Create notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'ai_agent',
+      action: 'created',
+      serviceName: data.name,
+      serviceId: result.data?.id,
+      metadata: {
+        modelId: data.model_id,
+        ragEnabled: data.rag_enabled ?? false,
+        isPublic: data.is_public ?? false,
+      },
+    });
+    await NotificationService.create(notificationParams);
 
     return NextResponse.json({
       success: true,

@@ -10,6 +10,7 @@ import { authenticateUser } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentUpdate } from '@/lib/ai/types';
+import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { z } from 'zod';
 
 // Validation schema for updating an agent
@@ -140,6 +141,29 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Determine update type for notification
+    let updateType = 'agent_settings';
+    if (patch.model_id) updateType = 'agent_model';
+    else if (patch.system_prompt) updateType = 'agent_system_prompt';
+    else if (patch.rag_enabled !== undefined) updateType = 'agent_rag';
+    else if (patch.status) updateType = 'agent_status';
+
+    // Create notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'ai_agent',
+      action: 'updated',
+      serviceName: result.data?.name || existing.data.name,
+      serviceId: id,
+      metadata: {
+        updateType,
+        modelId: patch.model_id,
+        enabled: patch.rag_enabled,
+        status: patch.status,
+      },
+    });
+    await NotificationService.create(notificationParams);
+
     return NextResponse.json({
       success: true,
       data: result.data,
@@ -189,11 +213,32 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const result = await AIAgents.delete(id, auth.user!.id);
 
     if (!result.success) {
+      // Create failure notification
+      const notificationParams = createServiceNotification({
+        userId: auth.user!.id,
+        serviceType: 'ai_agent',
+        action: 'failed',
+        serviceName: existing.data.name,
+        serviceId: id,
+        error: result.error || 'Failed to delete agent',
+      });
+      await NotificationService.create(notificationParams);
+
       return NextResponse.json(
         { error: result.error || 'Failed to delete agent' },
         { status: 400 }
       );
     }
+
+    // Create success notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'ai_agent',
+      action: 'deleted',
+      serviceName: existing.data.name,
+      serviceId: id,
+    });
+    await NotificationService.create(notificationParams);
 
     return NextResponse.json({
       success: true,

@@ -9,6 +9,7 @@ import { authenticateUser } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AgentKnowledgeBases } from '@/lib/supabase/queries/ai_agents';
 import { KnowledgeBaseInsert } from '@/lib/ai/types';
+import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { z } from 'zod';
 
 // Validation schema for creating a knowledge base
@@ -112,6 +113,20 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Create notification
+    const notificationParams = createServiceNotification({
+      userId: auth.user!.id,
+      serviceType: 'knowledge_base',
+      action: 'created',
+      serviceName: data.name,
+      serviceId: result.data?.id,
+      metadata: {
+        embeddingModel: data.embedding_model || 'text-embedding-3-small',
+        chunkSize: data.chunk_size || 1000,
+      },
+    });
+    await NotificationService.create(notificationParams);
 
     return NextResponse.json({
       success: true,
