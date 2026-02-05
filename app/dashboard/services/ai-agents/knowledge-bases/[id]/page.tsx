@@ -31,6 +31,7 @@ import {
   File,
   CheckCircle,
   XCircle,
+  Download,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -48,11 +49,12 @@ interface KnowledgeBase {
 
 interface Document {
   id: string;
-  filename: string;
-  content_type: string;
-  size_bytes: number;
+  name: string;
+  content_type: string | null;
+  file_size: number | null;
+  storage_path: string | null;
   chunk_count: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'processing' | 'indexed' | 'error';
   error_message: string | null;
   created_at: string;
 }
@@ -194,35 +196,64 @@ export default function KnowledgeBaseDetailsPage({
       const totalFiles = files.length;
       let completed = 0;
 
+      // Binary file types that need FormData upload
+      const binaryExtensions = ['.pdf', '.docx', '.doc'];
+
       for (const file of Array.from(files)) {
-        // Read file content
-        const content = await file.text();
+        const ext = file.name.toLowerCase().slice(file.name.lastIndexOf('.'));
+        const isBinary = binaryExtensions.includes(ext);
 
-        const res = await fetch(`/api/knowledge-bases/${id}/documents`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          body: JSON.stringify({
-            name: file.name,
-            source_type: 'text',
-            content,
-            content_type: file.type || 'text/plain',
-          }),
-        });
+        try {
+          let res: Response;
 
-        if (!res.ok) {
-          const data = await res.json();
-          toast.error(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
-        } else {
-          completed++;
-          setUploadProgress((completed / totalFiles) * 100);
+          if (isBinary) {
+            // Use FormData for binary files (PDF, DOCX)
+            const formData = new FormData();
+            formData.append('file', file);
+
+            res = await fetch(`/api/knowledge-bases/${id}/documents`, {
+              method: 'POST',
+              headers: {
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              },
+              body: formData,
+            });
+          } else {
+            // Use JSON for text-based files
+            const content = await file.text();
+
+            res = await fetch(`/api/knowledge-bases/${id}/documents`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              },
+              body: JSON.stringify({
+                name: file.name,
+                source_type: 'file',
+                content,
+                content_type: file.type || 'text/plain',
+              }),
+            });
+          }
+
+          if (!res.ok) {
+            const data = await res.json();
+            toast.error(`Failed to upload ${file.name}: ${data.error || 'Unknown error'}`);
+          } else {
+            completed++;
+            setUploadProgress((completed / totalFiles) * 100);
+          }
+        } catch (uploadErr) {
+          console.error(`Error uploading ${file.name}:`, uploadErr);
+          toast.error(`Failed to upload ${file.name}`);
         }
       }
 
-      toast.success(`Uploaded ${completed} of ${totalFiles} files`);
-      await loadKnowledgeBase();
+      if (completed > 0) {
+        toast.success(`Uploaded ${completed} of ${totalFiles} files`);
+        await loadKnowledgeBase();
+      }
     } catch (err) {
       console.error('Upload error:', err);
       toast.error('Failed to upload files');
@@ -243,9 +274,9 @@ export default function KnowledgeBaseDetailsPage({
 
   const getStatusIcon = (status: Document['status']) => {
     switch (status) {
-      case 'completed':
+      case 'indexed':
         return <CheckCircle className="h-4 w-4 text-green-400" />;
-      case 'failed':
+      case 'error':
         return <XCircle className="h-4 w-4 text-red-400" />;
       case 'processing':
         return <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />;
@@ -366,7 +397,7 @@ export default function KnowledgeBaseDetailsPage({
         <CardHeader>
           <CardTitle>Upload Documents</CardTitle>
           <CardDescription>
-            Upload text files (.txt, .md, .json) to add to the knowledge base
+            Upload documents to add to the knowledge base. Supports PDF, Word, code files, and more.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -374,7 +405,7 @@ export default function KnowledgeBaseDetailsPage({
             ref={fileInputRef}
             type="file"
             multiple
-            accept=".txt,.md,.json,.csv"
+            accept=".txt,.md,.markdown,.pdf,.docx,.doc,.html,.htm,.json,.jsonl,.csv,.xml,.js,.jsx,.ts,.tsx,.py,.java,.c,.cpp,.h,.hpp,.cs,.go,.rs,.rb,.php,.swift,.kt,.scala,.sql,.sh,.bash,.ps1,.yaml,.yml,.toml,.css,.scss,.vue,.svelte"
             onChange={handleFileUpload}
             className="hidden"
           />
@@ -394,7 +425,7 @@ export default function KnowledgeBaseDetailsPage({
                 <Upload className="h-8 w-8 text-slate-500 mx-auto mb-4" />
                 <p className="text-slate-300 mb-2">Click to upload files</p>
                 <p className="text-sm text-slate-500">
-                  Supports .txt, .md, .json, .csv (max 10MB each)
+                  PDF, Word, Markdown, Code, JSON, CSV, HTML, and more (max 20MB for PDF, 5MB for others)
                 </p>
               </>
             )}
@@ -421,19 +452,32 @@ export default function KnowledgeBaseDetailsPage({
                   <div className="flex items-center gap-3">
                     {getStatusIcon(doc.status)}
                     <div>
-                      <p className="text-white font-medium">{doc.filename}</p>
+                      <p className="text-white font-medium">{doc.name}</p>
                       <p className="text-sm text-slate-500">
-                        {formatFileSize(doc.size_bytes)} • {doc.chunk_count} chunks
+                        {doc.file_size ? formatFileSize(doc.file_size) : 'Unknown size'} • {doc.chunk_count} chunks
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {doc.storage_path && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-blue-400"
+                        onClick={() => {
+                          window.open(`/api/knowledge-bases/${id}/documents/${doc.id}/download`, '_blank');
+                        }}
+                        title="Download original file"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Badge
                       variant="outline"
                       className={
-                        doc.status === 'completed'
+                        doc.status === 'indexed'
                           ? 'bg-green-500/10 text-green-400 border-green-500/30'
-                          : doc.status === 'failed'
+                          : doc.status === 'error'
                             ? 'bg-red-500/10 text-red-400 border-red-500/30'
                             : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
                       }
