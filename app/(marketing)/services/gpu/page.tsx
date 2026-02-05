@@ -1,6 +1,7 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ServicesHomeSectionTwo from "@/components/serviceshome/section-2";
 import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
+import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 
 const GpuHome = () => {
   const defaultItems = [
@@ -57,6 +58,7 @@ const GpuHome = () => {
         description="Explore the robust features that empower your cloud infrastructure." 
         items={defaultItems} backgroundImage="/images/main-page/everything-sec-bg.svg" />
         <ServicesHomeSectionFour/>
+		<ServicesHomeSectionSix/>
     </main>
   );
 };
