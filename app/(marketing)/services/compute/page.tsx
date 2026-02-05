@@ -1,4 +1,5 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
+import ComputeMarqueeSection from "@/components/services/compute-marquee-section";
 import ServicesHomeSectionTwo from "@/components/serviceshome/section-2";
 import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 
@@ -54,6 +55,9 @@ const ComputeHome = () => {
         backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
         illustration={{ src: "/pages/compute/compute.svg", alt: "Compute infrastructure" }}
       />
+      <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
+        <ComputeMarqueeSection />
+      </div>
       <ServicesHomeSectionTwo 
         badge='Features' 
         title = "Powerful Capabilities" 
