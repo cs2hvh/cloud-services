@@ -32,7 +32,7 @@ export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      await api.post('/notifications/mark-read', { id });
+      await api.post('/notifications/mark-read', { id })
       setNotifications(prev => 
         prev.map(n => n.id === id ? { ...n, is_read: true } : n)
       );

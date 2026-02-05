@@ -49,76 +49,73 @@ export function NotificationBell() {
       channelRef.current = null;
     }
 
-    const supabase = createClient();
+    const supabase = createClient()
     
     console.log('[NotificationBell] Setting up realtime subscription for user:', user.id);
 
-    // Create the channel
-    const channel = supabase.channel(`notifications-user-${user.id}`, {
-      config: {
-        broadcast: { self: true },
-        presence: { key: user.id },
-      },
-    });
+    // Create the channel with a unique name
+    const channel = supabase.channel(`notifications:${user.id}:${Date.now()}`);
 
-    // Subscribe to INSERT events
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      },
-      (payload) => {
-        console.log('[NotificationBell] New notification INSERT:', payload);
-        if (payload.new && payload.new.is_read === false) {
-          setUnreadCount((prev) => prev + 1);
+    // Subscribe to postgres changes - ALL events first for debugging
+    channel
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log('[NotificationBell] 🔔 Realtime event received:', {
+            eventType: payload.eventType,
+            old: payload.old,
+            new: payload.new,
+          });
+
+          // Handle INSERT - increment count
+          if (payload.eventType === 'INSERT') {
+            const newRecord = payload.new as any;
+            if (newRecord && newRecord.is_read === false) {
+              console.log('[NotificationBell] ➕ Incrementing count')
+              setUnreadCount((prev) => {
+                const newCount = prev + 1;
+                console.log(`[NotificationBell] Count: ${prev} → ${newCount}`)
+                return newCount;
+              });
+            }
+          }
+
+          // Handle UPDATE - decrement count if marked as read
+          if (payload.eventType === 'UPDATE') {
+            const oldRecord = payload.old as any;
+            const newRecord = payload.new as any;
+            if (oldRecord?.is_read === false && newRecord?.is_read === true) {
+              console.log('[NotificationBell] ➖ Decrementing count')
+              setUnreadCount((prev) => {
+                const newCount = Math.max(0, prev - 1);
+                console.log(`[NotificationBell] Count: ${prev} → ${newCount}`);
+                return newCount;
+              });
+            }
+          }
         }
-      }
-    );
-
-    // Subscribe to UPDATE events (for mark as read)
-    channel.on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${user.id}`,
-      },
-      (payload) => {
-        console.log('[NotificationBell] Notification UPDATE:', payload);
-        // If marked as read, decrement
-        if (payload.old?.is_read === false && payload.new?.is_read === true) {
-          setUnreadCount((prev) => Math.max(0, prev - 1));
+      )
+      .subscribe((status, err) => {
+        console.log('[NotificationBell] 📡 Channel status:', status);
+        if (err) {
+          console.error('[NotificationBell] ❌ Channel error:', err);
         }
-      }
-    );
-
-    // Subscribe to ALL events (for debugging - remove later)
-    channel.on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'notifications',
-      },
-      (payload) => {
-        console.log('[NotificationBell] ANY notification event:', payload);
-      }
-    );
-
-    // Subscribe to the channel
-    channel.subscribe((status, err) => {
-      console.log('[NotificationBell] Channel status:', status);
-      if (err) {
-        console.error('[NotificationBell] Channel error:', err);
-      }
-      if (status === 'SUBSCRIBED') {
-        console.log('[NotificationBell] Successfully subscribed to realtime notifications!');
-      }
-    });
+        if (status === 'SUBSCRIBED') {
+          console.log('[NotificationBell] ✅ Successfully subscribed to realtime notifications!');
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('[NotificationBell] ❌ Channel error - realtime might not be enabled for this table');
+        }
+        if (status === 'TIMED_OUT') {
+          console.error('[NotificationBell] ⏱️ Subscription timed out');
+        }
+      });
 
     channelRef.current = channel;
 

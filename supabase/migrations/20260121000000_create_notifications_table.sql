@@ -32,6 +32,10 @@ CREATE POLICY "Users can update own notifications" ON notifications
 CREATE POLICY "Service role can insert notifications" ON notifications
   FOR INSERT WITH CHECK (true);
 
+-- Enable Realtime for notifications table
+ALTER TABLE notifications REPLICA IDENTITY FULL;
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+
 -- Comment for documentation
 COMMENT ON TABLE notifications IS 'User notifications for service CRUD operations';
 COMMENT ON COLUMN notifications.service_type IS 'Type of service: platform_app, database, kubernetes, object_storage, network_ddos, compute, game_server, firewall, spectrum';
