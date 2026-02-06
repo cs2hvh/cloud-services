@@ -8,6 +8,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { PlatformModels } from "@/lib/supabase/queries/ai_agents";
+import type { PlatformModelUpdate } from "@/lib/ai/types";
 import { z } from "zod";
 
 // Helper function to check if user is admin
@@ -128,8 +129,14 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // Normalize nullable fields (e.g., description) to match expected types
+    const updatePayload: PlatformModelUpdate = {
+      ...validation.data,
+      description: validation.data.description ?? undefined,
+    };
+
     // Update model
-    const result = await PlatformModels.update(id, validation.data);
+    const result = await PlatformModels.update(id, updatePayload);
 
     if (!result.success) {
       return NextResponse.json(

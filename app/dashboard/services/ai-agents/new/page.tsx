@@ -114,7 +114,8 @@ export default function NewAgentPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
 
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const [kbRes, keysRes, modelsRes] = await Promise.all([
         fetch('/api/knowledge-bases', { headers }),

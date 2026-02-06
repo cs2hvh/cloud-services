@@ -7,10 +7,13 @@ import { NotificationItem } from './notification-item';
 import { Notification } from '@/lib/notifications/types';
 import api from '@/lib/axios/axios';
 
-export function NotificationDropdown() {
+export function NotificationDropdown({ onClose }: { onClose?: () => void }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
+
+  // Use `onClose` optionally passed from parent (no-op here) to satisfy typings
+  void onClose;
 
   useEffect(() => {
     const fetchNotifications = async () => {

@@ -911,12 +911,15 @@ export const AgentUsage = {
       }
 
       const totals = (data || []).reduce(
-        (acc, row) => ({
+        (
+          acc: { requests: number; tokens: number; cost: number },
+          row: { request_count?: number; total_tokens?: number; estimated_cost?: string | null }
+        ) => ({
           requests: acc.requests + (row.request_count || 0),
           tokens: acc.tokens + (row.total_tokens || 0),
           cost: acc.cost + parseFloat(row.estimated_cost || '0'),
         }),
-        { requests: 0, tokens: 0, cost: 0 }
+        { requests: 0, tokens: 0, cost: 0 } as { requests: number; tokens: number; cost: number }
       );
 
       return totals;

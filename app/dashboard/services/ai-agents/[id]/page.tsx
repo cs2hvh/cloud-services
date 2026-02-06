@@ -151,7 +151,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const [agentRes, statsRes] = await Promise.all([
         fetch(`/api/ai-agents/${id}`, { headers }),
@@ -216,7 +217,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const res = await fetch('/api/knowledge-bases', { headers });
       if (res.ok) {
@@ -232,7 +234,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const res = await fetch('/api/ai-model-keys', { headers });
       if (res.ok) {

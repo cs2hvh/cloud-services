@@ -8,6 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { PlatformModels } from "@/lib/supabase/queries/ai_agents";
+import type { PlatformModel } from "@/lib/ai/types";
 
 // Fallback models when database is not yet migrated
 const FALLBACK_MODELS = [
@@ -104,6 +105,26 @@ const FALLBACK_MODELS = [
   },
 ];
 
+// Fill missing PlatformModel required fields for TypeScript compatibility
+const FILLED_FALLBACK_MODELS: PlatformModel[] = FALLBACK_MODELS.map((m) => ({
+  id: m.model_id,
+  model_id: m.model_id,
+  display_name: m.display_name,
+  provider: m.provider,
+  description: m.description ?? null,
+  input_cost_per_million: m.input_cost_per_million,
+  output_cost_per_million: m.output_cost_per_million,
+  context_window: m.context_window,
+  supports_vision: m.supports_vision,
+  supports_function_calling: m.supports_function_calling,
+  supports_streaming: m.supports_streaming,
+  is_active: true,
+  is_free: m.is_free,
+  sort_order: 0,
+  created_at: '1970-01-01T00:00:00Z',
+  updated_at: '1970-01-01T00:00:00Z',
+}));
+
 /**
  * GET /api/ai-agents/platform-models
  * List all active platform models available for selection
@@ -114,7 +135,7 @@ export async function GET() {
     
     // Use fallback if database returns empty (migration not run yet)
     if (!models || models.length === 0) {
-      models = FALLBACK_MODELS;
+      models = FILLED_FALLBACK_MODELS;
     }
     
     // Transform for frontend consumption
@@ -146,7 +167,7 @@ export async function GET() {
     console.error("[Platform Models API] Error listing models:", error);
     
     // Return fallback models even on error
-    const formattedModels = FALLBACK_MODELS.map(model => ({
+    const formattedModels = FILLED_FALLBACK_MODELS.map(model => ({
       id: model.model_id,
       name: model.display_name,
       provider: model.provider,
