@@ -131,7 +131,7 @@ export function ServicesHomeSectionOne({
           <div className={cn("w-full", imageLeft && "lg:order-1")}>
             <div className="relative mx-auto aspect-square w-full max-w-[520px] sm:max-w-[560px] lg:max-w-[621px]">
               {isIllustrationSvg ? (
-                <img
+                <Image
                   src={illustration.src}
                   alt={illustration.alt ?? title}
                   className="h-full w-full object-contain"

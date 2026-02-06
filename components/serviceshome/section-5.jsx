@@ -49,7 +49,7 @@ function ServicesHomeSectionFive({ title = "Frequently Asked Questions", faqs = 
 
         <div className="flex w-full flex-col gap-4">
           {faqs.map((faq, index) => (
-            <div className="relative">
+            <div key={index} className="relative">
               <details
                 key={faq.question}
                 className="group w-full overflow-hidden rounded-[6px] border border-white/35 bg-white/10 text-white shadow-[0_14px_34px_rgba(0,0,0,0.4),inset_0_0_18px_rgba(255,255,255,0.08)] backdrop-blur-[10px]"

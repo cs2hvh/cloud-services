@@ -1,6 +1,6 @@
 import React from "react";
 
-const ServicesHomeSectionSix = ({cases}:{cases:any[]}) => {
+const ServicesHomeSectionSix = ({cases}:{cases:{title: string; description: string}[]}) => {
  
 
   return (
