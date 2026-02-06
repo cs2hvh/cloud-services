@@ -42,7 +42,7 @@ type ComputeFeaturesCurveSectionProps = {
   badge?: string;
   title?: string;
   highlight?: string;
-  features?: FeatureItem[];
+  backgroundImage?: string;
   curveImage?: string;
   className?: string;
 };
@@ -51,41 +51,44 @@ const ComputeFeaturesCurveSection = ({
   badge = "Powerful Capabilities",
   title = "Enterprise Cloud",
   highlight = "Without Complexity",
-  features = defaultFeatures,
-  curveImage = "/images/compute-page/features-curv-logos.png",
+  backgroundImage = "/images/compute-page/curve-feature-section-bg.png",
+  curveImage = "/images/compute-page/curv-logo-and-content.png",
   className = "",
 }: ComputeFeaturesCurveSectionProps) => {
   return (
-    <section className={`relative w-full bg-black px-4 pb-0 pt-12 sm:px-6 lg:px-8 ${className}`}>
-      <div 
-        className="relative mx-auto w-full max-w-[1375px] overflow-hidden rounded-t-[10px] border border-white/[0.47] border-b-0 bg-[rgba(255,255,255,0.08)] px-6 py-12 sm:px-10 sm:py-14 lg:px-16 lg:py-16"
-        style={{ 
-          backdropFilter: "blur(17.05px)",
-          WebkitBackdropFilter: "blur(17.05px)",
-          boxSizing: "border-box"
-        }}
-      >
-        {/* Background gradient overlays */}
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-[35%] -top-[55%] h-[200%] w-[70%] rotate-[38.71deg] bg-[#494949] blur-[126.85px] opacity-55" />
-          <div className="absolute -right-[25%] -top-[40%] h-[160%] w-[60%] rotate-[38.71deg] bg-[#1C1C1C] blur-[90px] opacity-55" />
+    <section className={`relative w-full bg-transparent px-4 pb-0 pt-10 sm:px-6 lg:px-8 ${className}`}>
+      <div className="relative mx-auto w-full max-w-[1375px] overflow-hidden rounded-t-[10px] border border-white/[0.47] border-b-0 px-6 pb-12 pt-0 sm:px-10 sm:pb-104 sm:pt-0 lg:px-16 lg:pb-16 lg:pt-8  ">
+        <div className="absolute inset-0">
+          <Image
+            src={backgroundImage}
+            alt=""
+            fill
+            className="object-cover"
+            priority={false}
+          />
         </div>
-        
+
         <div className="relative z-10">
           {/* Header section */}
           <div className="relative flex flex-col items-center text-center">
             <p
-              className="text-xs font-medium text-white/85 sm:text-sm"
-              style={{ fontFamily: "Inter, sans-serif" }}
+              className="text-[clamp(16px,2.1vw,24px)] font-normal leading-[1.05] text-white"
+              style={{
+                fontFamily: "Sansation, sans-serif",
+                textShadow: "0px 4px 4px rgba(0, 0, 0, 0.25)",
+              }}
             >
               {badge}
             </p>
             <h2
-              className="mt-4 text-[clamp(28px,4vw,42px)] font-semibold leading-tight text-white"
-              style={{ fontFamily: "Inter, sans-serif" }}
+              className="mt-30 text-center text-[clamp(32px,4.2vw,48px)] font-normal leading-[0.98] text-white"
+              style={{
+                fontFamily: "Sansation, sans-serif",
+                textShadow: "0px 4px 4px rgba(0, 0, 0, 0.25)",
+              }}
             >
               <span className="block">{title}</span>
-              <span className="block text-[#2DA6FF] drop-shadow-[0_4px_12px_rgba(45,166,255,0.35)]">
+              <span className="block text-[#2DA6FF]">
                 {highlight}
               </span>
             </h2>
@@ -102,59 +105,6 @@ const ComputeFeaturesCurveSection = ({
                 className="h-auto w-full object-contain"
                 priority={false}
               />
-              {/* Features badge - positioned at center bottom of curve */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-[8%] flex justify-center">
-                <div 
-                  className="flex items-center justify-center rounded-[24px] border border-white/[0.43] bg-[#282828] text-white"
-                  style={{ 
-                    width: "222px",
-                    height: "42px",
-                    fontFamily: "Khula, sans-serif",
-                    fontSize: "28px",
-                    fontWeight: 400,
-                    lineHeight: "25px",
-                    textShadow: "0px 4px 4px rgba(0, 0, 0, 0.25)"
-                  }}
-                >
-                  Features
-                </div>
-              </div>
-            </div>
-
-            {/* Features grid */}
-            <div className="mt-8 grid w-full grid-cols-2 gap-x-4 gap-y-8 text-center sm:grid-cols-3 lg:mt-6 lg:flex lg:justify-between lg:gap-x-6">
-              {features.map((feature, index) => (
-                <div
-                  key={feature.title}
-                  className={`flex flex-col items-center mx-auto ${
-                    index === 2 ? "lg:w-[162px]" : "lg:w-[143px]"
-                  }`}
-                  style={{ maxWidth: index === 2 ? "162px" : "154px" }}
-                >
-                  <h3
-                    className="text-[15px] font-medium leading-[25px] text-white text-center"
-                    style={{ 
-                      fontFamily: "Inter, sans-serif",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      minHeight: index === 2 ? "50px" : "25px"
-                    }}
-                  >
-                    {feature.title}
-                  </h3>
-                  <p
-                    className="mt-3 text-[10px] font-medium leading-[17px] text-white text-center"
-                    style={{ 
-                      fontFamily: "Inter, sans-serif",
-                      display: "flex",
-                      alignItems: "center"
-                    }}
-                  >
-                    {feature.description}
-                  </p>
-                </div>
-              ))}
             </div>
           </div>
         </div>

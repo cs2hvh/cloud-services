@@ -16,8 +16,13 @@ const ComputeHome = () => {
       />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <ComputeMarqueeSection />
+        <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
+          <ComputeFeaturesCurveSection
+            backgroundImage="/images/compute-page/curve-feature-section-bg.png"
+            curveImage="/images/compute-page/curv-logo-and-content.png"
+          />
+        </div>
       </div>
-      <ComputeFeaturesCurveSection />
     </main>
   );
 };
