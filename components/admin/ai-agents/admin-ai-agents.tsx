@@ -11,7 +11,7 @@ import {
   DollarSign,
   Cpu,
   Eye,
-  EyeOff,
+  // EyeOff,
   Sparkles,
   Zap,
   MessageSquare,
@@ -22,7 +22,7 @@ import {
   Calendar,
   CreditCard,
   Globe,
-  ExternalLink,
+  // ExternalLink,
   RefreshCw,
   Loader2,
 } from "lucide-react";
@@ -653,7 +653,11 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
           <Button 
             variant="outline" 
             onClick={() => {
-              isEdit ? setEditDialogOpen(false) : setCreateDialogOpen(false);
+              if (isEdit) {
+                setEditDialogOpen(false);
+              } else {
+                setCreateDialogOpen(false);
+              }
               resetForm();
             }}
           >

@@ -31,8 +31,9 @@ import {
   createRAGPipeline,
   calculateCost,
 } from '@/lib/ai';
-import { LLMMessage, PlatformModel } from '@/lib/ai/types';
+import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
+import type { ChunkSearchResult } from '@/lib/ai/types';
 
 // Type for clients that support streaming
 type StreamingLLMClient = {
@@ -246,7 +247,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }));
 
     // RAG: Search knowledge base if enabled
-    let contextChunks: { content: string; similarity: number; id: string }[] = [];
+    let contextChunks: ChunkSearchResult[] = [];
     let ragContext = '';
     
     if (agent.rag_enabled && agent.knowledge_base_ids.length > 0) {
@@ -260,13 +261,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const chunks = await AgentKBChunks.search(
           agent.knowledge_base_ids,
           queryEmbedding,
-          agent.similarity_threshold,
           agent.max_context_chunks
         );
         
         contextChunks = chunks.map(c => ({
           id: c.id,
+          knowledge_base_id: c.knowledge_base_id,
+          document_id: c.document_id,
           content: c.content,
+          metadata: c.metadata,
           similarity: c.similarity,
         }));
         

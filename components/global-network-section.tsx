@@ -77,7 +77,7 @@
 
 "use client";
 import WorldMap from "@/components/ui/worldmap";
-import { motion } from "motion/react";
+// import { motion } from "motion/react";
 
 export default function GlobalNetworkSection() {
   return (

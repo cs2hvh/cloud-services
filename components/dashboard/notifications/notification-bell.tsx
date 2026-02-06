@@ -75,7 +75,7 @@ export function NotificationBell() {
 
           // Handle INSERT - increment count
           if (payload.eventType === 'INSERT') {
-            const newRecord = payload.new as any;
+            const newRecord = payload.new as { is_read: boolean };
             if (newRecord && newRecord.is_read === false) {
               console.log('[NotificationBell] ➕ Incrementing count')
               setUnreadCount((prev) => {
@@ -88,8 +88,8 @@ export function NotificationBell() {
 
           // Handle UPDATE - decrement count if marked as read
           if (payload.eventType === 'UPDATE') {
-            const oldRecord = payload.old as any;
-            const newRecord = payload.new as any;
+            const oldRecord = payload.old as { is_read: boolean };
+            const newRecord = payload.new as { is_read: boolean };
             if (oldRecord?.is_read === false && newRecord?.is_read === true) {
               console.log('[NotificationBell] ➖ Decrementing count')
               setUnreadCount((prev) => {

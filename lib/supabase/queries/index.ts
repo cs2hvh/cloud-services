@@ -28,7 +28,7 @@ export {
   AgentMessages,
   AgentUsage,
 } from "./ai_agents";
-export { Platform_App_Deployments } from "./platform_apps";
+// Platform app deployments re-export removed (not exported from platform_apps)
 
 // For backward compatibility - default export
 import { Users } from "./users";

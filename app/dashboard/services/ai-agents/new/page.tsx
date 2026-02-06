@@ -1,8 +1,10 @@
+
 'use client';
+import Link from 'next/link';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -112,7 +114,8 @@ export default function NewAgentPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
 
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const [kbRes, keysRes, modelsRes] = await Promise.all([
         fetch('/api/knowledge-bases', { headers }),
@@ -516,7 +519,7 @@ export default function NewAgentPage() {
                           <p className="text-sm text-slate-400 mt-1">
                             You need to add an API key before using custom models.{' '}
                             <Button variant="link" className="p-0 h-auto text-yellow-400" asChild>
-                              <a href="/dashboard/services/ai-agents/settings">Add API Key</a>
+                              <Link href="/dashboard/services/ai-agents/settings">Add API Key</Link>
                             </Button>
                           </p>
                         </div>
@@ -751,9 +754,9 @@ export default function NewAgentPage() {
                   <Database className="h-12 w-12 text-slate-600 mx-auto mb-4" />
                   <p className="text-slate-400 mb-4">No knowledge bases found</p>
                   <Button variant="outline" asChild>
-                    <a href="/dashboard/services/ai-agents/knowledge-bases/new">
+                    <Link href="/dashboard/services/ai-agents/knowledge-bases/new">
                       Create Knowledge Base
-                    </a>
+                    </Link>
                   </Button>
                 </div>
               )}

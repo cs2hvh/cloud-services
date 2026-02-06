@@ -1,42 +1,11 @@
 import Image from "next/image";
 
-type FeatureItem = {
-  title: string;
-  description: string;
-};
+// type FeatureItem = {
+//   title: string;
+//   description: string;
+// };
 
-const defaultFeatures: FeatureItem[] = [
-  {
-    title: "Instant Provisioning",
-    description:
-      "Deploy virtual machines in under 60 seconds. Choose from a wide range of configurations to match your exact requirements.",
-  },
-  {
-    title: "Auto-Scaling",
-    description:
-      "Automatically scale your infrastructure based on demand. Set custom rules or let our intelligent system optimize for you.",
-  },
-  {
-    title: "Built-in Security & Reliability",
-    description:
-      "Enterprise-grade security with DDoS protection, firewall rules, and private networking by default. High availability architecture ensures maximum uptime and data protection.",
-  },
-  {
-    title: "Global Regions",
-    description:
-      "Deploy closer to your users with data centers in over 50 locations worldwide. Low latency guaranteed.",
-  },
-  {
-    title: "Flexible Storage",
-    description:
-      "NVMe SSD storage with automatic backups and snapshots. Scale storage independently from compute resources.",
-  },
-  {
-    title: "Pay As You Go",
-    description:
-      "Only pay for what you use with per-second billing. No upfront commitments or hidden fees.",
-  },
-];
+  // const defaultFeatures: FeatureItem[] = [];
 
 type ComputeFeaturesCurveSectionProps = {
   badge?: string;

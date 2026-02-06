@@ -29,15 +29,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Bot,
   Save,
   Loader2,
   Copy,
-  ExternalLink,
   Trash2,
   ArrowLeft,
   MessageSquare,
-  BarChart3,
   Settings,
   Code,
 } from 'lucide-react';
@@ -154,7 +151,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const [agentRes, statsRes] = await Promise.all([
         fetch(`/api/ai-agents/${id}`, { headers }),
@@ -219,7 +217,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const res = await fetch('/api/knowledge-bases', { headers });
       if (res.ok) {
@@ -235,7 +234,8 @@ export default function AgentDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const res = await fetch('/api/ai-model-keys', { headers });
       if (res.ok) {
@@ -365,7 +365,7 @@ export default function AgentDetailsPage({
     );
   }
 
-  const selectedModel = platformModels.find((m) => m.id === model);
+  // const selectedModel = platformModels.find((m) => m.id === model);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">

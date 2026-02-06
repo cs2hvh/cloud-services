@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     // Get user info for all agents from auth.admin
     const userIds = [...new Set(agents?.map(a => a.user_id).filter(Boolean) || [])];
     
-    let userMap: Record<string, { email: string; full_name: string }> = {};
+    const userMap: Record<string, { email: string; full_name: string }> = {};
     if (userIds.length > 0) {
       const { data: authData } = await supabase.auth.admin.listUsers();
       const allUsers = authData?.users || [];

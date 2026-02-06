@@ -21,7 +21,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Database,
   ArrowLeft,
   Loader2,
   Upload,
@@ -91,7 +90,8 @@ export default function KnowledgeBaseDetailsPage({
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+      const headers: HeadersInit = {};
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
       const [kbRes, docsRes] = await Promise.all([
         fetch(`/api/knowledge-bases/${id}`, { headers }),

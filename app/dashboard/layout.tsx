@@ -3,7 +3,7 @@ import { requireAuthProfile } from "@/lib/supabase/auth";
 import { SessionProvider } from "./provider";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { NotificationBell } from "@/components/dashboard/notifications";
-import { BadgeDollarSign, BanknoteArrowUp, CreditCardIcon, DollarSign } from "lucide-react";
+import { BadgeDollarSign } from "lucide-react";
 import Link from "next/link";
 
 interface DashboardLayoutProps {
