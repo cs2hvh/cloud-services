@@ -1,28 +1,7 @@
 import React from "react";
 
-const ServicesHomeSectionSix = () => {
-  const cases = [
-    {
-      title: "AI/ML Training",
-      description:
-        "Train large language models and deep learning networks with high-performance GPU clusters.",
-    },
-    {
-      title: "Inference at Scale",
-      description:
-        "Deploy ML models for real-time inference with auto-scaling based on request volume.",
-    },
-    {
-      title: "3D Rendering",
-      description:
-        "Render complex 3D scenes and animations with professional-grade GPU acceleration.",
-    },
-    {
-      title: "Scientific Computing",
-      description:
-        "Run simulations, molecular dynamics, and other HPC workloads with GPU acceleration.",
-    },
-  ];
+const ServicesHomeSectionSix = ({cases}:{cases:any[]}) => {
+ 
 
   return (
     <section className="relative overflow-hidden bg-[#C1C1C1] py-16 md:py-24">

@@ -1,44 +1,45 @@
-import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
-import ComputeMarqueeSection from "@/components/services/compute-marquee-section";
-import { ServiceHeroSection } from "@/components/services/service-hero-section";
-import ServicesHomeSectionTwo from "@/components/serviceshome/section-2";
-import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
-import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+
+import React from 'react'
+import ServicesHomeSectionFour from '@/components/serviceshome/section-4';
+import { ServiceHeroSection } from '@/components/services/service-hero-section';
+import ServicesHomeSectionSix from '@/components/serviceshome/section-6';
+import ComputeFeaturesCurveSection from '@/components/services/compute-features-curve-section';
+import ComputeMarqueeSection from '@/components/services/compute-marquee-section';
 
 const defaultItems = [
 	{
-		title: "Multiple Database Engines",
+		title: "Latest GPU Hardware",
 		description:
 			"Access NVIDIA H100, A100, and RTX 4090 GPUs for maximum performance. Updated regularly with the latest hardware.",
-		iconSrc: "/images/main-page/service-home-db-1.svg",
+		iconSrc: "/images/main-page/service-home-gpu-1.svg",
 		iconAlt: "GPU hardware",
 	},
 	{
-		title: "Automatic Backups",
+		title: "Multi-GPU Support",
 		description:
 			"Scale from single GPU to multi-node clusters with NVLink interconnect for distributed training workloads.",
-		iconSrc: "/images/main-page/service-home-db-2.svg",
+		iconSrc: "/images/main-page/service-home-gpu-2.svg",
 		iconAlt: "Multi GPU",
 	},
 	{
-		title: "High Availability",
+		title: "Fast Storage",
 		description:
 			"High-bandwidth NVMe storage optimized for training data. Local SSD for maximum IOPS.",
-		iconSrc: "/images/main-page/service-home-db-3.svg",
+		iconSrc: "/images/main-page/service-home-gpu-3.svg",
 		iconAlt: "Fast storage",
 	},
 	{
-		title: "Connection Pooling",
+		title: "Spot Instances",
 		description:
 			"Save up to 90% with spot instances for fault-tolerant workloads. Automatic checkpointing included.",
-		iconSrc: "/images/main-page/service-home-db-4.svg",
+		iconSrc: "/images/main-page/service-home-gpu-4.svg",
 		iconAlt: "Spot instances",
 	},
 	{
-		title: "Performance Insights",
+		title: "Pre-configured Environments",
 		description:
 			"Start faster with pre-installed CUDA, cuDNN, PyTorch, TensorFlow, and other ML frameworks.",
-		iconSrc: "/images/main-page/service-home-db-5.svg",
+		iconSrc: "/images/main-page/service-home-gpu-5.svg",
 		iconAlt: "Preconfigured environments",
 	},
 ];
@@ -93,31 +94,31 @@ const plans = [
     },
   ];
 
-const DatabaseHome = () => {
+const CloudService = () => {
   return (
     <main className="bg-black">
       <ServiceHeroSection
         badge="High Performance Computing"
-        title="Database"
-        description="Fully managed database services with automatic backups, scaling, and high availability. Focus on your application, not database administration."
+        title="Cloud Security"
+        description="Enterprise-grade security with DDoS protection, web application firewalls, and comprehensive compliance certifications for regulated industries."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/service-home-db-section-1.svg", alt: "Database infrastructure" }}
+        illustration={{ src: "/images/main-page/service-home-security-section-1.svg", alt: "security infrastructure" }}
       />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <ComputeMarqueeSection />
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
             backgroundImage="/images/compute-page/curve-feature-section-bg.png"
-            curveImage="/images/main-page/service-home-db-section-3.png"
+            curveImage="/images/main-page/service-home-security-section-3.png"
           />
         </div>
       </div>
-      <ServicesHomeSectionFour plans={plans} />
+      <ServicesHomeSectionFour plans={plans}/>
       <ServicesHomeSectionSix cases={cases}/>
     </main>
-  );
-};
+  )
+}
 
-export default DatabaseHome;
+export default CloudService

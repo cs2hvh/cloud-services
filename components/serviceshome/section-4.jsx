@@ -1,35 +1,10 @@
-const plans = [
-    {
-        badge: "New",
-        badgePlacement: "outside",
-        title: "Basic",
-        description:
-            "With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["1-4 vCPU core", "2-8 GB RAM", "50-200 GB NVMe disk space", "4 TB bandwidth"],
-    },
-    {
-        badge: "Most Recommended",
-        badgePlacement: "inside",
-        title: "General Use",
-        description:
-            "For growing teams and production workloads. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine in just a few clicks.",
-        features: ["4-16 vCPU cores", "8-32 GB RAM", "200-400 GB NVMe disk space", "16 TB bandwidth"],
-    },
-    {
-        badge: "Most Scalable",
-        badgePlacement: "inside",
-        title: "High Performance",
-        description:
-            "For organizations with advanced needs. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["16-64 vCPU cores", "32-256 GB RAM", "400-1000 GB NVMe disk space", "32 TB bandwidth"],
-    },
-];
 
-export default function ServicesHomeSectionFour() {
+
+export default function ServicesHomeSectionFour({ plans}) {
     const indentClass = "pl-[15%]";
 
     return (
-        <section className="relative w-full overflow-hidden bg-[#1D1D1D] bg-[url('/images/main-page/service-home-section-4-bg.svg')] bg-cover bg-center backdrop-blur-[50px] py-16 shadow-[-4px_17px_13.4px_0px_#363636]  sm:py-20 lg:py-24">
+        <section className="relative w-full overflow-hidden bg-[#363636] bg-[url('/images/main-page/service-home-section-4-bg.svg')] bg-cover bg-center backdrop-blur-[50px] py-16 shadow-[-4px_17px_13.4px_0px_#363636]  sm:py-20 lg:py-24">
             {/* <div className="pointer-events-none absolute inset-0" aria-hidden="true">
                 <div className="absolute inset-0 bg-[radial-gradient(584%_96.29%_at_39.88%_60.67%,_#002F93_0.35%,_#000133_57.69%)] opacity-80 blur-[23.4px]" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(17,60,120,0.35),_transparent_55%)]" />

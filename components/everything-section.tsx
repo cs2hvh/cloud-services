@@ -56,9 +56,9 @@ const TABS = [
     imageAlt: "GPU server stack",
   },
   {
-    id: "protection",
-    label: "Protection",
-    title: "Protection",
+    id: "security",
+    label: "Security",
+    title: "Security",
     heading: "Security built into every layer",
     description:
       "Protect your workloads with enterprise-grade security controls, real-time monitoring, and automated responses.",
