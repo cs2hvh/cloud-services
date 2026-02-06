@@ -29,7 +29,7 @@ import {
   createRAGPipeline,
   calculateCost,
 } from '@/lib/ai';
-import { LLMMessage, PlatformModel } from '@/lib/ai/types';
+import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
 
 const testRequestSchema = z.object({
@@ -177,7 +177,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const chunks = await AgentKBChunks.search(
           agent.knowledge_base_ids,
           queryEmbedding,
-          agent.similarity_threshold || 0.3,
           agent.max_context_chunks || 5
         );
         logTime('RAG search complete');

@@ -3,7 +3,7 @@
  * Generates vector embeddings for text using OpenAI
  */
 
-import { EmbeddingRequest, EmbeddingResponse } from './types';
+import { EmbeddingResponse } from './types';
 
 const OPENAI_BASE_URL = 'https://api.openai.com/v1';
 

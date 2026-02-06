@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, use } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -198,7 +198,7 @@ export default function PlaygroundPage({
               } else if (parsed.type === 'error') {
                 throw new Error(parsed.error);
               }
-            } catch (parseErr) {
+            } catch {
               // Ignore JSON parse errors for incomplete chunks
               if (data && data !== '[DONE]') {
                 console.debug('Skipping non-JSON chunk:', data);

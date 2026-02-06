@@ -7,11 +7,7 @@ import { NotificationItem } from './notification-item';
 import { Notification } from '@/lib/notifications/types';
 import api from '@/lib/axios/axios';
 
-interface NotificationDropdownProps {
-  onClose: () => void;
-}
-
-export function NotificationDropdown({ onClose }: NotificationDropdownProps) {
+export function NotificationDropdown() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);

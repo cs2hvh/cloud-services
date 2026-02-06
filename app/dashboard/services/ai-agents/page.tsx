@@ -316,7 +316,7 @@ export default function AIAgentsPage() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => toggleAgentStatus(agent)}>
-                          {agent.is_active ? (
+                          {agent.status === 'active' ? (
                             <>
                               <Pause className="h-4 w-4 mr-2" />
                               Disable

@@ -29,15 +29,12 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Bot,
   Save,
   Loader2,
   Copy,
-  ExternalLink,
   Trash2,
   ArrowLeft,
   MessageSquare,
-  BarChart3,
   Settings,
   Code,
 } from 'lucide-react';
@@ -365,7 +362,7 @@ export default function AgentDetailsPage({
     );
   }
 
-  const selectedModel = platformModels.find((m) => m.id === model);
+  // const selectedModel = platformModels.find((m) => m.id === model);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">

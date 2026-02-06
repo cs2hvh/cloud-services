@@ -21,7 +21,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  Database,
   ArrowLeft,
   Loader2,
   Upload,

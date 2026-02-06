@@ -453,7 +453,6 @@ export const AgentKBChunks = {
   search: async (
     kb_ids: string[],
     query_embedding: number[],
-    match_threshold: number = 0.7,
     match_count: number = 5
   ): Promise<ChunkSearchResult[]> => {
     try {
