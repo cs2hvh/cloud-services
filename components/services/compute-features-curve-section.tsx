@@ -56,8 +56,8 @@ const ComputeFeaturesCurveSection = ({
   className = "",
 }: ComputeFeaturesCurveSectionProps) => {
   return (
-    <section className={`relative w-full bg-transparent px-4 pb-0 pt-12 sm:px-6 lg:px-8 ${className}`}>
-      <div className="relative mx-auto w-full max-w-[1375px] overflow-hidden rounded-t-[10px] border border-white/[0.47] border-b-0 px-6 py-12 sm:px-10 sm:py-14 lg:px-16 lg:py-16">
+    <section className={`relative w-full bg-transparent px-4 pb-0 pt-10 sm:px-6 lg:px-8 ${className}`}>
+      <div className="relative mx-auto w-full max-w-[1375px] overflow-hidden rounded-t-[10px] border border-white/[0.47] border-b-0 px-6 pb-12 pt-0 sm:px-10 sm:pb-104 sm:pt-0 lg:px-16 lg:pb-16 lg:pt-8  ">
         <div className="absolute inset-0">
           <Image
             src={backgroundImage}
@@ -72,17 +72,23 @@ const ComputeFeaturesCurveSection = ({
           {/* Header section */}
           <div className="relative flex flex-col items-center text-center">
             <p
-              className="text-xs font-medium text-white/85 sm:text-sm"
-              style={{ fontFamily: "Inter, sans-serif" }}
+              className="text-[clamp(16px,2.1vw,24px)] font-normal leading-[1.05] text-white"
+              style={{
+                fontFamily: "Sansation, sans-serif",
+                textShadow: "0px 4px 4px rgba(0, 0, 0, 0.25)",
+              }}
             >
               {badge}
             </p>
             <h2
-              className="mt-4 text-[clamp(28px,4vw,42px)] font-semibold leading-tight text-white"
-              style={{ fontFamily: "Inter, sans-serif" }}
+              className="mt-30 text-center text-[clamp(32px,4.2vw,48px)] font-normal leading-[0.98] text-white"
+              style={{
+                fontFamily: "Sansation, sans-serif",
+                textShadow: "0px 4px 4px rgba(0, 0, 0, 0.25)",
+              }}
             >
               <span className="block">{title}</span>
-              <span className="block text-[#2DA6FF] drop-shadow-[0_4px_12px_rgba(45,166,255,0.35)]">
+              <span className="block text-[#2DA6FF]">
                 {highlight}
               </span>
             </h2>
