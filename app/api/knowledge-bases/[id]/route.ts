@@ -11,6 +11,7 @@ import { limitByUser } from '@/lib/cooldown/userbased';
 import { AgentKnowledgeBases, AgentKBDocuments } from '@/lib/supabase/queries/ai_agents';
 import { KnowledgeBaseUpdate } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
+import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
 
 // Validation schema for updating a knowledge base
@@ -119,7 +120,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const patch: KnowledgeBaseUpdate = validation.data;
+    const patch: KnowledgeBaseUpdate = {
+      ...validation.data,
+      description: validation.data.description === null ? undefined : validation.data.description,
+    };
 
     const result = await AgentKnowledgeBases.update(id, auth.user!.id, patch);
 
@@ -129,6 +133,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // Get audit context
+    const auditContext = getAuditContext(request);
+
+    // Create audit log
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: 'user',
+      user_email: auth.user!.email,
+      action: 'update',
+      service_type: 'knowledge_base',
+      service_id: id,
+      service_name: result.data?.name || existing.data.name,
+      before_state: existing.data as unknown as Record<string, unknown>,
+      after_state: result.data as unknown as Record<string, unknown>,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        updatedFields: Object.keys(patch),
+      },
+    });
 
     // Create notification
     const notificationParams = createServiceNotification({
@@ -210,6 +236,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // Get audit context
+    const auditContext = getAuditContext(request);
+
+    // Create audit log
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: 'user',
+      user_email: auth.user!.email,
+      action: 'delete',
+      service_type: 'knowledge_base',
+      service_id: id,
+      service_name: existing.data.name,
+      before_state: existing.data as unknown as Record<string, unknown>,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        embeddingModel: existing.data.embedding_model,
+        documentCount: existing.data.document_count || 0,
+      },
+    });
 
     // Create success notification
     const notificationParams = createServiceNotification({

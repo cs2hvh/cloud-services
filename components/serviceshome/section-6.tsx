@@ -26,14 +26,16 @@ const ServicesHomeSectionSix = () => {
 
   return (
     <section className="relative overflow-hidden bg-[#C1C1C1] py-16 md:py-24">
-      {/* Top triangular black div */}
+      {/* Top triangular black div - edge at top */}
       <div
-        className="absolute inset-x-0 -top-16 h-24 bg-black origin-top-left skew-y-3"
-        aria-hidden="true"
-      />
-      {/* Bottom triangular black div */}
+        className="absolute top-0 left-0 w-full h-[6vw] bg-black
+  [clip-path:polygon(0_0,_100%_0,_100%_100%)]"
+      ></div>
+
+      {/* Bottom triangular black div - edge at bottom */}
       <div
-        className="absolute inset-x-0 -bottom-16 h-24 bg-black origin-bottom-left -skew-y-3"
+        className="absolute inset-x-0 -bottom-8 h-[6vw] bg-black [clip-path:polygon(0_100%,_100%_100%,_0_0)]"
+        // style={{ clipPath: 'polygon(0 100%, 100% 0, 100% 100%)' }}
         aria-hidden="true"
       />
       <div className="relative mx-auto flex w-full max-w-7xl flex-col px-6">
@@ -46,7 +48,7 @@ const ServicesHomeSectionSix = () => {
             Built For Your <span className="text-sky-500">Needs</span>
           </h2>
         </div>
-        
+
         {/* Grid with custom positioning */}
         <div className="mt-12 flex flex-col gap-8">
           {/* Top 2 articles towards left 20% */}
@@ -63,7 +65,7 @@ const ServicesHomeSectionSix = () => {
               </article>
             ))}
           </div>
-          
+
           {/* Bottom 2 articles towards right 20% */}
           <div className="grid w-full gap-8 md:grid-cols-2 md:pl-[20%]">
             {cases.slice(2, 4).map((item) => (

@@ -10,6 +10,7 @@ import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentInsert } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
+import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
 
 // Validation schema for creating an agent
@@ -161,6 +162,30 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Get audit context
+    const auditContext = getAuditContext(request);
+
+    // Create audit log
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: 'user',
+      user_email: auth.user!.email,
+      action: 'create',
+      service_type: 'ai_agent',
+      service_id: result.data?.id,
+      service_name: data.name,
+      after_state: result.data as unknown as Record<string, unknown>,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        modelId: data.model_id,
+        ragEnabled: data.rag_enabled ?? false,
+        isPublic: data.is_public ?? false,
+        endpointId: endpoint_id,
+      },
+    });
 
     // Create notification
     const notificationParams = createServiceNotification({

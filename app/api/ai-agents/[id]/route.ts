@@ -11,6 +11,7 @@ import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentUpdate } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
+import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
 
 // Validation schema for updating an agent
@@ -130,7 +131,12 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const patch: AIAgentUpdate = validation.data;
+    const patch: AIAgentUpdate = {
+      ...validation.data,
+      description: validation.data.description === null ? undefined : validation.data.description,
+      avatar_url: validation.data.avatar_url === null ? undefined : validation.data.avatar_url,
+      welcome_message: validation.data.welcome_message === null ? undefined : validation.data.welcome_message,
+    };
 
     const result = await AIAgents.update(id, auth.user!.id, patch);
 
@@ -140,6 +146,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // Get audit context
+    const auditContext = getAuditContext(request);
+
+    // Create audit log
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: 'user',
+      user_email: auth.user!.email,
+      action: 'update',
+      service_type: 'ai_agent',
+      service_id: id,
+      service_name: result.data?.name || existing.data.name,
+      before_state: existing.data as unknown as Record<string, unknown>,
+      after_state: result.data as unknown as Record<string, unknown>,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        updatedFields: Object.keys(patch),
+      },
+    });
 
     // Determine update type for notification
     let updateType = 'agent_settings';
@@ -229,6 +257,28 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // Get audit context
+    const auditContext = getAuditContext(request);
+
+    // Create audit log
+    await AuditLogService.create({
+      user_id: auth.user!.id,
+      user_role: 'user',
+      user_email: auth.user!.email,
+      action: 'delete',
+      service_type: 'ai_agent',
+      service_id: id,
+      service_name: existing.data.name,
+      before_state: existing.data as unknown as Record<string, unknown>,
+      ip_address: auditContext.ipAddress,
+      user_agent: auditContext.userAgent,
+      request_id: auditContext.requestId,
+      metadata: {
+        endpointId: existing.data.endpoint_id,
+        modelId: existing.data.model_id,
+      },
+    });
 
     // Create success notification
     const notificationParams = createServiceNotification({

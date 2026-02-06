@@ -11,7 +11,9 @@ export type AuditServiceType =
   | 'platform_apps' 
   | 'object_storage'
   | 'auth'
-  | 'git_webhook';
+  | 'git_webhook'
+  | 'ai_agent'
+  | 'knowledge_base';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 
