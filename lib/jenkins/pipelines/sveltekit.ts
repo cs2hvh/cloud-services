@@ -60,8 +60,7 @@ export function createSvelteKitPipeline(
   // Use provided container port or default to 3000 (SvelteKit with adapter-node)
   const port = containerPort ?? 3000;
 
-  // Split env vars: PUBLIC_* → client-side, others → server-side
-  const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
+  // Split env vars: PUBLIC_* → client-side, others → server-side K8s Secrets
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only

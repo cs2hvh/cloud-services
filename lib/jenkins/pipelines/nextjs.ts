@@ -50,8 +50,7 @@ export function createNextJsPipeline(
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;
 
-  // Split env vars: NEXT_PUBLIC_* → build-time, others → runtime K8s Secrets
-  const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
+  // Split env vars: NEXT_PUBLIC_* → client-side, others → server-side K8s Secrets
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('NEXT_PUBLIC_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only

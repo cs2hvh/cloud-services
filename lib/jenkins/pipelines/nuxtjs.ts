@@ -128,8 +128,7 @@ export function createNuxtJsPipeline(
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;
 
-  // Split env vars: NUXT_PUBLIC_*/VITE_* → client-side, others → server-side
-  const clientEnvVars = envVars.filter(e => e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('VITE_'));
+  // Split env vars: NUXT_PUBLIC_*/VITE_* → client-side, others → server-side K8s Secrets
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('VITE_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
