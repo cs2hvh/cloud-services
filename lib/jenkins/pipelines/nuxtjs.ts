@@ -128,7 +128,7 @@ export function createNuxtJsPipeline(
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;
 
-  // Split env vars: NUXT_PUBLIC_*/VITE_* → build-time, others → runtime K8s Secrets
+  // Split env vars: NUXT_PUBLIC_*/VITE_* → client-side, others → server-side
   const clientEnvVars = envVars.filter(e => e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('VITE_'));
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('VITE_'));
 
@@ -137,10 +137,12 @@ export function createNuxtJsPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // Generate build args for CLIENT-SIDE vars (NUXT_PUBLIC_* and VITE_*)
-  // [WARN] Build args are visible in logs - only use for public configuration!
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars.map(e => {
+  // Generate build args for ALL env vars (like Vercel does)
+  // Why: Nuxt.js pre-renders SSR routes during build → needs access to all env vars
+  // Security: Build args are only used during build, runtime uses K8s Secrets
+  // [INFO] Build logs show build arg names but Jenkins masks sensitive values
+  const buildArgs = envVars.length > 0
+    ? envVars.map(e => {
         const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')

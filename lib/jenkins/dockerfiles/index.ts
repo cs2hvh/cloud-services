@@ -347,7 +347,9 @@ CMD ${pm.start}
 export function getNextjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Next.js can pre-render API routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -402,7 +404,7 @@ CMD ${pm.start}
 
 /**
  * Generate Dockerfile for Next.js (standalone mode)
- * Supports build-time env vars for NEXT_PUBLIC_* variables
+ * Supports build-time env vars for ALL variables (like Vercel)
  * 
  * ⚠️ RUNTIME: Package manager is ONLY used during build.
  * Standalone mode runs "node server.js" directly (Next.js generates optimized server).
@@ -411,7 +413,9 @@ CMD ${pm.start}
 export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Next.js can pre-render API routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -644,7 +648,9 @@ CMD ["sh", "-c", "serve -s dist -l $PORT"]
  * Supports npm, pnpm, and yarn package managers
  */
 export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
-  // Generate ARG directives for client-side env vars (NUXT_PUBLIC_*, VITE_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Nuxt can pre-render SSR routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -694,13 +700,15 @@ CMD ["node", ".output/server/index.mjs"]
 
 /**
  * Generate Dockerfile for SvelteKit (adapter-node)
- * Supports build-time env vars for PUBLIC_* variables
+ * Supports build-time env vars for ALL variables (like Vercel)
  * Now supports pnpm/yarn/npm auto-detection
  */
 export function getSveltekitDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so SvelteKit can pre-render SSR routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';

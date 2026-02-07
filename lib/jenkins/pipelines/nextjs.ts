@@ -59,10 +59,12 @@ export function createNextJsPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // Generate build args for CLIENT-SIDE vars (NEXT_PUBLIC_*)
-  // [WARN] Build args are visible in logs - only use for public configuration!
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars.map(e => {
+  // Generate build args for ALL env vars (like Vercel does)
+  // Why: Next.js pre-renders API routes during build → needs access to all env vars
+  // Security: Build args are only used during build, runtime uses K8s Secrets
+  // [INFO] Build logs show build arg names but Jenkins masks sensitive values
+  const buildArgs = envVars.length > 0
+    ? envVars.map(e => {
         const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
