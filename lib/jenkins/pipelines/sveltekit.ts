@@ -241,7 +241,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateSveltekitDockerfileStage(clientEnvVars)}
+${generateSveltekitDockerfileStage(envVars)}
             '''
             echo 'Dockerfile preparation completed'
           }

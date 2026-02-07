@@ -272,7 +272,7 @@ ${generateNuxtDependencyScanStage()}
       steps {
         container('git') {
           sh '''
-${generateNuxtjsDockerfileStage(clientEnvVars)}
+${generateNuxtjsDockerfileStage(envVars)}
           '''
         }
       }

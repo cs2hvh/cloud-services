@@ -167,7 +167,7 @@ ${generateSecurityStages({ language: 'node' })}
       steps {
         container('git') {
           sh '''
-${generateNextjsDockerfileStage(clientEnvVars)}
+${generateNextjsDockerfileStage(envVars)}
           '''
         }
       }
