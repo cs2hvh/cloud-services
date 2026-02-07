@@ -3,18 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,
-  
-  // Exclude email rendering packages from server bundle (Next.js 15+)
-  serverExternalPackages: ['@react-email/components', '@react-email/render'],
-  
-  webpack: (config, { isServer }) => {
-    if (isServer) {
-      // Completely exclude @react-email from webpack analysis
-      config.externals = [...(config.externals || []), '@react-email/components', '@react-email/render'];
-    }
-    return config;
-  },
-  
   images: {
     remotePatterns: [
       {
