@@ -2,6 +2,7 @@
 
 import { ApiResponse } from "./type";
 import { resend } from ".";
+import ForgotPasswordEmail from "./templates/forgot-password";
 
 export async function send_forgot_password_email(
   email: string,
@@ -9,7 +10,6 @@ export async function send_forgot_password_email(
   otp: string,
 ): Promise<ApiResponse> {
   try {
-    const { default: ForgotPasswordEmail } = await import("./templates/forgot-password");
     const res = await resend.emails.send({
       from: `support@${process.env.RESEND_DOMAIN}`,
       to: email,

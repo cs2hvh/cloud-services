@@ -1,6 +1,7 @@
 "use server";
 
 import { resend } from ".";
+import OTPEmail from "./templates/otp";
 import { ApiResponse } from "./type";
 
 export async function send_otp_email(
@@ -9,7 +10,6 @@ export async function send_otp_email(
   otp: string,
 ): Promise<ApiResponse> {
   try {
-    const { default: OTPEmail } = await import("./templates/otp");
     const res = await resend.emails.send({
       from: `support@${process.env.RESEND_DOMAIN}`,
       to: email,
