@@ -87,6 +87,54 @@ const TABS = [
     imageSrc: "/images/Features/ai-agent.png",
     imageAlt: "AI agent illustration",
   },
+  {
+    id: "kubernetes",
+    label: "Kubernetes",
+    title: "Kubernetes",
+    heading: "Build and scale on Kubernetes, without the hassle",
+    description:
+      "Enterprise-grade Kubernetes clusters with automatic scaling, seamless updates, and built-in security. Deploy containerized applications at any scale.",
+    bullets: [
+      "Fully Managed Clusters",
+      "Auto-Scaling Nodes",
+      "Built-in Load Balancing",
+      "Multi-Region Clusters ",
+    ],
+    imageSrc: "/images/main-page/kubernetes.svg",
+    imageAlt: "Kubernetes illustration",
+  },
+   {
+    id: "object-storage",
+    label: "Object Storage",
+    title: "Object Storage",
+    heading: "create space buckets, store and manage data globally",
+    description:
+      "Drop-in replacement for Amazon S3. Use your existing tools, SDKs, and workflows without any code changes required.",
+    bullets: [
+      "S3-Compatible API",
+      "Global CDN Integration",
+      "11 Nines Durability",
+      "Versioning & Immutability ",
+    ],
+    imageSrc: "/images/main-page/object-space.svg",
+    imageAlt: "Object storage illustration",
+  },
+  {
+    id: "App-Deploy",
+    label: "App-Deploy",
+    title: "App-Deploy",
+    heading: "deploy your applications with ease",
+    description:
+      "Deploy to 100+ edge locations automatically. Static assets cached globally, serverless functions run close to users.",
+    bullets: [
+      "Git-Based Deployments",
+      "Zero Configuration",
+      "Preview Environments",
+      "Global Edge Network ",
+    ],
+    imageSrc: "/images/main-page/app-deploy.svg",
+    imageAlt: "App deployment illustration",
+  },
 ] as const;
 
 export function EverythingSection() {
