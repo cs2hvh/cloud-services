@@ -135,6 +135,8 @@ export function ServiceHeroSection({
             <div className="relative mx-auto aspect-square w-full max-w-[520px] sm:max-w-[560px] lg:max-w-[621px]">
               {isIllustrationSvg ? (
                 <Image
+                  width={100}
+                  height={100}
                   src={illustration.src}
                   alt={illustration.alt ?? title}
                   className="h-full w-full object-contain"

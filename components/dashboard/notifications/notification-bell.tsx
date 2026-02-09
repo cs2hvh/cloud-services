@@ -33,7 +33,7 @@ export function NotificationBell() {
   }, [user?.id]);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) return
 
     // Fetch initial count only once
     if (!initialFetchDone.current) {

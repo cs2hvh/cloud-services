@@ -41,7 +41,8 @@ export const AuditLogs = {
 
       // Build query
       let query = supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*", { count: "exact" });
 
       // Apply filters
@@ -113,7 +114,8 @@ export const AuditLogs = {
       const supabase = await createServiceClient();
 
       const { data, error } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*")
         .eq("id", logId)
         .single();
@@ -144,14 +146,16 @@ export const AuditLogs = {
 
       // Get total count
       const { count: totalLogs } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*", { count: "exact", head: true });
 
       // Get today's count
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const { count: todayLogs } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*", { count: "exact", head: true })
         .gte("created_at", today.toISOString());
 
@@ -159,7 +163,8 @@ export const AuditLogs = {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       const { count: weekLogs } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*", { count: "exact", head: true })
         .gte("created_at", weekAgo.toISOString());
 
