@@ -72,11 +72,14 @@ export function createSvelteKitPipeline(
   // Why: SvelteKit pre-renders SSR routes during build → needs access to all env vars
   // Security: Build args are only used during build, runtime uses K8s Secrets
   // [INFO] Build logs show build arg names but Jenkins masks sensitive values
+  // NOTE: We pass ALL env vars (including NODE_ENV) to respect custom Dockerfiles.
+  // For platform-generated Dockerfiles, ENV NODE_ENV=production override ensures production builds.
   const buildArgs = envVars.length > 0
-    ? envVars.map(e => {
-        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-        return `--build-arg ${e.key}="${escapedValue}"`;
-      }).join(' \\\\\n                    ')
+    ? envVars
+        .map(e => {
+          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+          return `--build-arg ${e.key}="${escapedValue}"`;
+        }).join(' \\\\\n                    ')
     : '';
   // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
   const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';

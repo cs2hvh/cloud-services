@@ -372,7 +372,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -438,17 +441,17 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
 
-# ---- Run Stage (Standalone) ----
+# ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -676,7 +679,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Nuxt
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -731,7 +737,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for SvelteKit
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
