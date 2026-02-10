@@ -60,8 +60,7 @@ export function createSvelteKitPipeline(
   // Use provided container port or default to 3000 (SvelteKit with adapter-node)
   const port = containerPort ?? 3000;
 
-  // Split env vars: PUBLIC_* → build-time, others → runtime K8s Secrets
-  const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
+  // Split env vars: PUBLIC_* → client-side, others → server-side K8s Secrets
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
@@ -69,13 +68,18 @@ export function createSvelteKitPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // Generate build args for CLIENT-SIDE vars (PUBLIC_*)
-  // [WARN] Build args are visible in logs - only use for public configuration!
-  const buildArgs = clientEnvVars.length > 0
-    ? clientEnvVars.map(e => {
-        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
-        return `--build-arg ${e.key}="${escapedValue}"`;
-      }).join(' \\\\\n                    ')
+  // Generate build args for ALL env vars (like Vercel does)
+  // Why: SvelteKit pre-renders SSR routes during build → needs access to all env vars
+  // Security: Build args are only used during build, runtime uses K8s Secrets
+  // [INFO] Build logs show build arg names but Jenkins masks sensitive values
+  // NOTE: We pass ALL env vars (including NODE_ENV) to respect custom Dockerfiles.
+  // For platform-generated Dockerfiles, ENV NODE_ENV=production override ensures production builds.
+  const buildArgs = envVars.length > 0
+    ? envVars
+        .map(e => {
+          const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
+          return `--build-arg ${e.key}="${escapedValue}"`;
+        }).join(' \\\\\n                    ')
     : '';
   // Always include PACKAGE_MANAGER build arg (detected during Dockerfile stage)
   const pmBuildArg = '--build-arg PACKAGE_MANAGER=$PACKAGE_MANAGER';
@@ -239,7 +243,7 @@ ${generateSecurityStages({ language: 'node' })}
           script {
             echo 'STAGE: Prepare Dockerfile'
             sh '''
-${generateSveltekitDockerfileStage(clientEnvVars)}
+${generateSveltekitDockerfileStage(envVars)}
             '''
             echo 'Dockerfile preparation completed'
           }

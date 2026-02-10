@@ -7,7 +7,6 @@ const api = axios.create({
   timeout: 30000,
   headers: {
     "Content-Type": "application/json",
-    "x-client-secret": process.env.NEXT_PUBLIC_CLIENT_SECRET,
   },
 });
 

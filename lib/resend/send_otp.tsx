@@ -1,3 +1,5 @@
+"use server";
+
 import { resend } from ".";
 import OTPEmail from "./templates/otp";
 import { ApiResponse } from "./type";
