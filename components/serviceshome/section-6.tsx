@@ -35,7 +35,7 @@ const ServicesHomeSectionSix = ({cases}:{cases:{title: string; description: stri
             {cases.slice(0, 2).map((item) => (
               <article
                 key={item.title}
-                className="rounded-lg bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)]"
+                className=" bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)]"
               >
                 <h3 className="text-xl font-semibold">{item.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-neutral-200">
@@ -50,7 +50,7 @@ const ServicesHomeSectionSix = ({cases}:{cases:{title: string; description: stri
             {cases.slice(2, 4).map((item) => (
               <article
                 key={item.title}
-                className="rounded-lg bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)]"
+                className=" bg-[#1B1B1BBF] px-8 py-8 text-left text-white shadow-[0px_18px_28px_rgba(0,0,0,0.35)]"
               >
                 <h3 className="text-xl font-semibold">{item.title}</h3>
                 <p className="mt-3 text-sm leading-relaxed text-neutral-200">
