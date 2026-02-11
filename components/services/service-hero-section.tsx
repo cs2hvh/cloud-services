@@ -46,7 +46,7 @@ export function ServiceHeroSection({
         "relative w-full overflow-hidden bg-black",
         "min-h-[520px] h-auto",
         "md:min-h-[calc(100vh-80px)]",
-        "lg:h-[min(776px,calc(100vh-80px))] lg:min-h-0",
+        "lg:h-[min(850px,calc(100vh-80px))] lg:min-h-0",
         className,
       )}
     >
