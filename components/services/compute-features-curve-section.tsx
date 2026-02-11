@@ -26,7 +26,7 @@ const ComputeFeaturesCurveSection = ({
 }: ComputeFeaturesCurveSectionProps) => {
   return (
     <section className={`relative w-full bg-transparent px-4 pb-0 pt-10 sm:px-6 lg:px-8 ${className}`}>
-      <div className="relative mx-auto w-full max-w-[1375px] overflow-hidden rounded-t-[10px] border border-white/[0.47] border-b-0 px-6 pb-12 pt-0 sm:px-10 sm:pb-104 sm:pt-0 lg:px-16 lg:pb-16 lg:pt-8  ">
+      <div className="relative mx-auto w-full max-w-[2000px] overflow-hidden rounded-t-[10px]  border-b-0 px-6 pb-12 pt-0 sm:px-10 sm:pb-104 sm:pt-0 lg:px-16 lg:pb-16 lg:pt-8  ">
         <div className="absolute inset-0">
           <Image
             src={backgroundImage}

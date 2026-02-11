@@ -137,6 +137,8 @@ const TABS = [
   },
 ] as const;
 
+import { Container } from "@/components/ui/container";
+
 export function EverythingSection() {
   
   const [activeId, setActiveId] = useState<string>("gpu");
@@ -145,7 +147,7 @@ export function EverythingSection() {
   const router=useRouter();
 
   return (
-    <section className="select-none relative z-10 px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+    <section className="select-none relative z-10 py-16 lg:py-24">
       {/* Responsive background wave image */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <Image
@@ -158,9 +160,10 @@ export function EverythingSection() {
         />
       </div>
 
-      <div className="max-w-5xl mx-auto">
+      <Container>
+        <div className="max-w-[1200px] mx-auto px-4">
         {/* Heading */}
-        <div className="mb-8 md:mb-10 lg:mb-12">
+        <div className="mb-8 md:mb-10 lg:mb-12 max-w-full md:max-w-[1100px]">
           <h2
             className="text-4xl sm:text-5xl lg:text-6xl font-[400] tracking-tight leading-tight"
             style={{
@@ -179,7 +182,7 @@ export function EverythingSection() {
 
         {/* Tabs */}
         <div
-          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-[#4B4B4B] bg-transparent  px-1.5 sm:px-2 h-11 md:h-[46px] overflow-x-auto no-scrollbar"
+          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90  px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[1200px] mx-auto overflow-x-auto"
           style={{
             fontFamily:
               'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -206,7 +209,7 @@ export function EverythingSection() {
 
         {/* Content Card */}
         <div
-          className="relative border border-white/10 overflow-hidden"
+          className="relative max-w-[1600px] mx-auto border border-white/10 overflow-hidden"
           style={{
             backgroundColor: "#161618",
             fontFamily:
@@ -287,7 +290,8 @@ export function EverythingSection() {
             </AnimatePresence>
           </div>
         </div>
-      </div>
+        </div>
+      </Container>
     </section>
   );
 }

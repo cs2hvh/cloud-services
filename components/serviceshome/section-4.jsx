@@ -21,7 +21,7 @@ export default function ServicesHomeSectionFour({ plans}) {
 
 				  
 
-                <div className="mt-16 grid gap-6 md:grid-cols-2 lg:mt-16 lg:grid-cols-3">
+                <div className="mt-16 grid gap-6 gap-x-10 md:grid-cols-2 lg:mt-16 lg:grid-cols-3">
                     {plans.map((plan) => (
                         <article
                             key={plan.title}

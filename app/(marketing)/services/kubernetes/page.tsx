@@ -45,32 +45,7 @@ const GpuHome = () => {
 // 	},
 // ];
 
-const plans = [
-    {
-        badge: "New",
-        badgePlacement: "outside",
-        title: "Basic",
-        description:
-            "With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["1-4 vCPU core", "2-8 GB RAM", "50-200 GB NVMe disk space", "4 TB bandwidth"],
-    },
-    {
-        badge: "Most Recommended",
-        badgePlacement: "inside",
-        title: "General Use",
-        description:
-            "For growing teams and production workloads. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine in just a few clicks.",
-        features: ["4-16 vCPU cores", "8-32 GB RAM", "200-400 GB NVMe disk space", "16 TB bandwidth"],
-    },
-    {
-        badge: "Most Scalable",
-        badgePlacement: "inside",
-        title: "High Performance",
-        description:
-            "For organizations with advanced needs. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["16-64 vCPU cores", "32-256 GB RAM", "400-1000 GB NVMe disk space", "32 TB bandwidth"],
-    },
-];
+// plans removed (unused) to satisfy linter
 
  const cases = [
     {
