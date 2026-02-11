@@ -81,7 +81,7 @@ import WorldMap from "@/components/ui/worldmap";
 
 export default function GlobalNetworkSection() {
   return (
-    <div className="bg-[#030625] w-full">
+    <div className="bg-[#0a0a0a] w-full">
       
       <WorldMap
         dots={[
