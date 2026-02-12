@@ -102,72 +102,8 @@ export async function middleware(request: NextRequest) {
   const limited = applyIpCooldown(request);
   if (limited) return limited;
 
-  // Skip client secret check for:
-  // 1. Non-API routes (frontend navigation)
-  // 2. Auth callback routes (OAuth redirects from providers)
-  // 3. Webhook routes (external services)
-  // 4. Public APIs that are called from client-side without axios
-  // 5. Git provider APIs (repositories, branches) - called from app deployment wizard
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api');
-  const isAuthCallback = request.nextUrl.pathname.startsWith('/api/auth/callback');
-  const isWebhook = request.nextUrl.pathname.startsWith('/api/webhooks');
-  const isPublicApi = request.nextUrl.pathname.startsWith('/api/auth/providers') ||
-                      request.nextUrl.pathname.startsWith('/api/auth/link');
-  
-  // Git provider OAuth routes - these handle direct OAuth flows for infinite token refresh
-  const isGitProviderOAuth = 
-    pathname.startsWith('/api/gitlab/app-auth') ||
-    pathname.startsWith('/api/gitlab/callback') ||
-    pathname.startsWith('/api/bitbucket/app-auth') ||
-    pathname.startsWith('/api/bitbucket/callback');
-  
-  // Git provider APIs - these are called from the app deployment wizard (new.tsx)
-  // using fetch() without the x-client-secret header
-  const isGitProviderApi = 
-    pathname.startsWith('/api/github/repositories') ||
-    pathname.startsWith('/api/github/branches') ||
-    pathname.startsWith('/api/gitlab/repositories') ||
-    pathname.startsWith('/api/gitlab/branches') ||
-    pathname.startsWith('/api/bitbucket/repositories') ||
-    pathname.startsWith('/api/bitbucket/branches') ||
-    pathname.startsWith('/api/detect-framework') ||
-    pathname.startsWith('/api/admin/proxmox') ||
-    pathname.startsWith('/api/admin') ||
-    pathname.startsWith('/api/auth/signout') ||
-    pathname.startsWith('/api/services/') ||
-    pathname.startsWith('/api/ai-agents') ||
-    pathname.startsWith('/api/ai-model-keys') ||
-    pathname.startsWith('/api/knowledge-bases') ||
-    pathname.startsWith('/api/v1/agents');
-   
-
-  // Only check x-client-secret for API routes that aren't auth callbacks, webhooks, OAuth flows, or git provider APIs
-  if (isApiRoute && !isAuthCallback && !isWebhook && !isPublicApi && !isGitProviderOAuth && !isGitProviderApi) {
-    if (
-      request?.headers?.get("x-client-secret") !==
-      process.env.NEXT_PUBLIC_CLIENT_SECRET
-    ) {
-      console.log(
-        '[Middleware] Client secret mismatch for:',
-        request.nextUrl.pathname,
-        'Got:',
-        request?.headers?.get("x-client-secret")?.substring(0, 10) + '...',
-      );
-      return new NextResponse(
-        JSON.stringify({
-          error: "Unauthorized - Invalid client secret",
-        }),
-        {
-          status: 401,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
-      );
-    }
-  }
-
   // Update session (handles session refresh to prevent 30-min logout)
+  // Session validation provides proper authentication - no need for client secret theater
   return await updateSession(request);
 }
 

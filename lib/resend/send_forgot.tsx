@@ -1,3 +1,5 @@
+"use server";
+
 import { ApiResponse } from "./type";
 import { resend } from ".";
 import ForgotPasswordEmail from "./templates/forgot-password";

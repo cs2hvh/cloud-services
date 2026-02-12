@@ -71,7 +71,7 @@ export function createAngularPipeline(
   const buildArgs = envVars.length > 0
     ? envVars.map(e => {
         // Escape special characters for shell
-        const escapedValue = e.value.replace(/"/g, '\\\\"').replace(/\$/g, '\\\\$');
+        const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
         return `--build-arg ${e.key}="${escapedValue}"`;
       }).join(' \\\\\n                    ')
     : '';

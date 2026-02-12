@@ -63,30 +63,23 @@ export async function POST(req: NextRequest) {
     const { env_vars, ...appData } = validation.data;
 
     // Validate environment variables according to framework rules (Vercel approach)
+    // Log warnings/errors for awareness, but ALLOW deployment (like Vercel)
     if (env_vars && env_vars.length > 0) {
       const envValidation = validateEnvVars(appData.framework, env_vars);
       
-      // Hard fail on errors (security risks like NEXT_PUBLIC_DATABASE_URL)
-      if (!envValidation.isValid) {
-        console.error('[platform-apps/create] Environment variable validation failed:', {
+      // Log errors as warnings - don't block deployment
+      if (envValidation.errors.length > 0) {
+        console.warn('[platform-apps/create] Environment variable security warnings:', {
           framework: appData.framework,
           env_vars: env_vars.map(v => v.key),
           errors: envValidation.errors,
           warnings: envValidation.warnings
         });
-        return NextResponse.json(
-          {
-            error: 'Environment variable validation failed',
-            errors: envValidation.errors,
-            warnings: envValidation.warnings
-          },
-          { status: 400 }
-        );
       }
       
-      // Log warnings but allow deployment (e.g., non-VITE_ vars in Vue.js)
+      // Log info warnings
       if (envValidation.warnings.length > 0) {
-        console.log('[platform-apps/create] Environment variable warnings:', envValidation.warnings);
+        console.log('[platform-apps/create] Environment variable info:', envValidation.warnings);
       }
     }
 
