@@ -5,8 +5,8 @@ import { NextResponse } from "next/server"; // added
 // ---------- IP cooldown config ----------
 const IS_DEV = process.env.NODE_ENV === 'development';
 const WINDOW_MS = 60_000; // 1 minute window
-const MAX_REQUESTS = IS_DEV ? 500 : 30; // Higher limit in dev, stricter in production
-const COOLDOWN_MS = IS_DEV ? 30_000 : 5 * 60_000; // 30s dev, 5min production
+const MAX_REQUESTS = IS_DEV ? 500 : 100; // Higher limit in dev, stricter in production
+const COOLDOWN_MS = IS_DEV ? 30_000 : 2 * 60_000; // 30s dev, 5min production
 
 type IpRecord = {
   count: number;
