@@ -43,9 +43,9 @@ const TABS = [
     id: "gpu",
     label: "GPU Instance",
     title: "GPU Instance",
-    heading: "GPU power, without the complexity",
+    heading: "GPU Instance",
     description:
-      "Run your most demanding AI, ML, and rendering workloads on dedicated GPU infrastructure tuned for throughput.",
+      "Description Unleash high-performance computing power for your most demanding workloads. Accelerate AI training, 3D rendering, and complex video processing with dedicated GPU resources optimized for maximum throughput and low latency.",
     bullets: [
       "NVIDIA H100 & A100 Tensor Core clusters",
       "Scalable infrastructure for deep learning & LLMs",
@@ -137,6 +137,8 @@ const TABS = [
   },
 ] as const;
 
+import { Container } from "@/components/ui/container";
+
 export function EverythingSection() {
   
   const [activeId, setActiveId] = useState<string>("gpu");
@@ -145,7 +147,7 @@ export function EverythingSection() {
   const router=useRouter();
 
   return (
-    <section className="select-none relative z-10 px-4 sm:px-6 lg:px-8 py-16 lg:py-24">
+    <section className="select-none relative z-10 py-16 lg:py-24">
       {/* Responsive background wave image */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         <Image
@@ -158,14 +160,15 @@ export function EverythingSection() {
         />
       </div>
 
-      <div className="max-w-6xl mx-auto">
+      <Container>
+        <div className="max-w-[1200px] mx-auto px-4">
         {/* Heading */}
-        <div className="mb-8 md:mb-10 lg:mb-12 max-w-full md:max-w-[786px] mx-auto">
+        <div className="mb-8 md:mb-10 lg:mb-12 max-w-full md:max-w-[1100px]">
           <h2
-            className="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight leading-tight"
+            className="text-4xl sm:text-5xl lg:text-6xl font-[400] tracking-tight leading-tight"
             style={{
               fontFamily:
-                'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                'Sansation Regular',
             }}
           >
             <span className="block bg-gradient-to-r from-white via-[#E3E6EE] to-[#8B909A] bg-clip-text text-transparent">
@@ -179,7 +182,7 @@ export function EverythingSection() {
 
         {/* Tabs */}
         <div
-          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90  px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[786px] mx-auto overflow-x-auto"
+          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90  px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[1200px] mx-auto overflow-x-auto"
           style={{
             fontFamily:
               'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -192,10 +195,10 @@ export function EverythingSection() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveId(tab.id)}
-                className={`cursor-pointer relative inline-flex items-center px-3 sm:px-4 h-8 md:h-[34px] text-[11px] sm:text-xs md:text-sm  whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                className={`bg-transparent cursor-pointer relative inline-flex items-center px-3 sm:px-4 h-8 md:h-[34px] text-[11px] sm:text-xs md:text-sm  whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive
                     ? "bg-white text-[#111827] shadow-sm"
-                    : "bg-transparent text-gray-300/90 hover:text-white hover:bg-white/5"
+                    : " text-gray-300/90 hover:text-white hover:bg-white/5"
                 }`}
               >
                 {tab.label}
@@ -206,14 +209,14 @@ export function EverythingSection() {
 
         {/* Content Card */}
         <div
-          className="relative max-w-5xl mx-auto  border border-white/10 overflow-hidden"
+          className="relative max-w-[1600px] mx-auto border border-white/10 overflow-hidden"
           style={{
             backgroundColor: "#161618",
             fontFamily:
               'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
           }}
         >
-          <div className="relative grid gap-10 lg:gap-12 p-6 sm:p-8 lg:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center">
+          <div className="relative grid gap-10 lg:gap-12 p-6 sm:p-8 lg:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] items-center ">
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab.id + "-text"}
@@ -223,14 +226,13 @@ export function EverythingSection() {
                 transition={{ duration: 0.25 }}
                 className="space-y-4 sm:space-y-5"
               >
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-blue-400/80 mb-2">
-                    {activeTab.title}
-                  </p>
+
+                <div className="ps-6 w-full">
+                  <div>
                   <h3 className="text-2xl sm:text-3xl font-semibold text-white mb-2">
-                    {activeTab.heading}
+                    {activeTab.title}
                   </h3>
-                  <p className="text-sm sm:text-base text-gray-300/90 max-w-xl">
+                  <p style={{width:'728px'}} className="mb-2 w-full text-sm sm:text-base text-gray-300/90 ">
                     {activeTab.description}
                   </p>
                 </div>
@@ -249,15 +251,19 @@ export function EverythingSection() {
                     </li>
                   ))}
                 </ul>
-
-                <button
+                 <button
                   onClick={() => router.push(`/services/${activeTab.id}`)}
                   type="button"
-                  className="cursor-pointer mt-4 inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-4 py-2 text-xs sm:text-sm font-medium text-white hover:bg-white/10 hover:border-white/30 transition-colors"
+                  className=" cursor-pointer mt-4 inline-flex items-center gap-2  border-white/15 bg-white px-4 py-2 text-xs sm:text-sm font-medium text-black hover:bg-white/10 hover:border-white/30 transition-colors"
                 >
                   Explore {activeTab.label}
                   <ArrowRight className="h-4 w-4" />
                 </button>
+
+                </div>
+                
+
+               
               </motion.div>
             </AnimatePresence>
 
@@ -268,21 +274,24 @@ export function EverythingSection() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 12 }}
                 transition={{ duration: 0.25 }}
-                className="relative w-full max-w-md mx-auto aspect-[4/3] sm:aspect-[5/3]"
+                className=" relative w-full max-w-md mx-auto aspect-[4/3] sm:aspect-[5/3]"
               >
-                <Image
+               <div className="mt-2">
+                 <Image
                   src={activeTab.imageSrc}
                   alt={activeTab.imageAlt}
                   fill
                   sizes="(min-width: 1024px) 360px, (min-width: 640px) 70vw, 90vw"
-                  className="object-contain"
+                  className="object-contain mt-16"
                   priority={activeTab.id === "gpu"}
                 />
+               </div>
               </motion.div>
             </AnimatePresence>
           </div>
         </div>
-      </div>
+        </div>
+      </Container>
     </section>
   );
 }

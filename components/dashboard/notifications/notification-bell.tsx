@@ -28,9 +28,9 @@ export function NotificationBell() {
       const res = await api.get("/notifications/count");
       setUnreadCount(res.data.count || 0);
     } catch (error) {
-      console.error("[NotificationBell] Failed to fetch count:", error);
+      console.error("[NotificationBell] Failed to fetch count:", error)
     }
-  }, [user?.id]);
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) return

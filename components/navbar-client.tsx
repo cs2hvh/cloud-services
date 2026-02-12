@@ -8,6 +8,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 
+import { WideContainer } from "@/components/ui/container";
+
 type NavbarClientProps = {
   initialUser: SupabaseUser | null;
 };
@@ -64,8 +66,8 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
       style={{ backgroundColor: 'transparent' }}
     >
-      <div className="relative w-full max-w-[1440px] h-20 mx-auto" style={{ borderRadius: '4px' }}>
-        <div className="absolute inset-0 flex items-center px-4 sm:px-6 lg:px-8">
+      <WideContainer className="h-20">
+        <div className="flex items-center h-20 w-full" style={{ borderRadius: '4px' }}>
           {/* Logo */}
           <Link 
             href="/" 
@@ -269,7 +271,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             {isOpen ? <X className="w-6 h-6 text-white" /> : <Menu className="w-6 h-6 text-white" />}
           </button>
         </div>
-      </div>
+      </WideContainer>
 
       <AnimatePresence>
         {isOpen && (

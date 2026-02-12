@@ -77,51 +77,51 @@
 
 "use client";
 import WorldMap from "@/components/ui/worldmap";
+import { Container } from "@/components/ui/container";
 // import { motion } from "motion/react";
 
 export default function GlobalNetworkSection() {
   return (
-    <div className="bg-[#030625] w-full">
-      
-      <WorldMap
-        dots={[
-          {
-            start: {
-              lat: 64.2008,
-              lng: -149.4937,
-              label: "Alaska, USA",
-            },
-            end: {
-              lat: 34.0522,
-              lng: -118.2437,
-              label: "Los Angeles, USA",
-            },
-          },
-          {
-            start: { lat: 64.2008, lng: -149.4937, label: "Alaska, USA" },
-            end: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
-          },
-          {
-            start: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
-            end: { lat: 38.7223, lng: -9.1393, label: "Lisbon, Portugal" },
-          },
-          {
-            start: { lat: 51.5074, lng: -0.1278, label: "London, UK" },
-            end: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-          },
-          {
-            start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-            end: { lat: 43.1332, lng: 131.9113, label: "Vladivostok, Russia" },
-          },
-          {
-            start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-            end: { lat: -1.2921, lng: 36.8219, label: "Nairobi, Kenya" },
-          },
-        ]}
-      />
-    </div>
+    <section className="bg-[#000000] w-full py-16 lg:py-24">
+      <Container>
+        <WorldMap
+            dots={[
+              {
+                start: {
+                  lat: 64.2008,
+                  lng: -149.4937,
+                  label: "Alaska, USA",
+                },
+                end: {
+                  lat: 34.0522,
+                  lng: -118.2437,
+                  label: "Los Angeles, USA",
+                },
+              },
+              {
+                start: { lat: 64.2008, lng: -149.4937, label: "Alaska, USA" },
+                end: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
+              },
+              {
+                start: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
+                end: { lat: 38.7223, lng: -9.1393, label: "Lisbon, Portugal" },
+              },
+              {
+                start: { lat: 51.5074, lng: -0.1278, label: "London, UK" },
+                end: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
+              },
+              {
+                start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
+                end: { lat: 43.1332, lng: 131.9113, label: "Vladivostok, Russia" },
+              },
+              {
+                start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
+                end: { lat: -1.2921, lng: 36.8219, label: "Nairobi, Kenya" },
+              },
+            ]}
+          />
+      </Container>
+    </section>
   );
 }
-
-
 

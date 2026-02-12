@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
+import { Container } from "@/components/ui/container";
 
 export function ComplianceCta() {
   return (
-    <section className="relative z-10 bg-[#C1C1C1] px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl">
+    <section className="relative z-10 bg-[#C1C1C1] py-20 sm:py-24">
+      <Container>
         <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
           <div className="text-center md:text-left">
             <h2 className="text-4xl sm:text-5xl lg:text-[56px] leading-tight text-black">
@@ -46,7 +47,7 @@ export function ComplianceCta() {
             />
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

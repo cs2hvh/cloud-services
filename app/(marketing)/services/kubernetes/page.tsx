@@ -3,6 +3,7 @@ import ComputeMarqueeSection from "@/components/services/compute-marquee-section
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 // import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionFour2 from "@/components/serviceshome/section-4.2";
+import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 
 const GpuHome = () => {
@@ -114,6 +115,7 @@ const GpuHome = () => {
         </div>
       </div>
       <ServicesHomeSectionFour2/>
+      <ServicesHomeSectionFive/>
       <ServicesHomeSectionSix cases={cases}/>
     </main>
   );
