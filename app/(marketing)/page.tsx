@@ -4,7 +4,7 @@ import { ServicesSection } from "@/components/services-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
-import { HomeFeaturesSection } from "@/components/home/features-section";
+// import { HomeFeaturesSection } from "@/components/home/features-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 
 export default function Home() {
@@ -22,7 +22,7 @@ export default function Home() {
            {/*Everything you build*/}
        <EverythingSection />
       <GlobalNetworkSection />
-      <HomeFeaturesSection />
+      {/* <HomeFeaturesSection /> */}
       <WhyTrustUs />
       <ComplianceCta />
     </div>

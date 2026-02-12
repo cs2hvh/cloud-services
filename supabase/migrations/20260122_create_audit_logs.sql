@@ -4,8 +4,15 @@
 -- Purpose: Create immutable audit log system for admin monitoring
 -- ============================================
 
+-- Create audits schema
+CREATE SCHEMA IF NOT EXISTS audits;
+
+-- Grant usage on schema to authenticated users and service role
+GRANT USAGE ON SCHEMA audits TO authenticated, service_role;
+GRANT ALL ON SCHEMA audits TO postgres;
+
 -- Main audit log table (partitioned by date)
-CREATE TABLE public.audit_logs (
+CREATE TABLE audits.audit_logs (
   -- Primary Key
   id UUID DEFAULT gen_random_uuid(),
   
@@ -59,40 +66,40 @@ CREATE TABLE public.audit_logs (
 -- MONTHLY PARTITIONS (2026)
 -- ============================================
 
-CREATE TABLE public.audit_logs_2026_01 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_01 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
 
-CREATE TABLE public.audit_logs_2026_02 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_02 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
 
-CREATE TABLE public.audit_logs_2026_03 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_03 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
 
-CREATE TABLE public.audit_logs_2026_04 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_04 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
 
-CREATE TABLE public.audit_logs_2026_05 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_05 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
 
-CREATE TABLE public.audit_logs_2026_06 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_06 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
 
-CREATE TABLE public.audit_logs_2026_07 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_07 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
 
-CREATE TABLE public.audit_logs_2026_08 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_08 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
 
-CREATE TABLE public.audit_logs_2026_09 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_09 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
 
-CREATE TABLE public.audit_logs_2026_10 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_10 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-10-01') TO ('2026-11-01');
 
-CREATE TABLE public.audit_logs_2026_11 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_11 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
 
-CREATE TABLE public.audit_logs_2026_12 PARTITION OF public.audit_logs
+CREATE TABLE audits.audit_logs_2026_12 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
 
 -- ============================================
@@ -100,31 +107,31 @@ CREATE TABLE public.audit_logs_2026_12 PARTITION OF public.audit_logs
 -- ============================================
 
 -- Primary query patterns
-CREATE INDEX idx_audit_user_id ON public.audit_logs(user_id);
-CREATE INDEX idx_audit_service_type ON public.audit_logs(service_type);
-CREATE INDEX idx_audit_action ON public.audit_logs(action);
-CREATE INDEX idx_audit_created_at ON public.audit_logs(created_at DESC);
-CREATE INDEX idx_audit_service_id ON public.audit_logs(service_id);
+CREATE INDEX idx_audit_user_id ON audits.audit_logs(user_id);
+CREATE INDEX idx_audit_service_type ON audits.audit_logs(service_type);
+CREATE INDEX idx_audit_action ON audits.audit_logs(action);
+CREATE INDEX idx_audit_created_at ON audits.audit_logs(created_at DESC);
+CREATE INDEX idx_audit_service_id ON audits.audit_logs(service_id);
 
 -- Composite indexes for common admin queries
 CREATE INDEX idx_audit_admin_query 
-  ON public.audit_logs(service_type, action, created_at DESC);
+  ON audits.audit_logs(service_type, action, created_at DESC);
 
 CREATE INDEX idx_audit_user_timeline 
-  ON public.audit_logs(user_id, created_at DESC);
+  ON audits.audit_logs(user_id, created_at DESC);
 
 -- Full-text search on changes (optional but recommended)
-CREATE INDEX idx_audit_changes_gin ON public.audit_logs USING GIN(changes);
-CREATE INDEX idx_audit_metadata_gin ON public.audit_logs USING GIN(metadata);
+CREATE INDEX idx_audit_changes_gin ON audits.audit_logs USING GIN(changes);
+CREATE INDEX idx_audit_metadata_gin ON audits.audit_logs USING GIN(metadata);
 
 -- ============================================
 -- ROW LEVEL SECURITY
 -- ============================================
 
-ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audits.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Admins can read all audit logs
-CREATE POLICY "Admins can read audit logs" ON public.audit_logs
+CREATE POLICY "Admins can read audit logs" ON audits.audit_logs
   FOR SELECT
   TO authenticated
   USING (
@@ -135,7 +142,7 @@ CREATE POLICY "Admins can read audit logs" ON public.audit_logs
   );
 
 -- Service role can insert (server-side only)
-CREATE POLICY "Service role can insert audit logs" ON public.audit_logs
+CREATE POLICY "Service role can insert audit logs" ON audits.audit_logs
   FOR INSERT
   TO service_role
   WITH CHECK (true);
@@ -147,7 +154,7 @@ CREATE POLICY "Service role can insert audit logs" ON public.audit_logs
 -- TAMPER PREVENTION TRIGGER
 -- ============================================
 
-CREATE OR REPLACE FUNCTION public.prevent_audit_modification()
+CREATE OR REPLACE FUNCTION audits.prevent_audit_modification()
 RETURNS TRIGGER AS $$
 BEGIN
   RAISE EXCEPTION 'Audit logs are immutable. Modifications are not allowed.';
@@ -156,15 +163,15 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE TRIGGER audit_logs_immutable
-  BEFORE UPDATE OR DELETE ON public.audit_logs
+  BEFORE UPDATE OR DELETE ON audits.audit_logs
   FOR EACH ROW
-  EXECUTE FUNCTION public.prevent_audit_modification();
+  EXECUTE FUNCTION audits.prevent_audit_modification();
 
 -- ============================================
 -- HELPER FUNCTION: Auto-create future partitions
 -- ============================================
 
-CREATE OR REPLACE FUNCTION public.create_audit_monthly_partition(target_date DATE)
+CREATE OR REPLACE FUNCTION audits.create_audit_monthly_partition(target_date DATE)
 RETURNS TEXT AS $$
 DECLARE
   partition_name TEXT;
@@ -176,7 +183,7 @@ BEGIN
   partition_name := 'audit_logs_' || to_char(start_date, 'YYYY_MM');
   
   EXECUTE format(
-    'CREATE TABLE IF NOT EXISTS public.%I PARTITION OF public.audit_logs
+    'CREATE TABLE IF NOT EXISTS audits.%I PARTITION OF audits.audit_logs
      FOR VALUES FROM (%L) TO (%L)',
     partition_name, start_date, end_date
   );
@@ -186,15 +193,35 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================
+-- GRANT PERMISSIONS ON TABLES
+-- ============================================
+
+-- Grant table permissions
+GRANT SELECT ON audits.audit_logs TO authenticated;
+GRANT INSERT ON audits.audit_logs TO service_role;
+GRANT ALL ON audits.audit_logs TO postgres;
+
+-- Grant permissions on all tables in audits schema
+GRANT SELECT ON ALL TABLES IN SCHEMA audits TO authenticated;
+GRANT INSERT ON ALL TABLES IN SCHEMA audits TO service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA audits TO postgres;
+
+-- Grant default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA audits
+  GRANT SELECT ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA audits
+  GRANT INSERT ON TABLES TO service_role;
+
+-- ============================================
 -- VERIFICATION
 -- ============================================
 
 -- Verify table creation
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'audit_logs') THEN
-    RAISE NOTICE 'Audit logs table created successfully';
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'audits' AND tablename = 'audit_logs') THEN
+    RAISE NOTICE 'Audit logs table created successfully in audits schema';
   END IF;
   
-  RAISE NOTICE 'Migration completed. Audit log system is ready.';
+  RAISE NOTICE 'Migration completed. Audit log system is ready in audits schema.';
 END $$;

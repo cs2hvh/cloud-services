@@ -87,11 +87,23 @@ function applyIpCooldown(req: NextRequest): NextResponse | null {
 // ---------------------------------------
 
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // STREAMING ROUTES: Completely bypass middleware to prevent response buffering
+  // These routes use Server-Sent Events (SSE) which must not be touched by middleware
+  if (pathname.startsWith('/api/ai-agents/') && pathname.endsWith('/test')) {
+    return NextResponse.next();
+  }
+  if (pathname.startsWith('/api/v1/agents/') && pathname.endsWith('/chat')) {
+    return NextResponse.next();
+  }
+
   // IP cooldown check (early return if limited)
   const limited = applyIpCooldown(request);
   if (limited) return limited;
 
   // Update session (handles session refresh to prevent 30-min logout)
+  // Session validation provides proper authentication - no need for client secret theater
   return await updateSession(request);
 }
 

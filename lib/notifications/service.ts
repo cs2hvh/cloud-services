@@ -162,6 +162,8 @@ export function createServiceNotification(params: {
     restarted: { type: 'info', verb: 'restarted' },
     migrated: { type: 'success', verb: 'migrated' },
     resized: { type: 'info', verb: 'resized' },
+    attached: { type: 'info', verb: 'attached' },
+    detached: { type: 'info', verb: 'detached' },
   };
 
   const serviceLabels: Record<ServiceType, string> = {
@@ -174,6 +176,8 @@ export function createServiceNotification(params: {
     game_server: 'Game Server',
     firewall: 'Firewall Rule',
     spectrum: 'Spectrum App',
+    ai_agent: 'AI Agent',
+    knowledge_base: 'Knowledge Base',
   };
 
   const { type: defaultType, verb } = actionMessages[action];
@@ -235,9 +239,40 @@ export function createServiceNotification(params: {
       case 'bucket_versioning':
         message = `${serviceLabel} "${serviceName}" versioning ${metadata.enabled ? 'enabled' : 'disabled'}.`;
         break;
+      case 'agent_model':
+        message = `${serviceLabel} "${serviceName}" model updated to ${metadata.modelId}.`;
+        break;
+      case 'agent_system_prompt':
+        message = `${serviceLabel} "${serviceName}" system prompt has been updated.`;
+        break;
+      case 'agent_settings':
+        message = `${serviceLabel} "${serviceName}" settings have been updated.`;
+        break;
+      case 'agent_rag':
+        message = `${serviceLabel} "${serviceName}" RAG settings ${metadata.enabled ? 'enabled' : 'updated'}.`;
+        break;
+      case 'agent_status':
+        message = `${serviceLabel} "${serviceName}" status changed to ${metadata.status}.`;
+        break;
+      case 'kb_attached':
+        message = `Knowledge Base "${metadata.kbName}" attached to ${serviceName}.`;
+        break;
+      case 'kb_detached':
+        message = `Knowledge Base "${metadata.kbName}" detached from ${serviceName}.`;
+        break;
+      case 'kb_documents':
+        message = `${metadata.count} document(s) ${metadata.action} in "${serviceName}".`;
+        break;
+      case 'kb_settings':
+        message = `${serviceLabel} "${serviceName}" settings have been updated.`;
+        break;
       default:
         message = `${serviceLabel} "${serviceName}" has been ${verb} successfully.`;
     }
+  } else if (action === 'attached') {
+    message = `${serviceLabel} "${serviceName}" has been attached${metadata?.targetName ? ` to ${metadata.targetName}` : ''}.`;
+  } else if (action === 'detached') {
+    message = `${serviceLabel} "${serviceName}" has been detached${metadata?.targetName ? ` from ${metadata.targetName}` : ''}.`;
   } else {
     message = `${serviceLabel} "${serviceName}" has been ${verb} successfully.`;
   }

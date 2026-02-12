@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Container } from "@/components/ui/container";
 
 const trustFeatures = [
   {
@@ -56,8 +57,9 @@ const trustFeatures = [
 
 export function WhyTrustUs() {
   return (
-    <section className="relative z-10 bg-[#161618] border-b border-[#161618] px-4 sm:px-6 lg:px-8 py-20 sm:py-24">
-      <div className="mx-auto max-w-6xl">
+    <section className="relative z-10 bg-[#161618] border-b border-[#161618] py-20 sm:py-24">
+      <Container>
+        <div className="mx-auto w-full max-w-[1800px]">
         <div className="grid gap-12 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-16">
           <div className="relative overflow-hidden border border-[#2D7CFF] shadow-[0_6px_22px_rgba(45,124,255,0.35)]">
             <div className="absolute inset-0">
@@ -111,7 +113,8 @@ export function WhyTrustUs() {
             })}
           </div>
         </div>
-      </div>
+        </div>
+      </Container>
     </section>
   );
 }

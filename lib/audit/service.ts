@@ -38,7 +38,8 @@ export const AuditLogService = {
           : null;
 
       const { data, error } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .insert({
           user_id: params.user_id,
           user_role: params.user_role,
@@ -85,7 +86,8 @@ export const AuditLogService = {
       const offset = (page - 1) * limit;
 
       let query = supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*", { count: "exact" });
 
       // Apply filters
@@ -142,7 +144,8 @@ export const AuditLogService = {
       const supabase = await createServiceClient();
 
       const { data, error } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*")
         .eq("id", id)
         .single();
@@ -206,7 +209,8 @@ export const AuditLogService = {
       const supabase = await createServiceClient();
 
       const { data, error } = await supabase
-        .from("audit_logs")
+        .schema('audits')
+        .from('audit_logs')
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
@@ -240,7 +244,7 @@ export const AuditLogService = {
     try {
       const supabase = await createServiceClient();
 
-      let query = supabase.from("audit_logs").select("*");
+      let query = supabase.schema('audits').from('audit_logs').select("*");
 
       if (filters?.date_from) {
         query = query.gte("created_at", filters.date_from);

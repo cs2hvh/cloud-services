@@ -17,6 +17,19 @@ export { Promocodes } from "./promocodes";
 export { Platform_Apps, Platform_App_Webhooks } from "./platform_apps";
 export { storeFile } from "./utils";
 
+// AI Agents
+export {
+  AIAgents,
+  AgentKnowledgeBases,
+  AgentKBDocuments,
+  AgentKBChunks,
+  AgentModelKeys,
+  AgentConversations,
+  AgentMessages,
+  AgentUsage,
+} from "./ai_agents";
+// Platform app deployments re-export removed (not exported from platform_apps)
+
 // For backward compatibility - default export
 import { Users } from "./users";
 import { Projects } from "./projects";

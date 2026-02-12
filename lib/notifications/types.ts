@@ -9,7 +9,9 @@ export type ServiceType =
   | 'compute'
   | 'game_server'
   | 'firewall'
-  | 'spectrum';
+  | 'spectrum'
+  | 'ai_agent'
+  | 'knowledge_base';
 
 export type ActionType = 
   | 'created' 
@@ -20,7 +22,9 @@ export type ActionType =
   | 'scaled'
   | 'restarted'
   | 'migrated'
-  | 'resized';
+  | 'resized'
+  | 'attached'
+  | 'detached';
 
 export interface Notification {
   id: string;

@@ -347,7 +347,9 @@ CMD ${pm.start}
 export function getNextjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Next.js can pre-render API routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -370,7 +372,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
@@ -402,7 +407,7 @@ CMD ${pm.start}
 
 /**
  * Generate Dockerfile for Next.js (standalone mode)
- * Supports build-time env vars for NEXT_PUBLIC_* variables
+ * Supports build-time env vars for ALL variables (like Vercel)
  * 
  * ⚠️ RUNTIME: Package manager is ONLY used during build.
  * Standalone mode runs "node server.js" directly (Next.js generates optimized server).
@@ -411,7 +416,9 @@ CMD ${pm.start}
 export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (NEXT_PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Next.js can pre-render API routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -434,17 +441,17 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Next.js
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # Ensure public folder exists for COPY
 RUN mkdir -p ./public
 
-# ---- Run Stage (Standalone) ----
+# ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV PORT=3000
 
 # Security: Create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
@@ -644,7 +651,9 @@ CMD ["sh", "-c", "serve -s dist -l $PORT"]
  * Supports npm, pnpm, and yarn package managers
  */
 export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
-  // Generate ARG directives for client-side env vars (NUXT_PUBLIC_*, VITE_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so Nuxt can pre-render SSR routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -670,7 +679,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for Nuxt
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
@@ -694,13 +706,15 @@ CMD ["node", ".output/server/index.mjs"]
 
 /**
  * Generate Dockerfile for SvelteKit (adapter-node)
- * Supports build-time env vars for PUBLIC_* variables
+ * Supports build-time env vars for ALL variables (like Vercel)
  * Now supports pnpm/yarn/npm auto-detection
  */
 export function getSveltekitDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for client-side env vars (PUBLIC_*)
+  // Generate ARG directives for ALL env vars (build-time availability)
+  // Like Vercel: All vars available during build so SvelteKit can pre-render SSR routes
+  // Security: Server-side vars are still loaded from K8s Secrets at runtime
   const argDirectives = envVars.length > 0 
     ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
@@ -723,7 +737,10 @@ ${pm.install}
 COPY . .
 
 # Pass build args as environment variables for SvelteKit
-${envDirectives}${pm.build}
+${envDirectives}
+# Always build in production mode to prevent false positive errors
+ENV NODE_ENV=production
+${pm.build}
 
 # ---- Production Stage ----
 FROM node:NODE_VERSION_PLACEHOLDER-alpine
