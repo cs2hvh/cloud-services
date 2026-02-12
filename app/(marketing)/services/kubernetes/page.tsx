@@ -102,7 +102,7 @@ const GpuHome = () => {
         description="Enterprise-grade Kubernetes clusters with automatic scaling, seamless updates, and built-in security. Deploy containerized applications at any scale."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-         backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
+         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/kubernetes.svg", alt: "Kubernetes infrastructure" }}
       />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">

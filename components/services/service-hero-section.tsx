@@ -57,9 +57,10 @@ export function ServiceHeroSection({
           alt={backgroundImage.alt ?? ""}
           fill
           priority={backgroundImage.priority}
-          className="object-cover blur-[3px] scale-105"
+          className="object-cover blur-[3px] object-right-top scale-100"
+          style={{ objectPosition: "right top" }}
         />
-        <div className="absolute inset-0 bg-black/70" />
+        <div className="absolute inset-0 bg-black/0" />
       </div>
 
       <div className="relative z-10 mx-auto flex h-full w-full max-w-[1320px] px-6 sm:px-8 lg:max-w-[1440px] lg:px-12 min-[1920px]:max-w-[1800px] min-[1920px]:px-16 min-[2560px]:max-w-[2600px] min-[2560px]:px-12">

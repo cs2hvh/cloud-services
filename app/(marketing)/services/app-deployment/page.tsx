@@ -101,7 +101,7 @@ const GpuHome = () => {
         description="Enterprise-ready application deployments with CI/CD automation, environment isolation, and rollback support. Ship updates faster, ensure high availability, and scale applications seamlessly without operational overhead. "
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-         backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
+         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/app-deploy.svg", alt: "App Deployment infrastructure" }}
       />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
