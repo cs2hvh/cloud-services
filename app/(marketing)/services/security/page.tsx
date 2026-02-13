@@ -103,7 +103,7 @@ const CloudService = () => {
         description="Enterprise-grade security with DDoS protection, web application firewalls, and comprehensive compliance certifications for regulated industries."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/hero-bg.png", alt: "" }}
+        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/service-home-security-section-1.svg", alt: "security infrastructure" }}
       />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
