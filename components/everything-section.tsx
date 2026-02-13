@@ -182,7 +182,7 @@ export function EverythingSection() {
 
         {/* Tabs */}
         <div
-          className="flex flex-nowrap items-center gap-1.5 sm:gap-2 mb-8 md:mb-10 border border-white/10 bg-[#05060A]/90  px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[1200px] mx-auto overflow-x-auto"
+          className="flex flex-nowrap items-stretch gap-1.5 sm:gap-2 mb-8 md:mb-10 px-1.5 sm:px-2 h-11 md:h-[46px] max-w-full md:max-w-[1200px] mx-auto overflow-x-auto bg-black/10 backdrop-blur-sm border border-white/10"
           style={{
             fontFamily:
               'Nunito Sans, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -190,15 +190,15 @@ export function EverythingSection() {
         >
           {TABS.map((tab) => {
             const isActive = tab.id === activeId;
-            return (
+                return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveId(tab.id)}
-                className={`bg-transparent cursor-pointer relative inline-flex items-center px-3 sm:px-4 h-8 md:h-[34px] text-[11px] sm:text-xs md:text-sm  whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
+                className={`cursor-pointer relative inline-flex items-center px-3 sm:px-4 h-full text-[11px] sm:text-xs md:text-sm whitespace-nowrap transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/70 focus-visible:ring-offset-2 focus-visible:ring-offset-black ${
                   isActive
-                    ? "bg-white text-[#111827] shadow-sm"
-                    : " text-gray-300/90 hover:text-white hover:bg-white/5"
+                    ? "bg-white/95 text-[#111827] shadow-sm"
+                    : "bg-transparent text-gray-300/90 hover:text-white hover:bg-white/5"
                 }`}
               >
                 {tab.label}
@@ -227,12 +227,12 @@ export function EverythingSection() {
                 className="space-y-4 sm:space-y-5"
               >
 
-                <div className="ps-6 w-full">
+                <div className="w-full pl-0 sm:pl-6">
                   <div>
                   <h3 className="text-2xl sm:text-3xl font-semibold text-white mb-2">
                     {activeTab.title}
                   </h3>
-                  <p style={{width:'728px'}} className="mb-2 w-full text-sm sm:text-base text-gray-300/90 ">
+                  <p className="mb-2 w-full max-w-[728px] text-sm sm:text-base text-gray-300/90">
                     {activeTab.description}
                   </p>
                 </div>
@@ -274,18 +274,18 @@ export function EverythingSection() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 12 }}
                 transition={{ duration: 0.25 }}
-                className=" relative w-full max-w-md mx-auto aspect-[4/3] sm:aspect-[5/3]"
+                className="relative w-full max-w-md lg:max-w-none mx-auto aspect-[4/3] sm:aspect-[5/3] lg:aspect-[16/9]"
               >
-               <div className="mt-2">
-                 <Image
-                  src={activeTab.imageSrc}
-                  alt={activeTab.imageAlt}
-                  fill
-                  sizes="(min-width: 1024px) 360px, (min-width: 640px) 70vw, 90vw"
-                  className="object-contain mt-16"
-                  priority={activeTab.id === "gpu"}
-                />
-               </div>
+                <div className="mt-0 w-full h-full relative">
+                  <Image
+                    src={activeTab.imageSrc}
+                    alt={activeTab.imageAlt}
+                    fill
+                    sizes="(min-width: 1280px) 600px, (min-width: 1024px) 420px, (min-width: 640px) 70vw, 90vw"
+                    className="object-contain"
+                    priority={activeTab.id === "gpu"}
+                  />
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>
