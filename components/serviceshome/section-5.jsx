@@ -54,7 +54,6 @@ function ServicesHomeSectionFive({ title = "Frequently Asked Questions", faqs = 
                 <details
                   key={faq.question}
                   className="group w-full overflow-hidden rounded-[6px] border border-white/35 bg-white/10 text-white shadow-[0_14px_34px_rgba(0,0,0,0.4),inset_0_0_18px_rgba(255,255,255,0.08)] backdrop-blur-[10px]"
-                  open={index === 2}
                 >
                   <summary className="flex h-[56px] cursor-pointer list-none items-center justify-between gap-4 px-6 text-[clamp(14px,1.2vw,20px)] font-normal sm:h-[64px] min-[1920px]:h-[76px] min-[2560px]:h-[84px]">
                     <span style={{ fontFamily: "Nunito, sans-serif" }}>
