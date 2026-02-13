@@ -62,6 +62,7 @@ import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import api from '@/lib/axios/axios';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
+import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-editor';
 
 
 
@@ -172,7 +173,7 @@ export default function AppDetailPage() {
   }>>([]);
 
   // Environment variables editing state
-  const [editedEnvVars, setEditedEnvVars] = useState<Array<{ key: string; value: string }>>([]);
+  const [editedEnvVars, setEditedEnvVars] = useState<EnvVar[]>([]);
   const [envVarsModified, setEnvVarsModified] = useState(false);
   const [savingEnvVars, setSavingEnvVars] = useState(false);
   const [redeploying, setRedeploying] = useState(false);
@@ -293,7 +294,7 @@ export default function AppDetailPage() {
   // Initialize edited env vars when app data loads
   useEffect(() => {
     if (app?.env_vars) {
-      setEditedEnvVars(app.env_vars.map(env => ({ ...env })));
+      setEditedEnvVars(app.env_vars.map(env => ({ ...env, visible: false })));
     }
   }, [app?.env_vars]);
 
@@ -319,25 +320,9 @@ export default function AppDetailPage() {
     fetchPrices();
   }, []);
 
-  // Handle env var changes
-  const handleEnvVarChange = (index: number, field: 'key' | 'value', newValue: string) => {
-    const updated = [...editedEnvVars];
-    updated[index] = { ...updated[index], [field]: newValue };
-    setEditedEnvVars(updated);
-    setEnvVarsModified(true);
-    setEnvVarError(null);
-    setEnvVarSuccess(null);
-  };
-
-  const handleAddEnvVar = () => {
-    setEditedEnvVars([...editedEnvVars, { key: '', value: '' }]);
-    setEnvVarsModified(true);
-    setEnvVarError(null);
-    setEnvVarSuccess(null);
-  };
-
-  const handleRemoveEnvVar = (index: number) => {
-    setEditedEnvVars(editedEnvVars.filter((_, i) => i !== index));
+  // Handle env var changes - now handled by EnvVarsEditor
+  const handleEnvVarsChange = (vars: EnvVar[]) => {
+    setEditedEnvVars(vars);
     setEnvVarsModified(true);
     setEnvVarError(null);
     setEnvVarSuccess(null);
@@ -1296,21 +1281,8 @@ export default function AppDetailPage() {
                   )}
                 </div>
 
-                {/* Environment Variables - Editable */}
+                {/* Environment Variables - Using EnvVarsEditor */}
                 <div className="border-t border-white/10 pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-white/40">Environment Variables</p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleAddEnvVar}
-                      className="h-7 text-xs border-white/20 text-white hover:bg-white/10"
-                    >
-                      <Plus className="w-3 h-3 mr-1" />
-                      Add Variable
-                    </Button>
-                  </div>
-
                   {/* Success/Error Messages */}
                   {envVarError && (
                     <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
@@ -1324,39 +1296,8 @@ export default function AppDetailPage() {
                     </div>
                   )}
 
-                  {editedEnvVars.length > 0 ? (
-                    <div className="space-y-2">
-                      {editedEnvVars.map((env, idx) => (
-                        <div key={idx} className="flex items-center gap-2 bg-black/30 p-2 rounded">
-                          <Input
-                            type="text"
-                            value={env.key}
-                            onChange={(e) => handleEnvVarChange(idx, 'key', e.target.value)}
-                            placeholder="KEY"
-                            className="flex-1 max-w-[200px] h-8 text-sm font-mono bg-black/50 border-white/10 text-blue-400 placeholder:text-white/30"
-                          />
-                          <span className="text-white/30">=</span>
-                          <Input
-                            type="text"
-                            value={env.value}
-                            onChange={(e) => handleEnvVarChange(idx, 'value', e.target.value)}
-                            placeholder="value"
-                            className="flex-1 h-8 text-sm font-mono bg-black/50 border-white/10 text-white placeholder:text-white/30"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveEnvVar(idx)}
-                            className="h-8 w-8 p-0 text-white/50 hover:text-red-400 hover:bg-red-500/10"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-white/50">No environment variables configured. Click &quot;Add Variable&quot; to add one.</p>
-                  )}
+                  {/* Advanced Environment Variables Editor */}
+                  <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} />
 
                   {/* Save Button */}
                   {envVarsModified && (

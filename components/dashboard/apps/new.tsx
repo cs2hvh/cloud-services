@@ -71,31 +71,122 @@ interface ProviderConnection {
 
 // Framework detection and build settings
 const frameworkConfigs = {
-  'simple-test': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Test pipeline - no deployment' },
-  'Dockerfile': { buildCommand: 'docker build', outputDir: '', installCommand: '', description: 'Uses your existing Dockerfile - supports any language/runtime' },
-  'Java': { buildCommand: 'mvn package', outputDir: 'target', installCommand: 'mvn install', description: 'Auto-generates Dockerfile with Maven multi-stage build' },
-  'Next.js': { buildCommand: 'npm run build', outputDir: '.next', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'Nuxt.js': { buildCommand: 'npm run build', outputDir: '.output', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'Vite-React': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
-  'React': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (CRA)' },
-  'Vue.js': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Vite)' },
-  'Angular': { buildCommand: 'npm run build', outputDir: 'dist', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Angular CLI)' },
-  'SvelteKit': { buildCommand: 'npm run build', outputDir: 'build', installCommand: 'npm install', description: 'Auto-generates Dockerfile (Node adapter)' },
-  'Svelte': { buildCommand: 'npm run build', outputDir: 'public/build', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'Node.js': { buildCommand: 'npm run build', outputDir: '.', installCommand: 'npm install', description: 'Auto-generates Dockerfile' },
-  'express': { buildCommand: '', outputDir: '.', installCommand: 'npm ci --only=production', description: 'Auto-generates Dockerfile' },
-  'python': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'django': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'flask': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'fastapi': { buildCommand: '', outputDir: '.', installCommand: 'pip install -r requirements.txt', description: 'Auto-generates Dockerfile' },
-  'Static': { buildCommand: '', outputDir: '.', installCommand: '', description: 'Static files only' },
+  "simple-test": {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "",
+    description: "Test pipeline - no deployment",
+  },
+  Dockerfile: {
+    buildCommand: "docker build",
+    outputDir: "",
+    installCommand: "",
+    description:
+      "Uses your existing Dockerfile - supports any language/runtime",
+  },
+  Java: {
+    buildCommand: "mvn package",
+    outputDir: "target",
+    installCommand: "mvn install",
+    description: "Auto-generates Dockerfile with Maven multi-stage build",
+  },
+  "Next.js": {
+    buildCommand: "npm run build",
+    outputDir: ".next",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  "Nuxt.js": {
+    buildCommand: "npm run build",
+    outputDir: ".output",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  "Vite-React": {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Vite)",
+  },
+  React: {
+    buildCommand: "npm run build",
+    outputDir: "build",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (CRA)",
+  },
+  "Vue.js": {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Vite)",
+  },
+  Angular: {
+    buildCommand: "npm run build",
+    outputDir: "dist",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Angular CLI)",
+  },
+  SvelteKit: {
+    buildCommand: "npm run build",
+    outputDir: "build",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile (Node adapter)",
+  },
+  Svelte: {
+    buildCommand: "npm run build",
+    outputDir: "public/build",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  "Node.js": {
+    buildCommand: "npm run build",
+    outputDir: ".",
+    installCommand: "npm install",
+    description: "Auto-generates Dockerfile",
+  },
+  express: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "npm ci --only=production",
+    description: "Auto-generates Dockerfile",
+  },
+  python: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  django: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  flask: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  fastapi: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "pip install -r requirements.txt",
+    description: "Auto-generates Dockerfile",
+  },
+  Static: {
+    buildCommand: "",
+    outputDir: ".",
+    installCommand: "",
+    description: "Static files only",
+  },
 };
 
 // Instance size configurations with resource specs
 const instanceSizeConfigs = {
-  small: { cpu: '250m', ram: '256Mi', replicas: 1 },
-  medium: { cpu: '500m', ram: '512Mi', replicas: 2 },
-  large: { cpu: '1', ram: '1Gi', replicas: 3 },
+  small: { cpu: "250m", ram: "256Mi", replicas: 1 },
+  medium: { cpu: "500m", ram: "512Mi", replicas: 2 },
+  large: { cpu: "1", ram: "1Gi", replicas: 3 },
 };
 
 interface PricingRates {
@@ -112,8 +203,13 @@ interface PageProps {
 const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [connectingProvider, setConnectingProvider] = useState<string | null>(null); // Track which provider is being connected
-  const [connectionError, setConnectionError] = useState<{ provider: string; message: string } | null>(null); // Inline error
+  const [connectingProvider, setConnectingProvider] = useState<string | null>(
+    null,
+  ); // Track which provider is being connected
+  const [connectionError, setConnectionError] = useState<{
+    provider: string;
+    message: string;
+  } | null>(null); // Inline error
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingRepos, setLoadingRepos] = useState(false);
@@ -141,12 +237,16 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   const [size, setSize] = useState<string>("small");
   const [autoDeploy, setAutoDeploy] = useState<boolean>(true); // Auto-deploy on git push
   const [hasDockerfile, setHasDockerfile] = useState<boolean>(false); // Track if repo has Dockerfile
-  const [containerPort, setContainerPort] = useState<number | undefined>(undefined); // User-specified port
-  const [detectedPort, setDetectedPort] = useState<number | undefined>(undefined); // Port detected from Dockerfile
+  const [containerPort, setContainerPort] = useState<number | undefined>(
+    undefined,
+  ); // User-specified port
+  const [detectedPort, setDetectedPort] = useState<number | undefined>(
+    undefined,
+  ); // Port detected from Dockerfile
   const [detectingFramework, setDetectingFramework] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const reposPerPage = 3;
-  const [repoSearchTerm, setRepoSearchTerm] = useState<string>('');
+  const [repoSearchTerm, setRepoSearchTerm] = useState<string>("");
 
   // Fetch real provider connection status
   const fetchProviderStatus = useCallback(async () => {
@@ -163,9 +263,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             ...provider,
             connected:
               providers.find(
-                (p: ProviderConnection) => p.provider === provider.id
+                (p: ProviderConnection) => p.provider === provider.id,
               )?.status || false,
-          }))
+          })),
         );
       } else {
         toast.error("Failed to fetch provider status");
@@ -198,7 +298,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
         if (data.repositories?.length === 0) {
           toast.info(
-            `No repositories found in your ${provider.charAt(0).toUpperCase() + provider.slice(1)} account`
+            `No repositories found in your ${provider.charAt(0).toUpperCase() + provider.slice(1)} account`,
           );
         } else if (data.note) {
           toast.success(data.note);
@@ -216,7 +316,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
           setRepositories([]);
           toast.error(
             errorData.message ||
-              `${provider.charAt(0).toUpperCase() + provider.slice(1)} App connection required for private repositories`
+              `${provider.charAt(0).toUpperCase() + provider.slice(1)} App connection required for private repositories`,
           );
         } else {
           toast.error(errorData.message || "Failed to fetch repositories");
@@ -279,7 +379,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         setLoadingBranches(false);
       }
     },
-    []
+    [],
   );
 
   // Detect framework from repository files
@@ -306,13 +406,11 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
           const data = await response.json();
           if (data.framework) {
             // Handle Unknown framework (no framework detected, no Dockerfile)
-            if (data.framework === 'Unknown') {
-              toast.error(
-                "Framework not detected",
-                {
-                  description: "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually."
-                }
-              );
+            if (data.framework === "Unknown") {
+              toast.error("Framework not detected", {
+                description:
+                  "No supported framework or Dockerfile found. Please add a Dockerfile or select a framework manually.",
+              });
               setFramework(""); // Don't auto-select anything
               setHasDockerfile(false);
               return;
@@ -325,39 +423,40 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             // Note: Backend should already normalize Laravel/PHP/Ruby/Sinatra to "Dockerfile" or "Unknown"
             // This mapping acts as a safety fallback in case backend sends raw framework names
             const frameworkMap: Record<string, string> = {
-              'Next.js': 'Next.js',
-              'Nuxt.js': 'Nuxt.js',
-              'Vite-React': 'Vite-React',
-              'React': 'React',
-              'Vue.js': 'Vue.js',
-              'Angular': 'Angular',
-              'SvelteKit': 'SvelteKit',
-              'Svelte': 'Svelte',
-              'Express': 'express',
-              'Node.js': 'Node.js',
-              'Django': 'django',
-              'Flask': 'flask',
-              'FastAPI': 'fastapi',
-              'Dockerfile': 'Dockerfile',
-              'Python': 'python',
-              'python': 'python',
+              "Next.js": "Next.js",
+              "Nuxt.js": "Nuxt.js",
+              "Vite-React": "Vite-React",
+              React: "React",
+              "Vue.js": "Vue.js",
+              Angular: "Angular",
+              SvelteKit: "SvelteKit",
+              Svelte: "Svelte",
+              Express: "express",
+              "Node.js": "Node.js",
+              Django: "django",
+              Flask: "flask",
+              FastAPI: "fastapi",
+              Dockerfile: "Dockerfile",
+              Python: "python",
+              python: "python",
               // Java / Maven detection: map backend values to our UI option 'Java'
-              'Java': 'Java',
-              'java': 'Java',
-              'Maven': 'Java',
-              'maven': 'Java',
-              'mvn': 'Java',
-              'Mvn': 'Java',
+              Java: "Java",
+              java: "Java",
+              Maven: "Java",
+              maven: "Java",
+              mvn: "Java",
+              Mvn: "Java",
               // Safety fallback: If backend sends these (shouldn't happen), show as Dockerfile
-              'Laravel': 'Dockerfile',
-              'Symfony': 'Dockerfile',
-              'Ruby on Rails': 'Dockerfile',
-              'PHP': 'Dockerfile',
-              'Ruby': 'Dockerfile',
-              'Sinatra': 'Dockerfile',
+              Laravel: "Dockerfile",
+              Symfony: "Dockerfile",
+              "Ruby on Rails": "Dockerfile",
+              PHP: "Dockerfile",
+              Ruby: "Dockerfile",
+              Sinatra: "Dockerfile",
             };
 
-            normalizedFramework = frameworkMap[data.framework] || data.framework;
+            normalizedFramework =
+              frameworkMap[data.framework] || data.framework;
 
             setFramework(normalizedFramework);
 
@@ -376,16 +475,18 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             }
 
             if (data.buildSystem) {
-              console.log('Detected build system:', data.buildSystem);
+              console.log("Detected build system:", data.buildSystem);
             }
           }
         }
       } catch (error) {
-        console.error('Framework detection error:', error);
+        console.error("Framework detection error:", error);
       } finally {
         setDetectingFramework(false);
       }
-  }, [containerPort]);
+    },
+    [containerPort],
+  );
 
   // Load provider status on component mount
   useEffect(() => {
@@ -446,10 +547,16 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     if (!branchToDetect) return;
 
     detectFramework(selectedProvider, repo, branchToDetect);
-  }, [selectedBranch, selectedRepo, selectedProvider, repositories, detectFramework]);
+  }, [
+    selectedBranch,
+    selectedRepo,
+    selectedProvider,
+    repositories,
+    detectFramework,
+  ]);
 
   const { connectProvider: performConnection } = useProviderConnection({
-    returnTo: '/dashboard/services/apps/new'
+    returnTo: "/dashboard/services/apps/new",
   });
 
   const connectProvider = async (providerId: string) => {
@@ -462,7 +569,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         setConnectionError({ provider: providerId, message: result.error });
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Connection failed';
+      const errorMessage =
+        err instanceof Error ? err.message : "Connection failed";
       setConnectionError({ provider: providerId, message: errorMessage });
     } finally {
       setIsLoading(false);
@@ -477,8 +585,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       fetchProviderStatus();
     };
 
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [fetchProviderStatus]);
 
   const handleNextStep = () => {
@@ -570,15 +678,33 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         git_provider: selectedProvider as "github" | "gitlab" | "bitbucket",
         repository_id: selectedRepoData.id,
         repository_name: selectedRepoData.fullName,
-        repository_url: repoUrlMap[selectedProvider] || `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
-        branch: selectedBranch || selectedRepoData.defaultBranch || 'main',
-        framework: framework as 'simple-test' | 'Next.js' | 'React' | 'Vue.js' | 'Node.js' | 'express' | 'python' | 'django' | 'flask' | 'fastapi' | 'Static' | 'Java' | 'Dockerfile',
-        env_vars: envVars.filter(ev => ev.key && ev.value),
-        size: size || 'small',
+        repository_url:
+          repoUrlMap[selectedProvider] ||
+          `https://${selectedProvider}.com/${selectedRepoData.fullName}`,
+        branch: selectedBranch || selectedRepoData.defaultBranch || "main",
+        framework: framework as
+          | "simple-test"
+          | "Next.js"
+          | "React"
+          | "Vue.js"
+          | "Node.js"
+          | "express"
+          | "python"
+          | "django"
+          | "flask"
+          | "fastapi"
+          | "Static"
+          | "Java"
+          | "Dockerfile",
+        env_vars: envVars.filter((ev) => ev.key && ev.value),
+        size: size || "small",
         auto_deploy: autoDeploy,
         deploy_branch:
           selectedBranch || selectedRepoData.defaultBranch || "main",
-        project_id: selectedProject && selectedProject !== "none" ? selectedProject : undefined,
+        project_id:
+          selectedProject && selectedProject !== "none"
+            ? selectedProject
+            : undefined,
         container_port: containerPort, // Optional: only sent if user has Dockerfile
       };
 
@@ -621,7 +747,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
   const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
   const selectedProviderData = gitProviders.find(
-    (p) => p.id === selectedProvider
+    (p) => p.id === selectedProvider,
   );
 
   // Filter repositories based on search term
@@ -842,147 +968,165 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       />
                     </div>
                     {filteredRepositories.length > 0 ? (
-                    <div>
-                      <RadioGroup
-                        value={selectedRepo}
-                        onValueChange={setSelectedRepo}
-                        className="grid grid-cols-1 gap-4"
-                      >
-                        {filteredRepositories
-                          .slice(
-                            (currentPage - 1) * reposPerPage,
-                            currentPage * reposPerPage,
-                          )
-                          .map((repo) => (
-                            <div key={repo.id}>
-                              <RadioGroupItem
-                                value={repo.id}
-                                id={repo.id}
-                                className="peer sr-only"
-                              />
-                              <Label
-                                htmlFor={repo.id}
-                                className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                              >
-                                <div
-                                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
-                                    selectedRepo === repo.id
-                                      ? "border-blue-500 bg-blue-500"
-                                      : "border-white/30"
-                                  }`}
+                      <div>
+                        <RadioGroup
+                          value={selectedRepo}
+                          onValueChange={setSelectedRepo}
+                          className="grid grid-cols-1 gap-4"
+                        >
+                          {filteredRepositories
+                            .slice(
+                              (currentPage - 1) * reposPerPage,
+                              currentPage * reposPerPage,
+                            )
+                            .map((repo) => (
+                              <div key={repo.id}>
+                                <RadioGroupItem
+                                  value={repo.id}
+                                  id={repo.id}
+                                  className="peer sr-only"
+                                />
+                                <Label
+                                  htmlFor={repo.id}
+                                  className="flex items-start gap-4 p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
                                 >
-                                  {selectedRepo === repo.id && (
-                                    <div className="w-2 h-2 rounded-full bg-white"></div>
-                                  )}
-                                </div>
-                                <Code className="w-6 h-6 text-blue-400 mt-1" />
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className="font-semibold text-white">
-                                      {repo.name}
-                                    </div>
-                                    {repo.private && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-xs text-white/70 border-white/30"
-                                      >
-                                        Private
-                                      </Badge>
+                                  <div
+                                    className={`w-4 h-4 rounded-full border-2 flex items-center justify-center mt-1 ${
+                                      selectedRepo === repo.id
+                                        ? "border-blue-500 bg-blue-500"
+                                        : "border-white/30"
+                                    }`}
+                                  >
+                                    {selectedRepo === repo.id && (
+                                      <div className="w-2 h-2 rounded-full bg-white"></div>
                                     )}
                                   </div>
-                                  <div className="text-sm text-white/60 mt-1">
-                                    {repo.fullName}
-                                  </div>
-                                  {repo.description && (
-                                    <div className="text-xs text-white/50 mt-1">
-                                      {repo.description}
+                                  <Code className="w-6 h-6 text-blue-400 mt-1" />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className="font-semibold text-white">
+                                        {repo.name}
+                                      </div>
+                                      {repo.private && (
+                                        <Badge
+                                          variant="outline"
+                                          className="text-xs text-white/70 border-white/30"
+                                        >
+                                          Private
+                                        </Badge>
+                                      )}
                                     </div>
-                                  )}
-                                  <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
-                                    <span>{repo.language}</span>
-                                    <span>
-                                      Updated{" "}
-                                      {new Date(
-                                        repo.updatedAt,
-                                      ).toLocaleDateString()}
-                                    </span>
-                                    <span>Default: {repo.defaultBranch}</span>
+                                    <div className="text-sm text-white/60 mt-1">
+                                      {repo.fullName}
+                                    </div>
+                                    {repo.description && (
+                                      <div className="text-xs text-white/50 mt-1">
+                                        {repo.description}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
+                                      <span>{repo.language}</span>
+                                      <span>
+                                        Updated{" "}
+                                        {new Date(
+                                          repo.updatedAt,
+                                        ).toLocaleDateString()}
+                                      </span>
+                                      <span>Default: {repo.defaultBranch}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              </Label>
-                            </div>
-                          ))}
-                      </RadioGroup>
+                                </Label>
+                              </div>
+                            ))}
+                        </RadioGroup>
 
-                      {/* Repository List Pagination */}
-                      {filteredRepositories.length > reposPerPage && (() => {
-                        const totalPages = Math.ceil(filteredRepositories.length / reposPerPage);
-                        
-                        // Generate page numbers with ellipsis for large page counts
-                        const getPageNumbers = () => {
-                          const pages: (number | string)[] = [];
-                          
-                          if (totalPages <= 7) {
-                            // Show all pages if 7 or fewer
-                            for (let i = 1; i <= totalPages; i++) {
-                              pages.push(i);
-                            }
-                          } else {
-                            // Always show first page
-                            pages.push(1);
-                            
-                            if (currentPage > 3) {
-                              pages.push('...');
-                            }
-                            
-                            // Show pages around current page
-                            const start = Math.max(2, currentPage - 1);
-                            const end = Math.min(totalPages - 1, currentPage + 1);
-                            
-                            for (let i = start; i <= end; i++) {
-                              pages.push(i);
-                            }
-                            
-                            if (currentPage < totalPages - 2) {
-                              pages.push('...');
-                            }
-                            
-                            // Always show last page
-                            pages.push(totalPages);
-                          }
-                          
-                          return pages;
-                        };
-                        
-                        return (
-                          <div className="mt-4 pt-4 border-t border-white/10">
-                            <p className="text-xs text-white/40 text-center mb-2">
-                              Page {currentPage} of {totalPages} • {filteredRepositories.length} repositories
-                            </p>
-                            <div className="flex items-center justify-center gap-1">
-                              {/* Previous Page */}
-                              <Button
-                                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                                disabled={currentPage === 1}
-                                variant="ghost"
-                                size="sm"
-                                className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                ←
-                              </Button>
+                        {/* Repository List Pagination */}
+                        {filteredRepositories.length > reposPerPage &&
+                          (() => {
+                            const totalPages = Math.ceil(
+                              filteredRepositories.length / reposPerPage,
+                            );
 
-                              {/* Page Numbers */}
-                              <div className="flex items-center gap-1">
-                                {getPageNumbers().map((pageNum, idx) => (
-                                  pageNum === '...' ? (
-                                    <span key={`ellipsis-${idx}`} className="px-2 text-white/40">...</span>
-                                  ) : (
-                                    <Button
-                                      key={pageNum}
-                                      onClick={() => setCurrentPage(pageNum as number)}
-                                      variant="ghost"
-                                      size="sm"
-                                      className={`
+                            // Generate page numbers with ellipsis for large page counts
+                            const getPageNumbers = () => {
+                              const pages: (number | string)[] = [];
+
+                              if (totalPages <= 7) {
+                                // Show all pages if 7 or fewer
+                                for (let i = 1; i <= totalPages; i++) {
+                                  pages.push(i);
+                                }
+                              } else {
+                                // Always show first page
+                                pages.push(1);
+
+                                if (currentPage > 3) {
+                                  pages.push("...");
+                                }
+
+                                // Show pages around current page
+                                const start = Math.max(2, currentPage - 1);
+                                const end = Math.min(
+                                  totalPages - 1,
+                                  currentPage + 1,
+                                );
+
+                                for (let i = start; i <= end; i++) {
+                                  pages.push(i);
+                                }
+
+                                if (currentPage < totalPages - 2) {
+                                  pages.push("...");
+                                }
+
+                                // Always show last page
+                                pages.push(totalPages);
+                              }
+
+                              return pages;
+                            };
+
+                            return (
+                              <div className="mt-4 pt-4 border-t border-white/10">
+                                <p className="text-xs text-white/40 text-center mb-2">
+                                  Page {currentPage} of {totalPages} •{" "}
+                                  {filteredRepositories.length} repositories
+                                </p>
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Previous Page */}
+                                  <Button
+                                    onClick={() =>
+                                      setCurrentPage((prev) =>
+                                        Math.max(1, prev - 1),
+                                      )
+                                    }
+                                    disabled={currentPage === 1}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    ←
+                                  </Button>
+
+                                  {/* Page Numbers */}
+                                  <div className="flex items-center gap-1">
+                                    {getPageNumbers().map((pageNum, idx) =>
+                                      pageNum === "..." ? (
+                                        <span
+                                          key={`ellipsis-${idx}`}
+                                          className="px-2 text-white/40"
+                                        >
+                                          ...
+                                        </span>
+                                      ) : (
+                                        <Button
+                                          key={pageNum}
+                                          onClick={() =>
+                                            setCurrentPage(pageNum as number)
+                                          }
+                                          variant="ghost"
+                                          size="sm"
+                                          className={`
                                         min-w-[32px] h-8
                                         ${
                                           currentPage === pageNum
@@ -990,28 +1134,32 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                             : "text-white/50 hover:text-white hover:bg-white/10"
                                         }
                                       `}
-                                    >
-                                      {pageNum}
-                                    </Button>
-                                  )
-                                ))}
-                              </div>
+                                        >
+                                          {pageNum}
+                                        </Button>
+                                      ),
+                                    )}
+                                  </div>
 
-                              {/* Next Page */}
-                              <Button
-                                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                                disabled={currentPage === totalPages}
-                                variant="ghost"
-                                size="sm"
-                                className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
-                              >
-                                →
-                              </Button>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                                  {/* Next Page */}
+                                  <Button
+                                    onClick={() =>
+                                      setCurrentPage((prev) =>
+                                        Math.min(totalPages, prev + 1),
+                                      )
+                                    }
+                                    disabled={currentPage === totalPages}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
+                                  >
+                                    →
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                      </div>
                     ) : (
                       <div className="text-center py-8">
                         <Code className="w-8 h-8 text-white/20 mx-auto mb-2" />
@@ -1019,7 +1167,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           No repositories match &quot;{repoSearchTerm}&quot;
                         </p>
                         <Button
-                          onClick={() => setRepoSearchTerm('')}
+                          onClick={() => setRepoSearchTerm("")}
                           size="sm"
                           variant="outline"
                           className="mt-3 border-white/20 text-white hover:bg-white/10"
@@ -1168,9 +1316,17 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Button
                           onClick={async () => {
                             if (!selectedRepoData) return;
-                            await fetchBranches(selectedProvider, selectedRepoData);
-                            const branchToDetect = selectedBranch || selectedRepoData.defaultBranch;
-                            detectFramework(selectedProvider, selectedRepoData, branchToDetect);
+                            await fetchBranches(
+                              selectedProvider,
+                              selectedRepoData,
+                            );
+                            const branchToDetect =
+                              selectedBranch || selectedRepoData.defaultBranch;
+                            detectFramework(
+                              selectedProvider,
+                              selectedRepoData,
+                              branchToDetect,
+                            );
                           }}
                           variant="outline"
                           size="sm"
@@ -1194,9 +1350,17 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <Button
                           onClick={async () => {
                             if (!selectedRepoData) return;
-                            await fetchBranches(selectedProvider, selectedRepoData);
-                            const branchToDetect = selectedBranch || selectedRepoData.defaultBranch;
-                            detectFramework(selectedProvider, selectedRepoData, branchToDetect);
+                            await fetchBranches(
+                              selectedProvider,
+                              selectedRepoData,
+                            );
+                            const branchToDetect =
+                              selectedBranch || selectedRepoData.defaultBranch;
+                            detectFramework(
+                              selectedProvider,
+                              selectedRepoData,
+                              branchToDetect,
+                            );
                           }}
                           variant="outline"
                           size="sm"
@@ -1227,7 +1391,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         <SelectItem value="simple-test">
                           Simple Test (No Build/Deploy)
                         </SelectItem>
-
 
                         {/* Java (Dockerfile) */}
                         <SelectItem value="Java">
@@ -1318,8 +1481,10 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       className="border-white/20 text-white hover:bg-white/10"
                       disabled={detectingFramework || !selectedRepoData}
                     >
-                      <Loader2 className={`w-4 h-4 mr-2 ${detectingFramework ? "animate-spin" : "hidden"}`} />
-                      {detectingFramework ? 'Detecting...' : 'Detect'}
+                      <Loader2
+                        className={`w-4 h-4 mr-2 ${detectingFramework ? "animate-spin" : "hidden"}`}
+                      />
+                      {detectingFramework ? "Detecting..." : "Detect"}
                     </Button>
                   </div>
                 </div>
@@ -1389,9 +1554,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                 ✓ Using your repository&apos;s Dockerfile
                               </p>
                               <p className="text-xs text-white/60">
-                                {framework === 'Java' 
-                                  ? 'Your custom Dockerfile will be used for the Java/Maven build.'
-                                  : 'Your custom Dockerfile will be used for the build. The platform defaults below are for reference only.'}
+                                {framework === "Java"
+                                  ? "Your custom Dockerfile will be used for the Java/Maven build."
+                                  : "Your custom Dockerfile will be used for the build. The platform defaults below are for reference only."}
                               </p>
                             </div>
                           ) : (
@@ -1465,7 +1630,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                   )}
 
                 {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile or Java */}
-                {(hasDockerfile || framework === 'Dockerfile' || framework === 'Java') && (
+                {(hasDockerfile ||
+                  framework === "Dockerfile" ||
+                  framework === "Java") && (
                   <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
                     <Label className="text-white font-medium mb-2 block">
                       Container Port
@@ -1474,27 +1641,33 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                       type="number"
                       min="1"
                       max="65535"
-                      value={containerPort ?? ''}
+                      value={containerPort ?? ""}
                       onChange={(e) => {
                         const val = e.target.value;
                         setContainerPort(val ? parseInt(val, 10) : undefined);
                       }}
-                      placeholder={detectedPort ? detectedPort.toString() : '3000'}
+                      placeholder={
+                        detectedPort ? detectedPort.toString() : "3000"
+                      }
                       className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
                     />
                     {detectedPort && (
                       <p className="text-xs text-green-400 mt-2">
-                        ℹ️ Detected from Dockerfile: <span className="font-mono">EXPOSE {detectedPort}</span>
+                        ℹ️ Detected from Dockerfile:{" "}
+                        <span className="font-mono">EXPOSE {detectedPort}</span>
                       </p>
                     )}
                     {!detectedPort && containerPort === undefined && (
                       <p className="text-xs text-yellow-400 mt-2">
-                        ⚠️ Could not detect port from Dockerfile. Using framework default. Please confirm.
+                        ⚠️ Could not detect port from Dockerfile. Using
+                        framework default. Please confirm.
                       </p>
                     )}
                     <p className="text-xs text-white/50 mt-2">
-                      The port your application listens on inside the container (1-65535).
-                      {!detectedPort && ' Kubernetes will route traffic to this port.'}
+                      The port your application listens on inside the container
+                      (1-65535).
+                      {!detectedPort &&
+                        " Kubernetes will route traffic to this port."}
                     </p>
                   </div>
                 )}

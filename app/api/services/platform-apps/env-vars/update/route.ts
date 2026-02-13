@@ -134,6 +134,17 @@ export async function POST(req: NextRequest) {
         hint: "Click 'Redeploy' to apply changes (rebuild required)"
       });
     } else {
+      // Check if app is actually running before attempting K8s update
+      if (app.status !== 'running') {
+        console.log(`[env-vars/update] ${app.name}: App not running (status: ${app.status}), saved to DB only`);
+        return NextResponse.json({
+          message: "Environment variables saved to database",
+          requiresRedeploy: true,
+          reason: `App is not currently running (status: ${app.status})`,
+          hint: "Click 'Redeploy' to build and apply changes"
+        });
+      }
+
       // Runtime-only vars: Update K8s Secret and restart pods (fast, no rebuild)
       console.log(`[env-vars/update] ${app.name}: Applying runtime env vars without rebuild (${env_vars.length} vars)`);
       
