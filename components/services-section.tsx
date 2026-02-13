@@ -79,20 +79,20 @@ export function ServicesSection() {
                 ].map((service) => (
                   <div
                     key={service.title}
-                    className="absolute flex h-[47%] w-[14.6%] min-w-[190px] flex-col rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
+                    className="absolute flex h-[47%] w-[14.6%] min-w-[190px] flex-col items-center xl:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center xl:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
                     style={{ left: service.left, top: `var(${service.topVar})` }}
                   >
-                    <div className="relative h-14 w-14">
+                    <div className="relative h-14 w-14 self-center xl:self-auto">
                       <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
                     </div>
-                    <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff]">
+                    <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center xl:text-left">
                       {service.title}
                     </h3>
-                    <p className="mt-2 text-[10px] leading-[14px] text-white/60">
+                    <p className="mt-2 text-[10px] leading-[14px] text-white/60 text-center xl:text-left">
                       {service.description}
                     </p>
-                    <div className="mt-auto pt-4">
-                      <div className="h-px w-10 bg-white/20" />
+                    <div className="mt-auto pt-4 w-full">
+                      <div className="h-px w-full bg-white/20" />
                     </div>
                   </div>
                 ))}
@@ -117,19 +117,19 @@ export function ServicesSection() {
                 {figmaServices.map((service) => (
                   <div
                     key={service.title}
-                    className="flex min-h-[240px] flex-col rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
+                    className="flex min-h-[240px] flex-col items-center sm:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center sm:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
                   >
-                    <div className="relative h-12 w-12">
+                    <div className="relative h-12 w-12 self-center sm:self-start">
                       <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
                     </div>
-                    <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff]">
+                    <h3 className="mt-3 text-[13px] font-medium text-[#2d8cff] text-center sm:text-left">
                       {service.title}
                     </h3>
-                    <p className="mt-2 text-[10px] leading-[14px] text-white/60">
+                    <p className="mt-2 text-[10px] leading-[14px] text-white/60 text-center sm:text-left">
                       {service.description}
                     </p>
-                    <div className="mt-auto pt-4">
-                      <div className="h-px w-10 bg-white/20" />
+                    <div className="mt-auto pt-4 w-full">
+                      <div className="h-px w-full bg-white/20" />
                     </div>
                   </div>
                 ))}

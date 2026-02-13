@@ -20,7 +20,7 @@ export function Hero() {
       </div>
 
         <div className="relative z-10 h-full">
-        <WideContainer className="min-h-screen flex items-center py-12 lg:py-0">
+        <WideContainer className="min-h-screen flex items-center pt-25 pb-12 lg:pt-10 lg:pb-0">
           <div className="grid w-full grid-cols-1 items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="text-center lg:text-left lg:pr-4">
             <h1 className="font-normal text-[clamp(36px,5vw,112px)] leading-[1.05] tracking-tight">
@@ -33,10 +33,10 @@ export function Hero() {
             </p>
             </div>
 
-            <div className="relative mx-auto w-[clamp(360px,46vw,1200px)] max-w-[1200px] aspect-square lg:-ml-8">
+            <div className="relative w-[min(86vw,560px)] max-w-[560px] aspect-square mx-auto lg:mx-0 lg:w-[clamp(560px,46vw,1400px)] lg:max-w-[1400px] lg:-ml-8">
               {/* Globe */}
-              <div className="absolute left-[0%] top-[0%] w-[100%] h-[100%] z-10">
-                <Image src="/images/hero/globe.png" alt="Globe" fill className="object-contain" priority />
+              <div className="absolute inset-0 m-auto w-full h-full z-10">
+                <Image src="/images/hero/globe.png" alt="Globe" fill className="object-contain object-center" priority />
               </div>
 
               {/* Geometric Chain */}
