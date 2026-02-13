@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useId } from "react";
 import { motion } from "motion/react";
 import DottedMap from "dotted-map";
 import Image from "next/image";
@@ -40,6 +40,8 @@ export default function WorldMap({
     return { x, y };
   };
 
+  const gradientId = useId();
+
   const createCurvedPath = (
     start: { x: number; y: number },
     end: { x: number; y: number }
@@ -72,7 +74,7 @@ export default function WorldMap({
               <motion.path
                 d={createCurvedPath(startPoint, endPoint)}
                 fill="none"
-                stroke="url(#path-gradient)"
+                stroke={`url(#${gradientId})`}
                 strokeWidth="1"
                 initial={{
                   pathLength: 0,
@@ -92,7 +94,7 @@ export default function WorldMap({
         })}
 
         <defs>
-          <linearGradient id="path-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="white" stopOpacity="0" />
             <stop offset="5%" stopColor={lineColor} stopOpacity="1" />
             <stop offset="95%" stopColor={lineColor} stopOpacity="1" />
