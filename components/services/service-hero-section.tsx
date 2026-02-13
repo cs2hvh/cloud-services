@@ -78,7 +78,8 @@ export function ServiceHeroSection({
 
               <h1
                 className={cn(
-                  "text-[clamp(30px,3.2vw,88px)] leading-[1.02] font-normal",
+                  "text-[clamp(30px,3.2vw,64px)] leading-[1.02] font-normal",
+                  "lg:text-[64px]",
                   "drop-shadow-[2px_4px_18px_rgba(255,255,255,0.36)]",
                 )}
                 style={{ fontFamily: "Nunito Sans, Inter, sans-serif" }}
@@ -89,7 +90,7 @@ export function ServiceHeroSection({
               </h1>
 
               <p
-                className="max-w-[28rem] sm:max-w-[32rem] text-[clamp(14px,1.2vw,20px)] leading-[1.5] font-light text-white/80 lg:max-w-[560px] min-[2560px]:max-w-[640px]"
+                className="max-w-[28rem] sm:max-w-[32rem] text-[clamp(14px,1.2vw,20px)] lg:text-[20px] leading-[1.5] font-light text-white/80 lg:max-w-[560px] min-[2560px]:max-w-[640px]"
                 style={{ fontFamily: "Inter, sans-serif" }}
               >
                 {description}
@@ -103,8 +104,7 @@ export function ServiceHeroSection({
                       className={cn(
                         "inline-flex items-center justify-center",
                         "bg-[#383838] px-6",
-                        "h-9 min-w-[140px] text-[12px] font-medium leading-[25px] text-white",
-                        "lg:h-[37px] lg:min-w-[170px]",
+                        "h-[37px] min-w-[170px] text-[12px] font-medium leading-[25px] text-white",
                         "min-[1920px]:h-12 min-[1920px]:min-w-[200px] min-[1920px]:text-[14px]",
                         "min-[2560px]:h-14 min-[2560px]:min-w-[240px] min-[2560px]:text-[15px]",
                         "shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
@@ -121,8 +121,7 @@ export function ServiceHeroSection({
                       className={cn(
                         "inline-flex items-center justify-center",
                         "border border-[#464A4D] px-6",
-                        "h-9 min-w-[140px] text-[12px] font-medium leading-[25px] text-white",
-                        "lg:h-[37px] lg:min-w-[170px]",
+                        "h-[37px] min-w-[170px] text-[12px] font-medium leading-[25px] text-white",
                         "min-[1920px]:h-12 min-[1920px]:min-w-[200px] min-[1920px]:text-[14px]",
                         "min-[2560px]:h-14 min-[2560px]:min-w-[240px] min-[2560px]:text-[15px]",
                         "shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
@@ -138,7 +137,7 @@ export function ServiceHeroSection({
           </div>
 
           <div className={cn("w-full", imageLeft && "lg:order-1")}>
-            <div className="relative mx-auto aspect-square w-full max-w-[360px] sm:max-w-[520px] lg:max-w-[880px] min-[1920px]:max-w-[880px] min-[2560px]:max-w-[1100px]">
+            <div className="relative mx-auto aspect-square w-full max-w-[360px] sm:max-w-[640px] lg:max-w-[980px] min-[1920px]:max-w-[1100px] min-[2560px]:max-w-[1400px]">
               {isIllustrationSvg ? (
                 <Image
                   width={100}
