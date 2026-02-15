@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     
-    // Get the current user
+    // Get the current user - works regardless of login provider
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     
     if (userError || !user) {
@@ -38,67 +38,23 @@ export async function GET(request: Request) {
       );
     }
 
-    // Get the current session to check for provider tokens
-    const { data: { session } } = await supabase.auth.getSession();
+    // Get GitLab token from database (with auto-refresh)
+    // This works whether user logged in with GitLab or connected separately via /api/gitlab/app-auth
+    console.log('[GitLab Branches] Checking for GitLab token for user:', user.id);
+    const accessToken = await getValidGitLabToken(user.id);
     
-    if (!session) {
-      return Response.json(
-        { message: "No active session" },
-        { status: 401 }
-      );
-    }
-
-    // Check if user has GitLab provider linked
-    const gitlabIdentity = session.user.identities?.find(
-      identity => identity.provider === 'gitlab'
-    );
-
-    if (!gitlabIdentity) {
-      return Response.json(
-        { message: "GitLab account not connected" },
-        { status: 400 }
-      );
-    }
-
-    // Try to get a valid access token from various sources
-    let accessToken = null;
-    let tokenSource = 'none';
-
-    // Source 1: Database stored token with automatic refresh (most reliable for GitLab!)
-    // IMPORTANT: GitLab tokens expire in 2 hours, so we need to check and refresh them
-    console.log('[GitLab Branches] Checking gitlab_tokens table for user:', user.id);
-    const storedToken = await getValidGitLabToken(user.id);
-    if (storedToken) {
-      accessToken = storedToken;
-      tokenSource = 'gitlab_tokens_table';
-      console.log('[GitLab Branches] Found valid token in gitlab_tokens table (with auto-refresh)');
-    }
-
-    // Source 2: Identity data provider_token (usually not populated by Supabase)
-    if (!accessToken && gitlabIdentity.identity_data?.provider_token) {
-      accessToken = gitlabIdentity.identity_data.provider_token;
-      tokenSource = 'identity_data.provider_token';
-      console.log('[GitLab Branches] Found token in identity_data.provider_token');
-    }
-
-    // Source 3: Session provider_token, but only if this session actually belongs to GitLab
-    if (!accessToken && session.provider_token && (session.user as { app_metadata?: { provider?: string } })?.app_metadata?.provider === 'gitlab') {
-      accessToken = session.provider_token;
-      tokenSource = 'session.provider_token';
-      console.log('[GitLab Branches] Found token in session.provider_token for GitLab');
-    }
-
     if (!accessToken) {
+      console.log('[GitLab Branches] No GitLab token found for user:', user.id);
       return Response.json(
         { 
-          message: "GitLab access token not found or expired. Please reconnect your GitLab account.",
+          message: "GitLab account not connected. Please connect your GitLab account.",
           needsAppAuth: true
         },
         { status: 400 }
       );
     }
 
-    console.log(`[GitLab Branches] Using token from: ${tokenSource}`);
+    console.log('[GitLab Branches] Found valid GitLab token');
 
     // Get repository ID from query parameters
     const url = new URL(request.url);
@@ -111,8 +67,15 @@ export async function GET(request: Request) {
       );
     }
 
+    console.log('[GitLab Branches] Fetching branches for project:', projectId);
+
     // Fetch branches for the repository
-    const response = await fetch(`https://gitlab.com/api/v4/projects/${projectId}/repository/branches?per_page=100`, {
+    // Note: projectId must be URL-encoded for the API path (e.g., "namespace/project" -> "namespace%2Fproject")
+    const encodedProjectId = encodeURIComponent(projectId);
+    const apiUrl = `https://gitlab.com/api/v4/projects/${encodedProjectId}/repository/branches?per_page=100`;
+    console.log('[GitLab Branches] API URL:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Accept': 'application/json',
@@ -120,15 +83,17 @@ export async function GET(request: Request) {
       }
     });
 
+    console.log('[GitLab Branches] API Response Status:', response.status);
+    console.log('[GitLab Branches] API Response Headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
       // Log the error for debugging
       const errorText = await response.text();
       console.log(`[GitLab Branches] API request failed with status ${response.status}: ${errorText}`);
-      console.log(`[GitLab Branches] Token from ${tokenSource} may be invalid or expired`);
       
-      // If token from database failed, delete it so user can re-authenticate
-      if (tokenSource === 'gitlab_tokens_table') {
-        console.log('[GitLab Branches] Deleting invalid stored token');
+      // If token is invalid/expired, delete it so user can re-authenticate
+      if (response.status === 401) {
+        console.log('[GitLab Branches] Token is invalid or expired, deleting stored token');
         await supabase
           .from('gitlab_tokens')
           .delete()
@@ -160,6 +125,7 @@ export async function GET(request: Request) {
 
     const branches: GitLabBranch[] = await response.json();
     console.log(`[GitLab Branches] Successfully fetched ${branches.length} branches for project ${projectId}`);
+    console.log('[GitLab Branches] Branch names:', branches.map(b => b.name).join(', '));
     
     const transformedBranches = branches.map((branch: GitLabBranch) => ({
       name: branch.name,
@@ -167,6 +133,8 @@ export async function GET(request: Request) {
       protected: branch.protected
     }));
 
+    console.log('[GitLab Branches] Transformed branches:', transformedBranches.length);
+    
     return Response.json({ 
       branches: transformedBranches,
       note: `Loaded ${transformedBranches.length} branches`
