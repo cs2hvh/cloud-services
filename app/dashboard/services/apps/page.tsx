@@ -55,10 +55,16 @@ export default function ApplicationDeploymentPage() {
   // Fetch build info using axios - only called for apps with valid status
   const fetchBuildInfo = useCallback(async (appName: string) => {
     try {
-      const res = await api.get(`/jenkins/build-info?app=${appName}`);
-      if (res?.data && !res.data.error) {
+      // Accept 404 responses locally so the global axios interceptor doesn't toast
+      // while this UI polls the endpoint for pending builds.
+      const res = await api.get(`/jenkins/build-info?app=${appName}`, {
+        validateStatus: (status) => status < 500,
+      });
+
+      if (res?.status === 200 && res?.data && !res.data.error) {
         setBuildInfo((prev) => ({ ...prev, [appName]: res.data }));
       }
+      // If status is 404 the endpoint may be pending (no builds yet) — ignore here.
     } catch (error) {
       console.log(`[fetchBuildInfo] Build info not available for ${appName}:`, error);
     }
