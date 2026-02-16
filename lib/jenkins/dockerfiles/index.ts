@@ -27,11 +27,15 @@
  */
 export function getNodeVersionDetectionScript(defaultVersion: number = 20): string {
   return `
-# Detect Node.js version
+# Detect Node.js version (prefer Node for reliable JSON parsing when available)
 NODE_VERSION=${defaultVersion}
 if [ -f package.json ]; then
-  # Try to extract from engines.node (handles ">=20", "^20", "20.x", etc.)
-  DETECTED=$(cat package.json | grep -o '"node"[[:space:]]*:[[:space:]]*"[^"]*"' | grep -oE '[0-9]+' | head -1)
+  if command -v node >/dev/null 2>&1; then
+    DETECTED=$(node -e "try{const e=require('./package.json').engines?.node||''; console.log(e)}catch(e){}" | grep -oE '[0-9]+' | head -1)
+  else
+    # Fallback to grepping JSON if node is not available in the environment
+    DETECTED=$(grep -o '"node"[[:space:]]*:[[:space:]]*"[^"]*"' package.json | grep -oE '[0-9]+' | head -1)
+  fi
   if [ -n "$DETECTED" ] && [ "$DETECTED" -ge 18 ] 2>/dev/null; then
     NODE_VERSION=$DETECTED
   fi
@@ -51,6 +55,7 @@ if [ "$NODE_VERSION" = "${defaultVersion}" ] && [ -f .node-version ]; then
   fi
 fi
 echo "Detected Node.js version: $NODE_VERSION"
+export NODE_VERSION
 `.trim();
 }
 
@@ -98,6 +103,15 @@ secrets/
 .github
 .vscode
 .idea
+
+# Common credential and config files
+.npmrc
+.npmrc.*
+**/*.env
+credentials.json
+id_rsa
+id_rsa.pub
+.docker/config.json
 
 # Development files
 node_modules
@@ -172,41 +186,71 @@ export function getPackageManagerCommands(options: {
 } = {}) {
   const { production = false, legacyPeerDeps = false } = options;
 
-  // Global package manager installation command (pinned versions for stability)
-  const setupPm = `ARG PACKAGE_MANAGER
-RUN corepack disable && \\
+  // Global package manager preparation using Corepack (safer than global npm installs)
+  // Use Corepack to prepare/activate pnpm or yarn when available. If Corepack
+  // isn't present or the prepare step fails, fall back to installing via npm.
+  const setupPm = `ARG PACKAGE_MANAGER=npm
+RUN corepack enable || true && \\
     if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
-    npm install -g pnpm@9; \\
+      corepack prepare pnpm@9 --activate || npm install -g pnpm@9; \\
     elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
-    npm install -g yarn@1; \\
+      corepack prepare yarn@stable --activate || npm install -g yarn@1; \\
     fi`;
 
-  // Copy lockfiles (all possible lockfiles)
-  const copyLockfiles = `COPY package*.json pnpm-lock.yaml* yarn.lock* ./`;
+  // Copy lockfiles (attempt common lockfile names; keep globbing to avoid build failures)
+  const copyLockfiles = `COPY package*.json pnpm-lock.yaml* yarn.lock* package-lock.json* ./`;
 
   // Smart fallback install strategy - try strict first, fall back to forgiving
   // This matches Vercel/Railway philosophy but with production-grade reproducibility when possible
   // BENEFITS: Strict when lockfiles are good, forgiving when they're outdated/missing
   const prodFlag = production ? (legacyPeerDeps ? ' --omit=dev --legacy-peer-deps' : ' --omit=dev') : (legacyPeerDeps ? ' --legacy-peer-deps' : '');
-  const installCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
-      echo "Attempting pnpm install with frozen lockfile..." && \\
-      pnpm install --frozen-lockfile${production ? ' --prod' : ''} || \\
-      (echo "Frozen lockfile failed, using standard install..." && pnpm install${production ? ' --prod' : ''}); \\
+  // Strict install policy: when a lockfile is present we run the deterministic
+  // installer (pnpm/yarn frozen lockfile, or npm ci) and fail the build on error.
+  // Only when no lockfile exists do we run the permissive `install` path.
+  // Additional platform-level guards and post-install verification are added
+  // to detect missing build-time dependencies (not just Tailwind).
+  const installCmd = `RUN if [ -z "$PACKAGE_MANAGER" ]; then \\
+      echo "PACKAGE_MANAGER not provided — detecting from lockfiles inside image..." && \\
+      if [ -f pnpm-lock.yaml ]; then \\
+        export PACKAGE_MANAGER=pnpm; \\
+      elif [ -f yarn.lock ]; then \\
+        export PACKAGE_MANAGER=yarn; \\
+      elif [ -f package-lock.json ]; then \\
+        export PACKAGE_MANAGER=npm; \\
+      else \\
+        export PACKAGE_MANAGER=npm; \\
+      fi; \\
+    fi && \\
+    if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
+      if [ -f pnpm-lock.yaml ]; then \\
+        echo "Detected pnpm lockfile; running pnpm install --frozen-lockfile (fail on error)..." && \\
+        pnpm install --frozen-lockfile${production ? ' --prod' : ''}; \\
+      else \\
+        echo "No pnpm-lock.yaml found; using pnpm install (compatibility)" && \\
+        pnpm install${production ? ' --prod' : ''}; \\
+      fi; \\
     elif [ "$PACKAGE_MANAGER" = "yarn" ]; then \\
-      echo "Attempting yarn install with frozen lockfile..." && \\
-      yarn install --frozen-lockfile${production ? ' --production' : ''} || \\
-      (echo "Frozen lockfile failed, using standard install..." && yarn install${production ? ' --production' : ''}); \\
+      if [ -f yarn.lock ]; then \\
+        echo "Detected yarn.lock; running yarn install --frozen-lockfile (fail on error)..." && \\
+        yarn install --frozen-lockfile${production ? ' --production' : ''}; \\
+      else \\
+        echo "No yarn.lock found; using yarn install (compatibility)" && \\
+        yarn install${production ? ' --production' : ''}; \\
+      fi; \\
     else \\
       echo "Detected npm; checking for package-lock.json..." && \\
       if [ -f package-lock.json ]; then \\
-        echo "Attempting npm ci (fast & reproducible)..." && \\
-        npm ci${prodFlag} || \\
-        (echo "npm ci failed, falling back to npm install..." && npm install${prodFlag}); \\
+        echo "Running npm ci (deterministic) and failing on error..." && \\
+        npm ci${prodFlag}; \\
       else \\
-        echo "No package-lock.json found; using npm install (for compatibility)" && \\
+        echo "No package-lock.json found; using npm install (compatibility)" && \\
         npm install${prodFlag}; \\
       fi; \\
-    fi`;
+    fi && \\
+    echo "Verifying install: basic checks (warnings only)..." && \\
+    if [ ! -d node_modules ]; then echo "WARN: node_modules not found after install"; fi && \\
+    node -e "try{const pkg=require('./package.json'); if(!pkg.scripts||!pkg.scripts.build){ console.warn('WARN: package.json missing build script'); } else { console.log('package.json build script present'); }}catch(e){ console.warn('WARN: package.json parse failed');}" || true && \\
+    node -e "try{const pkg=require('./package.json'); const dev=pkg.devDependencies||{}; const candidates=['tailwindcss','@tailwindcss/postcss','postcss','webpack','vite','esbuild','rollup','parcel','@babel/core']; const missing=[]; candidates.forEach(n=>{ if(dev[n]){ try{require.resolve(n);}catch(e){ missing.push(n); } } }); if(missing.length){ console.error('WARN: Missing build-time modules:',missing.join(',')); } else { console.log('Build-time dependency verification passed'); }}catch(e){ console.warn('WARN: build-time dependency verification failed'); }" || echo 'WARN: build-time dependency verification failed'`;
 
   // Build command
   const buildCmd = `RUN if [ "$PACKAGE_MANAGER" = "pnpm" ]; then \\
@@ -240,12 +284,13 @@ export function getNextjsStandaloneDetectionScript(): string {
 # Detect Next.js standalone output mode
 NEXTJS_STANDALONE=false
 for config_file in next.config.js next.config.ts next.config.mjs; do
-  if [ -f "$config_file" ] && grep -q "output.*standalone" "$config_file" 2>/dev/null; then
+  if [ -f "$config_file" ] && grep -qi "output.*standalone" "$config_file" 2>/dev/null; then
     NEXTJS_STANDALONE=true
     echo "Detected Next.js standalone mode in $config_file"
     break
   fi
 done
+export NEXTJS_STANDALONE
 `.trim();
 }
 
@@ -272,12 +317,16 @@ PYTHON_MODULE=$(echo $PYTHON_ENTRY_FILE | sed 's/[.]py$//')
 export PYTHON_ENTRY_FILE
 export PYTHON_MODULE
 
-# Detect framework from requirements.txt or pyproject.toml
+# Detect framework from common files: requirements, Pipfile, or pyproject.toml
 REQ_FILE=""
 if [ -f requirements.txt ]; then
   REQ_FILE="requirements.txt"
 elif [ -f requirements.in ]; then
   REQ_FILE="requirements.in"
+elif [ -f Pipfile ]; then
+  REQ_FILE="Pipfile"
+elif [ -f Pipfile.lock ]; then
+  REQ_FILE="Pipfile.lock"
 elif [ -f pyproject.toml ]; then
   REQ_FILE="pyproject.toml"
 fi
@@ -292,6 +341,12 @@ if [ -n "$REQ_FILE" ]; then
   elif grep -qi "django" "$REQ_FILE" 2>/dev/null; then
     PYTHON_FRAMEWORK="django"
     echo "Detected Django framework"
+  fi
+else
+  # As a fallback, check for Django manage.py layout
+  if [ -f manage.py ] || ls */manage.py 1>/dev/null 2>&1; then
+    PYTHON_FRAMEWORK="django"
+    echo "Detected Django framework from manage.py"
   fi
 fi
 export PYTHON_FRAMEWORK
@@ -310,7 +365,7 @@ export function getNodejsDockerfile(): string {
   const pm = getPackageManagerCommands({ production: true });
   
   return `
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 
 WORKDIR /app
 
@@ -361,7 +416,7 @@ export function getNextjsDockerfile(envVars: Array<{key: string, value: string}>
 
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -381,7 +436,7 @@ ${pm.build}
 RUN mkdir -p ./public
 
 # ---- Run Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 # Security: Create non-root user
@@ -430,7 +485,7 @@ export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value
 
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -450,7 +505,7 @@ ${pm.build}
 RUN mkdir -p ./public
 
 # ---- Production Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 # Security: Create non-root user
@@ -502,7 +557,7 @@ export function getViteDockerfile(envVars: Array<{key: string, value: string}> =
 
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -516,7 +571,7 @@ COPY . .
 ${envDirectives}${pm.build}
 
 # ---- Production Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 # ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
@@ -532,7 +587,7 @@ RUN addgroup --system --gid 1001 nodejs && \
 
 # Ensure dist exists before copying
 RUN mkdir -p ./dist
-COPY --from=builder --chown=appuser:nodejs /app/${outputDir}/. ./dist/
+COPY --from=builder --chown=appuser:nodejs /app/${outputDir}/ ./dist/
 
 USER appuser
 
@@ -573,7 +628,7 @@ RUN ${sedCommands}
 
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -586,7 +641,7 @@ COPY . .
 ${envInjection}${pm.build}
 
 # ---- Production Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 # ⚠️ RUNTIME STRATEGY: Always use npm for serve installation
@@ -667,7 +722,7 @@ export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}>
   
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -685,7 +740,7 @@ ENV NODE_ENV=production
 ${pm.build}
 
 # ---- Production Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 nodejs
@@ -726,7 +781,7 @@ export function getSveltekitDockerfile(envVars: Array<{key: string, value: strin
 
   return `
 # ---- Build Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine AS builder
+FROM node:NODE_VERSION_PLACEHOLDER-slim AS builder
 WORKDIR /app
 
 ${pm.setupPm}
@@ -743,7 +798,7 @@ ENV NODE_ENV=production
 ${pm.build}
 
 # ---- Production Stage ----
-FROM node:NODE_VERSION_PLACEHOLDER-alpine
+FROM node:NODE_VERSION_PLACEHOLDER-slim
 WORKDIR /app
 
 # Security: Create non-root user
@@ -778,7 +833,7 @@ WORKDIR /app
 
 # Install dependencies (safe pattern - create empty file first)
 RUN touch requirements.txt
-COPY requirements.tx[t] ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 
 # Install production servers
@@ -941,7 +996,7 @@ WORKDIR /app
 
 # Copy requirements if it exists (safe pattern)
 RUN touch requirements.txt
-COPY requirements.tx[t] ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 RUN pip install --no-cache-dir uvicorn[standard]
 
@@ -965,7 +1020,7 @@ WORKDIR /app
 
 # Copy requirements if it exists (safe pattern)
 RUN touch requirements.txt
-COPY requirements.tx[t] ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 RUN pip install --no-cache-dir gunicorn
 
@@ -995,7 +1050,7 @@ WORKDIR /app
 
 # Copy requirements if it exists (safe pattern)
 RUN touch requirements.txt
-COPY requirements.tx[t] ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 RUN pip install --no-cache-dir gunicorn
 
@@ -1019,7 +1074,7 @@ WORKDIR /app
 
 # Copy requirements if it exists (safe pattern)
 RUN touch requirements.txt
-COPY requirements.tx[t] ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt || true
 
 COPY . .
