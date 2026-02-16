@@ -37,7 +37,7 @@ export function NotificationBell() {
 
     // Fetch initial count only once
     if (!initialFetchDone.current) {
-      initialFetchDone.current = true;
+      initialFetchDone.current = true
       fetchCount();
     }
 

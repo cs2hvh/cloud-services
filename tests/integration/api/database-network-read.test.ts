@@ -139,9 +139,7 @@ describe('POST /api/services/database/network/read', () => {
   });
 
   describe('Authorization Tests', () => {
-    it.skip('TC-DB-055: should reject access to cluster owned by another user', async () => {
-      // NOTE: API doesn't check ownership - relies on Supabase RLS
-    });
+    // NOTE: Route does not perform ownership verification — relies on Supabase RLS.
 
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
@@ -166,10 +164,8 @@ describe('POST /api/services/database/network/read', () => {
   });
 
   describe('Error Handling', () => {
-    it.skip('TC-DB-055: should handle non-existent cluster', async () => {
-      // NOTE: API doesn't return error when cluster not found, it returns undefined data
-      // This is handled by Supabase RLS
-    });
+    // NOTE: Route returns undefined when cluster not found (Supabase returns no data).
+    // This is handled by Supabase RLS — no explicit error returned.
 
     it('TC-DB-055: should handle database errors', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');

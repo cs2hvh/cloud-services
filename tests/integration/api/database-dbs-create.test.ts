@@ -115,37 +115,31 @@ describe('POST /api/services/database/dbs/create', () => {
   });
 
   describe('Reserved Names Validation', () => {
-    it.skip('TC-DB-047: should reject reserved database names', async () => {
-      // NOTE: Reserved name validation is not implemented at the API level
-      // The API currently allows reserved names and relies on DigitalOcean to reject them
-      const reservedNames = [
-        'mysql',
-        'sys',
-        'information_schema',
-        'performance_schema',
-        'postgres',
-        'template0',
-        'template1',
-        'admin',
-        'local',
-        'config',
-      ];
+    // NOTE: Reserved name validation is not implemented at the API level.
+    // The API relies on DigitalOcean to reject reserved names.
+    // This test verifies our route forwards to DO and returns its error.
 
-      for (const reservedName of reservedNames) {
-        const request = createMockPostRequest(
-          'http://localhost:3000/api/services/database/dbs/create',
-          {
-            cluster_id: mockDatabaseCluster.cluster_id,
-            name: reservedName,
-          }
-        );
+    it('TC-DB-047: should forward reserved names to DO and return DO error', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.post).mockRejectedValue({
+        response: {
+          status: 400,
+          data: { message: 'reserved database name' },
+        },
+      });
 
-        const response = await POST(request as NextRequest);
-        const status = response?.status || 400;
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/dbs/create',
+        {
+          cluster_id: mockDatabaseCluster.cluster_id,
+          name: 'mysql',
+        }
+      );
 
-        // Should be rejected with 400
-        expect(status).toBe(400);
-      }
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response!, 400);
+
+      expect(data.error).toBeDefined();
     });
   });
 

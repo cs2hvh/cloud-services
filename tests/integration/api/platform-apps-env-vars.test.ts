@@ -17,6 +17,8 @@ import {
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/services/kubernetes-info');
+vi.mock('@/lib/services/app-status');
 
 /**
  * Platform Apps Environment Variables API Integration Tests
@@ -46,6 +48,12 @@ describe('POST /api/services/platform-apps/env-vars/update', () => {
       },
     } as any);
     vi.mocked(Platform_Apps.set_env_vars).mockResolvedValue({
+      success: true,
+    } as any);
+
+    // Default mock for KubernetesInfoService
+    const { KubernetesInfoService } = await import('@/lib/services/kubernetes-info');
+    vi.mocked(KubernetesInfoService.updateEnvVarsAndRestart).mockResolvedValue({
       success: true,
     } as any);
   });

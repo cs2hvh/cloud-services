@@ -345,32 +345,7 @@ describe('POST /api/services/database/users/reset', () => {
   });
 
   describe('Authorization Tests', () => {
-    it.skip('should reject reset for cluster owned by different user', async () => {
-      // NOTE: API doesn't check ownership - relies on DO authentication
-      const differentUserCluster = {
-        ...mockDatabaseCluster,
-        owner_id: 'different-user-id',
-      };
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: differentUserCluster,
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/users/reset',
-        {
-          cluster_id: differentUserCluster.cluster_id,
-          username: 'testuser',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 403);
-
-      expect(data.error).toContain('not authorized');
-    });
+    // NOTE: Route does not perform ownership verification — relies on DO API auth.
 
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');

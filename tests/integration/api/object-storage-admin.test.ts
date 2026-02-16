@@ -122,17 +122,28 @@ describe('Admin Object Storage APIs', () => {
     beforeEach(async () => {
       vi.clearAllMocks();
 
-      // Mock admin authentication
-      const { authenticateUser } = await import('@/lib/auth/server-auth');
-      vi.mocked(authenticateUser).mockResolvedValue({
-        authenticated: true,
-        user: { ...mockAdminUser, role: 'admin' } as any,
-        response: null,
-      });
+      // Mock admin authentication via createClient (delete route uses checkAdminAuth, not authenticateUser)
+      const { createClient } = await import('@/lib/supabase/server');
+      const mockSupabaseClient = {
+        auth: {
+          getUser: vi.fn().mockResolvedValue({
+            data: { user: mockAdminUser },
+          }),
+        },
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({
+                data: { roles: ['admin'] },
+              }),
+            }),
+          }),
+        }),
+      };
+      vi.mocked(createClient).mockResolvedValue(mockSupabaseClient as any);
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should delete any bucket as admin', async () => {
+    it('should delete any bucket as admin', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -160,8 +171,7 @@ describe('Admin Object Storage APIs', () => {
       });
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should force delete by default', async () => {
+    it('should force delete by default', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -186,8 +196,7 @@ describe('Admin Object Storage APIs', () => {
       );
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should handle bucket not found', async () => {
+    it('should handle bucket not found', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -208,8 +217,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toBe('Bucket not found');
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should reject missing bucket_id', async () => {
+    it('should reject missing bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/admin/object-storage/buckets/delete',
         { owner_id: 'any-user-id' }
@@ -256,8 +264,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toContain('Unauthorized');
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should handle deletion failures', async () => {
+    it('should handle deletion failures', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -279,8 +286,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toBeDefined();
     });
 
-    // TODO: Fix admin delete authentication mocking
-    it.skip('should handle unexpected errors', async () => {
+    it('should handle unexpected errors', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockRejectedValue(
         new Error('Unexpected error')

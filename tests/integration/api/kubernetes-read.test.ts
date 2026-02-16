@@ -206,13 +206,6 @@ describe('POST /api/services/kubernetes/clusters/read', () => {
     });
   });
 
-  describe('Security', () => {
-    it.skip('should enforce ownership for non-admin users', async () => {
-      // Skipped: Complex mock chain for ownership verification
-    });
-
-    it.skip('should not include kubeconfig in list response', async () => {
-      // Skipped: Kubeconfig handling is tested in dedicated endpoint
-    });
-  });
+  // Security: Ownership is enforced by filtering query (owner_id filter for non-admins).
+  // Kubeconfig handling is tested in dedicated endpoint.
 });

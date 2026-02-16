@@ -246,25 +246,26 @@ describe('POST /api/services/database/users/delete', () => {
       expect(data.error).toBeDefined();
     });
 
-    it.skip('should return 404 for non-existent cluster (skipped - handled by DO API)', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: false,
-        error: 'Cluster not found',
+    it('should return 400 for non-existent cluster (forwarded to DO API)', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.delete).mockRejectedValue({
+        response: {
+          data: { message: 'cluster not found' },
+        },
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/users/delete',
         {
-          cluster_id: 'non-existent-cluster',
+          cluster_id: '550e8400-e29b-41d4-a716-446655440099',
           username: 'testuser',
         }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 404);
+      const data = await expectResponseStatus(response!, 400);
 
-      expect(data.error).toBeDefined();
+      expect(data.error).toBe('cluster not found');
     });
 
     it('should handle DigitalOcean API errors', async () => {
@@ -295,11 +296,18 @@ describe('POST /api/services/database/users/delete', () => {
       expect(data.error).toBeDefined();
     });
 
-    it.skip('should handle database query errors (skipped - only logs errors)', async () => {
+    it('should handle Supabase sync failure after DO user deletion', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockRejectedValue(
-        new Error('Database connection failed')
-      );
+      vi.mocked(Database_Clusters.remove_user).mockResolvedValue({
+        success: false,
+        error: 'Database sync failed',
+      });
+
+      const axios = await import('axios');
+      vi.mocked(axios.default.delete).mockResolvedValue({
+        status: 204,
+        data: {},
+      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/users/delete',
@@ -312,36 +320,12 @@ describe('POST /api/services/database/users/delete', () => {
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response!, 500);
 
-      expect(data.error).toBeDefined();
+      expect(data.error).toContain('failed to sync');
     });
   });
 
   describe('Authorization Tests', () => {
-    it.skip('should reject deletion for cluster owned by different user (skipped - ownership check via DO)', async () => {
-      const differentUserCluster = {
-        ...mockDatabaseCluster,
-        owner_id: 'different-user-id',
-      };
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: differentUserCluster,
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/users/delete',
-        {
-          cluster_id: differentUserCluster.id,
-          username: 'testuser',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 403);
-
-      expect(data.error).toContain('not authorized');
-    });
+    // NOTE: Route does not perform ownership verification — relies on DO API auth.
 
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');

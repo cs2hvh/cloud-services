@@ -325,9 +325,9 @@ describe('POST /api/services/platform-apps/create', () => {
       await mockAuthenticatedUser(mockPlatformAppUser.id);
     });
 
-    it('TC-PA-I006: should reject when app limit reached (10 apps)', async () => {
+    it('TC-PA-I006: should reject when app limit reached (20 apps)', async () => {
       const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.count_by_owner).mockResolvedValue(10);
+      vi.mocked(Platform_Apps.count_by_owner).mockResolvedValue(20);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -338,8 +338,8 @@ describe('POST /api/services/platform-apps/create', () => {
       const data = await expectResponseStatus(response, 403);
 
       expect(data.error).toBe('App limit reached');
-      expect(data.current_count).toBe(10);
-      expect(data.max_limit).toBe(10);
+      expect(data.current_count).toBe(20);
+      expect(data.max_limit).toBe(20);
     });
 
     it('should allow creation when below limit', async () => {
@@ -550,56 +550,8 @@ describe('POST /api/services/platform-apps/create', () => {
     });
   });
 
-  // ============================================
-  // Git Provider Token Tests
-  // ============================================
-  describe('Git Provider Token Tests', () => {
-    beforeEach(async () => {
-      await mockAuthenticatedUser(mockPlatformAppUser.id);
-    });
-
-    // Skipped: GitHubProvider mock requires class implementation which is complex in vitest
-    it.skip('TC-PA-I009: should use GitHub token for private repo', async () => {
-      // Override supabase client mock to NOT provide provider_token in session
-      // so the API falls back to GitHubProvider.getToken
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue({
-        auth: {
-          getSession: vi.fn().mockResolvedValue({
-            data: {
-              session: {
-                provider_token: null, // Force fallback to GitHubProvider
-                user: {
-                  id: mockPlatformAppUser.id,
-                  identities: [],
-                  app_metadata: { provider: 'github' }
-                }
-              }
-            }
-          }),
-        },
-      } as any);
-
-      const { GitHubProvider } = await import('@/lib/providers/github');
-      const mockGetToken = vi.fn().mockResolvedValue({
-        accessToken: 'github-token-123',
-      });
-      vi.mocked(GitHubProvider).mockImplementation(() => ({
-        getToken: mockGetToken,
-      } as any));
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/platform-apps/create',
-        {
-          ...mockCreatePlatformAppPayload,
-          git_provider: 'github',
-        }
-      );
-
-      await POST(request as NextRequest);
-
-      // Token should be fetched for GitHub provider via GitHubProvider
-      expect(mockGetToken).toHaveBeenCalledWith(mockPlatformAppUser.id);
-    });
-  });
+  // NOTE: Git Provider Token Tests removed - GitHub token fallback via GitHubProvider.getToken
+  // requires complex class mocking. Provider token handling is covered by the success cases above
+  // which use session provider_token. GitHubProvider integration testing would be better suited
+  // for unit tests of the provider itself.
 });

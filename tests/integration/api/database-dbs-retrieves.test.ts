@@ -5,431 +5,278 @@ import {
   createMockPostRequest,
   expectResponseStatus,
   mockAuthenticatedUser,
+  mockUnauthenticatedUser,
 } from '../../utils/test-helpers';
-import { mockDatabaseCluster } from '../../utils/mock-data';
 
 // Mock dependencies
 vi.mock('@/lib/auth/server-auth');
-vi.mock('@/lib/supabase/queries');
 vi.mock('axios');
 
 /**
  * Database Retrieve Tests
  * TC-DB-051: Get specific database details from a cluster
- * 
- * NOTE: This API route (/api/services/database/dbs/retrieve) does not exist in the codebase.
- * These tests are written speculatively for TC-DB-051 coverage.
- * The tests are marked to skip until the API route is implemented.
+ *
+ * Route: POST /api/services/database/dbs/retrieve
+ * Auth: authenticateUser()
+ * Validation: retrieveDbSchema -> { cluster_id: UUID, name: string (min 1) }
+ * External: DigitalOcean GET /v2/databases/{cluster_id}/dbs/{name}
+ * Response: { data: db, message } on 200, { error } on 400
  */
 
-describe.skip('POST /api/services/database/dbs/retrieve', () => {
-  const mockDatabase = {
-    name: 'production_db',
-  };
+const VALID_CLUSTER_ID = '550e8400-e29b-41d4-a716-446655440001';
+const API_URL = 'http://localhost:3000/api/services/database/dbs/retrieve';
 
+describe('POST /api/services/database/dbs/retrieve', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.DIGITAL_OCEAN_TOKEN = 'test-do-token';
     mockAuthenticatedUser();
   });
 
-  describe('TC-DB-051: Get specific database details', () => {
-    it('should retrieve database details by name', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: {
-          db: mockDatabase,
-        },
+  describe('Authentication Tests', () => {
+    it('TC-DB-051: should reject unauthenticated requests', async () => {
+      await mockUnauthenticatedUser();
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
       });
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'production_db',
-        }
-      );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.db).toBeDefined();
-      expect(data.db.name).toBe('production_db');
-      expect(axios.default.get).toHaveBeenCalledWith(
-        expect.stringContaining(`/databases/${mockDatabaseCluster.cluster_id}/dbs/production_db`),
-        expect.any(Object)
-      );
+      await expectResponseStatus(response!, 401);
     });
 
-    it('should retrieve database with metadata', async () => {
+    it('should accept authenticated user request', async () => {
       const axios = await import('axios');
       vi.mocked(axios.default.get).mockResolvedValue({
         status: 200,
-        data: {
-          db: {
-            name: 'production_db',
-          },
-        },
+        data: { db: { name: 'test_db' } },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
       });
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'production_db',
-        }
-      );
+      const response = await POST(request as NextRequest);
+      expect(response!.status).not.toBe(401);
+    });
+  });
+
+  describe('Validation Tests', () => {
+    it('TC-DB-052: should return 400 for missing cluster_id', async () => {
+      const request = createMockPostRequest(API_URL, {
+        name: 'test_db',
+      });
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
+    });
+
+    it('TC-DB-053: should return 400 for missing name', async () => {
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+      });
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
+    });
+
+    it('should return 400 for invalid cluster_id (not UUID)', async () => {
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: 'invalid-uuid',
+        name: 'test_db',
+      });
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
+    });
+
+    it('should return 400 for empty name', async () => {
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: '',
+      });
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
+    });
+
+    it('should return 400 for empty body', async () => {
+      const request = createMockPostRequest(API_URL, {});
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
+    });
+  });
+
+  describe('Success Cases', () => {
+    it('TC-DB-054: should retrieve database details by name', async () => {
+      const mockDb = { name: 'production_db', size_mib: 100 };
+      const axios = await import('axios');
+      vi.mocked(axios.default.get).mockResolvedValue({
+        status: 200,
+        data: { db: mockDb },
+      });
+
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'production_db',
+      });
 
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response!, 200);
 
-      expect(data.db).toHaveProperty('name');
+      expect(data.data).toBeDefined();
+      expect(data.data.name).toBe('production_db');
+      expect(data.message).toBe('Database retrieved successfully');
+    });
+
+    it('should call DigitalOcean API with correct URL and headers', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.get).mockResolvedValue({
+        status: 200,
+        data: { db: { name: 'test_db' } },
+      });
+
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
+      });
+
+      await POST(request as NextRequest);
+
+      expect(axios.default.get).toHaveBeenCalledWith(
+        `https://api.digitalocean.com/v2/databases/${VALID_CLUSTER_ID}/dbs/test_db`,
+        {
+          headers: {
+            Authorization: 'test-do-token',
+            'Content-Type': 'application/json',
+          },
+        }
+      );
     });
 
     it('should retrieve default database', async () => {
       const axios = await import('axios');
       vi.mocked(axios.default.get).mockResolvedValue({
         status: 200,
-        data: {
-          db: {
-            name: 'defaultdb',
-          },
-        },
+        data: { db: { name: 'defaultdb' } },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'defaultdb',
       });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'defaultdb',
-        }
-      );
 
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response!, 200);
-
-      expect(data.db.name).toBe('defaultdb');
+      expect(data.data.name).toBe('defaultdb');
     });
 
-    it('should retrieve MySQL system database', async () => {
+    it('should retrieve database with special names', async () => {
+      const specialNames = ['information_schema', 'postgres', 'mysql', 'test_db_123'];
+
       const axios = await import('axios');
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: {
-          db: {
-            name: 'information_schema',
-          },
-        },
-      });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: { ...mockDatabaseCluster, engine: 'mysql' },
-      });
+      for (const dbName of specialNames) {
+        vi.mocked(axios.default.get).mockResolvedValue({
+          status: 200,
+          data: { db: { name: dbName } },
+        });
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'information_schema',
-        }
-      );
+        const request = createMockPostRequest(API_URL, {
+          cluster_id: VALID_CLUSTER_ID,
+          name: dbName,
+        });
 
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.db.name).toBe('information_schema');
-    });
-
-    it('should retrieve PostgreSQL database', async () => {
-      const axios = await import('axios');
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: {
-          db: {
-            name: 'postgres',
-          },
-        },
-      });
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: { ...mockDatabaseCluster, engine: 'pg' },
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'postgres',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 200);
-
-      expect(data.db.name).toBe('postgres');
+        const response = await POST(request as NextRequest);
+        const data = await expectResponseStatus(response!, 200);
+        expect(data.data.name).toBe(dbName);
+      }
     });
   });
 
   describe('Error Cases', () => {
-    it('should return 404 for non-existent database', async () => {
+    it('TC-DB-055: should return 400 when database not found on DO', async () => {
       const axios = await import('axios');
       vi.mocked(axios.default.get).mockRejectedValue({
         response: {
-          status: 404,
-          data: {
-            message: 'Database not found',
-          },
+          data: { message: 'Database not found' },
         },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'non_existent_db',
       });
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'non_existent_db',
-        }
-      );
-
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 404);
+      const data = await expectResponseStatus(response!, 400);
+      expect(data.error).toBe('Database not found');
     });
 
-    it('should return 404 for non-existent cluster', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: false,
-        error: 'Cluster not found',
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: 'non-existent-cluster-id',
-          database_name: 'some_db',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 404);
-    });
-
-    it('should return 400 for missing cluster_id', async () => {
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          database_name: 'test_db',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
-    });
-
-    it('should return 400 for missing database_name', async () => {
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
-    });
-
-    it('should return 400 for invalid cluster_id format', async () => {
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: 'invalid-uuid',
-          database_name: 'test_db',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
-    });
-
-    it('should return 400 for empty database_name', async () => {
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: '',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
-    });
-
-    it('should return 400 for database_name with invalid characters', async () => {
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'db name with spaces',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
-    });
-
-    it('should handle DigitalOcean API errors', async () => {
+    it('should return 400 when cluster not found on DO', async () => {
       const axios = await import('axios');
       vi.mocked(axios.default.get).mockRejectedValue({
         response: {
-          status: 500,
-          data: {
-            message: 'Internal Server Error',
-          },
+          data: { message: 'cluster not found' },
         },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
       });
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'test_db',
-        }
-      );
-
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 500);
+      const data = await expectResponseStatus(response!, 400);
+      expect(data.error).toBe('cluster not found');
     });
-  });
 
-  describe('Authorization Tests', () => {
-    it('should reject access to cluster owned by different user', async () => {
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: {
-          ...mockDatabaseCluster,
-          owner_id: 'different-user-id',
+    it('should return 400 with "Invalid request" when DO error has no message', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.get).mockRejectedValue({
+        response: {
+          data: {},
         },
       });
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'test_db',
-        }
-      );
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
+      });
 
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 403);
+      const data = await expectResponseStatus(response!, 400);
+      expect(data.error).toBe('Invalid request');
     });
 
-    it('should reject unauthenticated requests', async () => {
-      const { authenticateUser } = await import('@/lib/auth/server-auth');
-      vi.mocked(authenticateUser).mockResolvedValue({
-        authenticated: false,
-        response: new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 }),
-      } as any);
+    it('should handle non-AxiosError (unknown error)', async () => {
+      const axios = await import('axios');
+      vi.mocked(axios.default.get).mockRejectedValue(new Error('Network failure'));
 
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: 'test_db',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 401);
-    });
-  });
-
-  describe('Data Validation', () => {
-    it('should validate database_name length', async () => {
-      const longName = 'a'.repeat(256);
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/retrieve',
-        {
-          cluster_id: mockDatabaseCluster.cluster_id,
-          database_name: longName,
-        }
-      );
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
+      });
 
       const response = await POST(request as NextRequest);
       await expectResponseStatus(response!, 400);
     });
 
-    it('should accept valid database names', async () => {
+    it('should handle DigitalOcean timeout', async () => {
       const axios = await import('axios');
-      vi.mocked(axios.default.get).mockResolvedValue({
-        status: 200,
-        data: {
-          db: {
-            name: 'valid_db_name',
-          },
-        },
+      const timeoutError = new Error('timeout');
+      (timeoutError as any).code = 'ECONNABORTED';
+      vi.mocked(axios.default.get).mockRejectedValue(timeoutError);
+
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
-      });
-
-      const validNames = [
-        'test_db',
-        'production',
-        'staging_db',
-        'db1',
-        'my_database',
-      ];
-
-      for (const dbName of validNames) {
-        const request = createMockPostRequest(
-          'http://localhost:3000/api/services/database/dbs/retrieve',
-          {
-            cluster_id: mockDatabaseCluster.cluster_id,
-            database_name: dbName,
-          }
-        );
-
-        const response = await POST(request as NextRequest);
-        await expectResponseStatus(response!, 200);
-      }
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response!, 400);
     });
   });
 
@@ -438,29 +285,20 @@ describe.skip('POST /api/services/database/dbs/retrieve', () => {
       const axios = await import('axios');
       vi.mocked(axios.default.get).mockResolvedValue({
         status: 200,
-        data: {
-          db: mockDatabase,
-        },
+        data: { db: { name: 'test_db' } },
       });
 
-      const { Database_Clusters } = await import('@/lib/supabase/queries');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: mockDatabaseCluster,
-      });
-
-      const requests = Array(5).fill(null).map(() =>
-        createMockPostRequest(
-          'http://localhost:3000/api/services/database/dbs/retrieve',
-          {
-            cluster_id: mockDatabaseCluster.cluster_id,
-            database_name: 'test_db',
-          }
-        )
-      );
+      const requests = Array(5)
+        .fill(null)
+        .map(() =>
+          createMockPostRequest(API_URL, {
+            cluster_id: VALID_CLUSTER_ID,
+            name: 'test_db',
+          })
+        );
 
       const responses = await Promise.all(
-        requests.map(req => POST(req as NextRequest))
+        requests.map((req) => POST(req as NextRequest))
       );
 
       for (const response of responses) {

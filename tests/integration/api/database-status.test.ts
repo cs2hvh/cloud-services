@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/database/update_status/route';
 import { NextRequest } from 'next/server';

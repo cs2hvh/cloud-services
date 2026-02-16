@@ -23,6 +23,9 @@ vi.mock('@/lib/supabase/queries');
 vi.mock('@/lib/supabase/queries/projects');
 vi.mock('@/lib/services/jenkins');
 vi.mock('@/lib/services/app-status');
+vi.mock('@/lib/services/build-polling');
+vi.mock('@/lib/audit');
+vi.mock('@/lib/audit/context');
 
 /**
  * Platform Apps Redeploy API Integration Tests
@@ -58,9 +61,16 @@ describe('POST /api/services/platform-apps/redeploy', () => {
     const { AppStatusService } = await import('@/lib/services/app-status');
     vi.mocked(AppStatusService.setStatus).mockResolvedValue({ success: true });
 
+    // Default mock for Platform_Apps.get_env_vars
+    vi.mocked(Platform_Apps.get_env_vars).mockResolvedValue([]);
+
     // Default mock for Projects.add_log
     const { Projects } = await import('@/lib/supabase/queries/projects');
     vi.mocked(Projects.add_log).mockResolvedValue({ success: true } as any);
+
+    // Default mock for getAuditContext
+    const { getAuditContext } = await import('@/lib/audit/context');
+    vi.mocked(getAuditContext).mockReturnValue({} as any);
   });
 
   // ============================================

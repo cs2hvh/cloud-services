@@ -268,32 +268,7 @@ describe('POST /api/services/database/users/create', () => {
   });
 
   describe('Authorization Tests', () => {
-    it.skip('should reject creation for cluster owned by different user (skipped - ownership check via DO)', async () => {
-      // Note: The current API doesn't check ownership via Supabase - it relies on DO API
-      const differentUserCluster = {
-        ...mockDatabaseCluster,
-        owner_id: 'different-user-id',
-      };
-
-      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: true,
-        data: differentUserCluster,
-      });
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/users/create',
-        {
-          cluster_id: differentUserCluster.id,
-          name: 'testuser',
-        }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 403);
-
-      expect(data.error).toContain('not authorized');
-    });
+    // NOTE: Route does not perform ownership verification — relies on DO API auth.
 
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
@@ -321,26 +296,27 @@ describe('POST /api/services/database/users/create', () => {
   });
 
   describe('Error Handling', () => {
-    it.skip('should handle non-existent cluster (skipped - handled by DO API)', async () => {
-      // The current API doesn't check if cluster exists - it passes through to DO API
-      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockResolvedValue({
-        success: false,
-        error: 'Cluster not found',
+    it('should handle non-existent cluster (forwarded to DO API)', async () => {
+      // Route doesn't check cluster existence — DO returns error for invalid cluster
+      const axios = await import('axios');
+      vi.mocked(axios.default.post).mockRejectedValue({
+        response: {
+          data: { message: 'cluster not found' },
+        },
       });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/users/create',
         {
-          cluster_id: 'non-existent-id',
+          cluster_id: '550e8400-e29b-41d4-a716-446655440099',
           name: 'testuser',
         }
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 404);
+      const data = await expectResponseStatus(response!, 400);
 
-      expect(data.error).toBeDefined();
+      expect(data.error).toBe('cluster not found');
     });
 
     it('should handle DigitalOcean API errors', async () => {
@@ -371,11 +347,24 @@ describe('POST /api/services/database/users/create', () => {
       expect(data.error).toBeDefined();
     });
 
-    it.skip('should handle database query errors (skipped - only logs errors)', async () => {
+    it('should handle Supabase sync failure after DO user creation', async () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
-      vi.mocked(Database_Clusters.read).mockRejectedValue(
-        new Error('Database connection failed')
-      );
+      vi.mocked(Database_Clusters.add_user).mockResolvedValue({
+        success: false,
+        error: 'Database sync failed',
+      });
+
+      const axios = await import('axios');
+      vi.mocked(axios.default.post).mockResolvedValue({
+        status: 201,
+        data: {
+          user: {
+            name: 'testuser',
+            role: 'normal',
+            password: 'generated-pw',
+          },
+        },
+      });
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/database/users/create',
@@ -388,7 +377,7 @@ describe('POST /api/services/database/users/create', () => {
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response!, 500);
 
-      expect(data.error).toBeDefined();
+      expect(data.error).toContain('failed to sync');
     });
   });
 

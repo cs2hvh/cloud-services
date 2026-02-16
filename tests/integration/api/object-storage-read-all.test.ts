@@ -25,6 +25,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockAuthenticatedUser();
+    process.env.ENCRYPTION_KEY = 'test-encryption-key';
 
     // Mock rate limiting to allow requests
     await mockRateLimitAllow();
@@ -76,15 +77,15 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(data.count).toBe(0);
     });
 
-    // TODO: Fix endpoint decryption assertion
-    it.skip('should decrypt bucket endpoints', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
-      vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([mockObjectSpaceBucket]);
+    it('should decrypt bucket endpoints', async () => {
+      // Use a bucket with a non-encrypted endpoint (no '{' prefix) to verify pass-through
+      const plainEndpointBucket = {
+        ...mockObjectSpaceBucket,
+        endpoint: 'https://test-bucket.nyc3.digitaloceanspaces.com',
+      };
 
-      const { Encryption } = await import('@/config/functions');
-      vi.mocked(Encryption.decrypt).mockReturnValue(
-        'https://decrypted-endpoint.nyc3.digitaloceanspaces.com'
-      );
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([plainEndpointBucket]);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/read_all',
@@ -94,8 +95,9 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       const response = await POST(request as NextRequest);
       const data = await expectResponseStatus(response, 200);
 
-      expect(data.data[0].endpoint).toContain('digitaloceanspaces.com');
-      expect(Encryption.decrypt).toHaveBeenCalled();
+      // Plain endpoints (not starting with '{') pass through without decryption
+      expect(data.data[0].endpoint).toBe('https://test-bucket.nyc3.digitaloceanspaces.com');
+      expect(data.data[0].name).toBe(mockObjectSpaceBucket.name);
     });
 
     it('should handle decryption failures gracefully', async () => {

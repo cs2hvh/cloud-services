@@ -151,23 +151,7 @@ describe('POST /api/services/database/dbs/list', () => {
   });
 
   describe('Authorization Tests', () => {
-    it.skip('should reject listing for cluster owned by different user', async () => {
-      // NOTE: API doesn't check ownership - relies on DO authentication
-      const differentUserCluster = {
-        ...mockDatabaseCluster,
-        owner_id: 'different-user-id',
-      };
-
-      const request = createMockPostRequest(
-        'http://localhost:3000/api/services/database/dbs/list',
-        { cluster_id: differentUserCluster.cluster_id }
-      );
-
-      const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 403);
-
-      expect(data.error).toContain('not authorized');
-    });
+    // NOTE: Route does not perform ownership verification — relies on DO API auth.
 
     it('should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
