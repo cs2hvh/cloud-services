@@ -1,5 +1,6 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
+import ComputeReleaseSection from "@/components/services/compute-release-section";
 import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
@@ -65,6 +66,7 @@ const ComputeHome = () => {
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/pages/compute/compute.svg", alt: "Compute infrastructure" }}
       />
+      <ComputeReleaseSection />
       <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
