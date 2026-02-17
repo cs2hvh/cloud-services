@@ -57,6 +57,8 @@ import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
+import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
+import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
@@ -159,16 +161,6 @@ export default function AppDetailPage() {
   const [buildLogs, setBuildLogs] = useState<string>('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [deployments, setDeployments] = useState<Array<{
-    build_number: number;
-    status: string;
-    started_at: string;
-    duration?: number;
-    commit_sha?: string;
-    commit_message?: string;
-    trigger?: string;
-    failure_reason?: string | null;
-  }>>([]);
 
   // Environment variables editing state
   const [editedEnvVars, setEditedEnvVars] = useState<EnvVar[]>([]);
@@ -201,6 +193,26 @@ export default function AppDetailPage() {
     appId,
     enabled: app?.status === 'running',
     refreshInterval: 30000,
+  });
+
+  // Real-time deployments
+  const { 
+    deployments, 
+    loading: deploymentsLoading, 
+    connectionStatus 
+  } = useRealtimeDeployments({ 
+    appId,
+    limit: 50,
+    enabled: !!app 
+  });
+
+  // Real-time app metadata updates
+  const { 
+    app: realtimeApp, 
+    connectionStatus: appConnectionStatus 
+  } = useRealtimeApp({ 
+    appId,
+    enabled: !!app 
   });
 
   const fetchApp = useCallback(async () => {
@@ -245,49 +257,34 @@ export default function AppDetailPage() {
     }
   }, []);
 
-  const fetchDeployments = useCallback(async () => {
-    try {
-      const res = await api.get(`/services/platform-apps/deployments?app_id=${appId}`);
-      if (res.data) {
-        setDeployments(res.data.deployments || []);
-      }
-    } catch (error) {
-      console.error('Error fetching deployments:', error);
-    }
-  }, [appId]);
-
   useEffect(() => {
     fetchApp();
   }, [fetchApp]);
 
+  // Sync real-time app updates to local state
+  useEffect(() => {
+    if (realtimeApp) {
+      setApp((prev) => {
+        // Only update if there are actual changes
+        if (!prev || JSON.stringify(prev) !== JSON.stringify({ ...prev, ...realtimeApp })) {
+          return { ...prev, ...realtimeApp } as AppDetail;
+        }
+        return prev;
+      });
+    }
+  }, [realtimeApp]);
+
   useEffect(() => {
     if (app?.name) {
       fetchBuildInfo(app.name);
-      fetchDeployments();
     }
-  }, [app?.name, fetchBuildInfo, fetchDeployments]);
+  }, [app?.name, fetchBuildInfo]);
 
   useEffect(() => {
     if (app?.name && buildInfo?.number) {
       fetchBuildLogs(app.name, buildInfo.number);
     }
   }, [app?.name, buildInfo?.number, fetchBuildLogs]);
-
-  // Auto-refresh for building apps
-  useEffect(() => {
-    if (app?.status === 'building' || buildInfo?.building) {
-      const interval = setInterval(() => {
-        fetchApp();
-        if (app?.name) {
-          fetchBuildInfo(app.name);
-          if (buildInfo?.number) {
-            fetchBuildLogs(app.name, buildInfo.number);
-          }
-        }
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [app?.status, app?.name, buildInfo?.building, buildInfo?.number, fetchApp, fetchBuildInfo, fetchBuildLogs]);
 
   // Initialize edited env vars when app data loads
   useEffect(() => {
@@ -413,10 +410,8 @@ export default function AppDetailPage() {
       const data = await res.json();
       setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
       
-      // Update status and refresh
-      setApp(prev => prev ? { ...prev, status: 'building' } : null);
-      fetchApp();
-      fetchDeployments();
+      // Real-time will update status automatically
+      // No need to call fetchApp() - WebSocket handles it
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to trigger redeploy';
       setEnvVarError(message);
@@ -448,10 +443,8 @@ export default function AppDetailPage() {
       setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
       setSelectedSize(null);
       
-      // Update local state
-      setApp(prev => prev ? { ...prev, status: 'building', size: selectedSize } : null);
-      fetchApp();
-      fetchDeployments();
+      // Real-time will update status and size automatically
+      // No need to call fetchApp() - WebSocket handles it
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resize app';
       setResizeError(message);
@@ -569,6 +562,12 @@ export default function AppDetailPage() {
                 {copiedField === 'app-name' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
               {getStatusBadge(app.status, buildInfo?.building)}
+              {appConnectionStatus === 'connected' && (
+                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs" title="Real-time app status updates enabled">
+                  <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
+                  Live
+                </Badge>
+              )}
             </div>
             {/* Show failure reason if app failed */}
             {app.status === 'failed' && app.last_failure_reason && (
@@ -603,14 +602,13 @@ export default function AppDetailPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                fetchApp();
                 if (app.name) fetchBuildInfo(app.name);
                 refetchDetails();
               }}
               className="border-white/20 text-white hover:bg-white/10"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
+              Refresh Metrics
             </Button>
             <Button
               variant="destructive"
@@ -956,17 +954,44 @@ export default function AppDetailPage() {
           <TabsContent value="deployments">
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Layers className="w-5 h-5" />
-                  Deployment History
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Layers className="w-5 h-5" />
+                    Deployment History
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {connectionStatus === 'connected' && (
+                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                        <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
+                        Live Updates
+                      </Badge>
+                    )}
+                    {connectionStatus === 'connecting' && (
+                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        Connecting...
+                      </Badge>
+                    )}
+                    {connectionStatus === 'disconnected' && (
+                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
+                        <XCircle className="w-3 h-3 mr-1" />
+                        Disconnected
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                {deployments.length > 0 ? (
+                {deploymentsLoading && deployments.length === 0 ? (
+                  <div className="text-center py-8 text-white/50">
+                    <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin" />
+                    <p>Loading deployments...</p>
+                  </div>
+                ) : deployments.length > 0 ? (
                   <div className="space-y-2">
-                    {deployments.map((deployment, idx) => (
+                    {deployments.map((deployment) => (
                       <div
-                        key={idx}
+                        key={deployment.id}
                         className="flex flex-col p-3 bg-black/30 rounded-lg gap-2"
                       >
                         <div className="flex items-center justify-between">
@@ -983,31 +1008,18 @@ export default function AppDetailPage() {
                             </Badge>
                           </div>
                           <div className="flex items-center gap-4 text-xs text-white/50">
-                            {deployment.duration && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {Math.round(deployment.duration / 1000)}s
-                              </span>
-                            )}
                             <span>
                               {new Date(deployment.started_at).toLocaleString()}
                             </span>
                           </div>
                         </div>
                         {/* Commit Info Row */}
-                        {(deployment.commit_sha || deployment.commit_message) && (
+                        {deployment.commit_sha && (
                           <div className="flex items-center gap-2 text-xs text-white/60 pl-1">
                             <GitCommit className="w-3 h-3 text-white/40" />
-                            {deployment.commit_sha && (
-                              <code className="px-1.5 py-0.5 bg-white/10 rounded text-blue-400 font-mono">
-                                {deployment.commit_sha}
-                              </code>
-                            )}
-                            {deployment.commit_message && (
-                              <span className="truncate max-w-[300px]" title={deployment.commit_message}>
-                                {deployment.commit_message}
-                              </span>
-                            )}
+                            <code className="px-1.5 py-0.5 bg-white/10 rounded text-blue-400 font-mono">
+                              {deployment.commit_sha.substring(0, 7)}
+                            </code>
                           </div>
                         )}
                         {/* Failure Reason Row */}
