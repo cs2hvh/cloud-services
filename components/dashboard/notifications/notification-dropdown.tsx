@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, CheckCheck, Loader2, AlertCircle } from 'lucide-react';
+import { Check, CheckCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NotificationItem } from './notification-item';
 import { useSession } from '@/app/dashboard/provider';
@@ -17,16 +17,13 @@ export function NotificationDropdown({ onClose }: { onClose?: () => void }) {
   // Use new realtime notifications hook
   const { 
     notifications, 
-    loading, 
-    error,
+    loading,
     markAsRead,
     markAllAsRead,
-    connectionStatus 
   } = useRealtimeNotifications({
     userId: user?.id,
     limit: 20,
     enabled: !!user?.id,
-    pauseWhenInactive: false, // Keep active while dropdown is open
   });
 
   const handleMarkAsRead = async (id: string) => {
@@ -80,13 +77,6 @@ export function NotificationDropdown({ onClose }: { onClose?: () => void }) {
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center justify-center py-8 text-orange-400">
-            <AlertCircle className="h-8 w-8 mb-2" />
-            <p className="text-sm font-medium">Connection Error</p>
-            <p className="text-xs text-slate-400 mt-1">Status: {connectionStatus}</p>
-            <p className="text-xs text-slate-500 mt-2 px-4 text-center">{error}</p>
           </div>
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-slate-400">

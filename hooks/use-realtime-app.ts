@@ -116,7 +116,6 @@ export function useRealtimeApp({
     orderBy: 'updated_at',
     orderDirection: 'desc',
     transform: transformApp,
-    event: 'UPDATE', // Only listen for updates (app already exists)
   });
 
   return {

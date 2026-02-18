@@ -123,7 +123,6 @@ export function useRealtimeApps({
     orderBy: 'created_at',
     orderDirection: 'desc',
     transform: transformApp,
-    event: '*', // Listen to INSERT, UPDATE, DELETE
   });
 
   return {

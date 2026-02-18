@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, WifiOff } from "lucide-react";
+import { Bell } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,14 +19,11 @@ export function NotificationBell() {
   // Use new realtime notifications hook
   const { 
     unreadCount, 
-    markAllAsRead, 
-    connectionStatus,
-    error 
+    markAllAsRead,
   } = useRealtimeNotifications({
     userId: user?.id,
     limit: 50,
     enabled: !!user?.id,
-    pauseWhenInactive: true,
   });
 
   // Handle dropdown open/close
@@ -42,9 +39,6 @@ export function NotificationBell() {
     }
   };
 
-  // Show connection error indicator
-  const hasConnectionError = connectionStatus === 'error' || !!error;
-
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -52,13 +46,8 @@ export function NotificationBell() {
           variant="ghost"
           size="icon"
           className="cursor-pointer relative text-slate-400 hover:text-white hover:bg-slate-800/50"
-          title={hasConnectionError ? "Realtime connection error" : undefined}
         >
-          {hasConnectionError ? (
-            <WifiOff className="h-5 w-5 text-orange-400" />
-          ) : (
-            <Bell className="h-5 w-5" />
-          )}
+          <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white animate-pulse">
               {unreadCount > 99 ? "99+" : unreadCount}

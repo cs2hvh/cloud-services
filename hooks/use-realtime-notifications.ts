@@ -42,9 +42,6 @@ interface UseRealtimeNotificationsOptions {
   
   /** Enable/disable subscription (default: true) */
   enabled?: boolean;
-  
-  /** Pause when user is inactive (default: true) */
-  pauseWhenInactive?: boolean;
 }
 
 interface UseRealtimeNotificationsReturn {
@@ -56,7 +53,6 @@ interface UseRealtimeNotificationsReturn {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   refetch: () => Promise<void>;
-  isInactive: boolean;
 }
 
 /**
@@ -86,7 +82,6 @@ export function useRealtimeNotifications({
   userId,
   limit = 50,
   enabled = true,
-  pauseWhenInactive = true,
 }: UseRealtimeNotificationsOptions = {}): UseRealtimeNotificationsReturn {
   // Use generic realtime table hook
   const {
@@ -95,19 +90,14 @@ export function useRealtimeNotifications({
     error,
     connectionStatus,
     refetch,
-    isInactive,
   } = useRealtimeTable<NotificationRecord, Notification>({
     table: 'notifications',
-    schema: 'public',
     filter: userId ? `user_id=eq.${userId}` : undefined,
-    event: '*',
     limit,
     enabled: enabled && !!userId,
     orderBy: 'created_at',
     orderDirection: 'desc',
     transform: transformNotification,
-    pauseWhenInactive,
-    inactivityThreshold: 300000, // 5 minutes
   });
 
   // Calculate unread count
@@ -165,6 +155,5 @@ export function useRealtimeNotifications({
     markAsRead,
     markAllAsRead,
     refetch,
-    isInactive,
   };
 }
