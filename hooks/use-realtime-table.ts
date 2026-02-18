@@ -176,32 +176,7 @@ export function useRealtimeTable<TDatabase extends Record<string, unknown> = Rec
       return;
     }
 
-    // Setup activity tracking if pause on inactivity is enabled
-    if (pauseWhenInactive) {
-      activityCleanupRef.current = setupActivityTracking();
-      
-      // Check inactivity periodically
-      const inactivityCheck = setInterval(() => {
-        const inactive = isUserInactive(inactivityThreshold);
-        setIsInactive(inactive);
-        
-        if (inactive && connectionRef.current) {
-          console.log(`[useRealtimeTable] User inactive, pausing ${table} subscription`);
-          connectionRef.current.cleanup();
-          connectionRef.current = null;
-          setConnectionStatus('disconnected');
-        } else if (!inactive && !connectionRef.current) {
-          console.log(`[useRealtimeTable] User active again, resuming ${table} subscription`);
-          setupSubscription();
-        }
-      }, 30000); // Check every 30 seconds
-
-      return () => {
-        clearInterval(inactivityCheck);
-        activityCleanupRef.current?.();
-      };
-    }
-
+    // Define setupSubscription BEFORE any early returns
     const setupSubscription = async () => {
       // Fetch initial data
       await fetchInitialData();
@@ -257,13 +232,44 @@ export function useRealtimeTable<TDatabase extends Record<string, unknown> = Rec
       connectionRef.current = connection;
     };
 
+    // Setup activity tracking if pause on inactivity is enabled
+    if (pauseWhenInactive) {
+      activityCleanupRef.current = setupActivityTracking();
+      
+      // Check inactivity periodically
+      const inactivityCheck = setInterval(() => {
+        const inactive = isUserInactive(inactivityThreshold);
+        setIsInactive(inactive);
+        
+        if (inactive && connectionRef.current) {
+          console.log(`[useRealtimeTable] User inactive, pausing ${table} subscription`);
+          connectionRef.current.cleanup();
+          connectionRef.current = null;
+          setConnectionStatus('disconnected');
+        } else if (!inactive && !connectionRef.current) {
+          console.log(`[useRealtimeTable] User active again, resuming ${table} subscription`);
+          setupSubscription();
+        }
+      }, 30000); // Check every 30 seconds
+
+      // Initial subscription setup
+      setupSubscription();
+
+      return () => {
+        clearInterval(inactivityCheck);
+        connectionRef.current?.cleanup();
+        connectionRef.current = null;
+        activityCleanupRef.current?.();
+      };
+    }
+
+    // Normal flow without inactivity tracking
     setupSubscription();
 
     // Cleanup
     return () => {
       connectionRef.current?.cleanup();
       connectionRef.current = null;
-      activityCleanupRef.current?.();
     };
   }, [table, schema, filter, event, limit, enabled, fetchInitialData, transformRecord, pauseWhenInactive, inactivityThreshold]);
 

@@ -57,7 +57,7 @@ export default function ApplicationDeploymentPage() {
   const deployedApps = localApps;
 
   // Check if any app is being deleted
-  const hasDeleting = deployedApps.some((app) => app.status === 'deleting');
+  // const hasDeleting = deployedApps.some((app) => app.status === 'deleting');
 
   // Handle optimistic updates (for immediate feedback before real-time confirms)
   const handleUpdateApps = (updater: (apps: typeof localApps) => typeof localApps) => {

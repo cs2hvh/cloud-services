@@ -16,7 +16,6 @@ import {
   Activity,
   Settings,
   Trash2,
-  Clock,
   Box,
   Cpu,
   HardDrive,
