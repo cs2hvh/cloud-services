@@ -1,41 +1,35 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Check, CheckCheck, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { NotificationItem } from './notification-item';
-import { Notification } from '@/lib/notifications/types';
-import api from '@/lib/axios/axios';
+import { useSession } from '@/app/dashboard/provider';
+import { useRealtimeNotifications } from '@/hooks/use-realtime-notifications';
+import { useState } from 'react';
 
 export function NotificationDropdown({ onClose }: { onClose?: () => void }) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useSession();
   const [markingAll, setMarkingAll] = useState(false);
-
+  
   // Use `onClose` optionally passed from parent (no-op here) to satisfy typings
   void onClose;
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const res = await api.get('/notifications?limit=20');
-        setNotifications(res.data.notifications || []);
-      } catch (error) {
-        console.error('[NotificationDropdown] Failed to fetch:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchNotifications();
-  }, []);
+  // Use new realtime notifications hook
+  const { 
+    notifications, 
+    loading,
+    markAsRead,
+    markAllAsRead,
+  } = useRealtimeNotifications({
+    userId: user?.id,
+    limit: 20,
+    enabled: !!user?.id,
+  });
 
   const handleMarkAsRead = async (id: string) => {
     try {
-      await api.post('/notifications/mark-read', { id })
-      setNotifications(prev => 
-        prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-      );
-      // Realtime subscription handles count update automatically
+      await markAsRead(id);
+      // Realtime automatically updates the list
     } catch (error) {
       console.error('[NotificationDropdown] Failed to mark as read:', error);
     }
@@ -44,9 +38,8 @@ export function NotificationDropdown({ onClose }: { onClose?: () => void }) {
   const handleMarkAllAsRead = async () => {
     setMarkingAll(true);
     try {
-      await api.post('/notifications/mark-read', { all: true });
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-      // Realtime subscription handles count update automatically
+      await markAllAsRead();
+      // Realtime automatically updates the list
     } catch (error) {
       console.error('[NotificationDropdown] Failed to mark all as read:', error);
     } finally {

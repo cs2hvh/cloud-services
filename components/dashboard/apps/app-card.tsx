@@ -130,8 +130,14 @@ export function AppCard({
   });
 
   const handleToggleLogs = () => {
-    if (!isExpanded && build) {
-      onFetchLogs(build.number);
+    // Always try to fetch logs when expanding IF we have a build number
+    if (!isExpanded) {
+      if (build?.number) {
+        onFetchLogs(build.number);
+      } else {
+        // If no build info yet, try build #1 (most apps will have at least one build)
+        onFetchLogs(1);
+      }
     }
     setActiveTab('logs');
     onToggleLogs();

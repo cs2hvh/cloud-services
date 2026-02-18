@@ -4,9 +4,9 @@ import { motion } from 'motion/react';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useEffect, useState, useCallback } from 'react';
 import {
-  App,
   BuildInfo,
   AppsList,
   StatsCards,
@@ -15,42 +15,54 @@ import {
   HowItWorks,
 } from '@/components/dashboard/apps';
 import api from '@/lib/axios/axios';
+import { useRealtimeApps } from '@/hooks/use-realtime-apps';
+import { createClient } from '@/lib/supabase/client';
 
 export default function ApplicationDeploymentPage() {
-  const [deployedApps, setDeployedApps] = useState<App[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
   const [buildInfo, setBuildInfo] = useState<Record<string, BuildInfo>>({});
   const [buildLogs, setBuildLogs] = useState<Record<string, string>>({});
   const [fetchedBuilds, setFetchedBuilds] = useState<Set<string>>(new Set());
   const [logsLoading, setLogsLoading] = useState<Record<string, boolean>>({});
   const [logsError, setLogsError] = useState<Record<string, string>>({});
+  const [localApps, setLocalApps] = useState<typeof realtimeApps>([]);
+
+  // Get user ID on mount
+  useEffect(() => {
+    const getUser = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    };
+    getUser();
+  }, []);
+
+  // Real-time apps subscription
+  const { 
+    apps: realtimeApps, 
+    loading, 
+    connectionStatus 
+  } = useRealtimeApps({ 
+    userId: userId || '',
+    enabled: !!userId,
+    limit: 100 
+  });
+
+  // Sync real-time apps to local state (with optimistic updates)
+  useEffect(() => {
+    setLocalApps(realtimeApps);
+  }, [realtimeApps]);
+
+  // Use local apps for display (allows optimistic updates)
+  const deployedApps = localApps;
 
   // Check if any app is being deleted
-  const hasDeleting = deployedApps.some((app) => app.status === 'deleting');
+  // const hasDeleting = deployedApps.some((app) => app.status === 'deleting');
 
-  const fetchApps = useCallback(async () => {
-    try {
-      const res = await api.get('/services/platform-apps/list');
-      const data = res.data;
-      setDeployedApps((prev) => {
-        const deletingAppIds = prev.filter((app) => app.status === 'deleting').map((app) => app.id);
-        const newApps = data?.apps || [];
-        const deletingApps = prev.filter(
-          (app) => app.status === 'deleting' && !newApps.some((a: App) => a.id === app.id)
-        );
-        return [
-          ...newApps.map((app: App) =>
-            deletingAppIds.includes(app.id) ? { ...app, status: 'deleting' } : app
-          ),
-          ...deletingApps,
-        ];
-      });
-    } catch (error) {
-      console.log('[fetchApps] Failed to fetch apps list:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Handle optimistic updates (for immediate feedback before real-time confirms)
+  const handleUpdateApps = (updater: (apps: typeof localApps) => typeof localApps) => {
+    setLocalApps(updater);
+  };
 
   // Fetch build info using axios - only called for apps with valid status
   const fetchBuildInfo = useCallback(async (appName: string) => {
@@ -92,17 +104,6 @@ export default function ApplicationDeploymentPage() {
     }
   }, []);
 
-  // Fetch apps
-  useEffect(() => {
-    fetchApps();
-    const interval = setInterval(() => {
-      if (!hasDeleting) {
-        fetchApps();
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [fetchApps, hasDeleting]);
-
   // Fetch build info for each app (only once per app, skip for pending/deleting apps)
   useEffect(() => {
     deployedApps.forEach((app) => {
@@ -117,7 +118,7 @@ export default function ApplicationDeploymentPage() {
     });
   }, [deployedApps, fetchedBuilds, fetchBuildInfo]);
 
-  // Refresh build info for apps that are building
+  // Refresh build info for apps that are building (reduced from 10s to 30s since real-time handles status)
   useEffect(() => {
     const buildingApps = deployedApps.filter((app) => {
       const build = buildInfo[app.name];
@@ -130,7 +131,7 @@ export default function ApplicationDeploymentPage() {
       buildingApps.forEach((app) => {
         fetchBuildInfo(app.name);
       });
-    }, 10000);
+    }, 30000); // 30 seconds instead of 10 (real-time handles app status updates)
 
     return () => clearInterval(interval);
   }, [deployedApps, buildInfo, fetchBuildInfo]);
@@ -158,7 +159,15 @@ export default function ApplicationDeploymentPage() {
         className="flex justify-between items-center mb-8"
       >
         <div>
-          <h1 className="text-3xl font-bold">Application Deployment</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            Application Deployment
+            {connectionStatus === 'connected' && (
+              <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
+                Live
+              </Badge>
+            )}
+          </h1>
           <p className="text-white/60">
             Deploy your applications directly from Git repositories with automatic builds and
             scaling.
@@ -224,7 +233,7 @@ export default function ApplicationDeploymentPage() {
           logsLoading={logsLoading}
           logsError={logsError}
           onFetchLogs={fetchBuildLogs}
-          onUpdateApps={setDeployedApps}
+          onUpdateApps={handleUpdateApps}
         />
       </motion.div>
 
