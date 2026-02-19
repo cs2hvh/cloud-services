@@ -22,11 +22,14 @@ function requiresRebuildForEnvVars(
     return { needsRebuild: false };
   }
 
-  const fw = framework.toLowerCase();
+  // Normalize framework id (handle values like "Next.js", "Nuxt.js", "vite-react")
+  // Remove dots/spaces to make comparisons robust (e.g. "Next.js" -> "nextjs")
+  let fw = framework.toLowerCase().replace(/[.\s]/g, '');
+  if (fw === 'vite-react') fw = 'vitereact';
 
   // Static SPAs ALWAYS need rebuild (no server to read runtime env vars)
-  // Check with .includes() or startsWith() to handle "Vue.js", "React", "vue", etc.
-  if (fw.includes('vue') || fw.includes('react') || fw.includes('angular') || fw === 'vite-react') {
+  // Use includes() to catch variants like "vue" or "react" inside names
+  if (fw.includes('vue') || fw.includes('react') || fw.includes('angular') || fw === 'vitereact') {
     return { 
       needsRebuild: true, 
       reason: 'Static SPA requires rebuild to update environment variables' 
@@ -42,9 +45,12 @@ function requiresRebuildForEnvVars(
         return key.startsWith('NEXT_PUBLIC_');
       case 'nuxtjs':
       case 'nuxt':
-        return key.startsWith('NUXT_PUBLIC_') || key.startsWith('VITE_');
+        return key.startsWith('NUXT_PUBLIC_') || key.startsWith('VITE_') || key.startsWith('PUBLIC_');
       case 'sveltekit':
         return key.startsWith('PUBLIC_');
+      case 'vitereact':
+      case 'vue':
+        return key.startsWith('VITE_');
       default:
         return false;
     }
@@ -123,64 +129,68 @@ export async function POST(req: NextRequest) {
     // Determine if we need rebuild or can just update K8s Secret + restart pods
     const rebuildCheck = requiresRebuildForEnvVars(app.framework, env_vars);
 
+    // Check if app is actually running before attempting K8s update
+    if (app.status !== 'running') {
+      console.log(`[env-vars/update] ${app.name}: App not running (status: ${app.status}), saved to DB only`);
+      return NextResponse.json({
+        message: "Environment variables saved to database",
+        requiresRedeploy: true,
+        reason: `App is not currently running (status: ${app.status})`,
+        hint: "Click 'Redeploy' to build and apply changes"
+      });
+    }
+
+    // ALWAYS apply runtime env vars to K8s immediately (even if rebuild is needed for build-time vars)
+    // This ensures: runtime vars take effect NOW, build-time vars take effect after rebuild
+    console.log(`[env-vars/update] ${app.name}: Applying env vars to K8s (${env_vars.length} vars)${rebuildCheck.needsRebuild ? ' + rebuild required' : ''}`);
+    
+    const k8sResult = await KubernetesInfoService.updateEnvVarsAndRestart(
+      app.name,
+      env_vars
+    );
+
+    if (!k8sResult.success) {
+      console.error(`[env-vars/update] K8s update failed:`, k8sResult.error);
+      return NextResponse.json({
+        message: "Environment variables saved to database, but live update failed",
+        requiresRedeploy: true,
+        reason: k8sResult.error,
+        hint: "Click 'Redeploy' to apply changes"
+      }, { status: 207 }); // 207 Multi-Status
+    }
+
+    console.log(`[env-vars/update] ✅ ${app.name}: Env vars updated and pods restarted`);
+    
+    // Sync app status from K8s after restart
+    try {
+      const { AppStatusService } = await import('@/lib/services/app-status');
+      const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
+      if (syncResult.changed) {
+        console.log(`[env-vars/update] Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
+      }
+    } catch (syncError) {
+      console.error(`[env-vars/update] Status sync failed (non-critical):`, syncError);
+    }
+
+    // Return response based on whether rebuild is needed
     if (rebuildCheck.needsRebuild) {
-      // Build-time vars require full rebuild via redeploy
+      // Mixed scenario: runtime vars applied NOW, build-time vars need rebuild
       console.log(`[env-vars/update] ${app.name}: Requires rebuild - ${rebuildCheck.reason}`);
       
       return NextResponse.json({
-        message: "Environment variables updated in database",
+        message: "Runtime environment variables applied immediately",
         requiresRedeploy: true,
+        appliedLive: true, // Runtime vars are live
         reason: rebuildCheck.reason,
-        hint: "Click 'Redeploy' to apply changes (rebuild required)"
+        hint: "Runtime vars are live now. Click 'Redeploy' to apply build-time variables (NEXT_PUBLIC_*, etc.)"
       });
     } else {
-      // Check if app is actually running before attempting K8s update
-      if (app.status !== 'running') {
-        console.log(`[env-vars/update] ${app.name}: App not running (status: ${app.status}), saved to DB only`);
-        return NextResponse.json({
-          message: "Environment variables saved to database",
-          requiresRedeploy: true,
-          reason: `App is not currently running (status: ${app.status})`,
-          hint: "Click 'Redeploy' to build and apply changes"
-        });
-      }
-
-      // Runtime-only vars: Update K8s Secret and restart pods (fast, no rebuild)
-      console.log(`[env-vars/update] ${app.name}: Applying runtime env vars without rebuild (${env_vars.length} vars)`);
-      
-      const k8sResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-        app.name,
-        env_vars
-      );
-
-      if (!k8sResult.success) {
-        console.error(`[env-vars/update] K8s update failed:`, k8sResult.error);
-        return NextResponse.json({
-          message: "Environment variables saved to database, but live update failed",
-          requiresRedeploy: true,
-          reason: k8sResult.error,
-          hint: "Click 'Redeploy' to apply changes"
-        }, { status: 207 }); // 207 Multi-Status
-      }
-
-      console.log(`[env-vars/update] ✅ ${app.name}: Env vars updated and pods restarted`);
-      
-      // Sync app status from K8s after restart
-      try {
-        const { AppStatusService } = await import('@/lib/services/app-status');
-        const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-        if (syncResult.changed) {
-          console.log(`[env-vars/update] Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
-        }
-      } catch (syncError) {
-        console.error(`[env-vars/update] Status sync failed (non-critical):`, syncError);
-      }
-      
+      // Pure runtime scenario: all vars applied, no rebuild needed
       return NextResponse.json({
         message: "Environment variables updated and applied successfully",
         requiresRedeploy: false,
         appliedLive: true,
-        hint: "Changes applied instantly via rolling restart (no rebuild needed)"
+        hint: "All changes applied instantly via rolling restart (no rebuild needed)"
       });
     }
   } catch (err: unknown) {

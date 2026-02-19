@@ -360,18 +360,30 @@ export default function AppDetailPage() {
       }
 
       // Handle different response types
-      if (data.requiresRedeploy) {
+      if (data.requiresRedeploy && data.appliedLive) {
+        // Mixed scenario: runtime vars applied NOW, build-time vars need rebuild
+        setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
+        toast.success('Environment changes saved', {
+          description:
+            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect — click Redeploy to trigger a rebuild.',
+          duration: 7000,
+        });
+      } else if (data.requiresRedeploy) {
+        // Only build-time vars or app not running
         setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
         toast.warning(data.reason || 'Redeploy required', {
           description: 'Click the Redeploy button to apply changes',
           duration: 5000,
         });
       } else if (data.appliedLive) {
+        // Pure runtime scenario: all vars applied
         setEnvVarSuccess(data.message);
-        toast.success('Changes applied instantly!', {
+        toast.success('All changes applied instantly! ⚡', {
           description: data.hint || 'Environment variables updated without rebuild',
+          duration: 4000,
         });
       } else {
+        // Fallback (shouldn't happen)
         setEnvVarSuccess(data.message || 'Environment variables saved successfully');
       }
       
@@ -1329,7 +1341,21 @@ export default function AppDetailPage() {
                         )}
                       </Button>
                       <span className="text-xs text-white/50">
-                        Note: After saving, click &quot;Redeploy&quot; to apply changes to your app.
+                        {envVarSuccess && envVarSuccess.toLowerCase().includes('applied') && envVarSuccess.toLowerCase().includes('immediately') ? (
+                          <span className="text-yellow-400">
+                            ⚡ Runtime vars live now. Build-time vars need redeploy.
+                          </span>
+                        ) : envVarSuccess && (envVarSuccess.includes('applied instantly') || envVarSuccess.includes('All changes applied')) ? (
+                          <span className="text-green-400">
+                            ⚡ All changes applied instantly (no rebuild needed)
+                          </span>
+                        ) : envVarSuccess && envVarSuccess.toLowerCase().includes('redeploy') ? (
+                          <span className="text-yellow-400">
+                            ⚠️ Changes require clicking &quot;Redeploy&quot; to take effect
+                          </span>
+                        ) : (
+                          'Auto-detects if hot update or rebuild is needed'
+                        )}
                       </span>
                     </div>
                   )}

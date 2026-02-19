@@ -50,7 +50,8 @@ export function createNextJsPipeline(
   // Use provided container port or default to 3000
   const port = containerPort ?? 3000;
 
-  // Split env vars: NEXT_PUBLIC_* → client-side, others → server-side K8s Secrets
+  // Split env vars: NEXT_PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('NEXT_PUBLIC_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
@@ -58,14 +59,13 @@ export function createNextJsPipeline(
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // Generate build args for ALL env vars (like Vercel does)
-  // Why: Next.js pre-renders API routes during build → needs access to all env vars
-  // Security: Build args are only used during build, runtime uses K8s Secrets
-  // [INFO] Build logs show build arg names but Jenkins masks sensitive values
-  // NOTE: We pass ALL env vars (including NODE_ENV) to respect custom Dockerfiles.
-  // For platform-generated Dockerfiles, ENV NODE_ENV=production override ensures production builds.
-  const buildArgs = envVars.length > 0
-    ? envVars
+  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // This prevents secrets from being baked into Docker images
+  // Why: Next.js only needs public vars during build for static generation
+  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
+  const buildArgs = clientEnvVars.length > 0
+    ? clientEnvVars
         .map(e => {
           const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
           return `--build-arg ${e.key}="${escapedValue}"`;

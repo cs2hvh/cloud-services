@@ -396,22 +396,25 @@ CMD ${pm.start}
 
 /**
  * Generate Dockerfile for Next.js (standard mode)
- * Supports build-time env vars for NEXT_PUBLIC_* variables
+ * Supports build-time env vars for NEXT_PUBLIC_* variables ONLY
+ * Server-side vars come from K8s secrets at runtime (never baked into image)
  * Now supports pnpm/yarn/npm auto-detection
  */
 export function getNextjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for ALL env vars (build-time availability)
-  // Like Vercel: All vars available during build so Next.js can pre-render API routes
-  // Security: Server-side vars are still loaded from K8s Secrets at runtime
-  const argDirectives = envVars.length > 0 
-    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
+  // Server-side env vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // This prevents secrets from being baked into Docker images
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
+  
+  const argDirectives = clientEnvVars.length > 0 
+    ? clientEnvVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
   // Generate ENV directives to pass ARGs to Next.js build
-  const envDirectives = envVars.length > 0
-    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+  const envDirectives = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
   return `
@@ -421,12 +424,13 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 ${pm.install}
 
 COPY . .
 
-# Pass build args as environment variables for Next.js
+# Build args for client-side vars (placed after install to preserve cache)
+${argDirectives}# Pass build args as environment variables for Next.js
 ${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
@@ -462,7 +466,8 @@ CMD ${pm.start}
 
 /**
  * Generate Dockerfile for Next.js (standalone mode)
- * Supports build-time env vars for ALL variables (like Vercel)
+ * Supports build-time env vars for NEXT_PUBLIC_* variables ONLY
+ * Server-side vars come from K8s secrets at runtime (never baked into image)
  * 
  * ⚠️ RUNTIME: Package manager is ONLY used during build.
  * Standalone mode runs "node server.js" directly (Next.js generates optimized server).
@@ -471,16 +476,18 @@ CMD ${pm.start}
 export function getNextjsStandaloneDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for ALL env vars (build-time availability)
-  // Like Vercel: All vars available during build so Next.js can pre-render API routes
-  // Security: Server-side vars are still loaded from K8s Secrets at runtime
-  const argDirectives = envVars.length > 0 
-    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+  // SECURITY FIX: Only pass NEXT_PUBLIC_* vars as build args (client-side only)
+  // Server-side env vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // This prevents secrets from being baked into Docker images
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('NEXT_PUBLIC_'));
+  
+  const argDirectives = clientEnvVars.length > 0 
+    ? clientEnvVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
   // Generate ENV directives to pass ARGs to Next.js build
-  const envDirectives = envVars.length > 0
-    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+  const envDirectives = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
   return `
@@ -490,12 +497,13 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 ${pm.install}
 
 COPY . .
 
-# Pass build args as environment variables for Next.js
+# Build args for client-side vars (placed after install to preserve cache)
+${argDirectives}# Pass build args as environment variables for Next.js
 ${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
@@ -701,21 +709,26 @@ CMD ["sh", "-c", "serve -s dist -l $PORT"]
 
 /**
  * Generate Dockerfile for Nuxt.js (Nuxt 3)
- * Supports build-time env vars for NUXT_PUBLIC_* and VITE_* variables
+ * Supports build-time env vars for NUXT_PUBLIC_* and PUBLIC_* variables ONLY
+ * Server-side vars come from K8s secrets at runtime (never baked into image)
  * Uses Nitro server output (.output/server/index.mjs)
  * Supports npm, pnpm, and yarn package managers
  */
 export function getNuxtjsDockerfile(envVars: Array<{key: string, value: string}> = []): string {
-  // Generate ARG directives for ALL env vars (build-time availability)
-  // Like Vercel: All vars available during build so Nuxt can pre-render SSR routes
-  // Security: Server-side vars are still loaded from K8s Secrets at runtime
-  const argDirectives = envVars.length > 0 
-    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+  // SECURITY FIX: Only pass public vars as build args (client-side only)
+  // Server-side env vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // Nuxt 3 uses NUXT_PUBLIC_* or PUBLIC_* prefix for public runtime config
+  const clientEnvVars = envVars.filter(e => 
+    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_')
+  );
+  
+  const argDirectives = clientEnvVars.length > 0 
+    ? clientEnvVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
   // Generate ENV directives to pass ARGs to build process
-  const envDirectives = envVars.length > 0
-    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+  const envDirectives = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
   const pm = getPackageManagerCommands();
@@ -727,13 +740,14 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 
 ${pm.install}
 
 COPY . .
 
-# Pass build args as environment variables for Nuxt
+# Build args for client-side vars (placed after install to preserve cache)
+${argDirectives}# Pass build args as environment variables for Nuxt
 ${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production
@@ -761,22 +775,25 @@ CMD ["node", ".output/server/index.mjs"]
 
 /**
  * Generate Dockerfile for SvelteKit (adapter-node)
- * Supports build-time env vars for ALL variables (like Vercel)
+ * Supports build-time env vars for PUBLIC_* variables ONLY
+ * Server-side vars come from K8s secrets at runtime (never baked into image)
  * Now supports pnpm/yarn/npm auto-detection
  */
 export function getSveltekitDockerfile(envVars: Array<{key: string, value: string}> = []): string {
   const pm = getPackageManagerCommands();
   
-  // Generate ARG directives for ALL env vars (build-time availability)
-  // Like Vercel: All vars available during build so SvelteKit can pre-render SSR routes
-  // Security: Server-side vars are still loaded from K8s Secrets at runtime
-  const argDirectives = envVars.length > 0 
-    ? envVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
+  // SECURITY FIX: Only pass PUBLIC_* vars as build args (client-side only)
+  // Server-side env vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // SvelteKit uses PUBLIC_* prefix for client-accessible environment variables
+  const clientEnvVars = envVars.filter(e => e.key.startsWith('PUBLIC_'));
+  
+  const argDirectives = clientEnvVars.length > 0 
+    ? clientEnvVars.map(e => `ARG ${e.key}`).join('\n') + '\n'
     : '';
 
   // Generate ENV directives to pass ARGs to SvelteKit build
-  const envDirectives = envVars.length > 0
-    ? envVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
+  const envDirectives = clientEnvVars.length > 0
+    ? clientEnvVars.map(e => `ENV ${e.key}=$${e.key}`).join('\n') + '\n'
     : '';
 
   return `
@@ -786,12 +803,13 @@ WORKDIR /app
 
 ${pm.setupPm}
 
-${argDirectives}${pm.copyLockfiles}
+${pm.copyLockfiles}
 ${pm.install}
 
 COPY . .
 
-# Pass build args as environment variables for SvelteKit
+# Build args for client-side vars (placed after install to preserve cache)
+${argDirectives}# Pass build args as environment variables for SvelteKit
 ${envDirectives}
 # Always build in production mode to prevent false positive errors
 ENV NODE_ENV=production

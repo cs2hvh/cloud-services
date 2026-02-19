@@ -128,22 +128,26 @@ export function createNuxtJsPipeline(
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;
 
-  // Split env vars: NUXT_PUBLIC_*/VITE_* → client-side, others → server-side K8s Secrets
-  const serverEnvVars = envVars.filter(e => !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('VITE_'));
+  // Split env vars: NUXT_PUBLIC_*/PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  const clientEnvVars = envVars.filter(e => 
+    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_')
+  );
+  const serverEnvVars = envVars.filter(e => 
+    !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('PUBLIC_')
+  );
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
   const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, serverEnvVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
-  // Generate build args for ALL env vars (like Vercel does)
-  // Why: Nuxt.js pre-renders SSR routes during build → needs access to all env vars
-  // Security: Build args are only used during build, runtime uses K8s Secrets
-  // [INFO] Build logs show build arg names but Jenkins masks sensitive values
-  // NOTE: We pass ALL env vars (including NODE_ENV) to respect custom Dockerfiles.
-  // For platform-generated Dockerfiles, ENV NODE_ENV=production override ensures production builds.
-  const buildArgs = envVars.length > 0
-    ? envVars
+  // SECURITY FIX: Only pass public vars as build args (client-side only)
+  // Server-side vars (DATABASE_URL, API_KEY, etc.) come from K8s Secrets at runtime
+  // This prevents secrets from being baked into Docker images
+  // Why: Nuxt.js only needs public vars during build for static generation
+  // Server-side API routes read env vars at runtime from process.env (K8s secrets)
+  const buildArgs = clientEnvVars.length > 0
+    ? clientEnvVars
         .map(e => {
           const escapedValue = e.value.replace(/"/g, '\\"').replace(/\$/g, '\\$');
           return `--build-arg ${e.key}="${escapedValue}"`;
