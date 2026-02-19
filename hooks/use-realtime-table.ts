@@ -58,7 +58,10 @@ export function useRealtimeTable<TData = any, TTransformed = TData>(
 
   // Fetch initial data
   const fetchData = useCallback(async () => {
-    if (!enabled || !table) return;
+    if (!enabled || !table) {
+      setLoading(false); // Don't stay in loading state when disabled
+      return;
+    }
 
     try {
       setLoading(true);
@@ -99,7 +102,11 @@ export function useRealtimeTable<TData = any, TTransformed = TData>(
 
   // Setup realtime subscription
   useEffect(() => {
-    if (!enabled || !table) return;
+    if (!enabled || !table) {
+      setLoading(false); // Don't stay in loading state when disabled
+      setConnectionStatus('disconnected');
+      return;
+    }
 
     let channel: RealtimeChannel;
 
