@@ -86,26 +86,92 @@ export async function POST(req: NextRequest) {
       console.log(`[Redeploy] Found ${envVars.length} environment variables for ${app.name}`);
 
       // Get repository URL (database uses repository_url, not git_url)
-      const gitUrl = (app as { repository_url?: string; git_url?: string }).repository_url || (app as { repository_url?: string; git_url?: string }).git_url;
+      let gitUrl = (app as { repository_url?: string; git_url?: string }).repository_url || (app as { repository_url?: string; git_url?: string }).git_url;
 
-      // If env vars exist, update the pipeline XML to include them
-      if (envVars.length > 0 && gitUrl) {
-        console.log(`[Redeploy] Updating pipeline XML with latest env vars`);
-        
-        await JenkinsService.updateJobConfig(
-          app.name,
-          app.id,
-          gitUrl,
-          app.branch || "main",
-          app.framework || undefined,
-          app.size || "small",
-          "manual",
-          envVars
-        );
-        console.log(`[Redeploy] Pipeline XML updated successfully`);
-      } else if (envVars.length > 0 && !gitUrl) {
-        console.warn(`[Redeploy] Cannot update pipeline: repository_url is missing for ${app.name}`);
+      if (!gitUrl) {
+        throw new Error('Repository URL not found in app configuration');
       }
+
+      // Reconstruct authenticated URL by getting provider token from session/database
+      const gitProvider = (app as { git_provider?: string }).git_provider;
+      console.log(`[Redeploy] Git provider: ${gitProvider}`);
+
+      if (gitProvider === 'github' || gitProvider === 'gitlab' || gitProvider === 'bitbucket') {
+        try {
+          const { createClient } = await import('@/lib/supabase/server');
+          const supabase = await createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+
+          let accessToken: string | null = null;
+
+          if (gitProvider === 'github') {
+            // Check session first
+            if (session?.provider_token) {
+              accessToken = session.provider_token;
+            } else if (session?.user?.identities) {
+              const githubIdentity = session.user.identities.find(id => id.provider === 'github');
+              if (githubIdentity?.identity_data?.provider_token) {
+                accessToken = githubIdentity.identity_data.provider_token;
+              }
+            }
+
+            // Fallback to GitHubProvider
+            if (!accessToken) {
+              const { GitHubProvider } = await import('@/lib/providers/github');
+              const githubProvider = new GitHubProvider();
+              const tokenObj = await githubProvider.getToken(auth.user!.id);
+              if (tokenObj?.accessToken) {
+                accessToken = tokenObj.accessToken;
+              }
+            }
+
+            if (accessToken) {
+              gitUrl = gitUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
+              console.log('[Redeploy] ✅ Injected GitHub token for private repository access');
+            }
+          } else if (gitProvider === 'gitlab') {
+            // Use GitLab token refresh service
+            const { getValidGitLabToken } = await import('@/lib/gitlab/token-refresh');
+            accessToken = await getValidGitLabToken(auth.user!.id);
+
+            if (accessToken) {
+              gitUrl = gitUrl.replace(/https:\/\/(www\.)?gitlab\.com\//, `https://oauth2:${accessToken}@gitlab.com/`);
+              console.log('[Redeploy] ✅ Injected GitLab token for private repository access');
+            }
+          } else if (gitProvider === 'bitbucket') {
+            // Use Bitbucket token refresh service
+            const { getValidBitbucketToken } = await import('@/lib/bitbucket/token-refresh');
+            accessToken = await getValidBitbucketToken(auth.user!.id);
+
+            if (accessToken) {
+              gitUrl = gitUrl.replace(/https:\/\/(www\.)?bitbucket\.org\//, `https://x-token-auth:${accessToken}@bitbucket.org/`);
+              console.log('[Redeploy] ✅ Injected Bitbucket token for private repository access');
+            }
+          }
+
+          if (!accessToken) {
+            console.warn(`[Redeploy] ⚠️ No ${gitProvider} token found - private repos may fail. Using unauthenticated URL.`);
+          }
+        } catch (tokenError) {
+          console.warn(`[Redeploy] Failed to get ${gitProvider} token:`, tokenError);
+          console.warn(`[Redeploy] Proceeding with unauthenticated URL - private repos may fail`);
+        }
+      }
+
+      // Update the pipeline XML with latest env vars and authenticated URL
+      console.log(`[Redeploy] Updating pipeline XML with latest configuration`);
+      
+      await JenkinsService.updateJobConfig(
+        app.name,
+        app.id,
+        gitUrl, // Now using authenticated URL
+        app.branch || "main",
+        app.framework || undefined,
+        app.size || "small",
+        "manual",
+        envVars
+      );
+      console.log(`[Redeploy] Pipeline XML updated successfully`);
       
       // Trigger a new build using JenkinsService
       const buildNumber = await JenkinsService.triggerBuild(app.name);
