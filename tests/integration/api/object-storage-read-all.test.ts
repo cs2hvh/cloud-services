@@ -38,7 +38,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
   });
 
   describe('Success Cases', () => {
-    it('should list all user buckets', async () => {
+    it('TC-OBJ-032: should list all user buckets', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([
         mockObjectSpaceBucket,
@@ -60,7 +60,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(ObjectSpaces.get_buckets).toHaveBeenCalledWith(mockUser.id);
     });
 
-    it('should return empty array for user with no buckets', async () => {
+    it('TC-OBJ-033: should return empty array for user with no buckets', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([]);
 
@@ -77,7 +77,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(data.count).toBe(0);
     });
 
-    it('should decrypt bucket endpoints', async () => {
+    it('TC-OBJ-034: should decrypt bucket endpoints', async () => {
       // Use a bucket with a non-encrypted endpoint (no '{' prefix) to verify pass-through
       const plainEndpointBucket = {
         ...mockObjectSpaceBucket,
@@ -100,7 +100,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(data.data[0].name).toBe(mockObjectSpaceBucket.name);
     });
 
-    it('should handle decryption failures gracefully', async () => {
+    it('TC-OBJ-035: should handle decryption failures gracefully', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockResolvedValue([
         {
@@ -129,7 +129,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
   });
 
   describe('Authorization', () => {
-    it('should reject request for different user\'s buckets', async () => {
+    it('TC-OBJ-036: should reject request for different user\'s buckets', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/read_all',
         { owner_id: 'different-user-id' }
@@ -142,7 +142,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(data.message).toContain('You can only view your own buckets');
     });
 
-    it('should reject unauthenticated requests', async () => {
+    it('TC-OBJ-037: should reject unauthenticated requests', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -156,7 +156,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should reject requests exceeding rate limit', async () => {
+    it('TC-OBJ-038: should reject requests exceeding rate limit', async () => {
       const { limitByUser } = await import('@/lib/cooldown/userbased');
       vi.mocked(limitByUser).mockResolvedValue({
         allowed: false,
@@ -177,7 +177,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle database errors gracefully', async () => {
+    it('TC-OBJ-039: should handle database errors gracefully', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockRejectedValue(
         new Error('Database connection failed')
@@ -194,7 +194,7 @@ describe('POST /api/services/object-storage/buckets/read_all', () => {
       expect(data.error).toBe('Request processing failed');
     });
 
-    it('should handle unexpected errors', async () => {
+    it('TC-OBJ-040: should handle unexpected errors', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_buckets).mockImplementation(() => {
         throw new Error('Unexpected error');

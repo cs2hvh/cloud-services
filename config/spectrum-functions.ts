@@ -151,7 +151,7 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
       await delay(waitTime);
       
       const checkIp = await axios.get(
-        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN}`
+        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN_SPECTRUM}`
       );
 
       if (checkIp.status === 200 && checkIp.data?.query) {

@@ -4,7 +4,7 @@ import { kubernetesClusterSchema } from '@/lib/validation/kubernetes';
 describe('Kubernetes Validation Schemas', () => {
   describe('kubernetesClusterSchema', () => {
     describe('Valid Cases', () => {
-      it('should accept valid cluster configuration with minimum requirements', () => {
+      it('TC-K8S-U001: should accept valid cluster configuration with minimum requirements', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster-01',
           nodes: 1,
@@ -12,7 +12,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept cluster name with letters and numbers', () => {
+      it('TC-K8S-U002: should accept cluster name with letters and numbers', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'cluster123',
           nodes: 1,
@@ -20,7 +20,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept cluster name with hyphens', () => {
+      it('TC-K8S-U003: should accept cluster name with hyphens', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster-production',
           nodes: 1,
@@ -28,7 +28,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept exactly 3 characters name', () => {
+      it('TC-K8S-U004: should accept exactly 3 characters name', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'abc',
           nodes: 1,
@@ -36,7 +36,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept name with 2 letters minimum', () => {
+      it('TC-K8S-U005: should accept name with 2 letters minimum', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'ab1',
           nodes: 1,
@@ -44,7 +44,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept cluster with 1 node', () => {
+      it('TC-K8S-U006: should accept cluster with 1 node', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 1,
@@ -52,7 +52,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept cluster with 10 nodes', () => {
+      it('TC-K8S-U007: should accept cluster with 10 nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 10,
@@ -60,7 +60,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should accept cluster with 100 nodes', () => {
+      it('TC-K8S-U008: should accept cluster with 100 nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 100,
@@ -70,7 +70,7 @@ describe('Kubernetes Validation Schemas', () => {
     });
 
     describe('Name Validation - Invalid Cases', () => {
-      it('should reject name shorter than 3 characters', () => {
+      it('TC-K8S-U009: should reject name shorter than 3 characters', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'ab',
           nodes: 1,
@@ -81,7 +81,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject name with only 1 letter', () => {
+      it('TC-K8S-U010: should reject name with only 1 letter', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'a123',
           nodes: 1,
@@ -92,7 +92,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject name with only numbers', () => {
+      it('TC-K8S-U011: should reject name with only numbers', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: '12345',
           nodes: 1,
@@ -103,7 +103,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject name with special characters except hyphen', () => {
+      it('TC-K8S-U012: should reject name with special characters except hyphen', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test@cluster',
           nodes: 1,
@@ -111,7 +111,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject name with spaces', () => {
+      it('TC-K8S-U013: should reject name with spaces', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test cluster',
           nodes: 1,
@@ -119,7 +119,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject name with underscores', () => {
+      it('TC-K8S-U014: should reject name with underscores', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test_cluster',
           nodes: 1,
@@ -127,7 +127,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject name with periods', () => {
+      it('TC-K8S-U015: should reject name with periods', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test.cluster',
           nodes: 1,
@@ -135,7 +135,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject name with uppercase letters', () => {
+      it('TC-K8S-U016: should reject name with uppercase letters', () => {
         // Note: Schema doesn't explicitly reject uppercase, 
         // but convention is lowercase. Adjust if schema changes
         const result = kubernetesClusterSchema.safeParse({
@@ -146,7 +146,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('should reject empty name', () => {
+      it('TC-K8S-U017: should reject empty name', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: '',
           nodes: 1,
@@ -156,7 +156,7 @@ describe('Kubernetes Validation Schemas', () => {
     });
 
     describe('Node Validation - Invalid Cases', () => {
-      it('should reject 0 nodes', () => {
+      it('TC-K8S-U018: should reject 0 nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 0,
@@ -167,7 +167,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject negative nodes', () => {
+      it('TC-K8S-U019: should reject negative nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: -5,
@@ -180,7 +180,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject decimal nodes', () => {
+      it('TC-K8S-U020: should reject decimal nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 2.5,
@@ -191,7 +191,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject non-numeric nodes (string)', () => {
+      it('TC-K8S-U021: should reject non-numeric nodes (string)', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: 'three',
@@ -199,7 +199,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject non-numeric nodes (null)', () => {
+      it('TC-K8S-U022: should reject non-numeric nodes (null)', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
           nodes: null,
@@ -207,7 +207,7 @@ describe('Kubernetes Validation Schemas', () => {
         expect(result.success).toBe(false);
       });
 
-      it('should reject missing nodes field', () => {
+      it('TC-K8S-U023: should reject missing nodes field', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'test-cluster',
         });
@@ -216,7 +216,7 @@ describe('Kubernetes Validation Schemas', () => {
     });
 
     describe('Combined Validation', () => {
-      it('should reject both invalid name and invalid nodes', () => {
+      it('TC-K8S-U024: should reject both invalid name and invalid nodes', () => {
         const result = kubernetesClusterSchema.safeParse({
           name: 'ab',
           nodes: -1,
@@ -227,7 +227,7 @@ describe('Kubernetes Validation Schemas', () => {
         }
       });
 
-      it('should reject missing both fields', () => {
+      it('TC-K8S-U025: should reject missing both fields', () => {
         const result = kubernetesClusterSchema.safeParse({});
         expect(result.success).toBe(false);
         if (!result.success) {

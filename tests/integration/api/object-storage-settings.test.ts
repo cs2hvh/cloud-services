@@ -20,7 +20,7 @@ vi.mock('@/lib/aws/s3-client');
 vi.mock('@/lib/aws/s3-operations');
 vi.mock('@/lib/cooldown/userbased');
 
-describe('PUT /api/services/object-storage/buckets/settings', () => {
+describe('POST /api/services/object-storage/buckets/settings', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     mockAuthenticatedUser();
@@ -30,7 +30,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
   });
 
   describe('POST /api/services/object-storage/buckets/settings/update-acl', () => {
-    it('should update ACL to public-read', async () => {
+    it('TC-OBJ-059: should update ACL to public-read', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -61,7 +61,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       );
     });
 
-    it('should update ACL to private', async () => {
+    it('TC-OBJ-060: should update ACL to private', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -86,7 +86,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       expect(updateBucketACL).toHaveBeenCalledWith(expect.anything(), mockObjectSpaceBucket.name, 'private');
     });
 
-    it('should reject invalid ACL value', async () => {
+    it('TC-OBJ-061: should reject invalid ACL value', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/settings/update-acl',
         {
@@ -99,7 +99,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject unauthorized user', async () => {
+    it('TC-OBJ-062: should reject unauthorized user', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue({
         ...mockObjectSpaceBucket,
@@ -120,7 +120,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    it('should reject bucket not found', async () => {
+    it('TC-OBJ-063: should reject bucket not found', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -138,7 +138,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
   });
 
   describe('POST /api/services/object-storage/buckets/settings/update-cors', () => {
-    it('should enable CORS', async () => {
+    it('TC-OBJ-064: should enable CORS', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -169,7 +169,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       );
     });
 
-    it('should disable CORS', async () => {
+    it('TC-OBJ-065: should disable CORS', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -195,7 +195,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       expect(updateBucketCORS).toHaveBeenCalledWith(expect.anything(), mockObjectSpaceBucket.name, false);
     });
 
-    it('should reject invalid enabled value', async () => {
+    it('TC-OBJ-066: should reject invalid enabled value', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/settings/update-cors',
         {
@@ -210,7 +210,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
   });
 
   describe('POST /api/services/object-storage/buckets/settings/update-versioning', () => {
-    it('should enable versioning', async () => {
+    it('TC-OBJ-067: should enable versioning', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -241,7 +241,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       );
     });
 
-    it('should disable versioning', async () => {
+    it('TC-OBJ-068: should disable versioning', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -268,7 +268,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
   });
 
   describe('POST /api/services/object-storage/buckets/settings/update-project', () => {
-    it('should update project_id', async () => {
+    it('TC-OBJ-069: should update project_id', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -292,7 +292,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       );
     });
 
-    it('should set project_id to null', async () => {
+    it('TC-OBJ-070: should set project_id to null', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
       vi.mocked(ObjectSpaces.update_bucket_settings).mockResolvedValue({ success: true });
@@ -315,7 +315,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       );
     });
 
-    it('should reject invalid project_id (not UUID)', async () => {
+    it('TC-OBJ-071: should reject invalid project_id (not UUID)', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/settings/update-project',
         {
@@ -330,7 +330,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
   });
 
   describe('Common Error Handling', () => {
-    it('should reject unauthenticated requests', async () => {
+    it('TC-OBJ-072: should reject unauthenticated requests', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -345,7 +345,7 @@ describe('PUT /api/services/object-storage/buckets/settings', () => {
       await expectResponseStatus(response, 401);
     });
 
-    it('should respect rate limits', async () => {
+    it('TC-OBJ-073: should respect rate limits', async () => {
       const { limitByUser } = await import('@/lib/cooldown/userbased');
       vi.mocked(limitByUser).mockResolvedValue({
         allowed: false,

@@ -35,7 +35,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Success Cases', () => {
-    it('should delete bucket with force=true', async () => {
+    it('TC-OBJ-041: should delete bucket with force=true', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -64,7 +64,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       });
     });
 
-    it('should delete bucket with force=false', async () => {
+    it('TC-OBJ-042: should delete bucket with force=false', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -87,7 +87,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       );
     });
 
-    it('should delete bucket with default force (true)', async () => {
+    it('TC-OBJ-043: should delete bucket with default force (true)', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -110,7 +110,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Validation Errors', () => {
-    it('should reject missing bucket_id', async () => {
+    it('TC-OBJ-044: should reject missing bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/delete',
         { force: true }
@@ -120,7 +120,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject empty bucket_id', async () => {
+    it('TC-OBJ-045: should reject empty bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/delete',
         { bucket_id: '', force: true }
@@ -130,7 +130,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject invalid force value', async () => {
+    it('TC-OBJ-046: should reject invalid force value', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/delete',
         { bucket_id: mockObjectSpaceBucket.id, force: 'yes' }
@@ -142,7 +142,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Not Found', () => {
-    it('should return 404 for non-existent bucket', async () => {
+    it('TC-OBJ-047: should return 404 for non-existent bucket', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -162,7 +162,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Authorization', () => {
-    it('should reject deletion of other user\'s bucket', async () => {
+    it('TC-OBJ-048: should reject deletion of other user\'s bucket', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -181,7 +181,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       expect(data.error).toBe('Unauthorized');
     });
 
-    it('should reject unauthenticated requests', async () => {
+    it('TC-OBJ-049: should reject unauthenticated requests', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -195,7 +195,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should reject requests exceeding rate limit', async () => {
+    it('TC-OBJ-050: should reject requests exceeding rate limit', async () => {
       const { limitByUser } = await import('@/lib/cooldown/userbased');
       vi.mocked(limitByUser).mockResolvedValue({
         allowed: false,
@@ -216,7 +216,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Delete Operations', () => {
-    it('should empty bucket before deletion when force=true', async () => {
+    it('TC-OBJ-051: should empty bucket before deletion when force=true', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       
       // Mock successful deletion
@@ -239,7 +239,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       );
     });
 
-    it('should delete bucket from provider', async () => {
+    it('TC-OBJ-052: should delete bucket from provider', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
@@ -258,7 +258,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       expect(data.success).toBe(true);
     });
 
-    it('should delete access key from provider', async () => {
+    it('TC-OBJ-053: should delete access key from provider', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
@@ -277,7 +277,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       expect(ObjectStorageFunctions.deleteBucket).toHaveBeenCalled();
     });
 
-    it('should remove bucket from database', async () => {
+    it('TC-OBJ-054: should remove bucket from database', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
@@ -298,7 +298,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle deletion failures from provider', async () => {
+    it('TC-OBJ-055: should handle deletion failures from provider', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -317,7 +317,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       expect(data.error).toBeDefined();
     });
 
-    it('should handle database deletion failures', async () => {
+    it('TC-OBJ-056: should handle database deletion failures', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -334,7 +334,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       await expectResponseStatus(response, 500);
     });
 
-    it('should handle unexpected errors', async () => {
+    it('TC-OBJ-057: should handle unexpected errors', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockRejectedValue(
         new Error('Unexpected error')
@@ -351,7 +351,7 @@ describe('DELETE /api/services/object-storage/buckets/delete', () => {
       expect(data.error).toBe('Request processing failed');
     });
 
-    it('should handle bucket with objects when force=false', async () => {
+    it('TC-OBJ-058: should handle bucket with objects when force=false', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,

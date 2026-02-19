@@ -128,7 +128,7 @@ const SpectrumAppInfo = ({ spectrumApp }: SpectrumAppInfoProps) => {
       >
         <AlertCircle className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-blue-100">
-          This page displays your Cloudflare Spectrum application configuration.
+          This page displays your Your Spectrum application configuration.
           Use the Settings tab to modify editable properties.
         </p>
       </motion.div>

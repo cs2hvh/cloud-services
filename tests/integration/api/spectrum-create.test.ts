@@ -55,7 +55,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
   });
 
   describe('Authentication', () => {
-    it('should return 401 if user not authenticated', async () => {
+    it('TC-SP-001: should return 401 if user not authenticated', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -69,7 +69,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should allow requests within rate limit', async () => {
+    it('TC-SP-002: should allow requests within rate limit', async () => {
       await mockRateLimitAllow();
 
       const request = createMockPostRequest(
@@ -81,7 +81,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBeLessThan(300);
     }, 30000);
 
-    it('should return 429 when rate limit exceeded', async () => {
+    it('TC-SP-003: should return 429 when rate limit exceeded', async () => {
       await mockRateLimitDeny(45);
 
       const request = createMockPostRequest(
@@ -96,7 +96,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(data.message).toContain('Retry after 45s');
     });
 
-    it('should include retry-after in 429 response', async () => {
+    it('TC-SP-004: should include retry-after in 429 response', async () => {
       await mockRateLimitDeny(30);
 
       const request = createMockPostRequest(
@@ -113,7 +113,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
   });
 
   describe('Validation', () => {
-    it('should validate request body with createSpectrumAppSchema', async () => {
+    it('TC-SP-005: should validate request body with createSpectrumAppSchema', async () => {
       const { createSpectrumApp } = await import('@/config/spectrum-functions');
       const createMock = vi.mocked(createSpectrumApp);
       createMock.mockResolvedValue({
@@ -130,7 +130,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(createMock).toHaveBeenCalled();
     }, 30000);
 
-    it('should reject invalid project_id', async () => {
+    it('TC-SP-006: should reject invalid project_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.invalidProjectId
@@ -140,7 +140,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject invalid protocol format', async () => {
+    it('TC-SP-007: should reject invalid protocol format', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.invalidProtocol
@@ -150,7 +150,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject empty origin_direct array', async () => {
+    it('TC-SP-008: should reject empty origin_direct array', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.emptyOrigins
@@ -160,7 +160,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject invalid DNS type', async () => {
+    it('TC-SP-009: should reject invalid DNS type', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.invalidDNSType
@@ -170,7 +170,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject short DNS name', async () => {
+    it('TC-SP-010: should reject short DNS name', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.shortDNSName
@@ -180,7 +180,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject invalid owner_id', async () => {
+    it('TC-SP-011: should reject invalid owner_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockInvalidSpectrumPayloads.invalidOwnerId
@@ -192,7 +192,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
   });
 
   describe('Success Cases', () => {
-    it('should create app in Cloudflare successfully', async () => {
+    it('TC-SP-012: should create app in Cloudflare successfully', async () => {
       const { createSpectrumApp } = await import('@/config/spectrum-functions');
       const createMock = vi.mocked(createSpectrumApp);
       createMock.mockResolvedValue({
@@ -215,7 +215,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       );
     }, 30000);
 
-    it('should persist app to database after Cloudflare creation', async () => {
+    it('TC-SP-013: should persist app to database after Cloudflare creation', async () => {
       const { createSpectrumApp } = await import('@/config/spectrum-functions');
       const createMock = vi.mocked(createSpectrumApp);
       createMock.mockResolvedValue({
@@ -270,7 +270,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
     //   expect(encryptMock).toHaveBeenCalled();
     // }, 30000);
 
-    it('should return 201 with created app data', async () => {
+    it('TC-SP-014: should return 201 with created app data', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/create',
         mockCreateSpectrumPayload
@@ -282,7 +282,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
   });
 
   describe('Error Cases', () => {
-    it('should handle Cloudflare API errors', async () => {
+    it('TC-SP-015: should handle Cloudflare API errors', async () => {
       const { createSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(createSpectrumApp).mockRejectedValue(
         new Error('Cloudflare API error')
@@ -297,7 +297,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(500);
     });
 
-    it('should handle database insert failure', async () => {
+    it('TC-SP-016: should handle database insert failure', async () => {
       const { createSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(createSpectrumApp).mockRejectedValue(
         new Error('Database insert failed')
@@ -312,7 +312,7 @@ describe('POST /api/services/spectrum/apps/create', () => {
       expect(response.status).toBe(500);
     }, 30000);
 
-    it('should handle DNS resolution timeout gracefully', async () => {
+    it('TC-SP-017: should handle DNS resolution timeout gracefully', async () => {
       // createSpectrumApp already mocked successfully in beforeEach
 
       const request = createMockPostRequest(
@@ -324,32 +324,40 @@ describe('POST /api/services/spectrum/apps/create', () => {
       // Should succeed with DNS resolution
       expect(response.status).toBe(201);
     }, 30000);
+  });
 
-    // it('should handle encryption errors', async () => {
-    //   // Mock Encryption to throw error FIRST
-    //   const { Encryption } = await import('@/config/functions');
-    //   vi.mocked(Encryption.encrypt).mockImplementation(() => {
-    //     throw new Error('Encryption failed');
-    //   });
+  describe('Billing Checks', () => {
+    it('TC-SP-067: should return 402 when insufficient credits', async () => {
+      const { ensureBalance } = await import('@/config/billing-flow');
+      vi.mocked(ensureBalance).mockResolvedValue({ ok: false, balance: 0 });
 
-    //   const axios = await import('axios');
-    //   vi.mocked(axios.default.post).mockResolvedValue({
-    //     status: 200,
-    //     data: { success: true, result: mockCloudflareSpectrumApp },
-    //   });
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/spectrum/apps/create',
+        mockCreateSpectrumPayload
+      );
 
-    //   vi.mocked(axios.default.get).mockResolvedValue({
-    //     status: 200,
-    //     data: { query: '1.2.3.4' },
-    //   });
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 402);
 
-    //   const request = createMockPostRequest(
-    //     'http://localhost:3000/api/services/spectrum/apps/create',
-    //     mockCreateSpectrumPayload
-    //   );
+      expect(data.error).toBe('Insufficient credits');
+    }, 30000);
+  });
 
-    //   const response = await POST(request as NextRequest);
-    //   expect(response.status).toBe(500);
-    // }, 30000);
+  describe('Error Recovery', () => {
+    it('TC-SP-068: should handle Cloudflare success + database persist failure', async () => {
+      const { createSpectrumApp } = await import('@/config/spectrum-functions');
+      vi.mocked(createSpectrumApp).mockRejectedValue(
+        new Error('Created in Cloudflare but failed to persist')
+      );
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/spectrum/apps/create',
+        mockCreateSpectrumPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      // Route returns 500 — Cloudflare resource is orphaned (no cleanup)
+      expect(response.status).toBe(500);
+    }, 30000);
   });
 });

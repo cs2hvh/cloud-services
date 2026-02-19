@@ -3,11 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 // import bcrypt from "bcryptjs";
 // import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
+import { authenticateUser } from "@/lib/auth/server-auth";
 // import { generateStrongPassword } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   try {
-    //debugger
     const json = await req.json();
    
     const droplets=await axios.delete(
@@ -43,9 +49,9 @@ return NextResponse.json({ message: "there is some internal error. please try la
 
   } catch (err: unknown) {
     if (err instanceof Error) {
-        console.log(err.message,"...........................47");
+      console.error("[ManageIP Delete] Error:", err.message);
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        { error: "Failed to delete droplet" },
         { status: 400 }
       );
     } else {

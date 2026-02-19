@@ -101,7 +101,7 @@ export function WhyTrustUs() {
                       </span>
                       <span>{feature.title}</span>
                     </h3>
-                    <p className="mt-2 text-sm sm:text-base lg:text-[20px] leading-6 text-[#BABCD2]">
+                    <p className="mt-2 text-sm sm:text-base lg:text-[20px]  leading-6 text-[#BABCD2]">
                       {feature.description}
                     </p>
                   </div>

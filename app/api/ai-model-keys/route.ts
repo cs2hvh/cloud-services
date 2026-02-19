@@ -87,11 +87,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('[Model Keys] Received body:', JSON.stringify(body, null, 2));
     const validation = createKeySchema.safeParse(body);
     
     if (!validation.success) {
-      console.log('[Model Keys] Validation errors:', JSON.stringify(validation.error.errors, null, 2));
       return NextResponse.json(
         { error: 'Validation error', details: validation.error.errors },
         { status: 400 }

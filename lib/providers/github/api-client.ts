@@ -34,7 +34,7 @@ export class GitHubApiClient {
    */
   private handleError(status: number) {
     const errors: Record<number, string> = {
-      401: 'GitHub token is invalid or expired',
+      401: 'GitHub token is invalid or expired.Kindly disconnect and reconnect your GitHub account to refresh the token.',
       403: 'GitHub API rate limit exceeded or insufficient permissions',
       404: 'Repository not found or access denied',
       500: 'GitHub API server error',

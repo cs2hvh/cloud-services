@@ -16,10 +16,25 @@ import {
 // Mock dependencies
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/supabase/server');
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(() => ({
+    get: vi.fn(),
+    getAll: vi.fn(() => []),
+    has: vi.fn(),
+  })),
+}));
 
 describe('POST /api/services/kubernetes/clusters/status', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    
+    // Mock authenticated user for all tests by default
+    const { authenticateUser } = await import('@/lib/auth/server-auth');
+    vi.mocked(authenticateUser).mockResolvedValue({
+      authenticated: true,
+      user: mockKubernetesUser,
+      response: null,
+    });
   });
 
   describe('Authentication Tests', () => {

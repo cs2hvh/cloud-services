@@ -47,6 +47,15 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
   };
 
   const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let portValue = parseInt(e.target.value);
+    if (isNaN(portValue)) {
+      onUpdate({ originPort: 0 });
+      return;
+    }
+    if(portValue < 0 || portValue > 65535){
+      toast.error('Please enter a valid port number (1-65535)');
+      return;
+    }
     onUpdate({ originPort: Number(e.target.value) });
   };
 
@@ -130,6 +139,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
                       max={65535}
                       type="number"
                       disabled={isSSHorRDP}
+                      placeholder="origin port"
                       className={`border-white/20 rounded-md text-white placeholder:text-white/50 ${
                         isSSHorRDP 
                           ? 'bg-white/5 cursor-not-allowed opacity-70' 

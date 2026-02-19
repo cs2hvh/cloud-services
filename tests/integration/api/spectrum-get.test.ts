@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/spectrum/apps/get/route';
 import { NextRequest } from 'next/server';
@@ -40,7 +41,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
   });
 
   describe('Authentication', () => {
-    it('should return 401 if user not authenticated', async () => {
+    it('TC-SP-018: should return 401 if user not authenticated', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -54,7 +55,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should allow requests within rate limit', async () => {
+    it('TC-SP-019: should allow requests within rate limit', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -64,7 +65,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
       expect(response.status).toBeLessThan(300);
     });
 
-    it('should return 429 when rate limit exceeded', async () => {
+    it('TC-SP-020: should return 429 when rate limit exceeded', async () => {
       await mockRateLimitDeny(20);
 
       const request = createMockPostRequest(
@@ -78,7 +79,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
   });
 
   describe('Validation', () => {
-    it('should reject missing app_id', async () => {
+    it('TC-SP-021: should reject missing app_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -88,7 +89,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
       expect(response.status).toBe(400);
     });
 
-    it('should reject invalid app_id format', async () => {
+    it('TC-SP-022: should reject invalid app_id format', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: '', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -100,7 +101,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
   });
 
   describe('Authorization', () => {
-    it('should allow owner to view their app', async () => {
+    it('TC-SP-023: should allow owner to view their app', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -110,7 +111,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should prevent non-owner from viewing app', async () => {
+    it('TC-SP-024: should prevent non-owner from viewing app', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440001' }
@@ -155,7 +156,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
     //   expect(decryptMock).toHaveBeenCalled();
     // });
 
-    it('should include all app properties', async () => {
+    it('TC-SP-025: should include all app properties', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/get',
         { app_id: 'test-id', user_id: '550e8400-e29b-41d4-a716-446655440000' }
@@ -207,7 +208,7 @@ describe('POST /api/services/spectrum/apps/get', () => {
     //   expect(response.status).toBe(400);
     // });
 
-    it('should handle database query errors', async () => {
+    it('TC-SP-026: should handle database query errors', async () => {
       const { getSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(getSpectrumApp).mockRejectedValue(
         new Error('Database error')

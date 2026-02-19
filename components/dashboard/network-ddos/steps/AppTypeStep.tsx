@@ -13,6 +13,7 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
       toast.error('Please select an application type');
       return;
     }
+    
     onNext();
   };
 

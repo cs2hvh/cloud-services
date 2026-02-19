@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server"; // your server-side helper
+import { authenticateUser } from "@/lib/auth/server-auth";
 // import { Json } from "@/lib/supabase/types";
 
 export const dynamic = "force-dynamic"; // avoid caching
@@ -18,6 +19,12 @@ type Row = {
 export async function POST(
   req: Request
 ) {
+  // Check authentication
+  const auth = await authenticateUser();
+  if (!auth.authenticated) {
+    return auth.response;
+  }
+
   const supabase = await createSSRClient();
 
  // console.log("...............18.......params")
@@ -31,7 +38,7 @@ export async function POST(
 
   if (error) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: "Failed to fetch cluster status" },
       { status: 400 }
     );
   }

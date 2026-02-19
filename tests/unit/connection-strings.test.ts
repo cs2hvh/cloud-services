@@ -618,14 +618,23 @@ function parseRedisConnectionString(str: string) {
 
 // Security functions
 function encodePasswordForConnectionString(password: string): string {
-  return encodeURIComponent(password);
+  // encodeURIComponent doesn't encode ! * ' ( ) which are valid in URLs
+  // but we want to encode them for safety in connection strings
+  return encodeURIComponent(password)
+    .replace(/!/g, '%21')
+    .replace(/\*/g, '%2A')
+    .replace(/'/g, '%27')
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29');
 }
 
 function maskConnectionStringPassword(connectionString: string): string {
-  return connectionString.replace(/(:)([^@]+)(@)/, '$1****$3');
+  // Match protocol://user:password@ and replace only password with ****
+  return connectionString.replace(/(\/\/[^:]+:)([^@]+)(@)/, '$1****$3');
 }
 
 function extractPasswordFromConnectionString(connectionString: string): string | null {
-  const match = connectionString.match(/:([^@]+)@/);
+  // Match protocol://user:password@ and extract only the password
+  const match = connectionString.match(/\/\/[^:]+:([^@]+)@/);
   return match ? match[1] : null;
 }
