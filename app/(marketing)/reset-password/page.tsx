@@ -6,11 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-
-// Force this page to be dynamic (not statically generated)
-// This prevents build-time errors with window and other client-side APIs
-export const dynamic = 'force-dynamic';
-export const runtime = 'nodejs';
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
