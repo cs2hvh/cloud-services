@@ -126,43 +126,42 @@ export default function SignUpMultiStep({
       )}
       {...props}
     >
-      <div className="mx-auto mb-4 text-center">
-        <h1 className="text-[28px] sm:text-[34px] font-bold leading-[1.02] text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
-        <p className="-mt-1 text-[32px] sm:text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
-      </div>
-
-      <div className="text-center">
-        <p className="text-lg text-white">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</p>
-        <p className="mt-1 text-sm text-white/90">
-          {step === 0
-            ? "Welcome back! Please Sign Up to continue."
+      <div className="mx-auto mb-1 text-center pt-2 pb-1">
+        <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+        <p className="mt-3 text-[14px] leading-[16px] text-white">
+          <span style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="block text-[14px] leading-[18px] font-normal">Sign up to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</span>
+          <span className="block  text-[14px] leading-[16px] text-white/90">{step === 0
+            ? "Welcome! Create an account to continue."
             : step === 1
               ? "Create your account details to continue."
               : "Enter the OTP sent to your email."}
+          </span>
         </p>
       </div>
 
       {step !== 2 && (
         <>
-          <div className="mt-5 flex items-center justify-center gap-5 sm:gap-8">
+          <div className="mt-4 flex items-center justify-center gap-4 sm:gap-6">
             <button type="button" aria-label="Sign up with GitHub" className="text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
-              <Icons.gitHub className="h-9 w-9" />
+              <Icons.gitHub className="h-8 w-8" />
             </button>
             <button type="button" aria-label="Sign up with GitLab" className="transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
-              <Image src="/gitlab.png" alt="GitLab" width={36} height={36} className="h-9 w-9" />
+              <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
             </button>
             <button type="button" aria-label="Sign up with Bitbucket" className="transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
-              <Image src="/BitBucket.png" alt="Bitbucket" width={36} height={36} className="h-9 w-9" />
+              <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
             </button>
             <button type="button" aria-label="Sign up with Google" className="text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
-              <Icons.google className="h-9 w-9" />
+              <Icons.google className="h-8 w-8" />
             </button>
           </div>
 
-          <div className="mt-5 flex items-center gap-3 text-white">
-            <div className="h-px flex-1 bg-white/75" />
-            <span className="text-sm">Or</span>
-            <div className="h-px flex-1 bg-white/75" />
+          <div className="mx-auto mt-4 w-full max-w-[320px]">
+            <div className="flex items-center gap-3 text-white">
+              <div className="h-px flex-1 bg-white/75" />
+              <span className="text-sm">Or</span>
+              <div className="h-px flex-1 bg-white/75" />
+            </div>
           </div>
         </>
       )}
@@ -170,9 +169,9 @@ export default function SignUpMultiStep({
       {step === 0 && (
         <Form {...entryForm}>
           <form
-            onSubmit={entryForm.handleSubmit(handleEntryContinue)}
-            className="mx-auto mt-4 w-full max-w-[356px] space-y-4"
-          >
+              onSubmit={entryForm.handleSubmit(handleEntryContinue)}
+              className="mx-auto mt-4 w-full max-w-[320px] space-y-4"
+            >
             <FormField
               control={entryForm.control}
               name="email"
@@ -195,7 +194,7 @@ export default function SignUpMultiStep({
               )}
             />
 
-            <div className={`mx-auto mt-1 w-full max-w-[236px] ${buttonShellClass}`}>
+            <div className={`mx-auto mt-1 w-full max-w-[200px] ${buttonShellClass}`}>
               <button
                 type="submit"
                 disabled={isLoading}
@@ -212,7 +211,7 @@ export default function SignUpMultiStep({
         <Form {...signupForm}>
           <form
             onSubmit={signupForm.handleSubmit(onSubmitSignup)}
-            className="mx-auto mt-4 w-full max-w-[356px] space-y-3"
+            className="mx-auto mt-4 w-full max-w-[320px] space-y-3"
           >
             <FormField
               control={signupForm.control}
