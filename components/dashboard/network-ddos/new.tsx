@@ -135,6 +135,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const isSSHorRDP = formData.appType === 'ssh' || formData.appType === 'rdp';
 
   const handleNextStep = () => {
+    debugger
     // Validate user on step 0 (admin only)
     if (currentStep === 0 && role === "admin") {
       const userError = validateUser(formData.selectedUser || "");

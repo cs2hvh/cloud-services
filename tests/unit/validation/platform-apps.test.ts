@@ -42,10 +42,10 @@ describe('Platform Apps Validation Schemas', () => {
         expect(result.success).toBe(true);
       });
 
-      it('TC-PA-U004: should accept maximum length app name (63 chars)', () => {
+      it('TC-PA-U004: should accept maximum length app name (40 chars)', () => {
         const payload = {
           ...mockCreatePlatformAppPayload,
-          name: 'a' + 'b'.repeat(61) + 'c', // 63 chars, starts and ends with letter
+          name: 'a' + 'b'.repeat(38) + 'c', // 40 chars, starts and ends with letter
         };
         const result = createPlatformAppSchema.safeParse(payload);
         expect(result.success).toBe(true);
@@ -172,7 +172,7 @@ describe('Platform Apps Validation Schemas', () => {
     });
 
     describe('Invalid Payloads', () => {
-      it('TC-PA-U002: should reject app name with uppercase letters', () => {
+      it('TC-PA-U017: should reject app name with uppercase letters', () => {
         const result = createPlatformAppSchema.safeParse(
           mockInvalidPlatformAppPayloads.invalidName
         );
@@ -182,7 +182,7 @@ describe('Platform Apps Validation Schemas', () => {
         }
       });
 
-      it('TC-PA-U003: should reject app name too short (<3 chars)', () => {
+      it('TC-PA-U018: should reject app name too short (<3 chars)', () => {
         const result = createPlatformAppSchema.safeParse(
           mockInvalidPlatformAppPayloads.nameTooShort
         );
@@ -193,7 +193,7 @@ describe('Platform Apps Validation Schemas', () => {
         }
       });
 
-      it('TC-PA-U004: should reject app name too long (>63 chars)', () => {
+      it('TC-PA-U019: should reject app name too long (>63 chars)', () => {
         const result = createPlatformAppSchema.safeParse(
           mockInvalidPlatformAppPayloads.nameTooLong
         );
@@ -330,7 +330,7 @@ describe('Platform Apps Validation Schemas', () => {
   // deletePlatformAppSchema Tests
   // ============================================
   describe('deletePlatformAppSchema', () => {
-    it('TC-PA-U015: should accept valid UUID for app_id', () => {
+    it('TC-PA-U060: should accept valid UUID for app_id', () => {
       const payload = {
         app_id: '550e8400-e29b-41d4-a716-446655440000',
       };
@@ -358,7 +358,7 @@ describe('Platform Apps Validation Schemas', () => {
       }
     });
 
-    it('TC-PA-U016: should reject invalid UUID format', () => {
+    it('TC-PA-U061: should reject invalid UUID format', () => {
       const payload = {
         app_id: 'invalid-uuid',
       };

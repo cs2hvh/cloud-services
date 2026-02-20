@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
+import * as crypto from "crypto";
 
 /**
  * Webhook endpoint for Jenkins to update deployment status
  * Called by Jenkins post-build hooks
  * 
+ * Auth:
+ * - Requires header: x-webhook-secret: <WEBHOOK_DEPLOYMENT_SECRET>
+ *
  * Expected payload:
  * {
  *   app_name: string,      // App name (or job name like "myapp-job")
@@ -17,6 +21,30 @@ import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries"
  * }
  */
 export async function POST(req: NextRequest) {
+  // Validate webhook shared secret
+  const expectedSecret = process.env.WEBHOOK_DEPLOYMENT_SECRET;
+  if (!expectedSecret) {
+    console.error("[Webhook] WEBHOOK_DEPLOYMENT_SECRET not configured");
+    return NextResponse.json(
+      { error: "Webhook not configured" },
+      { status: 503 }
+    );
+  }
+
+  const providedSecret = req.headers.get("x-webhook-secret");
+  const expectedBuf = Buffer.from(expectedSecret);
+  const providedBuf = providedSecret ? Buffer.from(providedSecret) : Buffer.alloc(0);
+  if (
+    !providedSecret ||
+    expectedBuf.length !== providedBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, providedBuf)
+  ) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { 
@@ -121,9 +149,8 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("[Webhook] Error updating deployment status:", error);
-    const errorMessage = error instanceof Error ? error.message : "Internal server error";
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Internal server error" },
       { status: 500 }
     );
   }

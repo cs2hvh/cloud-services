@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Platform_App_Deployments, Platform_Apps } from '@/lib/supabase/queries';
 import { createServiceClient } from '@/lib/supabase/server';
+import * as crypto from 'crypto';
 
 type DeploymentRecordPayload = {
   app_id: string;
@@ -35,10 +36,32 @@ function normalizeInt(value: unknown): number | null {
  * - Optionally mark the new deployment as active on success
  */
 export async function POST(req: NextRequest) {
+  // Validate webhook shared secret
+  const expectedSecret = process.env.JENKINS_DEPLOYMENT_RECORD_SECRET;
+  if (!expectedSecret) {
+    console.error('[DeploymentRecordWebhook] JENKINS_DEPLOYMENT_RECORD_SECRET not configured');
+    return NextResponse.json(
+      { error: 'Webhook not configured' },
+      { status: 503 }
+    );
+  }
+
+  const providedSecret = req.headers.get('x-deployment-record-secret');
+  const expectedBuf = Buffer.from(expectedSecret);
+  const providedBuf = providedSecret ? Buffer.from(providedSecret) : Buffer.alloc(0);
+  if (
+    !providedSecret ||
+    expectedBuf.length !== providedBuf.length ||
+    !crypto.timingSafeEqual(expectedBuf, providedBuf)
+  ) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
   try {
     const body = (await req.json()) as Partial<DeploymentRecordPayload>;
-
-    console.log('[DeploymentRecordWebhook] Received payload:', JSON.stringify(body));
 
     if (!body.app_id || !body.status || !body.trigger) {
       console.error('[DeploymentRecordWebhook] Missing required fields');
@@ -131,7 +154,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('[DeploymentRecordWebhook] Error:', error);
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

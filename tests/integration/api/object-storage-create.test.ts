@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/object-storage/buckets/create/route';
 import { NextRequest } from 'next/server';
@@ -64,7 +65,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Success Cases', () => {
-    it('should create bucket with valid data', async () => {
+    it('TC-OBJ-001: should create bucket with valid data', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
         success: true,
@@ -96,7 +97,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       });
     });
 
-    it('should create bucket with public ACL', async () => {
+    it('TC-OBJ-002: should create bucket with public ACL', async () => {
       const payload = {
         ...mockCreateBucketPayload,
         name: 'public-bucket-test',
@@ -126,7 +127,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       );
     });
 
-    it('should create bucket with CORS enabled', async () => {
+    it('TC-OBJ-003: should create bucket with CORS enabled', async () => {
       const payload = {
         ...mockCreateBucketPayload,
         name: 'cors-bucket-test',
@@ -156,7 +157,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       );
     });
 
-    it('should create bucket with versioning enabled', async () => {
+    it('TC-OBJ-004: should create bucket with versioning enabled', async () => {
       const payload = {
         ...mockCreateBucketPayload,
         name: 'versioning-bucket-test',
@@ -186,7 +187,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       );
     });
 
-    it('should create bucket in different regions', async () => {
+    it('TC-OBJ-005: should create bucket in different regions', async () => {
       const regions = ['nyc3', 'sfo2', 'sfo3', 'sgp1', 'ams3', 'fra1', 'blr1'];
 
       for (const region of regions) {
@@ -224,7 +225,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Validation Errors', () => {
-    it('should reject bucket name that is too short', async () => {
+    it('TC-OBJ-006: should reject bucket name that is too short', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -237,7 +238,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject bucket name that is too long', async () => {
+    it('TC-OBJ-007: should reject bucket name that is too long', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -250,7 +251,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject bucket name with uppercase letters', async () => {
+    it('TC-OBJ-008: should reject bucket name with uppercase letters', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -263,7 +264,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject bucket name formatted as IP address', async () => {
+    it('TC-OBJ-009: should reject bucket name formatted as IP address', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -276,7 +277,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject invalid region', async () => {
+    it('TC-OBJ-010: should reject invalid region', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -289,7 +290,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject invalid ACL', async () => {
+    it('TC-OBJ-011: should reject invalid ACL', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -302,7 +303,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject invalid project_id', async () => {
+    it('TC-OBJ-012: should reject invalid project_id', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -315,7 +316,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       await expectResponseStatus(response, 400);
     });
 
-    it('should reject invalid owner_id', async () => {
+    it('TC-OBJ-013: should reject invalid owner_id', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
 
@@ -330,7 +331,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Duplicate Bucket', () => {
-    it('should reject duplicate bucket name (database check)', async () => {
+    it('TC-OBJ-014: should reject duplicate bucket name (database check)', async () => {
       // Need to mock both the barrel export and direct import path
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
@@ -346,7 +347,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       expect(data.error).toBe('Bucket name already exists');
     });
 
-    it('should reject duplicate bucket name (provider check)', async () => {
+    it('TC-OBJ-015: should reject duplicate bucket name (provider check)', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
         success: false,
@@ -367,7 +368,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Authentication & Authorization', () => {
-    it('should reject unauthenticated requests', async () => {
+    it('TC-OBJ-016: should reject unauthenticated requests', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -381,7 +382,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should reject requests exceeding rate limit', async () => {
+    it('TC-OBJ-017: should reject requests exceeding rate limit', async () => {
       const { limitByUser } = await import('@/lib/cooldown/userbased');
       vi.mocked(limitByUser).mockResolvedValue({
         allowed: false,
@@ -402,7 +403,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle creation failures gracefully', async () => {
+    it('TC-OBJ-018: should handle creation failures gracefully', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
         success: false,
@@ -422,7 +423,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       expect(data.error).toBeDefined();
     });
 
-    it('should handle unexpected errors', async () => {
+    it('TC-OBJ-019: should handle unexpected errors', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockRejectedValue(
         new Error('Database connection failed')
@@ -437,6 +438,65 @@ describe('POST /api/services/object-storage/buckets/create', () => {
       const data = await expectResponseStatus(response, 500);
 
       expect(data.error).toBe('Request processing failed');
+    });
+  });
+
+  describe('Billing Checks', () => {
+    it('TC-OBJ-096: should return 402 when insufficient credits', async () => {
+      const { ensureBalance } = await import('@/config/billing-flow');
+      vi.mocked(ensureBalance).mockResolvedValue({ ok: false, balance: 5 });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/object-storage/buckets/create',
+        mockCreateBucketPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 402);
+
+      expect(data.error).toBe('Insufficient credits');
+    });
+
+    it('TC-OBJ-097: should call postProvisionBilling after successful creation', async () => {
+      const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
+      vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
+        success: true,
+        bucket: mockObjectSpaceBucket,
+        accessKey: mockDigitalOceanSpacesKey,
+      });
+
+      const { postProvisionBilling } = await import('@/config/billing-flow');
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/object-storage/buckets/create',
+        mockCreateBucketPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      await expectResponseStatus(response, 201);
+
+      expect(postProvisionBilling).toHaveBeenCalled();
+    });
+  });
+
+  describe('Error Recovery', () => {
+    it('TC-OBJ-098: should handle DO Spaces success + database insert failure', async () => {
+      const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
+      vi.mocked(ObjectStorageFunctions.createBucket).mockResolvedValue({
+        success: false,
+        error: 'Database insert failed after bucket creation',
+      });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/object-storage/buckets/create',
+        mockCreateBucketPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      // Route returns 400 when createBucket returns success: false
+      // DO Spaces bucket is orphaned (no cleanup in the route)
+      const data = await expectResponseStatus(response, 400);
+      expect(data.error).toBeDefined();
     });
   });
 });

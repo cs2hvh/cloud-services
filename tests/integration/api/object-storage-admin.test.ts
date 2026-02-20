@@ -40,7 +40,7 @@ describe('Admin Object Storage APIs', () => {
     },
   ];
 
-  describe('POST /api/admin/object-storage/buckets/read-all', () => {
+  describe('GET /api/admin/object-storage/buckets/read-all', () => {
     beforeEach(async () => {
       vi.clearAllMocks();
 
@@ -53,7 +53,7 @@ describe('Admin Object Storage APIs', () => {
       });
     });
 
-    it('should list all buckets for admin', async () => {
+    it('TC-OBJ-084: should list all buckets for admin', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue(mockAdminBuckets as any);
 
@@ -67,7 +67,7 @@ describe('Admin Object Storage APIs', () => {
       expect(ObjectSpaces.get_all_for_admin).toHaveBeenCalled();
     });
 
-    it('should return empty array when no buckets exist', async () => {
+    it('TC-OBJ-085: should return empty array when no buckets exist', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue([]);
 
@@ -78,7 +78,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.data).toHaveLength(0);
     });
 
-    it('should include owner information', async () => {
+    it('TC-OBJ-086: should include owner information', async () => {
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
       vi.mocked(ObjectSpaces.get_all_for_admin).mockResolvedValue([mockAdminBuckets[0]] as any);
 
@@ -89,7 +89,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.data[0].owner_username).toBe('user1');
     });
 
-    it('should reject non-admin users', async () => {
+    it('TC-OBJ-087: should reject non-admin users', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       vi.mocked(authenticateUser).mockResolvedValue({
         authenticated: true,
@@ -103,7 +103,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toContain('Unauthorized');
     });
 
-    it('should reject unauthenticated users', async () => {
+    it('TC-OBJ-088: should reject unauthenticated users', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       vi.mocked(authenticateUser).mockResolvedValue({
         authenticated: false,
@@ -143,7 +143,7 @@ describe('Admin Object Storage APIs', () => {
       vi.mocked(createClient).mockResolvedValue(mockSupabaseClient as any);
     });
 
-    it('should delete any bucket as admin', async () => {
+    it('TC-OBJ-089: should delete any bucket as admin', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -171,7 +171,7 @@ describe('Admin Object Storage APIs', () => {
       });
     });
 
-    it('should force delete by default', async () => {
+    it('TC-OBJ-090: should force delete by default', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: true,
@@ -196,7 +196,7 @@ describe('Admin Object Storage APIs', () => {
       );
     });
 
-    it('should handle bucket not found', async () => {
+    it('TC-OBJ-091: should handle bucket not found', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -217,7 +217,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toBe('Bucket not found');
     });
 
-    it('should reject missing bucket_id', async () => {
+    it('TC-OBJ-092: should reject missing bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/admin/object-storage/buckets/delete',
         { owner_id: 'any-user-id' }
@@ -230,7 +230,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.message).toContain('Bucket ID is required');
     });
 
-    it('should reject non-admin users', async () => {
+    it('TC-OBJ-093: should reject non-admin users', async () => {
       const { createClient } = await import('@/lib/supabase/server');
       const mockSupabaseClient = {
         auth: {
@@ -264,7 +264,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toContain('Unauthorized');
     });
 
-    it('should handle deletion failures', async () => {
+    it('TC-OBJ-094: should handle deletion failures', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockResolvedValue({
         success: false,
@@ -286,7 +286,7 @@ describe('Admin Object Storage APIs', () => {
       expect(data.error).toBeDefined();
     });
 
-    it('should handle unexpected errors', async () => {
+    it('TC-OBJ-095: should handle unexpected errors', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.deleteBucket).mockRejectedValue(
         new Error('Unexpected error')

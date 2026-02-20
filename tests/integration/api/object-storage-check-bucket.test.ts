@@ -27,14 +27,14 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Validation
   // ============================================
   describe('Validation', () => {
-    it('should return 400 when name is missing', async () => {
+    it('TC-OBJ-074: should return 400 when name is missing', async () => {
       const response = await GET(createRequest() as any);
       expect(response.status).toBe(400);
       const data = await response.json();
       expect(data.error).toContain('required');
     });
 
-    it('should return 400 when name is empty/whitespace', async () => {
+    it('TC-OBJ-075: should return 400 when name is empty/whitespace', async () => {
       const response = await GET(createRequest({ name: '   ' }) as any);
       expect(response.status).toBe(400);
     });
@@ -44,7 +44,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Bucket Exists
   // ============================================
   describe('Bucket Exists', () => {
-    it('should return exists: true when HeadBucket succeeds', async () => {
+    it('TC-OBJ-076: should return exists: true when HeadBucket succeeds', async () => {
       mockSend.mockResolvedValue({});
 
       const response = await GET(createRequest({ name: 'my-bucket' }) as any);
@@ -54,7 +54,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
       expect(data.statusCode).toBe(200);
     });
 
-    it('should use default region nyc3 when not specified', async () => {
+    it('TC-OBJ-077: should use default region nyc3 when not specified', async () => {
       mockSend.mockResolvedValue({});
 
       const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
@@ -62,7 +62,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
       expect(createS3ClientFromAccessKey).toHaveBeenCalledWith('nyc3');
     });
 
-    it('should use provided region', async () => {
+    it('TC-OBJ-078: should use provided region', async () => {
       mockSend.mockResolvedValue({});
 
       const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
@@ -75,7 +75,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Bucket Not Found
   // ============================================
   describe('Bucket Not Found', () => {
-    it('should return exists: false when S3 returns 404', async () => {
+    it('TC-OBJ-079: should return exists: false when S3 returns 404', async () => {
       const err = new Error('Not Found') as any;
       err.$metadata = { httpStatusCode: 404 };
       mockSend.mockRejectedValue(err);
@@ -92,7 +92,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Access Denied / Redirect
   // ============================================
   describe('Access Denied', () => {
-    it('should return exists: true when S3 returns 403', async () => {
+    it('TC-OBJ-080: should return exists: true when S3 returns 403', async () => {
       const err = new Error('Forbidden') as any;
       err.$metadata = { httpStatusCode: 403 };
       mockSend.mockRejectedValue(err);
@@ -104,7 +104,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
       expect(data.statusCode).toBe(403);
     });
 
-    it('should return exists: true when S3 returns 301', async () => {
+    it('TC-OBJ-081: should return exists: true when S3 returns 301', async () => {
       const err = new Error('Moved') as any;
       err.$metadata = { httpStatusCode: 301 };
       mockSend.mockRejectedValue(err);
@@ -121,7 +121,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Unknown S3 Error
   // ============================================
   describe('Unknown S3 Error', () => {
-    it('should conservatively treat unknown errors as existing', async () => {
+    it('TC-OBJ-082: should conservatively treat unknown errors as existing', async () => {
       const err = new Error('Timeout') as any;
       err.$metadata = { httpStatusCode: 500 };
       mockSend.mockRejectedValue(err);
@@ -138,7 +138,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
   // Handler-Level Error
   // ============================================
   describe('Handler Error', () => {
-    it('should return 500 when S3 client creation throws', async () => {
+    it('TC-OBJ-083: should return 500 when S3 client creation throws', async () => {
       const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
       vi.mocked(createS3ClientFromAccessKey).mockImplementation(() => { throw new Error('Bad config'); });
 

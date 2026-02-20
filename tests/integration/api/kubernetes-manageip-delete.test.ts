@@ -4,6 +4,14 @@ import { POST } from '@/app/api/services/kubernetes/manageip/delete/route';
 import { createMockPostRequest, expectResponseStatus } from '../../utils/test-helpers';
 
 vi.mock('axios');
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(() => ({
+    get: vi.fn(),
+    getAll: vi.fn(() => []),
+    has: vi.fn(),
+  })),
+}));
+vi.mock('@/lib/auth/server-auth');
 
 describe('POST /api/services/kubernetes/manageip/delete', () => {
   const testUrl = 'http://localhost:3000/api/services/kubernetes/manageip/delete';
@@ -13,6 +21,14 @@ describe('POST /api/services/kubernetes/manageip/delete', () => {
 
     const axios = (await import('axios')).default;
     vi.mocked(axios.isAxiosError).mockReturnValue(false);
+    
+    // Mock authenticated user
+    const { authenticateUser } = await import('@/lib/auth/server-auth');
+    vi.mocked(authenticateUser).mockResolvedValue({
+      authenticated: true,
+      user: { id: 'test-user-id', email: 'test@example.com' },
+      response: null,
+    });
   });
 
   // ============================================
@@ -71,7 +87,7 @@ describe('POST /api/services/kubernetes/manageip/delete', () => {
       const response = await POST(request as any);
       const data = await expectResponseStatus(response, 400);
 
-      expect(data.error).toContain('Network error');
+      expect(data.error).toContain('Failed to delete droplet');
     });
 
     it('TC-K8S-144: should return 400 on non-Error throw', async () => {

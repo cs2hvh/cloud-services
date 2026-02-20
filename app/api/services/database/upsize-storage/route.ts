@@ -94,6 +94,9 @@ export async function PUT(req: NextRequest) {
       storage_size_mib: validatedData.storage_size_mib,
     };
 
+
+    console.log(payload,"...............................payload")
+
     // Resize database cluster via DigitalOcean API
     const response = await axios.put(
       `https://api.digitalocean.com/v2/databases/${validatedData.database_id}/resize`,

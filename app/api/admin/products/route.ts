@@ -22,13 +22,13 @@ function getErrorMessage(error: unknown): string {
 // GET - Fetch all products or filter by type
 export async function GET(req: NextRequest) {
   // Check admin authentication
-  // const adminCheck = await requireAdmin();
-  // if (!adminCheck.ok) {
-  //   return NextResponse.json(
-  //     { error: "Unauthorized - Admin access required" },
-  //     { status: 401 }
-  //   );
-  // }
+  const adminCheck = await requireAdmin();
+  if (!adminCheck.ok) {
+    return NextResponse.json(
+      { error: "Unauthorized - Admin access required" },
+      { status: 401 }
+    );
+  }
 
   try {
     const { searchParams } = new URL(req.url);

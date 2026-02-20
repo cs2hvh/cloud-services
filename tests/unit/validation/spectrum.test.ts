@@ -349,7 +349,7 @@ describe('Spectrum Validation Schemas', () => {
 
   describe('deleteSpectrumAppSchema', () => {
     it('should accept valid app_id', () => {
-      const payload = { app_id: 'cf-app-123' };
+      const payload = { app_id: 'cf-app-123', id: 'db-record-id-123' };
       const result = deleteSpectrumAppSchema.safeParse(payload);
       expect(result.success).toBe(true);
     });
@@ -357,6 +357,7 @@ describe('Spectrum Validation Schemas', () => {
     it('should accept app_id with optional owner_id', () => {
       const payload = {
         app_id: 'cf-app-123',
+        id: 'db-record-id-123',
         owner_id: '550e8400-e29b-41d4-a716-446655440000',
       };
       const result = deleteSpectrumAppSchema.safeParse(payload);

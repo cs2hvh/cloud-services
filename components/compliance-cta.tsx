@@ -6,11 +6,13 @@ export function ComplianceCta() {
   return (
     <section className="relative z-10 bg-[#C1C1C1] py-20 sm:py-24">
       <Container>
-        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
+        <div className="flex flex-col lg:flex-row gap-6 justify-center  items-center  lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
           <div className="text-center md:text-left">
-            <h2 className="text-4xl sm:text-5xl lg:text-[56px] leading-tight text-black">
+            <div className="d-flex items-center max-w-xl">
+              <h2 className="text-4xl sm:text-5xl lg:text-[56px] leading-tight text-black ">
               Meet compliance requirements. Build customer trust.
             </h2>
+            </div>
             <p className="mt-6 text-sm sm:text-[14.4px] leading-6 text-black/80 md:max-w-[420px]">
               Use ahura
               <span className="text-[#00AAFF]">cloud</span>

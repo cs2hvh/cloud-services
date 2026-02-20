@@ -1,3 +1,4 @@
+//@ts-nocheck
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { POST } from '@/app/api/services/spectrum/apps/delete/route';
 import { NextRequest } from 'next/server';
@@ -41,7 +42,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
   });
 
    describe('Authentication', () => {
-      it('should return 401 if user not authenticated', async () => {
+      it('TC-SP-049: should return 401 if user not authenticated', async () => {
         await mockUnauthenticatedUser();
   
         const request = createMockPostRequest(
@@ -55,7 +56,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
     });
 
   describe('Rate Limiting', () => {
-    it('should allow requests within rate limit', async () => {
+    it('TC-SP-050: should allow requests within rate limit', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
@@ -105,7 +106,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
     //   expect(response.status).toBe(400);
     // });
 
-    it('should reject invalid app_id format', async () => {
+    it('TC-SP-051: should reject invalid app_id format', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/spectrum/apps/delete',
         { app_id: '', owner_id: '550e8400-e29b-41d4-a716-446655440000', id: 'test-service-id' }
@@ -117,7 +118,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
   });
 
   describe('Authorization', () => {
-    it('should allow owner to delete their app', async () => {
+    it('TC-SP-052: should allow owner to delete their app', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
@@ -143,7 +144,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
       expect(response.status).toBeLessThan(400);
     });
 
-    it('should prevent non-owner from deleting app', async () => {
+    it('TC-SP-053: should prevent non-owner from deleting app', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
@@ -161,7 +162,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
   });
 
   describe('Success Cases', () => {
-    it('should delete app from Cloudflare successfully', async () => {
+    it('TC-SP-054: should delete app from Cloudflare successfully', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
@@ -189,7 +190,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
       expect(deleteMock).toHaveBeenCalledWith('test-id');
     });
 
-    it('should delete app from database after Cloudflare deletion', async () => {
+    it('TC-SP-055: should delete app from database after Cloudflare deletion', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,
@@ -213,7 +214,7 @@ describe('POST /api/services/spectrum/apps/delete', () => {
       expect(deleteMock).toHaveBeenCalled();
     });
 
-    it('should return 200 on successful deletion', async () => {
+    it('TC-SP-056: should return 200 on successful deletion', async () => {
       const { Spectrum_Apps } = await import('@/lib/supabase/queries/spectrum_apps');
       vi.mocked(Spectrum_Apps.get).mockResolvedValue({
         success: true,

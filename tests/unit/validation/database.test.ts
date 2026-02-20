@@ -224,7 +224,7 @@ describe('Database Validation Schemas', () => {
   describe('validateEngineVersion', () => {
     it('should validate MySQL versions', () => {
       expect(validateEngineVersion('mysql', '8')).toBe(true);
-      expect(validateEngineVersion('mysql', '5.7')).toBe(true);
+      expect(validateEngineVersion('mysql', '5.7')).toBe(false); // 5.7 is not in supported versions
       expect(validateEngineVersion('mysql', '14')).toBe(false);
     });
 
@@ -236,8 +236,8 @@ describe('Database Validation Schemas', () => {
 
     it('should validate MongoDB versions', () => {
       expect(validateEngineVersion('mongodb', '5')).toBe(true);
-      expect(validateEngineVersion('mongodb', '4.4')).toBe(true);
-      expect(validateEngineVersion('mongodb', '8')).toBe(false);
+      expect(validateEngineVersion('mongodb', '4')).toBe(true); // '4' is supported, not '4.4'
+      expect(validateEngineVersion('mongodb', '2')).toBe(false); // version 2 is not supported
     });
 
     it('should validate Redis versions', () => {

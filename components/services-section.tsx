@@ -32,6 +32,20 @@ const figmaServices = [
     description:
       "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
   },
+  {
+    logoSrc: "/images/Features/kubernetes.svg",
+    logoAlt: "Kubernetes",
+    title: "Kubernetes",
+    description:
+      "I'm a paragraph. Click here to add your own text and edit me. It’s easy. Just click “Edit Text” or double click me to add your own content and make changes to the font. ",
+  },
+  {
+    logoSrc: "/images/Features/object-space.svg",
+    logoAlt: "Object Storage",
+    title: "Object Storage",
+    description:
+      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+  },
 ];
 
 export function ServicesSection() {
@@ -54,7 +68,7 @@ export function ServicesSection() {
           {/* Content wrapper adds inner padding on mobile, none on xl for precise layout */}
           <div className="relative p-[clamp(16px,3.5vw,32px)] xl:p-0">
             {/* Desktop exact layout */}
-            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-12.3%] [--service-top-2:-5.2%] [--service-top-3:40.1%] [--service-top-4:47.3%] 2xl:[--service-top-1:-8.5%] 2xl:[--service-top-2:-1.5%]">
+            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-12.3%] [--service-top-2:-5.2%] [--service-top-3:1.3%] [--service-top-4:40.1%] [--service-top-5:47.3%] [--service-top-6:54.3%] 2xl:[--service-top-1:-8.5%] 2xl:[--service-top-2:-1.5%]">
               <div className="absolute inset-0">
                 <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/15" />
 
@@ -72,10 +86,12 @@ export function ServicesSection() {
                 </div>
 
                 {[
-                  { ...figmaServices[0], left: "54.0%", topVar: "--service-top-1" },
-                  { ...figmaServices[1], left: "75.6%", topVar: "--service-top-2" },
-                  { ...figmaServices[2], left: "54.0%", topVar: "--service-top-3" },
-                  { ...figmaServices[3], left: "75.6%", topVar: "--service-top-4" },
+                  { ...figmaServices[0], left: "44.0%", topVar: "--service-top-1" },
+                  { ...figmaServices[1], left: "65.6%", topVar: "--service-top-2" },
+                  { ...figmaServices[4], left: "86.6%", topVar: "--service-top-3" },
+                  { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
+                  { ...figmaServices[3], left: "65.6%", topVar: "--service-top-5" },
+                   { ...figmaServices[5], left: "86.6%", topVar: "--service-top-6" },
                 ].map((service) => (
                   <div
                     key={service.title}

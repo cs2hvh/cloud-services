@@ -15,7 +15,7 @@ describe('POST /api/services/database/network/read', () => {
   });
 
   describe('Success Cases', () => {
-    it('TC-DB-054: should retrieve firewall rules for cluster', async () => {
+    it('TC-DB-055: should retrieve firewall rules for cluster', async () => {
       const clusterWithRules = {
         ...mockDatabaseCluster,
         network_rules: [
@@ -55,7 +55,7 @@ describe('POST /api/services/database/network/read', () => {
       expect(data.data.length).toBe(2);
     });
 
-    it('TC-DB-054: should return empty array for cluster with no rules', async () => {
+    it('TC-DB-056: should return empty array for cluster with no rules', async () => {
       const clusterNoRules = {
         ...mockDatabaseCluster,
         network_rules: [],
@@ -80,7 +80,7 @@ describe('POST /api/services/database/network/read', () => {
       expect(data.data.length).toBe(0);
     });
 
-    it('TC-DB-054: should retrieve different rule types (ip_addr, droplet, k8s, tag, app)', async () => {
+    it('TC-DB-057: should retrieve different rule types (ip_addr, droplet, k8s, tag, app)', async () => {
       const clusterWithAllRuleTypes = {
         ...mockDatabaseCluster,
         network_rules: [

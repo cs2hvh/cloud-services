@@ -26,7 +26,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
   });
 
   describe('Authentication', () => {
-    it('should return 401 if user not authenticated', async () => {
+    it('TC-SP-027: should return 401 if user not authenticated', async () => {
       await mockUnauthenticatedUser();
 
       const response = await GET();
@@ -35,7 +35,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should allow requests within rate limit', async () => {
+    it('TC-SP-028: should allow requests within rate limit', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockResolvedValue({
         cloudflare: [mockSpectrumApp as any],
@@ -46,7 +46,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
       expect(response.status).toBeLessThan(300);
     });
 
-    it('should return 429 when rate limit exceeded', async () => {
+    it('TC-SP-029: should return 429 when rate limit exceeded', async () => {
       await mockRateLimitDeny(15);
 
       const response = await GET();
@@ -55,7 +55,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
   });
 
   describe('Success Cases', () => {
-    it('should return empty array when user has no apps', async () => {
+    it('TC-SP-030: should return empty array when user has no apps', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockResolvedValue({
         cloudflare: [],
@@ -70,7 +70,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
       expect(data.local).toEqual([]);
     });
 
-    it('should return list of user apps with decrypted DNS names', async () => {
+    it('TC-SP-031: should return list of user apps with decrypted DNS names', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockResolvedValue({
         cloudflare: [mockSpectrumApp as any, { ...mockSpectrumApp, id: 'app-2' }],
@@ -85,7 +85,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
       expect(data.local).toHaveLength(2);
     });
 
-    it('should include all app properties in list', async () => {
+    it('TC-SP-032: should include all app properties in list', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockResolvedValue({
         cloudflare: [mockSpectrumApp as any],
@@ -101,7 +101,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
       expect(data.cloudflare[0]).toHaveProperty('dns');
     });
 
-    it('should only return apps owned by authenticated user', async () => {
+    it('TC-SP-033: should only return apps owned by authenticated user', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       const listMock = vi.mocked(listSpectrumApps);
       listMock.mockResolvedValue({
@@ -116,7 +116,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
   });
 
   describe('Error Cases', () => {
-    it('should handle database query errors', async () => {
+    it('TC-SP-034: should handle database query errors', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockRejectedValue(
         new Error('Database error')
@@ -126,7 +126,7 @@ describe('GET /api/services/spectrum/apps/list', () => {
       expect(response.status).toBe(500);
     });
 
-    it('should handle partial decryption failures', async () => {
+    it('TC-SP-035: should handle partial decryption failures', async () => {
       const { listSpectrumApps } = await import('@/config/spectrum-functions');
       vi.mocked(listSpectrumApps).mockRejectedValue(
         new Error('Decryption failed')

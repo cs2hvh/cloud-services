@@ -47,7 +47,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
   });
 
   describe('Authentication', () => {
-    it('should return 401 if user not authenticated', async () => {
+    it('TC-SP-057: should return 401 if user not authenticated', async () => {
       await mockUnauthenticatedUser();
       // Mock no user
       mockCreateClient.mockResolvedValue({
@@ -69,7 +69,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
   });
 
   describe('Authorization', () => {
-    it('should allow admin to delete any app', async () => {
+    it('TC-SP-058: should allow admin to delete any app', async () => {
       await mockAdminUser();
 
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
@@ -87,7 +87,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
       expect(response.status).toBeLessThan(400);
     });
 
-    it('should return 403 for non-admin users', async () => {
+    it('TC-SP-059: should return 403 for non-admin users', async () => {
       await mockNonAdminUser();
       // Mock non-admin user
       mockCreateClient.mockResolvedValue({
@@ -118,7 +118,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
   });
 
   describe('Validation', () => {
-    it('should reject missing spectrum_id', async () => {
+    it('TC-SP-060: should reject missing spectrum_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/admin/network-ddos/apps/delete',
         {}
@@ -130,7 +130,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
   });
 
   describe('Success Cases', () => {
-    it('should delete app from Cloudflare', async () => {
+    it('TC-SP-061: should delete app from Cloudflare', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       const deleteMock = vi.mocked(deleteSpectrumApp);
       deleteMock.mockResolvedValue({
@@ -148,7 +148,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
       expect(deleteMock).toHaveBeenCalledWith('test-id');
     });
 
-    it('should delete app from database using admin method', async () => {
+    it('TC-SP-062: should delete app from database using admin method', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       const deleteMock = vi.mocked(deleteSpectrumApp);
       deleteMock.mockResolvedValue({
@@ -166,7 +166,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
       expect(deleteMock).toHaveBeenCalled();
     });
 
-    it('should return 200 on successful deletion', async () => {
+    it('TC-SP-063: should return 200 on successful deletion', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(deleteSpectrumApp).mockResolvedValue({
         id: 'test-id',
@@ -184,7 +184,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
   });
 
   describe('Error Cases', () => {
-    it('should handle app not found', async () => {
+    it('TC-SP-064: should handle app not found', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(deleteSpectrumApp).mockResolvedValue(null as any);
 
@@ -197,7 +197,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
       expect(response.status).toBe(500);
     });
 
-    it('should handle Cloudflare API errors', async () => {
+    it('TC-SP-065: should handle Cloudflare API errors', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(deleteSpectrumApp).mockRejectedValue(
         new Error('Cloudflare API error')
@@ -212,7 +212,7 @@ describe('POST /api/admin/network-ddos/apps/delete', () => {
       expect(response.status).toBe(500);
     });
 
-    it('should handle database deletion failure', async () => {
+    it('TC-SP-066: should handle database deletion failure', async () => {
       const { deleteSpectrumApp } = await import('@/config/spectrum-functions');
       vi.mocked(deleteSpectrumApp).mockResolvedValue(null as any);
 

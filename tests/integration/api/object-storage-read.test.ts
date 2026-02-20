@@ -25,7 +25,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Success Cases', () => {
-    it('should read bucket with valid ID', async () => {
+    it('TC-OBJ-020: should read bucket with valid ID', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: true,
@@ -54,7 +54,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       });
     });
 
-    it('should return decrypted credentials', async () => {
+    it('TC-OBJ-021: should return decrypted credentials', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: true,
@@ -79,7 +79,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       expect(data.data.endpoint).toContain('digitaloceanspaces.com');
     });
 
-    it('should return live bucket stats', async () => {
+    it('TC-OBJ-022: should return live bucket stats', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: true,
@@ -104,7 +104,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Validation Errors', () => {
-    it('should reject missing bucket_id', async () => {
+    it('TC-OBJ-023: should reject missing bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/read',
         {}
@@ -117,7 +117,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       expect(data.message).toContain('Bucket ID is required');
     });
 
-    it('should reject invalid bucket_id type', async () => {
+    it('TC-OBJ-024: should reject invalid bucket_id type', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/read',
         { bucket_id: 123 }
@@ -129,7 +129,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       expect(data.error).toBe('Invalid request');
     });
 
-    it('should reject empty bucket_id', async () => {
+    it('TC-OBJ-025: should reject empty bucket_id', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/read',
         { bucket_id: '' }
@@ -143,7 +143,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Not Found', () => {
-    it('should return 404 for non-existent bucket', async () => {
+    it('TC-OBJ-026: should return 404 for non-existent bucket', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: false,
@@ -163,7 +163,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Authorization', () => {
-    it('should reject access to other user\'s bucket', async () => {
+    it('TC-OBJ-027: should reject access to other user\'s bucket', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: false,
@@ -183,7 +183,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       expect(data.message).toContain('Access denied');
     });
 
-    it('should reject unauthenticated requests', async () => {
+    it('TC-OBJ-028: should reject unauthenticated requests', async () => {
       await mockUnauthenticatedUser();
 
       const request = createMockPostRequest(
@@ -197,7 +197,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Rate Limiting', () => {
-    it('should reject requests exceeding rate limit', async () => {
+    it('TC-OBJ-029: should reject requests exceeding rate limit', async () => {
       const { limitByUser } = await import('@/lib/cooldown/userbased');
       vi.mocked(limitByUser).mockResolvedValue({
         allowed: false,
@@ -218,7 +218,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle read failures gracefully', async () => {
+    it('TC-OBJ-030: should handle read failures gracefully', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockResolvedValue({
         success: false,
@@ -237,7 +237,7 @@ describe('POST /api/services/object-storage/buckets/read', () => {
       expect(data.error).toBeDefined();
     });
 
-    it('should handle unexpected errors', async () => {
+    it('TC-OBJ-031: should handle unexpected errors', async () => {
       const { ObjectStorageFunctions } = await import('@/config/object-storage-functions');
       vi.mocked(ObjectStorageFunctions.readBucket).mockRejectedValue(
         new Error('Unexpected error')

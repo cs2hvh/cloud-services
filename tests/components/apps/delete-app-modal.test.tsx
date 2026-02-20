@@ -40,14 +40,14 @@ describe('DeleteAppModal Component', () => {
   // Rendering Tests
   // ============================================
   describe('Rendering Tests', () => {
-    it('TC-PA-C070: should render modal when open', () => {
+    it('TC-PA-C140: should render modal when open', () => {
       render(<DeleteAppModal {...defaultProps} />);
 
       // Check for the alertdialog role instead of text (both heading and button have same text)
       expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     });
 
-    it('TC-PA-C071: should not render when closed', () => {
+    it('TC-PA-C141: should not render when closed', () => {
       render(<DeleteAppModal {...defaultProps} open={false} />);
 
       expect(screen.queryByText('Delete Application')).not.toBeInTheDocument();

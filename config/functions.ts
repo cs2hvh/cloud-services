@@ -3,14 +3,14 @@ import * as crypto from "crypto";
 // import { lookup, resolve4, resolve6, resolveCname, resolveMx } from "dns/promises";
 import type { MxRecord } from "dns";
 
-export const generateStrongPassword = () => {
+export const generateStrongPassword = (length: number = 16) => {
   const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  const randomBytes = crypto.randomBytes(length);
   let password = "";
 
-  for (let i = 0; i < 12; i++) {
-    const randomIndex = Math.floor(Math.random() * chars.length);
-    password += chars[randomIndex];
+  for (let i = 0; i < length; i++) {
+    password += chars[randomBytes[i] % chars.length];
   }
 
   return password;
