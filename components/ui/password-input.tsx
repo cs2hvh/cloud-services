@@ -1,32 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface PasswordInputProps {
-  field: object;
+  field: Record<string, unknown>;
   placeholder: string;
-  disabled: boolean;
+  disabled?: boolean;
+  className?: string;
+  wrapperClassName?: string;
+  toggleClassName?: string;
+  style?: CSSProperties;
 }
 
-export function PasswordInput({ field, placeholder }: PasswordInputProps) {
+export function PasswordInput({
+  field,
+  placeholder,
+  disabled = false,
+  className,
+  wrapperClassName,
+  toggleClassName,
+  style,
+}: PasswordInputProps) {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="relative">
+    <div className={cn("relative", wrapperClassName)}>
       <Input
         type={showPassword ? "text" : "password"}
         placeholder={placeholder}
         {...field}
-        className="pr-10"
+        disabled={disabled}
+        className={cn("pr-10", className)}
+        style={style}
       />
-      <Button
+      <button
         type="button"
-        variant="ghost"
-        size="sm"
-        className="absolute right-0 h-9 top-0 px-3 hover:bg-transparent"
+        disabled={disabled}
+        className={cn(
+          "absolute right-0 top-0 h-10 px-3 text-gray-400 transition hover:text-gray-200 disabled:opacity-60",
+          toggleClassName,
+        )}
         onClick={() => setShowPassword(!showPassword)}
       >
         {showPassword ? (
@@ -34,7 +50,7 @@ export function PasswordInput({ field, placeholder }: PasswordInputProps) {
         ) : (
           <Eye className="h-4 w-4 text-gray-400" />
         )}
-      </Button>
+      </button>
     </div>
   );
 }

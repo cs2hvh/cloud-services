@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import * as React from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
@@ -25,29 +25,36 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import Image from "next/image";
 import Link from "next/link";
 import { Icons } from "@/components/ui/icons";
 import { PasswordInput } from "../ui/password-input";
 import api from "@/lib/axios/axios";
+import glass from "@/components/auth/glass-controls.module.css";
 
-type Input = z.infer<typeof signup_schema>;
 type SignupFormData = z.infer<typeof signup_schema>;
 type OtpFormData = z.infer<typeof otp_schema>;
+
+const entry_schema = z.object({ email: z.string().email() });
+type EntryFormData = z.infer<typeof entry_schema>;
+
+const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
+const buttonShellClass = `${glass.glassControl} ${glass.buttonShell}`;
 
 export default function SignUpMultiStep({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [pendingEmail, setPendingEmail] = useState<string>(""); // store email to verify with OTP
+  const [step, setStep] = React.useState<0 | 1 | 2>(0);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [pendingEmail, setPendingEmail] = React.useState<string>("");
   const router = useRouter();
 
-  // ------------------------------------
-  // Step 1 form: collect user details
-  // ------------------------------------
+  const entryForm = useForm<EntryFormData>({
+    resolver: zodResolver(entry_schema),
+    defaultValues: { email: "" },
+  });
+
   const signupForm = useForm<SignupFormData>({
     resolver: zodResolver(signup_schema),
     defaultValues: {
@@ -58,9 +65,6 @@ export default function SignUpMultiStep({
     },
   });
 
-  // ------------------------------------
-  // Step 2 form: collect OTP
-  // ------------------------------------
   const otpForm = useForm<OtpFormData>({
     resolver: zodResolver(otp_schema),
     defaultValues: {
@@ -68,304 +72,309 @@ export default function SignUpMultiStep({
     },
   });
 
-  /**
-   * Handle submission of Step 1:
-   *  - Send user details to the backend
-   *  - Backend should create a "pending" user and send an OTP (email or SMS)
-   */
   async function onSubmitSignup(data: SignupFormData) {
-    // debugger
-    //lsetIsLoading(true);
-
-    // 1) Post sign-up data to your API
     const response = await api.post("/auth/onboarding", data);
-    //setIsLoading(false);
     if (response.status === 200) {
-      // Suppose the backend returns { message: "...", email: "..." }
       toast.success(response.data.message);
-      setPendingEmail(data.email); // store email in state to verify
-      // 2) Switch to the OTP step
+      setPendingEmail(data.email);
       setStep(2);
     } else {
-      // e.g. response.status !== 200
       toast.error(response.data.message);
     }
   }
 
   async function onSubmitOtp(data: OtpFormData) {
     setIsLoading(true);
+    try {
+      const response = await api.post("/auth/onboarding/verify-otp", {
+        email: pendingEmail,
+        otpCode: data.pin,
+      });
 
-    const response = await api.post("/auth/onboarding/verify-otp", {
-      email: pendingEmail,
-      otpCode: data.pin,
-    });
-
-    setIsLoading(false);
-    if (response.status === 200) {
-      toast.success(response.data.message);
-      router.push("/signin");
+      if (response.status === 200) {
+        toast.success(response.data.message);
+        router.push("/signin");
+      }
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  // ---- social sign-up
+  async function handleEntryContinue(data: EntryFormData) {
+    signupForm.setValue("email", data.email, { shouldValidate: true });
+    setPendingEmail(data.email);
+    setStep(1);
+  }
+
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
-    const response = await api.post("/auth/signin/github", { type });
-
-    if (response.data?.url) {
-      window.location.href = response.data.url;
+    try {
+      const response = await api.post("/auth/signin/github", { type });
+      if (response.data?.url) {
+        window.location.href = response.data.url;
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-      <Card className="overflow-hidden shadow-lg bg-black/40 backdrop-blur-md border border-white/10">
-        <CardContent className="grid p-0 md:grid-cols-2">
-          <div className="relative hidden md:block h-full min-h-80 rounded-l-xl bg-gradient-to-br from-gray-900 to-black">
-            <div className="w-full h-full rounded-l-xl flex items-center justify-center">
-              <div className="text-center space-y-4 p-8">
-                <h2 className="text-2xl font-bold text-white">Join AhuraSense</h2>
-                <p className="text-gray-300">Start your cloud services journey today</p>
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-4 py-4 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6",
+        className,
+      )}
+      {...props}
+    >
+      <div className="mx-auto mb-4 text-center">
+        <h1 className="text-[28px] sm:text-[34px] font-bold leading-[1.02] text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+        <p className="-mt-1 text-[32px] sm:text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
+      </div>
+
+      <div className="text-center">
+        <p className="text-lg text-white">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</p>
+        <p className="mt-1 text-sm text-white/90">
+          {step === 0
+            ? "Welcome back! Please Sign Up to continue."
+            : step === 1
+              ? "Create your account details to continue."
+              : "Enter the OTP sent to your email."}
+        </p>
+      </div>
+
+      {step !== 2 && (
+        <>
+          <div className="mt-5 flex items-center justify-center gap-5 sm:gap-8">
+            <button type="button" aria-label="Sign up with GitHub" className="text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
+              <Icons.gitHub className="h-9 w-9" />
+            </button>
+            <button type="button" aria-label="Sign up with GitLab" className="transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+              <Image src="/gitlab.png" alt="GitLab" width={36} height={36} className="h-9 w-9" />
+            </button>
+            <button type="button" aria-label="Sign up with Bitbucket" className="transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+              <Image src="/BitBucket.png" alt="Bitbucket" width={36} height={36} className="h-9 w-9" />
+            </button>
+            <button type="button" aria-label="Sign up with Google" className="text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
+              <Icons.google className="h-9 w-9" />
+            </button>
+          </div>
+
+          <div className="mt-5 flex items-center gap-3 text-white">
+            <div className="h-px flex-1 bg-white/75" />
+            <span className="text-sm">Or</span>
+            <div className="h-px flex-1 bg-white/75" />
+          </div>
+        </>
+      )}
+
+      {step === 0 && (
+        <Form {...entryForm}>
+          <form
+            onSubmit={entryForm.handleSubmit(handleEntryContinue)}
+            className="mx-auto mt-4 w-full max-w-[356px] space-y-4"
+          >
+            <FormField
+              control={entryForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                  <FormControl>
+                    <div className={inputShellClass}>
+                      <Input
+                        placeholder=""
+                        {...field}
+                        type="email"
+                        disabled={isLoading}
+                        className={glass.field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className={`mx-auto mt-1 w-full max-w-[236px] ${buttonShellClass}`}>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={glass.button}
+              >
+                Continue
+              </button>
+            </div>
+          </form>
+        </Form>
+      )}
+
+      {step === 1 && (
+        <Form {...signupForm}>
+          <form
+            onSubmit={signupForm.handleSubmit(onSubmitSignup)}
+            className="mx-auto mt-4 w-full max-w-[356px] space-y-3"
+          >
+            <FormField
+              control={signupForm.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-normal text-white">Username</FormLabel>
+                  <FormControl>
+                    <div className={inputShellClass}>
+                      <Input
+                        placeholder=""
+                        {...field}
+                        type="text"
+                        disabled={isLoading}
+                        className={glass.field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signupForm.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                  <FormControl>
+                    <div className={inputShellClass}>
+                      <Input
+                        placeholder=""
+                        {...field}
+                        type="email"
+                        disabled
+                        className={glass.field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signupForm.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-normal text-white">Password</FormLabel>
+                  <FormControl>
+                  <PasswordInput
+                    field={field}
+                    placeholder=""
+                    disabled={isLoading}
+                    className={glass.field}
+                    wrapperClassName={inputShellClass}
+                    toggleClassName="h-full pr-3"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+              )}
+            />
+
+            <FormField
+              control={signupForm.control}
+              name="confirmPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-base font-normal text-white">Confirm Password</FormLabel>
+                  <FormControl>
+                  <PasswordInput
+                    field={field}
+                    placeholder=""
+                    disabled={isLoading}
+                    className={glass.field}
+                    wrapperClassName={inputShellClass}
+                    toggleClassName="h-full pr-3"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+              )}
+            />
+
+            <div className="flex items-center justify-center gap-3 pt-1">
+              <Button
+                type="button"
+                onClick={() => setStep(0)}
+                className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10"
+              >
+                Back
+              </Button>
+              <div className={`w-auto min-w-[180px] ${buttonShellClass}`}>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className={`${glass.button} px-6`}
+                >
+                  {isLoading ? "Creating..." : "Create Account"}
+                </button>
               </div>
             </div>
-          </div>
+          </form>
+        </Form>
+      )}
 
-          <div className="p-6 md:p-8">
-            <div className="flex flex-col items-center text-center mb-6">
-              <h1 className="text-2xl font-bold tracking-tight text-white">
-                Welcome to AhuraSense
-              </h1>
-              <p className="text-sm text-gray-300 mt-1">
-                We&apos;re excited to have you! Let&apos;s create your account.
-              </p>
-            </div>
-
-            <div className={cn("grid gap-4", className)} {...props}>
-              {step === 1 && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                      onClick={() => handleSignIn("github")}
-                      disabled={isLoading}
-                    >
-                      <Icons.gitHub className="h-5 w-5" />
-                      <span>GitHub</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                      onClick={() => handleSignIn("google")}
-                      disabled={isLoading}
-                    >
-                      <Icons.google className="h-5 w-5" />
-                      <span>Google</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                      onClick={() => handleSignIn("gitlab")}
-                      disabled={isLoading}
-                    >
-                      <Image src="/gitlab.png" alt="GitLab" width={20} height={20} className="h-5 w-5" />
-                      <span>GitLab</span>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                      onClick={() => handleSignIn("bitbucket")}
-                      disabled={isLoading}
-                    >
-                      <Image src="/BitBucket.png" alt="Bitbucket" width={20} height={20} className="h-5 w-5" />
-                      <span>Bitbucket</span>
-                    </Button>
-                  </div>
-
-                  <div className="flex justify-center mb-6">
-                    <span className="px-4 py-1 text-gray-300 bg-black/60 rounded-md border border-white/10 text-xs uppercase">
-                      Or continue with
-                    </span>
-                  </div>
-                </>
+      {step === 2 && (
+        <Form {...otpForm}>
+          <form
+            onSubmit={otpForm.handleSubmit(onSubmitOtp)}
+            className="mx-auto mt-5 max-w-sm space-y-4 text-center"
+          >
+            <p className="text-sm text-white/85">
+              Verification code sent to {pendingEmail}
+            </p>
+            <FormField
+              control={otpForm.control}
+              name="pin"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <InputOTP maxLength={6} {...field}>
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} />
+                        <InputOTPSlot index={1} />
+                        <InputOTPSlot index={2} />
+                      </InputOTPGroup>
+                      <InputOTPSeparator />
+                      <InputOTPGroup>
+                        <InputOTPSlot index={3} />
+                        <InputOTPSlot index={4} />
+                        <InputOTPSlot index={5} />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
+            />
 
-              {step === 1 && (
-                <Form {...signupForm}>
-                  <form
-                    onSubmit={signupForm.handleSubmit(onSubmitSignup)}
-                    className="space-y-5"
-                  >
-                    {/* STEP 1: Sign-up fields */}
-                    <FormField
-                      control={signupForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-white">Username</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Provide your desired username"
-                              {...field}
-                              type="text"
-                              disabled={isLoading}
-                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={signupForm.control}
-                      name="email"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-white">Email</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="Enter an email"
-                              {...field}
-                              type="email"
-                              disabled={isLoading}
-                              className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={signupForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-white">Password</FormLabel>
-                          <FormControl>
-                            <PasswordInput
-                              field={field}
-                              placeholder="Enter a good password"
-                              disabled={isLoading}
-                             // className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={signupForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-white">Confirm Password</FormLabel>
-                          <FormControl>
-                            <PasswordInput
-                              field={field}
-                              placeholder="Confirm your password"
-                              disabled={isLoading}
-                              //className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading && (
-                        <Icons.spinner className="h-4 w-4 animate-spin" />
-                      )}
-                      Create Account
-                    </Button>
-                  </form>
-                </Form>
-              )}
-
-              {step === 2 && (
-                <Form {...otpForm}>
-                  <form
-                    onSubmit={otpForm.handleSubmit(onSubmitOtp)}
-                    className="space-y-6 mx-auto text-center"
-                  >
-                    {/* STEP 2: OTP fields */}
-                    <FormField
-                      control={otpForm.control}
-                      name="pin"
-                      render={({ field }) => (
-                        <FormItem>
-                          {/* <FormLabel>One-Time Password</FormLabel> */}
-                          <FormControl>
-                            <InputOTP maxLength={6} {...field}>
-                              <InputOTPGroup>
-                                <InputOTPSlot index={0} />
-                                <InputOTPSlot index={1} />
-                                <InputOTPSlot index={2} />
-                              </InputOTPGroup>
-                              <InputOTPSeparator />
-                              <InputOTPGroup>
-                                <InputOTPSlot index={3} />
-                                <InputOTPSlot index={4} />
-                                <InputOTPSlot index={5} />
-                              </InputOTPGroup>
-                            </InputOTP>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full"
-                    >
-                      {isLoading && (
-                        <Icons.spinner className="h-4 w-4 animate-spin" />
-                      )}
-                      Verify OTP
-                    </Button>
-                  </form>
-                </Form>
-              )}
+            <div className={`w-full ${buttonShellClass}`}>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className={glass.button}
+              >
+                {isLoading ? "Verifying..." : "Verify OTP"}
+              </button>
             </div>
-            <div className="flex items-center justify-center mt-2">
-              <p className="text-sm text-gray-300">
-                Already have an account?{" "}
-                <Link
-                  href="/signin"
-                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
-                >
-                  Sign In
-                </Link>
-              </p>
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="px-6 flex items-center justify-center border-t border-white/10">
-          <div className="text-center text-sm text-gray-300 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-blue-300 transition-colors">
-            By creating account, you agree to our{" "}
-            <Link href="/terms" target="_blank">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" target="_blank">
-              Privacy Policy
-            </Link>
-            .
-          </div>
-        </CardFooter>
-      </Card>
+          </form>
+        </Form>
+      )}
+
+      <p className="mt-4 text-center text-sm text-white">
+        {step === 0 ? "Do you already have an account?" : "Already have an account?"}{" "}
+        <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff]">
+          Log In
+        </Link>
+      </p>
     </div>
   );
 }

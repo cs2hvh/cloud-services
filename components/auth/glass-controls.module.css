@@ -1,0 +1,139 @@
+/* ===============================
+   GLASS CONTROL
+================================= */
+
+.glassControl {
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  border-radius: inherit; /* Important: keeps input 10px & button 999px */
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+/* LEFT TOP SHINE */
+.glassControl::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+
+  background:
+    /* Top edge (left half only) */
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,0.85),
+      rgba(255,255,255,0.4),
+      transparent 60%
+    ) top left / 60% 1px no-repeat,
+
+    /* Left edge (top half only) */
+    linear-gradient(
+      180deg,
+      rgba(255,255,255,0.85),
+      rgba(255,255,255,0.4),
+      transparent 60%
+    ) top left / 1px 60% no-repeat;
+}
+
+/* RIGHT BOTTOM SHINE */
+.glassControl::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+
+  background:
+    /* Bottom edge (right half only) */
+    linear-gradient(
+      90deg,
+      transparent 40%,
+      rgba(255,255,255,0.4),
+      rgba(255,255,255,0.8)
+    ) bottom right / 60% 1px no-repeat,
+
+    /* Right edge (bottom half only) */
+    linear-gradient(
+      180deg,
+      transparent 40%,
+      rgba(255,255,255,0.4),
+      rgba(255,255,255,0.8)
+    ) bottom right / 1px 60% no-repeat;
+}
+
+
+/* ===============================
+   INPUT SHELL
+================================= */
+
+.inputShell {
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(15, 17, 24, 0.76);
+}
+
+
+/* ===============================
+   BUTTON SHELL (UNCHANGED)
+================================= */
+
+.buttonShell {
+  height: 40px;
+  border-radius: 999px; /* keep pill */
+  background: rgba(3, 27, 48, 0.82);
+  border-color: rgba(164, 197, 228, 0.6);
+}
+
+
+/* ===============================
+   INPUT FIELD
+================================= */
+
+.field {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: #ffffff;
+  padding: 0 16px;
+  outline: none;
+}
+
+.field::placeholder {
+  color: #8f97a7;
+}
+
+.field:focus {
+  box-shadow: none;
+}
+
+
+/* ===============================
+   BUTTON
+================================= */
+
+.button {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

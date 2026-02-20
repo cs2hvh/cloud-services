@@ -1,7 +1,5 @@
 import SignUpMultiStep from "@/components/auth/signup";
 import { getUser } from "@/lib/supabase/auth";
-import { Spotlight } from "@/components/ui/spotlight";
-import { cn } from "@/lib/utils";
 import { redirect } from "next/navigation";
 
 export default async function SignUpPage() {
@@ -12,24 +10,15 @@ export default async function SignUpPage() {
   }
 
   return (
-    <div className="relative min-h-svh w-full overflow-hidden bg-black/[0.96] antialiased">
+    <div className="relative min-h-svh w-full overflow-hidden bg-[#04060b] antialiased">
       <div
-        className={cn(
-          "pointer-events-none absolute inset-0 [background-size:40px_40px] select-none",
-          "[background-image:linear-gradient(to_right,#171717_1px,transparent_1px),linear-gradient(to_bottom,#171717_1px,transparent_1px)]",
-        )}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/signin-signup-bg.png')" }}
       />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.52)_65%,rgba(0,0,0,0.82)_100%)]" />
 
-      <Spotlight
-        className="-top-40 left-0 md:-top-20 md:left-60"
-        fill="white"
-      />
-
-      {/* Content */}
-      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm md:max-w-3xl">
-          <SignUpMultiStep />
-        </div>
+      <div className="relative z-10 flex min-h-svh items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
+        <SignUpMultiStep />
       </div>
     </div>
   );
