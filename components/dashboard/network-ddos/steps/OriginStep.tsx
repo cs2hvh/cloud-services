@@ -47,7 +47,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
   };
 
   const handlePortChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let portValue = parseInt(e.target.value);
+    const portValue = parseInt(e.target.value);
     if (isNaN(portValue)) {
       onUpdate({ originPort: 0 });
       return;
