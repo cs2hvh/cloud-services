@@ -84,6 +84,20 @@ export default function GlobalNetworkSection() {
   return (
     <section className="bg-[#000000] w-full py-16 lg:py-24">
       <Container>
+        {/* Header Section */}
+        <div className="text-center mb-12 lg:mb-16">
+          <h1 className="text-[clamp(32px,4vw,56px)] font-semibold leading-tight tracking-tight">
+            <span className="text-white">Global Network </span>
+            <span className="text-[#0095FF]">Infrastructure</span>
+          </h1>
+          <p className="mt-4 lg:mt-6 mx-auto max-w-3xl text-[clamp(14px,1.1vw,18px)] leading-relaxed text-slate-300 opacity-90 px-4">
+            Our global network infrastructure ensures low latency and high availability for your applications, 
+            no matter where your users are located. With strategically placed data centers around the world, 
+            we provide fast and reliable connectivity to keep your services running smoothly.
+          </p>
+        </div>
+
+        {/* World Map */}
         <WorldMap
             dots={[
               {
@@ -120,6 +134,22 @@ export default function GlobalNetworkSection() {
               },
             ]}
           />
+
+        {/* Footer Section */}
+        <div className="mt-16 lg:mt-24 text-center">
+          <div className="inline-block border border-[#0095FF]/40 bg-[#0095FF]/5 backdrop-blur-sm px-8 py-6 rounded-lg">
+            <h2 className="text-[clamp(24px,3vw,40px)] font-semibold leading-tight tracking-tight text-white">
+              Powered by an easy-to-use,
+              <br className="hidden sm:block" />
+              <span className="block sm:inline"> developer-friendly </span>
+              <span className="text-[#0095FF]">platform</span>
+            </h2>
+          </div>
+          <p className="mt-6 mx-auto max-w-2xl text-[clamp(12px,1vw,16px)] leading-relaxed text-slate-400 opacity-80 px-4">
+            All services share a common suite of platform features that enhance security and 
+            ensure seamless integration into your existing infrastructure.
+          </p>
+        </div>
       </Container>
     </section>
   );

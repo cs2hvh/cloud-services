@@ -151,10 +151,10 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
       await delay(waitTime);
       
       const checkIp = await axios.get(
-        `http://ip-api.com/json/${payload.dns.name}${process.env.PARENT_DOMAIN_SPECTRUM}`
+        `http://ip-api.com/json/${payload.dns.name}.${process.env.PARENT_DOMAIN_SPECTRUM}`
       );
 
-      if (checkIp.status === 200 && checkIp.data?.query) {
+      if (checkIp?.data?.status === 'success' && checkIp.data?.query) {
         ipAddress = checkIp.data.query;
         console.log("Resolved IP Address:", ipAddress);
         resolved = true;

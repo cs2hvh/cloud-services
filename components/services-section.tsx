@@ -68,7 +68,7 @@ export function ServicesSection() {
           {/* Content wrapper adds inner padding on mobile, none on xl for precise layout */}
           <div className="relative p-[clamp(16px,3.5vw,32px)] xl:p-0">
             {/* Desktop exact layout */}
-            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-12.3%] [--service-top-2:-5.2%] [--service-top-3:1.3%] [--service-top-4:40.1%] [--service-top-5:47.3%] [--service-top-6:54.3%] 2xl:[--service-top-1:-8.5%] 2xl:[--service-top-2:-1.5%]">
+            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-12.3%] [--service-top-2:-5.2%] [--service-top-3:1.3%] [--service-top-4:40.1%] [--service-top-5:47.3%] [--service-top-6:50.3%] 2xl:[--service-top-1:-8.5%] 2xl:[--service-top-2:-1.5%]">
               <div className="absolute inset-0">
                 <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/15" />
 

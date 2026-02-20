@@ -36,7 +36,7 @@ const ReleaseCard = ({
   specs: string[];
 }) => {
   return (
-    <div className="group relative w-full min-w-0 overflow-hidden rounded-[8px] aspect-[407/277] min-h-[260px] sm:min-h-[277px]">
+    <div className="group relative w-full min-w-0 overflow-hidden rounded-[8px] aspect-[407/277] min-h-[240px] sm:min-h-[260px] md:min-h-[277px]">
       <div className="absolute inset-0">
         <Image
           src="/images/Add/card-bg.png"
@@ -48,28 +48,28 @@ const ReleaseCard = ({
         />
       </div>
 
-      <div className="relative z-10 flex h-full flex-col items-start justify-center px-8 py-6 text-[#0b0b0b] sm:pl-14 sm:pr-8 sm:py-7">
-        <div className="w-full max-w-[320px]">
+      <div className="relative z-10 flex h-full flex-col items-start justify-center px-5 py-5 text-[#0b0b0b] sm:px-8 sm:py-6 md:pl-14 md:pr-8 md:py-7">
+        <div className="w-full pr-8 sm:pr-10 md:max-w-[320px] md:pr-0">
           <h3
-            className="text-left text-[22px] font-bold leading-tight sm:text-[24px] lg:text-[27px]"
+            className="text-left text-[18px] font-bold leading-tight sm:text-[20px] md:text-[22px] lg:text-[27px]"
             style={{ fontFamily: "Sora, sans-serif" }}
           >
             {title}
           </h3>
           <div
-            className="mt-3 flex flex-col gap-2 text-left text-[11px] font-normal leading-[1.6] text-black/80 break-words hyphens-auto sm:text-[12px] sm:leading-[1.7] md:text-[13px] md:leading-[1.8] lg:text-[14px]"
+            className="mt-2 flex flex-col gap-1.5 text-left text-[10px] font-normal leading-[1.5] text-black/80 break-words overflow-hidden sm:mt-3 sm:gap-2 sm:text-[11px] sm:leading-[1.6] md:text-[12px] md:leading-[1.7] lg:text-[14px]"
             style={{ fontFamily: "Sora, sans-serif" }}
           >
             {specs.map((spec, i) => (
-              <p key={i}>{spec}</p>
+              <p key={i} className="overflow-hidden text-ellipsis">{spec}</p>
             ))}
           </div>
         </div>
       </div>
 
       <div
-        className="absolute bottom-4 left-4 z-20 text-[22px] font-bold leading-none text-white/95 select-none pointer-events-none sm:text-[26px]"
-        style={{ fontFamily: "Sansation, sans-serif" }}
+        className="absolute bottom-0.5 left-0 z-20 text-[22px] font-bold leading-none text-white/95 select-none pointer-events-none sm:text-[26px]"
+        style={{ fontFamily: "Sansation, sans-serif" ,fontWeight:"bold"}}
       >
         {id}
       </div>
@@ -83,7 +83,7 @@ const ComputeReleaseSection = () => {
       {/* Background Image/Gradient */}
       <div className="absolute inset-0 z-0 pointer-events-none">
         <Image
-          src="/images/Add/ad-bg.png"
+          src="/images/main-page/service-home-section-2-bg.svg"
           alt="Background"
           fill
           className="object-cover"

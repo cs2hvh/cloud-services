@@ -8,10 +8,15 @@ import Image from "next/image";
 // Country flag codes for flagcdn.com
 const countryFlags: Record<string, string> = {
   usa: "us",
-  brazil: "br",
-  portugal: "pt",
   uk: "gb",
+  france: "fr",
+  lithuania: "lt",
+  brazil: "br",
   india: "in",
+  australia: "au",
+  indonesia: "id",
+  monaco: "mc",
+  portugal: "pt",
   russia: "ru",
   kenya: "ke",
 };
@@ -24,14 +29,32 @@ const getCountryFlag = (label: string): string | null => {
     lowerLabel.includes("los angeles")
   )
     return countryFlags.usa;
-  if (lowerLabel.includes("brazil") || lowerLabel.includes("brasília"))
-    return countryFlags.brazil;
-  if (lowerLabel.includes("portugal") || lowerLabel.includes("lisbon"))
-    return countryFlags.portugal;
   if (lowerLabel.includes("uk") || lowerLabel.includes("london"))
     return countryFlags.uk;
+  if (lowerLabel.includes("france") || lowerLabel.includes("paris"))
+    return countryFlags.france;
+  if (lowerLabel.includes("lithuania") || lowerLabel.includes("vilnius"))
+    return countryFlags.lithuania;
+  if (lowerLabel.includes("brazil") || lowerLabel.includes("brasília"))
+    return countryFlags.brazil;
   if (lowerLabel.includes("india") || lowerLabel.includes("delhi"))
     return countryFlags.india;
+  if (
+    lowerLabel.includes("australia") ||
+    lowerLabel.includes("sydney") ||
+    lowerLabel.includes("melbourne")
+  )
+    return countryFlags.australia;
+  if (
+    lowerLabel.includes("indonesia") ||
+    lowerLabel.includes("jakarta") ||
+    lowerLabel.includes("bali")
+  )
+    return countryFlags.indonesia;
+  if (lowerLabel.includes("monaco") || lowerLabel.includes("monte carlo"))
+    return countryFlags.monaco;
+  if (lowerLabel.includes("portugal") || lowerLabel.includes("lisbon"))
+    return countryFlags.portugal;
   if (lowerLabel.includes("russia") || lowerLabel.includes("vladivostok"))
     return countryFlags.russia;
   if (lowerLabel.includes("kenya") || lowerLabel.includes("nairobi"))
