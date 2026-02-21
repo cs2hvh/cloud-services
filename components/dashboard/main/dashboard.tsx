@@ -1,185 +1,80 @@
 'use client';
 
-// import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { 
-  Server, 
-  Database, 
-  // Globe, 
-  Activity,
-  // ArrowUp,
+import {
+  Database,
   MoreVertical,
   Plus,
-  ShieldCheck,
-  Eye,
   Archive,
   Shield,
-  Globe,
-  CheckCircle,
-  Loader2,
-  Ban,
-  GamepadIcon,
   Box,
   Rocket,
-
+  Cpu,
+  Zap,
+  ArrowUpRight,
+  Clock,
+  Server,
+  GitBranch,
+  Terminal,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-// import { createClient } from "@/lib/supabase/client";
 import { ObjectSpaceBucket, Tables, PlatformApp } from "@/lib/supabase/types";
-import { KubernetesIcon } from "@/components/ui/kubernetes";
-import { DatabaseIcon } from "../database/database-icon";
 import { dbLocations } from "@/config/locations";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
-// import { object } from "zod";
+import { useSession } from "@/app/dashboard/provider";
 
 interface PageProps {
-    game_servers: Tables<"game_servers">[];
-    database_clusters: Tables<"database_clusters">[];
-    kubernetes_clusters: Tables<"clusters_get">[];
-    spectrum_apps: Tables<"spectrum_apps">[];
-    object_storage:ObjectSpaceBucket[];
-    platform_apps: PlatformApp[];
-    project_logs:Tables<"project_logs">[];
+  game_servers: Tables<"game_servers">[];
+  database_clusters: Tables<"database_clusters">[];
+  kubernetes_clusters: Tables<"clusters_get">[];
+  spectrum_apps: Tables<"spectrum_apps">[];
+  object_storage: ObjectSpaceBucket[];
+  platform_apps: PlatformApp[];
+  project_logs: Tables<"project_logs">[];
 }
 
-// A simple bar chart component
-const BarChart = ({ data, colors }: { data: { name: string, value: number }[], colors: string[] }) => {
-  const maxValue = Math.max(...data.map(d => d.value));
-  return (
-    <div className="w-full p-4">
-      <div className="flex justify-around items-end space-x-4 h-48">
-        {data.map((d, i) => (
-          <div key={d.name} className="flex-1 flex flex-col items-center h-full justify-end">
-            <div className="w-full flex flex-col items-center justify-end h-full">
-              <div 
-                className="w-full rounded-t-md transition-all duration-300 min-h-[4px]"
-                style={{ 
-                  height: `${(d.value / maxValue) * 100}%`, 
-                  backgroundColor: colors[i % colors.length]
-                }}
-              ></div>
-            </div>
-            <div className="mt-2 text-center">
-              <span className="text-xs text-white/70 block">{d.name}</span>
-              <span className="text-xs text-white/50 block">{d.value}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const Dashboard = ({
-  data
+/* ─── Stat metric ─── */
+const Stat = ({
+  label,
+  value,
+  icon: Icon,
+  href,
 }: {
-  data: PageProps;
-}) => {
-  const router = useRouter();
-  
-  // Calculate metrics from actual data
-  const activeGameServers = data.game_servers.filter(s => s.status === 'active').length;
-  const onlineDatabases = data.database_clusters.filter(db => db.status === 'online').length;
-  const readyK8sClusters = data.kubernetes_clusters.filter(k8s => k8s.status === 'ready').length;
-  const spectrum_apps = data.spectrum_apps.filter(app => app.status === 'updated'||'created').length;
-  const object_storage = data.object_storage.filter(object=>object.status==='active').length;
-  const runningPlatformApps = data.platform_apps.filter(app => app.status === 'running').length;
+  label: string;
+  value: number;
+  icon: React.ElementType;
+  href: string;
+}) => (
+  <Link href={href} className="group flex items-center gap-3 py-3.5 px-5 hover:bg-white/[0.04] transition-colors border-r border-white/[0.06] last:border-r-0 flex-1 min-w-0">
+    <Icon className="w-4 h-4 text-white/50 flex-shrink-0" />
+    <div className="min-w-0">
+      <span className="text-xl font-bold text-white tabular-nums">{value}</span>
+      <p className="text-[11px] text-white/50 truncate">{label}</p>
+    </div>
+  </Link>
+);
 
-  const stats = [
-    {
-      title: "Game Servers",
-      value: data.game_servers.length.toString(),
-      icon: Server,
-      color: "bg-gradient-to-br from-blue-500 to-purple-600",
-    },
-    {
-      title: "Kubernetes",
-      value: data.kubernetes_clusters.length.toString(),
-      icon: KubernetesIcon,
-      color: "bg-gradient-to-br from-purple-500 to-blue-500",
-    },
-    {
-      title: "Databases",
-      value: data.database_clusters.length.toString(),
-      icon: Database,
-      color: "bg-gradient-to-br from-blue-600 to-purple-500",
-    },
-    {
-      title: "Active Services",
-      value: (activeGameServers + onlineDatabases + readyK8sClusters+ spectrum_apps + object_storage + runningPlatformApps).toString(),
-      icon: ShieldCheck,
-      color: "bg-gradient-to-br from-purple-600 to-blue-600",
-    },
-    {
-      title: "Platform Apps",
-      value: data.platform_apps.length.toString(),
-      icon: Rocket,
-      color: "bg-gradient-to-br from-emerald-500 to-teal-600",
-    },
-    {
-      title: "Spectrum Apps",
-      value: data.spectrum_apps.length.toString(),
-      icon: Shield,
-      color: "bg-gradient-to-br from-purple-600 to-blue-600",
-    },
-    {
-      title: "Object Storage",
-        value: data.object_storage.length.toString(),
-      icon: Archive,
-      color: "bg-gradient-to-br from-purple-600 to-blue-600",
-    },
-  ];
+const Dashboard = ({ data }: { data: PageProps }) => {
+  const { user } = useSession();
 
-  // Generate activities from actual resources
-  // const generateActivities = () => {
-  //   const activities: Array<{ id: string; action: string; type: string; time: string }> = [];
+  const activeSpectrum = data.spectrum_apps.filter(
+    (app) => app.status === "updated" || app.status === "created"
+  ).length;
+  const activeStorage = data.object_storage.filter(
+    (o) => o.status === "active"
+  ).length;
 
-  //   // Add game server activities
-  //   data.game_servers.slice(0, 3).forEach((server) => {
-  //     activities.push({
-  //       id: `game-${server.id}`,
-  //       action: `Game server "${server.name}" is ${server.status}`,
-  //       type: `${server.game_type}`,
-  //       time: server.created_at ? formatTimeAgo(new Date(server.created_at)) : "Recently",
-  //     });
-  //   });
+  const totalResources =
+    data.game_servers.length +
+    data.database_clusters.length +
+    data.kubernetes_clusters.length +
+    activeSpectrum +
+    activeStorage +
+    data.platform_apps.length;
 
-  //   // Add database activities
-  //   data.database_clusters.slice(0, 2).forEach((db, idx) => {
-  //     activities.push({
-  //       id: `db-${db.id || idx}`,
-  //       action: `Database cluster "${db.name}" is ${db.status}`,
-  //       type: db.engine,
-  //       time: "Recently",
-  //     });
-  //   });
-
-  //   // Add kubernetes activities
-  //   data.kubernetes_clusters.slice(0, 2).forEach((k8s) => {
-  //     activities.push({
-  //       id: `k8s-${k8s.cluster_id}`,
-  //       action: `Kubernetes cluster "${k8s.cluster_name}" is ${k8s.status}`,
-  //       type: "Kubernetes",
-  //       time: "Recently",
-  //     });
-  //   });
-
-  //   // Sort and return top 5
-  //   return activities.slice(0, 5);
-  // };
-
-  // Helper function to format time ago
   const formatTimeAgo = (date: Date): string => {
     const now = new Date();
     const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
     if (seconds < 60) return "just now";
     if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
@@ -187,719 +82,406 @@ const Dashboard = ({
     return date.toLocaleDateString();
   };
 
-  
+  const userName =
+    user?.display_name || user?.username || user?.email?.split("@")[0] || "there";
 
-  const chartData = [
-    { name: 'Game', value: data.game_servers.length },
-    { name: 'DB', value: data.database_clusters.length },
-    { name: 'K8s', value: data.kubernetes_clusters.length },
-    { name: 'Apps', value: data.platform_apps.length },
-    { name: 'Bucket', value: object_storage  },
-    { name: 'Network-ddos', value: spectrum_apps },
-    { name: 'Active', value: activeGameServers + onlineDatabases + readyK8sClusters + spectrum_apps + object_storage + runningPlatformApps },
-  ];
+  const hasAnyResources = totalResources > 0;
 
   return (
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex justify-between items-center mb-8"
+    <div className="flex-1 min-h-screen p-5 sm:p-8 text-white">
+
+      {/* ─── Welcome bar ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="flex items-center justify-between mb-6"
+      >
+        <div>
+          <h1 className="text-lg font-semibold text-white/95">
+            Welcome back, {userName}
+          </h1>
+          <p className="text-[13px] text-white/45 mt-0.5">Here&apos;s your infrastructure overview.</p>
+        </div>
+        <Link
+          href="/dashboard/projects/new"
+          className="inline-flex items-center gap-2 px-4 py-2 text-[12px] font-semibold text-white bg-white/[0.10] hover:bg-white/[0.16] border border-white/[0.12] transition-colors"
         >
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-white/60">An overview of your cloud empire.</p>
-          </div>
+          <Plus className="w-3.5 h-3.5" />
+          New Project
+        </Link>
+      </motion.div>
+
+      {/* ─── Stats strip ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05, duration: 0.3 }}
+        className="glass-panel flex overflow-x-auto mb-6"
+      >
+        <Stat label="Servers" value={data.game_servers.length} icon={Server} href="/dashboard/services/game" />
+        <Stat label="Databases" value={data.database_clusters.length} icon={Database} href="/dashboard/services/database" />
+        <Stat label="K8s Clusters" value={data.kubernetes_clusters.length} icon={Box} href="/dashboard/services/kubernetes" />
+        <Stat label="DDoS Protection" value={activeSpectrum} icon={Shield} href="/dashboard/services/network-ddos" />
+        <Stat label="Storage Buckets" value={activeStorage} icon={Archive} href="/dashboard/services/object-storage" />
+        <Stat label="Apps Deployed" value={data.platform_apps.length} icon={Rocket} href="/dashboard/services/apps" />
+      </motion.div>
+
+      {/* ─── Feature spotlight cards ─── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08, duration: 0.3 }}
+        >
           <Link
-            href="/dashboard/projects/new"
-            className="group relative inline-flex items-center justify-center px-6 py-2.5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+            href="/dashboard/services/apps/new"
+            className="group block glass-card p-5 h-full transition-all relative overflow-hidden"
           >
-            <Plus className="-ml-1 mr-2 h-5 w-5" />
-            New Project
+            <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.12), transparent)' }} />
+            <div className="flex items-center gap-2 mb-3">
+              <GitBranch className="w-4 h-4 text-white/60" />
+              <span className="text-[10px] font-semibold text-white/45 uppercase tracking-widest">App Platform</span>
+            </div>
+            <h3 className="text-[15px] font-semibold text-white/95 mb-1.5">Deploy from Git</h3>
+            <p className="text-[12px] text-white/50 leading-relaxed mb-4">
+              Push to deploy. Connect GitHub, GitLab, or Bitbucket and ship with zero config.
+            </p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-white/50 group-hover:text-white/80 transition-colors">
+              Get started <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
           </Link>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
-              className={`${stat.color} p-6 rounded-lg shadow-lg`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-white/80 font-medium">{stat.title}</p>
-                <stat.icon className="w-6 h-6 text-white/70" />
-              </div>
-              <p className="text-3xl font-bold mt-2">{stat.value}</p>
-            </motion.div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="lg:col-span-3 bg-white/5 p-6 rounded-lg"
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, duration: 0.3 }}
+        >
+          <Link
+            href="/dashboard/services/ai-agents"
+            className="group block glass-card p-5 h-full transition-all relative overflow-hidden"
           >
-            <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-            <div className="space-y-4">
-              {data.project_logs?.slice(0, 5).map((activity) => (
-                <div key={activity.id} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center space-x-3">
-                    <Activity className="w-4 h-4 text-blue-400" />
-                    <div>
-                      <p>{activity.event}</p>
-                      <p className="text-xs text-white/50">{activity.text}</p>
+            <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.12), transparent)' }} />
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="w-4 h-4 text-white/60" />
+              <span className="text-[10px] font-semibold text-white/45 uppercase tracking-widest">AI Agents</span>
+            </div>
+            <h3 className="text-[15px] font-semibold text-white/95 mb-1.5">Build with AI</h3>
+            <p className="text-[12px] text-white/50 leading-relaxed mb-4">
+              Deploy autonomous agents backed by managed inference. Prototype to production.
+            </p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-white/50 group-hover:text-white/80 transition-colors">
+              Explore agents <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
+          </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.16, duration: 0.3 }}
+        >
+          <Link
+            href="/dashboard/services/compute/bare-metal"
+            className="group block glass-card p-5 h-full transition-all relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.12), transparent)' }} />
+            <div className="flex items-center gap-2 mb-3">
+              <Zap className="w-4 h-4 text-white/60" />
+              <span className="text-[10px] font-semibold text-white/45 uppercase tracking-widest">GPU Compute</span>
+            </div>
+            <h3 className="text-[15px] font-semibold text-white/95 mb-1.5">GPU Instances</h3>
+            <p className="text-[12px] text-white/50 leading-relaxed mb-4">
+              H100, A100, and L40S on demand. No long-term commitments. Pay by the hour.
+            </p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-white/50 group-hover:text-white/80 transition-colors">
+              View GPUs <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
+          </Link>
+        </motion.div>
+      </div>
+
+      {/* ─── Main content: Resources + Activity side by side ─── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
+
+        {/* Left: Resources overview (3 col) */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.3 }}
+          className="lg:col-span-3 glass-panel overflow-hidden"
+        >
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06]">
+            <h2 className="text-[13px] font-bold text-white/80 uppercase tracking-wider">Resources</h2>
+            <span className="text-[12px] text-white/40 tabular-nums font-medium">{totalResources} total</span>
+          </div>
+
+          {hasAnyResources ? (
+            <div className="divide-y divide-white/[0.05]">
+              {/* Game Servers inline */}
+              {data.game_servers.map((server) => (
+                <div key={`gs-${server.id}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Cpu className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{server.name}</p>
+                    <p className="text-[11px] text-white/40">{server.game_type}</p>
+                  </div>
+                  <StatusBadge status={server.status} activeStatuses={["active"]} />
+                  <button className="p-1 text-white/25 hover:text-white/60 transition-colors">
+                    <MoreVertical className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))}
+
+              {/* Database Clusters inline */}
+              {data.database_clusters.map((db) => (
+                <Link
+                  key={`db-${db.id}`}
+                  href={`/dashboard/services/database/clusters/${db.cluster_id}`}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Database className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{db.name}</p>
+                    <p className="text-[11px] text-white/40">
+                      {dbLocations.find((l) => l.short === db.region)?.city || db.region} · v{db.version}
+                    </p>
+                  </div>
+                  <StatusBadge status={db.status} activeStatuses={["online"]} />
+                </Link>
+              ))}
+
+              {/* Kubernetes Clusters inline */}
+              {data.kubernetes_clusters.map((k8s) => (
+                <div key={`k8s-${k8s.cluster_id}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors">
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Box className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{k8s.cluster_name}</p>
+                    <p className="text-[11px] text-white/40">
+                      {k8s.cni_plugin} · {k8s.k8s_version} · {k8s.workers?.length} nodes
+                    </p>
+                  </div>
+                  <StatusBadge status={k8s.status ?? null} activeStatuses={["ready"]} />
+                </div>
+              ))}
+
+              {/* Spectrum Apps inline */}
+              {data.spectrum_apps.map((app) => (
+                <Link
+                  key={`sp-${app.id}`}
+                  href={`/dashboard/services/network-ddos/${app.spectrum_id}`}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Shield className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{app.dns.original_name}</p>
+                    <p className="text-[11px] text-white/40">{app.protocol} · {app.traffic_type || "direct"}</p>
+                  </div>
+                  <StatusBadge status={app.status} activeStatuses={["updated", "created"]} />
+                </Link>
+              ))}
+
+              {/* Object Storage inline */}
+              {data.object_storage.map((bucket) => (
+                <Link
+                  key={`os-${bucket.id}`}
+                  href={`/dashboard/services/object-storage/${bucket.id}`}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Archive className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{bucket.name}</p>
+                    <p className="text-[11px] text-white/40">{bucket.id}</p>
+                  </div>
+                  <StatusBadge status={bucket.status} activeStatuses={["active"]} />
+                </Link>
+              ))}
+
+              {/* Platform Apps inline */}
+              {data.platform_apps.map((app) => (
+                <Link
+                  key={`pa-${app.id}`}
+                  href={`/dashboard/services/apps/${app.id}`}
+                  className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.03] transition-colors"
+                >
+                  <div className="w-8 h-8 flex items-center justify-center bg-white/[0.07] border border-white/[0.10] flex-shrink-0">
+                    <Rocket className="w-4 h-4 text-white/55" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-medium text-white/90 truncate">{app.name}</p>
+                    <p className="text-[11px] text-white/40">
+                      {app.repository_name} · {app.git_provider || "github"}
+                    </p>
+                  </div>
+                  <StatusBadge status={app.status} activeStatuses={["running"]} />
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="py-16 text-center">
+              <Terminal className="mx-auto h-8 w-8 text-white/15 mb-3" />
+              <h3 className="text-[14px] font-medium text-white/60 mb-1">No resources yet</h3>
+              <p className="text-[12px] text-white/35 mb-5 max-w-xs mx-auto">
+                Deploy your first server, database, or application to get started.
+              </p>
+              <Link
+                href="/dashboard/services/compute/vps"
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-[12px] font-semibold text-white bg-white/[0.12] hover:bg-white/[0.18] border border-white/[0.10] transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create Resource
+              </Link>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Right column: Activity + Quick actions (2 col) */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Activity feed */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25, duration: 0.3 }}
+            className="glass-panel overflow-hidden flex-1"
+          >
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.06]">
+              <h2 className="text-[13px] font-bold text-white/80 uppercase tracking-wider">Activity</h2>
+              <Link
+                href="/dashboard/activity"
+                className="text-[12px] text-white/50 hover:text-white/80 font-medium transition-colors"
+              >
+                View all
+              </Link>
+            </div>
+            <div className="px-5 py-1">
+              {data.project_logs?.slice(0, 8).map((activity) => (
+                <div
+                  key={activity.id}
+                  className="flex items-start gap-3 py-3 border-b border-white/[0.04] last:border-b-0"
+                >
+                  <div className="w-5 h-5 flex items-center justify-center bg-white/[0.07] flex-shrink-0 mt-0.5">
+                    <Clock className="w-2.5 h-2.5 text-white/45" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12px] text-white/75 leading-snug font-medium">{activity.event}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[11px] text-white/35 truncate">{activity.text}</p>
+                      <span className="text-[10px] text-white/30 flex-shrink-0">
+                        {formatTimeAgo(new Date(activity?.created_at || ""))}
+                      </span>
                     </div>
                   </div>
-                  <span className="text-white/50">{formatTimeAgo(new Date(activity?.created_at||""))}</span>
                 </div>
               ))}
+              {(!data.project_logs || data.project_logs.length === 0) && (
+                <p className="text-[13px] text-white/30 py-8 text-center">
+                  No recent activity
+                </p>
+              )}
             </div>
           </motion.div>
 
+          {/* Quick links */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="lg:col-span-2 bg-white/5 p-6 rounded-lg"
+            transition={{ delay: 0.3, duration: 0.3 }}
+            className="grid grid-cols-2 gap-px bg-white/[0.06]"
           >
-            <h2 className="text-xl font-semibold mb-4">Services Overview</h2>
-            <BarChart data={chartData} colors={['#3b82f6', '#8b5cf6']} />
+            {[
+              { label: "Documentation", href: "/docs", icon: ArrowUpRight },
+              { label: "Billing", href: "/dashboard/nav/billing", icon: ArrowUpRight },
+              { label: "Settings", href: "/dashboard/settings", icon: ArrowUpRight },
+              { label: "Support", href: "/support", icon: ArrowUpRight },
+            ].map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="flex items-center justify-between px-4 py-3.5 bg-[#0a0a0c] hover:bg-white/[0.04] transition-colors text-[13px] font-medium text-white/55 hover:text-white/85"
+              >
+                {link.label}
+                <link.icon className="w-3.5 h-3.5" />
+              </Link>
+            ))}
           </motion.div>
         </div>
+      </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Game Servers</h2>
-            <Link href="/dashboard/services/game" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.game_servers.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                  <table className="min-w-full">
-                    <thead className="text-white/70 text-sm">
-                      <tr>
-                        <th scope="col" className="py-3.5 pl-6 pr-3 text-left font-semibold">Server Name</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Type</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Status</th>
-                        <th scope="col" className="relative py-3.5 pl-3 pr-6">
-                          <span className="sr-only">Edit</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10">
-                      {data.game_servers.map((server) => (
-                        <tr key={server.id}>
-                          <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{server.name}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-white/70">{server.game_type}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${server.status === 'active' ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                              {server.status}
-                            </span>
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-6 text-right text-sm font-medium">
-                            <button className="hover:text-blue-400"><MoreVertical className="w-5 h-5" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+      {/* ─── Bottom banner: Discover more ─── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35, duration: 0.3 }}
+        className="glass-panel overflow-hidden"
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-white/[0.06]">
+          <Link
+            href="/dashboard/services/network-ddos"
+            className="group flex items-center gap-4 p-5 hover:bg-white/[0.03] transition-colors"
+          >
+            <Shield className="w-8 h-8 text-white/20 flex-shrink-0 group-hover:text-white/45 transition-colors" />
+            <div>
+              <h3 className="text-[13px] font-semibold text-white/85 mb-0.5">DDoS Protection</h3>
+              <p className="text-[11px] text-white/45">Enterprise L3/L4/L7 mitigation for any origin.</p>
             </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <GamepadIcon className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No game servers</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by deploying a new game server.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/services/game/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Server
-                </Link>
-              </div>
+          </Link>
+          <Link
+            href="/dashboard/services/database"
+            className="group flex items-center gap-4 p-5 hover:bg-white/[0.03] transition-colors"
+          >
+            <Database className="w-8 h-8 text-white/20 flex-shrink-0 group-hover:text-white/45 transition-colors" />
+            <div>
+              <h3 className="text-[13px] font-semibold text-white/85 mb-0.5">Managed Databases</h3>
+              <p className="text-[11px] text-white/45">MySQL, PostgreSQL, Redis with daily backups.</p>
             </div>
-          )}
-        </motion.div>
-
-         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Database Clusters</h2>
-            <Link href="/dashboard/services/database" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.database_clusters.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                  <table className="min-w-full">
-                    <thead className="text-white/70 text-sm">
-                      <tr>
-                        <th scope="col" className="py-3.5 pl-6 pr-3 text-left font-semibold">Server Name</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">DB Icon</th>
-                         <th scope="col" className="px-3 py-3.5 text-left font-semibold">Location</th>
-                          <th scope="col" className="px-3 py-3.5 text-left font-semibold">Version</th>
-                          
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Status</th>
-                        <th scope="col" className="relative py-3.5 pl-3 pr-6">
-                          <span className="sr-only">Edit</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10">
-                      {data.database_clusters.map((server) => (
-                        <tr key={server.id}>
-                          <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{server.name}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-white/70">
-                           <DatabaseIcon engine={server.engine} className="h-8 w-8" />
-
-                          </td>
-                          <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{dbLocations.find(location => location.short === server.region)?.city}</td>
-                           <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{server.version}</td>
-                           
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${server.status === 'online' ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                              {server.status}
-                            </span>
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-6 text-right text-sm font-medium">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="hover:text-blue-400 transition-colors">
-                                  <MoreVertical className="w-5 h-5" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem 
-                                  onClick={() => router.push(`/dashboard/services/database/clusters/${server.cluster_id}`)}
-                                  className="flex items-center gap-2 cursor-pointer"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                  View
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          </Link>
+          <Link
+            href="/dashboard/services/kubernetes"
+            className="group flex items-center gap-4 p-5 hover:bg-white/[0.03] transition-colors"
+          >
+            <Box className="w-8 h-8 text-white/20 flex-shrink-0 group-hover:text-white/45 transition-colors" />
+            <div>
+              <h3 className="text-[13px] font-semibold text-white/85 mb-0.5">Kubernetes</h3>
+              <p className="text-[11px] text-white/45">Fully managed clusters. Auto-scaling built in.</p>
             </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <Database className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No database clusters</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by creating a database cluster.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/services/database/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Cluster
-                </Link>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Kubernetes Clusters</h2>
-            <Link href="/dashboard/services/kubernetes" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.kubernetes_clusters.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                  <table className="min-w-full">
-                    <thead className="text-white/70 text-sm">
-                      <tr>
-                        <th scope="col" className="py-3.5 pl-6 pr-3 text-left font-semibold">Server Name</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">CNI plugin</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Version</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Nodes</th>
-                        <th scope="col" className="px-3 py-3.5 text-left font-semibold">Status</th>
-                        <th scope="col" className="relative py-3.5 pl-3 pr-6">
-                          <span className="sr-only">Edit</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/10">
-                      {data.kubernetes_clusters.map((server) => (
-                        <tr key={server.cluster_id}>
-                          <td className="whitespace-nowrap py-4 pl-6 pr-3 text-sm font-medium">{server.cluster_name}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm text-white/70">{server.cni_plugin}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">{server.k8s_version}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">{server.workers?.length}</td>
-                          <td className="whitespace-nowrap px-3 py-4 text-sm">
-                            <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${server.status === 'ready' ? 'bg-green-500/10 text-green-400' : 'bg-yellow-500/10 text-yellow-400'}`}>
-                              {server.status}
-                            </span>
-                          </td>
-                          <td className="relative whitespace-nowrap py-4 pl-3 pr-6 text-right text-sm font-medium">
-                            <button className="hover:text-blue-400"><MoreVertical className="w-5 h-5" /></button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <Box className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No Kubernetes clusters</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by creating a Kubernetes cluster.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/services/kubernetes/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Cluster
-                </Link>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-
-         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Spectrum Apps</h2>
-            <Link href="/dashboard/services/network-ddos" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.spectrum_apps.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                  <table className="w-full">
-            <thead className="bg-neutral-800/50 border-b border-neutral-800">
-              <tr>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                 Name
-                </th>
-                <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Protocol
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Traffic Type
-                </th>
-                <th className="hidden xl:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  IP Firewall
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-neutral-800">
-              {data.spectrum_apps.map((app) => (
-                <tr
-                  key={app.id}
-                  className="hover:bg-neutral-800/30 transition-colors"
-                >
-                  {/* Origin IP */}
-                  <td className="px-4 sm:px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-blue-400 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-medium text-white text-sm truncate">
-                          {app.dns.original_name}
-                        </div>
-                        <div className="text-xs text-neutral-500 truncate">
-                          {app.spectrum_id}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Protocol - Hidden on mobile */}
-                  <td className="hidden md:table-cell px-4 sm:px-6 py-4">
-                    <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
-                      {app.protocol}
-                    </code>
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-4 sm:px-6 py-4">
-                    {app.status}
-                  </td>
-
-                  {/* Traffic Type - Hidden on tablet and below */}
-                  <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-neutral-400">
-                    <span className="capitalize">
-                      {app.traffic_type || "direct"}
-                    </span>
-                  </td>
-
-                  {/* IP Firewall - Hidden on large and below */}
-                  <td className="hidden xl:table-cell px-4 sm:px-6 py-4">
-                    {app.ip_firewall ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-blue-950/50 text-blue-400 border border-blue-900">
-                        <Shield className="h-3 w-3" />
-                        Enabled
-                      </span>
-                    ) : (
-                      <span className="text-xs text-neutral-500">Disabled</span>
-                    )}
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-4 sm:px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="cursor-pointer h-8 px-2 sm:px-3 hover:bg-neutral-700"
-                        asChild
-                      >
-                        <Link
-                          href={`/dashboard/services/network-ddos/${app.spectrum_id}`}
-                        >
-                          <Eye className="h-4 w-4" />
-                          <span className="hidden sm:inline ml-1">View</span>
-                        </Link>
-                      </Button>
-                     
-                       
-                    
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-
-             
-          </table>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <Shield className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No Layered Protection</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by creating a Layered Protection.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/services/network-ddos/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Layered Protection
-                </Link>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-
-         
-         
-         
-         
-         
-         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Object Spaces</h2>
-            <Link href="/dashboard/services/object-storage" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.object_storage.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                 <table className="w-full">
-            <thead className="bg-neutral-800/50 border-b border-neutral-800">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Bucket ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Status
-                </th>
-                
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-neutral-800">
-              {data.object_storage.map((bucket) => (
-                <tr
-                  key={bucket.id}
-                  className="hover:bg-neutral-800/30 transition-colors"
-                >
-                  {/* Name */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium text-white text-sm truncate">
-                          {bucket.name}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Bucket ID with Copy */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
-                        {bucket.id}
-                      </code>
-                      
-                    </div>
-                  </td>
-
-                  {/* Status Badge */}
-                  <td className="px-6 py-4">
-                    {bucket.status === "active" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-emerald-950/50 text-emerald-400 border border-emerald-900">
-                        <CheckCircle className="h-3 w-3" />
-                        Active
-                      </span>
-                    ) : bucket.status === "creating" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-yellow-950/50 text-yellow-400 border border-yellow-900">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Creating
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-950/50 text-red-400 border border-red-900">
-                        <Ban className="h-3 w-3" />
-                        Error
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Created Date */}
-                  {/* <td className="px-6 py-4 text-sm text-neutral-400">
-                    <div className="flex flex-col">
-                      <span>
-                        {format(new Date(bucket.created_at), "MMM d, yyyy")}
-                      </span>
-                      <span className="text-xs text-neutral-600">
-                        {format(new Date(bucket.created_at), "HH:mm:ss")}
-                      </span>
-                    </div>
-                  </td> */}
-
-                  {/* Actions */}
-                  <td className="px-6 py-4">
-                    <div className="flex gap-1.5">
-                      <Link
-                        href={`/dashboard/services/object-storage/${bucket.id}`}
-                        className="cursor-pointer"
-                      >
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="cursor-pointer h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
-                        >
-                          View
-                        </Button>
-                      </Link>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <Archive className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No Spaces Bucket</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by creating a Space Bucket.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/object-storage/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  New Space Bucket
-                </Link>
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Platform Apps Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="mt-8 bg-white/5 p-6 rounded-lg"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Platform Apps</h2>
-            <Link href="/dashboard/services/apps" className="text-blue-400 hover:text-blue-300 text-sm font-medium">
-              View all
-            </Link>
-          </div>
-          {data.platform_apps.length > 0 ? (
-            <div className="flow-root">
-              <div className="-mx-6 -my-2 overflow-x-auto">
-                <div className="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-                  <table className="w-full">
-                    <thead className="bg-neutral-800/50 border-b border-neutral-800">
-                      <tr>
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                          Name
-                        </th>
-                        <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                          Repository
-                        </th>
-                        <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                          Status
-                        </th>
-                        <th className="hidden lg:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                          Provider
-                        </th>
-                        <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-neutral-800">
-                      {data.platform_apps.map((app) => (
-                        <tr
-                          key={app.id}
-                          className="hover:bg-neutral-800/30 transition-colors"
-                        >
-                          {/* Name */}
-                          <td className="px-4 sm:px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <Rocket className="h-4 w-4 text-emerald-400 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <div className="font-medium text-white text-sm truncate">
-                                  {app.name}
-                                </div>
-                                <div className="text-xs text-neutral-500 truncate">
-                                  {app.id}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          {/* Repository - Hidden on mobile */}
-                          <td className="hidden md:table-cell px-4 sm:px-6 py-4">
-                            <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
-                              {app.repository_name}
-                            </code>
-                          </td>
-
-                          {/* Status */}
-                          <td className="px-4 sm:px-6 py-4">
-                            {app.status === "running" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-emerald-950/50 text-emerald-400 border border-emerald-900">
-                                <CheckCircle className="h-3 w-3" />
-                                Running
-                              </span>
-                            ) : app.status === "deploying" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-yellow-950/50 text-yellow-400 border border-yellow-900">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Deploying
-                              </span>
-                            ) : app.status === "stopped" ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-neutral-950/50 text-neutral-400 border border-neutral-700">
-                                <Ban className="h-3 w-3" />
-                                Stopped
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-950/50 text-red-400 border border-red-900">
-                                <Ban className="h-3 w-3" />
-                                {app.status}
-                              </span>
-                            )}
-                          </td>
-
-                          {/* Provider - Hidden on tablet and below */}
-                          <td className="hidden lg:table-cell px-4 sm:px-6 py-4 text-sm text-neutral-400">
-                            <span className="capitalize">
-                              {app.git_provider || "github"}
-                            </span>
-                          </td>
-
-                          {/* Actions */}
-                          <td className="px-4 sm:px-6 py-4">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="cursor-pointer h-8 px-2 sm:px-3 hover:bg-neutral-700"
-                                asChild
-                              >
-                                <Link
-                                  href={`/dashboard/services/apps/${app.id}`}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                  <span className="hidden sm:inline ml-1">View</span>
-                                </Link>
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12 border-2 border-dashed border-white/10 rounded-lg">
-              <Rocket className="mx-auto h-12 w-12 text-white/30" />
-              <h3 className="mt-2 text-sm font-semibold">No Platform Apps</h3>
-              <p className="mt-1 text-sm text-white/50">Get started by deploying your first app.</p>
-              <div className="mt-6">
-                <Link href="/dashboard/services/apps/new" className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200">
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  Deploy New App
-                </Link>
-              </div>
-            </div>
-          )}
-        </motion.div>
+          </Link>
+        </div>
+      </motion.div>
     </div>
+  );
+};
+
+/* ─── Status Badge ─── */
+const StatusBadge = ({
+  status,
+  activeStatuses,
+}: {
+  status: string | null;
+  activeStatuses: string[];
+}) => {
+  const isActive = activeStatuses.includes(status || "");
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold flex-shrink-0 ${
+        isActive
+          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
+          : "bg-amber-500/15 text-amber-400 border border-amber-500/20"
+      }`}
+    >
+      <span className={`w-1.5 h-1.5 ${isActive ? "bg-emerald-400" : "bg-amber-400"}`} />
+      {status}
+    </span>
   );
 };
 

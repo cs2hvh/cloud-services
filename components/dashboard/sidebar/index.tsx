@@ -29,6 +29,12 @@ import {
   Bot,
   Key,
   BookOpen,
+  LayoutDashboard,
+  Activity,
+  BarChart3,
+  FileText,
+  HelpCircle,
+  Cloud,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { useRouter } from "next/navigation";
@@ -60,12 +66,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const [isMobile, setIsMobile] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Close mobile sidebar when route changes
   useEffect(() => {
     setIsMobileOpen(false);
   }, [pathname]);
 
-  // Check if mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -73,13 +77,11 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         setIsMobileOpen(false);
       }
     };
-
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Check if user is admin
   useEffect(() => {
     const checkAdmin = async () => {
       try {
@@ -107,22 +109,36 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       name: "Dashboard",
       href: "/dashboard",
       current: pathname === "/dashboard",
+      icon: LayoutDashboard,
     },
     {
       name: "Activity",
       href: "/dashboard/activity",
       current: pathname === "/dashboard/activity",
+      icon: Activity,
     },
     {
       name: "Analytics",
       href: "/dashboard/analytics",
       current: pathname === "/dashboard/analytics",
+      icon: BarChart3,
     },
   ];
 
-  const services = [
+  const services: {
+    name: string;
+    href?: string;
+    current?: boolean;
+    icon: React.ElementType;
+    expandable?: boolean;
+  }[] = [
     {
-      name: "Databases",
+      name: "Compute",
+      icon: Cpu,
+      expandable: true,
+    },
+    {
+      name: "Database",
       href: "/dashboard/services/database",
       current: pathname.includes("/services/database"),
       icon: Database,
@@ -131,7 +147,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       name: "Application Deployment",
       href: "/dashboard/services/apps",
       current: pathname.includes("/services/apps"),
-      icon: Code,
+      icon: Rocket,
     },
     {
       name: "Kubernetes",
@@ -207,69 +223,109 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     },
   ];
 
-  // Mobile sidebar overlay and content
+  const NavItem = ({
+    href,
+    current,
+    icon: Icon,
+    name,
+  }: {
+    href: string;
+    current: boolean;
+    icon: React.ElementType;
+    name: string;
+  }) => (
+    <Link
+      href={href}
+      className={`
+        group flex items-center gap-3 px-3 py-2 text-[13px] transition-all duration-200
+        ${
+          current
+            ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
+            : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
+        }
+      `}
+    >
+      <Icon
+        className={`w-4 h-4 flex-shrink-0 ${
+          current ? "text-white" : "text-white/50 group-hover:text-white/75"
+        }`}
+      />
+      <span className="truncate">{name}</span>
+    </Link>
+  );
+
+  const SectionLabel = ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => (
+    <h3 className="px-3 mb-1.5 text-[10px] font-bold text-white/50 uppercase tracking-[0.12em]">
+      {children}
+    </h3>
+  );
+
   const sidebarContent = (
     <>
       {/* Logo Header */}
-      <div className="h-16 flex items-center justify-between px-4 sm:px-6 border-b border-slate-800/50 bg-slate-900/20">
-        <Link href="/dashboard" className="flex items-center">
-          <span className="text-xl font-bold text-white">AhuraSense</span>
+      <div className="h-14 flex items-center justify-between px-5 flex-shrink-0">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <div className="w-8 h-8 glass-icon flex items-center justify-center">
+            <Cloud className="w-[18px] h-[18px] text-white/90" />
+          </div>
+          <span className="text-[15px] font-bold text-white tracking-tight">
+            AhuraCloud
+          </span>
         </Link>
         {isMobile && (
           <button
             onClick={() => setIsMobileOpen(false)}
-            className="p-2 text-white hover:bg-slate-800/50 rounded-lg transition-colors"
+            className="p-1.5 text-white/50 hover:text-white hover:bg-white/[0.06] transition-colors"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Main Navigation */}
-      <nav className="flex-1 px-3 sm:px-4 py-4 sm:py-6 overflow-y-auto custom-scrollbar">
+      {/* Scrollable Navigation */}
+      <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar space-y-5 pb-4 mt-1">
         {/* Primary Nav */}
-        <div className="space-y-1.5">
+        <div className="space-y-0.5">
           {navigation.map((item) => (
-            <Link
+            <NavItem
               key={item.name}
               href={item.href}
-              className={`
-                block px-3 sm:px-4 py-2.5 text-sm font-medium rounded-lg transition-all duration-200
-                ${
-                  item.current
-                    ? "bg-white text-black shadow-sm"
-                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
-                }
-              `}
-            >
-              {item.name}
-            </Link>
+              current={item.current}
+              icon={item.icon}
+              name={item.name}
+            />
           ))}
         </div>
 
         {/* Projects Section */}
-        <div className="mt-6 sm:mt-10">
-          <div className="flex items-center justify-between mb-3 px-1">
+        <div>
+          <div className="flex items-center justify-between mb-1.5 px-1">
             <button
               onClick={() => setProjectsExpanded(!projectsExpanded)}
-              className="flex items-center text-xs font-bold text-white/70 uppercase tracking-widest hover:text-white transition-colors"
+              className="flex items-center text-[10px] font-bold text-white/50 uppercase tracking-[0.12em] hover:text-white/70 transition-colors"
             >
               Projects
               <ChevronDown
-                className={`ml-1 h-3 w-3 transition-transform ${projectsExpanded ? "" : "-rotate-90"}`}
+                className={`ml-1 h-2.5 w-2.5 transition-transform duration-200 ${
+                  projectsExpanded ? "" : "-rotate-90"
+                }`}
               />
             </button>
             <Link
               href="/dashboard/projects/new"
-              className="text-white/60 hover:text-white transition-colors p-1 hover:bg-slate-800/30 rounded"
+              className="text-white/50 hover:text-white/80 transition-colors p-0.5 hover:bg-white/[0.05]"
               title="New Project"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="h-3.5 w-3.5" />
             </Link>
           </div>
 
           {projectsExpanded && (
-            <div className="space-y-1">
+            <div className="space-y-0.5">
               {projects.length > 0 ? (
                 <>
                   {projects.slice(0, 5).map((project) => (
@@ -277,29 +333,29 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                       key={project.id}
                       href={`/dashboard/projects/${project.id}`}
                       className={`
-                        flex items-center px-3 sm:px-4 py-2 text-sm rounded-lg transition-all duration-200
+                        flex items-center px-3 py-1.5 text-[13px] transition-all duration-200
                         ${
                           pathname.includes(`/projects/${project.id}`)
-                            ? "bg-white text-black font-medium"
-                            : "text-white/60 hover:text-white hover:bg-slate-800/30"
+                            ? "bg-white/10 text-white font-medium"
+                            : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
                         }
                       `}
                     >
-                      <Circle className="w-2 h-2 mr-3 fill-current opacity-60" />
-                      <span className="truncate text-sm">{project.name}</span>
+                      <Circle className="w-1.5 h-1.5 mr-3 fill-current opacity-60" />
+                      <span className="truncate">{project.name}</span>
                     </Link>
                   ))}
                   {projects.length > 5 && (
                     <Link
                       href="/dashboard/projects"
-                      className="block px-3 sm:px-4 py-2 text-sm text-blue-400 hover:text-blue-300 font-medium"
+                      className="block px-3 py-1.5 text-[12px] text-white/50 hover:text-white/70 font-medium transition-colors"
                     >
                       View all →
                     </Link>
                   )}
                 </>
               ) : (
-                <p className="px-3 sm:px-4 py-2 text-sm text-white/40">
+                <p className="px-3 py-1.5 text-[12px] text-white/35">
                   No projects yet
                 </p>
               )}
@@ -308,35 +364,41 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         </div>
 
         {/* Services Section */}
-        <div className="mt-6 sm:mt-10">
-          <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
-            Services
-          </h3>
-          <div className="space-y-1">
-            {/* Compute Service with Sub-navigation */}
+        <div>
+          <SectionLabel>Services</SectionLabel>
+          <div className="space-y-0.5">
+            {/* Compute expandable */}
             <div>
               <button
                 onClick={() => setComputeExpanded(!computeExpanded)}
                 className={`
-                  w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                  w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
                   ${
                     pathname.includes("/services/compute")
-                      ? "bg-white text-black"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                      ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
+                      : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
                   }
                 `}
               >
-                <div className="flex items-center">
-                  <Cpu className="w-4 h-4 mr-3" />
-                  <span className="text-sm">Compute</span>
+                <div className="flex items-center gap-3">
+                  <Cpu
+                    className={`w-4 h-4 ${
+                      pathname.includes("/services/compute")
+                        ? "text-white"
+                        : "text-white/50"
+                    }`}
+                  />
+                  <span>Compute</span>
                 </div>
                 <ChevronDown
-                  className={`h-4 w-4 transition-transform ${computeExpanded ? "" : "-rotate-90"}`}
+                  className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
+                    computeExpanded ? "" : "-rotate-90"
+                  }`}
                 />
               </button>
 
               {computeExpanded && (
-                <div className="mt-1 ml-3 sm:ml-4 space-y-1">
+                <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
                   {computeServices.map((service) => {
                     const IconComponent = service.icon;
                     return (
@@ -344,16 +406,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                         key={service.name}
                         href={service.href}
                         className={`
-                          flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                          flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
                           ${
                             service.current
-                              ? "bg-slate-700 text-white font-medium"
-                              : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                              ? "text-white bg-white/[0.10]"
+                              : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
                           }
                         `}
                       >
-                        <IconComponent className="w-4 h-4 mr-2" />
-                        <span className="text-sm">{service.name}</span>
+                        <IconComponent className="w-3.5 h-3.5" />
+                        <span>{service.name}</span>
                       </Link>
                     );
                   })}
@@ -361,52 +423,54 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               )}
             </div>
 
-            {/* Other Services */}
-            {services.map((service) => {
-              const IconComponent = service.icon;
-              return (
-                <Link
-                  key={service.name}
-                  href={service.href}
-                  className={`
-                    flex items-center px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                    ${
-                      service.current
-                        ? "bg-white text-black"
-                        : "text-slate-300 hover:text-white hover:bg-slate-800/50"
-                    }
-                  `}
-                >
-                  <IconComponent className="w-4 h-4 mr-3" />
-                  <span className="text-sm">{service.name}</span>
-                </Link>
-              );
-            })}
+            {/* Flat services */}
+            {services
+              .filter((s) => !s.expandable)
+              .map((service) => {
+                const IconComponent = service.icon;
+                return (
+                  <NavItem
+                    key={service.name}
+                    href={service.href!}
+                    current={service.current!}
+                    icon={IconComponent}
+                    name={service.name}
+                  />
+                );
+              })}
 
-            {/* AI Agents with Sub-navigation */}
+            {/* AI Agents expandable */}
             <div>
               <button
                 onClick={() => setAiAgentsExpanded(!aiAgentsExpanded)}
                 className={`
-                  w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                  w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
                   ${
                     pathname.includes("/services/ai-agents")
-                      ? "bg-white text-black"
-                      : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                      ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
+                      : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
                   }
                 `}
               >
-                <div className="flex items-center">
-                  <Bot className="w-4 h-4 mr-3" />
-                  <span className="text-sm">AI Agents</span>
+                <div className="flex items-center gap-3">
+                  <Bot
+                    className={`w-4 h-4 ${
+                      pathname.includes("/services/ai-agents")
+                        ? "text-white"
+                        : "text-white/50"
+                    }`}
+                  />
+                  <span>AI Agents</span>
                 </div>
                 <ChevronDown
-                  className={`h-4 w-4 transition-transform ${aiAgentsExpanded ? "" : "-rotate-90"}`}
+                  className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
+                    aiAgentsExpanded ? "" : "-rotate-90"
+                  }`}
                 />
               </button>
 
               {aiAgentsExpanded && (
-                <div className="mt-1 ml-3 sm:ml-4 space-y-1">
+                <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
                   {aiAgentsServices.map((service) => {
                     const IconComponent = service.icon;
                     return (
@@ -414,16 +478,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                         key={service.name}
                         href={service.href}
                         className={`
-                          flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
+                          flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
                           ${
                             service.current
-                              ? "bg-slate-700 text-white font-medium"
-                              : "text-slate-400 hover:text-white hover:bg-slate-800/30"
+                              ? "text-white bg-white/[0.10]"
+                              : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
                           }
                         `}
                       >
-                        <IconComponent className="w-4 h-4 mr-2" />
-                        <span className="text-sm">{service.name}</span>
+                        <IconComponent className="w-3.5 h-3.5" />
+                        <span>{service.name}</span>
                       </Link>
                     );
                   })}
@@ -435,188 +499,75 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
         {/* Admin Section */}
         {isAdmin && (
-          <div className="mt-6 sm:mt-10">
-            <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
-              Admin
-            </h3>
-            <div className="space-y-1">
+          <div>
+            <SectionLabel>Admin</SectionLabel>
+            <div className="space-y-0.5">
               <div>
                 <button
                   onClick={() => setAdminExpanded(!adminExpanded)}
                   className={`
-                    w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
+                    w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
                     ${
                       pathname.includes("/dashboard/admin")
-                        ? "bg-white text-black"
-                        : "text-slate-300 hover:text-white hover:bg-slate-800/50"
+                        ? "bg-white/10 text-white font-medium"
+                        : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
                     }
                   `}
                 >
-                  <div className="flex items-center">
-                    <Settings className="w-4 h-4 mr-3" />
-                    <span className="text-sm">Administration</span>
+                  <div className="flex items-center gap-3">
+                    <Settings
+                      className={`w-4 h-4 ${
+                        pathname.includes("/dashboard/admin")
+                          ? "text-white"
+                          : "text-white/40"
+                      }`}
+                    />
+                    <span>Administration</span>
                   </div>
                   <ChevronDown
-                    className={`h-4 w-4 transition-transform ${adminExpanded ? "" : "-rotate-90"}`}
+                    className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
+                      adminExpanded ? "" : "-rotate-90"
+                    }`}
                   />
                 </button>
 
                 {adminExpanded && (
-                  <div className="mt-1 ml-3 sm:ml-4 space-y-1">
-                    <Link
-                      href="/dashboard/admin/hosts"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/hosts"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Network className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Proxmox Hosts</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/servers"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/servers"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Server className="w-4 h-4 mr-2" />
-                      <span className="text-sm">All Servers</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/users"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/users"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Users className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Users</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/databases"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/databases"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Database className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Databases</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/object-storage"
-                      className={`
-    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-    ${
-      pathname.startsWith("/dashboard/admin/object-storage")
-        ? "bg-slate-700 text-white font-medium"
-        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-    }
-  `}
-                    >
-                      <Archive className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Object Storage</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/network-ddos"
-                      className={`
-    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-    ${
-      pathname.startsWith("/dashboard/admin/network-ddos")
-        ? "bg-slate-700 text-white font-medium"
-        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-    }
-  `}
-                    >
-                      <Shield className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Network DDoS</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/kubernetes"
-                      className={`
-    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-    ${
-      pathname.startsWith("/dashboard/admin/kubernetes")
-        ? "bg-slate-700 text-white font-medium"
-        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-    }
-  `}
-                    >
-                      <Box className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Kubernetes</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/platform-apps"
-                      className={`
-    flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-    ${
-      pathname.startsWith("/dashboard/admin/platform-apps")
-        ? "bg-slate-700 text-white font-medium"
-        : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-    }
-  `}
-                    >
-                      <Rocket className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Platform-apps</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/coupons"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/coupons"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Ticket className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Coupons</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/audit-logs"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname === "/dashboard/admin/audit-logs"
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <ShieldCheck className="w-4 h-4 mr-2" />
-                      <span className="text-sm">Audit Logs</span>
-                    </Link>
-                    <Link
-                      href="/dashboard/admin/ai-agents"
-                      className={`
-                        flex items-center px-3 py-2 text-sm rounded-md transition-all duration-150
-                        ${
-                          pathname.startsWith("/dashboard/admin/ai-agents")
-                            ? "bg-slate-700 text-white font-medium"
-                            : "text-slate-400 hover:text-white hover:bg-slate-800/30"
-                        }
-                      `}
-                    >
-                      <Bot className="w-4 h-4 mr-2" />
-                      <span className="text-sm">AI Agents</span>
-                    </Link>
+                  <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
+                    {[
+                      { name: "Proxmox Hosts", href: "/dashboard/admin/hosts", icon: Network },
+                      { name: "All Servers", href: "/dashboard/admin/servers", icon: Server },
+                      { name: "Users", href: "/dashboard/admin/users", icon: Users },
+                      { name: "Databases", href: "/dashboard/admin/databases", icon: Database },
+                      { name: "Object Storage", href: "/dashboard/admin/object-storage", icon: Archive },
+                      { name: "Network DDoS", href: "/dashboard/admin/network-ddos", icon: Shield },
+                      { name: "Kubernetes", href: "/dashboard/admin/kubernetes", icon: Box },
+                      { name: "Platform-apps", href: "/dashboard/admin/platform-apps", icon: Rocket },
+                      { name: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket },
+                      { name: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck },
+                      { name: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot },
+                    ].map((item) => {
+                      const IconComponent = item.icon;
+                      const isActive =
+                        pathname === item.href ||
+                        pathname.startsWith(item.href + "/");
+                      return (
+                        <Link
+                          key={item.name}
+                          href={item.href}
+                          className={`
+                            flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
+                            ${
+                              isActive
+                                ? "text-white bg-white/[0.10]"
+                                : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
+                            }
+                          `}
+                        >
+                          <IconComponent className="w-3.5 h-3.5" />
+                          <span>{item.name}</span>
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -625,63 +576,54 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         )}
 
         {/* Support Section */}
-        <div className="mt-6 sm:mt-8">
-          <h3 className="px-1 mb-3 text-xs font-bold text-white/70 uppercase tracking-widest">
-            Support
-          </h3>
-          <div className="space-y-1">
-            <Link
+        <div>
+          <SectionLabel>Support</SectionLabel>
+          <div className="space-y-0.5">
+            <NavItem
               href="/dashboard/settings"
-              className={`
-                block px-3 py-2.5 text-sm font-medium rounded-md transition-all duration-150
-                ${
-                  pathname.includes("/settings")
-                    ? "bg-white text-black"
-                    : "text-slate-300 hover:text-white hover:bg-slate-800/50"
-                }
-              `}
-            >
-              Settings
-            </Link>
-            <Link
+              current={pathname.includes("/settings")}
+              icon={Settings}
+              name="Settings"
+            />
+            <NavItem
               href="/docs"
-              className="block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-all duration-150"
-            >
-              Documentation
-            </Link>
-            <Link
+              current={false}
+              icon={FileText}
+              name="Documentation"
+            />
+            <NavItem
               href="/support"
-              className="block px-3 py-2.5 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-md transition-all duration-150"
-            >
-              Help Center
-            </Link>
+              current={false}
+              icon={HelpCircle}
+              name="Help Center"
+            />
           </div>
         </div>
       </nav>
 
-      {/* User Section */}
-      <div className="border-t border-slate-800/50 p-3 sm:p-4 bg-slate-900/20">
+      {/* User Footer */}
+      <div className="flex-shrink-0 border-t border-white/[0.10] p-3">
         <div className="flex items-center justify-between">
           <Link
             href="/dashboard/nav/profile"
-            className="flex items-center min-w-0 flex-1 hover:bg-slate-800/30 rounded-lg p-1 -ml-1 transition-all duration-150"
+            className="flex items-center min-w-0 flex-1 hover:bg-white/[0.04] p-1.5 -ml-1.5 transition-all duration-200"
             title="View profile"
           >
-            <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-slate-700 to-slate-800 rounded-full flex items-center justify-center text-sm font-medium text-white">
+            <div className="w-8 h-8 bg-white/[0.08] border border-white/[0.10] flex items-center justify-center text-xs font-medium text-white/70">
               {user?.email?.charAt(0).toUpperCase() || "U"}
             </div>
-            <div className="ml-2 sm:ml-3 min-w-0 flex-1">
-              <p className="text-sm font-medium text-white truncate">
-                {user?.user_metadata?.full_name || user?.email?.split("@")[0]}
+            <div className="ml-2.5 min-w-0 flex-1">
+              <p className="text-[13px] font-medium text-white/85 truncate">
+                {user?.email?.split("@")[0] || "User"}
               </p>
-              <p className="text-xs text-slate-400 truncate hidden sm:block">
+              <p className="text-[11px] text-white/40 truncate hidden sm:block">
                 {user?.email}
               </p>
             </div>
           </Link>
           <button
             onClick={handleSignOut}
-            className="ml-2 p-1.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded transition-all duration-150"
+            className="ml-2 p-2 text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-all duration-200"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -697,7 +639,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       {isMobile && (
         <button
           onClick={() => setIsMobileOpen(true)}
-          className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-black border border-slate-800 rounded-lg text-white hover:bg-slate-800/50 transition-colors"
+          className="fixed top-3 left-3 z-50 p-2 glass-btn text-white/70 hover:text-white"
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -706,7 +648,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       {/* Mobile overlay */}
       {isMobile && isMobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/60 z-40 backdrop-blur-md"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
@@ -716,24 +658,16 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         className={`
         ${
           isMobile
-            ? `fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out ${
+            ? `fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-out ${
                 isMobileOpen ? "translate-x-0" : "-translate-x-full"
               }`
             : "relative"
         }
-        flex h-screen w-72 flex-col bg-black border-r border-slate-800/50
+        flex h-screen w-[260px] flex-col glass-sidebar
       `}
       >
         {sidebarContent}
       </div>
-
-      {/* Close sidebar when clicking on content (mobile) */}
-      {isMobile && isMobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-30"
-          onClick={() => setIsMobileOpen(false)}
-        />
-      )}
     </>
   );
 }
