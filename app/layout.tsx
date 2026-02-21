@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
-import { SUSE } from "next/font/google";
+import { Open_Sans, Nunito } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
 
-const suse = SUSE({
-  variable: "--font-suse",
+const openSans = Open_Sans({
+  variable: "--font-open-sans",
+  subsets: ["latin"],
+});
+
+const nunito = Nunito({
+  variable: "--font-nunito",
   subsets: ["latin"],
 });
 
@@ -21,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${suse.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable}`}>
         {children}
         <Toaster 
           position="top-right" 

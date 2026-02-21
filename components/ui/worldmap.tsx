@@ -1,88 +1,30 @@
 "use client";
 
-import { useRef } from "react";
-import { motion } from "motion/react";
 import DottedMap from "dotted-map";
 import Image from "next/image";
 
-// Country flag codes for flagcdn.com
-const countryFlags: Record<string, string> = {
-  usa: "us",
-  uk: "gb",
-  france: "fr",
-  lithuania: "lt",
-  brazil: "br",
-  india: "in",
-  australia: "au",
-  indonesia: "id",
-  monaco: "mc",
-  portugal: "pt",
-  russia: "ru",
-  kenya: "ke",
-};
-
-const getCountryFlag = (label: string): string | null => {
-  const lowerLabel = label.toLowerCase();
-  if (
-    lowerLabel.includes("usa") ||
-    lowerLabel.includes("alaska") ||
-    lowerLabel.includes("los angeles")
-  )
-    return countryFlags.usa;
-  if (lowerLabel.includes("uk") || lowerLabel.includes("london"))
-    return countryFlags.uk;
-  if (lowerLabel.includes("france") || lowerLabel.includes("paris"))
-    return countryFlags.france;
-  if (lowerLabel.includes("lithuania") || lowerLabel.includes("vilnius"))
-    return countryFlags.lithuania;
-  if (lowerLabel.includes("brazil") || lowerLabel.includes("brasília"))
-    return countryFlags.brazil;
-  if (lowerLabel.includes("india") || lowerLabel.includes("delhi"))
-    return countryFlags.india;
-  if (
-    lowerLabel.includes("australia") ||
-    lowerLabel.includes("sydney") ||
-    lowerLabel.includes("melbourne")
-  )
-    return countryFlags.australia;
-  if (
-    lowerLabel.includes("indonesia") ||
-    lowerLabel.includes("jakarta") ||
-    lowerLabel.includes("bali")
-  )
-    return countryFlags.indonesia;
-  if (lowerLabel.includes("monaco") || lowerLabel.includes("monte carlo"))
-    return countryFlags.monaco;
-  if (lowerLabel.includes("portugal") || lowerLabel.includes("lisbon"))
-    return countryFlags.portugal;
-  if (lowerLabel.includes("russia") || lowerLabel.includes("vladivostok"))
-    return countryFlags.russia;
-  if (lowerLabel.includes("kenya") || lowerLabel.includes("nairobi"))
-    return countryFlags.kenya;
-  return null;
-};
+interface LocationPoint {
+  lat: number;
+  lng: number;
+  label: string;
+}
 
 interface MapProps {
-  dots?: Array<{
-    start: { lat: number; lng: number; label?: string };
-    end: { lat: number; lng: number; label?: string };
-  }>;
-  lineColor?: string;
+  locations?: LocationPoint[];
+  dotColor?: string;
 }
 
 export default function WorldMap({
-  dots = [],
-  lineColor = "#ffffff",
+  locations = [],
+  dotColor = "#0095FF",
 }: MapProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
   const map = new DottedMap({ height: 100, grid: "diagonal" });
-  const theme = "dark";
 
   const svgMap = map.getSVG({
     radius: 0.22,
     color: "#FFFFFF40",
     shape: "circle",
-   backgroundColor: theme === "dark" ? "black" : "white",
+    backgroundColor: "transparent",
   });
 
   const projectPoint = (lat: number, lng: number) => {
@@ -91,17 +33,8 @@ export default function WorldMap({
     return { x, y };
   };
 
-  const createCurvedPath = (
-    start: { x: number; y: number },
-    end: { x: number; y: number }
-  ) => {
-    const midX = (start.x + end.x) / 2;
-    const midY = Math.min(start.y, end.y) - 50;
-    return `M ${start.x} ${start.y} Q ${midX} ${midY} ${end.x} ${end.y}`;
-  };
-
   return (
-    <div className="w-full aspect-[2/1] dark:bg-black bg-white rounded-lg  relative font-sans">
+    <div className="w-full aspect-[2/1] relative font-sans">
       <Image
         src={`data:image/svg+xml;utf8,${encodeURIComponent(svgMap)}`}
         className="h-full w-full [mask-image:linear-gradient(to_bottom,transparent,white_10%,white_90%,transparent)] pointer-events-none select-none"
@@ -111,141 +44,91 @@ export default function WorldMap({
         draggable={false}
       />
       <svg
-        ref={svgRef}
         viewBox="0 0 800 400"
-        className="w-full h-full absolute inset-0 pointer-events-none select-none text-white"
+        className="w-full h-full absolute inset-0 pointer-events-none select-none"
       >
-        {dots.map((dot, i) => {
-          const startPoint = projectPoint(dot.start.lat, dot.start.lng);
-          const endPoint = projectPoint(dot.end.lat, dot.end.lng);
-          return (
-            <g key={`path-group-${i}`}>
-              <motion.path
-                d={createCurvedPath(startPoint, endPoint)}
-                fill="none"
-                stroke="url(#path-gradient)"
-                strokeWidth="1"
-                initial={{
-                  pathLength: 0,
-                }}
-                animate={{
-                  pathLength: 1,
-                }}
-                transition={{
-                  duration: 1,
-                  delay: 0.5 * i,
-                  ease: "easeOut",
-                }}
-                key={`start-upper-${i}`}
-              />
-            </g>
-          );
-        })}
-
         <defs>
-          <linearGradient id="path-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="white" stopOpacity="0" />
-            <stop offset="5%" stopColor={lineColor} stopOpacity="1" />
-            <stop offset="95%" stopColor={lineColor} stopOpacity="1" />
-            <stop offset="100%" stopColor="white" stopOpacity="0" />
-          </linearGradient>
+          <radialGradient id="dot-glow">
+            <stop offset="0%" stopColor={dotColor} stopOpacity="0.5" />
+            <stop offset="100%" stopColor={dotColor} stopOpacity="0" />
+          </radialGradient>
         </defs>
 
-        {dots.map((dot, i) => {
-          const startPoint = projectPoint(dot.start.lat, dot.start.lng);
-          const endPoint = projectPoint(dot.end.lat, dot.end.lng);
-          const startFlag = dot.start.label
-            ? getCountryFlag(dot.start.label)
-            : null;
-          const endFlag = dot.end.label ? getCountryFlag(dot.end.label) : null;
-
+        {locations.map((loc, i) => {
+          const point = projectPoint(loc.lat, loc.lng);
           return (
-            <g key={`points-group-${i}`}>
-              <g key={`start-${i}`}>
-                <circle
-                  className="text-white"
-                  cx={startPoint.x}
-                  cy={startPoint.y}
-                  r="2"
-                  fill={lineColor}
+            <g key={`loc-${i}`}>
+              {/* Glow background */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="14"
+                fill="url(#dot-glow)"
+              />
+
+              {/* Pulsing ring */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="3"
+                fill="none"
+                stroke={dotColor}
+                strokeWidth="0.5"
+                opacity="0.5"
+              >
+                <animate
+                  attributeName="r"
+                  from="3"
+                  to="12"
+                  dur="2.5s"
+                  begin={`${i * 0.2}s`}
+                  repeatCount="indefinite"
                 />
-                <circle
-                  cx={startPoint.x}
-                  cy={startPoint.y}
-                  r="2"
-                  fill={lineColor}
-                  opacity="0.5"
-                >
-                  <animate
-                    attributeName="r"
-                    from="2"
-                    to="8"
-                    dur="1.5s"
-                    begin="0s"
-                    repeatCount="indefinite"
-                  />
-                  <animate
-                    attributeName="opacity"
-                    from="0.5"
-                    to="0"
-                    dur="1.5s"
-                    begin="0s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-                {startFlag && (
-                  <image
-                    href={`https://flagcdn.com/w40/${startFlag}.png`}
-                    x={startPoint.x - 10}
-                    y={startPoint.y - 28}
-                    width="20"
-                    height="15"
-                    preserveAspectRatio="xMidYMid slice"
-                  />
-                )}
-              </g>
-              <g key={`end-${i}`}>
-                <circle
-                  cx={endPoint.x}
-                  cy={endPoint.y}
-                  r="2"
-                  fill={lineColor}
+                <animate
+                  attributeName="opacity"
+                  from="0.5"
+                  to="0"
+                  dur="2.5s"
+                  begin={`${i * 0.2}s`}
+                  repeatCount="indefinite"
                 />
-                <circle
-                  cx={endPoint.x}
-                  cy={endPoint.y}
-                  r="2"
-                  fill={lineColor}
-                  opacity="0.5"
-                >
-                  <animate
-                    attributeName="r"
-                    from="2"
-                    to="8"
-                    dur="1.5s"
-                    begin="0s"
-                    repeatCount="indefinite"
-                  />
-                  <animate
-                    attributeName="opacity"
-                    from="0.5"
-                    to="0"
-                    dur="1.5s"
-                    begin="0s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-                {endFlag && (
-                  <image
-                    href={`https://flagcdn.com/w40/${endFlag}.png`}
-                    x={endPoint.x - 10}
-                    y={endPoint.y - 28}
-                    width="20"
-                    height="15"
-                    preserveAspectRatio="xMidYMid slice"
-                  />
-                )}
-              </g>
+              </circle>
+
+              {/* Second pulsing ring (delayed) */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="3"
+                fill="none"
+                stroke={dotColor}
+                strokeWidth="0.5"
+                opacity="0.35"
+              >
+                <animate
+                  attributeName="r"
+                  from="3"
+                  to="12"
+                  dur="2.5s"
+                  begin={`${i * 0.2 + 1.25}s`}
+                  repeatCount="indefinite"
+                />
+                <animate
+                  attributeName="opacity"
+                  from="0.35"
+                  to="0"
+                  dur="2.5s"
+                  begin={`${i * 0.2 + 1.25}s`}
+                  repeatCount="indefinite"
+                />
+              </circle>
+
+              {/* Core dot */}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r="2.5"
+                fill={dotColor}
+              />
             </g>
           );
         })}

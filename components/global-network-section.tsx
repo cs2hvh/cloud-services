@@ -1,157 +1,173 @@
-// "use client";
-
-// import Image from "next/image";
-
-// export function GlobalNetworkSection() {
-//   return (
-//     <section className="relative overflow-hidden bg-[#020617]">
-//       {/* Diagonal background bands */}
-//       <div className="pointer-events-none absolute inset-0">
-//         <div className="absolute -left-40 top-[20%] h-[220px] w-[160%] -rotate-6 bg-gradient-to-r from-black via-[#020617] to-black" />
-//         <div className="absolute -left-40 bottom-[-180px] h-[260px] w-[160%] rotate-6 bg-gradient-to-r from-black via-[#020617] to-black" />
-//       </div>
-
-//       {/* Top content */}
-//       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-28">
-//         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
-//           {/* Left text */}
-//           <div className="max-w-xl">
-//             <h2 className="text-2xl sm:text-3xl lg:text-[32px] font-semibold leading-tight tracking-tight">
-//               <span className="text-slate-400">Global </span>
-//               <span className="text-white">Network </span>
-//               <span className="block text-[#00A2FF]">Infrastructure</span>
-//             </h2>
-
-//             <p className="mt-3 max-w-md text-[11px] sm:text-xs text-slate-300">
-//               Data centers across the world ensuring your applications are always fast and
-//               available, no matter where your users are.
-//             </p>
-//           </div>
-
-//           {/* Right boxed world map */}
-//           <div className="relative justify-self-end w-full max-w-[360px] sm:max-w-[420px] lg:max-w-[560px]">
-//             <div className="relative aspect-[16/9] ">
-//               <Image
-//                 src="/images/main-page/world-map.svg"
-//                 alt="Global network map"
-//                 fill
-//                 className="object-contain"
-//                 priority={false}
-//               />
-//             </div>
-//           </div>
-//         </div>
-//       </div>
-
-//       {/* Bottom centered copy */}
-//       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-24 sm:mt-28 lg:mt-40 pb-16 sm:pb-20 lg:pb-28">
-//         <div className="flex flex-col items-center gap-6">
-//           {/* Boxed headline */}
-//           <div className="border border-[#00A2FF] px-6 py-5 text-center">
-//             <p className="text-2xl sm:text-3xl lg:text-[32px] font-semibold leading-snug tracking-tight text-white">
-//               <span className="block">Powered by an easy-</span>
-//               <span className="block">to-use, developer-</span>
-//               <span className="block">
-//                 friendly <span className="text-[#00A2FF]">platform</span>
-//               </span>
-//             </p>
-//           </div>
-
-//           {/* Footnote + description */}
-//           <div className="max-w-xl text-center text-[10px] sm:text-xs text-slate-400 space-y-2">
-//             <p>
-//               *Use this anim effect in this page
-//               https://velocity.uxdevtemplates.io/keon/portasmap-6-lento
-//             </p>
-//             <p>
-//               All Primitives share a common suite of platform features that enhance security and
-//               ensure ahura-cloud fits neatly into your existing infrastructure.
-//             </p>
-//           </div>
-//         </div>
-//       </div>
-//     </section>
-//   );
-// }
-
-
 "use client";
+
 import WorldMap from "@/components/ui/worldmap";
 import { Container } from "@/components/ui/container";
-// import { motion } from "motion/react";
+import { motion } from "motion/react";
+import Image from "next/image";
+
+const POP_LOCATIONS = [
+  { lat: 37.7749, lng: -122.4194, label: "San Francisco" },
+  { lat: 40.7128, lng: -74.006, label: "New York" },
+  { lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
+  { lat: -23.5505, lng: -46.6333, label: "Sao Paulo" },
+  { lat: 51.5074, lng: -0.1278, label: "London" },
+  { lat: 48.8566, lng: 2.3522, label: "Paris" },
+  { lat: 50.1109, lng: 8.6821, label: "Frankfurt" },
+  { lat: 52.3676, lng: 4.9041, label: "Amsterdam" },
+  { lat: 59.3293, lng: 18.0686, label: "Stockholm" },
+  { lat: 40.4168, lng: -3.7038, label: "Madrid" },
+  { lat: 19.076, lng: 72.8777, label: "Mumbai" },
+  { lat: 25.2048, lng: 55.2708, label: "Dubai" },
+  { lat: 1.3521, lng: 103.8198, label: "Singapore" },
+  { lat: 35.6762, lng: 139.6503, label: "Tokyo" },
+  { lat: -33.8688, lng: 151.2093, label: "Sydney" },
+];
+
+const STATS = [
+  { value: "15", label: "Global Regions" },
+  { value: "30+", label: "PoP Locations" },
+  { value: "<20ms", label: "Avg Latency" },
+  { value: "99.99%", label: "Uptime SLA" },
+];
+
+const REGIONS = [
+  {
+    continent: "Americas",
+    locations: [
+      { city: "San Francisco", flag: "us" },
+      { city: "Los Angeles", flag: "us" },
+      { city: "New York", flag: "us" },
+      { city: "Sao Paulo", flag: "br" },
+    ],
+  },
+  {
+    continent: "Europe",
+    locations: [
+      { city: "London", flag: "gb" },
+      { city: "Paris", flag: "fr" },
+      { city: "Frankfurt", flag: "de" },
+      { city: "Amsterdam", flag: "nl" },
+      { city: "Stockholm", flag: "se" },
+      { city: "Madrid", flag: "es" },
+    ],
+  },
+  {
+    continent: "Asia",
+    locations: [
+      { city: "Mumbai", flag: "in" },
+      { city: "Dubai", flag: "ae" },
+      { city: "Singapore", flag: "sg" },
+      { city: "Tokyo", flag: "jp" },
+    ],
+  },
+  {
+    continent: "Oceania",
+    locations: [
+      { city: "Sydney", flag: "au" },
+    ],
+  },
+];
 
 export default function GlobalNetworkSection() {
   return (
-    <section className="bg-[#000000] w-full py-16 lg:py-24">
+    <section className="relative z-10 py-16 lg:py-24">
+      {/* Background */}
+      <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
+        <div className="absolute inset-0 bg-black" />
+
+        {/* Top/bottom fade */}
+        <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent" />
+
+        {/* Top divider */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+      </div>
+
       <Container>
-        {/* Header Section */}
-        <div className="text-center mb-12 lg:mb-16">
-          <h1 className="text-[clamp(32px,4vw,56px)] font-semibold leading-tight tracking-tight">
-            <span className="text-white">Global Network </span>
-            <span className="text-[#0095FF]">Infrastructure</span>
-          </h1>
-          <p className="mt-4 lg:mt-6 mx-auto max-w-3xl text-[clamp(14px,1.1vw,18px)] leading-relaxed text-slate-300 opacity-90 px-4">
-            Our global network infrastructure ensures low latency and high availability for your applications, 
-            no matter where your users are located. With strategically placed data centers around the world, 
-            we provide fast and reliable connectivity to keep your services running smoothly.
+        {/* Header */}
+        <motion.div
+          className="text-center mb-8 lg:mb-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, ease: [0.25, 0.4, 0.25, 1] as const }}
+        >
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight leading-tight text-white">
+            Global Network Infrastructure
+          </h2>
+          <p className="mt-3 lg:mt-4 mx-auto max-w-2xl text-xs sm:text-sm leading-relaxed text-white/50 px-4">
+            Strategically placed data centers and PoP locations across 15 regions
+            deliver sub-20ms latency to 95% of the world&apos;s internet users.
           </p>
-        </div>
+        </motion.div>
 
-        {/* World Map */}
-        <WorldMap
-            dots={[
-              {
-                start: {
-                  lat: 64.2008,
-                  lng: -149.4937,
-                  label: "Alaska, USA",
-                },
-                end: {
-                  lat: 34.0522,
-                  lng: -118.2437,
-                  label: "Los Angeles, USA",
-                },
-              },
-              {
-                start: { lat: 64.2008, lng: -149.4937, label: "Alaska, USA" },
-                end: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
-              },
-              {
-                start: { lat: -15.7975, lng: -47.8919, label: "Brasília, Brazil" },
-                end: { lat: 38.7223, lng: -9.1393, label: "Lisbon, Portugal" },
-              },
-              {
-                start: { lat: 51.5074, lng: -0.1278, label: "London, UK" },
-                end: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-              },
-              {
-                start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-                end: { lat: 43.1332, lng: 131.9113, label: "Vladivostok, Russia" },
-              },
-              {
-                start: { lat: 28.6139, lng: 77.209, label: "New Delhi, India" },
-                end: { lat: -1.2921, lng: 36.8219, label: "Nairobi, Kenya" },
-              },
-            ]}
-          />
+        {/* Map */}
+        <motion.div
+          className="relative"
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0.4, 0.25, 1] as const }}
+        >
+          <WorldMap locations={POP_LOCATIONS} />
+        </motion.div>
 
-        {/* Footer Section */}
-        <div className="mt-16 lg:mt-24 text-center">
-          <div className="inline-block border border-[#0095FF]/40 bg-[#0095FF]/5 backdrop-blur-sm px-8 py-6 rounded-lg">
-            <h2 className="text-[clamp(24px,3vw,40px)] font-semibold leading-tight tracking-tight text-white">
-              Powered by an easy-to-use,
-              <br className="hidden sm:block" />
-              <span className="block sm:inline"> developer-friendly </span>
-              <span className="text-[#0095FF]">platform</span>
-            </h2>
+        {/* Locations by continent */}
+        <motion.div
+          className="mt-6 lg:mt-8 pt-6 lg:pt-8"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, delay: 0.25, ease: [0.25, 0.4, 0.25, 1] as const }}
+        >
+          <div className="flex flex-wrap justify-center gap-12 lg:gap-16">
+            {REGIONS.map((region) => (
+              <div key={region.continent}>
+                <h4 className="text-[11px] font-medium text-white/30 uppercase tracking-widest mb-4">
+                  {region.continent}
+                </h4>
+                <ul className="space-y-2.5">
+                  {region.locations.map((loc) => (
+                    <li key={loc.city} className="flex items-center gap-2.5">
+                      <Image
+                        src={`https://flagcdn.com/w40/${loc.flag}.png`}
+                        alt={loc.flag}
+                        width={18}
+                        height={12}
+                        className="rounded-[1px] shrink-0"
+                      />
+                      <span className="text-[13px] text-white/60">{loc.city}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
-          <p className="mt-6 mx-auto max-w-2xl text-[clamp(12px,1vw,16px)] leading-relaxed text-slate-400 opacity-80 px-4">
-            All services share a common suite of platform features that enhance security and 
-            ensure seamless integration into your existing infrastructure.
-          </p>
-        </div>
+        </motion.div>
+
+        {/* Stats Row */}
+        <motion.div
+          className="mt-8 lg:mt-10 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06]"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, delay: 0.35, ease: [0.25, 0.4, 0.25, 1] as const }}
+        >
+          {STATS.map((stat) => (
+            <div
+              key={stat.label}
+              className="bg-black p-5 sm:p-6 text-center transition-colors duration-300 hover:bg-white/[0.02]"
+            >
+              <div className="text-2xl sm:text-3xl font-semibold text-[#0095FF]">
+                {stat.value}
+              </div>
+              <div className="mt-1 text-xs sm:text-sm text-white/40">
+                {stat.label}
+              </div>
+            </div>
+          ))}
+        </motion.div>
       </Container>
     </section>
   );
 }
-

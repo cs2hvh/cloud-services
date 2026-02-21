@@ -17,7 +17,7 @@ import {
   Lock,
   Archive,
   Cpu,
-  Code,
+  
   Menu,
   X,
   Settings,

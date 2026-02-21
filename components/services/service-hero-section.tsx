@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -44,10 +45,7 @@ export function ServiceHeroSection({
     <section
       className={cn(
         "relative w-full overflow-hidden bg-black",
-        // Make the hero fill the viewport minus navbar on most screens so it fits without extra top padding
-        "min-h-[calc(100vh-80px)]",
-        // On very large screens keep a sensible max height
-        "lg:h-[min(850px,calc(100vh-80px))] lg:min-h-0",
+        "h-screen min-h-[600px]",
         className,
       )}
     >
@@ -60,84 +58,62 @@ export function ServiceHeroSection({
           className="object-cover blur-[3px] object-right-top scale-100"
           style={{ objectPosition: "right top" }}
         />
-        <div className="absolute inset-0 bg-black/0" />
+        <div className="absolute inset-0 bg-black/30" />
       </div>
 
-      <div className="relative z-10 mx-auto flex h-full items-center w-full max-w-[1320px] px-6 sm:px-8 lg:max-w-[1440px] lg:px-12 min-[1920px]:max-w-[1800px] min-[1920px]:px-16 min-[2560px]:max-w-[2600px] min-[2560px]:px-12">
-        <div className="flex w-full flex-col items-center gap-6 pt-20 sm:pt-20 py-6 sm:gap-10 sm:py-8 lg:flex-row lg:items-center lg:justify-between lg:gap-[96px] lg:py-12 min-[1920px]:gap-[120px] min-[2560px]:gap-[140px]">
-          <div className={cn("w-full max-w-[560px] min-[1920px]:max-w-[720px] min-[2560px]:max-w-[820px]", imageLeft && "lg:order-2")}>
-            <div className="flex flex-col gap-8 sm:gap-10 lg:gap-16">
-              {badge ? (
-                <div
-                  className="inline-flex items-center border border-white/15 bg-white/5 px-3 py-1 text-[12px] sm:px-5 sm:py-2 text-[13px] font-normal leading-[25px] text-white/90 backdrop-blur-[8.1px] min-[1920px]:px-6 min-[1920px]:py-3 min-[1920px]:text-[15px] min-[2560px]:text-[16px]"
-                  style={{ fontFamily: "Inter, sans-serif" }}
-                >
-                  {badge}
-                </div>
-              ) : null}
+      {/* Bottom fade */}
+      <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent z-[5]" />
 
-              <h1
-                className={cn(
-                  "text-[clamp(30px,3.2vw,64px)] leading-[1.02] font-normal",
-                  "lg:text-[64px]",
-                  "drop-shadow-[2px_4px_18px_rgba(255,255,255,0.36)]",
-                )}
-                style={{ fontFamily: "Nunito Sans, Inter, sans-serif" }}
-              >
-                <span className="bg-[linear-gradient(90deg,#ffffff_28.8%,rgba(255,255,255,0.76)_45.71%,rgba(255,255,255,0.4)_95%)] bg-clip-text text-transparent">
-                  {title}
-                </span>
+      <div className="relative z-10 mx-auto flex h-full items-center w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
+        <div className={cn(
+          "flex w-full flex-col items-center gap-8 py-6 lg:flex-row lg:items-center lg:justify-between lg:gap-16 lg:py-0",
+        )}>
+          <div className={cn("w-full max-w-[560px]", imageLeft && "lg:order-2")}>
+            <div className="flex flex-col gap-6">
+              {badge && (
+                <div className="inline-flex self-start items-center gap-2 border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm px-4 py-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0095FF] animate-pulse" />
+                  <span className="text-[12px] font-medium text-white/50 tracking-wide uppercase">
+                    {badge}
+                  </span>
+                </div>
+              )}
+
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-[400] tracking-tight leading-[1.05] text-white">
+                {title}
               </h1>
 
-              <p
-                className="max-w-[28rem] sm:max-w-[32rem] text-[clamp(14px,1.2vw,20px)] lg:text-[20px] leading-[1.5] font-light text-white/80 lg:max-w-[560px] min-[2560px]:max-w-[640px]"
-                style={{ fontFamily: "Inter, sans-serif" }}
-              >
+              <p className="max-w-[480px] text-base lg:text-lg leading-relaxed text-white/50">
                 {description}
               </p>
 
               {(primaryAction || secondaryAction) && (
-                <div className="flex flex-wrap items-center gap-4 lg:gap-[30px] min-[1920px]:gap-8">
-                  {primaryAction ? (
+                <div className="flex flex-wrap items-center gap-4 pt-2">
+                  {primaryAction && (
                     <Link
                       href={primaryAction.href}
-                      className={cn(
-                        "inline-flex items-center justify-center",
-                        "bg-[#383838] px-6",
-                        "h-[37px] min-w-[170px] text-[12px] font-medium leading-[25px] text-white",
-                        "min-[1920px]:h-12 min-[1920px]:min-w-[200px] min-[1920px]:text-[14px]",
-                        "min-[2560px]:h-14 min-[2560px]:min-w-[240px] min-[2560px]:text-[15px]",
-                        "shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
-                        "backdrop-blur-[8.1px]",
-                      )}
+                      className="inline-flex items-center justify-center gap-2 bg-white text-black px-6 h-10 text-[13px] font-medium hover:bg-white/90 transition-colors"
                     >
                       {primaryAction.label}
+                      <ArrowRight className="w-4 h-4" />
                     </Link>
-                  ) : null}
+                  )}
 
-                  {secondaryAction ? (
+                  {secondaryAction && (
                     <Link
                       href={secondaryAction.href}
-                      className={cn(
-                        "inline-flex items-center justify-center",
-                        "border border-[#464A4D] px-6",
-                        "h-[37px] min-w-[170px] text-[12px] font-medium leading-[25px] text-white",
-                        "min-[1920px]:h-12 min-[1920px]:min-w-[200px] min-[1920px]:text-[14px]",
-                        "min-[2560px]:h-14 min-[2560px]:min-w-[240px] min-[2560px]:text-[15px]",
-                        "shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
-                        "backdrop-blur-[8.1px]",
-                      )}
+                      className="inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-6 h-10 text-[13px] font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
                     >
                       {secondaryAction.label}
                     </Link>
-                  ) : null}
+                  )}
                 </div>
               )}
             </div>
           </div>
 
           <div className={cn("w-full", imageLeft && "lg:order-1")}>
-            <div className="relative mx-auto aspect-square w-full max-w-[360px] sm:max-w-[640px] lg:max-w-[980px] min-[1920px]:max-w-[1100px] min-[2560px]:max-w-[1400px]">
+            <div className="relative mx-auto aspect-square w-full max-w-[360px] sm:max-w-[500px] lg:max-w-[560px]">
               {isIllustrationSvg ? (
                 <Image
                   width={100}

@@ -1,156 +1,129 @@
 import Link from "next/link";
-import { WideContainer } from "@/components/ui/container";
+import { Container } from "@/components/ui/container";
+import { Shield, Lock, FileCheck } from "lucide-react";
+
+const FOOTER_LINKS = [
+  {
+    heading: "Company",
+    links: [
+      { label: "Blog", href: "#" },
+      { label: "Careers", href: "#" },
+      { label: "Pricing", href: "/pricing" },
+      { label: "Customers", href: "#" },
+    ],
+  },
+  {
+    heading: "Resources",
+    links: [
+      { label: "Documentation", href: "/docs" },
+      { label: "Papers", href: "#" },
+      { label: "Press", href: "#" },
+      { label: "Changelog", href: "#" },
+    ],
+  },
+  {
+    heading: "Solutions",
+    links: [
+      { label: "Compute", href: "/services/compute" },
+      { label: "Managed Database", href: "/services/database" },
+      { label: "GPU Instances", href: "/services/gpu" },
+      { label: "Kubernetes", href: "/services/kubernetes" },
+      { label: "Object Storage", href: "/services/object-storage" },
+      { label: "App Deploy", href: "/services/app-deployment" },
+    ],
+  },
+  {
+    heading: "Legal",
+    links: [
+      { label: "Terms of Service", href: "#" },
+      { label: "Privacy Policy", href: "#" },
+      { label: "Cookies Policy", href: "#" },
+      { label: "Data Processing", href: "#" },
+    ],
+  },
+];
+
+const COMPLIANCE_BADGES = [
+  { icon: Shield, abbr: "PCI", label: "PCI Level 1" },
+  { icon: Lock, abbr: "SOC", label: "SOC 2 Type II" },
+  { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
+];
 
 export function Footer() {
   return (
-    <footer className="relative z-10 bg-[#161618]">
-      <WideContainer className="pt-[clamp(40px,3vw,64px)] pb-[clamp(24px,2vw,36px)]">
-        <div className="grid gap-12 lg:grid-cols-[minmax(0,200px)_1fr_minmax(0,220px)]">
-          <div className="flex items-start">
-            <div className="text-2xl font-normal tracking-tight text-white">
-              <span>ahura</span>
-              <span className="text-[#00AAFF]">cloud</span>
+    <footer className="relative z-10 bg-black">
+      {/* Top divider */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+      <Container className="pt-16 lg:pt-20 pb-8 lg:pb-10">
+        {/* Main grid */}
+        <div className="grid gap-12 lg:grid-cols-[1fr_auto]">
+          {/* Left: brand + description */}
+          <div className="max-w-[280px]">
+            <Link
+              href="/"
+              className="text-[22px] font-normal text-white font-[family-name:var(--font-nunito)]"
+            >
+              ahura<span className="text-[#0095FF]">sense</span>
+            </Link>
+            <p className="mt-4 text-[13px] leading-relaxed text-white/40">
+              Enterprise-grade cloud infrastructure with global reach and
+              sub-20ms latency.
+            </p>
+
+            {/* Compliance badges */}
+            <div className="mt-6 flex flex-col gap-3">
+              {COMPLIANCE_BADGES.map((badge) => (
+                <div
+                  key={badge.abbr}
+                  className="flex items-center gap-3"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center border border-white/[0.08] bg-white/[0.04]">
+                    <badge.icon className="w-3.5 h-3.5 text-[#0095FF]" />
+                  </div>
+                  <span className="text-[12px] text-white/40">
+                    {badge.label}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <h3 className="text-[15px] text-white mb-4">Company</h3>
-              <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Blog
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Careers
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Pricing
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Customers
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-[15px] text-white mb-4">Resources</h3>
-              <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Documentation
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Papers
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Press
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-[15px] text-white mb-4">Solutions</h3>
-              <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    PCI Compliance
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Encryption as a Service
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Credentials Encryption
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    File Encryption
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    PII Encryption
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    HIPAA Compliance
-                  </Link>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <h3 className="text-[15px] text-white mb-4">Legal</h3>
-              <ul className="space-y-2 text-[13px] text-[#ACACAC] font-mono">
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Terms of Service
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Cookies Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white transition-colors">
-                    Data Processing
-                  </Link>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-[15px] text-white mb-4">Compliance</h3>
-            <div className="space-y-3 text-[13px] text-[#ACACAC] font-mono">
-              <div className="flex items-center gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
-                  PCI
-                </span>
-                <span>PCI Level 1</span>
+          {/* Right: link columns */}
+          <div className="grid grid-cols-2 gap-x-12 gap-y-10 sm:grid-cols-4 lg:gap-x-16">
+            {FOOTER_LINKS.map((group) => (
+              <div key={group.heading}>
+                <h3 className="text-[11px] font-medium text-white/30 uppercase tracking-widest mb-4">
+                  {group.heading}
+                </h3>
+                <ul className="space-y-2.5">
+                  {group.links.map((link) => (
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
+                        className="text-[13px] text-white/50 hover:text-white transition-colors duration-200"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[9px] font-semibold text-white/70">
-                  SOC
-                </span>
-                <span>SOC 2 Type II</span>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        <div className="mt-[clamp(24px,2.5vw,40px)] border-t border-[#2A2B3A] pt-[clamp(16px,1.6vw,24px)] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[12.8px] text-[#BABCD2]">© 2026 ahuracloud. All rights reserved.</p>
-          <div className="flex items-center gap-2 text-[12.8px] text-[#BABCD2] font-mono">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#00AAFF]" />
-            <span>All systems normal</span>
+        {/* Bottom bar */}
+        <div className="mt-12 lg:mt-16 pt-6 border-t border-white/[0.06] flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12px] text-white/30">
+            &copy; {new Date().getFullYear()} ahurasense. All rights reserved.
+          </p>
+          <div className="flex items-center gap-2 text-[12px] text-white/30">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span>All systems operational</span>
           </div>
         </div>
-      </WideContainer>
+      </Container>
     </footer>
   );
 }

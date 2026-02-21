@@ -1,63 +1,124 @@
 "use client";
 
-import Image from "next/image";
-import { WideContainer } from "@/components/ui/container";
+import Link from "next/link";
+import { motion } from "motion/react";
+import { LooperBackground } from "@/components/ui/looper-background";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, delay: 0.15 + i * 0.12, ease: [0.25, 0.4, 0.25, 1] as const },
+  }),
+};
 
 export function Hero() {
   return (
-    // Fill full viewport height on laptops and larger screens
-    <section className="relative w-full min-h-screen bg-[#0a0a0f] overflow-hidden">
-      
-      {/* 1. Main Background Layer */}
-      <div className="absolute inset-0 z-0">
-        <Image
-          src="/images/hero/hero-bg.png"
-          alt="Background Pattern"
-          fill
-          className="object-cover"
-          priority
-        />
-      </div>
+    <section className="relative w-full h-screen min-h-[600px] max-h-[1080px] bg-[#131313] overflow-hidden">
 
-        <div className="relative z-10 h-full">
-        <WideContainer className="min-h-screen flex items-center pt-25 pb-12 lg:pt-10 lg:pb-0">
-          <div className="grid w-full grid-cols-1 items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
-            <div className="text-center lg:text-left lg:pr-4">
-            <h1 className="font-normal text-[clamp(36px,5vw,112px)] leading-[1.05] tracking-tight">
-              <span className="text-[#0095FF] block">Deploy at the</span>
-              <span className="text-[#ECECFB] opacity-90 block">Speed of Light</span>
-            </h1>
-            <p className="mt-6 text-[#ECECFB] text-[clamp(16px,1.1vw,20px)] leading-[1.6] font-normal opacity-90 max-w-[clamp(520px,42vw,820px)] mx-auto lg:mx-0">
-              Deploy, scale, and manage your applications with enterprise-grade security. 
-              From GPU instances to AI agents, we provide the tools modern businesses need.
-            </p>
+      {/* ── Looper background ── */}
+      <LooperBackground className="z-0" />
+
+      {/* ── Edge vignette ── */}
+      <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_30%,#131313_75%)] pointer-events-none" />
+
+      {/* ── Content — centered ── */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center">
+        <div className="w-full max-w-[820px] mx-auto px-6 text-center">
+
+          {/* Tag */}
+          <motion.div
+            className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm rounded-full px-4 py-1.5 mb-6"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={0}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#0095FF] animate-pulse" />
+            <span className="text-[11px] text-white/50 font-medium tracking-wide">Cloud Infrastructure for Modern Teams</span>
+          </motion.div>
+
+          {/* Headline */}
+          <motion.h1
+            className="font-normal text-[clamp(36px,5.5vw,80px)] leading-[1.06] tracking-tight"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={1}
+          >
+            <span className="text-[#ECECFB] block">Deploy at the</span>
+            <span className="text-[#0095FF] block">Speed of Light</span>
+          </motion.h1>
+
+          {/* Subtitle */}
+          <motion.p
+            className="mt-5 text-[#ECECFB]/50 text-[clamp(15px,1.1vw,18px)] leading-[1.7] max-w-[560px] mx-auto"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={2}
+          >
+            GPU instances, Kubernetes, databases, app deployment, and AI agents
+            — everything you need to build and scale, in one platform.
+          </motion.p>
+
+          {/* CTAs */}
+          <motion.div
+            className="mt-8 flex flex-wrap items-center justify-center gap-3"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={3}
+          >
+            <Link
+              href="/signup"
+              className="group inline-flex items-center gap-2 bg-[#0095FF] px-7 py-3 text-sm font-medium text-white transition-all hover:bg-[#007ad6] hover:shadow-[0_0_32px_rgba(0,149,255,0.35)]"
+            >
+              Get Started Free
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-0.5">
+                <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+            <Link
+              href="/signin"
+              className="inline-flex items-center border border-white/10 bg-white/[0.04] backdrop-blur-sm px-7 py-3 text-sm font-medium text-[#ECECFB]/80 transition-all hover:bg-white/[0.08] hover:border-white/20"
+            >
+              View Console
+            </Link>
+          </motion.div>
+
+          {/* Stats */}
+          <motion.div
+            className="mt-12 flex flex-wrap items-center justify-center gap-8 text-xs text-[#ECECFB]/35"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={4}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[#0095FF] font-semibold text-sm">99.99%</span>
+              <span>Uptime SLA</span>
             </div>
-
-            <div className="relative w-[min(86vw,560px)] max-w-[560px] aspect-square mx-auto lg:mx-0 lg:w-[clamp(560px,46vw,1400px)] lg:max-w-[1400px] lg:-ml-8">
-              {/* Globe */}
-              <div className="absolute inset-0 m-auto w-full h-full z-10">
-                <Image src="/images/hero/globe.png" alt="Globe" fill className="object-contain object-center" priority />
-              </div>
-
-              {/* Geometric Chain */}
-              <div className="absolute left-[30%] top-[14%] w-[26%] h-[22%] z-0 opacity-80">
-                <Image src="/images/hero/geometry.png" alt="Geometry" fill className="object-contain" style={{ transform: "matrix(-0.46, -0.89, -0.89, 0.46, 0, 0)" }} />
-              </div>
-
-              {/* Security Lock */}
-              <div className="absolute left-[70%] top-[16%] w-[12%] h-[18%] z-20">
-                <Image src="/images/hero/security-lock.png" alt="Security" fill className="object-contain" />
-              </div>
-
-              {/* Server Stack */}
-              <div className="absolute left-[66%] top-[68%] w-[12%] h-[18%] z-20">
-                <Image src="/images/hero/server-stack.png" alt="Server" fill className="object-contain" />
-              </div>
+            <div className="h-3 w-px bg-white/8" />
+            <div className="flex items-center gap-2">
+              <span className="text-[#0095FF] font-semibold text-sm">12</span>
+              <span>Global Regions</span>
             </div>
-          </div>
-        </WideContainer>
-      </div>
+            <div className="h-3 w-px bg-white/8" />
+            <div className="flex items-center gap-2">
+              <span className="text-[#0095FF] font-semibold text-sm">&lt;50ms</span>
+              <span>Deploy Time</span>
+            </div>
+            <div className="h-3 w-px bg-white/8" />
+            <div className="flex items-center gap-2">
+              <span className="text-[#0095FF] font-semibold text-sm">SOC 2</span>
+              <span>Compliant</span>
+            </div>
+          </motion.div>
 
+        </div>
+      </div>
     </section>
   );
 }

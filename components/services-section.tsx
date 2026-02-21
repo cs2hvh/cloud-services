@@ -1,52 +1,79 @@
 "use client";
 
 import Image from "next/image";
+import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
 
 const figmaServices = [
   {
-    logoSrc: "/images/hero/server-stack.png",
-    logoAlt: "GPU instance",
-    title: "GPU instance",
+    logoSrc: "/images/compute-page/compute-hero.png",
+    logoAlt: "Compute",
+    title: "Compute",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+      "Elastic virtual machines across 12 global regions. Scale from a single core to hundreds of vCPUs with predictable pricing.",
+  },
+  {
+    logoSrc: "/images/hero/server-stack.png",
+    logoAlt: "GPU Instances",
+    title: "GPU Instances",
+    description:
+      "High-performance NVIDIA GPUs on demand. Train models, run inference, and accelerate compute-heavy workloads with bare-metal speed.",
   },
   {
     logoSrc: "/images/Features/database.png",
-    logoAlt: "Database",
-    title: "Database",
+    logoAlt: "Managed Database",
+    title: "Managed Database",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+      "Fully managed PostgreSQL, MySQL, and Redis clusters with automated backups, failover, and point-in-time recovery built in.",
   },
   {
     logoSrc: "/images/Features/protection.png",
-    logoAlt: "Protection",
-    title: "Protection",
+    logoAlt: "DDoS Protection",
+    title: "DDoS Protection",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+      "Enterprise-grade threat mitigation at the edge. Always-on L3/L4/L7 protection that absorbs attacks before they reach your stack.",
   },
   {
     logoSrc: "/images/Features/ai-agent.png",
-    logoAlt: "AI Agent",
-    title: "AI Agent",
+    logoAlt: "AI Agents",
+    title: "AI Agents",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+      "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
   },
   {
     logoSrc: "/images/Features/kubernetes.svg",
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It’s easy. Just click “Edit Text” or double click me to add your own content and make changes to the font. ",
+      "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
   },
   {
     logoSrc: "/images/Features/object-space.svg",
     logoAlt: "Object Storage",
     title: "Object Storage",
     description:
-      "I'm a paragraph. Click here to add your own text and edit me. It's easy. Just click \"Edit Text\" or double click me to add your own content and make changes to the font.",
+      "S3-compatible storage with 11 nines durability. Store, serve, and manage petabytes of data with predictable, low-cost pricing.",
   },
 ];
+
+const cardEntrance = {
+  hidden: { opacity: 0, y: 30, scale: 0.95 },
+  visible: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: { duration: 0.5, delay: 0.1 + i * 0.1, ease: [0.25, 0.4, 0.25, 1] as const },
+  }),
+};
+
+const fadeIn = {
+  hidden: { opacity: 0, y: 16 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] as const },
+  },
+};
 
 export function ServicesSection() {
   return (
@@ -60,43 +87,60 @@ export function ServicesSection() {
           className="object-cover opacity-80"
           priority
         />
+        {/* Bottom fade for smooth transition into next section */}
+        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent" />
       </div>
       <Container>
-        <div className="relative rounded-none xl:rounded-lg overflow-hidden xl:overflow-visible" style={{ fontFamily: "Sansation, sans-serif" }}>
-          {/* Glass panel overlay with border and blur */}
-          <div className="absolute inset-0 border border-[rgba(255,255,255,0.33)] bg-[rgba(255,255,255,0.01)] backdrop-blur-[6.3px]" />
+        <div className="relative rounded-none xl:rounded-lg overflow-hidden xl:overflow-visible">
           {/* Content wrapper adds inner padding on mobile, none on xl for precise layout */}
           <div className="relative p-[clamp(16px,3.5vw,32px)] xl:p-0">
             {/* Desktop exact layout */}
-            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-12.3%] [--service-top-2:-5.2%] [--service-top-3:1.3%] [--service-top-4:40.1%] [--service-top-5:47.3%] [--service-top-6:50.3%] 2xl:[--service-top-1:-8.5%] 2xl:[--service-top-2:-1.5%]">
+            <div className="relative hidden w-full pb-[41.9%] xl:block [--service-top-1:-10%] [--service-top-2:0%] [--service-top-3:10%] [--service-top-4:42.3%] [--service-top-5:52.3%] [--service-top-6:62.3%]">
               <div className="absolute inset-0">
-                <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/15" />
 
-                <div className="absolute left-[11.2%] top-[32.2%] flex h-[23%] w-[21.3%] items-center justify-center text-center text-[clamp(22px,2.2vw,26px)] leading-[1.25]">
-                  <span className="bg-[linear-gradient(90deg,#ffffff_28.8%,rgba(255,255,255,0.75517)_45.71%,rgba(255,255,255,0.4)_95%)] bg-clip-text text-transparent">
-                    Services to be known
-                  </span>
-                </div>
+                {/* Heading */}
+                <motion.div
+                  className="absolute left-[11.2%] top-[32.2%] flex h-[23%] w-[21.3%] items-center justify-center text-center"
+                  variants={fadeIn}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, margin: "-50px" }}
+                >
+                  <h2 className="text-[clamp(28px,3vw,42px)] font-[400] tracking-tight leading-tight text-white whitespace-nowrap">
+                    Our Core <span className="text-[#0095FF]">Services</span>
+                  </h2>
+                </motion.div>
 
-                <div className="absolute left-[9.9%] top-[46.9%] flex h-[23%] w-[23.9%] items-center justify-center text-center text-[clamp(13px,1.15vw,15px)] leading-[1.6]">
-                  <span className="bg-[linear-gradient(90deg,#ffffff_28.8%,rgba(255,255,255,0.75517)_45.71%,rgba(255,255,255,0.4)_95%)] bg-clip-text text-transparent">
-                    I&apos;m a paragraph. Click here to add your own text and edit me. It&apos;s easy. Just click &quot;Edit Text&quot; or
-                    double click me to add your own content and make changes to the font.
-                  </span>
-                </div>
+                {/* Subtitle */}
+                <motion.div
+                  className="absolute left-[9.9%] top-[46.9%] flex h-[23%] w-[23.9%] items-center justify-center text-center"
+                  variants={fadeIn}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true, margin: "-50px" }}
+                >
+                  <p className="text-[clamp(13px,1.15vw,15px)] leading-relaxed text-white/50">
+                    The building blocks behind every deployment. From compute to storage, each service is designed to work seamlessly together.
+                  </p>
+                </motion.div>
 
                 {[
                   { ...figmaServices[0], left: "44.0%", topVar: "--service-top-1" },
-                  { ...figmaServices[1], left: "65.6%", topVar: "--service-top-2" },
-                  { ...figmaServices[4], left: "86.6%", topVar: "--service-top-3" },
+                  { ...figmaServices[1], left: "65.3%", topVar: "--service-top-2" },
+                  { ...figmaServices[5], left: "86.6%", topVar: "--service-top-3" },
                   { ...figmaServices[2], left: "44.0%", topVar: "--service-top-4" },
-                  { ...figmaServices[3], left: "65.6%", topVar: "--service-top-5" },
-                   { ...figmaServices[5], left: "86.6%", topVar: "--service-top-6" },
-                ].map((service) => (
-                  <div
+                  { ...figmaServices[4], left: "65.3%", topVar: "--service-top-5" },
+                  { ...figmaServices[6], left: "86.6%", topVar: "--service-top-6" },
+                ].map((service, i) => (
+                  <motion.div
                     key={service.title}
-                    className="absolute flex h-[47%] w-[14.6%] min-w-[190px] flex-col items-center xl:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center xl:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
+                    className="absolute flex h-[47%] w-[14.6%] min-w-[190px] flex-col items-center xl:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center xl:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)] transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF]/30 hover:shadow-[0px_5px_25px_rgba(0,149,255,0.15)]"
                     style={{ left: service.left, top: `var(${service.topVar})` }}
+                    variants={cardEntrance}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "-30px" }}
+                    custom={i}
                   >
                     <div className="relative h-14 w-14 self-center xl:self-auto">
                       <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
@@ -110,30 +154,38 @@ export function ServicesSection() {
                     <div className="mt-auto pt-4 w-full">
                       <div className="h-px w-full bg-white/20" />
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
 
             {/* Responsive layout */}
             <div className="relative xl:hidden">
-              <div className="text-center">
-                <div className="text-[26px] leading-[1.2] sm:text-[30px]">
-                  <span className="bg-[linear-gradient(90deg,#ffffff_28.8%,rgba(255,255,255,0.75517)_45.71%,rgba(255,255,255,0.4)_95%)] bg-clip-text text-transparent">
-                    Services to be known
-                  </span>
-                </div>
-                <p className="mt-6 text-[15px] leading-[24px] text-white/70 max-w-[420px] mx-auto">
-                  I&apos;m a paragraph. Click here to add your own text and edit me. It&apos;s easy. Just click &quot;Edit Text&quot; or
-                  double click me to add your own content and make changes to the font.
+              <motion.div
+                className="text-center"
+                variants={fadeIn}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: "-50px" }}
+              >
+                <h2 className="text-3xl sm:text-4xl font-[400] tracking-tight leading-tight text-white">
+                  Our Core <span className="text-[#0095FF]">Services</span>
+                </h2>
+                <p className="mt-4 text-sm sm:text-base leading-relaxed text-white/50 max-w-[420px] mx-auto">
+                  The building blocks behind every deployment. From compute to storage, each service is designed to work seamlessly together.
                 </p>
-              </div>
+              </motion.div>
 
               <div className="mt-10 grid gap-6 sm:grid-cols-2">
-                {figmaServices.map((service) => (
-                  <div
+                {figmaServices.map((service, i) => (
+                  <motion.div
                     key={service.title}
-                    className="flex min-h-[240px] flex-col items-center sm:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center sm:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)]"
+                    className="flex min-h-[240px] flex-col items-center sm:items-start rounded-[5px] border border-transparent bg-[#1B1B1B] px-4 py-5 text-center sm:text-left shadow-[0px_5px_17.7px_rgba(0,0,0,0.75)] transition-all duration-300 hover:-translate-y-1 hover:border-[#0095FF]/30 hover:shadow-[0px_5px_25px_rgba(0,149,255,0.15)]"
+                    variants={cardEntrance}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true, margin: "-30px" }}
+                    custom={i}
                   >
                     <div className="relative h-12 w-12 self-center sm:self-start">
                       <Image src={service.logoSrc} alt={service.logoAlt} fill className="object-contain" />
@@ -147,7 +199,7 @@ export function ServicesSection() {
                     <div className="mt-auto pt-4 w-full">
                       <div className="h-px w-full bg-white/20" />
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
