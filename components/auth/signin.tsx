@@ -250,40 +250,40 @@ export function SignInForm() {
   }
 
   return (
-    <div className="mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-4 py-4 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6">
-      <div className="mx-auto mb-4 text-center">
-        <h1 className="text-[28px] sm:text-[34px] font-bold leading-[1.02] text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
-        <p className="-mt-1 text-[32px] sm:text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
+    <div className="mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-6 py-6 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6">
+      <div className="mx-auto mb-1 text-center pt-2 pb-1">
+        <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+        <p className="mt-3 text-[14px] leading-[16px] text-white">
+          <span style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="block text-[14px] leading-[18px] font-normal">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</span>
+          <span className="block  text-[14px] leading-[16px] text-white/90">Welcome back! Please Log in to continue.</span>
+        </p>
       </div>
 
-      <div className="text-center">
-        <p className="text-lg text-white">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</p>
-        <p className="mt-1 text-sm text-white/90">Welcome back! Please Log in to continue.</p>
-      </div>
-
-      <div className="mt-5 flex items-center justify-center gap-5 sm:gap-8">
-        <button type="button" aria-label="Sign in with GitHub" className="text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
-          <Icons.gitHub className="h-9 w-9" />
+      <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
+        <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
+          <Icons.gitHub className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with GitLab" className="transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
-          <Image src="/gitlab.png" alt="GitLab" width={36} height={36} className="h-9 w-9" />
+        <button type="button" aria-label="Sign in with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+          <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with Bitbucket" className="transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
-          <Image src="/BitBucket.png" alt="Bitbucket" width={36} height={36} className="h-9 w-9" />
+        <button type="button" aria-label="Sign in with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+          <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with Google" className="text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
-          <Icons.google className="h-9 w-9" />
+        <button type="button" aria-label="Sign in with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
+          <Icons.google className="h-8 w-8" />
         </button>
       </div>
 
-      <div className="mt-5 flex items-center gap-3 text-white">
-        <div className="h-px flex-1 bg-white/75" />
-        <span className="text-sm">Or</span>
-        <div className="h-px flex-1 bg-white/75" />
+      <div className="mx-auto mt-4 w-full max-w-[320px]">
+        <div className="flex items-center gap-3 text-white">
+          <div className="h-px flex-1 bg-white/75" />
+          <span className="text-sm">Or</span>
+          <div className="h-px flex-1 bg-white/75" />
+        </div>
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-4 w-full max-w-[356px] space-y-3">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-3 w-full max-w-[320px] space-y-2">
           <FormField
             control={form.control}
             name="email"
@@ -343,7 +343,7 @@ export function SignInForm() {
             </Link>
           </div>
 
-          <div className={`mx-auto mt-1 w-full max-w-[236px] ${buttonShellClass}`}>
+          <div className={`mx-auto mt-2 w-full max-w-[200px] ${buttonShellClass}`}>
             <button
               type="submit"
               disabled={isLoading}
@@ -355,7 +355,7 @@ export function SignInForm() {
         </form>
       </Form>
 
-      <p className="mt-4 text-center text-sm text-white">
+      <p className="mt-3 text-center text-sm text-white">
         New here! Create an account{" "}
         <Link href="/signup" className="text-[#00a2ff] hover:text-[#53beff]">
           Sign Up

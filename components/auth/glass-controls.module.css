@@ -71,8 +71,8 @@
 ================================= */
 
 .inputShell {
-  height: 40px;
-  border-radius: 10px;
+  height: 44px; /* Figma: 44px desktop */
+  border-radius: 5px; /* Figma radius 5px */
   background: rgba(15, 17, 24, 0.76);
 }
 
@@ -82,10 +82,16 @@
 ================================= */
 
 .buttonShell {
-  height: 40px;
-  border-radius: 999px; /* keep pill */
+  height: 44px; /* Figma: 44px desktop */
+  border-radius: 1000px; /* pill */
   background: rgba(3, 27, 48, 0.82);
   border-color: rgba(164, 197, 228, 0.6);
+}
+
+/* Mobile: slightly reduce heights to keep compact touch targets */
+@media (max-width: 640px) {
+  .inputShell { height: 40px; }
+  .buttonShell { height: 40px; }
 }
 
 

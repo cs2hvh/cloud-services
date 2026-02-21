@@ -196,26 +196,21 @@ function ResetPasswordContent() {
 
       {/* Content */}
       <div className="relative z-10 flex min-h-svh items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
-        <div className={authCardClassName}>
-          <div className="mx-auto mb-6 text-center">
-            <h1 className="text-[34px] font-bold leading-[1.02] text-white">
-              Ahura<span className="text-[#2f8af5]">Sense</span>
-            </h1>
-            <p className="-mt-1 text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
-          </div>
-
-          <div className="text-center">
-            <p className="text-lg text-white">
-              {step === "email" ? "Reset Your Password" : "Verify & Reset"}
+          <div className={authCardClassName}>
+          <div className="mx-auto mb-2 text-center">
+            <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="text-[24px] leading-[27px] font-bold text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+            <p className="mt-3 text-[14px] leading-[16px] text-white">
+              <span style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="block text-[14px] leading-[18px] font-normal">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</span>
+              <span className="block  text-[14px] leading-[16px] text-white/90">{step === "email" ? "Reset Your Password" : "Verify & Reset"}</span>
             </p>
-            <p className="mt-1 text-sm text-white/90">
+            <p className="mt-3 text-[14px] leading-[16px] text-white/90">
               {step === "email"
                 ? "Enter your email to receive a reset code."
                 : "Enter the code and choose a new password."}
             </p>
           </div>
 
-          <div className="mx-auto mt-5 w-full max-w-[356px] space-y-4">
+          <div className="mx-auto mt-5 w-full max-w-[320px] space-y-4">
             {step === "email" ? (
               <Form {...forgotForm}>
                 <form onSubmit={forgotForm.handleSubmit(onForgotSubmit)} className="space-y-4">
