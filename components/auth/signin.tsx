@@ -9,10 +9,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Icons } from "@/components/ui/icons";
 import { Label } from "@/components/ui/label";
 import {
@@ -27,17 +25,20 @@ import {
 import { signin_schema } from "@/types/zod/auth";
 import api from "@/lib/axios/axios";
 import { createClient } from "@/lib/supabase/client";
+import glass from "@/components/auth/glass-controls.module.css";
 
 type InputType = z.infer<typeof signin_schema>;
+
+const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
+const buttonShellClass = `${glass.glassControl} ${glass.buttonShell}`;
 
 export function SignInForm() {
   const router = useRouter();
   const search = useSearchParams();
 
-  // ---- UI state
   const [isLoading, setIsLoading] = React.useState(false);
+  const [rememberMe, setRememberMe] = React.useState(true);
 
-  // ---- 2FA state
   const [twofaRequired, setTwofaRequired] = React.useState(false);
   const [otpCode, setOtpCode] = React.useState("");
   const [twofaError, setTwofaError] = React.useState("");
@@ -46,66 +47,64 @@ export function SignInForm() {
   const [needsMfa, setNeedsMfa] = React.useState(false);
   const [factorId, setFactorId] = React.useState("");
 
-  // create supabase client once
   const supabase = React.useMemo(() => createClient(), []);
 
-  // safe redirect
   const nextPath = React.useMemo(() => {
     const raw = search.get("next") || "/dashboard";
     return raw.startsWith("/") ? raw : "/dashboard";
   }, [search]);
 
-  // ---- form
   const form = useForm<InputType>({
     resolver: zodResolver(signin_schema),
     defaultValues: { email: "", password: "" },
   });
 
-  // ---- email/password sign-in
   async function onSubmit(values: InputType) {
     setIsLoading(true);
-    const res = await api.post("/auth/signin/email", {
-      email: values.email,
-      password: values.password,
-    });
-    setIsLoading(false);
-    // If server says 2FA is required, switch to 2FA mode
-    if (res.data?.twofastatus) {
-      setTwofaRequired(true);
-      return; // don't redirect yet
-    } else if (res.status === 200) {
-      toast.success(`Welcome back ${res.data?.name || ""}!`);
-      
-      // Server set the session cookie, trigger auth state change by reading and setting it
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        await supabase.auth.setSession(data.session);
+    try {
+      const res = await api.post("/auth/signin/email", {
+        email: values.email,
+        password: values.password,
+        rememberMe,
+      });
+
+      if (res.data?.twofastatus) {
+        setTwofaRequired(true);
+        return;
       }
-      
-      router.refresh();
-      router.push("/");
+
+      if (res.status === 200) {
+        toast.success(`Welcome back ${res.data?.name || ""}!`);
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          await supabase.auth.setSession(data.session);
+        }
+        router.refresh();
+        router.push("/");
+      }
+    } finally {
+      setIsLoading(false);
     }
   }
 
-  // ---- social sign-in
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
-    let response;
-    if (type === "github" || type === "google" || type === "bitbucket") {
-       response = await api.post("/auth/signin/github", { type });
-    } else if (type === "gitlab") {
-       response = await api.post("/auth/signin/gitlab", { type });
-    }
+    try {
+      let response;
+      if (type === "github" || type === "google" || type === "bitbucket") {
+        response = await api.post("/auth/signin/github", { type });
+      } else if (type === "gitlab") {
+        response = await api.post("/auth/signin/gitlab", { type });
+      }
 
-
-    //if we get the url from the response, redirect to it.
-    if (response?.data?.url) {
-      window.location.href = response.data.url;
+      if (response?.data?.url) {
+        window.location.href = response.data.url;
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
-  // ---- kick off AAL check only when 2FA mode is active
   React.useEffect(() => {
     if (!twofaRequired) return;
 
@@ -122,14 +121,12 @@ export function SignInForm() {
         return;
       }
 
-      // Already at AAL2 (rare here) → proceed
       if (data.currentLevel === "aal2") {
         router.refresh();
         router.replace(nextPath);
         return;
       }
 
-      // Needs upgrade to AAL2 → load verified TOTP factor
       if (data.nextLevel === "aal2") {
         setNeedsMfa(true);
         const factors = await supabase.auth.mfa.listFactors();
@@ -151,7 +148,6 @@ export function SignInForm() {
         return;
       }
 
-      // AAL2 not required → proceed
       router.refresh();
       router.replace(nextPath);
     })();
@@ -161,7 +157,6 @@ export function SignInForm() {
     };
   }, [twofaRequired, supabase, router, nextPath]);
 
-  // ---- submit 2FA code
   const onSubmit2fa = async (e: React.FormEvent) => {
     e.preventDefault();
     setTwofaError("");
@@ -175,10 +170,12 @@ export function SignInForm() {
         challengeId: challenge.data.id,
         code: otpCode.trim(),
       });
+
       if (verify.error) {
-        // Handle specific TOTP errors
         if (verify.error.message.includes("Invalid TOTP code")) {
-          throw new Error("Invalid code. Make sure your device's clock is synchronized and try again.");
+          throw new Error(
+            "Invalid code. Make sure your device clock is synchronized and try again.",
+          );
         }
         throw new Error(verify.error.message);
       }
@@ -196,223 +193,174 @@ export function SignInForm() {
     }
   };
 
-  // ---------- RENDER ----------
-
-  // Show 2FA UI only when in 2FA mode
   if (twofaRequired) {
     if (!twofaReady) {
       return (
-        <div className="p-6 text-sm text-muted-foreground">
-          Checking your session…
+        <div className="mx-auto w-full max-w-md rounded-md border border-white/20 bg-[#11131b]/90 p-6 text-sm text-white/80 backdrop-blur-md">
+          Checking your session...
         </div>
       );
     }
+
     if (!needsMfa) {
-      // We’ll have redirected already
       return null;
     }
 
     return (
-      <div className="max-w-sm mx-auto p-6 bg-black/40 border border-white/10 rounded-lg shadow-sm backdrop-blur-md">
-        <h1 className="text-xl font-semibold mb-2 text-white">Two-Factor Verification</h1>
-        <p className="text-sm text-gray-300 mb-4">
-          Enter the 6-digit code from your authenticator app to continue.
+      <div className="mx-auto w-full max-w-md rounded-md border border-white/20 bg-[#11131b]/90 p-6 shadow-xl backdrop-blur-md">
+        <h1 className="mb-2 text-xl font-semibold text-white">Two-Factor Verification</h1>
+        <p className="mb-4 text-sm text-white/80">
+          Enter the 6-digit code from your authenticator app.
         </p>
 
         <form onSubmit={onSubmit2fa} className="space-y-3">
           <div>
-            <Label htmlFor="code">Authentication code</Label>
-            <Input
-              id="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              placeholder="123456"
-              value={otpCode}
-              onChange={(e) => {
-                // allow only digits and cap length at 6
-                const v = e.target.value.replace(/\D/g, "").slice(0, 6);
-                setOtpCode(v);
-              }}
-              maxLength={6}
-            />
+            <Label htmlFor="code" className="text-white">Authentication Code</Label>
+            <div className={inputShellClass}>
+              <Input
+                id="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                value={otpCode}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                  setOtpCode(v);
+                }}
+                maxLength={6}
+                className={glass.field}
+              />
+            </div>
           </div>
 
-          {twofaError && <p className="text-sm text-red-600">{twofaError}</p>}
+          {twofaError && <p className="text-sm text-red-400">{twofaError}</p>}
 
-          <Button type="submit" disabled={twofaBusy || otpCode.length < 6}>
-            {twofaBusy ? "Verifying…" : "Verify"}
-          </Button>
+          <div className={`w-full ${buttonShellClass}`}>
+            <button
+              type="submit"
+              disabled={twofaBusy || otpCode.length < 6}
+              className={glass.button}
+            >
+              {twofaBusy ? "Verifying..." : "Verify"}
+            </button>
+          </div>
         </form>
       </div>
     );
   }
 
-  // Normal sign-in UI
   return (
-    <div className="flex flex-col gap-6 max-w-3xl mx-auto">
-      <Card className="overflow-hidden shadow-lg bg-black/40 backdrop-blur-md border border-white/10">
-        <CardContent className="grid p-0 md:grid-cols-2">
-          <div className="relative hidden md:block h-full min-h-80 rounded-l-xl bg-gradient-to-br from-gray-900 to-black">
-            <div className="w-full h-full rounded-l-xl flex items-center justify-center">
-              <div className="text-center space-y-4 p-8">
-                <h2 className="text-2xl font-bold text-white">Welcome Back</h2>
-                <p className="text-gray-300">Access your cloud services platform</p>
-              </div>
-            </div>
-          </div>
+    <div className="mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-4 py-4 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6">
+      <div className="mx-auto mb-4 text-center">
+        <h1 className="text-[28px] sm:text-[34px] font-bold leading-[1.02] text-white">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
+        <p className="-mt-1 text-[32px] sm:text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
+      </div>
 
-          <div className="p-6 md:p-8">
-            <div className="flex flex-col items-center text-center mb-6">
-              <h1 className="text-2xl font-bold tracking-tight text-white">
-                Welcome back
-              </h1>
-              <p className="text-sm text-gray-300 mt-1">
-                Please sign in to access your account.
-              </p>
-            </div>
+      <div className="text-center">
+        <p className="text-lg text-white">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</p>
+        <p className="mt-1 text-sm text-white/90">Welcome back! Please Log in to continue.</p>
+      </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                onClick={() => handleSignIn("github")}
-                disabled={isLoading}
-              >
-                <Icons.gitHub className="h-5 w-5" />
-                <span>GitHub</span>
-              </Button>
+      <div className="mt-5 flex items-center justify-center gap-5 sm:gap-8">
+        <button type="button" aria-label="Sign in with GitHub" className="text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
+          <Icons.gitHub className="h-9 w-9" />
+        </button>
+        <button type="button" aria-label="Sign in with GitLab" className="transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+          <Image src="/gitlab.png" alt="GitLab" width={36} height={36} className="h-9 w-9" />
+        </button>
+        <button type="button" aria-label="Sign in with Bitbucket" className="transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+          <Image src="/BitBucket.png" alt="Bitbucket" width={36} height={36} className="h-9 w-9" />
+        </button>
+        <button type="button" aria-label="Sign in with Google" className="text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
+          <Icons.google className="h-9 w-9" />
+        </button>
+      </div>
 
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                onClick={() => handleSignIn("google")}
-                disabled={isLoading}
-              >
-                <Icons.google className="h-5 w-5" />
-                <span>Google</span>
-              </Button>
+      <div className="mt-5 flex items-center gap-3 text-white">
+        <div className="h-px flex-1 bg-white/75" />
+        <span className="text-sm">Or</span>
+        <div className="h-px flex-1 bg-white/75" />
+      </div>
 
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                onClick={() => handleSignIn("gitlab")}
-                disabled={isLoading}
-              >
-                <Image src="/gitlab.png" alt="GitLab" width={20} height={20} className="h-5 w-5" />
-                <span>GitLab</span>
-              </Button>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="mx-auto mt-4 w-full max-w-[356px] space-y-3">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                <FormControl>
+                  <div className={inputShellClass}>
+                    <Input
+                      placeholder=""
+                      {...field}
+                      disabled={isLoading}
+                      type="email"
+                      className={glass.field}
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-              <Button
-                variant="outline"
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-black/20 border-white/10 text-white hover:bg-white/10 hover:text-white transition-colors"
-                onClick={() => handleSignIn("bitbucket")}
-                disabled={isLoading}
-              >
-                <Image src="/BitBucket.png" alt="Bitbucket" width={20} height={20} className="h-5 w-5" />
-                <span>Bitbucket</span>
-              </Button>
-            </div>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-base font-normal text-white">Password</FormLabel>
+                <FormControl>
+                  <PasswordInput
+                    field={field}
+                    placeholder=""
+                    disabled={isLoading}
+                    className={glass.field}
+                    wrapperClassName={inputShellClass}
+                    toggleClassName="h-full pr-3"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <div className="flex justify-center mb-6">
-              <span className="px-4 py-1 text-gray-300 bg-black/60 rounded-md border border-white/10 text-xs uppercase">
-                Or continue with
-              </span>
-            </div>
+          <div className="flex items-center justify-between text-[11px] text-white">
+            <label className="inline-flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="h-[18px] w-[18px] rounded-sm border border-white/80 bg-transparent accent-white"
+              />
+              <span>Remember Me</span>
+            </label>
 
-            <Form {...form}>
-              <form
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="flex flex-col gap-4"
-              >
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-white">Email</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="name@example.com"
-                          {...field}
-                          disabled={isLoading}
-                          type="email"
-                          className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="flex items-center justify-between">
-                        <FormLabel htmlFor="password" className="text-white">Password</FormLabel>
-                        <Link
-                          href="/reset-password"
-                          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                        >
-                          Forgot password?
-                        </Link>
-                      </div>
-                      <FormControl>
-                        <PasswordInput
-                          field={field}
-                          placeholder="••••••••"
-                          disabled={isLoading}
-                          //className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full mt-2"
-                >
-                  {isLoading ? (
-                    <>
-                      <Icons.spinner className="h-4 w-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    "Sign in with Email"
-                  )}
-                </Button>
-              </form>
-            </Form>
-
-            <div className="flex items-center justify-center mt-2">
-              <p className="text-sm text-gray-300">
-                Don&apos;t have an account?{" "}
-                <Link
-                  href="/signup"
-                  className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
-                >
-                  Sign up
-                </Link>
-              </p>
-            </div>
-          </div>
-        </CardContent>
-        <CardFooter className="px-6 flex items-center justify-center border-t border-white/10">
-          <div className="text-center text-sm text-gray-300 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-blue-300 transition-colors">
-            By signing in, you agree to our{" "}
-            <Link href="/terms" target="_blank">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/privacy" target="_blank">
-              Privacy Policy
+            <Link href="/reset-password" className="text-[10px] leading-[11px] text-white hover:text-[#2f8af5]">
+              Forgot Password
             </Link>
-            .
           </div>
-        </CardFooter>
-      </Card>
+
+          <div className={`mx-auto mt-1 w-full max-w-[236px] ${buttonShellClass}`}>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className={glass.button}
+            >
+              {isLoading ? "Logging in..." : "Log In"}
+            </button>
+          </div>
+        </form>
+      </Form>
+
+      <p className="mt-4 text-center text-sm text-white">
+        New here! Create an account{" "}
+        <Link href="/signup" className="text-[#00a2ff] hover:text-[#53beff]">
+          Sign Up
+        </Link>
+      </p>
     </div>
   );
 }

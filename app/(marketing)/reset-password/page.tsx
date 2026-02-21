@@ -9,10 +9,8 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Icons } from "@/components/ui/icons";
 import {
   Form,
@@ -31,11 +29,15 @@ import {
   InputOTPSeparator,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { Spotlight } from "@/components/ui/spotlight";
-import { cn } from "@/lib/utils";
+import glass from "@/components/auth/glass-controls.module.css";
 
 type ForgotPasswordInput = z.infer<typeof forgot_password_schema>;
 type ResetPasswordInput = z.infer<typeof reset_password_schema>;
+
+const authCardClassName =
+  "mx-auto mt-3 sm:mt-0 w-full max-w-[520px] rounded-[5px] border border-white/20 bg-[#161619]/95 px-4 py-4 shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-[20px] sm:px-8 sm:py-6";
+const inputShellClass = `${glass.glassControl} ${glass.inputShell}`;
+const buttonShellClass = `${glass.glassControl} ${glass.buttonShell}`;
 
 // Countdown timer component
 function CountdownTimer({ expiresAt }: { expiresAt: string }) {
@@ -185,244 +187,221 @@ function ResetPasswordContent() {
   };
 
   return (
-    <div className="relative min-h-svh w-full overflow-hidden bg-black/[0.96] antialiased">
+    <div className="relative min-h-svh w-full overflow-hidden bg-[#04060b] antialiased">
       <div
-        className={cn(
-          "pointer-events-none absolute inset-0 [background-size:40px_40px] select-none",
-          "[background-image:linear-gradient(to_right,#171717_1px,transparent_1px),linear-gradient(to_bottom,#171717_1px,transparent_1px)]",
-        )}
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: "url('/signin-signup-bg.png')" }}
       />
-
-      <Spotlight
-        className="-top-40 left-0 md:-top-20 md:left-60"
-        fill="white"
-      />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.52)_65%,rgba(0,0,0,0.82)_100%)]" />
 
       {/* Content */}
-      <div className="relative z-10 flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-md">
-          <Card className="overflow-hidden shadow-lg bg-black/40 backdrop-blur-md border border-white/10">
-            <CardContent className="p-6 md:p-8">
-              <div className="flex flex-col items-center text-center mb-6">
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                  {step === "email" ? "Reset Your Password" : "Verify & Reset"}
-                </h1>
-                <p className="text-sm text-gray-300 mt-1">
-                  {step === "email" 
-                    ? "Enter your email address and we'll send you a code to reset your password" 
-                    : "Enter the code sent to your email and choose a new password"}
-                </p>
-              </div>
+      <div className="relative z-10 flex min-h-svh items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
+        <div className={authCardClassName}>
+          <div className="mx-auto mb-6 text-center">
+            <h1 className="text-[34px] font-bold leading-[1.02] text-white">
+              Ahura<span className="text-[#2f8af5]">Sense</span>
+            </h1>
+            <p className="-mt-1 text-[40px] font-bold leading-[0.95] text-white">Cloud</p>
+          </div>
 
-              <div className="space-y-4">
-                {step === "email" ? (
-                  <Form {...forgotForm}>
-                    <form onSubmit={forgotForm.handleSubmit(onForgotSubmit)} className="space-y-4">
-                      <FormField
-                        control={forgotForm.control}
-                        name="email"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-white">Email Address</FormLabel>
-                            <FormControl>
-                              <Input
-                                {...field}
-                                type="email"
-                                placeholder="name@example.com"
-                                disabled={isLoading}
-                                className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+          <div className="text-center">
+            <p className="text-lg text-white">
+              {step === "email" ? "Reset Your Password" : "Verify & Reset"}
+            </p>
+            <p className="mt-1 text-sm text-white/90">
+              {step === "email"
+                ? "Enter your email to receive a reset code."
+                : "Enter the code and choose a new password."}
+            </p>
+          </div>
+
+          <div className="mx-auto mt-5 w-full max-w-[356px] space-y-4">
+            {step === "email" ? (
+              <Form {...forgotForm}>
+                <form onSubmit={forgotForm.handleSubmit(onForgotSubmit)} className="space-y-4">
+                  <FormField
+                    control={forgotForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-normal text-white">Email</FormLabel>
+                        <FormControl>
+                          <div className={inputShellClass}>
+                            <Input
+                              {...field}
+                              type="email"
+                              placeholder=""
+                              disabled={isLoading}
+                              className={glass.field}
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className={`w-full ${buttonShellClass}`}>
+                    <button
+                      type="submit"
+                      disabled={isLoading}
+                      className={glass.button}
+                    >
+                      {isLoading ? "Sending code..." : "Send Reset Code"}
+                    </button>
+                  </div>
+                </form>
+              </Form>
+            ) : (
+              <Form {...resetForm}>
+                <form onSubmit={resetForm.handleSubmit(onResetSubmit)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-base font-normal text-white">Email</Label>
+                    <div className={inputShellClass}>
+                      <Input
+                        value={resetForm.watch("email")}
+                        type="email"
+                        disabled
+                        className={glass.field}
                       />
-
-                      <Button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full mt-2"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Icons.spinner className="h-4 w-4 animate-spin" />
-                            Sending code...
-                          </>
-                        ) : (
-                          "Send Reset Code"
-                        )}
-                      </Button>
-                    </form>
-                  </Form>
-                ) : (
-                  <Form {...resetForm}>
-                    <form onSubmit={resetForm.handleSubmit(onResetSubmit)} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label className="text-white">Email Address</Label>
-                        <div className="relative">
-                          <Input
-                            value={resetForm.watch("email")}
-                            type="email"
-                            disabled
-                            className="bg-black/20 border-white/10 text-white placeholder:text-gray-400"
-                          />
-                        </div>
-                        <p className="text-xs text-gray-400">
-                          This is the email address where we sent the reset code.
-                        </p>
-                      </div>
+                    </div>
+                    <p className="text-xs text-white/70">
+                      Code sent to this email address.
+                    </p>
+                  </div>
 
                       {otpExpiresAt && (
                         <CountdownTimer expiresAt={otpExpiresAt} />
                       )}
 
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <FormField
-                          control={resetForm.control}
-                          name="otp"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Reset Code</FormLabel>
-                              <FormControl>
-                                <div className="flex justify-center">
-                                  <InputOTP maxLength={6} {...field} disabled={isLoading}>
-                                    <InputOTPGroup>
-                                      <InputOTPSlot index={0} />
-                                      <InputOTPSlot index={1} />
-                                      <InputOTPSlot index={2} />
-                                    </InputOTPGroup>
-                                    <InputOTPSeparator />
-                                    <InputOTPGroup>
-                                      <InputOTPSlot index={3} />
-                                      <InputOTPSlot index={4} />
-                                      <InputOTPSlot index={5} />
-                                    </InputOTPGroup>
-                                  </InputOTP>
-                                </div>
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <FormField
+                      control={resetForm.control}
+                      name="otp"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-normal text-white">Reset Code</FormLabel>
+                          <FormControl>
+                            <div className="flex justify-center">
+                              <InputOTP maxLength={6} {...field} disabled={isLoading}>
+                                <InputOTPGroup>
+                                  <InputOTPSlot index={0} />
+                                  <InputOTPSlot index={1} />
+                                  <InputOTPSlot index={2} />
+                                </InputOTPGroup>
+                                <InputOTPSeparator />
+                                <InputOTPGroup>
+                                  <InputOTPSlot index={3} />
+                                  <InputOTPSlot index={4} />
+                                  <InputOTPSlot index={5} />
+                                </InputOTPGroup>
+                              </InputOTP>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </motion.div>
 
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.1 }}
-                      >
-                        <FormField
-                          control={resetForm.control}
-                          name="newPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">New Password</FormLabel>
-                              <FormControl>
-                                <PasswordInput
-                                  field={field}
-                                  placeholder="Enter new password"
-                                  disabled={isLoading}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.1 }}
+                  >
+                    <FormField
+                      control={resetForm.control}
+                      name="newPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-normal text-white">New Password</FormLabel>
+                          <FormControl>
+                            <PasswordInput
+                              field={field}
+                              placeholder=""
+                              disabled={isLoading}
+                              className={glass.field}
+                              wrapperClassName={inputShellClass}
+                              toggleClassName="h-full pr-3"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </motion.div>
 
-                      <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.2 }}
-                      >
-                        <FormField
-                          control={resetForm.control}
-                          name="confirmPassword"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-white">Confirm Password</FormLabel>
-                              <FormControl>
-                                <PasswordInput
-                                  field={field}
-                                  placeholder="Confirm new password"
-                                  disabled={isLoading}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, delay: 0.2 }}
+                  >
+                    <FormField
+                      control={resetForm.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-base font-normal text-white">Confirm Password</FormLabel>
+                          <FormControl>
+                            <PasswordInput
+                              field={field}
+                              placeholder=""
+                              disabled={isLoading}
+                              className={glass.field}
+                              wrapperClassName={inputShellClass}
+                              toggleClassName="h-full pr-3"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </motion.div>
 
-                      <Button
-                        type="submit"
-                        disabled={isLoading}
-                        className="w-full mt-2"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Icons.spinner className="h-4 w-4 animate-spin" />
-                            Resetting password...
-                          </>
-                        ) : (
-                          "Reset Password"
-                        )}
-                      </Button>
-                    </form>
-                  </Form>
-                )}
-              </div>
-
-              <div className="flex items-center justify-center mt-4 gap-4 flex-wrap">
-                {step === "reset" ? (
-                  <>
+                  <div className={`w-full ${buttonShellClass}`}>
                     <button
-                      onClick={resendCode}
+                      type="submit"
                       disabled={isLoading}
-                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
+                      className={glass.button}
                     >
-                      Resend code
+                      {isLoading ? "Resetting password..." : "Reset Password"}
                     </button>
-                    <span className="text-gray-600">•</span>
-                    <button
-                      onClick={() => setStep("email")}
-                      className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      Use different email
-                    </button>
-                  </>
-                ) : (
-                  <p className="text-sm text-gray-300">
-                    Remember your password?{" "}
-                  </p>
-                )}
-                <span className="text-gray-600">•</span>
-                <Link
-                  href="/signin"
-                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                  </div>
+                </form>
+              </Form>
+            )}
+          </div>
+
+          <div className="mt-4 text-center">
+            {step === "reset" ? (
+              <div className="flex items-center justify-center gap-2 text-sm">
+                <button
+                  onClick={resendCode}
+                  disabled={isLoading}
+                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors disabled:opacity-50"
                 >
-                  Sign in
-                </Link>
+                  Resend code
+                </button>
+                <span className="text-white/60">•</span>
+                <button
+                  onClick={() => setStep("email")}
+                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors"
+                >
+                  Use different email
+                </button>
               </div>
-            </CardContent>
-            <CardFooter className="px-6 flex items-center justify-center border-t border-white/10">
-              <div className="text-center text-sm text-gray-300 [&_a]:text-blue-400 [&_a]:underline [&_a]:underline-offset-4 hover:[&_a]:text-blue-300 transition-colors">
-                By resetting your password, you agree to our{" "}
-                <Link href="/terms" target="_blank">
-                  Terms of Service
-                </Link>{" "}
-                and{" "}
-                <Link href="/privacy" target="_blank">
-                  Privacy Policy
-                </Link>
-                .
-              </div>
-            </CardFooter>
-          </Card>
+            ) : null}
+            <p className="mt-2 text-sm text-white">
+              Remember your password?{" "}
+              <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff]">
+                Sign in
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -433,8 +412,13 @@ export default function ResetPasswordPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="flex min-h-svh items-center justify-center bg-black/[0.96]">
-          <Icons.spinner className="h-6 w-6 animate-spin text-white" />
+        <div className="relative flex min-h-svh items-center justify-center bg-[#04060b]">
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: "url('/signin-signup-bg.png')" }}
+          />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.52)_65%,rgba(0,0,0,0.82)_100%)]" />
+          <Icons.spinner className="relative z-10 h-6 w-6 animate-spin text-white" />
         </div>
       }
     >
