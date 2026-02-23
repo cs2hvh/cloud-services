@@ -52,8 +52,6 @@ const COMPLIANCE_BADGES = [
 export function Footer() {
   return (
     <footer className="relative z-10 bg-black">
-      {/* Top divider */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
       <Container className="pt-16 lg:pt-20 pb-8 lg:pb-10">
         {/* Main grid */}

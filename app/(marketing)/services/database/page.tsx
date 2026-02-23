@@ -1,83 +1,95 @@
-import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
-import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
+import DatabaseEnginesSection from "@/components/services/database-engines-section";
+import DatabaseShowcaseSection from "@/components/services/database-showcase-section";
+import DatabaseComparisonSection from "@/components/services/database-comparison-section";
+import DatabaseMetricsSection from "@/components/services/database-metrics-section";
+import DatabasePricingSection from "@/components/services/database-pricing-section";
+import DatabaseCtaSection from "@/components/services/database-cta-section";
+import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 
-
-
-const plans = [
-    {
-        badge: "New",
-        badgePlacement: "outside",
-        title: "Basic",
-        description:
-            "With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["1-4 vCPU core", "2-8 GB RAM", "50-200 GB NVMe disk space", "4 TB bandwidth"],
-    },
-    {
-        badge: "Most Recommended",
-        badgePlacement: "inside",
-        title: "General Use",
-        description:
-            "For growing teams and production workloads. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine in just a few clicks.",
-        features: ["4-16 vCPU cores", "8-32 GB RAM", "200-400 GB NVMe disk space", "16 TB bandwidth"],
-    },
-    {
-        badge: "Most Scalable",
-        badgePlacement: "inside",
-        title: "High Performance",
-        description:
-            "For organizations with advanced needs. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-        features: ["16-64 vCPU cores", "32-256 GB RAM", "400-1000 GB NVMe disk space", "32 TB bandwidth"],
-    },
+const cases = [
+  {
+    title: "SaaS & Multi-Tenant Apps",
+    description:
+      "Power multi-tenant SaaS platforms with connection pooling, row-level security, and automatic scaling as your customer base grows.",
+  },
+  {
+    title: "E-Commerce & Transactions",
+    description:
+      "Handle high-throughput transactional workloads with ACID-compliant databases, read replicas for product catalogs, and sub-millisecond caching.",
+  },
+  {
+    title: "Real-Time Analytics",
+    description:
+      "Ingest and query billions of events with ClickHouse or time-series extensions. Build dashboards and alerts on live data streams.",
+  },
+  {
+    title: "Mobile & IoT Backends",
+    description:
+      "Store user profiles, device telemetry, and session data with low-latency reads. Sync across regions for globally distributed apps.",
+  },
 ];
-
- const cases = [
-    {
-      title: "AI/ML Training",
-      description:
-        "Train large language models and deep learning networks with high-performance GPU clusters.",
-    },
-    {
-      title: "Inference at Scale",
-      description:
-        "Deploy ML models for real-time inference with auto-scaling based on request volume.",
-    },
-    {
-      title: "3D Rendering",
-      description:
-        "Render complex 3D scenes and animations with professional-grade GPU acceleration.",
-    },
-    {
-      title: "Scientific Computing",
-      description:
-        "Run simulations, molecular dynamics, and other HPC workloads with GPU acceleration.",
-    },
-  ];
 
 const DatabaseHome = () => {
   return (
     <main className="bg-black">
       <ServiceHeroSection
-        badge="High Performance Computing"
+        badge="Managed Databases"
         title="Database"
         description="Fully managed database services with automatic backups, scaling, and high availability. Focus on your application, not database administration."
-        primaryAction={{ label: "Get Started", href: "/signup" }}
+        primaryAction={{ label: "Launch a Database", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/service-home-db-section-1.svg", alt: "Database infrastructure" }}
+        illustration={{ src: "/images/main-page/service-home-db-section-1.png", alt: "Database infrastructure" }}
       />
-      <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
-        {/* <ComputeMarqueeSection /> */}
-        <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
-          <ComputeFeaturesCurveSection
-            backgroundImage="/images/compute-page/curve-feature-section-bg.png"
-            curveImage="/images/main-page/service-home-db-section-3.png"
-          />
-        </div>
-      </div>
-      <ServicesHomeSectionFour plans={plans} />
-      <ServicesHomeSectionSix cases={cases}/>
+      <DatabaseEnginesSection />
+      <DatabaseShowcaseSection />
+      <DatabaseComparisonSection />
+      <DatabaseMetricsSection />
+      <DatabasePricingSection />
+      <DatabaseCtaSection />
+      <ServicesHomeSectionFive
+        title="Frequently Asked Questions"
+        faqs={[
+          {
+            question: "Which database engines are supported?",
+            answer:
+              "We offer fully managed PostgreSQL, MySQL, MariaDB, Redis, MongoDB, and ClickHouse. Each engine runs on optimized infrastructure with automatic tuning for your workload profile.",
+          },
+          {
+            question: "How do backups and recovery work?",
+            answer:
+              "All databases include automatic daily snapshots with configurable retention (7–90 days). Pro and Enterprise plans support point-in-time recovery — restore your database to any second within the retention window.",
+          },
+          {
+            question: "Can I add read replicas?",
+            answer:
+              "Yes. On Pro and Enterprise plans, you can add up to 15 read replicas per database with automatic load balancing. Replicas can be deployed in different regions for low-latency reads.",
+          },
+          {
+            question: "How does high availability work?",
+            answer:
+              "Production databases run on multi-node clusters with synchronous replication. Automatic failover promotes a standby node within seconds if the primary becomes unavailable.",
+          },
+          {
+            question: "Is my data encrypted?",
+            answer:
+              "Yes. All data is encrypted at rest with AES-256 and in transit with TLS 1.3. You can also bring your own encryption keys (BYOK) on Enterprise plans.",
+          },
+          {
+            question: "Can I connect from my existing VPC?",
+            answer:
+              "Yes. VPC peering is available on Pro and Enterprise plans, allowing private connectivity without exposing your database to the public internet. We support AWS, GCP, and Azure peering.",
+          },
+          {
+            question: "How does scaling work?",
+            answer:
+              "Scale storage and compute independently with zero downtime. Storage auto-expands when you hit 90% capacity. CPU and RAM can be upgraded with a brief restart window.",
+          },
+        ]}
+      />
+      <ServicesHomeSectionSix cases={cases} />
     </main>
   );
 };

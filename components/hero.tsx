@@ -15,13 +15,13 @@ const fadeUp = {
 
 export function Hero() {
   return (
-    <section className="relative w-full h-screen min-h-[600px] max-h-[1080px] bg-[#131313] overflow-hidden">
+    <section className="relative w-full h-screen min-h-[600px] max-h-[1080px] bg-[#0a0a0a] overflow-hidden">
 
       {/* ── Looper background ── */}
       <LooperBackground className="z-0" />
 
       {/* ── Edge vignette ── */}
-      <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_30%,#131313_75%)] pointer-events-none" />
+      <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_30%,#0a0a0a_75%)] pointer-events-none" />
 
       {/* ── Content — centered ── */}
       <div className="absolute inset-0 z-10 flex items-center justify-center">

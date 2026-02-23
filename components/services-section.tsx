@@ -41,7 +41,7 @@ const figmaServices = [
       "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
   },
   {
-    logoSrc: "/images/Features/kubernetes.svg",
+    logoSrc: "/images/Features/kubernetes.png",
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
@@ -79,16 +79,19 @@ export function ServicesSection() {
   return (
     <section className="relative z-10 py-20">
       {/* Full-bleed background for the entire section */}
-      <div className="absolute inset-0 -z-10">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-[#0a0a0a] to-black">
         <Image
-          src="/images/Features/feature-bg.png"
+          src="/images/main-page/our-service.png"
           alt=""
           fill
-          className="object-cover opacity-80"
+          className="object-cover opacity-90"
+          style={{ objectPosition: "center center" }}
           priority
         />
-        {/* Bottom fade for smooth transition into next section */}
-        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black to-transparent" />
+        {/* Top fade — matches hero #0a0a0a */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-[#0a0a0a] to-transparent" />
+        {/* Bottom fade — blends into next section below */}
+        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent" />
       </div>
       <Container>
         <div className="relative rounded-none xl:rounded-lg overflow-hidden xl:overflow-visible">

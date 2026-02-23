@@ -100,7 +100,7 @@ const TABS = [
       "Integrated load balancing and ingress",
       "Multi-region clusters with cross-zone HA",
     ],
-    imageSrc: "/images/main-page/kubernetes.svg",
+    imageSrc: "/images/main-page/kubernetes.png",
     imageAlt: "Kubernetes illustration",
   },
   {

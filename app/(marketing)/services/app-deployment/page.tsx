@@ -1,121 +1,91 @@
-import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
-// import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
-import ServicesHomeSectionFour2 from "@/components/serviceshome/section-4.2";
+import AppDeployFrameworksSection from "@/components/services/app-deploy-frameworks-section";
+import AppDeployShowcaseSection from "@/components/services/app-deploy-showcase-section";
+import AppDeployPricingSection from "@/components/services/app-deploy-pricing-section";
+import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 
-const GpuHome = () => {
-//   const defaultItems = [
-// 	{
-// 		title: "Latest GPU Hardware",
-// 		description:
-// 			"Access NVIDIA H100, A100, and RTX 4090 GPUs for maximum performance. Updated regularly with the latest hardware.",
-// 		iconSrc: "/images/main-page/service-home-gpu-1.svg",
-// 		iconAlt: "GPU hardware",
-// 	},
-// 	{
-// 		title: "Multi-GPU Support",
-// 		description:
-// 			"Scale from single GPU to multi-node clusters with NVLink interconnect for distributed training workloads.",
-// 		iconSrc: "/images/main-page/service-home-gpu-2.svg",
-// 		iconAlt: "Multi GPU",
-// 	},
-// 	{
-// 		title: "Fast Storage",
-// 		description:
-// 			"High-bandwidth NVMe storage optimized for training data. Local SSD for maximum IOPS.",
-// 		iconSrc: "/images/main-page/service-home-gpu-3.svg",
-// 		iconAlt: "Fast storage",
-// 	},
-// 	{
-// 		title: "Spot Instances",
-// 		description:
-// 			"Save up to 90% with spot instances for fault-tolerant workloads. Automatic checkpointing included.",
-// 		iconSrc: "/images/main-page/service-home-gpu-4.svg",
-// 		iconAlt: "Spot instances",
-// 	},
-// 	{
-// 		title: "Pre-configured Environments",
-// 		description:
-// 			"Start faster with pre-installed CUDA, cuDNN, PyTorch, TensorFlow, and other ML frameworks.",
-// 		iconSrc: "/images/main-page/service-home-gpu-5.svg",
-// 		iconAlt: "Preconfigured environments",
-// 	},
-// ];
-
-// const plans = [
-//     {
-//         badge: "New",
-//         badgePlacement: "outside",
-//         title: "Basic",
-//         description:
-//             "With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-//         features: ["1-4 vCPU core", "2-8 GB RAM", "50-200 GB NVMe disk space", "4 TB bandwidth"],
-//     },
-//     {
-//         badge: "Most Recommended",
-//         badgePlacement: "inside",
-//         title: "General Use",
-//         description:
-//             "For growing teams and production workloads. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine in just a few clicks.",
-//         features: ["4-16 vCPU cores", "8-32 GB RAM", "200-400 GB NVMe disk space", "16 TB bandwidth"],
-//     },
-//     {
-//         badge: "Most Scalable",
-//         badgePlacement: "inside",
-//         title: "High Performance",
-//         description:
-//             "For organizations with advanced needs. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-//         features: ["16-64 vCPU cores", "32-256 GB RAM", "400-1000 GB NVMe disk space", "32 TB bandwidth"],
-//     },
-// ];
-
- const cases = [
+const AppDeploymentHome = () => {
+  const cases = [
     {
-      title: "AI/ML Training",
+      title: "SaaS & Web Applications",
       description:
-        "Train large language models and deep learning networks with high-performance GPU clusters.",
+        "Ship production-ready web apps with zero-downtime deployments, automatic SSL, and global CDN — from monoliths to microservices.",
     },
     {
-      title: "Inference at Scale",
+      title: "APIs & Backend Services",
       description:
-        "Deploy ML models for real-time inference with auto-scaling based on request volume.",
+        "Deploy REST and GraphQL APIs with auto-scaling, health checks, and built-in rate limiting. Connect to managed databases in one click.",
     },
     {
-      title: "3D Rendering",
+      title: "Static Sites & Jamstack",
       description:
-        "Render complex 3D scenes and animations with professional-grade GPU acceleration.",
+        "Instant builds for Next.js, Nuxt, Astro, and other SSG frameworks. Edge-cached globally with automatic cache invalidation.",
     },
     {
-      title: "Scientific Computing",
+      title: "Internal Tools & Dashboards",
       description:
-        "Run simulations, molecular dynamics, and other HPC workloads with GPU acceleration.",
+        "Deploy admin panels, monitoring dashboards, and internal tools with environment isolation and team-based access controls.",
     },
   ];
+
   return (
     <main className="bg-black">
       <ServiceHeroSection
-        badge="High Performance Computing"
+        badge="App Platform"
         title="App Deployment"
-        description="Enterprise-ready application deployments with CI/CD automation, environment isolation, and rollback support. Ship updates faster, ensure high availability, and scale applications seamlessly without operational overhead. "
-        primaryAction={{ label: "Get Started", href: "/signup" }}
+        description="Push your code, we handle the rest. Automatic builds, zero-downtime deployments, and instant rollbacks — from Git push to production in seconds."
+        primaryAction={{ label: "Deploy Your App", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
-         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
+        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/app-deploy.svg", alt: "App Deployment infrastructure" }}
       />
-      <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
-        {/* <ComputeMarqueeSection /> */}
-        <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
-          <ComputeFeaturesCurveSection
-            backgroundImage="/images/compute-page/curve-feature-section-bg.png"
-            curveImage="/images/main-page/service-home-app-section-3.png"
-          />
-        </div>
-      </div>
-      <ServicesHomeSectionFour2/>
-      <ServicesHomeSectionSix cases={cases}/>
+      <AppDeployFrameworksSection />
+      <AppDeployShowcaseSection />
+      <AppDeployPricingSection />
+      <ServicesHomeSectionFive
+        title="Frequently Asked Questions"
+        faqs={[
+          {
+            question: "How does deployment work?",
+            answer:
+              "Connect your GitHub, GitLab, or Bitbucket repository. Every push to your configured branch triggers an automatic build and deploy. You can also deploy manually via CLI or API.",
+          },
+          {
+            question: "Which languages and frameworks are supported?",
+            answer:
+              "We support Node.js, Python, Go, Java, Ruby, PHP, Rust, .NET, and more. Popular frameworks like Next.js, Django, Spring Boot, Laravel, and FastAPI are auto-detected with optimized build pipelines.",
+          },
+          {
+            question: "Can I use Docker?",
+            answer:
+              "Yes. If your repo contains a Dockerfile, we'll build and deploy it automatically. You can also push pre-built images from any container registry.",
+          },
+          {
+            question: "How do rollbacks work?",
+            answer:
+              "Every deployment creates an immutable release. Roll back to any previous version instantly from the dashboard or CLI — no rebuild required.",
+          },
+          {
+            question: "Is there a free tier?",
+            answer:
+              "Yes. The Starter plan includes 3 apps with 512 MB RAM each, automatic SSL, and 100 GB bandwidth per month — no credit card required to get started.",
+          },
+          {
+            question: "How does scaling work?",
+            answer:
+              "Scale horizontally by adding instances or vertically by upgrading resources. Auto-scaling rules can trigger based on CPU, memory, or request count thresholds.",
+          },
+          {
+            question: "Do you support environment variables and secrets?",
+            answer:
+              "Yes. Manage environment variables per app and per environment (preview, staging, production). Secrets are encrypted at rest and injected securely at runtime.",
+          },
+        ]}
+      />
+      <ServicesHomeSectionSix cases={cases} />
     </main>
   );
 };
 
-export default GpuHome;
+export default AppDeploymentHome;

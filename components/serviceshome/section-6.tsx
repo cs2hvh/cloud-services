@@ -1,15 +1,17 @@
 import React from "react";
 
-const ServicesHomeSectionSix = ({cases}:{cases:{title: string; description: string}[]}) => {
+const ServicesHomeSectionSix = ({cases, hideTopDivider = false}:{cases:{title: string; description: string}[]; hideTopDivider?: boolean}) => {
  
 
   return (
     <section className="relative overflow-hidden bg-[#C1C1C1] py-16 md:py-24 min-[1920px]:py-28">
       {/* Top triangular black div - edge at top */}
+      {!hideTopDivider && (
       <div
         className="absolute top-0 left-0 w-full h-[clamp(48px,6vw,140px)] bg-black
   [clip-path:polygon(0_0,_100%_0,_100%_100%)]"
       ></div>
+      )}
 
       {/* Bottom triangular black div - edge at bottom */}
       <div
