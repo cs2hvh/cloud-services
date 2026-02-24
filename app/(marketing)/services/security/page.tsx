@@ -106,7 +106,7 @@ const CloudService = () => {
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/service-home-security-section-1.svg", alt: "security infrastructure" }}
       />
-      <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
+      {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <ComputeMarqueeSection />
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
@@ -114,7 +114,7 @@ const CloudService = () => {
             curveImage="/images/main-page/service-home-security-section-3.png"
           />
         </div>
-      </div>
+      </div> */}
       <ServicesHomeSectionFour plans={plans}/>
       <ServicesHomeSectionSix cases={cases}/>
     </main>

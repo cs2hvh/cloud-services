@@ -3,7 +3,7 @@ import { WhatYouCanBuild } from "@/components/solutions/sections/what-you-can-bu
 import { ReferenceDeployment } from "@/components/solutions/sections/reference-deployment";
 import { ReadyToBuild } from "@/components/solutions/sections/ready-to-build";
 
-const GpuHome = () => {
+const AiMlPage = () => {
 
   const buildItems = [
     {
@@ -93,9 +93,8 @@ const GpuHome = () => {
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />
       <ReadyToBuild {...readyToBuildData} />
-      {/* <ServicesHomeSectionSix cases={cases}/> */}
     </main>
   );
 };
 
-export default GpuHome;
+export default AiMlPage;

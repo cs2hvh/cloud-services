@@ -103,14 +103,14 @@ const plans = [
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/service-home-gpu-section-1.svg", alt: "GPU infrastructure" }}
       />
-      <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
+      {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
             backgroundImage="/images/compute-page/curve-feature-section-bg.png"
             curveImage="/images/main-page/service-home-gpu-section-3.png"
           />
         </div>
-      </div>
+      </div> */}
      
       <ServicesHomeSectionFour plans={plans}/>
        <ServicesHomeSectionFive/>
