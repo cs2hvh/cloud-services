@@ -32,7 +32,7 @@ export function ReferenceDeployment({
   environments,
   tags,
   actions,
-  backgroundImage = "/images/main-page/ref-dply-bg.svg",
+  backgroundImage = "/images/main-page/ref-dply-bg.png",
   className,
 }: ReferenceDeploymentProps) {
   return (
@@ -42,8 +42,8 @@ export function ReferenceDeployment({
         className
       )}
     >
-      {/* Container with 10% margin */}
-      <div className="mx-[5%] sm:mx-[10%]">
+      {/* Container with consistent margins */}
+      <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
         {/* Main box with border and background */}
         <div
           className="relative border border-[#6b6b6b] overflow-hidden"

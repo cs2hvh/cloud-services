@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard, CreditCard,
-  Server, Database, Cpu, Shield, Bot, Box, HardDrive, Rocket,
+  ArrowRight,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -15,15 +16,56 @@ type NavbarClientProps = {
   initialUser: SupabaseUser | null;
 };
 
-const SOLUTIONS = [
-  { icon: Server, label: "Compute", desc: "Elastic virtual machines across 12 regions", href: "/services/compute" },
-  { icon: Database, label: "Managed Database", desc: "PostgreSQL, MySQL & Redis clusters", href: "/services/database" },
-  { icon: Cpu, label: "GPU Instances", desc: "NVIDIA H100 & A100 on demand", href: "/services/gpu" },
-  { icon: Shield, label: "Security", desc: "DDoS protection & managed WAF", href: "/services/security" },
-  { icon: Bot, label: "AI Agents", desc: "Deploy autonomous AI agents", href: "/services/ai-agent" },
-  { icon: Box, label: "Kubernetes", desc: "Managed K8s clusters in minutes", href: "/services/kubernetes" },
-  { icon: HardDrive, label: "Object Storage", desc: "S3-compatible, 11 nines durability", href: "/services/object-storage" },
-  { icon: Rocket, label: "App Deploy", desc: "Git-push to 100+ edge locations", href: "/services/app-deployment" },
+type SolutionItem = {
+  label: string;
+  desc: string;
+  href: string;
+  tags?: string[];
+};
+
+const SOLUTIONS: SolutionItem[] = [
+  {
+    label: "AI & Machine Learning",
+    desc: "Develop, train, and deploy intelligent systems",
+    href: "/solutions/ai-ml",
+    tags: ["GPUs", "Model Training", "MLOps", "AI APIs", "LLM Deployment", "Computer Vision", "NLP Engines", "AI Inference", "AutoML"],
+  },
+  {
+    label: "Web Hosting & SaaS Deployment",
+    desc: "Scalable and reliable application hosting",
+    href: "/solutions/web-hosting",
+    tags: ["AutoML"],
+  },
+  {
+    label: "Ecommerce Infrastructure",
+    desc: "Build and scale online stores",
+    href: "/solutions/ecommerce",
+  },
+  {
+    label: "Game Development & Hosting",
+    desc: "Low-latency multiplayer infrastructure",
+    href: "/solutions/game-dev",
+  },
+  {
+    label: "Database-Driven Applications",
+    desc: "High-performance data infrastructure",
+    href: "/solutions/database",
+  },
+  {
+    label: "Secure Enterprise Cloud",
+    desc: "Enterprise-grade protection and compliance",
+    href: "/solutions/security",
+  },
+  {
+    label: "Cloud-Native Kubernetes Platforms",
+    desc: "Modern container orchestration",
+    href: "/solutions/kubernetes",
+  },
+  {
+    label: "Storage & Backup Solutions",
+    desc: "Reliable and scalable data storage",
+    href: "/solutions/storage",
+  },
 ];
 
 export function NavbarClient({ initialUser }: NavbarClientProps) {
@@ -202,28 +244,55 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             onMouseEnter={handleSolutionsEnter}
             onMouseLeave={handleSolutionsLeave}
           >
-            <div className="rounded-2xl bg-black/90 backdrop-blur-[48px] border border-white/[0.08] shadow-[0_16px_48px_rgba(0,0,0,0.5)] p-6">
-              <div className="grid grid-cols-4 gap-2">
-                {SOLUTIONS.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setSolutionsOpen(false)}
-                    className="group flex items-start gap-3 rounded-lg px-3 py-3 hover:bg-white/[0.04] transition-colors duration-200"
-                  >
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white/[0.06] border border-white/[0.08] group-hover:border-[#0095FF]/30 transition-colors duration-200">
-                      <item.icon className="w-4 h-4 text-white/50 group-hover:text-[#0095FF] transition-colors duration-200" />
-                    </div>
-                    <div>
-                      <span className="block text-[13px] font-medium text-white/80 group-hover:text-white transition-colors duration-200">
-                        {item.label}
-                      </span>
-                      <span className="block text-[11px] leading-relaxed text-white/35 group-hover:text-white/50 transition-colors duration-200">
-                        {item.desc}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+            <div className="rounded-2xl bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+              <div className="grid grid-cols-3">
+                {/* Left side - Solutions grid (2 columns) */}
+                <div className="col-span-2 p-8">
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                    {SOLUTIONS.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setSolutionsOpen(false)}
+                        className="group block"
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                            {item.label}
+                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                        </div>
+                        <p className="text-[12px] text-black/50 leading-relaxed mb-2">
+                          {item.desc}
+                        </p>
+                        {item.tags && item.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right side - Image */}
+                <div className="relative overflow-hidden">
+                  <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
+                    <Image
+                      src="/images/main-page/solutions-navbar.svg"
+                      alt="Solutions"
+                      fill
+                      className="object-contain object-right"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -240,7 +309,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             transition={{ duration: 0.2 }}
             className="lg:hidden mt-2 mx-auto max-w-[75%] rounded-2xl bg-black/90 backdrop-blur-[48px] border border-white/[0.08] overflow-hidden"
           >
-            <div className="px-5 py-4 space-y-1">
+            <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
               {/* Solutions accordion in mobile */}
               <MobileSolutionsAccordion onNavigate={() => setIsOpen(false)} />
 
@@ -312,16 +381,23 @@ function MobileSolutionsAccordion({ onNavigate }: { onNavigate: () => void }) {
             transition={{ duration: 0.15 }}
             className="overflow-hidden"
           >
-            <div className="pl-3 py-1 space-y-0.5">
+            <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
               {SOLUTIONS.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   onClick={onNavigate}
-                  className="flex items-center gap-2.5 px-3 py-2 text-[12px] text-white/50 hover:text-white hover:bg-white/[0.04] rounded-md transition-colors duration-200"
+                  className="group block px-3 py-2.5 rounded-md hover:bg-white/[0.04] transition-colors duration-200"
                 >
-                  <item.icon className="w-3.5 h-3.5 text-white/30" />
-                  {item.label}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-medium text-white/70 group-hover:text-white transition-colors duration-200">
+                      {item.label}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all duration-200" />
+                  </div>
+                  <p className="text-[11px] text-white/40 mt-0.5">
+                    {item.desc}
+                  </p>
                 </Link>
               ))}
             </div>

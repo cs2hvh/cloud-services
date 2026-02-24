@@ -25,7 +25,7 @@ export function ReadyToBuild({
   description,
   formFields,
   buttonText,
-  backgroundImage = "/images/main-page/ref-deply-bg.png",
+  backgroundImage = "/images/main-page/ready-to-secure-bg.png",
   className,
   onSubmitAction,
 }: ReadyToBuildProps) {
@@ -50,8 +50,8 @@ export function ReadyToBuild({
         className
       )}
     >
-      {/* Container with 10% margin */}
-      <div className="mx-[5%] sm:mx-[10%]">
+      {/* Container with consistent margins */}
+      <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
         {/* Main box with background */}
         <div className="relative bg-[#141414] border border-[#737373] overflow-hidden">
           {/* Background Image - covers entire box */}
