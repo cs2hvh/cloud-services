@@ -4,6 +4,10 @@ import { ServiceHeroSection } from "@/components/services/service-hero-section";
 import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import ObjectStorageReleaseSection from "@/components/services/object-storage-release-section";
+import ObjectStorageFeaturesSection from "@/components/services/object-storage-features-section";
+import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
+import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
 
 const GpuHome = () => {
 //   const defaultItems = [
@@ -97,24 +101,24 @@ const GpuHome = () => {
 
   const cases = [
     {
-      title: "AI/ML Training",
+      title: "Media & Content Delivery",
       description:
-        "Train large language models and deep learning networks with high-performance GPU clusters.",
+        "Store and serve images, videos, and static assets with low-latency access and built-in CDN integration.",
     },
     {
-      title: "Inference at Scale",
+      title: "Backup & Disaster Recovery",
       description:
-        "Deploy ML models for real-time inference with auto-scaling based on request volume.",
+        "Automated backups with versioning, lifecycle policies, and cross-region replication for business continuity.",
     },
     {
-      title: "3D Rendering",
+      title: "Data Lakes & Analytics",
       description:
-        "Render complex 3D scenes and animations with professional-grade GPU acceleration.",
+        "Scalable storage for big data workloads, log aggregation, and analytics pipelines with S3-compatible tools.",
     },
     {
-      title: "Scientific Computing",
+      title: "Application Storage",
       description:
-        "Run simulations, molecular dynamics, and other HPC workloads with GPU acceleration.",
+        "Store user uploads, application state, and documents with fine-grained access controls and encryption.",
     },
   ];
   const faqs = [
@@ -147,14 +151,15 @@ const GpuHome = () => {
   return (
     <main className="bg-black">
       <ServiceHeroSection
-        badge="High Performance Computing"
+        badge="Cloud Storage"
         title="Object Storage"
-        description="Enterprise-grade Kubernetes clusters with automatic scaling, seamless updates, and built-in security. Deploy containerized applications at any scale."
+        description="S3-compatible object storage with 99.999% durability, automatic scaling, and built-in CDN. Store and serve any amount of data securely."
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/object-space.svg", alt: "Object Storage infrastructure" }}
       />
+      <ObjectStorageReleaseSection />
       {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
           <ComputeFeaturesCurveSection
@@ -163,8 +168,12 @@ const GpuHome = () => {
           />
         </div>
       </div> */}
+
+      <ObjectStoragePricingSection />
+      <ObjectStorageFeaturesSection />
       <ServicesHomeSectionFour plans={plans} />
       <ServicesHomeSectionFive title="Frequently Asked Questions" faqs={faqs} />
+      <ObjectStorageCtaSection />
       <ServicesHomeSectionSix cases={cases} />
     </main>
   );
