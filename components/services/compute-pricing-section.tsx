@@ -19,6 +19,26 @@ import {
 } from "lucide-react";
 import { Container } from "@/components/ui/container";
 
+/* ─── Type Definitions ─── */
+interface VirtualPlan {
+  vcpu: number;
+  ram: string;
+  storage: string;
+  bandwidth: string;
+  price: number;
+}
+
+interface BareMetalPlan {
+  processor: string;
+  cores: string;
+  ram: string;
+  storage: string;
+  bandwidth: string;
+  network: string;
+  price: number;
+}
+
+
 /* ─── Hardware Highlights ─── */
 const HIGHLIGHTS = [
   {
@@ -194,7 +214,7 @@ const CATEGORIES = [
 export default function ComputePricingSection() {
   const [activeKey, setActiveKey] = useState("shared");
   const active = CATEGORIES.find((c) => c.key === activeKey)!;
-  const isBM = !!(active as any).isBareMetalCategory;
+  const isBM = !!(active.isBareMetalCategory);
 
   return (
     <section className="relative z-10 py-16 lg:py-24">
@@ -330,7 +350,7 @@ export default function ComputePricingSection() {
                 </tr>
               </thead>
               <tbody>
-                {active.plans.map((plan: any, i: number) => (
+                {(active.plans as BareMetalPlan[]).map((plan, i: number) => (
                   <tr
                     key={`bm-${plan.processor}`}
                     className={`transition-colors duration-150 hover:bg-white/[0.02] ${
@@ -384,7 +404,7 @@ export default function ComputePricingSection() {
                 </tr>
               </thead>
               <tbody>
-                {active.plans.map((plan: any, i: number) => (
+                {(active.plans as VirtualPlan[]).map((plan, i: number) => (
                   <tr
                     key={`${active.key}-${plan.vcpu}-${plan.ram}`}
                     className={`transition-colors duration-150 hover:bg-white/[0.02] ${

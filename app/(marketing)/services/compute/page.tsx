@@ -1,5 +1,4 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
-import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
 import ComputeReleaseSection from "@/components/services/compute-release-section";
 import ComputePricingSection from "@/components/services/compute-pricing-section";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";

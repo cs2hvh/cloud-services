@@ -1,4 +1,3 @@
-import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 // import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionFour2 from "@/components/serviceshome/section-4.2";

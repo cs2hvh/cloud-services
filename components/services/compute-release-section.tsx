@@ -96,7 +96,7 @@ const ComputeReleaseSection = () => {
           {/* Server Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {bareMetalServers.map((server) => {
-              const isFeatured = !!(server as any).featured;
+              const isFeatured = !!(server).featured;
               return (
                 <div
                   key={server.id}

@@ -158,7 +158,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
               href={link.href}
               className="text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200"
             >
-              {link.label};
+              {link.label}
             </Link>
           ))}
         </div>

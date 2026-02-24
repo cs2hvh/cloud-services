@@ -7,7 +7,6 @@ import {
   Boxes,
   Server,
   Shield,
-  Globe,
   Gauge,
   Clock,
   Network,

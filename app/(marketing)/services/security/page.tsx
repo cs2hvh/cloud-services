@@ -3,8 +3,6 @@ import React from 'react'
 import ServicesHomeSectionFour from '@/components/serviceshome/section-4';
 import { ServiceHeroSection } from '@/components/services/service-hero-section';
 import ServicesHomeSectionSix from '@/components/serviceshome/section-6';
-import ComputeFeaturesCurveSection from '@/components/services/compute-features-curve-section';
-import ComputeMarqueeSection from '@/components/services/compute-marquee-section';
 
 // const defaultItems = [
 // 	{
