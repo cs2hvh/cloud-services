@@ -1,7 +1,8 @@
 import ComputeFeaturesCurveSection from "@/components/services/compute-features-curve-section";
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 // import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
-import ServicesHomeSectionFour2 from "@/components/serviceshome/section-4.2";
+import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
+import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 
 const GpuHome = () => {
@@ -70,7 +71,31 @@ const GpuHome = () => {
 //     },
 // ];
 
- const cases = [
+ const plans = [
+    {
+      badge: "Starter",
+      badgePlacement: "outside",
+      title: "Starter",
+      description: "Cost-effective object storage for small projects and backups.",
+      features: ["50 GB storage", "5 GB/month transfer", "S3-compatible API", "Basic support"],
+    },
+    {
+      badge: "Most Popular",
+      badgePlacement: "inside",
+      title: "Standard",
+      description: "Durable and scalable object storage for web apps and media.",
+      features: ["1 TB storage", "1 TB/month transfer", "S3 API + lifecycle rules", "99.99% durability"],
+    },
+    {
+      badge: "Enterprise",
+      badgePlacement: "inside",
+      title: "Enterprise",
+      description: "High-performance storage with SLA and dedicated support.",
+      features: ["Custom capacity", "Unlimited transfer", "Private networking", "Dedicated support"],
+    },
+  ];
+
+  const cases = [
     {
       title: "AI/ML Training",
       description:
@@ -92,6 +117,33 @@ const GpuHome = () => {
         "Run simulations, molecular dynamics, and other HPC workloads with GPU acceleration.",
     },
   ];
+  const faqs = [
+    {
+      question: "What object storage APIs are supported?",
+      answer:
+        "We provide an S3-compatible API with full support for buckets, object operations, ACLs, and lifecycle rules. You can use existing S3 SDKs and tools.",
+    },
+    {
+      question: "How is data durability and replication handled?",
+      answer:
+        "Objects are stored redundantly across multiple nodes with configurable replication policies to provide high durability and availability. Snapshots and versioning are supported.",
+    },
+    {
+      question: "What performance can I expect for large uploads/downloads?",
+      answer:
+        "We use NVMe-backed storage and a high-bandwidth network; performance scales with plan and region. Multipart uploads and parallel downloads are supported for large objects.",
+    },
+    {
+      question: "Is there lifecycle management and object locking?",
+      answer:
+        "Yes — you can configure lifecycle rules to transition objects between storage tiers, and object locking / retention policies are available for compliance use-cases.",
+    },
+    {
+      question: "How does billing and egress work?",
+      answer:
+        "Storage is billed by used capacity and transfer. Certain plans include monthly transfer allowances; overages are charged per-GB. Check the Pricing section for plan details.",
+    },
+  ];
   return (
     <main className="bg-black">
       <ServiceHeroSection
@@ -111,8 +163,9 @@ const GpuHome = () => {
           />
         </div>
       </div> */}
-      <ServicesHomeSectionFour2 />
-      <ServicesHomeSectionSix cases={cases}/>
+      <ServicesHomeSectionFour plans={plans} />
+      <ServicesHomeSectionFive title="Frequently Asked Questions" faqs={faqs} />
+      <ServicesHomeSectionSix cases={cases} />
     </main>
   );
 };
