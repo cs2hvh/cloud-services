@@ -132,7 +132,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 pt-4 px-4">
       {/* Pill-shaped glass bar */}
-      <div className="mx-auto max-w-[75%] flex items-center h-12 px-5 rounded-full bg-white/[0.04] backdrop-blur-[48px] border border-white/[0.08] shadow-[0_0_0_0.5px_rgba(255,255,255,0.06)_inset,0_8px_32px_rgba(0,0,0,0.4)]">
+      <div className="mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] flex items-center h-12 px-5 rounded-full bg-white/[0.04] backdrop-blur-[48px] border border-white/[0.08] shadow-[0_0_0_0.5px_rgba(255,255,255,0.06)_inset,0_8px_32px_rgba(0,0,0,0.4)]">
         {/* Logo */}
         <Link href="/" className="text-[22px] font-normal text-white shrink-0 font-[family-name:var(--font-nunito)]">
           ahura<span className="text-[#0095FF]">sense</span>
@@ -240,7 +240,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
-            className="hidden lg:block mx-auto max-w-[75%] mt-2"
+            className="hidden lg:block mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] mt-2"
             onMouseEnter={handleSolutionsEnter}
             onMouseLeave={handleSolutionsLeave}
           >
@@ -319,7 +319,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="lg:hidden mt-2 mx-auto max-w-[75%] rounded-2xl bg-black/90 backdrop-blur-[48px] border border-white/[0.08] overflow-hidden"
+            className="lg:hidden mt-2 mx-auto max-w-[92%] sm:max-w-[85%] rounded-2xl bg-black/90 backdrop-blur-[48px] border border-white/[0.08] overflow-hidden"
           >
             <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
               {/* Solutions accordion in mobile */}
