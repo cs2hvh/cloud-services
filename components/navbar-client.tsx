@@ -244,7 +244,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             onMouseEnter={handleSolutionsEnter}
             onMouseLeave={handleSolutionsLeave}
           >
-            <div className="rounded-2xl bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+            <div className=" bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
               <div className="grid grid-cols-3">
                 {/* Left side - Solutions grid (2 columns) */}
                 <div className="col-span-2 p-8">
@@ -293,6 +293,18 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                     />
                   </div>
                 </div>
+              </div>
+
+              {/* View all solutions link */}
+              <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
+                <Link
+                  href="/solutions"
+                  onClick={() => setSolutionsOpen(false)}
+                  className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200"
+                >
+                  View all solutions
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+                </Link>
               </div>
             </div>
           </motion.div>
