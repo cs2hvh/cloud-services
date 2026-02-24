@@ -24,7 +24,7 @@ export function Hero() {
       <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_30%,#0a0a0a_75%)] pointer-events-none" />
 
       {/* ── Content — centered ── */}
-      <div className="absolute inset-0 z-10 flex items-center justify-center">
+      <div className="absolute inset-0 z-10 flex items-center justify-center max-[400px]:pt-20 max-[400px]:items-start">
         <div className="w-full max-w-[820px] mx-auto px-6 text-center">
 
           {/* Tag */}

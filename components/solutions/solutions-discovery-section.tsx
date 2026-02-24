@@ -224,7 +224,8 @@ export function SolutionsDiscoverySection() {
 
   return (
     <section className="bg-black pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24">
-      <div className="mx-auto w-full max-w-[1438px] px-4 sm:px-6 md:px-10 lg:px-14 xl:px-16">
+      <div className="w-full">
+        <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
         <div className="relative grid gap-3 lg:grid-cols-[minmax(0,1fr)_155px_155px_155px]">
           <ToolbarSurface className="px-6 sm:px-8">
             <Image
@@ -404,6 +405,7 @@ export function SolutionsDiscoverySection() {
             No matching solutions found. Try another keyword or remove filters.
           </div>
         )}
+        </div>
       </div>
     </section>
   );

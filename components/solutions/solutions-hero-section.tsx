@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/container";
 
 const SOLUTION_TAG_GROUPS = [
   [
@@ -47,8 +48,9 @@ export function SolutionsHeroSection() {
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(14,15,15,0.7)_0%,rgba(14,15,15,0.55)_42%,rgba(14,15,15,0.35)_72%,rgba(14,15,15,0.6)_100%)]" />
       <div className="pointer-events-none absolute left-[-28%] top-[-34%] -z-10 h-[135px] w-[75vw] max-w-[1254px] rotate-[38.71deg] bg-[#494949]/45 blur-[126px]" />
 
-      <div className="relative z-10 mx-auto w-full max-w-[1438px] px-4 py-10 lg:py-0 lg:h-[calc(100vh-96px)] sm:px-6 md:px-10 lg:px-14 xl:px-16">
-        <div className="grid lg:h-full items-center gap-10 lg:grid-cols-2 lg:gap-0">
+      <Container>
+        <div className="relative z-10 py-10 lg:py-0 lg:h-[calc(100vh-96px)]">
+          <div className="grid lg:h-full items-center gap-10 lg:grid-cols-2 lg:gap-0">
           <div className="text-center sm:text-left lg:h-full flex flex-col justify-center lg:justify-self-start">
             <h1 className="max-w-[570px] text-[clamp(2rem,2.9vw,3.4rem)] font-normal leading-[1.22] text-[#F2F2F2] [text-shadow:2px_4px_18.1px_rgba(255,255,255,0.36)]">
               All solutions for building, scaling, and securing modern apps.
@@ -104,8 +106,9 @@ export function SolutionsHeroSection() {
               />
             </div>
           </div>
+          </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }
