@@ -135,6 +135,7 @@ export default function GlobalNetworkSection() {
                         width={18}
                         height={12}
                         className="rounded-[1px] shrink-0"
+                        unoptimized
                       />
                       <span className="text-[13px] text-white/60">{loc.city}</span>
                     </li>
