@@ -47,10 +47,10 @@ const ComputeHome = () => {
         }}
       />
       <ComputeReleaseSection />
-      <ComputeFeaturesCurveSection
+      {/* <ComputeFeaturesCurveSection
         backgroundImage="/images/compute-page/curve-feature-section-bg.png"
         curveImage="/images/compute-page/curv-logo-and-content.png"
-      />
+      /> */}
       <ComputePricingSection />
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
