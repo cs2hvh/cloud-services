@@ -102,8 +102,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
   },
 ];
 
-const TOOLBAR_SHADOW =
-  "shadow-[inset_0_0_22px_rgba(242,242,242,0.5),inset_0_0_0_1px_#999999,inset_2px_2px_1px_-2px_#B3B3B3,inset_-2px_-2px_1px_-2px_#B3B3B3,inset_3px_3px_0px_-3px_rgba(0,0,0,0.5)]";
+const TOOLBAR_SHADOW = "shadow-inner";
 
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
@@ -123,8 +122,8 @@ function ToolbarSurface({
   onClick?: () => void;
 }) {
   const commonClass = cn(
-    "flex h-[62px] items-center rounded-[2px] border border-[#999999]/90 px-4 backdrop-blur-[10px]",
-    active ? "bg-[#B1B1B1]" : "bg-[#383838]",
+    "flex h-[62px] items-center rounded-[2px] border border-white/20 bg-white/10 px-4 backdrop-blur-[10px]",
+    active ? "bg-white/65" : "",
     TOOLBAR_SHADOW,
     className,
   );
