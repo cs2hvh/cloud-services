@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/container";
 
 const PANEL_STYLES =
   "relative isolate overflow-hidden rounded-[4px] border-2 border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.04)] backdrop-blur-[5px] shadow-[0_8px_32px_rgba(0,0,0,0.5)]";
@@ -60,10 +61,10 @@ function AdvisoryPanel({
 export function SolutionsAdvisorySection() {
   return (
     <section className="relative isolate bg-black pb-16 sm:pb-20 lg:pb-24">
-      <div className="mx-auto w-full max-w-[1438px] px-4 sm:px-6 md:px-10 lg:px-14 xl:px-16">
+      <Container>
         <div className="h-px w-full bg-[#686868]" />
 
-        <div className="relative mx-auto mt-8 w-full max-w-[1246px] sm:mt-10">
+        <div className="relative mx-auto mt-8 w-full sm:mt-10">
           <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[400px] z-0 h-[calc(100%+180px)] w-[105%] overflow-hidden rounded-[4px]">
             <Image
               src="/solution/thirdsecion/third-bg.png"
@@ -80,7 +81,7 @@ export function SolutionsAdvisorySection() {
             <AdvisoryPanel heightClass="h-auto min-h-[353px] lg:h-[353px]" />
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

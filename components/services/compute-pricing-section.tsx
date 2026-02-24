@@ -228,24 +228,24 @@ export default function ComputePricingSection() {
         </div>
 
         {/* Hardware cards — stat-driven design */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] mb-14 lg:mb-16">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06] mb-14 lg:mb-16">
           {HIGHLIGHTS.map((h) => (
             <div
               key={h.title}
-              className="bg-[#0a0a0a] p-6 lg:p-8 group hover:bg-[#0d0d0d] transition-colors duration-300"
+              className="bg-[#0a0a0a] p-4 sm:p-6 lg:p-8 group hover:bg-[#0d0d0d] transition-colors duration-300"
             >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="flex h-10 w-10 items-center justify-center bg-[#0095FF]/[0.08] border border-[#0095FF]/20">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-3">
+                <div className="flex h-10 w-10 items-center justify-center bg-[#0095FF]/[0.08] border border-[#0095FF]/20 flex-shrink-0">
                   <h.icon className="w-5 h-5 text-[#0095FF]" />
                 </div>
-                <span className="text-[22px] lg:text-[26px] font-[600] text-white tabular-nums tracking-tight">
+                <span className="text-[18px] sm:text-[22px] lg:text-[26px] font-[600] text-white tabular-nums tracking-tight break-words">
                   {h.stat}
                 </span>
               </div>
-              <h3 className="text-[15px] font-[500] text-white mb-1.5">
+              <h3 className="text-[14px] sm:text-[15px] font-[500] text-white mb-1">
                 {h.title}
               </h3>
-              <p className="text-[13px] leading-[1.6] text-white/40">
+              <p className="text-[13px] leading-[1.5] text-white/40">
                 {h.desc}
               </p>
             </div>

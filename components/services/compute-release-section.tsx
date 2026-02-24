@@ -81,13 +81,13 @@ const ComputeReleaseSection = () => {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3.5 py-2">
-                <Image src="/images/compute-page/intel.png" alt="Intel" width={44} height={18} className="object-contain brightness-0 invert opacity-40" />
+            <div className="flex items-center gap-3 flex-wrap justify-center sm:justify-end">
+              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 sm:px-3.5 sm:py-2">
+                <Image src="/images/compute-page/intel.png" alt="Intel" width={44} height={18} className="w-9 sm:w-11 h-auto object-contain brightness-0 invert opacity-40" />
                 <span className="text-[9px] text-white/20 uppercase tracking-wider">Xeon</span>
               </div>
-              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3.5 py-2">
-                <Image src="/images/compute-page/amd.png" alt="AMD" width={44} height={18} className="object-contain brightness-0 invert opacity-40" />
+              <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5 sm:px-3.5 sm:py-2">
+                <Image src="/images/compute-page/amd.png" alt="AMD" width={44} height={18} className="w-9 sm:w-11 h-auto object-contain brightness-0 invert opacity-40" />
                 <span className="text-[9px] text-white/20 uppercase tracking-wider">EPYC &bull; Ryzen</span>
               </div>
             </div>
@@ -160,15 +160,15 @@ const ComputeReleaseSection = () => {
                   {/* Use case */}
                   <p className="mt-5 text-[11px] text-white/15 leading-relaxed">{server.useCase}</p>
 
-                  {/* Price + CTA */}
-                  <div className="mt-4 pt-5 border-t border-white/[0.06] flex items-end justify-between">
-                    <div>
+                  {/* Price + CTA: stacked on mobile, side-by-side on sm+ */}
+                  <div className="mt-4 pt-5 border-t border-white/[0.06] flex flex-col items-center sm:flex-row sm:items-end sm:justify-between gap-3">
+                    <div className="text-center sm:text-left">
                       <span className="text-[26px] font-[600] text-white tabular-nums tracking-tight">${server.price}</span>
                       <span className="text-[11px] text-white/20 ml-0.5">/mo</span>
                     </div>
                     <a
                       href="/signup"
-                      className={`cursor-pointer inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-medium transition-colors ${
+                      className={`cursor-pointer inline-flex items-center justify-center w-full sm:w-auto gap-1.5 px-4 py-2 text-[12px] font-medium transition-colors ${
                         isFeatured
                           ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
                           : "bg-white text-black hover:bg-white/90"
