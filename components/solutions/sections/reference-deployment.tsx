@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/container";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
@@ -42,8 +43,7 @@ export function ReferenceDeployment({
         className
       )}
     >
-      {/* Container with consistent margins */}
-      <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
+      <Container>
         {/* Main box with border and background */}
         <div
           className="relative border border-[#6b6b6b] overflow-hidden"
@@ -138,7 +138,7 @@ export function ReferenceDeployment({
             </div>
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

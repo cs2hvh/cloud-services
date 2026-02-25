@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/container";
 
 type BuildItem = {
   title: string;
@@ -26,15 +27,17 @@ export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
       )}
     >
       {/* Section Header */}
-      <div className="text-center mb-12 md:mb-16 mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white mb-4">
+      <Container>
+        <div className="text-center mb-12 md:mb-16">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white mb-4">
           What you{" "}
           <span className="text-[#0095FF]">can build</span>
         </h2>
-        <p className="text-sm sm:text-base text-white/60 max-w-2xl mx-auto">
-          From prototypes to production workloads, YourCloud provides the building blocks.
-        </p>
-      </div>
+          <p className="text-sm sm:text-base text-white/60 max-w-2xl mx-auto">
+            From prototypes to production workloads, YourCloud provides the building blocks.
+          </p>
+        </div>
+      </Container>
 
       {/* Full-width Grid with Borders */}
       <div className="w-full">

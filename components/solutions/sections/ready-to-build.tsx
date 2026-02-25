@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { Container } from "@/components/ui/container";
 import Image from "next/image";
 import { useState } from "react";
 
@@ -50,8 +51,7 @@ export function ReadyToBuild({
         className
       )}
     >
-      {/* Container with consistent margins */}
-      <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
+      <Container>
         {/* Main box with background */}
         <div className="relative bg-[#141414] border border-[#737373] overflow-hidden">
           {/* Background Image - covers entire box */}
@@ -122,7 +122,7 @@ export function ReadyToBuild({
             </div>
           </div>
         </div>
-      </div>
+      </Container>
     </section>
   );
 }

@@ -68,13 +68,60 @@ const SOLUTIONS: SolutionItem[] = [
   },
 ];
 
+const PRODUCTS: SolutionItem[] = [
+  {
+    label: "Compute",
+    desc: "Virtual machines with flexible configurations",
+    href: "/services/compute",
+    tags: ["VPS", "Dedicated CPU", "Shared CPU", "Cloud Servers"],
+  },
+  {
+    label: "GPU Instances",
+    desc: "High-performance GPU acceleration for AI/ML",
+    href: "/services/gpu",
+    tags: ["NVIDIA", "A100", "H100", "Training", "Inference"],
+  },
+  {
+    label: "Managed Database",
+    desc: "Fully managed databases with auto-scaling",
+    href: "/services/database",
+    tags: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "Backups"],
+  },
+  {
+    label: "Kubernetes",
+    desc: "Managed Kubernetes clusters at scale",
+    href: "/services/kubernetes",
+    tags: ["K8s", "Auto-scaling", "Load Balancing", "GitOps"],
+  },
+  {
+    label: "Object Storage",
+    desc: "S3-compatible object storage with CDN",
+    href: "/services/object-storage",
+    tags: ["S3 API", "CDN", "Versioning", "Lifecycle"],
+  },
+  {
+    label: "Security Suite",
+    desc: "DDoS protection, WAF, and firewall",
+    href: "/services/security",
+    tags: ["DDoS", "WAF", "SSL", "Monitoring"],
+  },
+  {
+    label: "Application Deployment",
+    desc: "CI/CD pipelines and container deployment",
+    href: "/services/app-deployment",
+    tags: ["Docker", "CI/CD", "Auto Deploy", "GitHub", "GitLab"],
+  },
+];
+
 export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(initialUser);
   const [isLoading, setIsLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [solutionsOpen, setSolutionsOpen] = useState(false);
+  const [productsOpen, setProductsOpen] = useState(false);
   const solutionsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
@@ -122,8 +169,16 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
     solutionsTimeout.current = setTimeout(() => setSolutionsOpen(false), 150);
   };
 
+  const handleProductsEnter = () => {
+    if (productsTimeout.current) clearTimeout(productsTimeout.current);
+    setProductsOpen(true);
+  };
+
+  const handleProductsLeave = () => {
+    productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
+  };
+
   const navLinks = [
-    { href: "/products", label: "Products" },
     { href: "/pricing", label: "Pricing" },
     { href: "/resources", label: "Resources" },
     { href: "/docs", label: "Docs" },
@@ -149,6 +204,18 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             <button className="cursor-pointer flex items-center gap-1 text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200">
               Solutions
               <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${solutionsOpen ? "rotate-180" : ""}`} />
+            </button>
+          </div>
+
+          {/* Products with dropdown */}
+          <div
+            className="relative"
+            onMouseEnter={handleProductsEnter}
+            onMouseLeave={handleProductsLeave}
+          >
+            <button className="cursor-pointer flex items-center gap-1 text-[13px] font-medium text-white/50 hover:text-white transition-colors duration-200">
+              Products
+              <ChevronDown className={`w-3 h-3 transition-transform duration-200 ${productsOpen ? "rotate-180" : ""}`} />
             </button>
           </div>
 
@@ -311,6 +378,85 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
         )}
       </AnimatePresence>
 
+      {/* Products mega-menu dropdown */}
+      <AnimatePresence>
+        {productsOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="hidden lg:block mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] mt-2"
+            onMouseEnter={handleProductsEnter}
+            onMouseLeave={handleProductsLeave}
+          >
+            <div className="bg-[#e5e5e5] shadow-[0_16px_48px_rgba(0,0,0,0.3)] overflow-hidden">
+              <div className="grid grid-cols-3">
+                {/* Left side - Products grid (2 columns) */}
+                <div className="col-span-2 p-8">
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                    {PRODUCTS.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setProductsOpen(false)}
+                        className="group block"
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <span className="text-[14px] font-semibold text-black group-hover:text-[#0095FF] transition-colors duration-200">
+                            {item.label}
+                          </span>
+                          <ArrowRight className="w-3.5 h-3.5 text-black/60 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all duration-200" />
+                        </div>
+                        <p className="text-[12px] text-black/50 leading-relaxed mb-2">
+                          {item.desc}
+                        </p>
+                        {item.tags && item.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {item.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-2 py-0.5 text-[10px] font-medium text-black/60 border border-black/20 rounded bg-white/50"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right side - Image */}
+                <div className="relative overflow-hidden">
+                  <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
+                    <Image
+                      src="/images/main-page/solutions-navbar.svg"
+                      alt="Products"
+                      fill
+                      className="object-contain object-right"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* View all products link */}
+              <div className="px-8 py-4 border-t border-[#ABABAB] flex justify-center items-center">
+                <Link
+                  href="/products"
+                  onClick={() => setProductsOpen(false)}
+                  className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-black hover:text-[#0095FF] transition-colors duration-200"
+                >
+                  View all products
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+                </Link>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile menu */}
       <AnimatePresence>
         {isOpen && (
@@ -324,6 +470,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
               {/* Solutions accordion in mobile */}
               <MobileSolutionsAccordion onNavigate={() => setIsOpen(false)} />
+
+              {/* Products accordion in mobile */}
+              <MobileProductsAccordion onNavigate={() => setIsOpen(false)} />
 
               {navLinks.map((link) => (
                 <Link
@@ -395,6 +544,54 @@ function MobileSolutionsAccordion({ onNavigate }: { onNavigate: () => void }) {
           >
             <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
               {SOLUTIONS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onNavigate}
+                  className="group block px-3 py-2.5 rounded-md hover:bg-white/[0.04] transition-colors duration-200"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[13px] font-medium text-white/70 group-hover:text-white transition-colors duration-200">
+                      {item.label}
+                    </span>
+                    <ArrowRight className="w-3 h-3 text-white/40 group-hover:text-white/70 group-hover:translate-x-0.5 transition-all duration-200" />
+                  </div>
+                  <p className="text-[11px] text-white/40 mt-0.5">
+                    {item.desc}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function MobileProductsAccordion({ onNavigate }: { onNavigate: () => void }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(!open)}
+        className="cursor-pointer w-full flex items-center justify-between px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200"
+      >
+        Products
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden"
+          >
+            <div className="pl-3 py-2 space-y-1 max-h-[50vh] overflow-y-auto no-scrollbar">
+              {PRODUCTS.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
