@@ -19,6 +19,26 @@ import {
 } from "lucide-react";
 import { Container } from "@/components/ui/container";
 
+/* ─── Type Definitions ─── */
+interface VirtualPlan {
+  vcpu: number;
+  ram: string;
+  storage: string;
+  bandwidth: string;
+  price: number;
+}
+
+interface BareMetalPlan {
+  processor: string;
+  cores: string;
+  ram: string;
+  storage: string;
+  bandwidth: string;
+  network: string;
+  price: number;
+}
+
+
 /* ─── Hardware Highlights ─── */
 const HIGHLIGHTS = [
   {
@@ -194,7 +214,7 @@ const CATEGORIES = [
 export default function ComputePricingSection() {
   const [activeKey, setActiveKey] = useState("shared");
   const active = CATEGORIES.find((c) => c.key === activeKey)!;
-  const isBM = !!(active as any).isBareMetalCategory;
+  const isBM = !!(active.isBareMetalCategory);
 
   return (
     <section className="relative z-10 py-16 lg:py-24">
@@ -215,14 +235,26 @@ export default function ComputePricingSection() {
           </p>
 
           {/* Powered-by brand strip */}
-          <div className="mt-6 flex items-center justify-center gap-6">
-            <div className="flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.02] px-4 py-2">
-              <Image src="/images/compute-page/amd.png" alt="AMD" width={60} height={22} className="object-contain brightness-0 invert opacity-50" />
-              <span className="text-[10px] text-white/25 uppercase tracking-wider">EPYC &bull; Ryzen 9</span>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:gap-6">
+            <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3 py-1 sm:px-4 sm:py-2">
+              <Image
+                src="/images/compute-page/amd.png"
+                alt="AMD"
+                width={60}
+                height={22}
+                className="object-contain w-12 sm:w-16 h-auto brightness-0 invert opacity-50"
+              />
+              <span className="text-[9px] sm:text-[10px] text-white/25 uppercase tracking-wider">EPYC &bull; Ryzen 9</span>
             </div>
-            <div className="flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.02] px-4 py-2">
-              <Image src="/images/compute-page/intel.png" alt="Intel" width={52} height={22} className="object-contain brightness-0 invert opacity-50" />
-              <span className="text-[10px] text-white/25 uppercase tracking-wider">Xeon &bull; Core</span>
+            <div className="flex items-center gap-2 border border-white/[0.06] bg-white/[0.02] px-3 py-1 sm:px-4 sm:py-2">
+              <Image
+                src="/images/compute-page/intel.png"
+                alt="Intel"
+                width={52}
+                height={22}
+                className="object-contain w-12 sm:w-14 h-auto brightness-0 invert opacity-50"
+              />
+              <span className="text-[9px] sm:text-[10px] text-white/25 uppercase tracking-wider">Xeon &bull; Core</span>
             </div>
           </div>
         </div>
@@ -297,7 +329,7 @@ export default function ComputePricingSection() {
         {/* Active category detail card */}
         <div className="border border-white/[0.08] bg-white/[0.015] p-6 lg:p-8 mb-6">
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-            <div className="max-w-[520px]">
+            <div className="w-full lg:max-w-[520px]">
               <h4 className="text-lg lg:text-xl font-[500] text-white mb-2">
                 {active.label}
               </h4>
@@ -305,7 +337,7 @@ export default function ComputePricingSection() {
                 {active.description}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2.5 shrink-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 w-full sm:w-auto">
               {active.features.map((f) => (
                 <div key={f} className="flex items-center gap-2.5">
                   <Check className="w-3.5 h-3.5 text-[#0095FF] shrink-0" />
@@ -330,7 +362,7 @@ export default function ComputePricingSection() {
                 </tr>
               </thead>
               <tbody>
-                {active.plans.map((plan: any, i: number) => (
+                {(active.plans as BareMetalPlan[]).map((plan, i: number) => (
                   <tr
                     key={`bm-${plan.processor}`}
                     className={`transition-colors duration-150 hover:bg-white/[0.02] ${
@@ -384,7 +416,7 @@ export default function ComputePricingSection() {
                 </tr>
               </thead>
               <tbody>
-                {active.plans.map((plan: any, i: number) => (
+                {(active.plans as VirtualPlan[]).map((plan, i: number) => (
                   <tr
                     key={`${active.key}-${plan.vcpu}-${plan.ram}`}
                     className={`transition-colors duration-150 hover:bg-white/[0.02] ${

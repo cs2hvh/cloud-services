@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, ArrowRight } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -14,6 +14,7 @@ type SolutionCardData = {
   icon: string;
   outcomes: string[];
   products: string[];
+  href: string;
 };
 
 const PRODUCT_FILTERS = [
@@ -35,6 +36,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/AI.svg",
     outcomes: ["Faster experimentation", "Low-latency inference", "Cost controls"],
     products: ["GPU Instances", "AI Agents", "Kubernetes", "Object Storage"],
+    href: "/solutions/ai-ml",
   },
   {
     title: "Web Hosting & SaaS Deployment",
@@ -43,6 +45,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Monitor.svg",
     outcomes: ["Quick launches", "Horizontal scalability", "Operational simplicity"],
     products: ["Compute", "Application Deployment", "Database", "Security"],
+    href: "/solutions/web-hosting",
   },
   {
     title: "Ecommerce Infrastructure",
@@ -51,6 +54,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Shopping%20Bag.svg",
     outcomes: ["High uptime", "Performance under load", "Secure transactions"],
     products: ["Compute", "Database", "Security", "Object Storage"],
+    href: "/solutions/ecommerce",
   },
   {
     title: "Game Development & Hosting",
@@ -59,6 +63,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Game%20Controller.svg",
     outcomes: ["Low ping", "Burst scale", "Operational visibility"],
     products: ["Compute", "Kubernetes", "Object Storage", "Security"],
+    href: "/solutions/game-dev",
   },
   {
     title: "Database-Driven Applications",
@@ -66,6 +71,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Database.svg",
     outcomes: ["Reliability", "High availability", "Easy scaling"],
     products: ["Database", "Compute", "Security", "Object Storage"],
+    href: "/solutions/database",
   },
   {
     title: "Secure Enterprise Cloud",
@@ -74,6 +80,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Protect.svg",
     outcomes: ["Least-privilege access", "Audit readiness", "Defense in depth"],
     products: ["Security", "Kubernetes", "Database", "Object Storage"],
+    href: "/solutions/security",
   },
   {
     title: "Cloud-Native Kubernetes Platforms",
@@ -82,6 +89,7 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Kubernetes.svg",
     outcomes: ["Faster releases", "Safer rollouts", "Consistent environments"],
     products: ["Kubernetes", "Application Deployment", "Security", "Database"],
+    href: "/solutions/kubernetes",
   },
   {
     title: "Storage & Backup Solutions",
@@ -90,11 +98,11 @@ const SOLUTION_CARDS: SolutionCardData[] = [
     icon: "/solution/secondsection/Stack.svg",
     outcomes: ["Durability", "Simpler backups", "Lower storage costs"],
     products: ["Object Storage", "Security", "Database", "Compute"],
+    href: "/solutions/storage",
   },
 ];
 
-const TOOLBAR_SHADOW =
-  "shadow-[inset_0_0_22px_rgba(242,242,242,0.5),inset_0_0_0_1px_#999999,inset_2px_2px_1px_-2px_#B3B3B3,inset_-2px_-2px_1px_-2px_#B3B3B3,inset_3px_3px_0px_-3px_rgba(0,0,0,0.5)]";
+const TOOLBAR_SHADOW = "shadow-inner";
 
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
@@ -114,8 +122,8 @@ function ToolbarSurface({
   onClick?: () => void;
 }) {
   const commonClass = cn(
-    "flex h-[62px] items-center rounded-[2px] border border-[#999999]/90 px-4 backdrop-blur-[10px]",
-    active ? "bg-[#B1B1B1]" : "bg-[#383838]",
+    "flex h-[62px] items-center rounded-[2px] border border-white/20 bg-white/10 px-4 backdrop-blur-[10px]",
+    active ? "bg-white/65" : "",
     TOOLBAR_SHADOW,
     className,
   );
@@ -170,10 +178,14 @@ function SolutionCard({ card }: { card: SolutionCardData }) {
       <div className="mt-auto pt-8">
         <div className="h-px w-full bg-[#686868]" />
         <div className="mt-3 flex items-center justify-between">
-          <Link href="/signup" className="text-[10px] font-semibold text-white">
-            View Solution -&gt;
+          <Link
+            href={card.href}
+            className="text-[10px] font-semibold text-white hover:text-white/80 transition-colors inline-flex items-center gap-2"
+          >
+            <span>View Solution</span>
+            <ArrowRight className="w-3.5 h-3.5 text-white/70" />
           </Link>
-          <Link href="/docs" className="text-[10px] font-normal text-white">
+          <Link href="/docs" className="text-[10px] font-normal text-white hover:text-white/80 transition-colors">
             Architecture Guide
           </Link>
         </div>

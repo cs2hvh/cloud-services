@@ -122,7 +122,7 @@ export function ServicesSection() {
                   whileInView="visible"
                   viewport={{ once: true, margin: "-50px" }}
                 >
-                  <p className="text-[clamp(13px,1.15vw,15px)] leading-relaxed text-white/50">
+                  <p className="text-[clamp(13px,1.15vw,15px)] mt-16 leading-relaxed text-white/50">
                     The building blocks behind every deployment. From compute to storage, each service is designed to work seamlessly together.
                   </p>
                 </motion.div>

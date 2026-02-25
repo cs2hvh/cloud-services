@@ -99,7 +99,7 @@ export default function DatabaseEnginesSection() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full bg-black py-20 lg:py-28 overflow-hidden"
+      className="relative w-full bg-black py-12 md:py-16 lg:py-28 overflow-hidden"
     >
       {/* ── Background layers ── */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
@@ -177,7 +177,7 @@ export default function DatabaseEnginesSection() {
 
         {/* ── Engine cards: 2x2 grid ── */}
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 gap-5 lg:gap-6"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-6"
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-60px" }}
@@ -187,11 +187,11 @@ export default function DatabaseEnginesSection() {
             <motion.div
               key={engine.name}
               variants={fadeUp}
-              className="group relative rounded-xl p-6 lg:p-8 bg-gradient-to-br from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02] transition-all duration-300 overflow-hidden"
+              className="group relative rounded-xl p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-white/[0.04] to-white/[0.01] hover:from-white/[0.06] hover:to-white/[0.02] transition-all duration-300 overflow-hidden min-h-0"
             >
               {/* Top accent line in engine color */}
               <div
-                className="absolute top-0 left-6 right-6 h-px opacity-40 group-hover:opacity-70 transition-opacity duration-300"
+                className="absolute top-0 left-4 right-4 sm:left-6 sm:right-6 h-px opacity-40 group-hover:opacity-70 transition-opacity duration-300"
                 style={{ background: `linear-gradient(90deg, transparent, ${engine.color}, transparent)` }}
               />
 
@@ -201,17 +201,17 @@ export default function DatabaseEnginesSection() {
                 style={{ backgroundColor: `${engine.color}15` }}
               />
 
-              <div className="relative flex items-start gap-5">
+              <div className="relative flex flex-col sm:flex-row md:flex-row items-start gap-4 sm:gap-5">
                 {/* Large icon */}
-                <div className="shrink-0">
+                  <div className="shrink-0 mb-3 sm:mb-0">
                   <div
-                    className="w-14 h-14 lg:w-16 lg:h-16 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-105"
+                    className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-105"
                     style={{
                       backgroundColor: `${engine.color}15`,
                       boxShadow: `0 0 0 1px ${engine.color}20, 0 0 30px ${engine.color}08`,
                     }}
                   >
-                    <div className="w-7 h-7 lg:w-8 lg:h-8" style={{ color: engine.color }}>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8" style={{ color: engine.color }}>
                       {engine.icon}
                     </div>
                   </div>
@@ -219,12 +219,13 @@ export default function DatabaseEnginesSection() {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-[17px] lg:text-[18px] font-[500] text-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                    <h3 className="text-[15px] sm:text-[16px] lg:text-[18px] font-[600] text-white">
                       {engine.name}
                     </h3>
-                    <span
-                      className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-sm"
+                    <div className="flex items-center gap-2 ml-0 sm:ml-2">
+                      <span
+                        className="text-[10px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-sm"
                       style={{
                         color: `${engine.color}`,
                         backgroundColor: `${engine.color}15`,
@@ -232,12 +233,13 @@ export default function DatabaseEnginesSection() {
                     >
                       v{engine.version}
                     </span>
-                    <span className="text-[10px] text-white/35 uppercase tracking-wider">
-                      {engine.type}
-                    </span>
+                      <span className="text-[10px] text-white/35 uppercase tracking-wider">
+                        {engine.type}
+                      </span>
+                    </div>
                   </div>
 
-                  <p className="text-[13px] text-white/55 leading-[1.7] mb-4">
+                  <p className="text-[13px] sm:text-[14px] text-white/60 leading-[1.5] mb-3 sm:mb-4 break-words">
                     {engine.description}
                   </p>
 
