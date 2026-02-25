@@ -1,155 +1,434 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type PricingTier = {
-  name: string;
-  badge?: string;
-  price: {
-    monthly: number;
-    yearly: number;
-  };
-  billingPeriod?: string;
-  features: string[];
-  highlighted?: boolean;
-  ctaText: string;
-  ctaLink: string;
-};
-
-type ServiceCategory = {
-  id: string;
-  label: string;
-  tiers: PricingTier[];
-};
+import { PricingContent, type ServiceCategory } from "@/components/pricing/pricing-content";
 
 const PRICING_DATA: ServiceCategory[] = [
   {
     id: "compute",
     label: "Compute",
-    tiers: [
+    description:
+      "General purpose instances for web apps, gaming servers, APIs, workers, and backend services.",
+    promos: [
       {
-        name: "Starter Free",
-        badge: "Limited Time",
-        price: { monthly: 0, yearly: 0 },
-        billingPeriod: "Free credits for new projects",
-        features: [
-          "2 vCPU, 4GB RAM, 100GB SSD",
-          "1TB bandwidth",
-          "99.9% uptime SLA",
-          "24/7 support",
-        ],
-        ctaText: "Best for Firms",
-        ctaLink: "/signup",
+        badge: "Crypto Deal",
+        badgeNote: "Limited-time",
+        title: "Balanced for $399 with crypto",
+        description:
+          "Pay with supported cryptocurrencies and unlock a limited-time promo price on the Balanced tier.",
+        subtext: "New purchases only. One promo per account.",
+        linkText: "See terms",
+        linkHref: "/pricing",
       },
       {
+        badge: "Startup Offer",
+        badgeNote: "Limited-time",
+        title: "Free credits for new projects",
+        description:
+          "Launch your first VM and get starter credits for 30 days.",
+        linkText: "Learn More",
+        linkHref: "/contact",
+      },
+    ],
+    tiers: [
+      {
+        id: "balanced",
         name: "Balanced",
+        shortDescription:
+          "Ideal for typical production workloads: backed services, web apps, and CI runners.",
         price: { monthly: 79, yearly: 949 },
         billingPeriod: "per month billed monthly",
+        specs: ["8 vCPU", "32GB DDR5", "400GB NVMe", "5 Gbit/s"],
         features: [
-          "8 vCPU, 16GB RAM, 500GB SSD",
-          "Unlimited bandwidth",
-          "99.99% uptime SLA",
-          "Priority support",
-          "Auto-scaling",
-          "Load balancing",
-          "Custom domains",
-          "SSL certificates",
-          "Daily backups",
-          "DDoS protection",
+          "Best value",
+          "Easy scaling",
+          "Reliable throughput",
+          "Great for web dev",
+          "Root access",
+          "Snapshots",
+          "Firewall",
+          "Monitoring",
+          "Private networking",
+          "IPv6 support",
+          "Cloud-init support",
+          "SSH key management",
         ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create VM",
+        },
         highlighted: true,
+        isFeatured: true,
         ctaText: "Learn More",
         ctaLink: "/contact",
       },
       {
-        name: "Premium",
+        id: "enterprise-ultra",
+        name: "Enterprise/Ultra",
+        shortDescription: "High-performance compute for demanding workloads",
         price: { monthly: 199, yearly: 2388 },
-        billingPeriod: "per month billed monthly",
+        billingPeriod: "per month billed yearly",
         features: [
-          "16 vCPU, 32GB RAM, 1TB NVMe",
-          "Unlimited bandwidth",
-          "99.999% uptime SLA",
-          "Dedicated support",
-          "Advanced monitoring",
-          "Multi-region deployment",
+          "Dedicated resources",
+          "Highest throughput",
+          "Priority support",
         ],
-        ctaText: "$ 0",
+        ctaText: "Create VM",
         ctaLink: "/signup",
       },
       {
-        name: "Starter",
+        id: "performance",
+        name: "Performance",
+        shortDescription: "Optimized for production apps and game servers",
+        price: { monthly: 149, yearly: 1788 },
+        billingPeriod: "per month billed yearly",
+        specs: ["12 vCPU", "48 GB DDR5", "600GB NVMe", "10 Gbit/s"],
+        features: [
+          "Root access",
+          "Private networking",
+          "Monitoring",
+          "DDoS baseline",
+          "One-click resize",
+          "Snapshots",
+          "Firewall",
+          "API access",
+          "IPv6 support",
+          "Simple image marketplace",
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create VM",
+        },
+        ctaText: "Create VM",
+        ctaLink: "/signup",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        shortDescription: "Everyday workloads",
         price: { monthly: 39, yearly: 468 },
-        billingPeriod: "per month",
-        features: [
-          "4 vCPU, 8GB RAM, 200GB SSD",
-          "5TB bandwidth",
-          "99.95% uptime SLA",
-        ],
-        ctaText: "$ 0",
+        billingPeriod: "per month billed yearly",
+        features: ["Reliable compute", "Balanced memory", "SSD storage"],
+        ctaText: "Create VM",
         ctaLink: "/signup",
       },
       {
-        name: "Maker",
-        price: { monthly: 0, yearly: 0 },
-        billingPeriod: "Small dev usage",
-        features: [
-          "1 vCPU, 2GB RAM, 50GB SSD",
-          "500GB bandwidth",
-        ],
-        ctaText: "$ 0",
+        id: "starter",
+        name: "Starter",
+        shortDescription: "Pocket-friendly starter",
+        price: { monthly: 9, yearly: 108 },
+        billingPeriod: "per month billed yearly",
+        features: ["Starter resources", "Low-cost entry"],
+        ctaText: "Create VM",
         ctaLink: "/signup",
       },
     ],
   },
   {
-    id: "storage",
-    label: "Storage",
-    tiers: [
+    id: "gpu",
+    label: "GPU",
+    description:
+      "General purpose instances for web apps, gaming servers, APIs, workers, and backend services.",
+    promos: [
       {
-        name: "Basic Storage",
-        price: { monthly: 5, yearly: 60 },
-        billingPeriod: "per 100GB/month",
-        features: [
-          "100GB storage",
-          "Standard performance",
-          "99.9% durability",
-          "Daily backups",
-        ],
-        ctaText: "Get Started",
-        ctaLink: "/signup",
+        badge: "Crypto Deal",
+        badgeNote: "Limited-time",
+        title: "Get GPU and Application Deployment  ",
+        description:
+          "Pay with supported cryptocurrencies and unlock a limited-time promo price on the Balanced tier.",
+        subtext:
+          "Applies to new purchases only. One promo per account. Taxes/fees may appl",
+        linkText: "See terms",
+        linkHref: "/pricing",
       },
       {
-        name: "Pro Storage",
-        price: { monthly: 49, yearly: 588 },
-        billingPeriod: "per 1TB/month",
+        badge: "Startup Offer",
+        badgeNote: "Limited-time",
+        title: "Free credits for AI with purchase of any GPU Instance",
+        description:
+          "Launch your first VM and get starter credits for 30 days.",
+        linkText: "Learn More",
+        linkHref: "/contact",
+      },
+    ],
+    tiers: [
+      {
+        id: "enterprise",
+        name: "Enterprise",
+        shortDescription:
+          "A strong sweet spot for busy web platforms, ecommerce, and realtime services with sustained load.",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["8 vCPU", "32GB DDR5", "400GB NVMe", "5 Gbit/s"],
         features: [
-          "1TB storage",
-          "High performance",
-          "99.99% durability",
-          "Hourly backups",
-          "CDN integration",
+          " Root access + full OS control",
+          "Snapshots & automated backups",
+          "IPv4 + IPv6",
+          "Firewall rules (ingress/egress)",
+          "Monitoring & alerting",
+          "API + CLI provisioning",
+          "DDoS baseline protection",
+          "99.99% uptime target",
         ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create VM",
+        },
         highlighted: true,
+        isFeatured: true,
         ctaText: "Learn More",
         ctaLink: "/contact",
       },
       {
-        name: "Enterprise Storage",
+        id: "enterprise-ultra",
+        name: "Enterprise/Ultra",
+        shortDescription: "High-performance compute for demanding workloads",
         price: { monthly: 199, yearly: 2388 },
-        billingPeriod: "per 5TB/month",
+        billingPeriod: "per month billed yearly",
         features: [
-          "5TB+ storage",
-          "Ultra performance",
-          "99.999% durability",
-          "Real-time replication",
-          "Custom retention",
+          "CUDA-ready environment",
+          "Monitoring & alerts",
+          "Snapshots",
+          "Private networking",
+          "API access",
+          "Secure images",
+          "SSH keys",
+          "Usage dashboards",
         ],
-        ctaText: "Contact Sales",
-        ctaLink: "/contact",
+        ctaText: "Create VM",
+        ctaLink: "/signup",
+      },
+      {
+        id: "performance",
+        name: "Performance",
+        shortDescription: "Optimized for production apps and game servers",
+        price: { monthly: 149, yearly: 1788 },
+        billingPeriod: "per month billed yearly",
+        specs: ["12 vCPU", "48 GB DDR5", "600GB NVMe", "10 Gbit/s"],
+        features: [
+          "Root access",
+          "Private networking",
+          "Monitoring",
+          "DDoS baseline",
+          "One-click resize",
+          "Snapshots",
+          "Firewall",
+          "API access",
+          "IPv6 support",
+          "Simple image marketplace",
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create VM",
+        },
+        ctaText: "Create VM",
+        ctaLink: "/signup",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        shortDescription: "Everyday workloads",
+        price: { monthly: 39, yearly: 468 },
+        billingPeriod: "per month billed yearly",
+        features: ["Reliable compute", "Balanced memory", "SSD storage"],
+        ctaText: "Create VM",
+        ctaLink: "/signup",
+      },
+      {
+        id: "starter",
+        name: "Starter",
+        shortDescription: "Pocket-friendly starter",
+        price: { monthly: 9, yearly: 108 },
+        billingPeriod: "per month billed yearly",
+        features: ["Starter resources", "Low-cost entry"],
+        ctaText: "Create VM",
+        ctaLink: "/signup",
       },
     ],
+  },
+  {
+    id: "object-storage",
+    label: "Object Storage",
+    description:
+      "S3-compatible object storage for backups, media, logs, datasets, and static website hosting.",
+    promos: [
+      {
+        badge: " Deal",
+        badgeNote: "Limited-time",
+        title: "Reduced egress on annual ",
+        description:
+          "Cut data transfer costs for media-heavy apps and CDN workflows",
+        subtext:
+          "Fair-use applies",
+        linkText: "See Balanced",
+        linkHref: "/pricing",
+      },
+    ],
+    tiers: [
+      {
+        id: "balanced",
+        name: "Balanced",
+        shortDescription:
+          " Most popular for products",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["S3 API" ,   "Encryption"  ,  "Lifecycle"],
+        features: [
+          "Great value",
+          "Simple integration",
+          "Fast",
+          "Reliable",
+          "S3 API",
+          "Encryption",
+          "Lifecycle",
+          "Signed URLs"
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create bucket",
+        },
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+     {
+        id: "enterprise",
+        name: "Enterprise",
+        shortDescription:
+          " Most popular for products",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["S3 API" ,   "Encryption"  ,  "Lifecycle"],
+        features: [
+          "Great value",
+          "Simple integration",
+          "Fast",
+          "Reliable",
+          "S3 API",
+          "Encryption",
+          "Lifecycle",
+          "Signed URLs"
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create bucket",
+        },
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+     {
+        id: "enterprise-ultra",
+        name: "Enterprise Ultra",
+        shortDescription:
+          " Most popular for products",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["S3 API" ,   "Encryption"  ,  "Lifecycle"],
+        features: [
+          "Great value",
+          "Simple integration",
+          "Fast",
+          "Reliable",
+          "S3 API",
+          "Encryption",
+          "Lifecycle",
+          "Signed URLs"
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create bucket",
+        },
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+      {
+        id: "standard",
+        name: "Standard",
+        shortDescription:
+          " Most popular for products",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["S3 API" ,   "Encryption"  ,  "Lifecycle"],
+        features: [
+          "Great value",
+          "Simple integration",
+          "Fast",
+          "Reliable",
+          "S3 API",
+          "Encryption",
+          "Lifecycle",
+          "Signed URLs"
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create bucket",
+        },
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+      {
+        id: "starter",
+        name: "Starter",
+        shortDescription:
+          " Most popular for products",
+        price: { monthly: 79, yearly: 949 },
+        billingPeriod: "per month billed monthly",
+        specs: ["S3 API" ,   "Encryption"  ,  "Lifecycle"],
+        features: [
+          "Great value",
+          "Simple integration",
+          "Fast",
+          "Reliable",
+          "S3 API",
+          "Encryption",
+          "Lifecycle",
+          "Signed URLs"
+        ],
+        summary: {
+          billing: "Yearly",
+          support: "Standard",
+          provisioning: "Instant",
+          guarantee: "60 Days",
+          buttonText: "Create bucket",
+        },
+        highlighted: true,
+        isFeatured: true,
+        ctaText: "Learn More",
+        ctaLink: "/contact",
+      },
+    ]
   },
   {
     id: "database",
@@ -159,11 +438,7 @@ const PRICING_DATA: ServiceCategory[] = [
         name: "Developer",
         price: { monthly: 0, yearly: 0 },
         billingPeriod: "Free tier",
-        features: [
-          "500MB database",
-          "Basic queries",
-          "Community support",
-        ],
+        features: ["500MB database", "Basic queries", "Community support"],
         ctaText: "Start Free",
         ctaLink: "/signup",
       },
@@ -295,48 +570,6 @@ const PRICING_DATA: ServiceCategory[] = [
     ],
   },
   {
-    id: "object-storage",
-    label: "Object Storage",
-    tiers: [
-      {
-        name: "Standard",
-        price: { monthly: 0.023, yearly: 0.276 },
-        billingPeriod: "per GB/month",
-        features: [
-          "Standard access",
-          "99.9% availability",
-          "Regional storage",
-        ],
-        ctaText: "Get Started",
-        ctaLink: "/signup",
-      },
-      {
-        name: "Infrequent Access",
-        price: { monthly: 0.0125, yearly: 0.15 },
-        billingPeriod: "per GB/month",
-        features: [
-          "Low-cost storage",
-          "99.5% availability",
-          "Retrieval fees apply",
-        ],
-        ctaText: "Learn More",
-        ctaLink: "/contact",
-      },
-      {
-        name: "Archive",
-        price: { monthly: 0.004, yearly: 0.048 },
-        billingPeriod: "per GB/month",
-        features: [
-          "Long-term storage",
-          "Lowest cost",
-          "Extended retrieval time",
-        ],
-        ctaText: "Get Started",
-        ctaLink: "/signup",
-      },
-    ],
-  },
-  {
     id: "ai-deployment",
     label: "AI Agents Deployment",
     tiers: [
@@ -392,11 +625,7 @@ const PRICING_DATA: ServiceCategory[] = [
         name: "Hobby",
         price: { monthly: 0, yearly: 0 },
         billingPeriod: "Free tier",
-        features: [
-          "1 application",
-          "Basic features",
-          "Community support",
-        ],
+        features: ["1 application", "Basic features", "Community support"],
         ctaText: "Start Free",
         ctaLink: "/signup",
       },
@@ -436,11 +665,12 @@ const PRICING_DATA: ServiceCategory[] = [
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [activeCategory, setActiveCategory] = useState<string>("compute");
+  const [expandedTierId, setExpandedTierId] = useState<string>("performance");
 
   const currentCategory = PRICING_DATA.find((cat) => cat.id === activeCategory);
 
   return (
-    <main className="min-h-screen bg-black text-white pt-20">
+    <main className="min-h-screen bg-[#191919] text-white pt-20">
       {/* Header Section */}
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] py-12 md:py-16">
         <div className="text-center">
@@ -457,29 +687,38 @@ export default function PricingPage() {
           </p>
 
           {/* Toggle Switch */}
-          <div className="inline-flex items-center gap-3 bg-white/5 border border-white/10 rounded-full p-1">
+          <div className=" inline-flex items-center gap-4 text-xs md:text-sm font-medium">
             <button
               onClick={() => setBillingCycle("monthly")}
               className={cn(
-                "px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200",
-                billingCycle === "monthly"
-                  ? "bg-white text-black"
-                  : "text-white/60 hover:text-white"
+                "cursor-pointer transition-colors duration-200",
+                billingCycle === "monthly" ? "text-white" : "text-white/50 hover:text-white"
               )}
             >
               Monthly
             </button>
             <button
+              onClick={() =>
+                setBillingCycle((prev) => (prev === "monthly" ? "yearly" : "monthly"))
+              }
+              aria-pressed={billingCycle === "yearly"}
+              className="relative h-6 w-12 rounded-full border border-white/20 bg-white/10 transition-colors duration-200"
+            >
+              <span
+                className={cn(
+                  "absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white transition-all duration-200",
+                  billingCycle === "yearly" ? "right-1" : "left-1"
+                )}
+              />
+            </button>
+            <button
               onClick={() => setBillingCycle("yearly")}
               className={cn(
-                "px-4 md:px-6 py-2 rounded-full text-xs md:text-sm font-medium transition-all duration-200",
-                billingCycle === "yearly"
-                  ? "bg-white text-black"
-                  : "text-white/60 hover:text-white"
+                "cursor-pointer transition-colors duration-200",
+                billingCycle === "yearly" ? "text-white" : "text-white/50 hover:text-white"
               )}
             >
-              <span className="hidden sm:inline">Pay annually get 20%</span>
-              <span className="sm:hidden">Yearly</span>
+              Pay annually get 20%
             </button>
           </div>
         </div>
@@ -487,102 +726,35 @@ export default function PricingPage() {
 
       {/* Main Content - Tabs and Pricing */}
       <section className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)] pb-16 md:pb-24">
-        <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+        <div className="flex flex-col lg:flex-row gap-10 lg:gap-14">
           {/* Left Side - Category Tabs */}
-          <aside className="lg:w-64 shrink-0">
-            <div className="lg:sticky lg:top-24 space-y-1">
-              {PRICING_DATA.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setActiveCategory(category.id)}
-                  className={cn(
-                    "w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200",
-                    activeCategory === category.id
-                      ? "bg-white/10 text-white border border-white/20"
-                      : "text-white/50 hover:text-white hover:bg-white/5"
-                  )}
-                >
-                  {category.label}
-                </button>
-              ))}
+          <aside className="lg:w-60 shrink-0 border-r border-white pr-4">
+            <div className="lg:sticky lg:top-24">
+              <div className="space-y-1 font-[family-name:var(--font-sansation)]">
+                {PRICING_DATA.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setActiveCategory(category.id)}
+                    className={cn(
+                      "w-full text-left px-3 py-2 text-sm font-medium transition-all duration-200",
+                      activeCategory === category.id
+                        ? "bg-white text-black"
+                        : "text-white/50 hover:text-white"
+                    )}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </aside>
 
-          {/* Right Side - Pricing Cards */}
-          <div className="flex-1">
-            <div className="space-y-6">
-              {currentCategory?.tiers.map((tier, index) => (
-                <div
-                  key={index}
-                  className={cn(
-                    "border rounded-lg p-6 md:p-8 transition-all duration-200",
-                    tier.highlighted
-                      ? "border-[#0095FF] bg-[#0095FF]/5"
-                      : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                  )}
-                >
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-                    {/* Left Content */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-xl md:text-2xl font-semibold">
-                          {tier.name}
-                        </h3>
-                        {tier.badge && (
-                          <span className="px-2.5 py-1 bg-[#0095FF] text-white text-[10px] font-medium rounded">
-                            {tier.badge}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mb-6">
-                        <div className="flex items-baseline gap-1 mb-1">
-                          <span className="text-3xl md:text-4xl font-semibold">
-                            ${billingCycle === "monthly" ? tier.price.monthly : (tier.price.yearly / 12).toFixed(2)}
-                          </span>
-                          {tier.price.monthly > 0 && (
-                            <span className="text-white/40 text-sm">
-                              /{billingCycle === "monthly" ? "mo" : "mo"}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-white/40">
-                          {tier.billingPeriod}
-                        </p>
-                      </div>
-
-                      {/* Features Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                        {tier.features.map((feature, idx) => (
-                          <div key={idx} className="flex items-start gap-2">
-                            <Check className="w-4 h-4 text-[#0095FF] mt-0.5 shrink-0" />
-                            <span className="text-xs md:text-sm text-white/70">
-                              {feature}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Right Content - CTA */}
-                    <div className="md:w-48 shrink-0">
-                      <a
-                        href={tier.ctaLink}
-                        className={cn(
-                          "block w-full text-center px-6 py-3 rounded-lg text-sm font-medium transition-all duration-200",
-                          tier.highlighted
-                            ? "bg-[#0095FF] text-white hover:bg-[#007ad6]"
-                            : "border border-white/20 text-white hover:bg-white/5"
-                        )}
-                      >
-                        {tier.ctaText}
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <PricingContent
+            category={currentCategory}
+            billingCycle={billingCycle}
+            expandedTierId={expandedTierId}
+            setExpandedTierId={setExpandedTierId}
+          />
         </div>
       </section>
     </main>

@@ -41,7 +41,7 @@ const figmaServices = [
       "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
   },
   {
-    logoSrc: "/images/Features/kubernetes.png",
+    logoSrc: "/images/Features/kubernetes.svg",
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
