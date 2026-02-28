@@ -445,6 +445,7 @@ export type Database = {
           type: Database["public"]["Enums"]["product_type"];
           slug?: string | null;
           upsize_range?: { lower: number; upper: number };
+          cpu_type?: 'basic' | 'general_purpose' | 'storage_optimized' | null;
           // Pricing page fields
           billing_period?: string | null;
           specs?: string[] | null;
@@ -478,6 +479,7 @@ export type Database = {
           type: Database["public"]["Enums"]["product_type"];
           slug?: string | null;
           upsize_range?: { lower: number; upper: number };
+          cpu_type?: 'basic' | 'general_purpose' | 'storage_optimized' | null;
           // Pricing page fields
           billing_period?: string | null;
           specs?: string[] | null;
@@ -511,6 +513,7 @@ export type Database = {
           type?: Database["public"]["Enums"]["product_type"];
           slug?: string | null;
           upsize_range?: { lower: number; upper: number };
+          cpu_type?: 'basic' | 'general_purpose' | 'storage_optimized' | null;
           // Pricing page fields
           billing_period?: string | null;
           specs?: string[] | null;

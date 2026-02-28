@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Plus, Loader2, Server } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getErrorMessage } from "@/config/functions";
 
 interface AddPlanDialogProps {
@@ -29,16 +30,46 @@ const DB_TYPES = [
   { value: "mongodb", label: "MongoDB" },
 ];
 
+interface DOSize {
+  slug: string;
+  cpu_type: 'basic' | 'general_purpose' | 'storage_optimized';
+  cpu: number;
+  ram: number;
+  display_name: string;
+  num_nodes: number;
+}
+
+interface SizesByType {
+  basic: DOSize[];
+  general_purpose: DOSize[];
+  storage_optimized: DOSize[];
+}
+
+interface DOOptionsResponse {
+  success: boolean;
+  data: {
+    sizesByType: {
+      [engine: string]: SizesByType;
+    };
+  };
+}
+
 export default function AddPlanDialog({
   isOpen,
   onClose,
   onSuccess,
 }: AddPlanDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingSizes, setLoadingSizes] = useState(false);
+  const [doSizes, setDoSizes] = useState<{ [engine: string]: SizesByType }>({});
+  const [selectedCpuType, setSelectedCpuType] = useState<'basic' | 'general_purpose' | 'storage_optimized'>('basic');
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     sub: "mysql",
+    slug: "",
+    cpu_type: "basic" as 'basic' | 'general_purpose' | 'storage_optimized',
     cpu: 1,
     ram: 1,
     storage: 15,
@@ -47,11 +78,35 @@ export default function AddPlanDialog({
     discount: 0,
   });
 
+  // Fetch DO sizes when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDOSizes();
+    }
+  }, [isOpen]);
+
+  const fetchDOSizes = async () => {
+    setLoadingSizes(true);
+    try {
+      const response = await api.get<DOOptionsResponse>("/admin/database-options");
+      if (response.data.success) {
+        setDoSizes(response.data.data.sizesByType);
+      }
+    } catch (error) {
+      console.error("Error fetching DO sizes:", error);
+      toast.error("Failed to load database sizes");
+    } finally {
+      setLoadingSizes(false);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: "",
       description: "",
       sub: "mysql",
+      slug: "",
+      cpu_type: "basic",
       cpu: 1,
       ram: 1,
       storage: 15,
@@ -59,6 +114,7 @@ export default function AddPlanDialog({
       fixed_price: 0,
       discount: 0,
     });
+    setSelectedCpuType('basic');
   };
 
   const handleClose = () => {
@@ -66,6 +122,16 @@ export default function AddPlanDialog({
       resetForm();
       onClose();
     }
+  };
+
+  const handleSizeSelect = (size: DOSize) => {
+    setFormData({
+      ...formData,
+      slug: size.slug,
+      cpu_type: size.cpu_type,
+      cpu: size.cpu,
+      ram: size.ram,
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,13 +143,18 @@ export default function AddPlanDialog({
       return;
     }
 
+    if (!formData.slug) {
+      toast.error("Please select a database size");
+      return;
+    }
+
     if (formData.price <= 0) {
       toast.error("Price must be greater than 0");
       return;
     }
 
-    if (formData.cpu <= 0 || formData.ram <= 0 || formData.storage <= 0) {
-      toast.error("Resources must be greater than 0");
+    if (formData.storage <= 0) {
+      toast.error("Storage must be greater than 0");
       return;
     }
 
@@ -94,6 +165,8 @@ export default function AddPlanDialog({
         description: formData.description || null,
         type: "database",
         sub: formData.sub,
+        slug: formData.slug,
+        cpu_type: formData.cpu_type,
         price: formData.price,
         fixed_price: formData.fixed_price ?? 0,
         resources: {
@@ -118,6 +191,12 @@ export default function AddPlanDialog({
     }
   };
 
+  const cpuTypeLabels = {
+    basic: 'Basic (Shared CPU)',
+    general_purpose: 'General Purpose (Dedicated CPU)',
+    storage_optimized: 'Storage Optimized',
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -134,7 +213,7 @@ export default function AddPlanDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-neutral-900 rounded-2xl border border-neutral-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-neutral-900 rounded-2xl border border-neutral-800 shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
@@ -204,9 +283,9 @@ export default function AddPlanDialog({
               </Label>
               <Select
                 value={formData.sub}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, sub: value })
-                }
+                onValueChange={(value) => {
+                  setFormData({ ...formData, sub: value, slug: "", cpu: 1, ram: 1 });
+                }}
                 disabled={isLoading}
               >
                 <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:ring-green-500">
@@ -226,129 +305,112 @@ export default function AddPlanDialog({
               </Select>
             </div>
 
-            {/* Resources */}
+            {/* Database Size Selection */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Resources</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* CPU */}
-                <div className="space-y-2">
-                  <Label htmlFor="cpu" className="text-sm font-medium text-neutral-300">
-                    CPU (vCPU) *
-                  </Label>
-                  <Input
-                    id="cpu"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.cpu}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        cpu: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
+              <h3 className="text-sm font-semibold text-white">Database Size (from DigitalOcean) *</h3>
+              
+              {loadingSizes ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                  <span className="ml-2 text-neutral-400">Loading sizes...</span>
                 </div>
+              ) : (
+                <Tabs 
+                  value={selectedCpuType} 
+                  onValueChange={(value) => setSelectedCpuType(value as typeof selectedCpuType)}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-3 bg-neutral-800">
+                    <TabsTrigger 
+                      value="basic" 
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                    >
+                      Basic
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="general_purpose"
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                    >
+                      General Purpose
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="storage_optimized"
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                    >
+                      Storage Optimized
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  {(['basic', 'general_purpose', 'storage_optimized'] as const).map((cpuType) => (
+                    <TabsContent key={cpuType} value={cpuType} className="mt-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
+                        {(doSizes[formData.sub]?.[cpuType] || []).length === 0 ? (
+                          <p className="text-neutral-500 text-sm col-span-2 py-4 text-center">
+                            No sizes available for this CPU type
+                          </p>
+                        ) : (
+                          (doSizes[formData.sub]?.[cpuType] || []).map((size) => (
+                            <div
+                              key={size.slug}
+                              onClick={() => handleSizeSelect(size)}
+                              className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                formData.slug === size.slug
+                                  ? "border-green-500 bg-green-500/10"
+                                  : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Server className="h-4 w-4 text-neutral-400" />
+                                <span className="text-sm font-medium text-white">
+                                  {size.cpu} vCPU / {size.ram} GB RAM
+                                </span>
+                              </div>
+                              <p className="text-xs text-neutral-500 mt-1 truncate">
+                                {size.slug}
+                              </p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
 
-                {/* RAM */}
-                <div className="space-y-2">
-                  <Label htmlFor="ram" className="text-sm font-medium text-neutral-300">
-                    RAM (GB) *
-                  </Label>
-                  <Input
-                    id="ram"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.ram}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        ram: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
+              {formData.slug && (
+                <div className="p-3 bg-neutral-800 rounded-lg border border-neutral-700">
+                  <p className="text-xs text-neutral-400">Selected Size:</p>
+                  <p className="text-sm text-white font-medium">{formData.slug}</p>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    {formData.cpu} vCPU, {formData.ram} GB RAM, {cpuTypeLabels[formData.cpu_type]}
+                  </p>
                 </div>
-
-                {/* Storage */}
-                <div className="space-y-2">
-                  <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
-                    Storage (GB) *
-                  </Label>
-                  <Input
-                    id="storage"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.storage}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        storage: parseInt(e.target.value) || 15,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-              </div>
+              )}
             </div>
 
-            {/* Pricing */}
-            <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Pricing</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Price */}
-                <div className="space-y-2">
-                  <Label htmlFor="price" className="text-sm font-medium text-neutral-300">
-                    Price ($) *
-                  </Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        price: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-
-                {/* Discount */}
-                <div className="space-y-2">
-                  <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
-                    Discount (%)
-                  </Label>
-                  <Input
-                    id="discount"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={formData.discount}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        discount: parseInt(e.target.value) || 0,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
-                  />
-                </div>
-              </div>
+            {/* Storage (user can customize) */}
+            <div className="space-y-2">
+              <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
+                Storage (GB) *
+              </Label>
+              <Input
+                id="storage"
+                type="number"
+                min="1"
+                step="1"
+                value={formData.storage}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    storage: parseInt(e.target.value) || 15,
+                  })
+                }
+                disabled={isLoading}
+                className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+              />
+              <p className="text-xs text-neutral-500">
+                Set the storage allocation for this plan
+              </p>
             </div>
 
             {/* Pricing */}
@@ -424,8 +486,8 @@ export default function AddPlanDialog({
               </Button>
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading || !formData.slug}
+                className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
               >
                 {isLoading ? (
                   <>

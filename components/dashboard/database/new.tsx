@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
@@ -71,6 +72,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
   );
   const [databaseTypes, setDatabaseTypes] = useState<DatabaseType[]>([]);
   const [loadingTypes, setLoadingTypes] = useState<boolean>(true);
+  const [selectedCpuType, setSelectedCpuType] = useState<'basic' | 'general_purpose' | 'storage_optimized'>('basic');
 
   const [state, setState] = useState({
     selectedDb: "", // Selected database product
@@ -173,11 +175,16 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
     fetchDatabaseTypes();
   }, []);
 
-  // Filter products when database type changes
+  // Filter products when database type or CPU type changes
   useEffect(() => {
     if (state.selectedDbType) {
       const filteredProducts = products.filter(
-        (product) => product.sub === state.selectedDbType
+        (product) => {
+          const matchesDbType = product.sub === state.selectedDbType;
+          const productCpuType = (product as { cpu_type?: string }).cpu_type || 'basic';
+          const matchesCpuType = productCpuType === selectedCpuType;
+          return matchesDbType && matchesCpuType;
+        }
       );
 
       setAvailablePlans(filteredProducts);
@@ -195,7 +202,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
         }));
       }
     }
-  }, [state.selectedDbType, products, databaseTypes]);
+  }, [state.selectedDbType, products, databaseTypes, selectedCpuType]);
 
   const handleNextStep = () => {
     let hasError = false;
@@ -308,14 +315,17 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
         return;
       }
 
+      // Use stored slug from product, or fallback to dynamic generation for backwards compatibility
+      const sizeSlug = selectedPlan.slug || `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`;
+
       // Prepare payload matching the schema
       const payload = {
         name: state.selectedName,
         engine: state.selectedDbType,
         version: state.selectedVersion,
         num_nodes: 1,
-        size: `db-s-${selectedPlan.resources?.cpu || 1}vcpu-${selectedPlan.resources?.ram || 1}gb`,
-        plan_id:selectedPlan.id,
+        size: sizeSlug,
+        plan_id: selectedPlan.id,
         region: state.selectedLocation,
         project_id: state.selectedProject,
         owner_id: userId,
@@ -750,9 +760,47 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                 <CardTitle className="text-white">Database Plan & Version</CardTitle>
               </CardHeader>
               <CardContent>
+                {/* CPU Type Tabs */}
+                <Tabs 
+                  value={selectedCpuType} 
+                  onValueChange={(value) => {
+                    setSelectedCpuType(value as typeof selectedCpuType);
+                    // Reset selected plan when changing CPU type
+                    setState(prev => ({ ...prev, selectedDb: "" }));
+                  }}
+                  className="w-full mb-6"
+                >
+                  <TabsList className="grid w-full grid-cols-3 bg-white/10">
+                    <TabsTrigger 
+                      value="basic" 
+                      className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-white/70"
+                    >
+                      Basic
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="general_purpose"
+                      className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-white/70"
+                    >
+                      General Purpose
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="storage_optimized"
+                      className="data-[state=active]:bg-blue-600 data-[state=active]:text-white text-white/70"
+                    >
+                      Storage Optimized
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <div className="mt-2 text-xs text-white/50">
+                    {selectedCpuType === 'basic' && 'Shared CPU - Best for development and low-traffic applications'}
+                    {selectedCpuType === 'general_purpose' && 'Dedicated CPU - Best for production workloads'}
+                    {selectedCpuType === 'storage_optimized' && 'Optimized for storage-intensive workloads'}
+                  </div>
+                </Tabs>
+
                 {availablePlans.length === 0 ? (
                   <div className="text-center py-8 text-white/60">
-                    No plans available for this database type
+                    No plans available for this configuration
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 gap-4">
