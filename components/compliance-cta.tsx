@@ -29,7 +29,7 @@ export function ComplianceCta() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
-                href="#"
+                href="/pricing"
                 className="inline-flex items-center justify-center gap-2 border border-black/20 px-6 py-3 text-[16px] font-medium text-black hover:bg-black/5 transition-colors"
               >
                 Pricing

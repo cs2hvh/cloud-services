@@ -171,24 +171,23 @@ export function PricingContent({
                   <div className="border border-white/15 bg-black/30 p-4 text-xs text-white/70">
                     <div className="flex items-baseline justify-between mb-3">
                       <span className="text-base text-white">{featuredTier.name}</span>
-                      <span className="text-[10px] text-white/60">Most Popular</span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between">
                         <span>Billing</span>
-                        <span className="text-white">{featuredTier.summary?.billing}</span>
+                        <span className="text-white">{featuredTier.summary?.billing || "Monthly/Yearly"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Support</span>
-                        <span className="text-white">{featuredTier.summary?.support}</span>
+                        <span className="text-white">{featuredTier.summary?.support || "Standard"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Provisioning</span>
-                        <span className="text-white">{featuredTier.summary?.provisioning}</span>
+                        <span className="text-white">{featuredTier.summary?.provisioning || "Instant"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Guarantee</span>
-                        <span className="text-white">{featuredTier.summary?.guarantee}</span>
+                        <span className="text-white">{featuredTier.summary?.guarantee || "60 days"}</span>
                       </div>
                     </div>
                     <button className="mt-4 w-full bg-white/10 hover:bg-white/15 text-white text-xs py-2">
@@ -203,7 +202,7 @@ export function PricingContent({
                       ${formatPrice(
                         billingCycle === "monthly"
                           ? featuredTier.price.monthly
-                          : featuredTier.price.yearly / 12
+                          : featuredTier.price.monthly * 12
                       )}
                     </div>
                     <div className="text-xs text-white/50">
@@ -220,11 +219,11 @@ export function PricingContent({
 
         <div className="space-y-2">
           <h3 className="text-lg md:text-xl font-semibold">
-            {category?.startingPriceLabel ?? "Starts at just $9"}
+            {"Starts at just $" + (category?.startingPriceLabel ?? "$9")}
           </h3>
           <p className="text-xs md:text-sm text-white/50">
             {category?.startingPriceDescription ??
-              "Upgrade or downgrade anytime. Mix tiers across projects as your needs change."}
+              "Upgrade  anytime. Mix tiers across projects as your needs change."}
           </p>
         </div>
 
@@ -312,24 +311,23 @@ export function PricingContent({
                         <div className="border border-white/15 bg-black/30 p-4 text-xs text-white/70">
                           <div className="flex items-baseline justify-between mb-3">
                             <span className="text-base text-white">{tier.name}</span>
-                            <span className="text-[10px] text-white/60">Most Popular</span>
                           </div>
                           <div className="space-y-1">
                             <div className="flex justify-between">
                               <span>Billing</span>
-                              <span className="text-white">{tier.summary.billing}</span>
+                              <span className="text-white">{tier?.summary?.billing||"Monthly/Yearly"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Support</span>
-                              <span className="text-white">{tier.summary.support}</span>
+                              <span className="text-white">{tier?.summary?.support||"Standard"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Provisioning</span>
-                              <span className="text-white">{tier.summary.provisioning}</span>
+                              <span className="text-white">{tier.summary.provisioning||"Instant"}</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Guarantee</span>
-                              <span className="text-white">{tier.summary.guarantee}</span>
+                              <span className="text-white">{tier.summary.guarantee||"60 days"}</span>
                             </div>
                           </div>
                           <button className="mt-4 w-full bg-white/10 hover:bg-white/15 text-white text-xs py-2">

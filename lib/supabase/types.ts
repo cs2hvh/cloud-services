@@ -439,11 +439,29 @@ export type Database = {
           name: string | null;
           price: number | null;
           fixed_price?: number | null;
+          yearly_price?: number | null;
           resources: { cpu: number; ram: number; storage: number };
           sub: string | null;
           type: Database["public"]["Enums"]["product_type"];
-         slug?:string|null;
-         upsize_range?:{lower:number;upper:number};
+          slug?: string | null;
+          upsize_range?: { lower: number; upper: number };
+          // Pricing page fields
+          billing_period?: string | null;
+          specs?: string[] | null;
+          features?: string[] | null;
+          summary?: {
+            billing: string;
+            support: string;
+            provisioning: string;
+            guarantee: string;
+            buttonText: string;
+          } | null;
+          is_featured?: boolean | null;
+          is_highlighted?: boolean | null;
+          cta_text?: string | null;
+          cta_link?: string | null;
+          sort_order?: number | null;
+          short_description?: string | null;
         };
         Insert: {
           created_at?: string | null;
@@ -454,11 +472,29 @@ export type Database = {
           name: string;
           price: number;
           fixed_price?: number | null;
+          yearly_price?: number | null;
           resources: { cpu: number; ram: number; storage: number };
           sub?: string | null;
           type: Database["public"]["Enums"]["product_type"];
-           slug?:string|null;
-            upsize_range?:{lower:number;upper:number};
+          slug?: string | null;
+          upsize_range?: { lower: number; upper: number };
+          // Pricing page fields
+          billing_period?: string | null;
+          specs?: string[] | null;
+          features?: string[] | null;
+          summary?: {
+            billing: string;
+            support: string;
+            provisioning: string;
+            guarantee: string;
+            buttonText: string;
+          } | null;
+          is_featured?: boolean | null;
+          is_highlighted?: boolean | null;
+          cta_text?: string | null;
+          cta_link?: string | null;
+          sort_order?: number | null;
+          short_description?: string | null;
         };
         Update: {
           created_at?: string | null;
@@ -469,11 +505,122 @@ export type Database = {
           name?: string;
           price?: number;
           fixed_price?: number | null;
+          yearly_price?: number | null;
           resources?: Json;
           sub?: string | null;
           type?: Database["public"]["Enums"]["product_type"];
-          slug?:string|null;
-           upsize_range?:{lower:number;upper:number};
+          slug?: string | null;
+          upsize_range?: { lower: number; upper: number };
+          // Pricing page fields
+          billing_period?: string | null;
+          specs?: string[] | null;
+          features?: string[] | null;
+          summary?: {
+            billing: string;
+            support: string;
+            provisioning: string;
+            guarantee: string;
+            buttonText: string;
+          } | null;
+          is_featured?: boolean | null;
+          is_highlighted?: boolean | null;
+          cta_text?: string | null;
+          cta_link?: string | null;
+          sort_order?: number | null;
+          short_description?: string | null;
+        };
+        Relationships: [];
+      };
+      pricing_categories: {
+        Row: {
+          id: number;
+          slug: string;
+          label: string;
+          description: string | null;
+          starting_price_label: string | null;
+          starting_price_description: string | null;
+          sort_order: number;
+          active: boolean;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: number;
+          slug: string;
+          label: string;
+          description?: string | null;
+          starting_price_label?: string | null;
+          starting_price_description?: string | null;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: number;
+          slug?: string;
+          label?: string;
+          description?: string | null;
+          starting_price_label?: string | null;
+          starting_price_description?: string | null;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Relationships: [];
+      };
+      pricing_promos: {
+        Row: {
+          id: string;
+          category_slug: string;
+          badge: string;
+          badge_note: string | null;
+          title: string;
+          description: string;
+          subtext: string | null;
+          price_old: string | null;
+          price_current: string | null;
+          link_text: string;
+          link_href: string;
+          sort_order: number;
+          active: boolean;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          category_slug: string;
+          badge: string;
+          badge_note?: string | null;
+          title: string;
+          description: string;
+          subtext?: string | null;
+          price_old?: string | null;
+          price_current?: string | null;
+          link_text: string;
+          link_href: string;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          category_slug?: string;
+          badge?: string;
+          badge_note?: string | null;
+          title?: string;
+          description?: string;
+          subtext?: string | null;
+          price_old?: string | null;
+          price_current?: string | null;
+          link_text?: string;
+          link_href?: string;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string | null;
+          updated_at?: string | null;
         };
         Relationships: [];
       };
@@ -1173,7 +1320,7 @@ export type Database = {
       [_ in never]: never;
     };
     Enums: {
-      product_type: "vps" | "vds" | "game" | "database" | "object-storage" | "kubernetes" | "network-ddos" | "platform-apps";
+      product_type: "vps" | "vds" | "game" | "database" | "object-storage" | "kubernetes" | "network-ddos" | "platform-apps" | "compute" | "gpu" | "security" | "ai-deployment" | "app-deployment";
       user_role:
         | "member"
         | "admin"
