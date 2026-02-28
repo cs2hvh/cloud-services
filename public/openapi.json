@@ -1,0 +1,113 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Cloud Services - API v1",
+    "version": "1.0.0",
+    "description": "Minimal OpenAPI spec for the cloud-services project (API v1)."
+  },
+  "servers": [
+    { "url": "/" }
+  ],
+  "paths": {
+    "/api/v1/apps": {
+      "get": {
+        "summary": "List apps",
+        "responses": {
+          "200": {
+            "description": "A list of apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/App" }
+                    },
+                    "meta": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": { "type": "string", "format": "uuid" }
+        }
+      ],
+      "get": {
+        "summary": "Get an app by ID",
+        "responses": {
+          "200": {
+            "description": "App object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/App" }
+              }
+            }
+          },
+          "404": { "description": "Not found" }
+        }
+      },
+      "patch": {
+        "summary": "Update app metadata",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AppUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated app" },
+          "400": { "description": "Validation error" },
+          "403": { "description": "Forbidden" },
+          "404": { "description": "Not found" }
+        }
+      },
+      "delete": {
+        "summary": "Delete an app (destructive)",
+        "responses": {
+          "200": { "description": "Deletion accepted" },
+          "404": { "description": "Not found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "App": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "framework": { "type": "string" },
+          "repository_name": { "type": "string" },
+          "branch": { "type": "string" },
+          "status": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AppUpdate": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "branch": { "type": "string" },
+          "description": { "type": "string" },
+          "framework": { "type": "string" },
+          "auto_deploy": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

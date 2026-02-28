@@ -14,7 +14,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 export type AuthContext = Extract<ApiAuthResult, { authenticated: true }>;
 
 type RouteContext = { params: Promise<{ [key: string]: string | string[] }> };
-type Handler = (req: NextRequest, auth: AuthContext, context?: RouteContext) => Promise<NextResponse>;
+type Handler = (req: NextRequest, auth: AuthContext, context: RouteContext) => Promise<NextResponse>;
 
 /**
  * Wraps a route handler with authentication and per-user, per-operation rate limiting.
@@ -24,7 +24,7 @@ type Handler = (req: NextRequest, auth: AuthContext, context?: RouteContext) => 
  * All tokens for the same user share one counter — more tokens ≠ more quota.
  */
 export function withV1Auth(operation: string, handler: Handler) {
-  return async (req: NextRequest, context?: RouteContext): Promise<NextResponse> => {
+  return async (req: NextRequest, context: RouteContext): Promise<NextResponse> => {
     const auth = await authenticateApiRequest(req);
     if (!auth.authenticated) {
       return v1Error(auth.error, auth.status);
