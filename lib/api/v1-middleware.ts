@@ -39,7 +39,13 @@ export function withV1Auth(operation: string, handler: Handler) {
 
     if (!rl.allowed) {
       return NextResponse.json(
-        { error: "Too Many Requests", retry_after: rl.retryAfterSec },
+        {
+          error: "RATE_LIMIT_EXCEEDED",
+          message: "Too many requests. Please try again later.",
+          details: { retry_after: rl.retryAfterSec },
+          // Backward compatibility for any client already reading this field
+          retry_after: rl.retryAfterSec,
+        },
         {
           status: 429,
           headers: {

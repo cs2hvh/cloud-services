@@ -4,8 +4,7 @@
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { updatePlatformAppSchema } from "@/lib/validation/platform-apps";
-import { DeploymentService } from "@/lib/services";
-import { Billing } from "@/lib/supabase/queries/billing";
+import { PlatformAppService } from "@/lib/services/platform-app-service";
 
 // Helper to extract and validate app ID
 async function getValidatedAppId(context: { params: Promise<{ [key: string]: string | string[] }> } | undefined) {
@@ -27,41 +26,50 @@ export const GET = withV1Auth("apps:get", async (_req, auth, context) => {
   const { error, id } = await getValidatedAppId(context);
   if (error) return error;
 
-  const result = await Platform_Apps.get(id!);
+  try {
+    // Use shared service with live status sync from Kubernetes
+    const app = await PlatformAppService.getApp({
+      appId: id!,
+      userId: auth.userId,
+      syncStatus: true,  // ✅ Sync live status from K8s
+      includeEnvVars: false,
+    });
 
-  if (!result.success) {
-    return v1Error("NOT_FOUND", 404, "App not found");
+    return v1Ok({
+      data: {
+        id: app.id,
+        name: app.name,
+        slug: app.slug,
+        framework: app.framework,
+        repository_name: app.repository_name,
+        repository_url: app.repository_url,
+        branch: app.branch,
+        status: app.status,  // This is now live status from K8s
+        deployment_url: app.deployment_url,
+        port: app.port,
+        ip: app.ip,
+        size: app.size,
+        auto_deploy: app.auto_deploy,
+        git_provider: app.git_provider,
+        build_command: app.build_command,
+        output_directory: app.output_directory,
+        created_at: app.created_at,
+        updated_at: app.updated_at,
+      },
+    });
+  } catch (getError: unknown) {
+    const error = getError as Error & { code?: string };
+    
+    if (error.code === 'NOT_FOUND') {
+      return v1Error("NOT_FOUND", 404, "App not found");
+    }
+    if (error.code === 'FORBIDDEN') {
+      return v1Error("FORBIDDEN", 403, "Access denied");
+    }
+
+    console.error(`[GET /api/v1/apps/{id}] Failed:`, error);
+    return v1Error("INTERNAL_ERROR", 500, "Failed to fetch app");
   }
-
-  const app = result.data;
-
-  // Verify ownership
-  if (app.user_id !== auth.userId) {
-    return v1Error("FORBIDDEN", 403, "Access denied");
-  }
-
-  return v1Ok({
-    data: {
-      id: app.id,
-      name: app.name,
-      slug: app.slug,
-      framework: app.framework,
-      repository_name: app.repository_name,
-      repository_url: app.repository_url,
-      branch: app.branch,
-      status: app.status,
-      deployment_url: app.deployment_url,
-      port: app.port,
-      ip: app.ip,
-      size: app.size,
-      auto_deploy: app.auto_deploy,
-      git_provider: app.git_provider,
-      build_command: app.build_command,
-      output_directory: app.output_directory,
-      created_at: app.created_at,
-      updated_at: app.updated_at,
-    },
-  });
 });
 
 export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
@@ -135,21 +143,12 @@ export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
   }
 
   try {
-    // Delete app using DeploymentService (handles infrastructure cleanup)
-    await DeploymentService.delete(id!, auth.userId, false);
-
-    // Stop billing (prorated final charge)
-    try {
-      await Billing.close_active_service("platform_apps", {
-        userId: auth.userId,
-        serviceId: id!,
-        failOnInsufficient: false, // Don't block deletion if user has no balance
-      });
-      console.log(`[DELETE /api/v1/apps/{id}] Billing closed for app ${id}`);
-    } catch (billingError) {
-      console.warn(`[DELETE /api/v1/apps/{id}] Billing closure failed (non-blocking):`, billingError);
-      // Don't fail the deletion - billing can be handled separately
-    }
+    // Delete using shared service (handles all cleanup: infrastructure, billing, logs, notifications)
+    await PlatformAppService.deleteApp({
+      appId: id!,
+      userId: auth.userId,
+      isAdmin: false,
+    });
 
     return v1Ok({
       data: {
@@ -159,9 +158,18 @@ export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
       },
     });
   } catch (deleteError) {
+    const error = deleteError as Error & { code?: string };
     const errorMessage = deleteError instanceof Error ? deleteError.message : "Unknown error";
-    
-    // Map error messages to appropriate status codes
+
+    // Prefer structured error codes when available
+    if (error.code === 'NOT_FOUND') {
+      return v1Error("NOT_FOUND", 404, "App not found");
+    }
+    if (error.code === 'FORBIDDEN') {
+      return v1Error("FORBIDDEN", 403, "Access denied");
+    }
+
+    // Fallback to legacy message checks for downstream services that throw plain messages
     if (errorMessage === "App not found") {
       return v1Error("NOT_FOUND", 404, "App not found");
     }

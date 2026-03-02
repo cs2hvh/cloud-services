@@ -10,6 +10,7 @@ export { KubernetesCustomDomainService } from "./kubernetes-custom-domain";
 export { RuntimeLogsService } from "./runtime-logs";
 export { DatabaseIntegrationService } from "./database-integration";
 export { ObjectStorageIntegrationService } from "./object-storage-integration";
+export { PlatformAppService } from "./platform-app-service";
 
 export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";
@@ -31,6 +32,13 @@ export type {
   StorageUnlinkResult,
   LinkedBucket
 } from "./object-storage-integration";
+export type {
+  DeleteAppOptions,
+  DeleteAppResult,
+  GetAppOptions,
+  ListAppsOptions,
+} from "./platform-app-service";
+
 export type {
   CustomDomain,
   CustomDomainWithStatus,
