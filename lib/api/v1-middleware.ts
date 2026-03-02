@@ -27,7 +27,7 @@ export function withV1Auth(operation: string, handler: Handler) {
   return async (req: NextRequest, context: RouteContext): Promise<NextResponse> => {
     const auth = await authenticateApiRequest(req);
     if (!auth.authenticated) {
-      return v1Error(auth.error, auth.status);
+      return v1Error("UNAUTHORIZED", auth.status, auth.error || "Authentication failed");
     }
 
     const { limit, windowMs } = getRateLimitConfig(auth);
@@ -58,7 +58,7 @@ export function withV1Auth(operation: string, handler: Handler) {
       return res;
     } catch (err) {
       console.error(`[v1/${operation}]`, err);
-      return v1Error("Internal server error", 500);
+      return v1Error("INTERNAL_ERROR", 500, "Internal server error");
     }
   };
 }
@@ -71,15 +71,36 @@ export function v1Ok<T>(
   return NextResponse.json(body, { status });
 }
 
-/** Standard error response */
+/** Standard error response with consistent format */
 export function v1Error(
-  error: string | Record<string, unknown>,
-  status = 400,
-  message?: string
+  errorCode: string,
+  status: number,
+  message: string,
+  details?: Record<string, unknown>
 ): NextResponse {
-  const errorBody = typeof error === "string" ? { error } : { error: "Validation failed", details: error };
+  const errorBody: Record<string, unknown> = {
+    error: errorCode,
+    message,
+  };
+  
+  if (details) {
+    errorBody.details = details;
+  }
+  
+  return NextResponse.json(errorBody, { status });
+}
+
+/** Validation error response with structured errors */
+export function v1ValidationError(
+  validationErrors: Array<{ path: string; message: string }>,
+  message = "Invalid request body"
+): NextResponse {
   return NextResponse.json(
-    { ...errorBody, ...(message && { message }) },
-    { status }
+    {
+      error: "VALIDATION_ERROR",
+      message,
+      validation_errors: validationErrors,
+    },
+    { status: 400 }
   );
 }

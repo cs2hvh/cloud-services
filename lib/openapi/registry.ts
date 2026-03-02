@@ -18,10 +18,34 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 
 // Common response schemas
 export const ErrorResponseSchema = z.object({
-  error: z.string().openapi({ example: 'Validation failed' }),
-  message: z.string().optional().openapi({ example: 'Invalid request body' }),
-  details: z.record(z.unknown()).optional(),
+  error: z.string().openapi({ 
+    example: 'VALIDATION_ERROR',
+    description: 'Error code identifier'
+  }),
+  message: z.string().openapi({ 
+    example: 'Invalid request body',
+    description: 'Human-readable error message'
+  }),
+  details: z.record(z.unknown()).optional().openapi({
+    example: { field: 'name', issue: 'Must be at least 3 characters' },
+    description: 'Additional error details'
+  }),
 }).openapi('ErrorResponse');
+
+// Validation error response schema
+export const ValidationErrorResponseSchema = z.object({
+  error: z.string().openapi({ example: 'VALIDATION_ERROR' }),
+  message: z.string().openapi({ example: 'Invalid request body' }),
+  validation_errors: z.array(z.object({
+    path: z.string().openapi({ example: 'name' }),
+    message: z.string().openapi({ example: 'Must be at least 3 characters' }),
+  })).openapi({ 
+    example: [
+      { path: 'name', message: 'Must be at least 3 characters' },
+      { path: 'branch', message: 'Required field' }
+    ]
+  }),
+}).openapi('ValidationErrorResponse');
 
 export const PaginationMetaSchema = z.object({
   total: z.number().openapi({ example: 42 }),
@@ -135,6 +159,10 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
         },
       },
     },
@@ -143,6 +171,11 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
         },
       },
     },
@@ -174,11 +207,28 @@ registry.registerPath({
         },
       },
     },
+    400: {
+      description: 'Bad request - invalid app ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid app ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
     401: {
       description: 'Unauthorized',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
         },
       },
     },
@@ -187,6 +237,10 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'You do not have permission to access this app'
+          }
         },
       },
     },
@@ -195,6 +249,35 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'App not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Internal server error'
+          }
         },
       },
     },
@@ -235,10 +318,17 @@ registry.registerPath({
       },
     },
     400: {
-      description: 'Validation error - invalid request body',
+      description: 'Bad request - validation error or invalid app ID',
       content: {
         'application/json': {
-          schema: ErrorResponseSchema,
+          schema: ValidationErrorResponseSchema,
+          example: {
+            error: 'VALIDATION_ERROR',
+            message: 'Invalid request body',
+            validation_errors: [
+              { path: 'name', message: 'Must be at least 3 characters' }
+            ]
+          }
         },
       },
     },
@@ -247,6 +337,10 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
         },
       },
     },
@@ -255,6 +349,10 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'You do not have permission to modify this app'
+          }
         },
       },
     },
@@ -263,6 +361,36 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'App not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error - update failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UPDATE_FAILED',
+            message: 'Failed to update app',
+            details: { details: 'Database update failed' }
+          }
         },
       },
     },
@@ -294,11 +422,28 @@ registry.registerPath({
         },
       },
     },
+    400: {
+      description: 'Bad request - invalid app ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid app ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
     401: {
       description: 'Unauthorized',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
         },
       },
     },
@@ -307,6 +452,10 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'You do not have permission to delete this app'
+          }
         },
       },
     },
@@ -315,6 +464,23 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'App not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
         },
       },
     },
@@ -323,6 +489,11 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
+          example: {
+            error: 'DELETE_FAILED',
+            message: 'Failed to delete app. Infrastructure cleanup may be incomplete.',
+            details: { details: 'Kubernetes deletion timeout' }
+          }
         },
       },
     },

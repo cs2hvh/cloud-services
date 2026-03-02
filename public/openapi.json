@@ -190,21 +190,29 @@
         "properties": {
           "error": {
             "type": "string",
-            "example": "Validation failed"
+            "description": "Error code identifier",
+            "example": "VALIDATION_ERROR"
           },
           "message": {
             "type": "string",
+            "description": "Human-readable error message",
             "example": "Invalid request body"
           },
           "details": {
             "type": "object",
             "additionalProperties": {
               "nullable": true
+            },
+            "description": "Additional error details",
+            "example": {
+              "field": "name",
+              "issue": "Must be at least 3 characters"
             }
           }
         },
         "required": [
-          "error"
+          "error",
+          "message"
         ]
       },
       "AppResponse": {
@@ -253,6 +261,54 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "ValidationErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "VALIDATION_ERROR"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid request body"
+          },
+          "validation_errors": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "example": "name"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Must be at least 3 characters"
+                }
+              },
+              "required": [
+                "path",
+                "message"
+              ]
+            },
+            "example": [
+              {
+                "path": "name",
+                "message": "Must be at least 3 characters"
+              },
+              {
+                "path": "branch",
+                "message": "Required field"
+              }
+            ]
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "validation_errors"
         ]
       },
       "UpdateAppRequest": {
@@ -359,6 +415,10 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
                 }
               }
             }
@@ -369,6 +429,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -412,12 +479,33 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request - invalid app ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid app ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
                 }
               }
             }
@@ -428,6 +516,10 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this app"
                 }
               }
             }
@@ -438,6 +530,41 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
                 }
               }
             }
@@ -490,11 +617,21 @@
             }
           },
           "400": {
-            "description": "Validation error - invalid request body",
+            "description": "Bad request - validation error or invalid app ID",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "name",
+                      "message": "Must be at least 3 characters"
+                    }
+                  ]
                 }
               }
             }
@@ -505,6 +642,10 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
                 }
               }
             }
@@ -515,6 +656,10 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to modify this app"
                 }
               }
             }
@@ -525,6 +670,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - update failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UPDATE_FAILED",
+                  "message": "Failed to update app",
+                  "details": {
+                    "details": "Database update failed"
+                  }
                 }
               }
             }
@@ -566,12 +749,33 @@
               }
             }
           },
+          "400": {
+            "description": "Bad request - invalid app ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid app ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
                 }
               }
             }
@@ -582,6 +786,10 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this app"
                 }
               }
             }
@@ -592,6 +800,27 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "App not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -602,6 +831,13 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete app. Infrastructure cleanup may be incomplete.",
+                  "details": {
+                    "details": "Kubernetes deletion timeout"
+                  }
                 }
               }
             }

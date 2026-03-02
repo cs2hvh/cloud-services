@@ -2,7 +2,7 @@
 // PATCH /api/v1/apps/[id] — update app metadata (does NOT redeploy)
 // DELETE /api/v1/apps/[id] — delete app and all infrastructure
 import { Platform_Apps } from "@/lib/supabase/queries";
-import { withV1Auth, v1Ok, v1Error } from "@/lib/api/v1-middleware";
+import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { updatePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { DeploymentService } from "@/lib/services";
 import { Billing } from "@/lib/supabase/queries/billing";
@@ -10,14 +10,14 @@ import { Billing } from "@/lib/supabase/queries/billing";
 // Helper to extract and validate app ID
 async function getValidatedAppId(context: { params: Promise<{ [key: string]: string | string[] }> } | undefined) {
   if (!context?.params) {
-    return { error: v1Error("Missing route context", 500), id: null };
+    return { error: v1Error("INTERNAL_ERROR", 500, "Missing route context"), id: null };
   }
   const rawParams = await context.params;
   const id = Array.isArray(rawParams.id) ? rawParams.id[0] : rawParams.id;
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!id || !uuidRegex.test(id)) {
-    return { error: v1Error({ code: "INVALID_ID", field: "id" }, 400, "Invalid app ID format"), id: null };
+    return { error: v1Error("INVALID_ID", 400, "Invalid app ID format", { field: "id" }), id: null };
   }
 
   return { error: null, id };
@@ -30,14 +30,14 @@ export const GET = withV1Auth("apps:get", async (_req, auth, context) => {
   const result = await Platform_Apps.get(id!);
 
   if (!result.success) {
-    return v1Error({ code: "NOT_FOUND" }, 404, "App not found");
+    return v1Error("NOT_FOUND", 404, "App not found");
   }
 
   const app = result.data;
 
   // Verify ownership
   if (app.user_id !== auth.userId) {
-    return v1Error({ code: "FORBIDDEN" }, 403, "Access denied");
+    return v1Error("FORBIDDEN", 403, "Access denied");
   }
 
   return v1Ok({
@@ -80,25 +80,25 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
       path: issue.path.join("."),
       message: issue.message,
     }));
-    return v1Error({ validation_errors: errors }, 400, "Invalid request body");
+    return v1ValidationError(errors);
   }
 
   // Get existing app to verify ownership
   const existing = await Platform_Apps.get(id!);
   if (!existing.success) {
-    return v1Error({ code: "NOT_FOUND" }, 404, "App not found");
+    return v1Error("NOT_FOUND", 404, "App not found");
   }
 
   // Verify ownership
   if (existing.data.user_id !== auth.userId) {
-    return v1Error({ code: "FORBIDDEN" }, 403, "Access denied");
+    return v1Error("FORBIDDEN", 403, "Access denied");
   }
 
   // Update app (metadata only - does NOT trigger redeployment)
   const result = await Platform_Apps.update(id!, updateData);
 
   if (!result.success) {
-    return v1Error({ code: "UPDATE_FAILED", details: result.error }, 500, "Failed to update app");
+    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: result.error });
   }
 
   return v1Ok({
@@ -123,14 +123,14 @@ export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
   // Get app details before deletion
   const appResult = await Platform_Apps.get(id!);
   if (!appResult.success) {
-    return v1Error({ code: "NOT_FOUND" }, 404, "App not found");
+    return v1Error("NOT_FOUND", 404, "App not found");
   }
 
   const app = appResult.data;
 
   // Verify ownership
   if (app.user_id !== auth.userId) {
-    return v1Error({ code: "FORBIDDEN" }, 403, "Access denied");
+    return v1Error("FORBIDDEN", 403, "Access denied");
   }
 
   try {
@@ -162,17 +162,18 @@ export const DELETE = withV1Auth("apps:delete", async (_req, auth, context) => {
     
     // Map error messages to appropriate status codes
     if (errorMessage === "App not found") {
-      return v1Error({ code: "NOT_FOUND" }, 404, "App not found");
+      return v1Error("NOT_FOUND", 404, "App not found");
     }
     if (errorMessage === "Unauthorized") {
-      return v1Error({ code: "FORBIDDEN" }, 403, "Access denied");
+      return v1Error("FORBIDDEN", 403, "Access denied");
     }
 
     console.error(`[DELETE /api/v1/apps/{id}] Deletion failed:`, deleteError);
     return v1Error(
-      { code: "DELETE_FAILED", details: errorMessage },
+      "DELETE_FAILED",
       500,
-      "Failed to delete app. Infrastructure cleanup may be incomplete."
+      "Failed to delete app. Infrastructure cleanup may be incomplete.",
+      { details: errorMessage }
     );
   }
 });
