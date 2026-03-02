@@ -321,35 +321,10 @@
             "description": "App name (DNS-compatible, lowercase, 3-40 chars)",
             "example": "my-updated-app"
           },
-          "branch": {
-            "type": "string",
-            "description": "Git branch to deploy from",
-            "example": "main"
-          },
-          "description": {
-            "type": "string",
-            "description": "App description",
-            "example": "My production application"
-          },
-          "framework": {
-            "type": "string",
-            "description": "Framework type",
-            "example": "Next.js"
-          },
           "auto_deploy": {
             "type": "boolean",
             "description": "Enable automatic deployments on git push",
             "example": true
-          },
-          "build_command": {
-            "type": "string",
-            "description": "Custom build command",
-            "example": "npm run build"
-          },
-          "output_directory": {
-            "type": "string",
-            "description": "Build output directory",
-            "example": "dist"
           }
         }
       },
@@ -576,7 +551,7 @@
           "Platform Apps"
         ],
         "summary": "Update app metadata",
-        "description": "Updates app metadata. **Note:** This does NOT trigger a redeployment. Only metadata is updated.",
+        "description": "Updates safe metadata fields only (name, auto_deploy). **Build configuration changes (branch, framework, build command) are NOT allowed** - use the redeploy endpoint to change build settings and trigger a new deployment.",
         "security": [
           {
             "bearerAuth": []

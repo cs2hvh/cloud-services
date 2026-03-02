@@ -81,29 +81,9 @@ export const UpdateAppRequestSchema = z.object({
     example: 'my-updated-app',
     description: 'App name (DNS-compatible, lowercase, 3-40 chars)'
   }),
-  branch: z.string().optional().openapi({ 
-    example: 'main',
-    description: 'Git branch to deploy from'
-  }),
-  description: z.string().optional().openapi({ 
-    example: 'My production application',
-    description: 'App description'
-  }),
-  framework: z.string().optional().openapi({ 
-    example: 'Next.js',
-    description: 'Framework type'
-  }),
   auto_deploy: z.boolean().optional().openapi({ 
     example: true,
     description: 'Enable automatic deployments on git push'
-  }),
-  build_command: z.string().optional().openapi({ 
-    example: 'npm run build',
-    description: 'Custom build command'
-  }),
-  output_directory: z.string().optional().openapi({ 
-    example: 'dist',
-    description: 'Build output directory'
   }),
 }).openapi('UpdateAppRequest');
 
@@ -290,7 +270,7 @@ registry.registerPath({
   path: '/api/v1/apps/{id}',
   tags: ['Platform Apps'],
   summary: 'Update app metadata',
-  description: 'Updates app metadata. **Note:** This does NOT trigger a redeployment. Only metadata is updated.',
+  description: 'Updates safe metadata fields only (name, auto_deploy). **Build configuration changes (branch, framework, build command) are NOT allowed** - use the redeploy endpoint to change build settings and trigger a new deployment.',
   security: [{ bearerAuth: [] }],
   request: {
     params: z.object({

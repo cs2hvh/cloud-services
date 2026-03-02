@@ -94,7 +94,8 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
     return v1Error("FORBIDDEN", 403, "Access denied");
   }
 
-  // Update app (metadata only - does NOT trigger redeployment)
+  // Update app (safe metadata only: name, auto_deploy)
+  // Build config changes (branch, framework, etc) require redeploy endpoint
   const result = await Platform_Apps.update(id!, updateData);
 
   if (!result.success) {
