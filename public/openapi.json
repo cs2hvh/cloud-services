@@ -3,29 +3,372 @@
   "info": {
     "title": "Cloud Services - API v1",
     "version": "1.0.0",
-    "description": "Minimal OpenAPI spec for the cloud-services project (API v1)."
+    "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limit headers are included in all responses:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
+    "contact": {
+      "name": "Cloud Services Support",
+      "email": "support@galaxyhvh.com",
+      "url": "https://galaxyhvh.com/support"
+    },
+    "license": {
+      "name": "Proprietary",
+      "url": "https://galaxyhvh.com/terms"
+    }
   },
   "servers": [
-    { "url": "/" }
+    {
+      "url": "http://localhost:3000",
+      "description": "Development server"
+    },
+    {
+      "url": "https://galaxyhvh.com",
+      "description": "Production server"
+    }
   ],
+  "tags": [
+    {
+      "name": "Platform Apps",
+      "description": "Manage application deployments, containers, and infrastructure."
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "API key authentication. Format: `Bearer sk_live_xxx` or `Bearer sk_test_xxx`"
+      }
+    },
+    "schemas": {
+      "App": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+          },
+          "name": {
+            "type": "string",
+            "example": "my-awesome-app"
+          },
+          "slug": {
+            "type": "string",
+            "example": "my-awesome-app"
+          },
+          "framework": {
+            "type": "string",
+            "example": "Next.js"
+          },
+          "repository_name": {
+            "type": "string",
+            "example": "user/repo"
+          },
+          "repository_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://github.com/user/repo"
+          },
+          "branch": {
+            "type": "string",
+            "example": "main"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "deploying",
+              "running",
+              "failed",
+              "stopped"
+            ],
+            "example": "running"
+          },
+          "deployment_url": {
+            "type": "string",
+            "format": "uri",
+            "example": "https://my-awesome-app.example.com"
+          },
+          "port": {
+            "type": "number",
+            "example": 3000
+          },
+          "ip": {
+            "type": "string",
+            "example": "192.168.1.1"
+          },
+          "size": {
+            "type": "string",
+            "example": "small"
+          },
+          "auto_deploy": {
+            "type": "boolean",
+            "example": true
+          },
+          "git_provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab",
+              "bitbucket"
+            ],
+            "example": "github"
+          },
+          "build_command": {
+            "type": "string",
+            "example": "npm run build"
+          },
+          "output_directory": {
+            "type": "string",
+            "example": "dist"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "framework",
+          "repository_name",
+          "branch",
+          "status",
+          "auto_deploy",
+          "git_provider",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PaginationMeta": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "number",
+            "example": 42
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "per_page": {
+            "type": "number",
+            "example": 20
+          }
+        },
+        "required": [
+          "total"
+        ]
+      },
+      "AppListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/App"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "example": "Validation failed"
+          },
+          "message": {
+            "type": "string",
+            "example": "Invalid request body"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "AppResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/App"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AppUpdateResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "slug",
+              "branch",
+              "updated_at"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "UpdateAppRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 40,
+            "description": "App name (DNS-compatible, lowercase, 3-40 chars)",
+            "example": "my-updated-app"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Git branch to deploy from",
+            "example": "main"
+          },
+          "description": {
+            "type": "string",
+            "description": "App description",
+            "example": "My production application"
+          },
+          "framework": {
+            "type": "string",
+            "description": "Framework type",
+            "example": "Next.js"
+          },
+          "auto_deploy": {
+            "type": "boolean",
+            "description": "Enable automatic deployments on git push",
+            "example": true
+          },
+          "build_command": {
+            "type": "string",
+            "description": "Custom build command",
+            "example": "npm run build"
+          },
+          "output_directory": {
+            "type": "string",
+            "description": "Build output directory",
+            "example": "dist"
+          }
+        }
+      },
+      "AppDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      }
+    },
+    "parameters": {}
+  },
   "paths": {
     "/api/v1/apps": {
       "get": {
-        "summary": "List apps",
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "List all apps",
+        "description": "Returns a list of all apps owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
-            "description": "A list of apps",
+            "description": "List of apps",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": { "$ref": "#/components/schemas/App" }
-                    },
-                    "meta": { "type": "object" }
-                  }
+                  "$ref": "#/components/schemas/AppListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -34,78 +377,235 @@
       }
     },
     "/api/v1/apps/{id}": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": { "type": "string", "format": "uuid" }
-        }
-      ],
       "get": {
-        "summary": "Get an app by ID",
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Get app by ID",
+        "description": "Returns detailed information about a specific app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "App object",
+            "description": "App details",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/App" }
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                }
               }
             }
           },
-          "404": { "description": "Not found" }
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "patch": {
+        "tags": [
+          "Platform Apps"
+        ],
         "summary": "Update app metadata",
+        "description": "Updates app metadata. **Note:** This does NOT trigger a redeployment. Only metadata is updated.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
         "requestBody": {
-          "required": true,
+          "description": "App metadata to update",
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/AppUpdate" }
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAppRequest"
+              }
             }
           }
         },
         "responses": {
-          "200": { "description": "Updated app" },
-          "400": { "description": "Validation error" },
-          "403": { "description": "Forbidden" },
-          "404": { "description": "Not found" }
+          "200": {
+            "description": "App updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppUpdateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error - invalid request body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       },
       "delete": {
-        "summary": "Delete an app (destructive)",
+        "tags": [
+          "Platform Apps"
+        ],
+        "summary": "Delete app",
+        "description": "**DESTRUCTIVE OPERATION:** Permanently deletes the app and all associated infrastructure (Jenkins job, Kubernetes resources, DNS records). This action cannot be undone.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "App UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
         "responses": {
-          "200": { "description": "Deletion accepted" },
-          "404": { "description": "Not found" }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "App": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "name": { "type": "string" },
-          "slug": { "type": "string" },
-          "framework": { "type": "string" },
-          "repository_name": { "type": "string" },
-          "branch": { "type": "string" },
-          "status": { "type": "string" },
-          "created_at": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" }
-        }
-      },
-      "AppUpdate": {
-        "type": "object",
-        "properties": {
-          "name": { "type": "string" },
-          "branch": { "type": "string" },
-          "description": { "type": "string" },
-          "framework": { "type": "string" },
-          "auto_deploy": { "type": "boolean" }
+          "200": {
+            "description": "App deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppDeleteResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - deletion failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
         }
       }
     }
