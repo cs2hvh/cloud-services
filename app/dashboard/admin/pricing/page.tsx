@@ -31,7 +31,7 @@ const AdminPricingSuspense = async () => {
     "security",
     "kubernetes",
     "ai-deployment",
-    "app-deployment",
+    "platform-apps",
     "network-ddos",
   ];
   const pricingProducts = products.filter((p) =>

@@ -88,7 +88,7 @@ const AiMlPage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-ai.svg", alt: "AI Machine Learning infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-ai.png", alt: "AI Machine Learning infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

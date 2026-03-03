@@ -88,7 +88,7 @@ const SolutionsStoragePage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-storage.svg", alt: "Storage infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-storage.png", alt: "Storage infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

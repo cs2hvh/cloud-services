@@ -88,7 +88,7 @@ const EcommercePage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-ecom.svg", alt: "Ecommerce infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-ecom.png", alt: "Ecommerce infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

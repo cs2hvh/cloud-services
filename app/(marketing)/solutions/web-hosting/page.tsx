@@ -88,7 +88,7 @@ const WebHostingPage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-web-host.svg", alt: "Web Hosting & SaaS Deployment Infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-web-host.png", alt: "Web Hosting & SaaS Deployment Infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

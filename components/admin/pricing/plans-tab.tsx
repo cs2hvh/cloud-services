@@ -58,7 +58,7 @@ const PRODUCT_TYPES = [
   { value: "security", label: "Security" },
   { value: "kubernetes", label: "Kubernetes" },
   { value: "ai-deployment", label: "AI Deployment" },
-  { value: "app-deployment", label: "App Deployment" },
+  { value: "platform-apps", label: "App Deployment" },
   { value: "network-ddos", label: "Network/DDoS" },
 ];
 

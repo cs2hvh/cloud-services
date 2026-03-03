@@ -7,6 +7,7 @@ import DatabasePricingSection from "@/components/services/database-pricing-secti
 import DatabaseCtaSection from "@/components/services/database-cta-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import { getDatabasePlans} from "@/lib/helpers/database-plans";
 
 const cases = [
   {
@@ -31,7 +32,10 @@ const cases = [
   },
 ];
 
-const DatabaseHome = () => {
+const DatabaseHome = async () => {
+  // Fetch dynamic pricing plans from database
+  const plans = await getDatabasePlans();
+
   return (
     <main className="bg-black">
       <ServiceHeroSection
@@ -47,7 +51,7 @@ const DatabaseHome = () => {
       <DatabaseShowcaseSection />
       <DatabaseComparisonSection />
       <DatabaseMetricsSection />
-      <DatabasePricingSection />
+      <DatabasePricingSection plans={plans} />
       <DatabaseCtaSection />
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
