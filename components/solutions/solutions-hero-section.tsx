@@ -35,7 +35,7 @@ function SolutionTag({ label, className }: SolutionTagProps) {
 export function SolutionsHeroSection() {
   return (
     <section className="relative isolate min-h-screen lg:h-screen overflow-hidden pt-[96px] bg-[#0E0F0F]">
-      <div className="absolute inset-0 -z-20 bg-[#0E0F0F]" />
+      <div className="absolute inset-0 -z-20 bg-transparent" />
 
       <Image
         src="/solution/solution-hero-background.png"
@@ -52,7 +52,7 @@ export function SolutionsHeroSection() {
         <div className="relative z-10 py-10 lg:py-0 lg:h-[calc(100vh-96px)]">
           <div className="grid lg:h-full items-center gap-10 lg:grid-cols-2 lg:gap-0">
           <div className="text-center sm:text-left lg:h-full flex flex-col justify-center lg:justify-self-start">
-            <h1 className="max-w-[570px] text-[clamp(2rem,2.9vw,3.4rem)] font-normal leading-[1.22] text-[#F2F2F2] [text-shadow:2px_4px_18.1px_rgba(255,255,255,0.36)]">
+            <h1 className="max-w-[570px] text-[clamp(2rem,2.9vw,3.4rem)] font-normal leading-[1.22] text-[#FFFFFF] [text-shadow:2px_4px_18.1px_rgba(255,255,255,0.36)]">
               All solutions for building, scaling, and securing modern apps.
             </h1>
 

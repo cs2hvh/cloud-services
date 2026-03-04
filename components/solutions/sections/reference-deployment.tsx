@@ -39,14 +39,14 @@ export function ReferenceDeployment({
   return (
     <section
       className={cn(
-        "relative w-full border-b border-[#6b6b6b] bg-black py-16 md:py-20 lg:py-24",
+        "relative w-full border-b border-[#6b6b6b] bg-transparent py-16 md:py-20 lg:py-24",
         className
       )}
     >
       <Container>
         {/* Main box with border and background */}
         <div
-          className="relative border border-[#6b6b6b] overflow-hidden"
+          className="relative border border-[#6b6b6b] overflow-hidden bg-transparent"
         >
           {/* Background Image */}
           <div className="absolute inset-0">

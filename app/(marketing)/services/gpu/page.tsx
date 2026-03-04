@@ -92,7 +92,7 @@ const plans = [
     },
   ];
   return (
-    <main className="bg-black">
+    <main>
       <ServiceHeroSection
         badge="High Performance Computing"
         title="GPU instance"

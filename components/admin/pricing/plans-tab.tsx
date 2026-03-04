@@ -13,6 +13,7 @@ import {
   Loader2,
   Filter,
   Star,
+  Zap,
   Cpu,
   HardDrive,
   DollarSign,
@@ -69,6 +70,9 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
   );
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
+  const [filterSubtype, setFilterSubtype] = useState<string>("all");
+  const [filterFeatured, setFilterFeatured] = useState<string>("all");
+  const [filterHighlighted, setFilterHighlighted] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(
     Math.ceil(initialProducts.length / ITEMS_PER_PAGE)
@@ -106,12 +110,38 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
     }
   };
 
+  // Get available subtypes for current filter type
+  const getAvailableSubtypes = () => {
+    if (filterType === "all") return [];
+    
+    const subtypesSet = new Set<string>();
+    productsList
+      .filter((p) => p.type === filterType && p.sub)
+      .forEach((p) => subtypesSet.add(p.sub!));
+    
+    return Array.from(subtypesSet).sort();
+  };
+
   // Filter and search products
   const getFilteredProducts = () => {
     let filtered = [...productsList];
 
     if (filterType !== "all") {
       filtered = filtered.filter((p) => p.type === filterType);
+    }
+
+    if (filterSubtype !== "all") {
+      filtered = filtered.filter((p) => p.sub === filterSubtype);
+    }
+
+    if (filterFeatured !== "all") {
+      const isFeatured = filterFeatured === "featured";
+      filtered = filtered.filter((p) => p.is_featured === isFeatured);
+    }
+
+    if (filterHighlighted !== "all") {
+      const isHighlighted = filterHighlighted === "highlighted";
+      filtered = filtered.filter((p) => p.is_highlighted === isHighlighted);
     }
 
     if (searchQuery.trim()) {
@@ -144,6 +174,20 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
 
   const handleFilterChange = (value: string) => {
     setFilterType(value);
+    // Reset subtype filter when type changes
+    setFilterSubtype("all");
+  };
+
+  const handleSubtypeFilterChange = (value: string) => {
+    setFilterSubtype(value);
+  };
+
+  const handleFeaturedFilterChange = (value: string) => {
+    setFilterFeatured(value);
+  };
+
+  const handleHighlightedFilterChange = (value: string) => {
+    setFilterHighlighted(value);
   };
 
   const handleEditProduct = (product: Tables<"products">) => {
@@ -204,7 +248,7 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
   useEffect(() => {
     updatePagination(1);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, filterType]);
+  }, [searchQuery, filterType, filterSubtype, filterFeatured, filterHighlighted]);
 
   const getTypeLabel = (type: string) => {
     const typeConfig = PRODUCT_TYPES.find((t) => t.value === type);
@@ -214,6 +258,42 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
   const formatPrice = (price: number | null) => {
     if (price === null || price === undefined) return "-";
     return `$${price}/mo`;
+  };
+
+  const getSubtypeLabel = (subtype: string | null) => {
+    if (!subtype) return "N/A";
+    const subtypeLower = subtype.toLowerCase();
+    
+    const subtypeMap: { [key: string]: string } = {
+      pg: "PostgreSQL",
+      postgres: "PostgreSQL",
+      postgresql: "PostgreSQL",
+      mysql: "MySQL",
+      mongodb: "MongoDB",
+      mongo: "MongoDB",
+      redis: "Redis",
+      mariadb: "MariaDB",
+    };
+    
+    return subtypeMap[subtypeLower] || subtype;
+  };
+
+  const getSubtypeStyles = (subtype: string | null) => {
+    if (!subtype) return { bg: "bg-neutral-800", border: "border-neutral-600", text: "text-neutral-300" };
+    const subtypeLower = subtype.toLowerCase();
+    
+    const styleMap: { [key: string]: { bg: string; border: string; text: string } } = {
+      pg: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-300" },
+      postgres: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-300" },
+      postgresql: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-300" },
+      mysql: { bg: "bg-orange-500/20", border: "border-orange-500", text: "text-orange-300" },
+      mongodb: { bg: "bg-green-500/20", border: "border-green-500", text: "text-green-300" },
+      mongo: { bg: "bg-green-500/20", border: "border-green-500", text: "text-green-300" },
+      redis: { bg: "bg-red-500/20", border: "border-red-500", text: "text-red-300" },
+      mariadb: { bg: "bg-purple-500/20", border: "border-purple-500", text: "text-purple-300" },
+    };
+    
+    return styleMap[subtypeLower] || { bg: "bg-neutral-800", border: "border-neutral-600", text: "text-neutral-300" };
   };
 
   return (
@@ -239,11 +319,12 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
           </Button>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* Type Filter */}
           <Select value={filterType} onValueChange={handleFilterChange}>
-            <SelectTrigger className="cursor-pointer w-[180px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+            <SelectTrigger className="cursor-pointer w-[160px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
               <Filter className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Filter by type" />
+              <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent className="bg-neutral-900 border-neutral-800">
               <SelectItem
@@ -261,6 +342,88 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
                   {type.label}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+
+          {/* Subtype Filter - Only show if type is selected */}
+          {filterType !== "all" && getAvailableSubtypes().length > 0 && (
+            <Select value={filterSubtype} onValueChange={handleSubtypeFilterChange}>
+              <SelectTrigger className="cursor-pointer w-[140px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+                <SelectValue placeholder="Subtype" />
+              </SelectTrigger>
+              <SelectContent className="bg-neutral-900 border-neutral-800">
+                <SelectItem
+                  value="all"
+                  className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+                >
+                  All Subtypes
+                </SelectItem>
+                {getAvailableSubtypes().map((subtype) => (
+                  <SelectItem
+                    key={subtype}
+                    value={subtype}
+                    className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+                  >
+                    {getSubtypeLabel(subtype)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Featured Filter */}
+          <Select value={filterFeatured} onValueChange={handleFeaturedFilterChange}>
+            <SelectTrigger className="cursor-pointer w-[130px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+              <Star className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Featured" />
+            </SelectTrigger>
+            <SelectContent className="bg-neutral-900 border-neutral-800">
+              <SelectItem
+                value="all"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                All
+              </SelectItem>
+              <SelectItem
+                value="featured"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Featured
+              </SelectItem>
+              <SelectItem
+                value="not-featured"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Not Featured
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Highlighted Filter */}
+          <Select value={filterHighlighted} onValueChange={handleHighlightedFilterChange}>
+            <SelectTrigger className="cursor-pointer w-[140px] bg-neutral-900 border-neutral-800 text-white focus:ring-0">
+              <Zap className="h-4 w-4 mr-2" />
+              <SelectValue placeholder="Highlighted" />
+            </SelectTrigger>
+            <SelectContent className="bg-neutral-900 border-neutral-800">
+              <SelectItem
+                value="all"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                All
+              </SelectItem>
+              <SelectItem
+                value="highlighted"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Highlighted
+              </SelectItem>
+              <SelectItem
+                value="not-highlighted"
+                className="cursor-pointer text-white focus:bg-neutral-800 focus:text-white"
+              >
+                Not Highlighted
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -290,6 +453,9 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                     Type
+                  </th>
+                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    sub-type
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                     Resources
@@ -332,11 +498,23 @@ export default function PlansTab({ products: initialProducts, categories }: Plan
                           </div>
                         </div>
                       </td>
+                      
 
                       <td className="px-6 py-4">
                         <Badge className="bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border-0 text-xs">
                           {getTypeLabel(product.type)}
                         </Badge>
+                      </td>
+                      <td className="px-6 py-4">
+                        {product.sub ? (
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium border ${getSubtypeStyles(product.sub).bg} ${getSubtypeStyles(product.sub).border} ${getSubtypeStyles(product.sub).text}`}
+                          >
+                            {getSubtypeLabel(product.sub)}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500 text-xs">-</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-4">

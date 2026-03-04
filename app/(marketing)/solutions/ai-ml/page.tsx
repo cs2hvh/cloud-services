@@ -80,7 +80,7 @@ const AiMlPage = () => {
     buttonText: "Request Consultation",
   };
   return (
-    <main className="bg-black">
+    <main >
       <SolutionsHeroSection
         badge={["GPU Training", "Inference APIs", "LLM Fine-tuning", "Secure Cloud"]}
         title="AI Machine Learning"
@@ -90,7 +90,7 @@ const AiMlPage = () => {
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-ai.png", alt: "AI Machine Learning infrastructure" }}
       />
-      <WhatYouCanBuild items={buildItems} />
+      <WhatYouCanBuild items={buildItems} horizontal={true} />
       <ReferenceDeployment {...referenceDeploymentData} />
       <ReadyToBuild {...readyToBuildData} />
     </main>
