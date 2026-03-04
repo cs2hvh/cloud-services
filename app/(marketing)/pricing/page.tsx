@@ -3,6 +3,7 @@ import { getFullPricingData, type ServiceCategory } from "@/lib/supabase/queries
 import PricingClient from "@/components/pricing/pricing-client"
 
 // Fallback static data - used when database has no pricing data yet
+//pushing new changes
 const FALLBACK_PRICING_DATA: ServiceCategory[] = [
   {
     id: "compute",
