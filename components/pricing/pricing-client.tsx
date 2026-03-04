@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { PricingContent, type ServiceCategory } from "@/components/pricing/pricing-content";
+import { ServiceCategory} from "@/lib/supabase/queries/pricing";
+import { PricingContent } from "@/components/pricing/pricing-content";
 
 interface PricingClientProps {
   categories: ServiceCategory[];

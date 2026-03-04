@@ -88,7 +88,7 @@ const SolutionsKubernetesPage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-kubernetes.svg", alt: "Kubernetes infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-kubernetes.png", alt: "Kubernetes infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

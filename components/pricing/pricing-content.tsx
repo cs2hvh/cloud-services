@@ -1,53 +1,9 @@
 import type { Dispatch, SetStateAction } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
 
-type PricingTier = {
-  id?: string;
-  name: string;
-  shortDescription?: string;
-  badge?: string;
-  price: {
-    monthly: number;
-    yearly: number;
-  };
-  billingPeriod?: string;
-  specs?: string[];
-  features: string[];
-  summary?: {
-    billing: string;
-    support: string;
-    provisioning: string;
-    guarantee: string;
-    buttonText: string;
-  };
-  highlighted?: boolean;
-  isFeatured?: boolean;
-  ctaText: string;
-  ctaLink: string;
-};
 
-type PricingPromo = {
-  badge: string;
-  badgeNote?: string;
-  title: string;
-  description: string;
-  subtext?: string;
-  priceOld?: string;
-  priceCurrent?: string;
-  linkText: string;
-  linkHref: string;
-};
-
-export type ServiceCategory = {
-  id: string;
-  label: string;
-  description?: string;
-  startingPriceLabel?: string;
-  startingPriceDescription?: string;
-  promos?: PricingPromo[];
-  tiers: PricingTier[];
-};
 
 type PricingContentProps = {
   category?: ServiceCategory;

@@ -202,7 +202,6 @@ export default function PromosTab({ promos: initialPromos, categories: initialCa
   // Fetch categories on mount
   useEffect(() => {
     fetchCategories();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getCategoryLabel = (slug: string) => {

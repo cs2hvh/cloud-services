@@ -1,7 +1,6 @@
 import { Suspense } from "react";
-import { getFullPricingData } from "@/lib/supabase/queries/pricing";
+import { getFullPricingData, type ServiceCategory } from "@/lib/supabase/queries/pricing";
 import PricingClient from "@/components/pricing/pricing-client";
-import type { ServiceCategory } from "@/components/pricing/pricing-content";
 
 // Fallback static data - used when database has no pricing data yet
 const FALLBACK_PRICING_DATA: ServiceCategory[] = [

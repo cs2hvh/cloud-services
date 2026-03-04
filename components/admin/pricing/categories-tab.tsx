@@ -13,8 +13,6 @@ import {
   Loader2,
   Eye,
   EyeOff,
-  ArrowUp,
-  ArrowDown,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { Input } from "@/components/ui/input";

@@ -28,7 +28,7 @@ export const createProductSchema = z.object({
     cpu: z.number().min(0, "CPU must be non-negative"),
     ram: z.number().min(0, "RAM must be non-negative"),
     storage: z.number().min(0, "Storage must be non-negative"),
-  }).optional(),
+  }),
   specs: z.array(z.string()).optional(),
   features: z.array(z.string()).optional(),
   summary: z.object({
@@ -37,7 +37,7 @@ export const createProductSchema = z.object({
     provisioning: z.string().optional(),
     guarantee: z.string().optional(),
     buttonText: z.string().optional(),
-  }).optional(),
+  }).optional().nullable(),
   is_featured: z.boolean().optional(),
   is_highlighted: z.boolean().optional(),
   cta_text: z.string().optional(),

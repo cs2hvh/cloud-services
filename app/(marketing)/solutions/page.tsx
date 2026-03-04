@@ -4,7 +4,7 @@ import { SolutionsHeroSection } from "@/components/solutions/solutions-hero-sect
 
 export default function SolutionsPage() {
   return (
-    <main className="bg-black">
+    <main >
       <SolutionsHeroSection />
       <SolutionsDiscoverySection />
       <SolutionsAdvisorySection />

@@ -19,13 +19,13 @@ export interface PricingTier {
   billingPeriod?: string;
   specs?: string[];
   features: string[];
-  summary?: {
-    billing: string;
-    support: string;
-    provisioning: string;
-    guarantee: string;
-    buttonText: string;
-  };
+ summary?: {
+            billing?: string|undefined;
+            support?: string|undefined;
+            provisioning?: string|undefined;
+            guarantee?: string|undefined;
+            buttonText?: string|undefined;
+          } | null;
   highlighted?: boolean;
   isFeatured?: boolean;
   ctaText: string;

@@ -353,7 +353,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                 <div className="relative overflow-hidden">
                   <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
                     <Image
-                      src="/images/main-page/solutions-navbar.svg"
+                      src="/images/main-page/solutions-navbar-1.png"
                       alt="Solutions"
                       fill
                       className="object-contain object-right"
@@ -432,7 +432,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                 <div className="relative overflow-hidden">
                   <div className="absolute top-[77px] bottom-[86px] right-[46px] left-0">
                     <Image
-                      src="/images/main-page/solutions-navbar.svg"
+                      src="/images/main-page/solutions-navbar-1.png"
                       alt="Products"
                       fill
                       className="object-contain object-right"
@@ -488,24 +488,24 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
               <div className="pt-3 mt-2 border-t border-white/[0.06]">
                 {user ? (
                   <>
-                    <Link href="/dashboard" className="block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200" onClick={() => setIsOpen(false)}>
+                    <button onClick={() => { router.push("/dashboard"); setIsOpen(false); }} className="cursor-pointer w-full text-left block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200">
                       Dashboard
-                    </Link>
-                    <Link href="/dashboard/nav/billing" className="block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200" onClick={() => setIsOpen(false)}>
+                    </button>
+                    <button onClick={() => { router.push("/dashboard/nav/billing"); setIsOpen(false); }} className="cursor-pointer w-full text-left block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200">
                       Billing
-                    </Link>
+                    </button>
                     <button onClick={() => { handleSignOut(); setIsOpen(false); }} className="cursor-pointer w-full text-left px-3 py-2.5 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors duration-200">
                       Sign out
                     </button>
                   </>
                 ) : (
                   <div className="flex flex-col gap-2 pt-1">
-                    <Link href="/signin" className="block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg text-center transition-colors duration-200" onClick={() => setIsOpen(false)}>
+                    <button onClick={() => { router.push("/signin"); setIsOpen(false); }} className="cursor-pointer w-full block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg text-center transition-colors duration-200">
                       Log in
-                    </Link>
-                    <Link href="/signup" className="block px-3 py-2.5 text-[13px] font-medium text-white bg-[#0095FF] hover:bg-[#007ad6] rounded-lg text-center transition-colors duration-200" onClick={() => setIsOpen(false)}>
+                    </button>
+                    <button onClick={() => { router.push("/signup"); setIsOpen(false); }} className="cursor-pointer w-full block px-3 py-2.5 text-[13px] font-medium text-white bg-[#0095FF] hover:bg-[#007ad6] rounded-lg text-center transition-colors duration-200">
                       Sign Up
-                    </Link>
+                    </button>
                   </div>
                 )}
               </div>

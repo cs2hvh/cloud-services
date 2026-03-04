@@ -89,7 +89,7 @@ const SolutionsDatabasePage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-db.svg", alt: "Database infrastructure" }}
+        illustration={{ src: "/images/main-page/service-home-db-section-1.png", alt: "Database infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

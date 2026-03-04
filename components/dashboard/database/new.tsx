@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";

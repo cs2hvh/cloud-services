@@ -451,11 +451,11 @@ export type Database = {
           specs?: string[] | null;
           features?: string[] | null;
           summary?: {
-            billing: string;
-            support: string;
-            provisioning: string;
-            guarantee: string;
-            buttonText: string;
+            billing?: string|undefined;
+            support?: string|undefined;
+            provisioning?: string|undefined;
+            guarantee?: string|undefined;
+            buttonText?: string|undefined;
           } | null;
           is_featured?: boolean | null;
           is_highlighted?: boolean | null;
@@ -484,12 +484,12 @@ export type Database = {
           billing_period?: string | null;
           specs?: string[] | null;
           features?: string[] | null;
-          summary?: {
-            billing: string;
-            support: string;
-            provisioning: string;
-            guarantee: string;
-            buttonText: string;
+           summary?: {
+            billing?: string|undefined;
+            support?: string|undefined;
+            provisioning?: string|undefined;
+            guarantee?: string|undefined;
+            buttonText?: string|undefined;
           } | null;
           is_featured?: boolean | null;
           is_highlighted?: boolean | null;
@@ -519,11 +519,11 @@ export type Database = {
           specs?: string[] | null;
           features?: string[] | null;
           summary?: {
-            billing: string;
-            support: string;
-            provisioning: string;
-            guarantee: string;
-            buttonText: string;
+            billing?: string;
+            support?: string;
+            provisioning?: string;
+            guarantee?: string;
+            buttonText?: string;
           } | null;
           is_featured?: boolean | null;
           is_highlighted?: boolean | null;

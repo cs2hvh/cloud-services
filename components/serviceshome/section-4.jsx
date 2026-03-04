@@ -3,7 +3,7 @@ import { Container } from "@/components/ui/container";
 
 export default function ServicesHomeSectionFour({ plans }) {
   return (
-    <section className="relative z-10 py-16 lg:py-24">
+    <section className="relative z-10 py-16 lg:py-24 bg-transparent">
       {/* Background */}
       <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
         <div className="absolute inset-0 bg-black" />

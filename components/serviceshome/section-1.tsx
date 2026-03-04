@@ -43,7 +43,7 @@ export function ServicesHomeSectionOne({
   return (
     <section
       className={cn(
-        "relative w-full overflow-hidden bg-black",
+        "relative w-full overflow-hidden bg-transparent",
         "min-h-[520px] h-[calc(100vh-80px)]",
         "lg:h-[min(776px,calc(100vh-80px))] lg:min-h-0",
         className,
