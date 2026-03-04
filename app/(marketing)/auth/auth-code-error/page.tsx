@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import AuthCodeError from "@/components/auth/auth-code-error";
 
 function AuthCodeErrorFallback() {
-  //pushing new changes
+  //pushing new changes-changes
   return (
     <div className="max-w-md mx-auto mt-16 rounded-xl border p-6 shadow-sm bg-white">
       <h1 className="text-xl font-semibold mb-2">Loading...</h1>
