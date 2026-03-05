@@ -29,7 +29,7 @@ const ComputeHome = () => {
   ];
 
   return (
-    <main className="bg-transparent opacity-65">
+    <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
         badge="Cloud Compute"
         title="Compute"
@@ -41,7 +41,7 @@ const ComputeHome = () => {
           alt: "",
         }}
         illustration={{
-          src: "/pages/compute/compute.svg",
+          src: "/images/main-page/compute.png",
           alt: "Compute infrastructure",
         }}
       />

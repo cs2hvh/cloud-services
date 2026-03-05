@@ -80,7 +80,7 @@ const WebHostingPage = () => {
     buttonText: "Request Consultation",
   };
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["Auto Deploy", "CI/CD Pipelines", "Managed DB", "Global CDN"]}
         title="Web Hosting & SaaS Deployment Infrastructure"

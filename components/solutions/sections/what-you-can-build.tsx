@@ -23,7 +23,7 @@ export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYo
   return (
     <section
       className={cn(
-        "relative w-full bg-transparent opacity-65 py-16 md:py-20 lg:py-24 border-b border-[#6b6b6b]",
+        "relative w-full bg-[#0E0F0F] py-16 md:py-20 lg:py-24 border-b border-[#6b6b6b]",
         className
       )}
     >
@@ -41,7 +41,7 @@ export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYo
       </Container>
 
       {/* Full-width Grid with Borders */}
-      <div className="w-full">
+      <div className="w-full ">
         {/* Top border */}
         {horizontal && <div className="w-full h-px bg-[#6b6b6b]" />}
         
@@ -63,7 +63,7 @@ export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYo
               <div
                 key={index}
                 className={cn(
-                  "px-6 py-8 md:px-8 md:py-10 lg:px-10 lg:py-12",
+                  "px-6 py-8 md:px-8 md:py-10 lg:px-10 lg:py-12 ",
                   // Vertical borders (between columns)
                   !isLgLastCol && "lg:border-r lg:border-[#6b6b6b]",
                   !isSmLastCol && "sm:max-lg:border-r sm:max-lg:border-[#6b6b6b]",
@@ -73,12 +73,15 @@ export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYo
                   horizontal && !isMobileLastRow && "max-sm:border-b max-sm:border-[#6b6b6b]"
                 )}
               >
-                <h3 className="text-lg md:text-xl font-medium text-white mb-3">
+                <div className="mx-8">
+                  <h3 className="text-lg md:text-xl font-medium text-white mb-3">
                   {item.title}
                 </h3>
                 <p className="text-sm md:text-base text-white/50 leading-relaxed">
                   {item.description}
                 </p>
+                </div>
+                
               </div>
             );
           })}

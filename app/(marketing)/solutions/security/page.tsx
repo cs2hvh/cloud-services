@@ -80,7 +80,7 @@ const SolutionsSecurityPage = () => {
   };
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["Zero Trust", "WAF & DDoS", "Compliance", "SOC2/ISO/GDPR"]}
         title="Secure Enterprise Cloud Infrastructure"
