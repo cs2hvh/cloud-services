@@ -86,7 +86,7 @@ export async function deleteBucket(
     );
     return { success: true };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -155,7 +155,7 @@ export async function listObjects(
       totalCount: objects.length,
     };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -187,7 +187,7 @@ export async function uploadFile(
     );
     return { success: true, etag: response.ETag };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -219,7 +219,7 @@ export async function downloadFile(
       contentType: response.ContentType,
     };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -247,7 +247,7 @@ export async function deleteFile(
     );
     return { success: true };
   }catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -280,7 +280,7 @@ export async function getFileMetadata(
       contentType: response.ContentType,
     };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -310,7 +310,7 @@ export async function generatePresignedUrl(
     const url = await getSignedUrl(client, command, { expiresIn });
     return { success: true, url };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -341,7 +341,7 @@ export async function copyFile(
     );
     return { success: true };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -387,7 +387,7 @@ export async function updateBucketCORS(
     }
     return { success: true };
   }catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -417,7 +417,7 @@ export async function updateBucketVersioning(
     );
     return { success: true };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -445,7 +445,7 @@ export async function updateBucketACL(
     );
     return { success: true };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -477,7 +477,7 @@ export async function getBucketStats(
 
     return { success: true, size: totalSize, count: totalCount };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 
@@ -513,7 +513,7 @@ export async function emptyBucket(
 
     return { success: true, deletedCount };
   } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
+  console.error('S3 operation error:', error);
 
   let message = 'Unknown error';
 

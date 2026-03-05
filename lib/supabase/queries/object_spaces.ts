@@ -77,7 +77,6 @@ export const ObjectSpaces = {
     error?: string;
   }> => {
     try {
-      console.log(payload,"...........")
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("object_spaces")

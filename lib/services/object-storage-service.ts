@@ -308,20 +308,7 @@ export class ObjectStorageService {
 
       const bucketName = bucket?.name || bucket_id;
 
-      // 2. Close billing (prorated)
-      try {
-        const billingResult = await Billing.close_active_service("objectspace", {
-          userId: user_id,
-          serviceId: bucket_id,
-          failOnInsufficient: false,
-        });
-        console.log(`[ObjectStorageService.deleteBucket] Billing closed:`, billingResult);
-      } catch (billErr) {
-        console.warn(`[ObjectStorageService.deleteBucket] Billing close failed:`, billErr);
-        // Don't block deletion on billing failure
-      }
-
-      // 3. Create audit log before deletion
+      // 2. Create audit log before deletion
       if (audit_context && bucket) {
         try {
           await AuditLogService.create({
@@ -343,7 +330,7 @@ export class ObjectStorageService {
         }
       }
 
-      // 4. Delete bucket infrastructure
+      // 3. Delete bucket infrastructure
       const result = await ObjectStorageFunctions.deleteBucket({
         bucket_id,
         user_id,
@@ -356,6 +343,19 @@ export class ObjectStorageService {
         error.code = result.error === "Bucket not found" ? 'NOT_FOUND' :
                     result.error === "Unauthorized" ? 'FORBIDDEN' : 'DELETION_FAILED';
         throw error;
+      }
+
+      // 4. Close billing (prorated) after successful provider deletion
+      try {
+        const billingResult = await Billing.close_active_service("objectspace", {
+          userId: user_id,
+          serviceId: bucket_id,
+          failOnInsufficient: false,
+        });
+        console.log(`[ObjectStorageService.deleteBucket] Billing closed:`, billingResult);
+      } catch (billErr) {
+        console.warn(`[ObjectStorageService.deleteBucket] Billing close failed:`, billErr);
+        // Don't block deletion on billing failure
       }
 
       // 5. Create success notification
@@ -438,16 +438,6 @@ export class ObjectStorageService {
       const error = new Error('Unauthorized') as Error & { code?: string };
       error.code = 'FORBIDDEN';
       throw error;
-    }
-
-    // Decrypt credentials if requested
-    if (decrypt_credentials) {
-      return {
-        ...bucket,
-        endpoint: this.decryptJsonField(bucket.endpoint),
-        key_id: this.decryptJsonField(bucket.key_id),
-        secret_key: this.decryptJsonField(bucket.secret_key),
-      };
     }
 
     return bucket;

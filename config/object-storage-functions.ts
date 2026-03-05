@@ -222,6 +222,35 @@ async function storeBucketInDatabase(
 }
 
 /**
+ * Best-effort rollback for partially created bucket resources.
+ * This prevents orphaned buckets/keys when DB persistence fails.
+ */
+async function rollbackCreatedResources(
+  config: CreateBucketConfig,
+  envConfig: EnvironmentConfig,
+  accessKeyId?: string
+): Promise<void> {
+  if (accessKeyId) {
+    try {
+      await deleteSpacesKey(accessKeyId);
+    } catch (error) {
+      console.warn("[handleCreateBucket] Rollback key deletion failed:", error);
+    }
+  }
+
+  try {
+    const s3Client = createS3Client(
+      config.region,
+      envConfig.spacesAccessKey,
+      envConfig.spacesSecretKey
+    );
+    await s3DeleteBucket(s3Client, config.name);
+  } catch (error) {
+    console.warn("[handleCreateBucket] Rollback bucket deletion failed:", error);
+  }
+}
+
+/**
  * Main function to handle bucket creation with all security measures
  * @param config Bucket configuration from validated request
  * @returns Complete bucket creation result
@@ -257,45 +286,60 @@ export async function handleCreateBucket(config: CreateBucketConfig): Promise<Cr
     };
   }
 
-  // Step 3: Create dedicated access credentials
-  const credentialsResult = await createBucketCredentials(config.name);
-  if (!credentialsResult.success) {
+  let createdAccessKeyId: string | undefined;
+
+  try {
+    // Step 3: Create dedicated access credentials
+    const credentialsResult = await createBucketCredentials(config.name);
+    if (!credentialsResult.success) {
+      await rollbackCreatedResources(config, envConfig);
+      return {
+        success: false,
+        error: "Failed to create access credentials",
+        message: credentialsResult.error
+      };
+    }
+
+    createdAccessKeyId = credentialsResult.credentials?.accessKeyId;
+
+    // Step 4: Process and encrypt endpoint
+    const encryptedEndpoint = await processAndEncryptEndpoint(
+      config.name, 
+      config.region, 
+      envConfig.encryptionKey
+    );
+
+    // Step 5: Encrypt credentials
+    const encryptedCredentials = encryptCredentials(
+      credentialsResult.credentials!.accessKeyId,
+      credentialsResult.credentials!.secretAccessKey,
+      envConfig.encryptionKey
+    );
+
+    // Step 6: Store in database
+    const dbResult = await storeBucketInDatabase(config, encryptedEndpoint, encryptedCredentials);
+    if (!dbResult.success) {
+      await rollbackCreatedResources(config, envConfig, createdAccessKeyId);
+      return {
+        success: false,
+        error: "Failed to save bucket information",
+        message: dbResult.error
+      };
+    }
+
+    return {
+      success: true,
+      data: dbResult.data,
+      message: "Bucket created successfully with secure access credentials"
+    };
+  } catch (error) {
+    await rollbackCreatedResources(config, envConfig, createdAccessKeyId);
     return {
       success: false,
-      error: "Failed to create access credentials",
-      message: credentialsResult.error
+      error: "Failed to create storage bucket",
+      message: error instanceof Error ? error.message : "Unknown error occurred"
     };
   }
-
-  // Step 4: Process and encrypt endpoint
-  const encryptedEndpoint = await processAndEncryptEndpoint(
-    config.name, 
-    config.region, 
-    envConfig.encryptionKey
-  );
-
-  // Step 5: Encrypt credentials
-  const encryptedCredentials = encryptCredentials(
-    credentialsResult.credentials!.accessKeyId,
-    credentialsResult.credentials!.secretAccessKey,
-    envConfig.encryptionKey
-  );
-
-  // Step 6: Store in database
-  const dbResult = await storeBucketInDatabase(config, encryptedEndpoint, encryptedCredentials);
-  if (!dbResult.success) {
-    return {
-      success: false,
-      error: "Failed to save bucket information",
-      message: dbResult.error
-    };
-  }
-
-  return {
-    success: true,
-    data: dbResult.data,
-    message: "Bucket created successfully with secure access credentials"
-  };
 }
 
 
