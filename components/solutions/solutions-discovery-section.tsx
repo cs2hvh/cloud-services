@@ -142,7 +142,7 @@ function ToolbarSurface({
 function SolutionCard({ card }: { card: SolutionCardData }) {
   return (
     <article className="flex min-h-[288px] flex-col border border-[#F2F2F2]/70 bg-transparent p-5 sm:p-6">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 text-white font-bold">
         <Image src={card.icon} alt="" width={41} height={41} />
         <div>
           <h3 className="text-[16px] font-normal leading-[1.2] text-white">{card.title}</h3>
@@ -235,7 +235,7 @@ export function SolutionsDiscoverySection() {
   };
 
   return (
-    <section className="bg-black pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24">
+    <section className="bg-transparent pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24">
       <div className="w-full">
         <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
         <div className="relative grid gap-3 lg:grid-cols-[minmax(0,1fr)_155px_155px_155px]">

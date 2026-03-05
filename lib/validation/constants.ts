@@ -43,28 +43,38 @@ export const VALID_MONGODB_VERSIONS = ['4', '5', '6', '7', '8'] as const;
 // Valid Kafka versions
 export const VALID_KAFKA_VERSIONS = ['3.5', '3.6', '3.7', '3.8'] as const;
 
-// Valid database cluster sizes (whitelist to prevent expensive provisioning)
+// Valid database cluster size patterns (regex-based validation)
+// - db-s-* : Basic tier (shared CPU)
+// - db-intel-*, db-amd-* : Basic tier (dedicated CPU)
+// - gd-*   : General Purpose tier  
+// - so1_5-* : Storage Optimized 1.5x tier
+export const VALID_DATABASE_SIZE_PATTERN = /^(db-s-|db-intel-|db-amd-|gd-|so1_5-)\d+vcpu-\d+gb$/;
+
+// Legacy array for backward compatibility (basic tier only)
+// NOTE: Use VALID_DATABASE_SIZE_PATTERN for validation instead
 export const VALID_DATABASE_SIZES = [
-  // Basic tier - 1-2 vCPU
+  // Basic tier
   'db-s-1vcpu-1gb',
   'db-s-1vcpu-2gb',
+  'db-s-2vcpu-2gb',
   'db-s-2vcpu-4gb',
-  
-  // Standard tier - 4 vCPU
   'db-s-4vcpu-8gb',
-   'db-s-6vcpu-12gb',
-    'db-s-6vcpu-6gb',
-     'db-s-2vcpu-2gb',
-      'db-s-2vcpu-4gb',
-  
-  
-  // Professional tier - 6-8 vCPU (comment out if not allowed)
-  // 'db-s-6vcpu-16gb',
-  // 'db-s-8vcpu-32gb',
-  
-  // Medium tier - higher resources (enable only if needed)
-  // 'db-m-16vcpu-64gb',
-  // 'db-m-32vcpu-128gb',
+  'db-s-6vcpu-6gb',
+  'db-s-6vcpu-12gb',
+  // General Purpose tier
+  'gd-2vcpu-8gb',
+  'gd-4vcpu-16gb',
+  'gd-8vcpu-32gb',
+  'gd-16vcpu-64gb',
+  'gd-32vcpu-128gb',
+  'gd-40vcpu-160gb',
+  // Storage Optimized tier
+  'so1_5-2vcpu-16gb-100gb',
+  'so1_5-4vcpu-32gb-200gb',
+  'so1_5-8vcpu-64gb-400gb',
+  'so1_5-16vcpu-128gb-800gb',
+  'so1_5-24vcpu-192gb-1200gb',
+  'so1_5-32vcpu-256gb-1600gb',
 ] as const;
 
 // Resource limits to prevent cost overruns

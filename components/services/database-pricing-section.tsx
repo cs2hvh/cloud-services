@@ -6,7 +6,20 @@ import { Container } from "@/components/ui/container";
 
 type Cycle = "monthly" | "yearly";
 
-const PLANS = [
+interface Plan {
+  name: string;
+  description: string;
+  monthly: number;
+  yearly: number;
+  cta: string;
+  featured: boolean;
+  highlighted: boolean;
+  features: string[];
+  isCustom?: boolean;
+}
+
+// Static fallback data
+const FALLBACK_PLANS: Plan[] = [
   {
     name: "Starter",
     description: "For dev environments and side projects.",
@@ -14,6 +27,7 @@ const PLANS = [
     yearly: 0,
     cta: "Start Free",
     featured: false,
+    highlighted:false,
     features: [
       "1 database",
       "1 GB storage",
@@ -30,6 +44,7 @@ const PLANS = [
     yearly: 20,
     cta: "Get Started",
     featured: true,
+    highlighted: true,
     features: [
       "Unlimited databases",
       "Up to 500 GB storage",
@@ -48,6 +63,7 @@ const PLANS = [
     yearly: 0,
     cta: "Contact Sales",
     featured: false,
+    highlighted: false,
     isCustom: true,
     features: [
       "Everything in Pro",
@@ -62,7 +78,11 @@ const PLANS = [
   },
 ];
 
-export default function DatabasePricingSection() {
+interface DatabasePricingSectionProps {
+  plans?: Plan[];
+}
+
+export default function DatabasePricingSection({ plans = FALLBACK_PLANS }: DatabasePricingSectionProps) {
   const [cycle, setCycle] = useState<Cycle>("monthly");
 
   return (
@@ -108,15 +128,15 @@ export default function DatabasePricingSection() {
 
         {/* Cards — compute-style grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06]">
-          {PLANS.map((plan) => (
+          {plans.map((plan) => (
             <div
               key={plan.name}
               className={`relative bg-[#0a0a0a] p-6 lg:p-8 flex flex-col group hover:bg-[#0d0d0d] transition-colors duration-300 ${
-                plan.featured ? "bg-[#0c0c0c]" : ""
+                plan.highlighted ? "bg-[#0c0c0c]" : ""
               }`}
             >
               {/* Featured indicator */}
-              {plan.featured && (
+              {plan.highlighted && (
                 <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#0095FF]" />
               )}
 
@@ -125,7 +145,7 @@ export default function DatabasePricingSection() {
                 <h3 className="text-[18px] font-[500] text-white">
                   {plan.name}
                 </h3>
-                {plan.featured && (
+                {plan.highlighted && (
                   <span className="text-[10px] font-medium text-[#0095FF] bg-[#0095FF]/[0.08] border border-[#0095FF]/20 px-2 py-0.5 uppercase tracking-wider">
                     Popular
                   </span>
@@ -194,7 +214,6 @@ export default function DatabasePricingSection() {
             "DDoS Protection",
             "Daily Backups",
             "Monitoring",
-            "No CC Required",
           ].map((label) => (
             <div
               key={label}

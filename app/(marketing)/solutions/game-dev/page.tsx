@@ -88,7 +88,7 @@ const GameDevPage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-game-dev.svg", alt: "Game Development infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-game-dev.png", alt: "Game Development infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
         }
       );
 
-      console.log(database.data,"...........database data from DO...........");
+      console.log(database.data?.database.autoscale,"...........database data from DO...........");
 
       if (database.status === 200) {
         doStatus = database.data.database.status;
