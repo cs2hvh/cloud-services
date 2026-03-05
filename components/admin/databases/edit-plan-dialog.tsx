@@ -2,19 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Save, Loader2 } from "lucide-react";
+import { X, Save, Loader2, Server } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { getErrorMessage } from "@/config/functions";
 
@@ -31,6 +25,30 @@ const DB_TYPES = [
   { value: "mongodb", label: "MongoDB" },
 ];
 
+interface DOSize {
+  slug: string;
+  cpu_type: 'basic' | 'general_purpose' | 'storage_optimized';
+  cpu: number;
+  ram: number;
+  display_name: string;
+  num_nodes: number;
+}
+
+interface SizesByType {
+  basic: DOSize[];
+  general_purpose: DOSize[];
+  storage_optimized: DOSize[];
+}
+
+interface DOOptionsResponse {
+  success: boolean;
+  data: {
+    sizesByType: {
+      [engine: string]: SizesByType;
+    };
+  };
+}
+
 export default function EditPlanDialog({
   product,
   isOpen,
@@ -38,10 +56,17 @@ export default function EditPlanDialog({
   onSuccess,
 }: EditPlanDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingSizes, setLoadingSizes] = useState(false);
+  const [doSizes, setDoSizes] = useState<{ [engine: string]: SizesByType }>({});
+  const [selectedCpuType, setSelectedCpuType] = useState<'basic' | 'general_purpose' | 'storage_optimized'>('basic');
+  const [showSizeSelector, setShowSizeSelector] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: "",
     description: "",
     sub: "mysql",
+    slug: "",
+    cpu_type: "basic" as 'basic' | 'general_purpose' | 'storage_optimized',
     cpu: 1,
     ram: 1,
     storage: 15,
@@ -50,13 +75,37 @@ export default function EditPlanDialog({
     discount: 0,
   });
 
+  // Fetch DO sizes when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchDOSizes();
+    }
+  }, [isOpen]);
+
+  const fetchDOSizes = async () => {
+    setLoadingSizes(true);
+    try {
+      const response = await api.get<DOOptionsResponse>("/admin/database-options");
+      if (response.data.success) {
+        setDoSizes(response.data.data.sizesByType);
+      }
+    } catch (error) {
+      console.error("Error fetching DO sizes:", error);
+    } finally {
+      setLoadingSizes(false);
+    }
+  };
+
   // Initialize form when product changes
   useEffect(() => {
     if (product) {
+      const cpuType = (product as { cpu_type?: string }).cpu_type as 'basic' | 'general_purpose' | 'storage_optimized' || 'basic';
       setFormData({
         name: product.name || "",
         description: product.description || "",
         sub: product.sub || "mysql",
+        slug: product.slug || "",
+        cpu_type: cpuType,
         cpu: product.resources?.cpu || 1,
         ram: product.resources?.ram || 1,
         storage: product.resources?.storage || 15,
@@ -64,12 +113,23 @@ export default function EditPlanDialog({
         fixed_price: (product as { fixed_price?: number }).fixed_price || 0,
         discount: product.discount || 0,
       });
+      setSelectedCpuType(cpuType);
+      setShowSizeSelector(false);
     }
   }, [product]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSizeSelect = (size: DOSize) => {
+    setFormData({
+      ...formData,
+      slug: size.slug,
+      cpu_type: size.cpu_type,
+      cpu: size.cpu,
+      ram: size.ram,
+    });
+    setShowSizeSelector(false);
+  };
 
-   // debugger;
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!product) return;
@@ -85,8 +145,8 @@ export default function EditPlanDialog({
       return;
     }
 
-    if (formData.cpu <= 0 || formData.ram <= 0 || formData.storage <= 0) {
-      toast.error("Resources must be greater than 0");
+    if (formData.storage <= 0) {
+      toast.error("Storage must be greater than 0");
       return;
     }
 
@@ -96,6 +156,8 @@ export default function EditPlanDialog({
         id: product.id,
         name: formData.name,
         description: formData.description || null,
+        slug: formData.slug,
+        cpu_type: formData.cpu_type,
         price: formData.price,
         fixed_price: formData.fixed_price ?? 0,
         resources: {
@@ -117,6 +179,12 @@ export default function EditPlanDialog({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const cpuTypeLabels = {
+    basic: 'Basic (Shared CPU)',
+    general_purpose: 'General Purpose (Dedicated CPU)',
+    storage_optimized: 'Storage Optimized',
   };
 
   if (!isOpen || !product) return null;
@@ -196,86 +264,124 @@ export default function EditPlanDialog({
               </div>
             </div>
 
-            {/* Resources */}
+            {/* Current Size Display / Size Selector */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Resources</h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* CPU */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="cpu"
-                    className="text-sm font-medium text-neutral-300"
-                  >
-                    CPU (vCPU) *
-                  </Label>
-                  <Input
-                    id="cpu"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.cpu}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        cpu: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* RAM */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="ram"
-                    className="text-sm font-medium text-neutral-300"
-                  >
-                    RAM (GB) *
-                  </Label>
-                  <Input
-                    id="ram"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.ram}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        ram: parseInt(e.target.value) || 1,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
-
-                {/* Storage */}
-                <div className="space-y-2">
-                  <Label
-                    htmlFor="storage"
-                    className="text-sm font-medium text-neutral-300"
-                  >
-                    Storage (GB) *
-                  </Label>
-                  <Input
-                    id="storage"
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={formData.storage}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        storage: parseInt(e.target.value) || 15,
-                      })
-                    }
-                    disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
-                  />
-                </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">Database Size</h3>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSizeSelector(!showSizeSelector)}
+                  className="text-xs bg-neutral-800 border-neutral-700 hover:bg-neutral-700"
+                >
+                  {showSizeSelector ? 'Cancel' : 'Change Size'}
+                </Button>
               </div>
+
+              {/* Current Size Info */}
+              {formData.slug && !showSizeSelector && (
+                <div className="p-3 bg-neutral-800 rounded-lg border border-neutral-700">
+                  <p className="text-xs text-neutral-400">Current Size:</p>
+                  <p className="text-sm text-white font-medium">{formData.slug}</p>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    {formData.cpu} vCPU, {formData.ram} GB RAM, {cpuTypeLabels[formData.cpu_type]}
+                  </p>
+                </div>
+              )}
+
+              {/* Size Selector */}
+              {showSizeSelector && (
+                loadingSizes ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                    <span className="ml-2 text-neutral-400">Loading sizes...</span>
+                  </div>
+                ) : (
+                  <Tabs 
+                    value={selectedCpuType} 
+                    onValueChange={(value) => setSelectedCpuType(value as typeof selectedCpuType)}
+                    className="w-full"
+                  >
+                    <TabsList className="grid w-full grid-cols-3 bg-neutral-800">
+                      <TabsTrigger 
+                        value="basic" 
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      >
+                        Basic
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="general_purpose"
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      >
+                        General Purpose
+                      </TabsTrigger>
+                      <TabsTrigger 
+                        value="storage_optimized"
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      >
+                        Storage Optimized
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    {(['basic', 'general_purpose', 'storage_optimized'] as const).map((cpuType) => (
+                      <TabsContent key={cpuType} value={cpuType} className="mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
+                          {(doSizes[formData.sub]?.[cpuType] || []).length === 0 ? (
+                            <p className="text-neutral-500 text-sm col-span-2 py-4 text-center">
+                              No sizes available for this CPU type
+                            </p>
+                          ) : (
+                            (doSizes[formData.sub]?.[cpuType] || []).map((size) => (
+                              <div
+                                key={size.slug}
+                                onClick={() => handleSizeSelect(size)}
+                                className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                                  formData.slug === size.slug
+                                    ? "border-blue-500 bg-blue-500/10"
+                                    : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Server className="h-4 w-4 text-neutral-400" />
+                                  <span className="text-sm font-medium text-white">
+                                    {size.cpu} vCPU / {size.ram} GB RAM
+                                  </span>
+                                </div>
+                                <p className="text-xs text-neutral-500 mt-1 truncate">
+                                  {size.slug}
+                                </p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                )
+              )}
+            </div>
+
+            {/* Storage (editable) */}
+            <div className="space-y-2">
+              <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
+                Storage (GB) *
+              </Label>
+              <Input
+                id="storage"
+                type="number"
+                min="1"
+                step="1"
+                value={formData.storage}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    storage: parseInt(e.target.value) || 15,
+                  })
+                }
+                disabled={isLoading}
+                className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+              />
             </div>
 
             {/* Pricing */}

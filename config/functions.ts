@@ -2,6 +2,98 @@ import { AxiosError } from "axios";
 import * as crypto from "crypto";
 // import { lookup, resolve4, resolve6, resolveCname, resolveMx } from "dns/promises";
 import type { MxRecord } from "dns";
+import { Products } from "@/lib/supabase/queries/products";
+import type { Plan } from "@/types/pricing";
+
+const FALLBACK_PLANS: Plan[] = [
+  {
+    name: "Starter",
+    description: "For dev environments and side projects.",
+    monthly: 0,
+    yearly: 0,
+    cta: "Start Free",
+    featured: false,
+    highlighted:false,
+    features: [
+      "1 database",
+      "1 GB storage",
+      "Shared CPU",
+      "Daily backups (7-day retention)",
+      "Community support",
+      "Single node",
+    ],
+  },
+  {
+    name: "Pro",
+    description: "For production apps and growing teams.",
+    monthly: 25,
+    yearly: 20,
+    cta: "Get Started",
+    featured: true,
+    highlighted:false,
+    features: [
+      "Unlimited databases",
+      "Up to 500 GB storage",
+      "Dedicated CPU",
+      "Point-in-time recovery (30 days)",
+      "Read replicas",
+      "Connection pooling",
+      "VPC peering",
+      "Priority support",
+    ],
+  },
+  {
+    name: "Enterprise",
+    description: "For teams that need compliance and scale.",
+    monthly: 0,
+    yearly: 0,
+    cta: "Contact Sales",
+    featured: false,
+    highlighted:false,
+    isCustom: true,
+    features: [
+      "Everything in Pro",
+      "Multi-region replication",
+      "SSO / SAML",
+      "SOC 2 & HIPAA compliance",
+      "99.999% SLA",
+      "Dedicated support engineer",
+      "Custom retention policies",
+      "Audit logs",
+    ],
+  },
+];
+
+
+
+
+// export async function getDatabasePlans(): Promise<Plan[]> {
+//   try {
+//     // Fetch featured database products
+//     const products = await Products.get_featured_by_service_type("database");
+    
+//     // Map products to plans structure
+//     const dynamicPlans = products.map((product) => ({
+//       name: product.name || "",
+//       description: product.short_description || product.description || "",
+//       monthly: product.price || 0,
+//       yearly: product.yearly_price || product.price || 0,
+//       cta: product.cta_text || "Get Started",
+//       featured: product.is_featured || false,
+//       highlighted: product.is_highlighted || false,
+//       features: product.features || [],
+//       isCustom: product.cta_text?.toLowerCase().includes("contact") || false,
+//     }));
+    
+//     // Return dynamic plans if available, otherwise fallback
+//     return dynamicPlans.length > 0 ? dynamicPlans : FALLBACK_PLANS;
+//   } catch (error) {
+//     console.error("Error fetching database plans:", error);
+//     return FALLBACK_PLANS;
+//   }
+// }
+
+
 
 export const generateStrongPassword = (length: number = 16) => {
   const chars =

@@ -29,7 +29,7 @@ const ComputeHome = () => {
   ];
 
   return (
-    <main className="bg-black">
+    <main className="bg-transparent opacity-65">
       <ServiceHeroSection
         badge="Cloud Compute"
         title="Compute"

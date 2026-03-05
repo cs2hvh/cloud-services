@@ -92,7 +92,7 @@ const plans = [
     },
   ];
   return (
-    <main className="bg-black">
+    <main>
       <ServiceHeroSection
         badge="High Performance Computing"
         title="GPU instance"
@@ -100,7 +100,7 @@ const plans = [
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/service-home-gpu-section-1.svg", alt: "GPU infrastructure" }}
+        illustration={{ src: "/images/main-page/gpu aniamtion resized.png", alt: "GPU infrastructure" }}
       />
       {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">

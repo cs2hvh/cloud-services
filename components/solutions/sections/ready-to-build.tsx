@@ -47,7 +47,7 @@ export function ReadyToBuild({
   return (
     <section
       className={cn(
-        "relative w-full bg-black py-16 md:py-20 lg:py-24",
+        "relative w-full bg-transparent  py-16 md:py-20 lg:py-24",
         className
       )}
     >
@@ -70,10 +70,10 @@ export function ReadyToBuild({
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-2">
             {/* Left Side - Text Content */}
             <div className="p-6 sm:p-8 md:p-10 lg:p-12 flex flex-col justify-center min-h-[200px] sm:min-h-[250px] lg:min-h-[320px]">
-              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white mb-3 md:mb-4">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-semibold text-white  md:mb-4">
                 {title}
               </h2>
-              <p className="text-sm sm:text-base text-white/60 leading-relaxed max-w-md">
+              <p className="text-sm sm:text-base text-white leading-relaxed max-w-md">
                 {description}
               </p>
             </div>

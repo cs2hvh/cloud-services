@@ -9,9 +9,10 @@ type BuildItem = {
 type WhatYouCanBuildProps = {
   items: BuildItem[];
   className?: string;
+  horizontal?: boolean;
 };
 
-export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
+export function WhatYouCanBuild({ items, className, horizontal = false }: WhatYouCanBuildProps) {
   // Calculate rows for different breakpoints
   const lgCols = 3;
   const smCols = 2;
@@ -22,13 +23,13 @@ export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
   return (
     <section
       className={cn(
-        "relative w-full bg-black py-16 md:py-20 lg:py-24 border-b border-[#6b6b6b]",
+        "relative w-full bg-transparent opacity-65 py-16 md:py-20 lg:py-24 border-b border-[#6b6b6b]",
         className
       )}
     >
       {/* Section Header */}
       <Container>
-        <div className="text-center mb-12 md:mb-16">
+        <div className="text-center mb-12 md:mb-16 bg-transparent">
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-white mb-4">
           What you{" "}
           <span className="text-[#0095FF]">can build</span>
@@ -42,7 +43,7 @@ export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
       {/* Full-width Grid with Borders */}
       <div className="w-full">
         {/* Top border */}
-        <div className="w-full h-px bg-[#6b6b6b]" />
+        {horizontal && <div className="w-full h-px bg-[#6b6b6b]" />}
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item, index) => {
@@ -66,10 +67,10 @@ export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
                   // Vertical borders (between columns)
                   !isLgLastCol && "lg:border-r lg:border-[#6b6b6b]",
                   !isSmLastCol && "sm:max-lg:border-r sm:max-lg:border-[#6b6b6b]",
-                  // Horizontal borders (between rows)
-                  !isLgLastRow && "lg:border-b lg:border-[#6b6b6b]",
-                  !isSmLastRow && "sm:max-lg:border-b sm:max-lg:border-[#6b6b6b]",
-                  !isMobileLastRow && "max-sm:border-b max-sm:border-[#6b6b6b]"
+                  // Horizontal borders (between rows) - only if horizontal prop is true
+                  horizontal && !isLgLastRow && "lg:border-b lg:border-[#6b6b6b]",
+                  horizontal && !isSmLastRow && "sm:max-lg:border-b sm:max-lg:border-[#6b6b6b]",
+                  horizontal && !isMobileLastRow && "max-sm:border-b max-sm:border-[#6b6b6b]"
                 )}
               >
                 <h3 className="text-lg md:text-xl font-medium text-white mb-3">
@@ -84,7 +85,7 @@ export function WhatYouCanBuild({ items, className }: WhatYouCanBuildProps) {
         </div>
 
         {/* Bottom border */}
-        <div className="w-full h-px bg-[#6b6b6b]" />
+        {horizontal && <div className="w-full h-px bg-[#6b6b6b]" />}
       </div>
     </section>
   );

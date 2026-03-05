@@ -7,7 +7,7 @@ import {
   VALID_REDIS_VERSIONS,
   VALID_MONGODB_VERSIONS,
   VALID_KAFKA_VERSIONS,
-  VALID_DATABASE_SIZES,
+  VALID_DATABASE_SIZE_PATTERN,
   RESOURCE_LIMITS,
   NAMING_RULES,
   VALID_MAINTENANCE_DAYS,
@@ -48,11 +48,10 @@ export const createDatabaseSchema = z.object({
       RESOURCE_LIMITS.MAX_NODES_PER_CLUSTER,
       `Maximum ${RESOURCE_LIMITS.MAX_NODES_PER_CLUSTER} nodes allowed per cluster`
     ),
-  size: z.enum(VALID_DATABASE_SIZES, {
-    errorMap: () => ({
-      message: `Size must be one of the allowed tiers: ${VALID_DATABASE_SIZES.join(", ")}`,
-    }),
-  }),
+  size: z.string().refine(
+    (val) => VALID_DATABASE_SIZE_PATTERN.test(val),
+    { message: "Size must be a valid DigitalOcean database size (e.g., db-s-1vcpu-1gb, gd-2vcpu-8gb, so1_5-2vcpu-16gb-100gb)" }
+  ),
   region: z.enum(VALID_DATABASE_REGIONS, {
     errorMap: () => ({
       message: `Region must be one of: ${VALID_DATABASE_REGIONS.join(", ")}`,
@@ -140,11 +139,10 @@ export type MigrateRegionPayload = z.infer<typeof migrateRegionSchema>;
  */
 export const updateStorageSchema = z.object({
   database_id: z.string().uuid("Database ID must be a valid UUID"),
-  size: z.enum(VALID_DATABASE_SIZES, {
-    errorMap: () => ({
-      message: `Size must be one of the allowed tiers: ${VALID_DATABASE_SIZES.join(", ")}`,
-    }),
-  }),
+  size: z.string().refine(
+    (val) => VALID_DATABASE_SIZE_PATTERN.test(val),
+    { message: "Size must be a valid DigitalOcean database size (e.g., db-s-1vcpu-1gb, gd-2vcpu-8gb, so1_5-2vcpu-16gb-100gb)" }
+  ),
 });
 
 export type UpdateStoragePayload = z.infer<typeof updateStorageSchema>;

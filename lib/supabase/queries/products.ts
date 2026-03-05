@@ -92,6 +92,38 @@ export const Products = {
     }
   },
 
+  get_featured_by_service_type: async (
+    serviceType: string
+  ): Promise<Product[]> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("type", serviceType)
+        .eq("is_featured", true)
+        .order("sort_order", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        handleQueryError(
+          "getting featured products by service type",
+          error,
+          "Products"
+        );
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      handleQueryError(
+        "getting featured products by service type",
+        err,
+        "Products"
+      );
+      return [];
+    }
+  },
+
   create: async (
     props: TablesInsert<"products">
   ): Promise<{ success: boolean; data?: Product; error?: string }> => {
