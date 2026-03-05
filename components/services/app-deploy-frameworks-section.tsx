@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 import { Container } from "@/components/ui/container";
 import { ArrowRight, GitBranch, Terminal, Layers } from "lucide-react";
 
-/* ─── Real SVG icons (Simple Icons, viewBox 0 0 24 24) ───------- */
+/* ─── Real SVG icons (Simple Icons, viewBox 0 0 24 24) ───----------- */
 
 const icons = {
   nodejs: (
