@@ -94,7 +94,7 @@ const plans = [
 
 const CloudService = () => {
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
         badge="High Performance Computing"
         title="Cloud Security"

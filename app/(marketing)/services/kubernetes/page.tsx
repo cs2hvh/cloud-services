@@ -30,7 +30,7 @@ const KubernetesPage = () => {
   ];
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
         badge="High Performance Computing"
         title="Kubernetes Cluster"

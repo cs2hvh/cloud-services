@@ -80,7 +80,7 @@ const GameDevPage = () => {
     buttonText: "Request Consultation",
   };
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["Low Latency", "Game Servers", "Asset Storage", "Burst Scale"]}
         title="Game Development & Hosting Infrastructure"
@@ -88,7 +88,7 @@ const GameDevPage = () => {
         primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/solution-home-game-dev.png", alt: "Game Development infrastructure" }}
+        illustration={{ src: "/images/main-page/solution-home-web-host.png", alt: "Game Development infrastructure" }}
       />
       <WhatYouCanBuild items={buildItems} />
       <ReferenceDeployment {...referenceDeploymentData} />

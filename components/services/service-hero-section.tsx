@@ -45,12 +45,12 @@ export function ServiceHeroSection({
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden bg-transparent",
+        "relative w-full overflow-x-hidden bg-[#0E0F0F] ",
         "min-h-screen flex flex-col",
         className,
       )}
     >
-      <div className="absolute inset-0">
+     
         <Image
           src={backgroundImage.src}
           alt={backgroundImage.alt ?? ""}
@@ -59,8 +59,8 @@ export function ServiceHeroSection({
           className="object-cover blur-[3px] object-right-top scale-100"
           style={{ objectPosition: "right top" }}
         />
-        <div className="absolute inset-0 bg-black/30" />
-      </div>
+      
+     
 
       {/* Bottom fade */}
       <div className="absolute bottom-0 left-0 right-0 h-32 md:h-48 bg-gradient-to-t from-black to-transparent z-[5]" />

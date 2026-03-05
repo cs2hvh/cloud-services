@@ -80,7 +80,7 @@ const AiMlPage = () => {
     buttonText: "Request Consultation",
   };
   return (
-    <main >
+    <main  style={{backgroundColor:"#0E0F0F"}} >
       <SolutionsHeroSection
         badge={["GPU Training", "Inference APIs", "LLM Fine-tuning", "Secure Cloud"]}
         title="AI Machine Learning"

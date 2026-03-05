@@ -80,7 +80,7 @@ const SolutionsKubernetesPage = () => {
   };
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["Managed K8s", "Auto Scaling", "Service Mesh", "GitOps"]}
         title="Cloud-Native Kubernetes Platforms Infrastructure"

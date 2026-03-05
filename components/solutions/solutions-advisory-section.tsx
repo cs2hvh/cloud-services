@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
+import { CoreProductsPanel } from "./core-products-panel";
 
 const PANEL_STYLES =
   "relative isolate overflow-hidden rounded-[4px] border-2 border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.04)] backdrop-blur-[5px] shadow-[0_8px_32px_rgba(0,0,0,0.5)]";
@@ -60,12 +61,12 @@ function AdvisoryPanel({
 
 export function SolutionsAdvisorySection() {
   return (
-    <section className="relative isolate bg-black pb-16 sm:pb-20 lg:pb-24">
+    <section className="relative isolate bg-[#0E0F0F] pb-16 sm:pb-20 lg:pb-24">
       <Container>
         <div className="h-px w-full bg-[#686868]" />
 
         <div className="relative mx-auto mt-8 w-full sm:mt-10">
-          <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[400px] z-0 h-[calc(100%+180px)] w-[105%] overflow-hidden rounded-[4px]">
+          <div className=" bg-none pointer-events-none absolute left-1/2 -translate-x-1/2 -top-[400px] z-0 h-[calc(100%+180px)] w-[105%] overflow-hidden rounded-[4px]">
             <Image
               src="/solution/thirdsecion/third-bg.png"
               alt=""
@@ -77,7 +78,9 @@ export function SolutionsAdvisorySection() {
           </div>
 
           <div className="relative z-10 flex flex-col gap-7 sm:gap-8">
-            <AdvisoryPanel heightClass="h-auto min-h-[420px] lg:h-[505px]" />
+            {/* <AdvisoryPanel heightClass="h-auto min-h-[420px] lg:h-[505px]" /> */}
+
+            <CoreProductsPanel/>
             <AdvisoryPanel heightClass="h-auto min-h-[353px] lg:h-[353px]" />
           </div>
         </div>

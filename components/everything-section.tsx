@@ -20,7 +20,7 @@ const TABS = [
       "Built-in monitoring, logs, and alerting",
       "Full API, CLI, and Terraform provider support",
     ],
-    imageSrc: "/images/hero/globe.png",
+    imageSrc: "/images/main-page/compute.png",
     imageAlt: "Global compute visualization",
   },
   {

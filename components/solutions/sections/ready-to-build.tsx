@@ -26,7 +26,7 @@ export function ReadyToBuild({
   description,
   formFields,
   buttonText,
-  backgroundImage = "/images/main-page/ready-to-secure-bg.png",
+  backgroundImage = "/images/main-page/ready-to-secure-bg.svg",
   className,
   onSubmitAction,
 }: ReadyToBuildProps) {
@@ -47,13 +47,13 @@ export function ReadyToBuild({
   return (
     <section
       className={cn(
-        "relative w-full bg-transparent  py-16 md:py-20 lg:py-24",
+        "relative w-full bg-[#0E0F0F] py-16 md:py-20 lg:py-24",
         className
       )}
     >
       <Container>
         {/* Main box with background */}
-        <div className="relative bg-[#141414] border border-[#737373] overflow-hidden">
+        <div className="relative bg-[#141414] border border-[#707070] overflow-hidden">
           {/* Background Image - covers entire box */}
           <div className="absolute inset-0">
             <Image
@@ -62,8 +62,6 @@ export function ReadyToBuild({
               fill
               className="object-cover object-right"
             />
-            {/* Gradient overlay for text readability on left */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/60 to-transparent" />
           </div>
 
           {/* Content Grid */}
@@ -114,7 +112,7 @@ export function ReadyToBuild({
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  className="w-full sm:w-auto px-6 py-3 bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
+                  className="w-full px-6 py-3 bg-[#D4D4D4] text-black text-sm font-medium hover:bg-white/90 transition-colors"
                 >
                   {buttonText}
                 </button>

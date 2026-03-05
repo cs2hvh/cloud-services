@@ -33,56 +33,54 @@ export function ReferenceDeployment({
   environments,
   tags,
   actions,
-  backgroundImage = "/images/main-page/ref-dply-bg.png",
+  backgroundImage = "/images/main-page/ref-dply-bg.svg",
   className,
 }: ReferenceDeploymentProps) {
   return (
     <section
       className={cn(
-        "relative w-full border-b border-[#6b6b6b] bg-transparent py-16 md:py-20 lg:py-24",
+        "relative w-full border-b border-[#6b6b6b]  py-16 md:py-20 lg:py-24",
         className
       )}
     >
       <Container>
         {/* Main box with border and background */}
         <div
-          className="relative border border-[#6b6b6b] overflow-hidden bg-transparent"
+          className="relative border border-[#707070] overflow-hidden bg-[#141414]"
         >
           {/* Background Image */}
-          <div className="absolute inset-0">
+          <div >
             <Image
               src={backgroundImage}
               alt=""
               fill
               className="object-cover object-right"
             />
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/90 to-transparent" />
           </div>
 
           {/* Content */}
           <div className="relative z-10 p-6 sm:p-8 md:p-10 lg:p-12">
             {/* Badge */}
-            <span className="text-[#0095FF] text-xs sm:text-sm font-medium tracking-wide">
+            <span className="text-[#FFFFFF] text-xs sm:text-sm font-medium tracking-wide">
               {badge}
             </span>
 
             {/* Title */}
-            <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-semibold text-white mt-3 mb-4 max-w-3xl">
+            <h2 style={{fontSize:"24px"}} className="sm:text-2xl md:text-3xl lg:text-4xl font-semibold text-white mt-3 mb-4 max-w-3xl">
               {title}
             </h2>
 
             {/* Description */}
-            <p className="text-sm sm:text-base text-white/60 max-w-2xl leading-relaxed mb-8 md:mb-10">
+            <p className="text-sm sm:text-base text-white max-w-2xl leading-relaxed mb-8 md:mb-10">
               {description}
             </p>
 
             {/* Environment Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-10 max-w-3xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6 mb-8 md:mb-10 max-w-5xl">
               {environments.map((env, index) => (
                 <div
                   key={index}
-                  className="border border-white/20 bg-white/[0.02] p-5 sm:p-6"
+                  className="border border-[#575757] max-w-[476px] gap-2 bg-[#141414] p-5 sm:p-6"
                 >
                   <h3 className="text-base sm:text-lg font-medium text-white mb-4">
                     {env.title}
@@ -106,7 +104,7 @@ export function ReferenceDeployment({
             <div className="flex flex-wrap items-center gap-2 mb-8 md:mb-10">
               {tags.map((tag, index) => (
                 <div key={index} className="flex items-center">
-                  <span className="text-xs sm:text-sm text-white/80 px-3 py-1.5 border border-white/20 bg-white/[0.02]">
+                  <span className="text-xs sm:text-sm text-white px-3 py-1.5 border border-white/20 bg-[#141414]">
                     {tag}
                   </span>
                 </div>

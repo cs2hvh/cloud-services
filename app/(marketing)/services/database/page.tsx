@@ -37,7 +37,7 @@ const DatabaseHome = async () => {
   const plans = await getDatabasePlans();
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <ServiceHeroSection
         badge="Managed Databases"
         title="Database"

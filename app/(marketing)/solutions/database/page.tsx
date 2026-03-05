@@ -81,7 +81,7 @@ const SolutionsDatabasePage = () => {
   };
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["Managed DB", "Auto Backup", "Read Replicas", "High Availability"]}
         title="Database-Driven Applications Infrastructure"

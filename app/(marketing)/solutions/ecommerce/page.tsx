@@ -80,7 +80,7 @@ const EcommercePage = () => {
     buttonText: "Request Consultation",
   };
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["High Availability", "Secure Checkout", "Big CDN", "PCI Ready"]}
         title="Ecommerce Infrastructure"

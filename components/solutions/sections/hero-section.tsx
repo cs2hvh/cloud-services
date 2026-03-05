@@ -45,7 +45,7 @@ export function SolutionsHeroSection({
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden bg-transparent",
+        "relative w-full overflow-x-hidden bg-[#0E0F0F] ",
         "min-h-screen flex flex-col border-b  border-[#737373]",
         className,
       )}
@@ -59,11 +59,9 @@ export function SolutionsHeroSection({
           className="object-cover blur-[3px] object-right-top scale-100"
           style={{ objectPosition: "right top" }}
         />
-        <div className="absolute inset-0 bg-black/30" />
+        
       </div>
-
-      {/* Bottom fade */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 md:h-48 bg-gradient-to-t from-black to-transparent z-[5]" />
+      
 
       <div className="relative z-10 flex-1 flex items-center w-full pt-20 pb-12 sm:pt-24 sm:pb-16 md:pt-28 md:pb-20">
         <Container>

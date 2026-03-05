@@ -235,7 +235,7 @@ export function SolutionsDiscoverySection() {
   };
 
   return (
-    <section className="bg-transparent pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24">
+    <section className=" pb-16 pt-6 sm:pb-20 sm:pt-8 lg:pb-24">
       <div className="w-full">
         <div className="mx-auto w-full max-w-[75%] px-[clamp(24px,3vw,80px)]">
         <div className="relative grid gap-3 lg:grid-cols-[minmax(0,1fr)_155px_155px_155px]">

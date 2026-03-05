@@ -80,7 +80,7 @@ const SolutionsStoragePage = () => {
   };
 
   return (
-    <main className="bg-black">
+    <main className="bg-[#0E0F0F]">
       <SolutionsHeroSection
         badge={["S3 Compatible", "Auto Backup", "CDN Delivery", "Lifecycle Rules"]}
         title="Storage & Backup Solutions Infrastructure"
