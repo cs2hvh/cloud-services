@@ -222,10 +222,21 @@ export async function getSpectrumApp(appId: string) {
   const { zoneId, token, encryptionKey } = getCloudflareConfig();
 
   // Fetch from Cloudflare
-  const cfResp = await axios.get<CloudflareResponse<CloudflareSpectrumApp>>(
-    `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,
-    { headers: getCloudflareHeaders(token) }
-  );
+  let cfResp;
+  try {
+    cfResp = await axios.get<CloudflareResponse<CloudflareSpectrumApp>>(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,
+      { headers: getCloudflareHeaders(token) }
+    );
+  } catch (err: unknown) {
+    const error = err as { response?: { status?: number } };
+    if (error.response?.status === 404) {
+      const notFoundError = new Error("Spectrum app not found") as Error & { code?: string };
+      notFoundError.code = "NOT_FOUND";
+      throw notFoundError;
+    }
+    throw err;
+  }
 
   if (!cfResp.data?.success || !cfResp.data.result) {
     throw new Error(

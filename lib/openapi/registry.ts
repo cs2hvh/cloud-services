@@ -115,6 +115,77 @@ export const AppDeleteResponseSchema = z.object({
   }),
 }).openapi('AppDeleteResponse');
 
+// Spectrum App schema
+export const SpectrumAppSchema = z.object({
+  id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
+  dns_name: z.string().nullable().openapi({ example: 'api.example.com', description: 'DNS name for the Spectrum app' }),
+  protocol: z.string().openapi({ example: 'tcp/443', description: 'Protocol and port (e.g., tcp/443, udp/27015)' }),
+  origin_direct: z.array(z.string()).openapi({ example: ['203.0.113.1:443'], description: 'Origin servers' }),
+  tls: z.enum(['off', 'full', 'strict', 'flexible']).openapi({ example: 'full', description: 'TLS mode' }),
+  ip_firewall: z.boolean().openapi({ example: false, description: 'IP firewall enabled' }),
+  traffic_type: z.string().openapi({ example: 'direct', description: 'Traffic type' }),
+  proxy_protocol: z.string().openapi({ example: 'off', description: 'PROXY protocol mode' }),
+  status: z.string().openapi({ example: 'created', description: 'App status' }),
+  cloudflare_status: z.string().optional().openapi({ example: 'active', description: 'Cloudflare sync status' }),
+  created_at: z.string().datetime().openapi({ example: '2026-02-27T10:00:00Z' }),
+  updated_at: z.string().datetime().optional().openapi({ example: '2026-02-27T12:00:00Z' }),
+}).openapi('SpectrumApp');
+
+// Create Spectrum app request schema
+export const CreateSpectrumAppRequestSchema = z.object({
+  project_id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83', description: 'Project UUID' }),
+  dns: z.object({
+    name: z.string().openapi({ example: 'api', description: 'DNS subdomain' }),
+    type: z.enum(['A', 'CNAME']).openapi({ example: 'CNAME', description: 'DNS record type' }),
+  }).openapi({ description: 'DNS configuration' }),
+  protocol: z.string().openapi({ example: 'tcp/443', description: 'Protocol and port' }),
+  origin_direct: z.array(z.string()).openapi({ example: ['203.0.113.1:443'], description: 'Origin servers' }),
+  tls: z.enum(['off', 'full']).optional().openapi({ example: 'full', description: 'TLS mode' }),
+  edge_ips: z.object({
+    type: z.string().optional().openapi({ example: 'dynamic' }),
+    connectivity: z.string().optional().openapi({ example: 'all' }),
+  }).optional().openapi({ description: 'Edge IPs configuration' }),
+  ip_firewall: z.boolean().optional().openapi({ example: false }),
+  traffic_type: z.string().optional().openapi({ example: 'direct' }),
+  proxy_protocol: z.string().optional().openapi({ example: 'off' }),
+}).openapi('CreateSpectrumAppRequest');
+
+// Update Spectrum app request schema
+export const UpdateSpectrumAppRequestSchema = z.object({
+  dns: z.object({
+    name: z.string(),
+    type: z.enum(['A', 'CNAME']),
+  }).optional().openapi({ description: 'DNS configuration' }),
+  protocol: z.string().optional().openapi({ example: 'tcp/443', description: 'Protocol and port' }),
+  origin_direct: z.array(z.string()).optional().openapi({ example: ['203.0.113.1:443'] }),
+  tls: z.enum(['off', 'full', 'strict', 'flexible']).optional().openapi({ example: 'full', description: 'TLS mode' }),
+  edge_ips: z.object({
+    type: z.string().optional(),
+    connectivity: z.string().optional(),
+  }).optional().openapi({ description: 'Edge IPs configuration' }),
+  ip_firewall: z.boolean().optional(),
+  traffic_type: z.string().optional(),
+  proxy_protocol: z.string().optional(),
+  argo_smart_routing: z.boolean().optional().openapi({ description: 'Enable Argo Smart Routing' }),
+}).openapi('UpdateSpectrumAppRequest');
+
+// Spectrum response wrappers
+export const SpectrumAppResponseSchema = z.object({
+  data: SpectrumAppSchema,
+}).openapi('SpectrumAppResponse');
+
+export const SpectrumAppListResponseSchema = z.object({
+  data: z.array(SpectrumAppSchema),
+  meta: PaginationMetaSchema,
+}).openapi('SpectrumAppListResponse');
+
+export const SpectrumAppDeleteResponseSchema = z.object({
+  data: z.object({
+    id: z.string().uuid(),
+    message: z.string().openapi({ example: 'Spectrum app deleted successfully' }),
+  }),
+}).openapi('SpectrumAppDeleteResponse');
+
 // Register endpoints
 
 // GET /api/v1/apps - List all apps
@@ -480,6 +551,469 @@ registry.registerPath({
   },
 });
 
+// GET /api/v1/network/spectrum - List Spectrum apps
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/network/spectrum',
+  tags: ['Network DDoS (Spectrum)'],
+  summary: 'List Spectrum apps',
+  description: 'Returns a list of all Spectrum DDoS protection apps owned by the authenticated user.',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'List of Spectrum apps',
+      content: {
+        'application/json': {
+          schema: SpectrumAppListResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized - missing or invalid API key',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+  },
+});
+
+// POST /api/v1/network/spectrum - Create Spectrum app
+registry.registerPath({
+  method: 'post',
+  path: '/api/v1/network/spectrum',
+  tags: ['Network DDoS (Spectrum)'],
+  summary: 'Create Spectrum app',
+  description: 'Creates a new Spectrum DDoS protection app. Requires sufficient credits in account.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    body: {
+      description: 'Spectrum app configuration',
+      content: {
+        'application/json': {
+          schema: CreateSpectrumAppRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: 'Spectrum app created successfully',
+      content: {
+        'application/json': {
+          schema: SpectrumAppResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - validation error',
+      content: {
+        'application/json': {
+          schema: ValidationErrorResponseSchema,
+          example: {
+            error: 'VALIDATION_ERROR',
+            message: 'Invalid request body',
+            validation_errors: [
+              { path: 'protocol', message: 'Protocol must be tcp|udp with a port' }
+            ]
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    402: {
+      description: 'Insufficient credits',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INSUFFICIENT_CREDITS',
+            message: 'Insufficient credits',
+            details: { balance: 5.0, required: 10.0 }
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to create spectrum app'
+          }
+        },
+      },
+    },
+  },
+});
+
+// GET /api/v1/network/spectrum/{id} - Get Spectrum app by ID
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/network/spectrum/{id}',
+  tags: ['Network DDoS (Spectrum)'],
+  summary: 'Get Spectrum app by ID',
+  description: 'Returns detailed information about a specific Spectrum app.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ 
+        example: '8bdf284c-d3df-40f0-9565-b6e26f588c83',
+        description: 'Spectrum app UUID'
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Spectrum app details',
+      content: {
+        'application/json': {
+          schema: SpectrumAppResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid app ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid app ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden - not the app owner',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'Access denied'
+          }
+        },
+      },
+    },
+    404: {
+      description: 'Spectrum app not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'Spectrum app not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error - returned on Cloudflare API errors or database failures',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to fetch spectrum app'
+          }
+        },
+      },
+    },
+  },
+});
+
+// PATCH /api/v1/network/spectrum/{id} - Update Spectrum app
+registry.registerPath({
+  method: 'patch',
+  path: '/api/v1/network/spectrum/{id}',
+  tags: ['Network DDoS (Spectrum)'],
+  summary: 'Update Spectrum app',
+  description: 'Partial update of Spectrum app configuration. Only submitted fields are updated.',  
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ 
+        example: '8bdf284c-d3df-40f0-9565-b6e26f588c83',
+        description: 'Spectrum app UUID'
+      }),
+    }),
+    body: {
+      description: 'Spectrum app configuration to update',
+      content: {
+        'application/json': {
+          schema: UpdateSpectrumAppRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Spectrum app updated successfully',
+      content: {
+        'application/json': {
+          schema: SpectrumAppResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - validation error or invalid app ID format',
+      content: {
+        'application/json': {
+          schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          examples: {
+            validation: {
+              error: 'VALIDATION_ERROR',
+              message: 'Invalid request body',
+              validation_errors: [
+                { path: 'protocol', message: 'Protocol must be tcp|udp with a port' }
+              ]
+            },
+            invalid_id: {
+              error: 'INVALID_ID',
+              message: 'Invalid app ID format',
+              details: { field: 'id' }
+            }
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden - not the app owner',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'Access denied'
+          }
+        },
+      },
+    },
+    404: {
+      description: 'Spectrum app not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'Spectrum app not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error - returned on Cloudflare API errors or database failures',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to update spectrum app'
+          }
+        },
+      },
+    },
+  },
+});
+
+// DELETE /api/v1/network/spectrum/{id} - Delete Spectrum app
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/network/spectrum/{id}',
+  tags: ['Network DDoS (Spectrum)'],
+  summary: 'Delete Spectrum app',
+  description: '**DESTRUCTIVE OPERATION:** Permanently deletes the Spectrum app, removes Cloudflare configuration, and stops DDoS protection. This action cannot be undone.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ 
+        example: '8bdf284c-d3df-40f0-9565-b6e26f588c83',
+        description: 'Spectrum app UUID'
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Spectrum app deleted successfully',
+      content: {
+        'application/json': {
+          schema: SpectrumAppDeleteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid app ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid app ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden - not the app owner',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'Access denied'
+          }
+        },
+      },
+    },
+    404: {
+      description: 'Spectrum app not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'Spectrum app not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to delete spectrum app'
+          }
+        },
+      },
+    },
+  },
+});
+
 /**
  * Generate the complete OpenAPI document
  */
@@ -577,6 +1111,10 @@ For more examples, see the API reference below.
       {
         name: 'Platform Apps',
         description: 'Manage application deployments, containers, and infrastructure.',
+      },
+      {
+        name: 'Network DDoS (Spectrum)',
+        description: 'Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP).',
       },
     ],
   });

@@ -28,6 +28,10 @@
     {
       "name": "Platform Apps",
       "description": "Manage application deployments, containers, and infrastructure."
+    },
+    {
+      "name": "Network DDoS (Spectrum)",
+      "description": "Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP)."
     }
   ],
   "components": {
@@ -350,6 +354,315 @@
               "id",
               "name",
               "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SpectrumApp": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+          },
+          "dns_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "DNS name for the Spectrum app",
+            "example": "api.example.com"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol and port (e.g., tcp/443, udp/27015)",
+            "example": "tcp/443"
+          },
+          "origin_direct": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Origin servers",
+            "example": [
+              "203.0.113.1:443"
+            ]
+          },
+          "tls": {
+            "type": "string",
+            "enum": [
+              "off",
+              "full",
+              "strict",
+              "flexible"
+            ],
+            "description": "TLS mode",
+            "example": "full"
+          },
+          "ip_firewall": {
+            "type": "boolean",
+            "description": "IP firewall enabled",
+            "example": false
+          },
+          "traffic_type": {
+            "type": "string",
+            "description": "Traffic type",
+            "example": "direct"
+          },
+          "proxy_protocol": {
+            "type": "string",
+            "description": "PROXY protocol mode",
+            "example": "off"
+          },
+          "status": {
+            "type": "string",
+            "description": "App status",
+            "example": "created"
+          },
+          "cloudflare_status": {
+            "type": "string",
+            "description": "Cloudflare sync status",
+            "example": "active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "dns_name",
+          "protocol",
+          "origin_direct",
+          "tls",
+          "ip_firewall",
+          "traffic_type",
+          "proxy_protocol",
+          "status",
+          "created_at"
+        ]
+      },
+      "SpectrumAppListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpectrumApp"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "SpectrumAppResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SpectrumApp"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "CreateSpectrumAppRequest": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Project UUID",
+            "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+          },
+          "dns": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "DNS subdomain",
+                "example": "api"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "A",
+                  "CNAME"
+                ],
+                "description": "DNS record type",
+                "example": "CNAME"
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "description": "DNS configuration"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol and port",
+            "example": "tcp/443"
+          },
+          "origin_direct": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Origin servers",
+            "example": [
+              "203.0.113.1:443"
+            ]
+          },
+          "tls": {
+            "type": "string",
+            "enum": [
+              "off",
+              "full"
+            ],
+            "description": "TLS mode",
+            "example": "full"
+          },
+          "edge_ips": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "example": "dynamic"
+              },
+              "connectivity": {
+                "type": "string",
+                "example": "all"
+              }
+            },
+            "description": "Edge IPs configuration"
+          },
+          "ip_firewall": {
+            "type": "boolean",
+            "example": false
+          },
+          "traffic_type": {
+            "type": "string",
+            "example": "direct"
+          },
+          "proxy_protocol": {
+            "type": "string",
+            "example": "off"
+          }
+        },
+        "required": [
+          "project_id",
+          "dns",
+          "protocol",
+          "origin_direct"
+        ]
+      },
+      "UpdateSpectrumAppRequest": {
+        "type": "object",
+        "properties": {
+          "dns": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "A",
+                  "CNAME"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "type"
+            ],
+            "description": "DNS configuration"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "Protocol and port",
+            "example": "tcp/443"
+          },
+          "origin_direct": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "203.0.113.1:443"
+            ]
+          },
+          "tls": {
+            "type": "string",
+            "enum": [
+              "off",
+              "full",
+              "strict",
+              "flexible"
+            ],
+            "description": "TLS mode",
+            "example": "full"
+          },
+          "edge_ips": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string"
+              },
+              "connectivity": {
+                "type": "string"
+              }
+            },
+            "description": "Edge IPs configuration"
+          },
+          "ip_firewall": {
+            "type": "boolean"
+          },
+          "traffic_type": {
+            "type": "string"
+          },
+          "proxy_protocol": {
+            "type": "string"
+          },
+          "argo_smart_routing": {
+            "type": "boolean",
+            "description": "Enable Argo Smart Routing"
+          }
+        }
+      },
+      "SpectrumAppDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "message": {
+                "type": "string",
+                "example": "Spectrum app deleted successfully"
+              }
+            },
+            "required": [
+              "id",
+              "message"
             ]
           }
         },
@@ -813,6 +1126,592 @@
                   "details": {
                     "details": "Kubernetes deletion timeout"
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/network/spectrum": {
+      "get": {
+        "tags": [
+          "Network DDoS (Spectrum)"
+        ],
+        "summary": "List Spectrum apps",
+        "description": "Returns a list of all Spectrum DDoS protection apps owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of Spectrum apps",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpectrumAppListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Network DDoS (Spectrum)"
+        ],
+        "summary": "Create Spectrum app",
+        "description": "Creates a new Spectrum DDoS protection app. Requires sufficient credits in account.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "description": "Spectrum app configuration",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSpectrumAppRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Spectrum app created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpectrumAppResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                },
+                "example": {
+                  "error": "VALIDATION_ERROR",
+                  "message": "Invalid request body",
+                  "validation_errors": [
+                    {
+                      "path": "protocol",
+                      "message": "Protocol must be tcp|udp with a port"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INSUFFICIENT_CREDITS",
+                  "message": "Insufficient credits",
+                  "details": {
+                    "balance": 5,
+                    "required": 10
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to create spectrum app"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/network/spectrum/{id}": {
+      "get": {
+        "tags": [
+          "Network DDoS (Spectrum)"
+        ],
+        "summary": "Get Spectrum app by ID",
+        "description": "Returns detailed information about a specific Spectrum app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Spectrum app UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spectrum app details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpectrumAppResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid app ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid app ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "Access denied"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Spectrum app not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Spectrum app not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - returned on Cloudflare API errors or database failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch spectrum app"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Network DDoS (Spectrum)"
+        ],
+        "summary": "Update Spectrum app",
+        "description": "Partial update of Spectrum app configuration. Only submitted fields are updated.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Spectrum app UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "description": "Spectrum app configuration to update",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSpectrumAppRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Spectrum app updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpectrumAppResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - validation error or invalid app ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "error": "VALIDATION_ERROR",
+                    "message": "Invalid request body",
+                    "validation_errors": [
+                      {
+                        "path": "protocol",
+                        "message": "Protocol must be tcp|udp with a port"
+                      }
+                    ]
+                  },
+                  "invalid_id": {
+                    "error": "INVALID_ID",
+                    "message": "Invalid app ID format",
+                    "details": {
+                      "field": "id"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "Access denied"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Spectrum app not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Spectrum app not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - returned on Cloudflare API errors or database failures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to update spectrum app"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Network DDoS (Spectrum)"
+        ],
+        "summary": "Delete Spectrum app",
+        "description": "**DESTRUCTIVE OPERATION:** Permanently deletes the Spectrum app, removes Cloudflare configuration, and stops DDoS protection. This action cannot be undone.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Spectrum app UUID",
+              "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spectrum app deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpectrumAppDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid app ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid app ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the app owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "Access denied"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Spectrum app not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Spectrum app not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to delete spectrum app"
                 }
               }
             }
