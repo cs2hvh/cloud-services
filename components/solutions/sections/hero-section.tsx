@@ -45,7 +45,7 @@ export function SolutionsHeroSection({
   return (
     <section
       className={cn(
-        "relative w-full overflow-x-hidden bg-transparent",
+        "relative w-full overflow-x-hidden ",
         "min-h-screen flex flex-col border-b  border-[#737373]",
         className,
       )}

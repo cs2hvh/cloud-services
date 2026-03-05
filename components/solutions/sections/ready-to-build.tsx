@@ -47,7 +47,7 @@ export function ReadyToBuild({
   return (
     <section
       className={cn(
-        "relative w-full bg-transparent  py-16 md:py-20 lg:py-24",
+        "relative w-full   py-16 md:py-20 lg:py-24",
         className
       )}
     >

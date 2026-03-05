@@ -49,9 +49,10 @@ const COMPLIANCE_BADGES = [
   { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
 ];
 
+
 export function Footer() {
   return (
-    <footer className="relative z-10 bg-black">
+    <footer className="relative z-10 bg-[#161618]">
 
       <Container className="pt-16 lg:pt-20 pb-8 lg:pb-10">
         {/* Main grid */}

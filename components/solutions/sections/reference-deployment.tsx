@@ -39,7 +39,7 @@ export function ReferenceDeployment({
   return (
     <section
       className={cn(
-        "relative w-full border-b border-[#6b6b6b] bg-transparent py-16 md:py-20 lg:py-24",
+        "relative w-full border-b border-[#6b6b6b]  py-16 md:py-20 lg:py-24",
         className
       )}
     >
