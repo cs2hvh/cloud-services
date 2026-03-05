@@ -77,7 +77,6 @@ export const ObjectSpaces = {
     error?: string;
   }> => {
     try {
-      console.log(payload,"...........")
       const supabase = await createWorkerClient();
       const { data, error } = await supabase
         .from("object_spaces")
@@ -180,6 +179,7 @@ export const ObjectSpaces = {
         .select("*")
         .eq("id", id)
         .eq("type", "bucket")
+        .neq("status", "deleted")
         .single();
 
       if (error) {
@@ -216,6 +216,28 @@ export const ObjectSpaces = {
       return data as ObjectSpaceBucket;
     } catch (err) {
       console.error(`[ObjectSpaces] Error getting bucket by id: ${err}`);
+      return null;
+    }
+  },
+
+  get_bucket_by_name: async (name: string): Promise<ObjectSpaceBucket | null> => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from("object_spaces")
+        .select("*")
+        .eq("name", name)
+        .eq("type", "bucket")
+        .neq("status", "deleted")
+        .maybeSingle();
+
+      if (error) {
+        console.error(`[ObjectSpaces] Error getting bucket by name: ${error.message}`);
+        return null;
+      }
+      return (data as ObjectSpaceBucket) || null;
+    } catch (err) {
+      console.error(`[ObjectSpaces] Error getting bucket by name: ${err}`);
       return null;
     }
   },

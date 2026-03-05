@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
+import { PlatformAppService } from "@/lib/services/platform-app-service";
 
 export async function GET() {
   const auth = await authenticateUser();
@@ -23,22 +23,15 @@ export async function GET() {
       );
     }
 
-    const apps = await Platform_Apps.list_by_owner(auth.user!.id);
+    // Use shared service method (same logic as v1 API)
+    const apps = await PlatformAppService.listApps({
+      userId: auth.user!.id,
+      includeRollbackInfo: true, // Internal API includes rollback capability
+    });
 
-    const appsWithRollback = await Promise.all(
-      (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
-        const prev = await Platform_App_Deployments.get_previous_successful(
-          app.id,
-          app.active_deployment_id ?? null
-        );
-        const canRollback = !!(prev.success && prev.data);
-        return { ...app, can_rollback: canRollback };
-      })
-    );
-
-    return NextResponse.json({ apps: appsWithRollback });
+    return NextResponse.json({ apps });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
   }
 }

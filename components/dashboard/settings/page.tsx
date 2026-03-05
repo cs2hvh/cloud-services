@@ -6,15 +6,22 @@ import { Card, CardContent} from "@/components/ui/card";
 import { 
   User, 
   Shield,
-  QrCode
+  QrCode,
+  Key
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ProfileSettings from "@/components/dashboard/profile/page";
 import Accounts from "@/components/dashboard/accounts/page";
 import EnableTotp from "@/components/dashboard/2fa/page";
+import { useRouter } from "next/navigation";
 
 const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState<"profile" | "account" | "security">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "account" | "security" | "api-keys">("profile");
+  const router = useRouter();
+
+  const handleApiKeysClick = () => {
+    router.push("/dashboard/settings/api-keys");
+  };
 
   return (
     // Changed from "container mx-auto py-8" to match dashboard layout pattern
@@ -33,11 +40,11 @@ const SettingsPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex space-x-4 mb-6 border-b border-white/10"
+        className="flex space-x-4 mb-6 border-b border-white/10 overflow-x-auto"
       >
         <Button
           variant={activeTab === "profile" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none ${
+          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
             activeTab === "profile" 
               ? "bg-white text-black" 
               : "text-white hover:bg-white/10"
@@ -50,7 +57,7 @@ const SettingsPage = () => {
         
         <Button
           variant={activeTab === "account" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none ${
+          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
             activeTab === "account" 
               ? "bg-white text-black" 
               : "text-white hover:bg-white/10"
@@ -63,7 +70,7 @@ const SettingsPage = () => {
         
         <Button
           variant={activeTab === "security" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none ${
+          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
             activeTab === "security" 
               ? "bg-white text-black" 
               : "text-white hover:bg-white/10"
@@ -72,6 +79,19 @@ const SettingsPage = () => {
         >
           <QrCode className="h-4 w-4 mr-2" />
           Security
+        </Button>
+
+        <Button
+          variant={activeTab === "api-keys" ? "default" : "ghost"}
+          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
+            activeTab === "api-keys" 
+              ? "bg-white text-black" 
+              : "text-white hover:bg-white/10"
+          }`}
+          onClick={() => setActiveTab("api-keys")}
+        >
+          <Key className="h-4 w-4 mr-2" />
+          API Keys
         </Button>
       </motion.div>
 
@@ -131,6 +151,38 @@ const SettingsPage = () => {
                   <p className="text-sm text-muted-foreground">Manage your security preferences</p>
                 </div>
                 <EnableTotp />
+              </motion.div>
+            )}
+
+            {activeTab === "api-keys" && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <div className="mb-4">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Key className="h-5 w-5" />
+                    API Keys
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    Create and manage API keys for programmatic access
+                  </p>
+                </div>
+                <div className="text-center py-8">
+                  <Key className="h-12 w-12 mx-auto mb-4 text-white/50" />
+                  <h3 className="text-lg font-semibold mb-2">API Keys Management</h3>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Create API keys to authenticate your applications and services
+                  </p>
+                  <Button 
+                    onClick={handleApiKeysClick}
+                    className="bg-white text-black hover:bg-white/90"
+                  >
+                    <Key className="h-4 w-4 mr-2" />
+                    Manage API Keys
+                  </Button>
+                </div>
               </motion.div>
             )}
           </CardContent>

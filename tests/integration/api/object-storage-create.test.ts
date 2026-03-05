@@ -21,7 +21,6 @@ import {
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/supabase/queries/object_spaces');
 vi.mock('@/lib/supabase/queries/billing');
-vi.mock('@/lib/supabase/queries');  // Also mock barrel export for test dynamic imports
 vi.mock('@/config/object-storage-functions');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/auth');
@@ -51,12 +50,9 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     const { ensureBalance, postProvisionBilling } = await import('@/config/billing-flow');
     vi.mocked(ensureBalance).mockResolvedValue({ ok: true, balance: 100 });
 
-    // Mock ObjectSpaces from both paths
+    // Mock ObjectSpaces
     const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
-    vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
-    
-    const objectSpacesBarrel = await import('@/lib/supabase/queries');
-    vi.mocked(objectSpacesBarrel.ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+    vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
     vi.mocked(postProvisionBilling).mockResolvedValue({ success: true } as any);
 
     // Mock Billing.add_active_objectspace
@@ -73,8 +69,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
         message: 'Bucket created successfully with secure access credentials',
       });
 
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -111,8 +107,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
         message: 'Bucket created successfully',
       });
 
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -141,8 +137,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
         message: 'Bucket created successfully',
       });
 
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -171,8 +167,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
         message: 'Bucket created successfully',
       });
 
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -206,8 +202,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
           message: 'Bucket created successfully',
         });
 
-        const { ObjectSpaces } = await import('@/lib/supabase/queries');
-        vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+        const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+        vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
         const request = createMockPostRequest(
           'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -226,8 +222,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
 
   describe('Validation Errors', () => {
     it('TC-OBJ-006: should reject bucket name that is too short', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -239,8 +235,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-007: should reject bucket name that is too long', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -252,8 +248,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-008: should reject bucket name with uppercase letters', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -265,8 +261,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-009: should reject bucket name formatted as IP address', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -278,8 +274,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-010: should reject invalid region', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -291,8 +287,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-011: should reject invalid ACL', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -304,8 +300,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-012: should reject invalid project_id', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -317,8 +313,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-013: should reject invalid owner_id', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(null);
+      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(null);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -334,7 +330,7 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     it('TC-OBJ-014: should reject duplicate bucket name (database check)', async () => {
       // Need to mock both the barrel export and direct import path
       const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockResolvedValue(mockObjectSpaceBucket);
+      vi.mocked(ObjectSpaces.get_bucket_by_name).mockResolvedValue(mockObjectSpaceBucket);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/object-storage/buckets/create',
@@ -424,8 +420,8 @@ describe('POST /api/services/object-storage/buckets/create', () => {
     });
 
     it('TC-OBJ-019: should handle unexpected errors', async () => {
-      const { ObjectSpaces } = await import('@/lib/supabase/queries/object_spaces');
-      vi.mocked(ObjectSpaces.get_bucket_by_bucket_id).mockRejectedValue(
+      const { getRatesForObjectStorage } = await import('@/config/pricing');
+      vi.mocked(getRatesForObjectStorage).mockRejectedValue(
         new Error('Database connection failed')
       );
 

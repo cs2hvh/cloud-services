@@ -3,8 +3,8 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { getPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { Platform_Apps } from "@/lib/supabase/queries";
-import { AppStatusService } from "@/lib/services/app-status";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -30,36 +30,38 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(getPlatformAppSchema, body);
     if (!validation.success) return validation.response;
 
-    const result = await Platform_Apps.get(validation.data.app_id);
-    
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 404 });
-    }
+    // Use shared service method (same logic as v1 API)
+    const app = await PlatformAppService.getApp({
+      appId: validation.data.app_id,
+      userId: auth.user!.id,
+      syncStatus: true,      // Internal API syncs K8s status
+      includeEnvVars: false, // Get env vars separately (below)
+    });
 
-    // Verify ownership
-    if (result.data.user_id !== auth.user!.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
-    }
-
-    // Sync status from K8s (single source of truth)
-    // This ensures the status is always accurate when viewing app details
-    const syncResult = await AppStatusService.syncStatus(
-      validation.data.app_id,
-      result.data.name,
-      result.data.status as "running" | "failed" | "pending" | "building" | "stopped"
-    );
-
-    // Get environment variables
+    // Get environment variables (internal API feature)
     const env_vars = await Platform_Apps.get_env_vars(validation.data.app_id);
 
-    // Return app with synced status
     return NextResponse.json({ 
-      ...result.data, 
-      status: syncResult.currentStatus, // Use synced status
+      ...app,
       env_vars 
     });
   } catch (err: unknown) {
+    if (err instanceof Error && 'code' in err) {
+      const error = err as Error & { code?: string };
+      if (error.code === 'NOT_FOUND') {
+        return NextResponse.json(
+          { error: 'App not found', message: 'App not found' },
+          { status: 404 }
+        );
+      }
+      if (error.code === 'FORBIDDEN') {
+        return NextResponse.json(
+          { error: 'Unauthorized', message: 'Unauthorized' },
+          { status: 403 }
+        );
+      }
+    }
     const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
   }
 }
