@@ -9,6 +9,12 @@ import { Billing } from "@/lib/supabase/queries/billing";
 
 type RouteContext = { params: Promise<{ [key: string]: string | string[] }> };
 
+function getDnsOriginalName(dns: unknown): string | null {
+  if (!dns || typeof dns !== "object") return null;
+  const value = (dns as { original_name?: unknown }).original_name;
+  return typeof value === "string" ? value : null;
+}
+
 async function getValidatedAppId(context: RouteContext | undefined) {
   if (!context?.params) {
     return {
@@ -49,11 +55,10 @@ export const GET = withV1Auth("spectrum:get", async (_req, auth, context) => {
       return v1Error("FORBIDDEN", 403, "Access denied");
     }
 
-    const dns = result.local.dns as any;
     return v1Ok({
       data: {
         id: result.local.spectrum_id || id,
-        dns_name: dns?.original_name || null,
+        dns_name: getDnsOriginalName(result.local.dns),
         protocol: result.local.protocol,
         origin_direct: result.local.origin_direct,
         tls: result.local.tls,
@@ -112,11 +117,10 @@ export const PATCH = withV1Auth(
       // Update app
       const result = await updateSpectrumApp(validation.data);
 
-      const dns = result.app?.dns as any;
       return v1Ok({
         data: {
           id: result.app?.spectrum_id || id,
-          dns_name: dns?.original_name || null,
+          dns_name: getDnsOriginalName(result.app?.dns),
           protocol: result.app?.protocol,
           origin_direct: result.app?.origin_direct,
           tls: result.app?.tls,

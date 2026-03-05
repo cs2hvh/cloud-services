@@ -30,6 +30,10 @@
       "description": "Manage application deployments, containers, and infrastructure."
     },
     {
+      "name": "Object Storage",
+      "description": "Manage S3-compatible object storage buckets for file storage and CDN."
+    },
+    {
       "name": "Network DDoS (Spectrum)",
       "description": "Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP)."
     }
@@ -354,6 +358,136 @@
               "id",
               "name",
               "deleted"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "Bucket": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f"
+          },
+          "name": {
+            "type": "string",
+            "example": "my-storage-bucket"
+          },
+          "region": {
+            "type": "string",
+            "example": "nyc3"
+          },
+          "acl": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public-read"
+            ],
+            "example": "private"
+          },
+          "cors_enabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "versioning_enabled": {
+            "type": "boolean",
+            "example": false
+          },
+          "project_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "example": "9d7e8f3a-2b1c-4d5e-8f9a-3b4c5d6e7f8a"
+          },
+          "status": {
+            "type": "string",
+            "example": "active"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T10:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-02-27T12:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "region",
+          "acl",
+          "cors_enabled",
+          "versioning_enabled",
+          "project_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "BucketListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Bucket"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/PaginationMeta"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "BucketResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Bucket"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "BucketDeleteResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "deleted": {
+                "type": "boolean",
+                "example": true
+              },
+              "deleted_at": {
+                "type": "string",
+                "format": "date-time",
+                "example": "2026-02-27T14:30:00Z"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "deleted",
+              "deleted_at"
             ]
           }
         },
@@ -1125,6 +1259,322 @@
                   "message": "Failed to delete app. Infrastructure cleanup may be incomplete.",
                   "details": {
                     "details": "Kubernetes deletion timeout"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/buckets": {
+      "get": {
+        "tags": [
+          "Object Storage"
+        ],
+        "summary": "List all buckets",
+        "description": "Returns a list of all object storage buckets owned by the authenticated user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - missing or invalid API key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/storage/buckets/{id}": {
+      "get": {
+        "tags": [
+          "Object Storage"
+        ],
+        "summary": "Get bucket by ID",
+        "description": "Returns detailed information about a specific object storage bucket.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Bucket UUID",
+              "example": "7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bucket details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid bucket ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid bucket ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the bucket owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to access this bucket"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bucket not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Bucket not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Internal server error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Object Storage"
+        ],
+        "summary": "Delete bucket",
+        "description": "**DESTRUCTIVE OPERATION:** Permanently deletes the bucket and all stored objects. Closes any active billing cycles with prorated refunds. This action cannot be undone.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Bucket UUID",
+              "example": "7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bucket deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BucketDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid bucket ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid bucket ID format",
+                  "details": {
+                    "field": "id"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - not the bucket owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "FORBIDDEN",
+                  "message": "You do not have permission to delete this bucket"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Bucket not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "NOT_FOUND",
+                  "message": "Bucket not found"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests - rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error - deletion failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "DELETE_FAILED",
+                  "message": "Failed to delete bucket. Infrastructure cleanup may be incomplete.",
+                  "details": {
+                    "details": "S3 deletion timeout"
                   }
                 }
               }

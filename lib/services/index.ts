@@ -11,6 +11,7 @@ export { RuntimeLogsService } from "./runtime-logs";
 export { DatabaseIntegrationService } from "./database-integration";
 export { ObjectStorageIntegrationService } from "./object-storage-integration";
 export { PlatformAppService } from "./platform-app-service";
+export { ObjectStorageService } from "./object-storage-service";
 
 export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";
@@ -38,6 +39,16 @@ export type {
   GetAppOptions,
   ListAppsOptions,
 } from "./platform-app-service";
+export type {
+  CreateBucketOptions,
+  CreateBucketResult,
+  DeleteBucketOptions,
+  DeleteBucketResult,
+  GetBucketOptions,
+  ListBucketsOptions,
+  UpdateBucketSettingsOptions,
+  UpdateBucketSettingsResult,
+} from "./object-storage-service";
 
 export type {
   CustomDomain,

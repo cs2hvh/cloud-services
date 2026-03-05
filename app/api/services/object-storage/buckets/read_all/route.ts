@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Encryption } from "@/config/functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { ObjectStorageService } from "@/lib/services/object-storage-service";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -34,41 +33,26 @@ export async function POST(req: NextRequest) {
 
     console.log("📖 Reading all buckets for user:", owner_id);
 
-    // Get all buckets for user
-    const buckets = await ObjectSpaces.get_buckets(owner_id);
-
-    // Decrypt endpoints for all buckets
-    const decryptedBuckets = buckets.map(bucket => {
-      const decryptedBucket = { ...bucket };
-      if (bucket.endpoint) {
-        try {
-          const encryptionKey = process.env.ENCRYPTION_KEY;
-          if (encryptionKey && bucket.endpoint.startsWith('{')) {
-            // Endpoint is encrypted (JSON stringified)
-            const encryptedData = JSON.parse(bucket.endpoint);
-            decryptedBucket.endpoint = Encryption.decrypt(encryptedData, encryptionKey);
-          }
-        } catch (error) {
-          console.error(`Error decrypting endpoint for bucket ${bucket.id}:`, error);
-          // Keep original endpoint if decryption fails
-        }
-      }
-      return decryptedBucket;
+    // Use centralized service (decrypt credentials for internal API)
+    const buckets = await ObjectStorageService.listBuckets({
+      owner_id,
+      decrypt_credentials: true,
     });
 
-    console.log("✅ Decrypted endpoints for all buckets");
+    console.log("✅ Retrieved buckets with decrypted credentials");
 
     return NextResponse.json(
       {
         success: true,
-        data: decryptedBuckets,
-        count: decryptedBuckets.length,
+        data: buckets,
+        count: buckets.length,
       },
       { status: 200 }
     );
-  } catch (error) {
+
+  } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin bucket delete error:", errorMessage);
+    console.error("Bucket read_all error:", errorMessage);
     
     return NextResponse.json(
       {

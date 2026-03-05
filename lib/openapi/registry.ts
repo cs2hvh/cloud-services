@@ -115,6 +115,38 @@ export const AppDeleteResponseSchema = z.object({
   }),
 }).openapi('AppDeleteResponse');
 
+// Object Storage schemas
+export const BucketSchema = z.object({
+  id: z.string().uuid().openapi({ example: '7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f' }),
+  name: z.string().openapi({ example: 'my-storage-bucket' }),
+  region: z.string().openapi({ example: 'nyc3' }),
+  acl: z.enum(['private', 'public-read']).openapi({ example: 'private' }),
+  cors_enabled: z.boolean().openapi({ example: false }),
+  versioning_enabled: z.boolean().openapi({ example: false }),
+  project_id: z.string().uuid().nullable().openapi({ example: '9d7e8f3a-2b1c-4d5e-8f9a-3b4c5d6e7f8a' }),
+  status: z.string().openapi({ example: 'active' }),
+  created_at: z.string().datetime().openapi({ example: '2026-02-27T10:00:00Z' }),
+  updated_at: z.string().datetime().openapi({ example: '2026-02-27T12:00:00Z' }),
+}).openapi('Bucket');
+
+export const BucketListResponseSchema = z.object({
+  data: z.array(BucketSchema),
+  meta: PaginationMetaSchema,
+}).openapi('BucketListResponse');
+
+export const BucketResponseSchema = z.object({
+  data: BucketSchema,
+}).openapi('BucketResponse');
+
+export const BucketDeleteResponseSchema = z.object({
+  data: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    deleted: z.boolean().openapi({ example: true }),
+    deleted_at: z.string().datetime().openapi({ example: '2026-02-27T14:30:00Z' }),
+  }),
+}).openapi('BucketDeleteResponse');
+
 // Spectrum App schema
 export const SpectrumAppSchema = z.object({
   id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
@@ -544,6 +576,258 @@ registry.registerPath({
             error: 'DELETE_FAILED',
             message: 'Failed to delete app. Infrastructure cleanup may be incomplete.',
             details: { details: 'Kubernetes deletion timeout' }
+          }
+        },
+      },
+    },
+  },
+});
+
+// Object Storage Endpoints
+
+// GET /api/v1/storage/buckets - List all buckets
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/storage/buckets',
+  tags: ['Object Storage'],
+  summary: 'List all buckets',
+  description: 'Returns a list of all object storage buckets owned by the authenticated user.',
+  security: [{ bearerAuth: [] }],
+  responses: {
+    200: {
+      description: 'List of buckets',
+      content: {
+        'application/json': {
+          schema: BucketListResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized - missing or invalid API key',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+  },
+});
+
+// GET /api/v1/storage/buckets/{id} - Get bucket by ID
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/storage/buckets/{id}',
+  tags: ['Object Storage'],
+  summary: 'Get bucket by ID',
+  description: 'Returns detailed information about a specific object storage bucket.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ 
+        example: '7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f',
+        description: 'Bucket UUID'
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Bucket details',
+      content: {
+        'application/json': {
+          schema: BucketResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid bucket ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid bucket ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden - not the bucket owner',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'You do not have permission to access this bucket'
+          }
+        },
+      },
+    },
+    404: {
+      description: 'Bucket not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'Bucket not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Internal server error'
+          }
+        },
+      },
+    },
+  },
+});
+
+// DELETE /api/v1/storage/buckets/{id} - Delete bucket
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/storage/buckets/{id}',
+  tags: ['Object Storage'],
+  summary: 'Delete bucket',
+  description: '**DESTRUCTIVE OPERATION:** Permanently deletes the bucket and all stored objects. Closes any active billing cycles with prorated refunds. This action cannot be undone.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ 
+        example: '7c8f9a2b-4e3d-4c5a-9b8c-1a2b3c4d5e6f',
+        description: 'Bucket UUID'
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Bucket deleted successfully',
+      content: {
+        'application/json': {
+          schema: BucketDeleteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid bucket ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INVALID_ID',
+            message: 'Invalid bucket ID format',
+            details: { field: 'id' }
+          }
+        },
+      },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'UNAUTHORIZED',
+            message: 'Missing or invalid API key'
+          }
+        },
+      },
+    },
+    403: {
+      description: 'Forbidden - not the bucket owner',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'FORBIDDEN',
+            message: 'You do not have permission to delete this bucket'
+          }
+        },
+      },
+    },
+    404: {
+      description: 'Bucket not found',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'NOT_FOUND',
+            message: 'Bucket not found'
+          }
+        },
+      },
+    },
+    429: {
+      description: 'Too many requests - rate limit exceeded',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'RATE_LIMIT_EXCEEDED',
+            message: 'Too many requests. Please try again later.',
+            details: { retry_after: 58 }
+          }
+        },
+      },
+    },
+    500: {
+      description: 'Internal server error - deletion failed',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'DELETE_FAILED',
+            message: 'Failed to delete bucket. Infrastructure cleanup may be incomplete.',
+            details: { details: 'S3 deletion timeout' }
           }
         },
       },
@@ -1111,6 +1395,10 @@ For more examples, see the API reference below.
       {
         name: 'Platform Apps',
         description: 'Manage application deployments, containers, and infrastructure.',
+      },
+      {
+        name: 'Object Storage',
+        description: 'Manage S3-compatible object storage buckets for file storage and CDN.',
       },
       {
         name: 'Network DDoS (Spectrum)',

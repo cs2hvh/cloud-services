@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { ObjectStorageFunctions } from "@/config/object-storage-functions";
-import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
-import { Billing } from "@/lib/supabase/queries/billing";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { getRatesForObjectStorage } from "@/config/pricing";
-import { AuditLogService, getAuditContext } from "@/lib/audit";
+import { getAuditContext } from "@/lib/audit";
+import { ObjectStorageService } from "@/lib/services/object-storage-service";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -18,6 +13,7 @@ export async function POST(req: NextRequest) {
   if (!auth.authenticated) {
     return auth.response;
   }
+
   try {
     // Per-user rate limit (bucket creation is sensitive / resource provisioning)
     const rl = await limitByUser(auth.user!.id, { prefix: "rl:bucket-create", limit: 3, windowMs: 60_000 });
@@ -27,9 +23,10 @@ export async function POST(req: NextRequest) {
         { status: 429 }
       );
     }
+
     const body = await req.json();
 
-    // ✅ VALIDATE REQUEST PAYLOAD
+    // Validate request payload
     const validation = validateRequest(createBucketSchema, body);
     if (!validation.success) {
       return validation.response;
@@ -37,9 +34,11 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
+    // Check admin access if creating for another user
     const authenticatedUserId = auth.user!.id;
     const requestedOwnerId = validatedData.owner_id;
     let targetOwnerId = authenticatedUserId;
+    let isAdmin = false;
 
     if (requestedOwnerId !== authenticatedUserId) {
       const adminCheck = await requireAdmin();
@@ -53,139 +52,73 @@ export async function POST(req: NextRequest) {
         );
       }
       targetOwnerId = requestedOwnerId;
+      isAdmin = true;
     }
 
-    
+    // Get audit context
+    const auditContext = getAuditContext(req);
 
-    // Duplicate check (DB uniqueness exists; this gives user-friendly 409)
-    const existing = await ObjectSpaces.get_bucket_by_bucket_id(validatedData.name);
-    if (existing) {
+    // Use centralized service
+    const result = await ObjectStorageService.createBucket({
+      name: validatedData.name,
+      region: validatedData.region,
+      acl: validatedData.acl || 'private',
+      cors_enabled: validatedData.cors_enabled ?? false,
+      versioning_enabled: validatedData.versioning_enabled ?? false,
+      owner_id: targetOwnerId,
+      project_id: validatedData.project_id || null,
+      audit_context: {
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        user_email: auth.user?.email,
+        user_role: isAdmin ? 'admin' : 'user',
+      },
+    });
+
+    return NextResponse.json(
+      { 
+        success: true, 
+        data: result.bucket, 
+        message: "Bucket created successfully" 
+      }, 
+      { status: 201 }
+    );
+
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string; balance?: number };
+    
+    // Map error codes to HTTP status codes
+    if (err.code === 'BUCKET_EXISTS') {
       return NextResponse.json(
-        { error: "Bucket name already exists", message: "Choose a different name" },
+        { error: err.message, message: "Bucket name already exists" },
         { status: 409 }
       );
     }
-
-    // 🔒 SECURE: Use centralized function for bucket creation
-    // All sensitive operations are handled securely in the config layer
-    // Billing: upfront and hourly (dynamic from admin pricing)
-    const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForObjectStorage();
-
-    // Check balance BEFORE provisioning
-    const balCheck = await ensureBalance(targetOwnerId, INITIAL_COST);
-    if (!balCheck.ok) {
+    
+    if (err.code === 'INSUFFICIENT_BALANCE') {
       return NextResponse.json(
-        { error: "Insufficient credits", message: `Required: ${INITIAL_COST}`, balance: balCheck.balance },
+        { error: err.message, message: "Insufficient credits", balance: err.balance },
         { status: 402 }
       );
     }
 
-    const result = await ObjectStorageFunctions.createBucket({
-      name: validatedData.name,
-      region: validatedData.region,
-      acl: validatedData.acl,
-      cors_enabled: validatedData.cors_enabled,
-      versioning_enabled: validatedData.versioning_enabled,
-      owner_id: targetOwnerId,
-      project_id: validatedData.project_id,
-    });
-
-    // Handle result based on success/failure
-    if (!result.success) {
-      // Check if the error is due to bucket already existing
-      const statusCode = result.error === "Bucket already exists" ? 409 : 400;
+    if (err.code === 'CREATION_FAILED') {
       return NextResponse.json(
-        {
-          error: result.error,
-          message: statusCode===409?"Bucket already exists.":result.message,
-        },
-        { status: statusCode }
+        { error: err.message, message: err.message || "Failed to create bucket" },
+        { status: 400 }
       );
     }
 
-    // ✅ SUCCESS RESPONSE
-    // Deduct upfront and add to billing.active_objectspace for hourly billing
-    try {
-      const serviceId = (result.data)?.id ?? validatedData.name;
-      await postProvisionBilling({
-        userId: targetOwnerId,
-        initialCost: INITIAL_COST,
-        hourlyRate: HOURLY_RATE,
-        serviceId,
-        addActive: Billing.add_active_objectspace,
-      });
-    } catch (err) {
-  const msg =
-    err instanceof Error
-      ? err.message
-      : typeof err === "string"
-        ? err
-        : JSON.stringify(err);
-
-  return NextResponse.json(
-    { error: "Post provision billing failed", details: msg },
-    { status: 500 }
-  );
-}
-
-
-    // Create audit log
-    const auditContext = getAuditContext(req);
-    const adminCheck = await requireAdmin();
-    
-    await AuditLogService.create({
-      user_id: targetOwnerId,
-      user_role: adminCheck.ok ? 'admin' : 'user',
-      user_email: auth.user?.email,
-      action: 'create',
-      service_type: 'object_storage',
-      service_id: result.data?.id ?? validatedData.name,
-      service_name: validatedData.name,
-      after_state: result.data,
-      ip_address: auditContext.ipAddress,
-      user_agent: auditContext.userAgent,
-      request_id: auditContext.requestId,
-      metadata: {
-        region: validatedData.region,
-        acl: validatedData.acl,
-        initial_cost: INITIAL_COST,
-        hourly_rate: HOURLY_RATE,
-      },
-    });
-
-    // Create notification
-    await NotificationService.create(
-      createServiceNotification({
-        userId: targetOwnerId,
-        type: 'success',
-        action: 'created',
-        serviceType: 'object_storage',
-        serviceName: validatedData.name,
-        serviceId: result.data?.id ?? validatedData.name,
-      })
-    );
-
-    return NextResponse.json({ success: true, data: result.data, message: result.message }, { status: 201 });
-  } catch (error) {
-    // Create error notification
-    try {
-      await NotificationService.create(
-        createServiceNotification({
-          userId: auth.user!.id,
-          type: 'error',
-          action: 'created',
-          serviceType: 'object_storage',
-          serviceName: 'Object Storage Bucket',
-          error: error instanceof Error ? error.message : 'Unknown error',
-        })
+    if (err.code === 'BILLING_FAILED') {
+      return NextResponse.json(
+        { error: err.message, message: "Post provision billing failed" },
+        { status: 500 }
       );
-    } catch (notifErr) {
-      console.error('Failed to create error notification:', notifErr);
     }
 
-    // Generic error handling - no sensitive details exposed
-    const errorMessage =
-      error instanceof Error ? error.message : "An unexpected error occurred";
+    // Generic error
+    const errorMessage = err.message || "An unexpected error occurred";
     return NextResponse.json(
       {
         error: "Request processing failed",

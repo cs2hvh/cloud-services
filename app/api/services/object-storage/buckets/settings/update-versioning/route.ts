@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
-import { updateBucketVersioning } from "@/lib/aws/s3-operations";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateBucketVersioningSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
-import { AuditLogService } from "@/lib/audit";
-import { getAuditContext } from "@/lib/audit/context";
+import { getAuditContext } from "@/lib/audit";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { ObjectStorageService } from "@/lib/services/object-storage-service";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -32,89 +29,25 @@ export async function POST(req: NextRequest) {
 
     console.log("📦 Updating bucket versioning:", bucket_id, "enabled:", enabled);
 
-    // Get bucket from database
-    const bucket = await ObjectSpaces.get_bucket_by_bucket_id(bucket_id);
+    // Get audit context
+    const auditContext = getAuditContext(req);
+    const adminCheck = await requireAdmin();
 
-    if (!bucket) {
-      return NextResponse.json(
-        { error: "Bucket not found" },
-        { status: 404 }
-      );
-    }
-
-    // Verify ownership
-    if (bucket.owner_id !== auth.user!.id) {
-      return NextResponse.json(
-        { error: "Unauthorized", message: "You don't have access to this bucket" },
-        { status: 403 }
-      );
-    }
-
-    // Create S3 client
-    const s3Client = createS3ClientFromAccessKey(bucket.region);
-
-    // Update versioning in S3
-    const updateResult = await updateBucketVersioning(s3Client, bucket.name, enabled);
-
-    if (!updateResult.success) {
-      console.error("Failed to update bucket versioning:", updateResult.error);
-      return NextResponse.json(
-        {
-          error: "Failed to update bucket versioning",
-          message: updateResult.error,
-        },
-        { status: 500 }
-      );
-    }
-
-    // Update in database
-  const dbResult = await ObjectSpaces.update_bucket_settings(bucket.id as string, { versioning_enabled: enabled });
-
-    if (!dbResult.success) {
-      console.error("Failed to update versioning in database:", dbResult.error);
-    }
+    // Use centralized service
+    await ObjectStorageService.updateBucketSettings({
+      bucket_id,
+      user_id: auth.user!.id,
+      settings: { versioning_enabled: enabled },
+      audit_context: {
+        ip_address: auditContext.ipAddress,
+        user_agent: auditContext.userAgent,
+        request_id: auditContext.requestId,
+        user_email: auth.user?.email,
+        user_role: adminCheck.ok ? 'admin' : 'user',
+      },
+    });
 
     console.log("✅ Bucket versioning updated successfully");
-
-    // Create audit log
-    try {
-      const context = getAuditContext(req);
-      await AuditLogService.create({
-        user_id: auth.user!.id,
-        user_role: 'user',
-        user_email: auth.user!.email,
-        action: 'update',
-        service_type: 'object_storage',
-        service_id: bucket_id,
-        service_name: bucket.name,
-        before_state: { versioning_enabled: bucket.versioning_enabled },
-        after_state: { versioning_enabled: enabled },
-        metadata: { update_type: 'versioning_settings' },
-        ...context,
-      });
-    } catch (auditErr) {
-      console.error('[updateBucketVersioning] Failed to create audit log:', auditErr);
-    }
-
-    // Create success notification
-    try {
-      await NotificationService.create(
-        createServiceNotification({
-          userId: auth.user!.id,
-          type: 'success',
-          action: 'updated',
-          serviceType: 'object_storage',
-          serviceName: bucket.name,
-          serviceId: bucket_id,
-          metadata: {
-            updateType: 'bucket_versioning',
-            enabled: enabled
-          }
-        })
-      );
-    } catch (notifErr) {
-      console.error('[updateBucketVersioning] Failed to create notification:', notifErr);
-    }
 
     return NextResponse.json(
       {
@@ -123,10 +56,26 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin bucket delete error:", errorMessage);
+  } catch (error: unknown) {
+    const err = error as Error & { code?: string };
     
+    // Map error codes to HTTP status codes
+    if (err.code === 'NOT_FOUND') {
+      return NextResponse.json(
+        { error: err.message, message: "Bucket not found" },
+        { status: 404 }
+      );
+    }
+    
+    if (err.code === 'FORBIDDEN') {
+      return NextResponse.json(
+        { error: err.message, message: "Unauthorized" },
+        { status: 403 }
+      );
+    }
+
+    // Generic error
+    const errorMessage = err.message || "An unexpected error occurred";
     return NextResponse.json(
       {
         error: "Request processing failed",

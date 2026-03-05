@@ -19,7 +19,7 @@ export interface CreateBucketConfig {
   cors_enabled?: boolean;
   versioning_enabled?: boolean;
   owner_id: string;
-  project_id: string;
+  project_id?: string | null;
 }
 
 export interface CreateBucketResult {
@@ -199,7 +199,7 @@ async function storeBucketInDatabase(
       cors_enabled: config.cors_enabled || false,
       versioning_enabled: config.versioning_enabled || false,
       owner_id: config.owner_id,
-      project_id: config.project_id,
+      project_id: config.project_id ?? null,
       status: "active",
       size_bytes: 0,
       object_count: 0,

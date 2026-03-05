@@ -6,16 +6,21 @@ import { listSpectrumApps, createSpectrumApp } from "@/config/spectrum-functions
 import { ensureBalance } from "@/config/billing-flow";
 import { getRatesForSpectrum } from "@/config/pricing";
 
+function getDnsOriginalName(dns: unknown): string | null {
+  if (!dns || typeof dns !== "object") return null;
+  const value = (dns as { original_name?: unknown }).original_name;
+  return typeof value === "string" ? value : null;
+}
+
 export const GET = withV1Auth("spectrum:list", async (_req, auth) => {
   try {
     const result = await listSpectrumApps(auth.userId);
 
     return v1Ok({
       data: result.local.map((app) => {
-        const dns = app.dns as any;
         return {
           id: app.spectrum_id,
-          dns_name: dns?.original_name || null,
+          dns_name: getDnsOriginalName(app.dns),
           protocol: app.protocol,
         origin_direct: app.origin_direct,
         tls: app.tls,
