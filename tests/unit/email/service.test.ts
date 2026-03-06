@@ -54,4 +54,25 @@ describe("EmailService", () => {
       { name: "environment", value: "production" },
     ]);
   });
+
+  it("builds new login alert emails", () => {
+    const message = service.buildMessage({
+      template: "newLoginAlert",
+      to: "user@example.com",
+      data: {
+        username: "Taylor",
+        device: "MacBook Pro",
+        location: "Bengaluru, IN",
+        loggedInAt: "2026-03-06 14:00 UTC",
+      },
+    });
+
+    expect(message.subject).toBe(
+      "AhuraSense | New login detected from Bengaluru, IN",
+    );
+    expect(message.text).toContain("MacBook Pro");
+    expect(message.tags).toEqual([
+      { name: "category", value: "account-security" },
+    ]);
+  });
 });

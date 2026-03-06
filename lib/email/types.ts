@@ -38,6 +38,47 @@ export interface ForgotPasswordEmailData {
   otp: string;
 }
 
+export interface AccountCreatedEmailData {
+  username: string;
+  email: string;
+  loginUrl?: string;
+}
+
+export interface EmailVerificationEmailData {
+  username: string;
+  verificationUrl?: string;
+  verificationCode?: string;
+  expiresIn?: string;
+}
+
+export interface NewLoginAlertEmailData {
+  username: string;
+  device: string;
+  location: string;
+  loggedInAt: string;
+  ipAddress?: string;
+  reviewUrl?: string;
+}
+
+export interface ApiKeyActivityEmailData {
+  username: string;
+  keyName: string;
+  action: "created" | "deleted";
+  projectName?: string;
+  happenedAt?: string;
+  dashboardUrl?: string;
+}
+
+export interface SuspiciousActivityEmailData {
+  username: string;
+  activity: string;
+  detectedAt: string;
+  location?: string;
+  ipAddress?: string;
+  actionUrl?: string;
+  actionLabel?: string;
+}
+
 export interface BillingNotificationEmailData {
   customerName: string;
   invoiceNumber: string;
@@ -78,6 +119,11 @@ export interface SystemAlertEmailData {
 export interface EmailTemplateDataMap {
   otp: OtpEmailData;
   forgotPassword: ForgotPasswordEmailData;
+  accountCreated: AccountCreatedEmailData;
+  emailVerification: EmailVerificationEmailData;
+  newLoginAlert: NewLoginAlertEmailData;
+  apiKeyActivity: ApiKeyActivityEmailData;
+  suspiciousActivity: SuspiciousActivityEmailData;
   billingNotification: BillingNotificationEmailData;
   deploymentStatus: DeploymentStatusEmailData;
   systemAlert: SystemAlertEmailData;

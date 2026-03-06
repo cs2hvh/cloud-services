@@ -22,6 +22,11 @@ Example templates included:
 
 - `otp`
 - `forgotPassword`
+- `accountCreated`
+- `emailVerification`
+- `newLoginAlert`
+- `apiKeyActivity`
+- `suspiciousActivity`
 - `billingNotification`
 - `deploymentStatus`
 - `systemAlert`

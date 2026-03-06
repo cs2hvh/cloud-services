@@ -4,6 +4,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { emailService } from "@/lib/email";
 import { ApiKeys } from "@/lib/supabase/queries/api_keys";
 
 /**
@@ -27,6 +28,8 @@ export async function DELETE(
       );
     }
 
+    const existingKey = await ApiKeys.get(keyId, auth.user!.id);
+
     const result = await ApiKeys.delete(keyId, auth.user!.id);
 
     if (!result.success) {
@@ -34,6 +37,30 @@ export async function DELETE(
         { error: result.error || "Failed to delete API key" },
         { status: 500 }
       );
+    }
+
+    const email = auth.user!.email;
+    if (email && existingKey) {
+      const emailResult = await emailService.sendTemplate({
+        template: "apiKeyActivity",
+        to: email,
+        data: {
+          username:
+            auth.user!.user_metadata?.username ||
+            auth.user!.user_metadata?.display_name ||
+            email.split("@")[0],
+          keyName: existingKey.name,
+          action: "deleted",
+          happenedAt: new Date().toISOString(),
+        },
+      });
+
+      if (!emailResult.success) {
+        console.error(
+          "[API Keys DELETE] Failed to send API key deleted email:",
+          emailResult.error,
+        );
+      }
     }
 
     return NextResponse.json({

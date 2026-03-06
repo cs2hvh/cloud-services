@@ -9,8 +9,12 @@ export async function send_otp_email(
   otp: string,
 ): Promise<ApiResponse> {
   return emailService.sendTemplate({
-    template: "otp",
+    template: "emailVerification",
     to: email,
-    data: { username, otp },
+    data: {
+      username,
+      verificationCode: otp,
+      expiresIn: "5 minutes",
+    },
   });
 }
