@@ -12,6 +12,7 @@ export { DatabaseIntegrationService } from "./database-integration";
 export { ObjectStorageIntegrationService } from "./object-storage-integration";
 export { PlatformAppService } from "./platform-app-service";
 export { ObjectStorageService } from "./object-storage-service";
+export { DatabaseService } from "./database-service";
 
 export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";
@@ -59,3 +60,30 @@ export type {
   DomainRoutingStatus,
   AddDomainResult,
 } from "./custom-domain";
+
+export type {
+  CreateDatabaseClusterRequest,
+  CreateDatabaseClusterResult,
+  GetDatabaseClusterRequest,
+  GetDatabaseClusterResult,
+  UpdateDatabaseClusterProjectRequest,
+  DeleteDatabaseClusterRequest,
+  DeleteDatabaseClusterResult,
+  CreateDatabaseRequest,
+  DeleteDatabaseRequest,
+  DeleteDatabaseUserRequest,
+  CreateDatabaseUserRequest,
+  ResetDatabaseUserPasswordRequest,
+  ListDatabasesRequest,
+  ListDatabasesResult,
+  ListDatabaseUsersRequest,
+  ListDatabaseUsersResult,
+  UpdateDatabaseStatusRequest,
+  AddFirewallRuleResult,
+  DeleteFirewallRuleRequest,
+  DeleteFirewallRuleResult,
+  RetrieveDatabaseRequest,
+  ReadMigrationStatusRequest,
+  ReadMigrationStatusResult,
+  UpsizeStorageRequest,
+} from "./database-service";
