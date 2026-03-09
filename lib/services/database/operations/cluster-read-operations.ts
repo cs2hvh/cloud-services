@@ -14,6 +14,7 @@ import {
   extractPasswordFromUri,
   getDigitalOceanHeaders,
   parseAxiosError,
+  redactClusterSecrets,
 } from "../helpers";
 import type {
   GetDatabaseClusterRequest,
@@ -155,7 +156,7 @@ export const clusterReadOperations = {
 
                 return {
                   success: true,
-                  data: decryptClusterData(updatedRead.data, encryptionKey),
+                  data: redactClusterSecrets(decryptClusterData(updatedRead.data, encryptionKey)),
                 };
               }
             }
@@ -175,7 +176,7 @@ export const clusterReadOperations = {
       const encryptionKey = process.env.ENCRYPTION_KEY!;
       return {
         success: true,
-        data: decryptClusterData(supabaseRead.data, encryptionKey),
+        data: redactClusterSecrets(decryptClusterData(supabaseRead.data, encryptionKey)),
       };
     } catch (err: unknown) {
       return {
@@ -200,7 +201,9 @@ export const clusterReadOperations = {
       return {
         success: true,
         data: rows.map((cluster) =>
-          decryptClusterDataWithoutUri(cluster as Record<string, unknown>, encryptionKey)
+          redactClusterSecrets(
+            decryptClusterDataWithoutUri(cluster as Record<string, unknown>, encryptionKey)
+          )
         ),
       };
     } catch (err: unknown) {

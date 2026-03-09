@@ -43,41 +43,45 @@ const getLocationName = (regionCode: string): string => {
 
 const DatabasePage = () => {
  
-  const user = useSession();
+  const session = useSession();
   const router = useRouter();
-
-  if (!user) {
-    router.push("/login");
-    toast.error("You must be logged in to access the dashboard.");
-  }
+  const userId = session?.user?.id;
 
   const [clusters, setClusters] = useState([] as DbCluster[]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    //fetch clusters from backend.
+    if (!userId) {
+      return;
+    }
+
     async function fetchClusters() {
       try {
-        //debugger;
         setLoading(true);
         const res = await api.post("/services/database/read_all_owner", {
-          id: user?.user?.id,
+          id: userId,
         });
         if (res.status === 200) {
           setClusters(
-            // res.data.data.filter((item: DbCluster) => item.status === "online")
             res.data.data
           );
         }
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
+        toast.error("Failed to fetch databases");
       } finally {
         setLoading(false);
       }
     }
     fetchClusters();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
+
+  useEffect(() => {
+    if (!session?.user) {
+      router.push("/login");
+      toast.error("You must be logged in to access the dashboard.");
+    }
+  }, [router, session?.user]);
 
   if (loading) {
     return (

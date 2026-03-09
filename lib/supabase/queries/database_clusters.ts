@@ -112,11 +112,15 @@ export const Database_Clusters = {
       .from("database_cluster")
       .select("*")
       .eq("cluster_id", id)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error("[updateClusterWorker] update failed:", error.message);
+      console.error("[readCluster] read failed:", error.message);
       return { success: false, error: error.message };
+    }
+
+    if (!data) {
+      return { success: false, error: "Database cluster not found" };
     }
     return { success: true, data: data };
   },
@@ -129,7 +133,7 @@ export const Database_Clusters = {
       .neq("status", "deleted");
 
     if (error) {
-      console.error("[updateClusterWorker] update failed:", error.message);
+      console.error("[readAllOwner] read failed:", error.message);
       return { success: false, error: error.message };
     }
     return { success: true, data: data };

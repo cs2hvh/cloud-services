@@ -37,6 +37,18 @@ This document describes the implemented API v1 infrastructure.
 - ✅ PATCH /api/v1/apps/{id} - Update app metadata (does NOT redeploy)
 - ✅ DELETE /api/v1/apps/{id} - Delete app and all infrastructure
 - ❌ POST /api/v1/apps - **Not supported** (deployment requires OAuth session, billing integration, Jenkins pipeline)
+- ✅ GET /api/v1/databases - List all user's database clusters
+- ✅ POST /api/v1/databases - Create a database cluster
+- ✅ GET /api/v1/databases/{id} - Get database cluster by ID
+- ✅ DELETE /api/v1/databases/{id} - Delete database cluster
+- ✅ GET /api/v1/databases/{id}/dbs - List databases in a cluster
+- ✅ POST /api/v1/databases/{id}/dbs - Create database in a cluster
+- ✅ GET /api/v1/databases/{id}/dbs/{name} - Get database in a cluster
+- ✅ DELETE /api/v1/databases/{id}/dbs/{name} - Delete database in a cluster
+- ✅ GET /api/v1/databases/{id}/users - List users in a cluster
+- ✅ POST /api/v1/databases/{id}/users - Create user in a cluster
+- ✅ DELETE /api/v1/databases/{id}/users/{username} - Delete user in a cluster
+- ✅ POST /api/v1/databases/{id}/users/{username}/reset-password - Reset database user password
 
 ---
 

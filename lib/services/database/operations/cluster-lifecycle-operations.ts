@@ -121,13 +121,14 @@ export const clusterLifecycleOperations = {
         };
       }
 
-      const serviceId = supabaseData.data?.id ?? database.data.database.id;
+      const providerClusterId = database.data.database.id as string;
+      const billingServiceId = (supabaseData.data?.id as string | undefined) ?? providerClusterId;
       try {
         await postProvisionBilling({
           userId: request.owner_id,
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
-          serviceId,
+          serviceId: billingServiceId,
           addActive: Billing.add_active_database,
         });
       } catch (billingErr) {
@@ -154,7 +155,7 @@ export const clusterLifecycleOperations = {
           user_email: request.user_email,
           action: "create",
           service_type: "database",
-          service_id: serviceId,
+          service_id: billingServiceId,
           service_name: request.name,
           after_state: supabaseData.data,
           ip_address: auditContext.ipAddress,
@@ -176,13 +177,13 @@ export const clusterLifecycleOperations = {
           action: "created",
           serviceType: "database",
           serviceName: request.name,
-          serviceId,
+          serviceId: providerClusterId,
         })
       );
 
       return {
         success: true,
-        clusterId: serviceId,
+        clusterId: providerClusterId,
         data: supabaseData.data,
         connection: {
           host: database.data.database.connection.host,

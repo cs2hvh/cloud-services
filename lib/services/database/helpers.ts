@@ -90,6 +90,40 @@ export function decryptClusterData(
   };
 }
 
+export function redactClusterSecrets(cluster: Record<string, unknown>): Record<string, unknown> {
+  const publicConnection = (cluster.public_connection || undefined) as
+    | Record<string, unknown>
+    | undefined;
+  const privateConnection = (cluster.private_connection || undefined) as
+    | Record<string, unknown>
+    | undefined;
+  const users = Array.isArray(cluster.users) ? (cluster.users as DatabaseUser[]) : [];
+
+  return {
+    ...cluster,
+    password: null,
+    ca_certificate: null,
+    public_connection: publicConnection
+      ? {
+          ...publicConnection,
+          password: null,
+          uri: null,
+        }
+      : undefined,
+    private_connection: privateConnection
+      ? {
+          ...privateConnection,
+          password: null,
+          uri: null,
+        }
+      : undefined,
+    users: users.map((user: DatabaseUser) => ({
+      ...user,
+      password: null,
+    })),
+  };
+}
+
 export function decryptClusterDataWithoutUri(
   cluster: Record<string, unknown>,
   encryptionKey: string

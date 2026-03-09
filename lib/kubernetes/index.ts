@@ -5,7 +5,6 @@ const kubectl = new KubeConfig();
 
 // KUBE_CONFIG_STRING should contain base64 encoded kubeconfig
 const configString = process.env.KUBE_CONFIG_STRING;
-console.log(configString?.length);
 
 let loadedFrom: 'KUBE_CONFIG_STRING' | 'DEFAULT' | 'NONE' = 'NONE';
 
