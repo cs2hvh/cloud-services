@@ -37,6 +37,11 @@ This document describes the implemented API v1 infrastructure.
 - ✅ PATCH /api/v1/apps/{id} - Update app metadata (does NOT redeploy)
 - ✅ DELETE /api/v1/apps/{id} - Delete app and all infrastructure
 - ❌ POST /api/v1/apps - **Not supported** (deployment requires OAuth session, billing integration, Jenkins pipeline)
+- ✅ GET /api/v1/projects - List user's projects
+- ✅ POST /api/v1/projects - Create project
+- ✅ GET /api/v1/projects/{id} - Get project by ID
+- ✅ PATCH /api/v1/projects/{id} - Update project metadata
+- ✅ DELETE /api/v1/projects/{id} - Delete project
 - ✅ GET /api/v1/databases - List all user's database clusters
 - ✅ POST /api/v1/databases - Create a database cluster
 - ✅ GET /api/v1/databases/{id} - Get database cluster by ID

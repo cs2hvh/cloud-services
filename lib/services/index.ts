@@ -13,6 +13,7 @@ export { ObjectStorageIntegrationService } from "./object-storage-integration";
 export { PlatformAppService } from "./platform-app-service";
 export { ObjectStorageService } from "./object-storage-service";
 export { DatabaseService } from "./database-service";
+export { ProjectService } from "./project-service";
 
 export type { DeploymentConfig, DeploymentResult } from "./deployment";
 export type { BuildPollConfig, BuildPollResult } from "./build-polling";

@@ -7,6 +7,7 @@ import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-open
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
 import { registerDatabasePaths } from '@/lib/openapi/paths/databases';
 import { registerNetworkPaths } from '@/lib/openapi/paths/network';
+import { registerProjectPaths } from '@/lib/openapi/paths/projects';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
 
 export const registry = new OpenAPIRegistry();
@@ -19,6 +20,7 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 });
 
 registerAppPaths(registry);
+registerProjectPaths(registry);
 registerStoragePaths(registry);
 registerNetworkPaths(registry);
 registerDatabasePaths(registry);
@@ -120,6 +122,10 @@ For more examples, see the API reference below.
       {
         name: 'Platform Apps',
         description: 'Manage application deployments, containers, and infrastructure.',
+      },
+      {
+        name: 'Projects',
+        description: 'Manage projects used to organize cloud services and ownership.',
       },
       {
         name: 'Databases',
