@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CreditCard, Wallet, X, Ticket } from "lucide-react";
-import { z } from "zod";
+import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 
@@ -17,30 +16,18 @@ interface Coupon {
   coupon_type: string;
 }
 
-const cardSchema = z.object({
-  cardNumber: z
-    .string()
-    .min(12, "Card number is too short")
-    .max(19, "Card number is too long")
-    .regex(/^\d{12,19}$/g, "Card number must be digits only"),
-  expiry: z
-    .string()
-    .regex(/^(0[1-9]|1[0-2])\/(\d{2})$/g, "Use MM/YY format"),
-  cvv: z.string().regex(/^\d{3,4}$/g, "CVV must be 3-4 digits"),
-});
-
 export default function BillingTabs({
   initialBalance = 0.0,
-  // promoCredits = 0,
-  // topupCredits = 0,
   availableCoupons = [],
+  paymentStatus,
 }: {
   initialBalance?: number;
   promoCredits?: number;
   topupCredits?: number;
   availableCoupons?: Coupon[];
+  paymentStatus?: string | null;
 }) {
-  const [tab, setTab] = useState<"balance" | "payment" | "coupons">("balance");
+  const [tab, setTab] = useState<"balance" | "payment" | "coupons" | "transactions">("balance");
   const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
   const [amount, setAmount] = useState("");
   const [loadingTopup, setLoadingTopup] = useState(false);
@@ -55,9 +42,17 @@ export default function BillingTabs({
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3000);
   };
 
-  // Values from server; only remaining balance must be real
+  // Show toast on return from Stripe checkout
+  useEffect(() => {
+    if (paymentStatus === "success") {
+      pushToast("success", "Payment successful! Your balance will update shortly.");
+    } else if (paymentStatus === "cancelled") {
+      pushToast("error", "Payment was cancelled.");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentStatus]);
+
   const remaining = balance;
-  console.log(remaining,"remaining balance")
 
   const onTopup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,19 +61,23 @@ export default function BillingTabs({
       pushToast("error", "Enter a valid amount > 0");
       return;
     }
+    if (parsed > 10000) {
+      pushToast("error", "Maximum top-up amount is $10,000");
+      return;
+    }
     try {
       setLoadingTopup(true);
-      const res = await api.post("/billing/topup", {
+      const res = await api.post("/billing/create-checkout-session", {
         amount: parsed,
       });
-      if (res.status !== 200) throw new Error("Top-up failed");
-      const data = await res.data
-      if (typeof data.balance === "number") setBalance(data.balance);
-      pushToast("success", "Top-up successful");
-      setAmount("");
+      const data = res.data;
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error("No checkout URL returned");
+      }
     } catch (_err: unknown) {
-      pushToast("error", _err instanceof Error ? _err.message : "Failed to top up");
-    } finally {
+      pushToast("error", _err instanceof Error ? _err.message : "Failed to start payment");
       setLoadingTopup(false);
     }
   };
@@ -132,8 +131,8 @@ export default function BillingTabs({
 
   return (
     <div className="max-w-[1600px] mx-auto">
-      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment" | "coupons")} className="w-full">
-        <TabsList className="w-full grid grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
+      <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment" | "coupons" | "transactions")} className="w-full">
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
           <TabsTrigger
             value="balance"
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -151,6 +150,12 @@ export default function BillingTabs({
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
           >
             Coupons
+          </TabsTrigger>
+          <TabsTrigger
+            value="transactions"
+            className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+          >
+            Transactions
           </TabsTrigger>
         </TabsList>
 
@@ -183,7 +188,7 @@ export default function BillingTabs({
                   type="submit"
                   className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  {loadingTopup ? "Processing..." : "Top up"}
+                  {loadingTopup ? "Redirecting to Stripe..." : "Top up"}
                 </button>
               </div>
             </form>
@@ -196,7 +201,7 @@ export default function BillingTabs({
             animate={{ opacity: 1, y: 0 }}
             className="space-y-6"
           >
-            <PaymentMethod pushToast={pushToast} />
+            <PaymentMethod />
           </motion.div>
         </TabsContent>
 
@@ -256,6 +261,15 @@ export default function BillingTabs({
                 ))}
               </div>
             )}
+          </motion.div>
+        </TabsContent>
+        <TabsContent value="transactions" className="mt-0">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-6"
+          >
+            <TransactionsTab />
           </motion.div>
         </TabsContent>
       </Tabs>
@@ -352,133 +366,425 @@ function CouponCard({ coupon, onRedeem }: { coupon: Coupon; onRedeem: (code: str
   );
 }
 
-function PaymentMethod({ pushToast }: { pushToast: (type: Toast["type"], message: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ cardNumber: "", expiry: "", cvv: "" });
+function PaymentMethod() {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border border-white/10 bg-black/30 p-5 backdrop-blur-xl">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white">
+            <Shield className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-white font-medium">Secure Payments by Stripe</div>
+            <div className="text-xs text-gray-400">Your payment details are handled securely by Stripe</div>
+          </div>
+        </div>
 
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = cardSchema.safeParse(form);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0]?.message || "Invalid details";
-      pushToast("error", first);
-      return;
-    }
+        <div className="rounded-lg border border-white/5 bg-white/5 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <CreditCard className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-white">Payment methods are managed during checkout</p>
+              <p className="text-xs text-neutral-400 mt-1">
+                When you top up your balance, you&apos;ll be redirected to Stripe&apos;s secure checkout
+                where you can pay with credit card, debit card, or other supported methods.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Shield className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-white">PCI-DSS Compliant</p>
+              <p className="text-xs text-neutral-400 mt-1">
+                Your card details never touch our servers. All payment processing is handled
+                entirely by Stripe, a PCI Level 1 certified payment processor.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <ExternalLink className="w-4 h-4 text-purple-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm text-white">How it works</p>
+              <p className="text-xs text-neutral-400 mt-1">
+                Go to the Balance tab, enter an amount, and click &quot;Top up&quot;.
+                You&apos;ll be securely redirected to Stripe to complete the payment.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Transactions Tab ────────────────────────────────────────────────
+
+interface Transaction {
+  id: string;
+  stripe_session_id: string | null;
+  amount: number;
+  currency: string;
+  status: string;
+  type: string;
+  balance_after: number | null;
+  description: string | null;
+  created_at: string;
+}
+
+type StatusFilter = "" | "completed" | "pending" | "failed";
+type TypeFilter = "" | "topup" | "refund" | "coupon";
+
+function TransactionsTab() {
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [searchId, setSearchId] = useState("");
+
+  const limit = 10;
+
+  const fetchTransactions = async (p: number) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch("/api/billing/payment-method", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
-      });
-      if (!res.ok) throw new Error("Failed to save payment method");
-      pushToast("success", "Payment method saved");
-      setOpen(false);
-      setForm({ cardNumber: "", expiry: "", cvv: "" });
-    } catch (_err: unknown) {
-      pushToast("error", _err instanceof Error ? _err.message : "Error saving payment method");
+      const params = new URLSearchParams();
+      params.set("page", String(p));
+      params.set("limit", String(limit));
+      if (statusFilter) params.set("status", statusFilter);
+      if (typeFilter) params.set("type", typeFilter);
+      if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        params.set("to", end.toISOString());
+      }
+
+      const res = await api.get(`/billing/transactions?${params.toString()}`);
+      const data = res.data;
+      setTransactions(data.data ?? []);
+      setTotal(data.pagination?.total ?? 0);
+      setTotalPages(data.pagination?.totalPages ?? 1);
+      setPage(data.pagination?.page ?? 1);
+    } catch {
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    fetchTransactions(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, typeFilter, dateFrom, dateTo]);
+
+  const clearFilters = () => {
+    setStatusFilter("");
+    setTypeFilter("");
+    setDateFrom("");
+    setDateTo("");
+    setSearchId("");
+  };
+
+  const hasActiveFilters = statusFilter || typeFilter || dateFrom || dateTo;
+
+  const filteredTransactions = searchId
+    ? transactions.filter(
+        (t) =>
+          t.id.toLowerCase().includes(searchId.toLowerCase()) ||
+          (t.stripe_session_id?.toLowerCase().includes(searchId.toLowerCase()) ?? false) ||
+          (t.description?.toLowerCase().includes(searchId.toLowerCase()) ?? false)
+      )
+    : transactions;
+
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+  const statusBadge = (status: string) => {
+    const map: Record<string, string> = {
+      completed: "bg-emerald-500/15 text-emerald-300 border-emerald-500/20",
+      pending: "bg-yellow-500/15 text-yellow-300 border-yellow-500/20",
+      failed: "bg-red-500/15 text-red-300 border-red-500/20",
+    };
+    return map[status] ?? "bg-white/10 text-neutral-300 border-white/10";
+  };
+
+  const typeBadge = (type: string) => {
+    const map: Record<string, string> = {
+      topup: "bg-blue-500/15 text-blue-300 border-blue-500/20",
+      refund: "bg-purple-500/15 text-purple-300 border-purple-500/20",
+      coupon: "bg-amber-500/15 text-amber-300 border-amber-500/20",
+    };
+    return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
+  };
+
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/10 bg-black/30 p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center text-white">
-            <CreditCard className="w-5 h-5" />
+      {/* Filters */}
+      <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-wrap">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+            <input
+              type="text"
+              value={searchId}
+              onChange={(e) => setSearchId(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+              placeholder="Search by transaction ID..."
+            />
           </div>
-          <div>
-            <div className="text-white font-medium">Visa •••• 4242</div>
-            <div className="text-xs text-gray-400">Expires 12/29</div>
-          </div>
+
+          {/* Status */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+          >
+            <option value="">All Statuses</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+
+          {/* Type */}
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+          >
+            <option value="">All Types</option>
+            <option value="topup">Top-up</option>
+            <option value="refund">Refund</option>
+            <option value="coupon">Coupon</option>
+          </select>
+
+          {/* Date From */}
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            placeholder="From"
+          />
+
+          {/* Date To */}
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+            placeholder="To"
+          />
+
+          {/* Clear filters */}
+          {hasActiveFilters && (
+            <button
+              onClick={clearFilters}
+              className="cursor-pointer flex items-center gap-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm transition-all"
+            >
+              <X className="w-3.5 h-3.5" /> Clear
+            </button>
+          )}
         </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="cursor-pointer px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-sm"
-        >
-          Add Payment Method
-        </button>
       </div>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[70]"
-          >
-            <div
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
-              onClick={() => !loading && setOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[92vw] max-w-md rounded-2xl border border-white/10 bg-black/80 backdrop-blur-2xl p-5 shadow-2xl"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-white font-medium">
-                  <Wallet className="w-4 h-4" /> Add Payment Method
-                </div>
-                <button
-                  onClick={() => !loading && setOpen(false)}
-                  className="cursor-pointer p-1 rounded-md hover:bg-white/10 text-gray-300"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <form onSubmit={onSubmit} className="space-y-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Card Number</label>
-                  <input
-                    inputMode="numeric"
-                    autoComplete="cc-number"
-                    placeholder="1234123412341234"
-                    value={form.cardNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, cardNumber: e.target.value.replace(/\s/g, "") }))}
-                    className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">Expiry (MM/YY)</label>
-                    <input
-                      placeholder="MM/YY"
-                      autoComplete="cc-exp"
-                      value={form.expiry}
-                      onChange={(e) => setForm((f) => ({ ...f, expiry: e.target.value }))}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-gray-400 mb-1">CVV</label>
-                    <input
-                      inputMode="numeric"
-                      autoComplete="cc-csc"
-                      placeholder="123"
-                      value={form.cvv}
-                      onChange={(e) => setForm((f) => ({ ...f, cvv: e.target.value }))}
-                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
-                    />
-                  </div>
-                </div>
-                <button
-                  disabled={loading}
-                  type="submit"
-                  className="cursor-pointer w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Saving..." : "Save Payment Method"}
-                </button>
-              </form>
-            </motion.div>
-          </motion.div>
+      {/* Summary */}
+      <div className="flex items-center justify-between text-sm text-neutral-400 px-1">
+        <span>
+          {total} transaction{total !== 1 ? "s" : ""} found
+        </span>
+        {totalPages > 1 && (
+          <span>
+            Page {page} of {totalPages}
+          </span>
         )}
-      </AnimatePresence>
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+        </div>
+      ) : filteredTransactions.length === 0 ? (
+        <div className="text-center py-16 rounded-lg border border-white/10 bg-black/20">
+          <Receipt className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
+          <p className="text-neutral-400">No transactions found</p>
+          <p className="text-sm text-neutral-500 mt-1">
+            {hasActiveFilters
+              ? "Try adjusting your filters"
+              : "Transactions will appear here after your first top-up"}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden sm:block rounded-xl border border-white/10 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 bg-white/5">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Date
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Transaction ID
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Type
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Balance After
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {filteredTransactions.map((txn) => (
+                  <tr key={txn.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-3 px-4 text-neutral-300 whitespace-nowrap">
+                      {formatDate(txn.created_at)}
+                    </td>
+                    <td className="py-3 px-4">
+                      <code className="text-xs font-mono text-neutral-400">
+                        {txn.id.slice(0, 8)}...
+                      </code>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
+                      >
+                        {txn.type}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right font-medium text-white">
+                      {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-right text-neutral-300">
+                      {txn.balance_after != null ? `$${txn.balance_after.toFixed(2)}` : "—"}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${statusBadge(txn.status)}`}
+                      >
+                        {txn.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="sm:hidden space-y-3">
+            {filteredTransactions.map((txn) => (
+              <div
+                key={txn.id}
+                className="rounded-lg border border-white/10 bg-black/30 p-4 space-y-2"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-neutral-400">{formatDate(txn.created_at)}</span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${statusBadge(txn.status)}`}
+                  >
+                    {txn.status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
+                    >
+                      {txn.type}
+                    </span>
+                    <code className="text-xs font-mono text-neutral-500">
+                      {txn.id.slice(0, 8)}...
+                    </code>
+                  </div>
+                  <span className="text-base font-semibold text-white">
+                    {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                  </span>
+                </div>
+                {txn.balance_after != null && (
+                  <div className="flex items-center justify-between text-xs text-neutral-400">
+                    <span>Balance</span>
+                    <span>${txn.balance_after.toFixed(2)}</span>
+                  </div>
+                )}
+                {txn.description && (
+                  <div className="text-xs text-neutral-500">
+                    Code: {txn.description}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => fetchTransactions(page - 1)}
+                disabled={page <= 1}
+                className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                .filter(
+                  (p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1
+                )
+                .reduce<(number | "ellipsis")[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push("ellipsis");
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((item, idx) =>
+                  item === "ellipsis" ? (
+                    <span key={`e-${idx}`} className="px-1 text-neutral-500">
+                      ...
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => fetchTransactions(item as number)}
+                      className={`cursor-pointer min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${
+                        page === item
+                          ? "bg-white text-black shadow-md"
+                          : "bg-white/10 hover:bg-white/15 text-white"
+                      }`}
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+              <button
+                onClick={() => fetchTransactions(page + 1)}
+                disabled={page >= totalPages}
+                className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/15 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
