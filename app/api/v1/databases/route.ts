@@ -4,6 +4,7 @@ import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { v1DatabaseServiceError } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
+import { redactClusterSecrets } from "@/lib/services/database/helpers";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
 
@@ -81,13 +82,14 @@ export const POST = withV1Auth("databases:create", async (req, auth) => {
     result.data && typeof result.data === "object"
       ? (result.data as Record<string, unknown>)
       : ({} as Record<string, unknown>);
+  const redactedClusterData = redactClusterSecrets(clusterData);
 
   return v1Ok(
     {
       data: {
-        ...clusterData,
-        cluster_id: result.clusterId ?? clusterData.cluster_id,
-        connection: result.connection ?? null,
+        ...redactedClusterData,
+        cluster_id: result.clusterId ?? redactedClusterData.cluster_id,
+        connection: null,
       },
     },
     201

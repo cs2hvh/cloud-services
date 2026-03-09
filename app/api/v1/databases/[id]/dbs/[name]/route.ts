@@ -5,6 +5,7 @@ import {
   v1DatabaseServiceError,
   v1EnsureOwnedDatabaseCluster,
   v1ExtractDatabaseId,
+  v1ResolveDatabaseClusterId,
   v1ExtractStringParam,
 } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
@@ -24,9 +25,10 @@ export const GET = withV1Auth("databases:dbs:get", async (_req, auth, context) =
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   const result = await DatabaseService.retrieveDatabase({
-    clusterId: id,
+    clusterId,
     name: nameParam.value,
   });
 
@@ -52,9 +54,10 @@ export const DELETE = withV1Auth("databases:dbs:delete", async (_req, auth, cont
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   const result = await DatabaseService.deleteDatabase({
-    clusterId: id,
+    clusterId,
     dbName: nameParam.value,
     userId: auth.userId,
   });

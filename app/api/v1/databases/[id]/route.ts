@@ -6,6 +6,7 @@ import {
   v1EnsureOwnedDatabaseCluster,
   v1ExtractDatabaseId,
   v1ParseBooleanQuery,
+  v1ResolveDatabaseClusterId,
 } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
 
@@ -19,6 +20,7 @@ export const GET = withV1Auth("databases:get", async (req, auth, context) => {
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   const rawCheckStatus = req.nextUrl.searchParams.get("check_status");
   const checkStatus = v1ParseBooleanQuery(rawCheckStatus);
@@ -32,7 +34,7 @@ export const GET = withV1Auth("databases:get", async (req, auth, context) => {
   }
 
   const result = await DatabaseService.getCluster({
-    clusterId: id,
+    clusterId,
     userId: auth.userId,
     checkStatus,
   });
@@ -54,6 +56,7 @@ export const DELETE = withV1Auth("databases:delete", async (req, auth, context) 
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   let force = req.nextUrl.searchParams.get("force") === "true";
 
@@ -70,7 +73,7 @@ export const DELETE = withV1Auth("databases:delete", async (req, auth, context) 
 
   const result = await DatabaseService.deleteCluster(
     {
-      clusterId: id,
+      clusterId,
       userId: auth.userId,
       force,
     },

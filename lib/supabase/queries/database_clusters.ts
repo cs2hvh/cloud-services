@@ -108,21 +108,37 @@ export const Database_Clusters = {
 
   read: async (id: string) => {
     const supabase = await createSSRClient();
-    const { data, error } = await supabase
+    const { data: byClusterId, error: clusterIdError } = await supabase
       .from("database_cluster")
       .select("*")
       .eq("cluster_id", id)
       .maybeSingle();
 
-    if (error) {
-      console.error("[readCluster] read failed:", error.message);
-      return { success: false, error: error.message };
+    if (clusterIdError) {
+      console.error("[readCluster] read by cluster_id failed:", clusterIdError.message);
+      return { success: false, error: clusterIdError.message };
     }
 
-    if (!data) {
+    if (byClusterId) {
+      return { success: true, data: byClusterId };
+    }
+
+    const { data: byInternalId, error: internalIdError } = await supabase
+      .from("database_cluster")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (internalIdError) {
+      console.error("[readCluster] read by id failed:", internalIdError.message);
+      return { success: false, error: internalIdError.message };
+    }
+
+    if (!byInternalId) {
       return { success: false, error: "Database cluster not found" };
     }
-    return { success: true, data: data };
+
+    return { success: true, data: byInternalId };
   },
   read_all_owner: async (owner_id: string) => {
     const supabase = await createSSRClient();

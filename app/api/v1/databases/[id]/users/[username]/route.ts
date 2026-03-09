@@ -4,6 +4,7 @@ import {
   v1DatabaseServiceError,
   v1EnsureOwnedDatabaseCluster,
   v1ExtractDatabaseId,
+  v1ResolveDatabaseClusterId,
   v1ExtractStringParam,
 } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
@@ -23,10 +24,11 @@ export const DELETE = withV1Auth("databases:users:delete", async (req, auth, con
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   const result = await DatabaseService.deleteDatabaseUser(
     {
-      clusterId: id,
+      clusterId,
       username: usernameParam.value,
       userId: auth.userId,
       userEmail: auth.kind === "session" ? auth.email : undefined,

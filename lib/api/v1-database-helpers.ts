@@ -137,3 +137,11 @@ export function v1ParseBooleanQuery(value: string | null): boolean | undefined {
 
   return undefined;
 }
+
+export function v1ResolveDatabaseClusterId(cluster: Record<string, unknown>, fallbackId: string): string {
+  const clusterId = cluster.cluster_id;
+  if (typeof clusterId === "string" && clusterId.length > 0) {
+    return clusterId;
+  }
+  return fallbackId;
+}

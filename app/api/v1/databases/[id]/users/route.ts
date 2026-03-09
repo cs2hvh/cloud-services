@@ -6,6 +6,7 @@ import {
   v1DatabaseServiceError,
   v1EnsureOwnedDatabaseCluster,
   v1ExtractDatabaseId,
+  v1ResolveDatabaseClusterId,
 } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
 import { createDatabaseUserSchema } from "@/lib/validation/database";
@@ -20,9 +21,10 @@ export const GET = withV1Auth("databases:users:list", async (_req, auth, context
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   const result = await DatabaseService.listDatabaseUsers({
-    clusterId: id,
+    clusterId,
     userId: auth.userId,
   });
 
@@ -51,6 +53,7 @@ export const POST = withV1Auth("databases:users:create", async (req, auth, conte
   if (ownership.error) {
     return ownership.error;
   }
+  const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
   let parsedBody: unknown;
   try {
@@ -62,7 +65,7 @@ export const POST = withV1Auth("databases:users:create", async (req, auth, conte
 
   const validation = createDatabaseUserSchema.safeParse({
     ...body,
-    cluster_id: id,
+    cluster_id: clusterId,
   });
 
   if (!validation.success) {
@@ -71,7 +74,7 @@ export const POST = withV1Auth("databases:users:create", async (req, auth, conte
 
   const result = await DatabaseService.createDatabaseUser(
     {
-      clusterId: id,
+      clusterId,
       name: validation.data.name,
       userId: auth.userId,
     },
