@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
+import { Billing } from "@/lib/supabase/queries/billing";
 import { limitByUser } from "@/lib/cooldown/userbased";
 
 // POST: Redeem a coupon code
@@ -51,6 +52,21 @@ export async function POST(request: Request) {
         { message: result.error || "Failed to redeem coupon" },
         { status: 400 }
       );
+    }
+
+    // Record coupon redemption as a transaction
+    try {
+      await Billing.save_transaction({
+        userId: user.id,
+        amount: result.amount!,
+        status: "completed",
+        type: "coupon",
+        balanceAfter: result.balance,
+        description: code.toUpperCase().trim(),
+      });
+    } catch (txnErr) {
+      console.error("[Coupons] Failed to save coupon transaction:", txnErr);
+      // Don't fail the redemption — credits are already added
     }
 
     return NextResponse.json({

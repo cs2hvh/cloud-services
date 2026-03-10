@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-async function BillingSuspense() {
+async function BillingSuspense({ paymentStatus }: { paymentStatus?: string | null }) {
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const userId = data.user?.id;
@@ -19,8 +19,6 @@ async function BillingSuspense() {
     Billing.get_user_credits(userId),
     Promocodes.get_available_for_user(userId, userEmail),
   ]);
-  
-  console.log(credits,"credits in billing page")
 
   return (
     <div className="max-w-[1600px] mx-auto">
@@ -32,16 +30,22 @@ async function BillingSuspense() {
       <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-xl p-4 sm:p-6">
         <BillingTabs
           initialBalance={credits.credit_balance}
-          // promoCredits={credits.promo_credits}
-          // topupCredits={credits.topup_credits}
           availableCoupons={availableCoupons}
+          paymentStatus={paymentStatus}
         />
       </div>
     </div>
   );
 }
 
-export default async function BillingPage() {
+export default async function BillingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; session_id?: string }>;
+}) {
+  const params = await searchParams;
+  const paymentStatus = params.status ?? null;
+
   return (
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
       <Suspense
@@ -51,7 +55,7 @@ export default async function BillingPage() {
           </div>
         }
       >
-        <BillingSuspense />
+        <BillingSuspense paymentStatus={paymentStatus} />
       </Suspense>
     </div>
   );

@@ -443,4 +443,137 @@ export const Billing = {
 
     return { charged: charge, newBalance };
   },
+
+  // ─── Stripe Integration Helpers ─────────────────────────────────────
+
+  get_stripe_customer_id: async (userId: string): Promise<string | null> => {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("stripe_customer_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    return data?.stripe_customer_id ?? null;
+  },
+
+  save_stripe_customer_id: async (userId: string, stripeCustomerId: string): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { data: existing } = await supabase
+      .schema("billing")
+      .from("user_credits")
+      .select("user_id")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .schema("billing")
+        .from("user_credits")
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq("user_id", userId);
+      if (error) throw new Error(`Failed to save stripe customer: ${error.message}`);
+    } else {
+      const { error } = await supabase
+        .schema("billing")
+        .from("user_credits")
+        .insert({ user_id: userId, credit_balance: 0, stripe_customer_id: stripeCustomerId });
+      if (error) throw new Error(`Failed to create user credits: ${error.message}`);
+    }
+  },
+
+  save_transaction: async (params: {
+    userId: string;
+    stripeSessionId?: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    status: "pending" | "completed" | "failed";
+    type?: "topup" | "refund" | "coupon";
+    balanceAfter?: number;
+    description?: string;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert({
+        user_id: params.userId,
+        stripe_session_id: params.stripeSessionId ?? null,
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        status: params.status,
+        type: params.type ?? "topup",
+        balance_after: params.balanceAfter ?? null,
+        description: params.description ?? null,
+        completed_at: params.status === "completed" ? new Date().toISOString() : null,
+      });
+    if (error) throw new Error(`Failed to save transaction: ${error.message}`);
+  },
+
+  get_transaction_by_session: async (stripeSessionId: string): Promise<{ id: string; status: string } | null> => {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .select("id, status")
+      .eq("stripe_session_id", stripeSessionId)
+      .maybeSingle();
+    return data ?? null;
+  },
+
+  get_transactions: async (
+    userId: string,
+    opts?: {
+      limit?: number;
+      offset?: number;
+      status?: string;
+      type?: string;
+      from?: string;
+      to?: string;
+    }
+  ): Promise<{
+    transactions: Array<{
+      id: string;
+      stripe_session_id: string | null;
+      amount: number;
+      currency: string;
+      status: string;
+      type: string;
+      balance_after: number | null;
+      description: string | null;
+      created_at: string;
+    }>;
+    total: number;
+  }> => {
+    const supabase = await createServiceClient();
+    const limit = opts?.limit ?? 20;
+    const offset = opts?.offset ?? 0;
+
+    let query = supabase
+      .schema("billing")
+      .from("transactions")
+      .select("id, stripe_session_id, amount, currency, status, type, balance_after, description, created_at", { count: "exact" })
+      .eq("user_id", userId);
+
+    if (opts?.status && ["pending", "completed", "failed"].includes(opts.status)) {
+      query = query.eq("status", opts.status);
+    }
+    if (opts?.type && ["topup", "refund", "coupon"].includes(opts.type)) {
+      query = query.eq("type", opts.type);
+    }
+    if (opts?.from) {
+      query = query.gte("created_at", opts.from);
+    }
+    if (opts?.to) {
+      query = query.lte("created_at", opts.to);
+    }
+
+    const { data, count } = await query
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    return { transactions: data ?? [], total: count ?? 0 };
+  },
 };
