@@ -10,10 +10,21 @@ export const resend = {
   get emails() {
     if (!resendInstance) {
       if (!process.env.RESEND_API_KEY) {
-        throw new Error('RESEND_API_KEY environment variable is not set');
+        throw new Error("RESEND_API_KEY environment variable is not set");
       }
       resendInstance = new Resend(process.env.RESEND_API_KEY);
     }
     return resendInstance.emails;
-  }
+  },
 };
+
+export function getResendClient(): Resend {
+  if (!resendInstance) {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error("RESEND_API_KEY environment variable is not set");
+    }
+    resendInstance = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  return resendInstance;
+}

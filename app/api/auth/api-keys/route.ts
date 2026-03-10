@@ -5,6 +5,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { emailService } from "@/lib/email";
 import { ApiKeys } from "@/lib/supabase/queries/api_keys";
 
 /**
@@ -84,6 +85,30 @@ export async function POST(req: NextRequest) {
         { error: result.error },
         { status: isLimitError ? 400 : 500 }
       );
+    }
+
+    const email = auth.user!.email;
+    if (email) {
+      const emailResult = await emailService.sendTemplate({
+        template: "apiKeyActivity",
+        to: email,
+        data: {
+          username:
+            auth.user!.user_metadata?.username ||
+            auth.user!.user_metadata?.display_name ||
+            email.split("@")[0],
+          keyName: result.record.name,
+          action: "created",
+          happenedAt: result.record.created_at,
+        },
+      });
+
+      if (!emailResult.success) {
+        console.error(
+          "[API Keys POST] Failed to send API key created email:",
+          emailResult.error,
+        );
+      }
     }
 
     // Return the key ONCE (never stored, never shown again)

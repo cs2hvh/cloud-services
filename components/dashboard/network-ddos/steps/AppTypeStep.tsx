@@ -37,7 +37,7 @@ export const AppTypeStep = ({ formData, onUpdate, onNext }: StepProps) => {
   };
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card className="glass-panel overflow-hidden">
       <CardHeader>
         <div className="flex gap-2 ">
           <AppWindow className="w-5 h-5 text-blue-400 " />

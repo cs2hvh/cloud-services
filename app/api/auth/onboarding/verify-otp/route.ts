@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { emailService } from "@/lib/email";
 import { createServiceClient } from "@/lib/supabase/server";
 import { OTPs } from "@/lib/supabase/queries/otps";
 
@@ -53,6 +54,13 @@ export async function POST(request: NextRequest) {
       return Response.json({ message: "User not found." }, { status: 404 });
     }
 
+    if (user.email_confirmed_at) {
+      return Response.json(
+        { message: "Email is already verified." },
+        { status: 200 },
+      );
+    }
+
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
       { email_confirm: true },
@@ -63,6 +71,25 @@ export async function POST(request: NextRequest) {
       return Response.json(
         { message: "Failed to verify user email." },
         { status: 500 },
+      );
+    }
+
+    const emailResult = await emailService.sendTemplate({
+      template: "accountCreated",
+      to: email,
+      data: {
+        username:
+          user.user_metadata?.username ||
+          user.user_metadata?.display_name ||
+          email.split("@")[0],
+        email,
+      },
+    });
+
+    if (!emailResult.success) {
+      console.error(
+        "[Onboarding Verify OTP] Failed to send account created email:",
+        emailResult.error,
       );
     }
 

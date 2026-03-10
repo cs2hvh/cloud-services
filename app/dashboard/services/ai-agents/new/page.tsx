@@ -241,64 +241,81 @@ export default function NewAgentPage() {
 
   const selectedPlatformModel = platformModels.find((m) => m.id === model);
   const selectedKb = knowledgeBases.find((kb) => kb.id === knowledgeBaseId);
+  const selectedModelKey = modelKeys.find((key) => key.id === modelKeyId);
+  const progressPercentage = (currentStep / STEPS.length) * 100;
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">Create AI Agent</h1>
-        <p className="text-slate-400 mt-2">
-          Configure your AI agent with a custom model and knowledge base
-        </p>
-      </div>
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">AI Services</p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Create an AI agent with model, behavior, and knowledge controls.</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">Move through identity, model policy, prompt design, and knowledge attachment with a focused review before launch.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Progress</div>
+              <div className="mt-1.5 text-lg font-semibold text-white">{currentStep} / {STEPS.length}</div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Status</div>
+              <div className="mt-1.5 text-sm font-semibold text-white">{currentStep === STEPS.length ? 'Review' : 'In progress'}</div>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="h-1.5 w-full overflow-hidden bg-white/[0.06]">
+            <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progressPercentage}%` }} />
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+            {STEPS.map((step) => {
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
 
-      {/* Progress Steps */}
-      <div className="flex items-center justify-between">
-        {STEPS.map((step, index) => (
-          <div key={step.id} className="flex items-center">
-            <div className="flex flex-col items-center">
-              <div
-                className={cn(
-                  'w-10 h-10 rounded-full flex items-center justify-center border-2 transition-colors',
-                  currentStep === step.id
-                    ? 'border-blue-500 bg-blue-500/20 text-blue-400'
-                    : currentStep > step.id
-                      ? 'border-green-500 bg-green-500/20 text-green-400'
-                      : 'border-slate-700 bg-slate-800 text-slate-500'
-                )}
-              >
-                {currentStep > step.id ? (
-                  <CheckCircle2 className="h-5 w-5" />
-                ) : (
-                  <span className="text-sm font-medium">{step.id}</span>
-                )}
-              </div>
-              <div className="mt-2 text-center hidden sm:block">
-                <p
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => !creating && setCurrentStep(step.id)}
                   className={cn(
-                    'text-sm font-medium',
-                    currentStep >= step.id ? 'text-white' : 'text-slate-500'
+                    'border px-3 py-3 text-left transition-colors',
+                    isActive
+                      ? 'border-blue-400/30 bg-blue-500/10'
+                      : isCompleted
+                        ? 'border-emerald-500/20 bg-emerald-500/10'
+                        : 'border-white/[0.08] bg-white/[0.03]'
                   )}
                 >
-                  {step.name}
-                </p>
-                <p className="text-xs text-slate-500">{step.description}</p>
-              </div>
-            </div>
-            {index < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  'h-0.5 w-12 mx-2 sm:w-20',
-                  currentStep > step.id ? 'bg-green-500' : 'bg-slate-700'
-                )}
-              />
-            )}
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center border',
+                        isActive
+                          ? 'border-blue-400/30 bg-blue-500/15 text-blue-200'
+                          : isCompleted
+                            ? 'border-emerald-500/20 bg-emerald-500/15 text-emerald-300'
+                            : 'border-white/[0.08] bg-white/[0.04] text-white/55'
+                      )}
+                    >
+                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <span className="text-sm font-semibold">{step.id}</span>}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-white">{step.name}</div>
+                      <div className="truncate text-xs text-white/40">{step.description}</div>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        ))}
+        </div>
       </div>
 
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+        <div className="space-y-6 xl:min-w-0">
       {/* Step Content */}
-      <Card className="bg-slate-900/50 border-slate-800">
+      <Card className="glass-panel overflow-hidden">
         <CardContent className="p-6">
           {/* Step 1: Basic Info */}
           {currentStep === 1 && (
@@ -848,27 +865,32 @@ export default function NewAgentPage() {
       </Card>
 
       {/* Navigation Buttons */}
-      <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={prevStep} disabled={currentStep === 1 || creating}>
-          <ChevronLeft className="h-4 w-4 mr-2" />
+      <div className="flex items-center justify-between gap-3">
+        <Button
+          variant="outline"
+          onClick={prevStep}
+          disabled={currentStep === 1 || creating}
+          className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
+        >
+          <ChevronLeft className="mr-2 h-4 w-4" />
           Previous
         </Button>
 
         {currentStep < STEPS.length ? (
-          <Button onClick={nextStep}>
+          <Button onClick={nextStep} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
             Next
-            <ChevronRight className="h-4 w-4 ml-2" />
+            <ChevronRight className="ml-2 h-4 w-4" />
           </Button>
         ) : (
-          <Button onClick={handleCreate} disabled={creating}>
+          <Button onClick={handleCreate} disabled={creating} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
             {creating ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating...
               </>
             ) : (
               <>
-                <Bot className="h-4 w-4 mr-2" />
+                <Bot className="mr-2 h-4 w-4" />
                 Create Agent
               </>
             )}
@@ -876,5 +898,57 @@ export default function NewAgentPage() {
         )}
       </div>
     </div>
+
+    <div className="xl:min-w-0">
+      <Card className="glass-panel overflow-hidden xl:sticky xl:top-8">
+        <CardContent className="space-y-5 p-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Deployment Summary</p>
+            <div className="mt-4 flex justify-center border border-white/[0.08] bg-white/[0.04] px-4 py-5">
+              <Bot className="h-14 w-14 text-blue-300/70" />
+            </div>
+          </div>
+
+          {name && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-white/60">Agent</span>
+              <span className="text-right text-sm font-medium text-white">{name}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/60">Model</span>
+            <span className="text-right text-sm font-medium text-white">
+              {usePlatformBilling ? selectedPlatformModel?.name || 'Select a model' : selectedModelKey?.name || 'Bring your own key'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/60">Billing</span>
+            <span className="text-right text-sm font-medium text-white">{usePlatformBilling ? 'Platform billing' : 'Own API key'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/60">Knowledge Base</span>
+            <span className="text-right text-sm font-medium text-white">{selectedKb?.name || 'None attached'}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/60">Temperature</span>
+            <span className="text-right text-sm font-medium text-white">{temperature}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-white/60">Max Tokens</span>
+            <span className="text-right text-sm font-medium text-white">{maxTokens.toLocaleString()}</span>
+          </div>
+          {usePlatformBilling && selectedPlatformModel && (
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100/90">
+              {selectedPlatformModel.pricing.inputFormatted} input / {selectedPlatformModel.pricing.outputFormatted} output
+            </div>
+          )}
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/55">
+            Endpoint access and API keys are configured after the agent is created.
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  </div>
+</div>
   );
 }

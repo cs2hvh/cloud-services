@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from "react";
-import { CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Card,
@@ -28,6 +28,7 @@ import {
 } from "./steps";
 // import api from "@/lib/axios/axios";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {  Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
 import axios from "axios";
@@ -135,7 +136,6 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const isSSHorRDP = formData.appType === 'ssh' || formData.appType === 'rdp';
 
   const handleNextStep = () => {
-    debugger
     // Validate user on step 0 (admin only)
     if (currentStep === 0 && role === "admin") {
       const userError = validateUser(formData.selectedUser || "");
@@ -199,7 +199,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   };
 
   const onSubmit = async () => {
-    //debugger
+    //
     if (!formData.project_id) {
       toast.error("Please select a project");
       return;
@@ -215,7 +215,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     try {
       // Log the form data
       //console.log('Spectrum App Configuration:', formData);
-      //debugger
+      //
       const response = await fetch("/api/services/spectrum/apps/create", {
         method: "POST",
         headers: {
@@ -278,14 +278,14 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     ? (isSSHorRDP
         ? [
             { id: 0, name: "User", displayId: 1 },
-            { id: 1, name: "AppType", displayId: 2 },
+            { id: 1, name: "App Type", displayId: 2 },
             { id: 2, name: "Domain", displayId: 3 },
             { id: 4, name: "Origin", displayId: 4 },
             { id: 6, name: "Project", displayId: 5 }
           ]
         : [
             { id: 0, name: "User" },
-            { id: 1, name: "AppType" },
+            { id: 1, name: "App Type" },
             { id: 2, name: "Domain" },
             { id: 3, name: "Edge Port" },
             { id: 4, name: "Origin" },
@@ -294,13 +294,13 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
           ])
     : (isSSHorRDP
         ? [
-            { id: 1, name: "AppType", displayId: 1 },
+            { id: 1, name: "App Type", displayId: 1 },
             { id: 2, name: "Domain", displayId: 2 },
             { id: 4, name: "Origin", displayId: 3 },
             { id: 6, name: "Project", displayId: 4 }
           ]
         : [
-            { id: 1, name: "AppType" },
+            { id: 1, name: "App Type" },
             { id: 2, name: "Domain" },
             { id: 3, name: "Edge Port" },
             { id: 4, name: "Origin" },
@@ -320,62 +320,116 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     : projects;
 
   const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
+  const panelClassName = "glass-panel overflow-hidden";
+  const wizardStartStep = role === "admin" ? 0 : 1;
+  const progressStep = currentStep - wizardStartStep + 1;
+  const progressPercentage = (progressStep / steps.length) * 100;
 
   return (
-    <div className="py-4">
-      {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex justify-between mb-2">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex-1 flex flex-col items-center">
-              {/* Step circle and connector line */}
-              <div className="flex items-center w-full">
-                <div className="flex flex-col items-center relative">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
-                      currentStep > step.id
-                        ? "bg-green-600 text-white"
-                        : currentStep === step.id
-                          ? "bg-blue-500 text-white"
-                          : "bg-white/10 text-white/50"
-                    }`}
-                  >
-                    {currentStep > step.id ? (
-                      <CheckCircle2 size={16} />
-                    ) : (
-                      ('displayId' in step ? step.displayId : step.id)
-                    )}
-                  </div>
-                  {/* Step name positioned directly below the circle */}
-                  <p
-                    className={`mt-2 text-xs text-center whitespace-nowrap ${
-                      currentStep >= step.id ? "text-white" : "text-white/50"
-                    }`}
-                  >
-                    {step.name}
-                  </p>
-                </div>
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className={panelClassName}>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href={role === "admin" ? "/dashboard/admin/network-ddos" : "/dashboard/services/network-ddos"}
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft size={16} className="mr-2" />
+              Back to protection inventory
+            </Link>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              Network Security
+            </p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Configure Layer 4 DDoS protection with clearer operational choices.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+              Move through app type, domain, routing, origin, and project assignment in a more compact enterprise flow.
+            </p>
+          </div>
 
-                {/* Connector line */}
-                {index < steps.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 transition-colors duration-300 ${
-                      currentStep > step.id ? "bg-green-600" : "bg-white/10"
-                    }`}
-                  ></div>
-                )}
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Progress
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {progressStep} / {steps.length}
               </div>
             </div>
-          ))}
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Monthly rate
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {loadingPrice ? "-" : "$" + spectrumPrice.toFixed(2)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
+            <div
+              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
+              style={{ width: progressPercentage + "%" }}
+            />
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
+            {steps.map((step) => {
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+              const stepNumber = "displayId" in step ? step.displayId : step.id;
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    if (step.id < currentStep) {
+                      setCurrentStep(step.id);
+                    }
+                  }}
+                  className={
+                    (isActive
+                      ? "border border-blue-400/30 bg-blue-500/10 "
+                      : isCompleted
+                        ? "border border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] "
+                        : "border border-white/[0.06] bg-transparent ") +
+                    (step.id < currentStep ? "cursor-pointer " : "cursor-default ") +
+                    "px-3 py-3 text-left transition-colors"
+                  }
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div
+                      className={
+                        "flex h-8 w-8 items-center justify-center border bg-white/[0.05] " +
+                        (isActive
+                          ? "border-blue-400/30 text-blue-300"
+                          : "border-white/[0.10] text-white/78")
+                      }
+                    >
+                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
+                    </div>
+                    <span className="text-xs font-semibold text-white/32">
+                      {String(stepNumber).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           {/* Step 0: User Selection (Admin Only) */}
           {currentStep === 0 && role === "admin" && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <User className="h-5 w-5" />
@@ -450,7 +504,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                 <Button
                   onClick={handleNextStep}
                   disabled={!formData.selectedUser}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next
                 </Button>
@@ -513,7 +567,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 
           {/* Step 6: Project Selection */}
           {currentStep === 6 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <FolderTree className="h-5 w-5" />
@@ -572,14 +626,14 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
               <CardContent className="flex justify-between pt-0">
                 <button
                   onClick={handlePrevStep}
-                  className="px-4 py-2 bg-white/10 text-white rounded-md hover:bg-white/20 transition-colors"
+                  className="rounded-md border border-white/[0.14] bg-white/[0.03] px-4 py-2 text-white/82 transition-colors hover:bg-white/[0.07]"
                 >
                   Back
                 </button>
                 <Button
                   onClick={onSubmit}
                   disabled={isLoading || !formData.project_id}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   {isLoading ? 
                  <>Creating<Loader2 className="animate-spin h-4 w-4 mr-2" /></>: "Create"}
@@ -590,10 +644,10 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
         </div>
 
         {/* Summary Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="bg-white/5 border-white/10 sticky top-6">
+        <div className="xl:min-w-0">
+          <Card className={`${panelClassName} xl:sticky xl:top-8`}>
             <CardHeader>
-              <CardTitle className="text-white">Order Summary</CardTitle>
+              <CardTitle className="text-white">Deployment Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Application Type */}

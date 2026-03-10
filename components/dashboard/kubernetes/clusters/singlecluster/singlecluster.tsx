@@ -1,19 +1,23 @@
 "use client";
 import api from "@/lib/axios/axios";
-// import { Json } from "@/lib/supabase/types";
 import {
+  AlertTriangle,
+  ArrowLeft,
+  BarChart3,
   Check,
+  CheckCircle2,
+  Clock3,
   Cpu,
   Download,
+  FolderOpen,
   HardDrive,
   LucideIcon,
   MemoryStick,
-  Trash2,
+  Server,
   Settings,
-  BarChart3,
-  FolderOpen,
-  AlertTriangle,
+  Trash2,
 } from "lucide-react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -602,6 +606,18 @@ function SingleCluster({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeForInsight, insightTimeRange, activeTab]);
 
+  const clusterStatusLabel = clusterFailed
+    ? "Failed"
+    : ready
+      ? "Ready"
+      : "Provisioning";
+  const clusterStatusClassName = clusterFailed
+    ? "border-red-500/20 bg-red-500/10 text-red-300"
+    : ready
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      : "border-amber-500/20 bg-amber-500/10 text-amber-300";
+  const totalNodes = nodesData?.length || 0;
+
   if (loading && !ready) {
     return (
       <div className="flex-1 bg-black min-h-screen flex items-center justify-center">
@@ -611,23 +627,82 @@ function SingleCluster({
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-black py-10 px-4">
+    <div className="min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
       <div className="mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="mb-6"
         >
-          <h2 className="text-2xl font-semibold text-white mb-1">
-            {ready
-              ? "Kubernetes Cluster Management"
-              : "Getting Started with Kubernetes"}
-          </h2>
-          <p className="text-white/60 text-sm">
-            {ready
-              ? "Manage your cluster, monitor performance, and configure settings"
-              : "Setting up your Kubernetes cluster..."}
-          </p>
+          <div className="glass-panel overflow-hidden">
+            <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <Link
+                  href="/dashboard/services/kubernetes"
+                  className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back to clusters
+                </Link>
+                <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+                  Kubernetes Service
+                </p>
+                <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  {ready
+                    ? "Cluster operations and lifecycle controls."
+                    : "Provisioning cluster infrastructure."}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+                  {ready
+                    ? "Review kubeconfig access, node capacity, monitoring, and project assignment from a single operator view."
+                    : "We are validating control plane creation, node connectivity, and readiness checks before the cluster becomes available."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:min-w-[420px]">
+                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Status
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-blue-300" />
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${clusterStatusClassName}`}>
+                      {clusterStatusLabel}
+                    </span>
+                  </div>
+                </div>
+                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Nodes
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-lg font-semibold text-white">
+                    <Server className="h-4 w-4 text-blue-300" />
+                    {totalNodes}
+                  </div>
+                </div>
+                <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Sync
+                  </div>
+                  <div className="mt-2 flex items-center gap-2 text-sm font-medium text-white/80">
+                    <Clock3 className="h-4 w-4 text-blue-300" />
+                    {lastUpdated ? lastUpdated.toLocaleTimeString() : "Pending"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-white/[0.06] px-5 py-3 sm:px-6">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 font-mono text-white/60">
+                  {clusterId}
+                </span>
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
+                  {ready ? "Cluster ready for workloads" : "Provisioning checks in progress"}
+                </span>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {clusterFailed && (
@@ -669,7 +744,7 @@ function SingleCluster({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 md:p-8 space-y-5"
+            className="glass-panel p-6 md:p-8 space-y-5"
           >
             {steps.map((s, idx) => {
               const done = status[s.key];
@@ -689,7 +764,7 @@ function SingleCluster({
                 {!allDone ? (
                   <span className="inline-flex items-center gap-2">
                     <Spinner />
-                    <span>Checking status every 1 minute…</span>
+                    <span>Checking status every minute...</span>
                   </span>
                 ) : (
                   <span className="text-green-400 font-medium">
@@ -701,7 +776,7 @@ function SingleCluster({
                 {lastUpdated ? (
                   <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
                 ) : (
-                  <span>Waiting for first update…</span>
+                  <span>Waiting for first update...</span>
                 )}
               </div>
             </div>
@@ -714,24 +789,24 @@ function SingleCluster({
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 bg-white/10">
+            <TabsList className="grid w-full grid-cols-3 border border-white/[0.08] bg-white/[0.04] p-1">
               <TabsTrigger
                 value="cluster"
-                className="cursor-pointer data-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
               >
                 <FolderOpen className="h-4 w-4 mr-2" />
                 Cluster
               </TabsTrigger>
               <TabsTrigger
                 value="insight"
-                className="cursor-pointerdata-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
               >
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Insight
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
-                className="cursor-pointer data-[state=active]:bg-white data-[state=active]:text-black"
+                className="cursor-pointer data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
               >
                 <Settings className="h-4 w-4 mr-2" />
                 Settings
@@ -743,7 +818,7 @@ function SingleCluster({
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+                className="glass-panel p-6 space-y-4"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold text-white">
@@ -756,7 +831,7 @@ function SingleCluster({
                         clusterData?.clusterInfo?.kubeconfig || ""
                       );
                     }}
-                    className="cursor-pointer inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-black font-medium hover:bg-gray-200 transition-colors"
+                    className="inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
                   >
                     <Download className="h-4 w-4" />
                     Download kubeconfig
@@ -772,7 +847,7 @@ function SingleCluster({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+                className="glass-panel p-6 space-y-4"
               >
                 <h3 className="text-base font-semibold text-white">
                   Cluster Resources
@@ -803,7 +878,7 @@ function SingleCluster({
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-4"
+                className="glass-panel p-6 space-y-4"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-base font-semibold text-white">Nodes</h3>
@@ -844,7 +919,7 @@ function SingleCluster({
                                 handleDeleteNodeClick(n.droplet_id, index)
                               }
                               disabled={loading}
-                              className="cursor-pointer inline-flex items-center gap-1 rounded-lg text-red-400 border border-2 border-red-500 px-2.5 py-1.5 text-xs hover:bg-red-500/20 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Trash2 className="h-3.5 w-3.5" /> Delete
                             </button>
@@ -862,7 +937,7 @@ function SingleCluster({
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-6"
+                className="glass-panel p-6 space-y-6"
               >
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
@@ -947,7 +1022,7 @@ function SingleCluster({
               <motion.section
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6 space-y-6"
+                className="glass-panel p-6 space-y-6"
               >
                 <div>
                   <h3 className="text-base font-semibold text-white mb-1">
@@ -982,7 +1057,7 @@ function SingleCluster({
                   <button
                     onClick={updateClusterProject}
                     disabled={loading || !selectedProjectId}
-                    className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg bg-slate-700 text-white font-medium px-6 py-2 text-sm font-medium text-white hover:bg-slate-1000 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-6 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? <Spinner /> : <Check className="h-4 w-4" />}
                     Update Project
