@@ -16,6 +16,20 @@ export function getDigitalOceanHeaders(): Record<string, string | undefined> {
   };
 }
 
+const LOGICAL_DATABASE_ENGINES = new Set(["pg", "mysql", "mongodb"]);
+
+export function supportsLogicalDatabases(engine: string | null | undefined): boolean {
+  if (!engine) {
+    return false;
+  }
+  return LOGICAL_DATABASE_ENGINES.has(engine.toLowerCase());
+}
+
+export function getLogicalDatabaseEngineError(engine: string | null | undefined): string {
+  const normalizedEngine = engine?.toLowerCase() || "unknown";
+  return `Logical database operations are not supported for engine ${normalizedEngine}. Supported engines: pg, mysql, mongodb.`;
+}
+
 export function isEncrypted(value: unknown): value is EncryptedData {
   if (!value || typeof value !== "object") {
     return false;

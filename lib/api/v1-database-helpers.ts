@@ -92,6 +92,10 @@ export function v1DatabaseServiceError(
       return v1Error("SERVICE_UNAVAILABLE", 503, message);
     case "NOT_FOUND":
       return v1Error("NOT_FOUND", 404, message);
+    case "INVALID_PARAMETER":
+      return v1Error("INVALID_PARAMETER", 400, message);
+    case "ALREADY_EXISTS":
+      return v1Error("ALREADY_EXISTS", 409, message);
     case "DATABASE_HAS_ACTIVE_LINKS":
       return v1Error("DATABASE_HAS_ACTIVE_LINKS", 409, message, {
         linked_apps_count: failure.linkedAppsCount ?? 0,
@@ -115,7 +119,22 @@ export function v1DatabaseServiceError(
   if (lowered.includes("not authorized") || lowered.includes("unauthorized") || lowered.includes("permission")) {
     return v1Error("FORBIDDEN", 403, message);
   }
+  if (lowered.includes("not supported") || lowered.includes("unsupported") || lowered.includes("invalid request")) {
+    return v1Error("INVALID_PARAMETER", 400, message);
+  }
+  if (
+    lowered.includes("cannot delete defaultdb") ||
+    lowered.includes("cannot delete default database")
+  ) {
+    return v1Error("INVALID_PARAMETER", 400, message);
+  }
   if (lowered.includes("already exists") || lowered.includes("duplicate") || lowered.includes("conflict")) {
+    return v1Error("ALREADY_EXISTS", 409, message);
+  }
+  if (
+    lowered.includes("name is not available") ||
+    (lowered.includes("database name") && lowered.includes("not available"))
+  ) {
     return v1Error("ALREADY_EXISTS", 409, message);
   }
 

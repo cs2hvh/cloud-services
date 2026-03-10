@@ -83,6 +83,14 @@ export const CreateClusterDatabaseRequestSchema = z.object({
   name: z.string().min(1).max(63).openapi({ example: 'appdb' }),
 }).openapi('CreateClusterDatabaseRequest');
 
+export const UpdateDatabaseStorageRequestSchema = z.object({
+  size: z.string().openapi({ example: 'db-s-2vcpu-4gb' }),
+}).openapi('UpdateDatabaseStorageRequest');
+
+export const UpsizeDatabaseStorageRequestSchema = z.object({
+  storage_size_mib: z.number().int().min(10240).openapi({ example: 20480 }),
+}).openapi('UpsizeDatabaseStorageRequest');
+
 export const ClusterDatabaseListResponseSchema = z.object({
   data: z.array(DatabaseInstanceSchema),
   meta: z.object({
@@ -126,3 +134,19 @@ export const DatabaseSubResourceDeleteResponseSchema = z.object({
     deleted: z.boolean().openapi({ example: true }),
   }),
 }).openapi('DatabaseSubResourceDeleteResponse');
+
+export const DatabaseStorageUpdateResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    size: z.string().openapi({ example: 'db-s-2vcpu-4gb' }),
+    updated: z.boolean().openapi({ example: true }),
+  }),
+}).openapi('DatabaseStorageUpdateResponse');
+
+export const DatabaseStorageUpsizeResponseSchema = z.object({
+  data: z.object({
+    cluster_id: z.string().uuid().openapi({ example: '4a8e82f0-5f60-44ec-a2ed-5f41e2d0229f' }),
+    storage_size_mib: z.number().int().openapi({ example: 20480 }),
+    updated: z.boolean().openapi({ example: true }),
+  }),
+}).openapi('DatabaseStorageUpsizeResponse');

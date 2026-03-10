@@ -22,6 +22,7 @@ import {
  * Prevents: cost overruns, invalid configurations, malicious payloads
  */
 export const createDatabaseSchema = z.object({
+  // This is the provider cluster name, not only a local display label.
   name: z
     .string()
     .min(NAMING_RULES.MIN_CLUSTER_NAME_LENGTH, "Cluster name must be at least 3 characters")

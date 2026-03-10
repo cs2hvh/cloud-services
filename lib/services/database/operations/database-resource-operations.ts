@@ -7,7 +7,12 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import type { DatabaseInstance } from "@/lib/supabase/types";
 
-import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
+import {
+  getDigitalOceanHeaders,
+  getLogicalDatabaseEngineError,
+  parseAxiosError,
+  supportsLogicalDatabases,
+} from "../helpers";
 import type {
   CreateDatabaseRequest,
   DeleteDatabaseRequest,
@@ -32,6 +37,13 @@ export const databaseResourceOperations = {
         return {
           success: false,
           error: "You are not authorized to create databases in this cluster",
+        };
+      }
+
+      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+        return {
+          success: false,
+          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
         };
       }
 
@@ -129,6 +141,18 @@ export const databaseResourceOperations = {
     request: DeleteDatabaseRequest
   ): Promise<{ success: boolean; error?: string }> {
     try {
+      const clusterResult = await Database_Clusters.read(request.clusterId);
+      if (!clusterResult.success || !clusterResult.data) {
+        return { success: false, error: "Database cluster not found" };
+      }
+
+      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+        return {
+          success: false,
+          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+        };
+      }
+
       const response = await axios.delete(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.dbName}`,
         { headers: getDigitalOceanHeaders() }
@@ -192,6 +216,18 @@ export const databaseResourceOperations = {
 
   async listDatabases(request: ListDatabasesRequest): Promise<ListDatabasesResult> {
     try {
+      const clusterResult = await Database_Clusters.read(request.clusterId);
+      if (!clusterResult.success || !clusterResult.data) {
+        return { success: false, error: "Database cluster not found" };
+      }
+
+      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+        return {
+          success: false,
+          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+        };
+      }
+
       const response = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs`,
         { headers: getDigitalOceanHeaders() }
@@ -241,6 +277,18 @@ export const databaseResourceOperations = {
     request: RetrieveDatabaseRequest
   ): Promise<{ success: boolean; data?: unknown; error?: string }> {
     try {
+      const clusterResult = await Database_Clusters.read(request.clusterId);
+      if (!clusterResult.success || !clusterResult.data) {
+        return { success: false, error: "Database cluster not found" };
+      }
+
+      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+        return {
+          success: false,
+          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+        };
+      }
+
       const response = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.name}`,
         { headers: getDigitalOceanHeaders() }
@@ -250,7 +298,30 @@ export const databaseResourceOperations = {
         return { success: false, error: "Failed to retrieve database" };
       }
 
-      return { success: true, data: response.data.db };
+      const retrievedDatabase = response.data?.db as DatabaseInstance | undefined;
+      if (retrievedDatabase?.name === request.name) {
+        return { success: true, data: retrievedDatabase };
+      }
+
+      // Provider responses can be inconsistent for some engines; verify by listing
+      // databases and matching by name before returning a false positive.
+      const listResponse = await axios.get(
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs`,
+        { headers: getDigitalOceanHeaders() }
+      );
+      if (listResponse.status !== 200) {
+        return { success: false, error: "Failed to retrieve database" };
+      }
+
+      const databases = Array.isArray(listResponse.data?.dbs)
+        ? (listResponse.data.dbs as DatabaseInstance[])
+        : [];
+      const matched = databases.find((db) => db.name === request.name);
+      if (!matched) {
+        return { success: false, error: `database ${request.name} was not found` };
+      }
+
+      return { success: true, data: matched };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
       return {

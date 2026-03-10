@@ -42,7 +42,7 @@ export const DELETE = withV1Auth("databases:users:delete", async (req, auth, con
 
   return v1Ok({
     data: {
-      cluster_id: id,
+      cluster_id: clusterId,
       username: usernameParam.value,
       deleted: true,
     },

@@ -17,26 +17,67 @@ export const scalingResourceOperations = {
   async updateStorage(
     clusterId: string,
     requestedSize: string = "db-s-2vcpu-4gb"
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     try {
-      const response = await axios.put(
-        `https://api.digitalocean.com/v2/databases/${clusterId}/resize`,
-        {
-          size: "db-s-2vcpu-4gb",
-          num_nodes: 1,
-          storage_size_mib: 75680,
-        },
-        { headers: getDigitalOceanHeaders() }
-      );
+      const clusterData = await Database_Clusters.read(clusterId);
+      if (!clusterData.success || !clusterData.data) {
+        return { success: false, error: "Database cluster not found", errorCode: "NOT_FOUND" };
+      }
+
+      const resizePayload: { size: string; num_nodes: number; storage_size_mib?: number } = {
+        size: requestedSize,
+        num_nodes: clusterData.data.num_nodes || 1,
+      };
+
+      if (
+        typeof clusterData.data.storage_size_mib === "number" &&
+        clusterData.data.storage_size_mib > 0
+      ) {
+        resizePayload.storage_size_mib = clusterData.data.storage_size_mib;
+      }
+
+      let response;
+      try {
+        response = await axios.put(
+          `https://api.digitalocean.com/v2/databases/${clusterId}/resize`,
+          resizePayload,
+          { headers: getDigitalOceanHeaders() }
+        );
+      } catch (firstErr) {
+        const firstAxiosError = parseAxiosError(firstErr);
+        const firstStatus = firstAxiosError?.response?.status;
+
+        // Some target tiers require provider-managed storage defaults.
+        // Retry once without explicit storage_size_mib when provider rejects the first payload.
+        if (
+          (firstStatus === 400 || firstStatus === 422) &&
+          typeof resizePayload.storage_size_mib === "number"
+        ) {
+          const fallbackPayload = {
+            size: requestedSize,
+            num_nodes: clusterData.data.num_nodes || 1,
+          };
+          response = await axios.put(
+            `https://api.digitalocean.com/v2/databases/${clusterId}/resize`,
+            fallbackPayload,
+            { headers: getDigitalOceanHeaders() }
+          );
+        } else {
+          throw firstErr;
+        }
+      }
 
       if (response.status !== 202 && response.status !== 204) {
-        return { success: false, error: "Failed to resize database cluster" };
+        return {
+          success: false,
+          error: "Failed to resize database cluster",
+          errorCode: "DIGITALOCEAN_API_ERROR",
+        };
       }
 
       await Database_Clusters.update_storage(clusterId, requestedSize);
 
-      const clusterData = await Database_Clusters.read(clusterId);
-      if (clusterData.success && clusterData.data.project_id) {
+      if (clusterData.data.project_id) {
         await Projects.add_log({
           project_id: clusterData.data.project_id,
           event: "Settings",
@@ -44,37 +85,45 @@ export const scalingResourceOperations = {
         });
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "updated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: clusterId,
-              metadata: { updateType: "storage", newSize: requestedSize },
-            })
-          );
-        } catch (notifErr) {
-          console.error("[updateStorage] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: clusterData.data.owner_id,
+            type: "info",
+            action: "updated",
+            serviceType: "database",
+            serviceName: clusterData.data.name,
+            serviceId: clusterId,
+            metadata: { updateType: "storage", newSize: requestedSize },
+          })
+        );
+      } catch (notifErr) {
+        console.error("[updateStorage] Failed to create notification:", notifErr);
       }
 
       return { success: true };
     } catch (err: unknown) {
       if (err instanceof Error && "response" in err) {
         const axiosError = parseAxiosError(err);
+        const status = axiosError?.response?.status;
+        if (status === 404) {
+          return {
+            success: false,
+            error: axiosError?.response?.data?.message || err.message,
+            errorCode: "NOT_FOUND",
+          };
+        }
         return {
           success: false,
           error: axiosError?.response?.data?.message || err.message,
+          errorCode: "DIGITALOCEAN_API_ERROR",
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        errorCode: "UNKNOWN_ERROR",
       };
     }
   },
@@ -208,11 +257,11 @@ export const scalingResourceOperations = {
   async upsizeStorage(
     request: UpsizeStorageRequest,
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
     try {
       const clusterData = await Database_Clusters.read(request.clusterId);
       if (!clusterData.success || !clusterData.data) {
-        return { success: false, error: "Database cluster not found" };
+        return { success: false, error: "Database cluster not found", errorCode: "NOT_FOUND" };
       }
 
       const currentSize = clusterData.data.size;
@@ -223,6 +272,7 @@ export const scalingResourceOperations = {
         return {
           success: false,
           error: "New storage size must be greater than current storage size",
+          errorCode: "INVALID_PARAMETER",
         };
       }
 
@@ -256,6 +306,7 @@ export const scalingResourceOperations = {
         return {
           success: false,
           error: `Storage size cannot exceed ${limits.maxGiB} GiB for ${engine} with ${ram} RAM`,
+          errorCode: "INVALID_PARAMETER",
         };
       }
 
@@ -263,14 +314,18 @@ export const scalingResourceOperations = {
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/resize`,
         {
           size: currentSize,
-          num_nodes: 1,
+          num_nodes: clusterData.data.num_nodes || 1,
           storage_size_mib: request.storageSizeMib,
         },
         { headers: getDigitalOceanHeaders() }
       );
 
       if (response.status !== 202 && response.status !== 204) {
-        return { success: false, error: "Failed to upsize database storage" };
+        return {
+          success: false,
+          error: "Failed to upsize database storage",
+          errorCode: "DIGITALOCEAN_API_ERROR",
+        };
       }
 
       await Database_Clusters.update_storage_size(request.clusterId, request.storageSizeMib);
@@ -331,11 +386,22 @@ export const scalingResourceOperations = {
       return { success: true };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
+      const status = axiosError?.response?.status;
+      if (status === 404) {
+        return {
+          success: false,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
+          errorCode: "NOT_FOUND",
+        };
+      }
       return {
         success: false,
         error:
           axiosError?.response?.data?.message ||
           (err instanceof Error ? err.message : "Unknown error occurred"),
+        errorCode: axiosError ? "DIGITALOCEAN_API_ERROR" : "UNKNOWN_ERROR",
       };
     }
   },

@@ -1,6 +1,7 @@
 import type { Database_Connection, DatabaseInstance, DatabaseUser, Rule } from "@/lib/supabase/types";
 
 export interface CreateDatabaseClusterRequest {
+  // Provider cluster name (forwarded to DigitalOcean API).
   name: string;
   engine: string;
   version: string;

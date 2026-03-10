@@ -16,7 +16,7 @@ type Database = {
   version?: string | null;
   region?: string;
   cluster_id?: UUID;
-  status: "pending" | "online" | "creating" | "migrating" | "resizing";
+  status: "pending" | "online" | "creating" | "migrating" | "resizing" | "deleted";
   owner_id: string;
   created_at?: string;
   project_id: string;
