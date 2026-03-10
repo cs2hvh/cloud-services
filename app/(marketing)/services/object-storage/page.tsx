@@ -156,7 +156,7 @@ const GpuHome = () => {
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
          backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/object-space.svg", alt: "Object Storage infrastructure" }}
+        illustration={{ src: "/images/Features/obejctstorage.png", alt: "Object Storage infrastructure" }}
       />
       <ObjectStorageReleaseSection />
       {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
