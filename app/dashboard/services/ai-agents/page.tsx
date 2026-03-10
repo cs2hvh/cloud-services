@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -167,219 +167,212 @@ export default function AIAgentsPage() {
     };
     return modelNames[model] || model;
   };
+  const activeAgents = agents.filter((agent) => agent.status === 'active').length;
+  const totalMessages = agents.reduce((sum, agent) => sum + (agent.usage_count || 0), 0);
+  const linkedKnowledgeBases = agents.reduce(
+    (sum, agent) => sum + (agent.knowledge_base_ids?.length || 0),
+    0
+  );
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">AI Agents</h1>
-          <p className="text-slate-400 mt-2">
-            Create and manage AI agents with custom knowledge bases
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={loadAgents} variant="outline" disabled={loading}>
-            <RotateCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard/services/ai-agents/new">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Agent
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-slate-900/30 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Total Agents</CardTitle>
-            <Bot className="h-4 w-4 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">{agents.length}</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900/30 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Active Agents</CardTitle>
-            <Play className="h-4 w-4 text-green-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {agents.filter((a) => a.status === 'active').length}
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-slate-900/30 border-slate-800">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Total Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-slate-400" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {agents.reduce((sum, a) => sum + (a.usage_count || 0), 0)}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Agents List */}
-      <div className="space-y-4">
-        {loading ? (
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardContent className="flex items-center justify-center py-12">
-              <div className="text-slate-400">Loading agents...</div>
-            </CardContent>
-          </Card>
-        ) : agents.length > 0 ? (
-          agents.map((agent) => (
-            <Card
-              key={agent.id}
-              className="bg-slate-900/30 border-slate-800 hover:border-slate-700 transition-colors"
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">AI Services</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI agents for conversational workflows and production automations.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">Manage deployed agents, review endpoint posture, and control operational status from a cleaner enterprise console.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={loadAgents}
+              variant="outline"
+              disabled={loading}
+              className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
             >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 rounded-lg bg-blue-500/10 text-blue-400">
-                      <Bot className="h-6 w-6" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
-                        <Badge
-                          variant={agent.status === 'active' ? 'default' : 'secondary'}
-                          className={
-                            agent.status === 'active'
-                              ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                              : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                          }
-                        >
-                          {agent.status === 'active' ? 'Active' : 'Paused'}
-                        </Badge>
-                      </div>
-                      {agent.description && (
-                        <p className="text-sm text-slate-400">{agent.description}</p>
-                      )}
-                      <div className="flex items-center gap-4 mt-2">
-                        <Badge variant="outline" className="text-xs">
-                          {getModelDisplayName(agent.model_id)}
-                        </Badge>
-                        {agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0 && (
-                          <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-400 border-purple-500/30">
-                            {agent.knowledge_base_ids.length} KB(s)
-                          </Badge>
-                        )}
-                        <span className="text-xs text-slate-500">
-                          Created {new Date(agent.created_at).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+              <RotateCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button asChild className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+              <Link href="/dashboard/services/ai-agents/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Agent
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => copyEndpoint(agent.endpoint_id)}
-                    >
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Endpoint
-                    </Button>
-                    <Button variant="outline" size="sm" asChild>
-                      <Link href={`/dashboard/services/ai-agents/${agent.id}/playground`}>
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Test
-                      </Link>
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/services/ai-agents/${agent.id}`}>
-                            <Settings className="h-4 w-4 mr-2" />
-                            Settings
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/services/ai-agents/${agent.id}/playground`}>
-                            <ExternalLink className="h-4 w-4 mr-2" />
-                            Open Playground
-                          </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => toggleAgentStatus(agent)}>
-                          {agent.status === 'active' ? (
-                            <>
-                              <Pause className="h-4 w-4 mr-2" />
-                              Disable
-                            </>
-                          ) : (
-                            <>
-                              <Play className="h-4 w-4 mr-2" />
-                              Enable
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-red-400 focus:text-red-400"
-                          onClick={() => setDeleteAgent(agent)}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Card className="glass-panel overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agents</CardTitle>
+              <div className="mt-3 text-2xl font-semibold text-white">{agents.length}</div>
+              <p className="mt-1 text-sm text-white/45">Provisioned conversational agents</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
+              <Bot className="h-4 w-4" />
+            </div>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Active</CardTitle>
+              <div className="mt-3 text-2xl font-semibold text-white">{activeAgents}</div>
+              <p className="mt-1 text-sm text-white/45">Agents currently serving traffic</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-emerald-300">
+              <Play className="h-4 w-4" />
+            </div>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</CardTitle>
+              <div className="mt-3 text-2xl font-semibold text-white">{totalMessages}</div>
+              <p className="mt-1 text-sm text-white/45">Tracked requests across all agents</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-white/70">
+              <MessageSquare className="h-4 w-4" />
+            </div>
+          </CardHeader>
+        </Card>
+        <Card className="glass-panel overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div>
+              <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Knowledge Links</CardTitle>
+              <div className="mt-3 text-2xl font-semibold text-white">{linkedKnowledgeBases}</div>
+              <p className="mt-1 text-sm text-white/45">Knowledge-base attachments in use</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-purple-300">
+              <Settings className="h-4 w-4" />
+            </div>
+          </CardHeader>
+        </Card>
+      </div>
+
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-2 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+          <h2 className="text-lg font-semibold text-white">Agent Inventory</h2>
+          <p className="text-sm text-white/45">Review deployment posture, models, and endpoint access for each agent.</p>
+        </div>
+        <div className="p-5 sm:p-6">
+          {loading ? (
+            <div className="flex items-center justify-center border border-white/[0.08] bg-white/[0.03] py-16 text-sm text-white/45">Loading agents...</div>
+          ) : agents.length > 0 ? (
+            <div className="space-y-4">
+              {agents.map((agent) => (
+                <div key={agent.id} className="border border-white/[0.08] bg-white/[0.03] p-5 transition-colors hover:border-white/[0.14] hover:bg-white/[0.04]">
+                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-300">
+                        <Bot className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">{agent.name}</h3>
+                          <Badge className={agent.status === 'active' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.05] text-white/60'}>
+                            {agent.status === 'active' ? 'Active' : 'Paused'}
+                          </Badge>
+                        </div>
+                        {agent.description && (
+                          <p className="max-w-3xl text-sm leading-6 text-white/50">{agent.description}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+                          <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">{getModelDisplayName(agent.model_id)}</span>
+                          <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">{agent.usage_count || 0} messages</span>
+                          <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">{agent.knowledge_base_ids?.length || 0} knowledge bases</span>
+                          <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">Created {new Date(agent.created_at).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                      <Button variant="outline" size="sm" onClick={() => copyEndpoint(agent.endpoint_id)} className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy Endpoint
+                      </Button>
+                      <Button variant="outline" size="sm" asChild className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+                        <Link href={`/dashboard/services/ai-agents/${agent.id}/playground`}>
+                          <MessageSquare className="mr-2 h-4 w-4" />
+                          Playground
+                        </Link>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-white/60 hover:bg-white/[0.08] hover:text-white">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/dashboard/services/ai-agents/${agent.id}`}>
+                              <Settings className="mr-2 h-4 w-4" />
+                              Settings
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/dashboard/services/ai-agents/${agent.id}/playground`}>
+                              <ExternalLink className="mr-2 h-4 w-4" />
+                              Open Playground
+                            </Link>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => toggleAgentStatus(agent)}>
+                            {agent.status === 'active' ? (
+                              <>
+                                <Pause className="mr-2 h-4 w-4" />
+                                Disable
+                              </>
+                            ) : (
+                              <>
+                                <Play className="mr-2 h-4 w-4" />
+                                Enable
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteAgent(agent)}>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        ) : (
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-              <Bot className="h-12 w-12 text-slate-600 mb-4" />
-              <h3 className="text-lg font-semibold text-white mb-2">No agents yet</h3>
-              <p className="text-slate-400 mb-4 max-w-md">
-                Create your first AI agent to start building conversational experiences with custom
-                knowledge bases.
-              </p>
-              <Button asChild>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] bg-white/[0.02] px-6 py-16 text-center">
+              <Bot className="h-12 w-12 text-white/22" />
+              <h3 className="mt-5 text-lg font-semibold text-white">No agents yet</h3>
+              <p className="mt-2 max-w-md text-sm leading-6 text-white/45">Create your first AI agent to launch conversational flows with model selection, knowledge grounding, and endpoint controls.</p>
+              <Button asChild className="mt-6 border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                 <Link href="/dashboard/services/ai-agents/new">
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="mr-2 h-4 w-4" />
                   Create Your First Agent
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deleteAgent} onOpenChange={() => setDeleteAgent(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Agent</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete &quot;{deleteAgent?.name}&quot;? This action cannot be
-              undone and will delete all conversations and usage data associated with this agent.
+              Are you sure you want to delete &quot;{deleteAgent?.name}&quot;? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-red-600 hover:bg-red-700"
-            >
+            <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
               {deleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>

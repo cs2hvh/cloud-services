@@ -309,19 +309,32 @@ export default function AIAgentsSettingsPage() {
     return PROVIDERS.find((p) => p.id === providerId)?.name || providerId;
   };
 
+  const validModelKeys = keys.filter((key) => key.is_valid).length;
+  const activeAgentKeys = agentApiKeys.filter((key) => key.is_active).length;
+  const totalAgentRequests = agentApiKeys.reduce((sum, key) => sum + key.request_count, 0);
+
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href="/dashboard/services/ai-agents">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-white">AI Agents Settings</h1>
-          <p className="text-slate-400">Manage your API keys and configuration</p>
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">AI Services</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">AI agent access, provider keys, and API controls.</h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">Manage model provider credentials, issue endpoint keys, and share implementation guidance from a more operational settings surface.</p>
+          </div>
+          <Button variant="outline" asChild className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+            <Link href="/dashboard/services/ai-agents">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to agents
+            </Link>
+          </Button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300"><Key className="h-4 w-4" /></div></div></CardContent></Card>
+        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-emerald-300"><CheckCircle className="h-4 w-4" /></div></div></CardContent></Card>
+        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-purple-300"><ShieldCheck className="h-4 w-4" /></div></div></CardContent></Card>
       </div>
 
       {/* New Key Created Dialog */}
@@ -371,9 +384,9 @@ export default function AIAgentsSettingsPage() {
       </Dialog>
 
       <Tabs defaultValue="model-keys" className="space-y-6">
-        <TabsList className="bg-slate-800 border-slate-700">
-          <TabsTrigger value="model-keys">Model API Keys</TabsTrigger>
-          <TabsTrigger value="agent-api-keys">Agent API Keys</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
+          <TabsTrigger value="model-keys" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Model API Keys</TabsTrigger>
+          <TabsTrigger value="agent-api-keys" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Agent API Keys</TabsTrigger>
         </TabsList>
 
         {/* Model API Keys Tab */}
@@ -629,7 +642,7 @@ export default function AIAgentsSettingsPage() {
               {/* Info Box */}
               <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
                 <p className="text-sm text-blue-400">
-                  💡 Agent API Keys are used in the <code className="bg-slate-800 px-1 rounded">x-api-key</code> header 
+                  Note: Agent API Keys are used in the <code className="bg-slate-800 px-1 rounded">x-api-key</code> header 
                   when calling your agent&apos;s public endpoint. Enable &quot;Require API Key&quot; in your agent&apos;s 
                   Access Control settings to require authentication.
                 </p>
@@ -712,11 +725,11 @@ export default function AIAgentsSettingsPage() {
                           </div>
                           <div className="flex items-center gap-3 text-sm text-slate-500">
                             <span className="font-mono">{key.key_prefix}...</span>
-                            <span>•</span>
+                            <span>-</span>
                             <span>{key.request_count.toLocaleString()} requests</span>
                             {key.last_used_at && (
                               <>
-                                <span>•</span>
+                                <span>-</span>
                                 <span>Last used {new Date(key.last_used_at).toLocaleDateString()}</span>
                               </>
                             )}
@@ -934,10 +947,10 @@ data: {"type":"done","usage":{...}}`}
               <div>
                 <h4 className="text-white font-medium mb-3">Code Examples</h4>
                 <Tabs defaultValue="curl" className="w-full">
-                  <TabsList className="bg-slate-800">
-                    <TabsTrigger value="curl">cURL</TabsTrigger>
-                    <TabsTrigger value="javascript">JavaScript</TabsTrigger>
-                    <TabsTrigger value="python">Python</TabsTrigger>
+                  <TabsList className="border border-white/[0.08] bg-white/[0.04] p-1">
+                    <TabsTrigger value="curl" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">cURL</TabsTrigger>
+                    <TabsTrigger value="javascript" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">JavaScript</TabsTrigger>
+                    <TabsTrigger value="python" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Python</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="curl" className="mt-3">
