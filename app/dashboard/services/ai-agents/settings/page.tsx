@@ -339,7 +339,7 @@ export default function AIAgentsSettingsPage() {
 
       {/* New Key Created Dialog */}
       <Dialog open={showNewKeyDialog} onOpenChange={setShowNewKeyDialog}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="glass-panel overflow-hidden border border-white/[0.08] bg-[#050816] text-white sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5 text-green-500" />
@@ -350,7 +350,7 @@ export default function AIAgentsSettingsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+            <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/10">
               <p className="text-sm text-yellow-400 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 This key will only be shown once. Store it securely.
@@ -360,7 +360,7 @@ export default function AIAgentsSettingsPage() {
               <Input
                 readOnly
                 value={newlyCreatedKey || ''}
-                className="font-mono text-sm bg-slate-800 border-slate-700"
+                className="font-mono text-sm bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35"
               />
               <Button
                 variant="outline"
@@ -371,7 +371,7 @@ export default function AIAgentsSettingsPage() {
               </Button>
             </div>
             <Button
-              className="w-full"
+              className="w-full border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
               onClick={() => {
                 setShowNewKeyDialog(false);
                 setNewlyCreatedKey(null);
@@ -391,7 +391,7 @@ export default function AIAgentsSettingsPage() {
 
         {/* Model API Keys Tab */}
         <TabsContent value="model-keys" className="space-y-6">
-          <Card className="bg-slate-900/30 border-slate-800">
+          <Card className="glass-panel overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -401,7 +401,7 @@ export default function AIAgentsSettingsPage() {
                   </CardDescription>
                 </div>
                 {!showAddForm && (
-                  <Button onClick={() => setShowAddForm(true)}>
+                  <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Key
                   </Button>
@@ -411,13 +411,13 @@ export default function AIAgentsSettingsPage() {
             <CardContent className="space-y-4">
               {/* Add Key Form */}
               {showAddForm && (
-                <Card className="bg-slate-800/50 border-slate-700">
+                <Card className="border border-white/[0.08] bg-white/[0.03]">
                   <CardContent className="p-4 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Provider</Label>
                         <Select value={newProvider} onValueChange={setNewProvider}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -437,7 +437,7 @@ export default function AIAgentsSettingsPage() {
                           placeholder="e.g., Production Key"
                           value={newKeyName}
                           onChange={(e) => setNewKeyName(e.target.value)}
-                          className="bg-slate-800 border-slate-700"
+                          className="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35"
                         />
                       </div>
                     </div>
@@ -451,7 +451,7 @@ export default function AIAgentsSettingsPage() {
                           placeholder="sk-..."
                           value={newApiKey}
                           onChange={(e) => setNewApiKey(e.target.value)}
-                          className="bg-slate-800 border-slate-700 pr-10"
+                          className="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35 pr-10"
                         />
                         <Button
                           type="button"
@@ -480,7 +480,7 @@ export default function AIAgentsSettingsPage() {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleAddKey} disabled={saving}>
+                      <Button onClick={handleAddKey} disabled={saving} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                         {saving ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -501,18 +501,18 @@ export default function AIAgentsSettingsPage() {
               {/* Keys List */}
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-white/55" />
                 </div>
               ) : keys.length > 0 ? (
                 <div className="space-y-2">
                   {keys.map((key) => (
                     <div
                       key={key.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                      className="flex items-center justify-between p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-slate-700">
-                          <Key className="h-4 w-4 text-slate-300" />
+                        <div className="p-2 rounded-lg bg-white/[0.06] border border-white/[0.08]">
+                          <Key className="h-4 w-4 text-white/75" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -521,7 +521,7 @@ export default function AIAgentsSettingsPage() {
                               {getProviderName(key.provider)}
                             </Badge>
                           </div>
-                          <p className="text-sm text-slate-500 font-mono">{key.api_key_preview}</p>
+                          <p className="text-sm text-white/40 font-mono">{key.api_key_preview}</p>
                         </div>
                       </div>
 
@@ -562,7 +562,7 @@ export default function AIAgentsSettingsPage() {
                               <AlertDialogAction
                                 onClick={handleDeleteKey}
                                 disabled={deleting}
-                                className="bg-red-600 hover:bg-red-700"
+                                className="bg-red-600 hover:bg-red-700 text-white"
                               >
                                 {deleting ? 'Deleting...' : 'Delete'}
                               </AlertDialogAction>
@@ -575,13 +575,13 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Key className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400 mb-2">No API keys configured</p>
-                  <p className="text-sm text-slate-500 mb-4">
+                  <Key className="h-12 w-12 text-white/22 mx-auto mb-4" />
+                  <p className="text-white/55 mb-2">No API keys configured</p>
+                  <p className="text-sm text-white/40 mb-4">
                     Add an API key to start using AI models
                   </p>
                   {!showAddForm && (
-                    <Button onClick={() => setShowAddForm(true)}>
+                    <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                       <Plus className="h-4 w-4 mr-2" />
                       Add Your First Key
                     </Button>
@@ -592,7 +592,7 @@ export default function AIAgentsSettingsPage() {
           </Card>
 
           {/* Provider Info */}
-          <Card className="bg-slate-900/30 border-slate-800">
+          <Card className="glass-panel overflow-hidden">
             <CardHeader>
               <CardTitle>Supported Providers</CardTitle>
               <CardDescription>
@@ -604,10 +604,10 @@ export default function AIAgentsSettingsPage() {
                 {PROVIDERS.map((provider) => (
                   <div
                     key={provider.id}
-                    className="p-4 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                    className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
                   >
                     <h3 className="font-medium text-white">{provider.name}</h3>
-                    <p className="text-sm text-slate-400 mt-1">{provider.description}</p>
+                    <p className="text-sm text-white/55 mt-1">{provider.description}</p>
                   </div>
                 ))}
               </div>
@@ -617,7 +617,7 @@ export default function AIAgentsSettingsPage() {
 
         {/* Agent API Keys Tab */}
         <TabsContent value="agent-api-keys" className="space-y-6">
-          <Card className="bg-slate-900/30 border-slate-800">
+          <Card className="glass-panel overflow-hidden">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -631,7 +631,7 @@ export default function AIAgentsSettingsPage() {
                   </CardDescription>
                 </div>
                 {!showAddAgentKeyForm && (
-                  <Button onClick={() => setShowAddAgentKeyForm(true)}>
+                  <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                     <Plus className="h-4 w-4 mr-2" />
                     Create Key
                   </Button>
@@ -640,9 +640,9 @@ export default function AIAgentsSettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Info Box */}
-              <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+              <div className="p-4 rounded-lg border border-blue-500/20 bg-blue-500/10">
                 <p className="text-sm text-blue-400">
-                  Note: Agent API Keys are used in the <code className="bg-slate-800 px-1 rounded">x-api-key</code> header 
+                  Note: Agent API Keys are used in the <code className="bg-white/[0.08] px-1 rounded">x-api-key</code> header 
                   when calling your agent&apos;s public endpoint. Enable &quot;Require API Key&quot; in your agent&apos;s 
                   Access Control settings to require authentication.
                 </p>
@@ -650,7 +650,7 @@ export default function AIAgentsSettingsPage() {
 
               {/* Add Key Form */}
               {showAddAgentKeyForm && (
-                <Card className="bg-slate-800/50 border-slate-700">
+                <Card className="border border-white/[0.08] bg-white/[0.03]">
                   <CardContent className="p-4 space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="agentKeyName">Key Name</Label>
@@ -659,9 +659,9 @@ export default function AIAgentsSettingsPage() {
                         placeholder="e.g., Production API Key, Mobile App Key"
                         value={newAgentKeyName}
                         onChange={(e) => setNewAgentKeyName(e.target.value)}
-                        className="bg-slate-800 border-slate-700"
+                        className="bg-white/[0.04] border-white/[0.1] text-white placeholder:text-white/35"
                       />
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-white/40">
                         Give this key a descriptive name so you can identify it later.
                       </p>
                     </div>
@@ -676,7 +676,7 @@ export default function AIAgentsSettingsPage() {
                       >
                         Cancel
                       </Button>
-                      <Button onClick={handleAddAgentKey} disabled={savingAgentKey}>
+                      <Button onClick={handleAddAgentKey} disabled={savingAgentKey} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                         {savingAgentKey ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -697,18 +697,18 @@ export default function AIAgentsSettingsPage() {
               {/* Keys List */}
               {loadingAgentKeys ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-white/55" />
                 </div>
               ) : agentApiKeys.length > 0 ? (
                 <div className="space-y-2">
                   {agentApiKeys.map((key) => (
                     <div
                       key={key.id}
-                      className="flex items-center justify-between p-4 rounded-lg bg-slate-800/50 hover:bg-slate-800 transition-colors"
+                      className="flex items-center justify-between p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-2 rounded-lg bg-slate-700">
-                          <ShieldCheck className="h-4 w-4 text-slate-300" />
+                        <div className="p-2 rounded-lg bg-white/[0.06] border border-white/[0.08]">
+                          <ShieldCheck className="h-4 w-4 text-white/75" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -723,7 +723,7 @@ export default function AIAgentsSettingsPage() {
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-3 text-sm text-slate-500">
+                          <div className="flex items-center gap-3 text-sm text-white/40">
                             <span className="font-mono">{key.key_prefix}...</span>
                             <span>-</span>
                             <span>{key.request_count.toLocaleString()} requests</span>
@@ -761,7 +761,7 @@ export default function AIAgentsSettingsPage() {
                             <AlertDialogAction
                               onClick={handleDeleteAgentKey}
                               disabled={deletingAgentKey}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-red-600 hover:bg-red-700 text-white"
                             >
                               {deletingAgentKey ? 'Deleting...' : 'Delete'}
                             </AlertDialogAction>
@@ -773,13 +773,13 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <ShieldCheck className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400 mb-2">No agent API keys</p>
-                  <p className="text-sm text-slate-500 mb-4">
+                  <ShieldCheck className="h-12 w-12 text-white/22 mx-auto mb-4" />
+                  <p className="text-white/55 mb-2">No agent API keys</p>
+                  <p className="text-sm text-white/40 mb-4">
                     Create an API key to authenticate requests to your agent endpoints
                   </p>
                   {!showAddAgentKeyForm && (
-                    <Button onClick={() => setShowAddAgentKeyForm(true)}>
+                    <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
                       <Plus className="h-4 w-4 mr-2" />
                       Create Your First Key
                     </Button>
@@ -790,7 +790,7 @@ export default function AIAgentsSettingsPage() {
           </Card>
 
           {/* API Documentation */}
-          <Card className="bg-slate-900/30 border-slate-800">
+          <Card className="glass-panel overflow-hidden">
             <CardHeader>
               <CardTitle>API Documentation</CardTitle>
               <CardDescription>
@@ -801,7 +801,7 @@ export default function AIAgentsSettingsPage() {
               {/* Endpoint URL */}
               <div>
                 <h4 className="text-white font-medium mb-2">Endpoint URL</h4>
-                <pre className="p-3 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+                <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                   <code className="text-blue-400">POST /api/v1/agents/&#123;endpoint_id&#125;/chat</code>
                 </pre>
               </div>
@@ -812,22 +812,22 @@ export default function AIAgentsSettingsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left py-2 text-slate-400">Header</th>
-                        <th className="text-left py-2 text-slate-400">Required</th>
-                        <th className="text-left py-2 text-slate-400">Description</th>
+                      <tr className="border-b border-white/[0.08]">
+                        <th className="text-left py-2 text-white/55">Header</th>
+                        <th className="text-left py-2 text-white/55">Required</th>
+                        <th className="text-left py-2 text-white/55">Description</th>
                       </tr>
                     </thead>
-                    <tbody className="text-slate-300">
-                      <tr className="border-b border-slate-800">
+                    <tbody className="text-white/75">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-green-400">Content-Type</td>
                         <td className="py-2">Yes</td>
-                        <td className="py-2">Must be <code className="bg-slate-700 px-1 rounded">application/json</code></td>
+                        <td className="py-2">Must be <code className="bg-white/[0.08] px-1 rounded">application/json</code></td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-green-400">x-api-key</td>
                         <td className="py-2">If auth required</td>
-                        <td className="py-2">Your agent API key (starts with <code className="bg-slate-700 px-1 rounded">ak_</code>)</td>
+                        <td className="py-2">Your agent API key (starts with <code className="bg-white/[0.08] px-1 rounded">ak_</code>)</td>
                       </tr>
                     </tbody>
                   </table>
@@ -840,27 +840,27 @@ export default function AIAgentsSettingsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left py-2 text-slate-400">Field</th>
-                        <th className="text-left py-2 text-slate-400">Type</th>
-                        <th className="text-left py-2 text-slate-400">Required</th>
-                        <th className="text-left py-2 text-slate-400">Description</th>
+                      <tr className="border-b border-white/[0.08]">
+                        <th className="text-left py-2 text-white/55">Field</th>
+                        <th className="text-left py-2 text-white/55">Type</th>
+                        <th className="text-left py-2 text-white/55">Required</th>
+                        <th className="text-left py-2 text-white/55">Description</th>
                       </tr>
                     </thead>
-                    <tbody className="text-slate-300">
-                      <tr className="border-b border-slate-800">
+                    <tbody className="text-white/75">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-yellow-400">message</td>
                         <td className="py-2">string</td>
                         <td className="py-2">Yes</td>
                         <td className="py-2">User message (max 32KB)</td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-yellow-400">conversation_id</td>
                         <td className="py-2">string</td>
                         <td className="py-2">No</td>
                         <td className="py-2">UUID to continue an existing conversation</td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-yellow-400">stream</td>
                         <td className="py-2">boolean</td>
                         <td className="py-2">No</td>
@@ -874,15 +874,15 @@ export default function AIAgentsSettingsPage() {
               {/* Standard vs Streaming */}
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Standard Response */}
-                <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-3 h-3 rounded-full bg-blue-500"></div>
                     <h5 className="text-white font-medium">Standard Response</h5>
                   </div>
-                  <p className="text-sm text-slate-400 mb-3">
+                  <p className="text-sm text-white/55 mb-3">
                     Best for: Simple integrations, backend services, or when you need the complete response at once.
                   </p>
-                  <pre className="p-3 rounded-lg bg-slate-900 text-xs overflow-x-auto">
+                  <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
                     <code className="text-green-400">
 {`// Request
 {
@@ -909,7 +909,7 @@ export default function AIAgentsSettingsPage() {
                 </div>
 
                 {/* Streaming Response */}
-                <div className="p-4 rounded-lg bg-slate-800/50 border border-purple-500/30">
+                <div className="rounded-lg border border-purple-500/20 bg-purple-500/10 p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <div className="w-3 h-3 rounded-full bg-purple-500 animate-pulse"></div>
                     <h5 className="text-white font-medium">Streaming Response</h5>
@@ -917,10 +917,10 @@ export default function AIAgentsSettingsPage() {
                       Real-time
                     </Badge>
                   </div>
-                  <p className="text-sm text-slate-400 mb-3">
+                  <p className="text-sm text-white/55 mb-3">
                     Best for: Chat UIs, real-time apps. Words appear as they&apos;re generated for better UX.
                   </p>
-                  <pre className="p-3 rounded-lg bg-slate-900 text-xs overflow-x-auto">
+                  <pre className="p-3 rounded-lg border border-white/[0.08] bg-black/40 text-xs overflow-x-auto">
                     <code className="text-purple-400">
 {`// Request
 {
@@ -954,7 +954,7 @@ data: {"type":"done","usage":{...}}`}
                   </TabsList>
                   
                   <TabsContent value="curl" className="mt-3">
-                    <pre className="p-4 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-green-400">
 {`# Standard request
 curl -X POST \\
@@ -974,7 +974,7 @@ curl -N -X POST \\
                   </TabsContent>
                   
                   <TabsContent value="javascript" className="mt-3">
-                    <pre className="p-4 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-yellow-400">
 {`// Standard request
 const response = await fetch(
@@ -1031,7 +1031,7 @@ while (true) {
                   </TabsContent>
                   
                   <TabsContent value="python" className="mt-3">
-                    <pre className="p-4 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+                    <pre className="p-4 rounded-lg border border-white/[0.08] bg-black/30 text-sm overflow-x-auto">
                       <code className="text-blue-400">
 {`import requests
 import json
@@ -1081,32 +1081,32 @@ for line in response.iter_lines():
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-slate-700">
-                        <th className="text-left py-2 text-slate-400">Event Type</th>
-                        <th className="text-left py-2 text-slate-400">Description</th>
-                        <th className="text-left py-2 text-slate-400">Fields</th>
+                      <tr className="border-b border-white/[0.08]">
+                        <th className="text-left py-2 text-white/55">Event Type</th>
+                        <th className="text-left py-2 text-white/55">Description</th>
+                        <th className="text-left py-2 text-white/55">Fields</th>
                       </tr>
                     </thead>
-                    <tbody className="text-slate-300">
-                      <tr className="border-b border-slate-800">
+                    <tbody className="text-white/75">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-green-400">start</td>
                         <td className="py-2">Stream initialized</td>
-                        <td className="py-2"><code className="bg-slate-700 px-1 rounded">conversation_id</code></td>
+                        <td className="py-2"><code className="bg-white/[0.08] px-1 rounded">conversation_id</code></td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-purple-400">content</td>
                         <td className="py-2">Text chunk received</td>
-                        <td className="py-2"><code className="bg-slate-700 px-1 rounded">content</code> (string)</td>
+                        <td className="py-2"><code className="bg-white/[0.08] px-1 rounded">content</code> (string)</td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-red-400">error</td>
                         <td className="py-2">Error occurred</td>
-                        <td className="py-2"><code className="bg-slate-700 px-1 rounded">error</code> (message)</td>
+                        <td className="py-2"><code className="bg-white/[0.08] px-1 rounded">error</code> (message)</td>
                       </tr>
-                      <tr className="border-b border-slate-800">
+                      <tr className="border-b border-white/[0.08]">
                         <td className="py-2 font-mono text-blue-400">done</td>
                         <td className="py-2">Stream complete</td>
-                        <td className="py-2"><code className="bg-slate-700 px-1 rounded">conversation_id</code>, <code className="bg-slate-700 px-1 rounded">usage</code></td>
+                        <td className="py-2"><code className="bg-white/[0.08] px-1 rounded">conversation_id</code>, <code className="bg-white/[0.08] px-1 rounded">usage</code></td>
                       </tr>
                     </tbody>
                   </table>
