@@ -2,43 +2,41 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  ChevronDown,
-  Plus,
-  LogOut,
-  Circle,
-  Server,
-  HardDrive,
-  Gamepad2,
-  Database,
-  Box,
-  Shield,
-  Lock,
-  Archive,
-  Cpu,
-  
-  Menu,
-  X,
-  Settings,
-  Users,
-  Network,
-  Ticket,
-  Rocket,
-  ShieldCheck,
-  Bot,
-  Key,
-  BookOpen,
-  LayoutDashboard,
   Activity,
-  BarChart3,
-  FileText,
-  HelpCircle,
+  Archive,
+  BookOpen,
+  Bot,
+  Box,
+  ChevronDown,
+  Circle,
   Cloud,
+  Cpu,
+  Database,
+  FileText,
+  Gamepad2,
+  HardDrive,
+  HelpCircle,
+  Key,
+  LayoutDashboard,
+  Lock,
+  LogOut,
+  Menu,
+  Network,
+  Plus,
+  Rocket,
+  Server,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Ticket,
+  Users,
+  X,
+  type LucideIcon,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type AppSidebarProps = {
   user: {
@@ -49,19 +47,97 @@ type AppSidebarProps = {
   projects: Tables<"projects">[];
 };
 
+type NavLinkItem = {
+  name: string;
+  href: string;
+  current: boolean;
+  icon: LucideIcon;
+};
+
+const SectionLabel = ({ children }: { children: React.ReactNode }) => (
+  <div className="px-1">
+    <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+      {children}
+    </h3>
+  </div>
+);
+
+function SidebarLink({ item, compact = false }: { item: NavLinkItem; compact?: boolean }) {
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      className={`group flex items-center gap-3 border transition-colors ${
+        compact ? "px-2.5 py-2 text-[12px]" : "px-3 py-2.5 text-[13px]"
+      } ${
+        item.current
+          ? "border-blue-400/25 bg-blue-500/10 text-white"
+          : "border-transparent text-white/60 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/88"
+      }`}
+    >
+      <Icon
+        className={`shrink-0 ${compact ? "h-3.5 w-3.5" : "h-4 w-4"} ${
+          item.current ? "text-blue-200" : "text-white/45 group-hover:text-white/70"
+        }`}
+      />
+      <span className="truncate">{item.name}</span>
+    </Link>
+  );
+}
+
+function ExpandableGroup({
+  label,
+  icon: Icon,
+  expanded,
+  active,
+  onToggle,
+  children,
+}: {
+  label: string;
+  icon: LucideIcon;
+  expanded: boolean;
+  active: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={onToggle}
+        className={`group flex w-full items-center justify-between border px-3 py-2.5 text-[13px] transition-colors ${
+          active
+            ? "border-blue-400/25 bg-blue-500/10 text-white"
+            : "border-transparent text-white/60 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/88"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Icon className={`h-4 w-4 shrink-0 ${active ? "text-blue-200" : "text-white/45 group-hover:text-white/70"}`} />
+          <span>{label}</span>
+        </div>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-white/45 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+        />
+      </button>
+
+      {expanded && (
+        <div className="ml-4 mt-1.5 border-l border-white/[0.08] pl-3 space-y-1">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AppSidebar({ projects, user }: AppSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+
   const [projectsExpanded, setProjectsExpanded] = useState(true);
-  const [computeExpanded, setComputeExpanded] = useState(
-    pathname.includes("/services/compute")
-  );
-  const [aiAgentsExpanded, setAiAgentsExpanded] = useState(
-    pathname.includes("/services/ai-agents")
-  );
-  const [adminExpanded, setAdminExpanded] = useState(
-    pathname.includes("/admin")
-  );
+  const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
+  const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.includes("/services/ai-agents"));
+  const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -71,12 +147,26 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   }, [pathname]);
 
   useEffect(() => {
+    if (pathname.includes("/services/compute")) {
+      setComputeExpanded(true);
+    }
+    if (pathname.includes("/services/ai-agents")) {
+      setAiAgentsExpanded(true);
+    }
+    if (pathname.includes("/admin")) {
+      setAdminExpanded(true);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (!mobile) {
         setIsMobileOpen(false);
       }
     };
+
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
@@ -85,14 +175,13 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   useEffect(() => {
     const checkAdmin = async () => {
       try {
-        const res = await fetch("/api/admin/proxmox/hosts", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/admin/proxmox/hosts", { cache: "no-store" });
         setIsAdmin(res.ok);
       } catch {
         setIsAdmin(false);
       }
     };
+
     checkAdmin();
   }, []);
 
@@ -104,7 +193,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     router.push("/signin");
   };
 
-  const navigation = [
+  const primaryNavigation: NavLinkItem[] = [
     {
       name: "Dashboard",
       href: "/dashboard",
@@ -117,23 +206,13 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       current: pathname === "/dashboard/activity",
       icon: Activity,
     },
-    {
-      name: "Analytics",
-      href: "/dashboard/analytics",
-      current: pathname === "/dashboard/analytics",
-      icon: BarChart3,
-    },
   ];
 
-  const services: {
-    name: string;
-    href?: string;
-    current?: boolean;
-    icon: React.ElementType;
-    expandable?: boolean;
-  }[] = [
+  const services: Array<NavLinkItem & { expandable?: boolean }> = [
     {
       name: "Compute",
+      href: "/dashboard/services/compute",
+      current: pathname.includes("/services/compute"),
       icon: Cpu,
       expandable: true,
     },
@@ -181,7 +260,22 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     },
   ];
 
-  const aiAgentsServices = [
+  const computeServices: NavLinkItem[] = [
+    {
+      name: "Bare Metal Servers",
+      href: "/dashboard/services/compute/bare-metal",
+      current: pathname.includes("/services/compute/bare-metal"),
+      icon: HardDrive,
+    },
+    {
+      name: "Virtual Private Servers",
+      href: "/dashboard/services/compute/vps",
+      current: pathname.includes("/services/compute/vps"),
+      icon: Server,
+    },
+  ];
+
+  const aiAgentsServices: NavLinkItem[] = [
     {
       name: "All Agents",
       href: "/dashboard/services/ai-agents",
@@ -208,116 +302,88 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     },
   ];
 
-  const computeServices = [
+  const adminLinks: NavLinkItem[] = [
+    { name: "Proxmox Hosts", href: "/dashboard/admin/hosts", current: pathname === "/dashboard/admin/hosts" || pathname.startsWith("/dashboard/admin/hosts/"), icon: Network },
+    { name: "All Servers", href: "/dashboard/admin/servers", current: pathname === "/dashboard/admin/servers" || pathname.startsWith("/dashboard/admin/servers/"), icon: Server },
+    { name: "Users", href: "/dashboard/admin/users", current: pathname === "/dashboard/admin/users" || pathname.startsWith("/dashboard/admin/users/"), icon: Users },
+    { name: "Databases", href: "/dashboard/admin/databases", current: pathname === "/dashboard/admin/databases" || pathname.startsWith("/dashboard/admin/databases/"), icon: Database },
+    { name: "Object Storage", href: "/dashboard/admin/object-storage", current: pathname === "/dashboard/admin/object-storage" || pathname.startsWith("/dashboard/admin/object-storage/"), icon: Archive },
+    { name: "Network DDoS", href: "/dashboard/admin/network-ddos", current: pathname === "/dashboard/admin/network-ddos" || pathname.startsWith("/dashboard/admin/network-ddos/"), icon: Shield },
+    { name: "Kubernetes", href: "/dashboard/admin/kubernetes", current: pathname === "/dashboard/admin/kubernetes" || pathname.startsWith("/dashboard/admin/kubernetes/"), icon: Box },
+    { name: "Platform Apps", href: "/dashboard/admin/platform-apps", current: pathname === "/dashboard/admin/platform-apps" || pathname.startsWith("/dashboard/admin/platform-apps/"), icon: Rocket },
+    { name: "Coupons", href: "/dashboard/admin/coupons", current: pathname === "/dashboard/admin/coupons" || pathname.startsWith("/dashboard/admin/coupons/"), icon: Ticket },
+    { name: "Audit Logs", href: "/dashboard/admin/audit-logs", current: pathname === "/dashboard/admin/audit-logs" || pathname.startsWith("/dashboard/admin/audit-logs/"), icon: ShieldCheck },
+    { name: "AI Agents", href: "/dashboard/admin/ai-agents", current: pathname === "/dashboard/admin/ai-agents" || pathname.startsWith("/dashboard/admin/ai-agents/"), icon: Bot },
+  ];
+
+  const supportLinks: NavLinkItem[] = [
     {
-      name: "Bare Metal Servers",
-      href: "/dashboard/services/compute/bare-metal",
-      current: pathname.includes("/services/compute/bare-metal"),
-      icon: HardDrive,
+      name: "Settings",
+      href: "/dashboard/settings",
+      current: pathname.includes("/settings"),
+      icon: Settings,
     },
     {
-      name: "Virtual Private Servers",
-      href: "/dashboard/services/compute/vps",
-      current: pathname.includes("/services/compute/vps"),
-      icon: Server,
+      name: "Documentation",
+      href: "/docs",
+      current: false,
+      icon: FileText,
+    },
+    {
+      name: "Help Center",
+      href: "/support",
+      current: false,
+      icon: HelpCircle,
     },
   ];
 
-  const NavItem = ({
-    href,
-    current,
-    icon: Icon,
-    name,
-  }: {
-    href: string;
-    current: boolean;
-    icon: React.ElementType;
-    name: string;
-  }) => (
-    <Link
-      href={href}
-      className={`
-        group flex items-center gap-3 px-3 py-2 text-[13px] transition-all duration-200
-        ${
-          current
-            ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
-            : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
-        }
-      `}
-    >
-      <Icon
-        className={`w-4 h-4 flex-shrink-0 ${
-          current ? "text-white" : "text-white/50 group-hover:text-white/75"
-        }`}
-      />
-      <span className="truncate">{name}</span>
-    </Link>
-  );
-
-  const SectionLabel = ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => (
-    <h3 className="px-3 mb-1.5 text-[10px] font-bold text-white/50 uppercase tracking-[0.12em]">
-      {children}
-    </h3>
-  );
+  const projectPreview = useMemo(() => projects.slice(0, 5), [projects]);
+  const userName = user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User";
 
   const sidebarContent = (
     <>
-      {/* Logo Header */}
-      <div className="h-14 flex items-center justify-between px-5 flex-shrink-0">
-        <Link href="/dashboard" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 glass-icon flex items-center justify-center">
-            <Cloud className="w-[18px] h-[18px] text-white/90" />
+      <div className="flex h-16 items-center justify-between border-b border-white/[0.08] px-4">
+        <Link href="/dashboard" className="flex items-center gap-3">
+          <div className="glass-icon flex h-9 w-9 items-center justify-center text-blue-200">
+            <Cloud className="h-[18px] w-[18px]" />
           </div>
-          <span className="text-[15px] font-bold text-white tracking-tight">
-            AhuraCloud
-          </span>
+          <div>
+            <div className="text-[15px] font-semibold tracking-tight text-white">AhuraCloud</div>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-white/32">Control Plane</div>
+          </div>
         </Link>
+
         {isMobile && (
           <button
+            type="button"
             onClick={() => setIsMobileOpen(false)}
-            className="p-1.5 text-white/50 hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.03] text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
           >
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
 
-      {/* Scrollable Navigation */}
-      <nav className="flex-1 px-3 overflow-y-auto custom-scrollbar space-y-5 pb-4 mt-1">
-        {/* Primary Nav */}
-        <div className="space-y-0.5">
-          {navigation.map((item) => (
-            <NavItem
-              key={item.name}
-              href={item.href}
-              current={item.current}
-              icon={item.icon}
-              name={item.name}
-            />
+      <nav className="custom-scrollbar flex-1 space-y-6 overflow-y-auto px-3 py-4">
+        <div className="space-y-1">
+          {primaryNavigation.map((item) => (
+            <SidebarLink key={item.name} item={item} />
           ))}
         </div>
 
-        {/* Projects Section */}
         <div>
-          <div className="flex items-center justify-between mb-1.5 px-1">
+          <div className="mb-2 flex items-center justify-between px-1">
             <button
-              onClick={() => setProjectsExpanded(!projectsExpanded)}
-              className="flex items-center text-[10px] font-bold text-white/50 uppercase tracking-[0.12em] hover:text-white/70 transition-colors"
+              type="button"
+              onClick={() => setProjectsExpanded((prev) => !prev)}
+              className="flex items-center text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35 transition-colors hover:text-white/60"
             >
               Projects
-              <ChevronDown
-                className={`ml-1 h-2.5 w-2.5 transition-transform duration-200 ${
-                  projectsExpanded ? "" : "-rotate-90"
-                }`}
-              />
+              <ChevronDown className={`ml-1 h-3 w-3 transition-transform duration-200 ${projectsExpanded ? "" : "-rotate-90"}`} />
             </button>
             <Link
               href="/dashboard/projects/new"
-              className="text-white/50 hover:text-white/80 transition-colors p-0.5 hover:bg-white/[0.05]"
+              className="flex h-6 w-6 items-center justify-center text-white/45 transition-colors hover:bg-white/[0.05] hover:text-white/75"
               title="New Project"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -325,305 +391,123 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
           </div>
 
           {projectsExpanded && (
-            <div className="space-y-0.5">
-              {projects.length > 0 ? (
+            <div className="space-y-1">
+              {projectPreview.length > 0 ? (
                 <>
-                  {projects.slice(0, 5).map((project) => (
-                    <Link
-                      key={project.id}
-                      href={`/dashboard/projects/${project.id}`}
-                      className={`
-                        flex items-center px-3 py-1.5 text-[13px] transition-all duration-200
-                        ${
-                          pathname.includes(`/projects/${project.id}`)
-                            ? "bg-white/10 text-white font-medium"
-                            : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
-                        }
-                      `}
-                    >
-                      <Circle className="w-1.5 h-1.5 mr-3 fill-current opacity-60" />
-                      <span className="truncate">{project.name}</span>
-                    </Link>
-                  ))}
+                  {projectPreview.map((project) => {
+                    const isActive = pathname.includes(`/projects/${project.id}`);
+                    return (
+                      <Link
+                        key={project.id}
+                        href={`/dashboard/projects/${project.id}`}
+                        className={`group flex items-center gap-3 border px-3 py-2 text-[12px] transition-colors ${
+                          isActive
+                            ? "border-blue-400/25 bg-blue-500/10 text-white"
+                            : "border-transparent text-white/55 hover:border-white/[0.08] hover:bg-white/[0.05] hover:text-white/82"
+                        }`}
+                      >
+                        <Circle className={`h-1.5 w-1.5 shrink-0 fill-current ${isActive ? "text-blue-200" : "text-white/35 group-hover:text-white/55"}`} />
+                        <span className="truncate">{project.name}</span>
+                      </Link>
+                    );
+                  })}
                   {projects.length > 5 && (
                     <Link
                       href="/dashboard/projects"
-                      className="block px-3 py-1.5 text-[12px] text-white/50 hover:text-white/70 font-medium transition-colors"
+                      className="block px-3 py-1.5 text-[12px] font-medium text-white/45 transition-colors hover:text-white/72"
                     >
-                      View all →
+                      View all projects →
                     </Link>
                   )}
                 </>
               ) : (
-                <p className="px-3 py-1.5 text-[12px] text-white/35">
-                  No projects yet
-                </p>
+                <div className="px-3 py-2 text-[12px] text-white/35">No projects yet</div>
               )}
             </div>
           )}
         </div>
 
-        {/* Services Section */}
         <div>
           <SectionLabel>Services</SectionLabel>
-          <div className="space-y-0.5">
-            {/* Compute expandable */}
-            <div>
-              <button
-                onClick={() => setComputeExpanded(!computeExpanded)}
-                className={`
-                  w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
-                  ${
-                    pathname.includes("/services/compute")
-                      ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
-                      : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
-                  }
-                `}
-              >
-                <div className="flex items-center gap-3">
-                  <Cpu
-                    className={`w-4 h-4 ${
-                      pathname.includes("/services/compute")
-                        ? "text-white"
-                        : "text-white/50"
-                    }`}
-                  />
-                  <span>Compute</span>
-                </div>
-                <ChevronDown
-                  className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
-                    computeExpanded ? "" : "-rotate-90"
-                  }`}
-                />
-              </button>
+          <div className="space-y-1">
+            <ExpandableGroup
+              label="Compute"
+              icon={Cpu}
+              expanded={computeExpanded}
+              active={pathname.includes("/services/compute")}
+              onToggle={() => setComputeExpanded((prev) => !prev)}
+            >
+              {computeServices.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
 
-              {computeExpanded && (
-                <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
-                  {computeServices.map((service) => {
-                    const IconComponent = service.icon;
-                    return (
-                      <Link
-                        key={service.name}
-                        href={service.href}
-                        className={`
-                          flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
-                          ${
-                            service.current
-                              ? "text-white bg-white/[0.10]"
-                              : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
-                          }
-                        `}
-                      >
-                        <IconComponent className="w-3.5 h-3.5" />
-                        <span>{service.name}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Flat services */}
             {services
-              .filter((s) => !s.expandable)
-              .map((service) => {
-                const IconComponent = service.icon;
-                return (
-                  <NavItem
-                    key={service.name}
-                    href={service.href!}
-                    current={service.current!}
-                    icon={IconComponent}
-                    name={service.name}
-                  />
-                );
-              })}
+              .filter((item) => !item.expandable)
+              .map((item) => (
+                <SidebarLink key={item.name} item={item} />
+              ))}
 
-            {/* AI Agents expandable */}
-            <div>
-              <button
-                onClick={() => setAiAgentsExpanded(!aiAgentsExpanded)}
-                className={`
-                  w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
-                  ${
-                    pathname.includes("/services/ai-agents")
-                      ? "bg-white/[0.12] text-white font-medium border border-white/[0.12]"
-                      : "text-white/65 hover:text-white/95 hover:bg-white/[0.06]"
-                  }
-                `}
-              >
-                <div className="flex items-center gap-3">
-                  <Bot
-                    className={`w-4 h-4 ${
-                      pathname.includes("/services/ai-agents")
-                        ? "text-white"
-                        : "text-white/50"
-                    }`}
-                  />
-                  <span>AI Agents</span>
-                </div>
-                <ChevronDown
-                  className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
-                    aiAgentsExpanded ? "" : "-rotate-90"
-                  }`}
-                />
-              </button>
-
-              {aiAgentsExpanded && (
-                <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
-                  {aiAgentsServices.map((service) => {
-                    const IconComponent = service.icon;
-                    return (
-                      <Link
-                        key={service.name}
-                        href={service.href}
-                        className={`
-                          flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
-                          ${
-                            service.current
-                              ? "text-white bg-white/[0.10]"
-                              : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
-                          }
-                        `}
-                      >
-                        <IconComponent className="w-3.5 h-3.5" />
-                        <span>{service.name}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <ExpandableGroup
+              label="AI Agents"
+              icon={Bot}
+              expanded={aiAgentsExpanded}
+              active={pathname.includes("/services/ai-agents")}
+              onToggle={() => setAiAgentsExpanded((prev) => !prev)}
+            >
+              {aiAgentsServices.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
           </div>
         </div>
 
-        {/* Admin Section */}
         {isAdmin && (
           <div>
-            <SectionLabel>Admin</SectionLabel>
-            <div className="space-y-0.5">
-              <div>
-                <button
-                  onClick={() => setAdminExpanded(!adminExpanded)}
-                  className={`
-                    w-full group flex items-center justify-between px-3 py-2 text-[13px] transition-all duration-200
-                    ${
-                      pathname.includes("/dashboard/admin")
-                        ? "bg-white/10 text-white font-medium"
-                        : "text-white/50 hover:text-white/80 hover:bg-white/[0.04]"
-                    }
-                  `}
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings
-                      className={`w-4 h-4 ${
-                        pathname.includes("/dashboard/admin")
-                          ? "text-white"
-                          : "text-white/40"
-                      }`}
-                    />
-                    <span>Administration</span>
-                  </div>
-                  <ChevronDown
-                    className={`h-3.5 w-3.5 text-white/50 transition-transform duration-200 ${
-                      adminExpanded ? "" : "-rotate-90"
-                    }`}
-                  />
-                </button>
-
-                {adminExpanded && (
-                  <div className="mt-0.5 ml-4 pl-3 border-l border-white/[0.10] space-y-0.5">
-                    {[
-                      { name: "Proxmox Hosts", href: "/dashboard/admin/hosts", icon: Network },
-                      { name: "All Servers", href: "/dashboard/admin/servers", icon: Server },
-                      { name: "Users", href: "/dashboard/admin/users", icon: Users },
-                      { name: "Databases", href: "/dashboard/admin/databases", icon: Database },
-                      { name: "Object Storage", href: "/dashboard/admin/object-storage", icon: Archive },
-                      { name: "Network DDoS", href: "/dashboard/admin/network-ddos", icon: Shield },
-                      { name: "Kubernetes", href: "/dashboard/admin/kubernetes", icon: Box },
-                      { name: "Platform-apps", href: "/dashboard/admin/platform-apps", icon: Rocket },
-                      { name: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket },
-                      { name: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck },
-                      { name: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot },
-                    ].map((item) => {
-                      const IconComponent = item.icon;
-                      const isActive =
-                        pathname === item.href ||
-                        pathname.startsWith(item.href + "/");
-                      return (
-                        <Link
-                          key={item.name}
-                          href={item.href}
-                          className={`
-                            flex items-center gap-2.5 px-2.5 py-1.5 text-[12px] transition-all duration-200
-                            ${
-                              isActive
-                                ? "text-white bg-white/[0.10]"
-                                : "text-white/55 hover:text-white/85 hover:bg-white/[0.05]"
-                            }
-                          `}
-                        >
-                          <IconComponent className="w-3.5 h-3.5" />
-                          <span>{item.name}</span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
+            <SectionLabel>Administration</SectionLabel>
+            <ExpandableGroup
+              label="Admin Console"
+              icon={Settings}
+              expanded={adminExpanded}
+              active={pathname.includes("/dashboard/admin")}
+              onToggle={() => setAdminExpanded((prev) => !prev)}
+            >
+              {adminLinks.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
           </div>
         )}
 
-        {/* Support Section */}
         <div>
           <SectionLabel>Support</SectionLabel>
-          <div className="space-y-0.5">
-            <NavItem
-              href="/dashboard/settings"
-              current={pathname.includes("/settings")}
-              icon={Settings}
-              name="Settings"
-            />
-            <NavItem
-              href="/docs"
-              current={false}
-              icon={FileText}
-              name="Documentation"
-            />
-            <NavItem
-              href="/support"
-              current={false}
-              icon={HelpCircle}
-              name="Help Center"
-            />
+          <div className="space-y-1">
+            {supportLinks.map((item) => (
+              <SidebarLink key={item.name} item={item} />
+            ))}
           </div>
         </div>
       </nav>
 
-      {/* User Footer */}
-      <div className="flex-shrink-0 border-t border-white/[0.10] p-3">
-        <div className="flex items-center justify-between">
+      <div className="border-t border-white/[0.08] p-3">
+        <div className="flex items-center justify-between gap-2">
           <Link
             href="/dashboard/nav/profile"
-            className="flex items-center min-w-0 flex-1 hover:bg-white/[0.04] p-1.5 -ml-1.5 transition-all duration-200"
+            className="flex min-w-0 flex-1 items-center gap-3 border border-transparent px-2 py-2 transition-colors hover:border-white/[0.08] hover:bg-white/[0.05]"
             title="View profile"
           >
-            <div className="w-8 h-8 bg-white/[0.08] border border-white/[0.10] flex items-center justify-center text-xs font-medium text-white/70">
+            <div className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-xs font-semibold text-white/75">
               {user?.email?.charAt(0).toUpperCase() || "U"}
             </div>
-            <div className="ml-2.5 min-w-0 flex-1">
-              <p className="text-[13px] font-medium text-white/85 truncate">
-                {user?.email?.split("@")[0] || "User"}
-              </p>
-              <p className="text-[11px] text-white/40 truncate hidden sm:block">
-                {user?.email}
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-medium text-white/85">{userName}</p>
+              <p className="truncate text-[11px] text-white/38">{user?.email}</p>
             </div>
           </Link>
           <button
+            type="button"
             onClick={handleSignOut}
-            className="ml-2 p-2 text-white/50 hover:text-white/80 hover:bg-white/[0.06] transition-all duration-200"
+            className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.03] text-white/55 transition-colors hover:bg-white/[0.08] hover:text-white"
             title="Sign out"
           >
             <LogOut className="h-4 w-4" />
@@ -635,36 +519,31 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
   return (
     <>
-      {/* Mobile menu button */}
       {isMobile && (
         <button
+          type="button"
           onClick={() => setIsMobileOpen(true)}
-          className="fixed top-3 left-3 z-50 p-2 glass-btn text-white/70 hover:text-white"
+          className="fixed left-3 top-3 z-50 flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-black/55 text-white/70 backdrop-blur-xl transition-colors hover:bg-black/70 hover:text-white"
         >
           <Menu className="h-5 w-5" />
         </button>
       )}
 
-      {/* Mobile overlay */}
       {isMobile && isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 backdrop-blur-md"
+          className="fixed inset-0 z-40 bg-black/65 backdrop-blur-sm"
           onClick={() => setIsMobileOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
       <div
-        className={`
-        ${
+        className={`flex h-[100dvh] w-[280px] flex-col glass-sidebar ${
           isMobile
-            ? `fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-out ${
+            ? `fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-out ${
                 isMobileOpen ? "translate-x-0" : "-translate-x-full"
               }`
             : "relative"
-        }
-        flex h-screen w-[260px] flex-col glass-sidebar
-      `}
+        }`}
       >
         {sidebarContent}
       </div>

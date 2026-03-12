@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from "react";
 import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -321,6 +321,8 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 
   const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
   const panelClassName = "glass-panel overflow-hidden";
+  const summaryPanelClassName =
+    "overflow-hidden rounded-none border border-white/[0.1] bg-[linear-gradient(180deg,rgba(18,24,37,0.98),rgba(10,14,22,0.96))] shadow-[0_24px_56px_rgba(2,6,20,0.38)] backdrop-blur-2xl";
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
@@ -645,129 +647,90 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 
         {/* Summary Sidebar */}
         <div className="xl:min-w-0">
-          <Card className={`${panelClassName} xl:sticky xl:top-8`}>
-            <CardHeader>
-              <CardTitle className="text-white">Deployment Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Application Type */}
-              <div className="flex justify-between items-start">
-                <div className="text-sm text-white/60">Application Type</div>
-                <div className="text-white uppercase text-right text-sm">
-                  {formData.appType || "Not selected"}
+          <Card className={`${summaryPanelClassName} rounded-none xl:sticky xl:top-8 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col`}>
+            <CardHeader className="rounded-none border-b border-white/[0.08] bg-white/[0.02] px-4 py-3.5">
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+                  Deployment Summary
                 </div>
+                {!loadingPrice && spectrumPrice > 0 && (
+                  <div className="text-2xl font-semibold tracking-tight text-white">
+                    ${spectrumPrice.toFixed(2)}
+                    <span className="ml-1 text-sm font-medium text-white/45">/mo</span>
+                  </div>
+                )}
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3 overflow-y-auto px-4 py-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0))]">
+              {formData.appType && (
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Application</div>
+                  <div className="max-w-[62%] text-right text-sm font-semibold uppercase tracking-[0.12em] text-white">
+                    {formData.appType}
+                  </div>
+                </div>
+              )}
 
-              {/* Domain Name */}
               {formData.domain && (
-                <div className="flex justify-between items-start">
-                  <div className="text-sm text-white/60">Domain Name</div>
-                  <div className="text-white text-sm text-right max-w-[60%] break-words">
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Domain</div>
+                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
                     {formData.domain}
                   </div>
                 </div>
               )}
 
-              {/* Edge Port */}
               {formData.edgePort > 0 && (
-                <div className="flex justify-between items-start">
-                  <div className="text-sm text-white/60">Edge Port</div>
-                  <div className="text-white text-sm">{formData.edgePort}</div>
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Edge Port</div>
+                  <div className="text-right text-sm font-semibold text-white">{formData.edgePort}</div>
                 </div>
               )}
 
-              {/* Origin */}
               {formData.originIP && (
-                <div className="flex justify-between items-start">
-                  <div className="text-sm text-white/60">Origin</div>
-                  <div className="text-right max-w-[60%]">
-                    <div className="text-white text-sm break-words">
-                      {formData.originIP}
-                    </div>
-                   
-                  </div>
-                </div>
-              )}
-              {formData.originPort>0 && (
-                <div className="flex justify-between items-start">
-                  <div className="text-sm text-white/60">Port</div>
-                  <div className="text-right max-w-[60%]">
-                    <div className="text-white text-sm break-words">
-                      {formData.originPort}
-                    </div>
-                   
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Origin</div>
+                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
+                    {formData.originIP}{formData.originPort > 0 ? `:${formData.originPort}` : ""}
                   </div>
                 </div>
               )}
 
-
-              {/* Settings Section */}
-              {formData.ipAccessRule ||formData.proxyProtocol && (
-                <>
-                 
-                  <div>
-                    <div className="text-sm text-white/60 mb-3">Settings</div>
-                    <div className="space-y-2 text-sm">
-                      {/* <div className="flex justify-between">
-                        <span className="text-white/60">Argo Routing:</span>
-                        <span className="text-white">
-                          {formData.argoSmartRouting ? "On" : "Off"}
-                        </span>
-                      </div> */}
-                      {/* <div className="flex justify-between">
-                        <span className="text-white/60">TLS:</span>
-                        <span className="text-white capitalize">
-                          {formData.tls}
-                        </span>
-                      </div> */}
-                      <div className="flex justify-between">
-                        <span className="text-white/60">IP Rules:</span>
-                        <span className="text-white">
-                          {formData.ipAccessRule ? "On" : "Off"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">Proxy:</span>
-                        <span className="text-white uppercase">
-                          {formData.proxyProtocol}
-                        </span>
-                      </div>
-                    </div>
+              {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Protection</div>
+                  <div className="max-w-[62%] text-right text-sm font-semibold text-white">
+                    {[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null]
+                      .filter(Boolean)
+                      .join(' / ')}
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Project Section */}
               {currentStep === 6 && selectedProject && (
-                <>
-                 
-                  <div className="flex justify-between items-start">
-                    <div className="text-sm text-white/60">Project</div>
-                    <div className="text-white text-sm text-right max-w-[60%] break-words">
-                      {selectedProject.name}
-                    </div>
+                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
+                  <div className="text-sm font-medium text-white/50">Project</div>
+                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
+                    {selectedProject.name}
                   </div>
-                </>
+                </div>
               )}
 
-              {/* Pricing Section */}
               {!loadingPrice && spectrumPrice > 0 && (
-                <>
-                  <div className="border-t border-white/10 pt-4 mt-4">
-                    <div className="flex justify-between items-center">
-                      <div className="text-sm text-white/60 flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        Price
-                      </div>
-                      <div className="text-white text-lg font-semibold">
-                        ${spectrumPrice.toFixed(2)}/mo
-                      </div>
+                <div className="flex items-end justify-between gap-4 pt-1">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/50">
+                      <DollarSign className="h-4 w-4" />
+                      Monthly Price
                     </div>
-                    <p className="text-xs text-white/50 mt-2">
-                      Monthly subscription for DDoS protection
-                    </p>
                   </div>
-                </>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold tracking-tight text-white">
+                      ${spectrumPrice.toFixed(2)}
+                    </div>
+                    <div className="text-xs font-medium text-white/45">per month</div>
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -778,3 +741,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 };
 
 export default SpectrumAppCreate;
+
+
+
+

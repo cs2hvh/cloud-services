@@ -1,193 +1,245 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Card, CardContent} from "@/components/ui/card";
-import { 
-  User, 
-  Shield,
+import { Card, CardContent } from "@/components/ui/card";
+import {
+  ExternalLink,
+  Key,
   QrCode,
-  Key
+  Shield,
+  Sparkles,
+  User,
+  type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+
 import ProfileSettings from "@/components/dashboard/profile/page";
 import Accounts from "@/components/dashboard/accounts/page";
 import EnableTotp from "@/components/dashboard/2fa/page";
 import { useRouter } from "next/navigation";
 
+type SettingsTab = "profile" | "account" | "security";
+
+const SECTION_META: Record<
+  SettingsTab,
+  {
+    title: string;
+    description: string;
+    icon: LucideIcon;
+    helper: string;
+    eyebrow: string;
+  }
+> = {
+  profile: {
+    title: "Profile",
+    description: "Update your personal details, identity, and password preferences.",
+    icon: User,
+    helper: "Keep contact details current so account recovery and notifications stay reliable.",
+    eyebrow: "Identity",
+  },
+  account: {
+    title: "Connected Accounts",
+    description: "Manage linked providers and account access relationships.",
+    icon: Shield,
+    helper: "Review connected accounts regularly and remove providers you no longer use.",
+    eyebrow: "Access",
+  },
+  security: {
+    title: "Security",
+    description: "Configure two-factor authentication and strengthen sign-in controls.",
+    icon: QrCode,
+    helper: "Turning on two-factor authentication is the fastest way to improve account security.",
+    eyebrow: "Protection",
+  },
+};
+
 const SettingsPage = () => {
-  const [activeTab, setActiveTab] = useState<"profile" | "account" | "security" | "api-keys">("profile");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const router = useRouter();
+
+  const activeSection = useMemo(() => SECTION_META[activeTab], [activeTab]);
+  const ActiveIcon = activeSection.icon;
 
   const handleApiKeysClick = () => {
     router.push("/dashboard/settings/api-keys");
   };
 
+  const renderContent = () => {
+    if (activeTab === "profile") {
+      return <ProfileSettings />;
+    }
+
+    if (activeTab === "account") {
+      return <Accounts />;
+    }
+
+    return <EnableTotp />;
+  };
+
   return (
-    // Changed from "container mx-auto py-8" to match dashboard layout pattern
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-bold">Settings</h1>
-        <p className="text-muted-foreground">Manage your account settings and preferences</p>
-      </motion.div>
-
-      {/* Tab Navigation */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex space-x-4 mb-6 border-b border-white/10 overflow-x-auto"
-      >
-        <Button
-          variant={activeTab === "profile" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
-            activeTab === "profile" 
-              ? "bg-white text-black" 
-              : "text-white hover:bg-white/10"
-          }`}
-          onClick={() => setActiveTab("profile")}
-        >
-          <User className="h-4 w-4 mr-2" />
-          Profile
-        </Button>
-        
-        <Button
-          variant={activeTab === "account" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
-            activeTab === "account" 
-              ? "bg-white text-black" 
-              : "text-white hover:bg-white/10"
-          }`}
-          onClick={() => setActiveTab("account")}
-        >
-          <Shield className="h-4 w-4 mr-2" />
-          Account
-        </Button>
-        
-        <Button
-          variant={activeTab === "security" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
-            activeTab === "security" 
-              ? "bg-white text-black" 
-              : "text-white hover:bg-white/10"
-          }`}
-          onClick={() => setActiveTab("security")}
-        >
-          <QrCode className="h-4 w-4 mr-2" />
-          Security
-        </Button>
-
-        <Button
-          variant={activeTab === "api-keys" ? "default" : "ghost"}
-          className={`px-4 py-2 rounded-b-none whitespace-nowrap ${
-            activeTab === "api-keys" 
-              ? "bg-white text-black" 
-              : "text-white hover:bg-white/10"
-          }`}
-          onClick={() => setActiveTab("api-keys")}
-        >
-          <Key className="h-4 w-4 mr-2" />
-          API Keys
-        </Button>
-      </motion.div>
-
-      {/* Tab Content */}
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ duration: 0.28 }}
+        className="glass-panel overflow-hidden"
       >
-        <Card className="bg-black/50 border-white/10">
-          <CardContent className="pt-6">
-            {activeTab === "profile" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <User className="h-5 w-5" />
-                    Profile Settings
-                  </h2>
-                  <p className="text-sm text-muted-foreground">Update your profile information</p>
-                </div>
-                <ProfileSettings />
-              </motion.div>
-            )}
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              User Settings
+            </p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              Manage your profile, account access, and security controls.
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">
+              Review identity details, connected accounts, and authentication posture from a
+              cleaner settings workspace designed for day-to-day account management.
+            </p>
+          </div>
 
-            {activeTab === "account" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Account Settings
-                  </h2>
-                  <p className="text-sm text-muted-foreground">Manage your connected accounts</p>
-                </div>
-                <Accounts />
-              </motion.div>
-            )}
-
-            {activeTab === "security" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <QrCode className="h-5 w-5" />
-                    Security Settings
-                  </h2>
-                  <p className="text-sm text-muted-foreground">Manage your security preferences</p>
-                </div>
-                <EnableTotp />
-              </motion.div>
-            )}
-
-            {activeTab === "api-keys" && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3 }}
-              >
-                <div className="mb-4">
-                  <h2 className="text-xl font-semibold flex items-center gap-2">
-                    <Key className="h-5 w-5" />
-                    API Keys
-                  </h2>
-                  <p className="text-sm text-muted-foreground">
-                    Create and manage API keys for programmatic access
-                  </p>
-                </div>
-                <div className="text-center py-8">
-                  <Key className="h-12 w-12 mx-auto mb-4 text-white/50" />
-                  <h3 className="text-lg font-semibold mb-2">API Keys Management</h3>
-                  <p className="text-sm text-muted-foreground mb-6">
-                    Create API keys to authenticate your applications and services
-                  </p>
-                  <Button 
-                    onClick={handleApiKeysClick}
-                    className="bg-white text-black hover:bg-white/90"
-                  >
-                    <Key className="h-4 w-4 mr-2" />
-                    Manage API Keys
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </CardContent>
-        </Card>
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[260px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Sections
+              </div>
+              <div className="mt-2 text-lg font-semibold text-white">4 areas</div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Active View
+              </div>
+              <div className="mt-2 text-lg font-semibold text-white">{activeSection.title}</div>
+            </div>
+          </div>
+        </div>
       </motion.div>
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)] xl:items-start">
+        <motion.div
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1, duration: 0.28 }}
+          className="space-y-4 xl:sticky xl:top-8"
+        >
+          <Card className="glass-panel overflow-hidden">
+            <CardContent className="p-4">
+              <div className="mb-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Account Areas
+                </p>
+                <p className="mt-2 text-sm text-white/45">
+                  Move between profile, account, and security settings without leaving the page.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                {(Object.entries(SECTION_META) as Array<[SettingsTab, (typeof SECTION_META)[SettingsTab]]>).map(
+                  ([tab, section]) => {
+                    const SectionIcon = section.icon;
+                    const isActive = activeTab === tab;
+
+                    return (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setActiveTab(tab)}
+                        className={`w-full border px-3 py-3 text-left transition-colors ${
+                          isActive
+                            ? "border-blue-400/30 bg-blue-500/10"
+                            : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex h-9 w-9 items-center justify-center border ${
+                              isActive
+                                ? "border-blue-400/30 bg-blue-500/15 text-blue-200"
+                                : "border-white/[0.08] bg-white/[0.04] text-white/55"
+                            }`}
+                          >
+                            <SectionIcon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-white">{section.title}</div>
+                            <div className="mt-1 text-xs leading-5 text-white/40">
+                              {section.description}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  }
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleApiKeysClick}
+                  className="w-full border border-white/[0.08] bg-white/[0.03] px-3 py-3 text-left transition-colors hover:bg-white/[0.05]"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-white/55">
+                      <Key className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm font-medium text-white">
+                        API Keys
+                        <ExternalLink className="h-3.5 w-3.5 text-white/45" />
+                      </div>
+                      <div className="mt-1 text-xs leading-5 text-white/40">
+                        Open the dedicated credentials page for programmatic access management.
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel overflow-hidden">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-300">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-white">Recommended next step</div>
+                  <p className="mt-2 text-sm leading-6 text-white/45">{activeSection.helper}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, x: 10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.12, duration: 0.28 }}
+        >
+          <Card className="glass-panel overflow-hidden">
+            <CardContent className="p-0">
+              <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center border border-blue-500/20 bg-blue-500/10 text-blue-300">
+                    <ActiveIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      {activeSection.eyebrow}
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-white">{activeSection.title}</h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+                      {activeSection.description}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-5 py-5 sm:px-6 sm:py-6">{renderContent()}</div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
     </div>
   );
 };
