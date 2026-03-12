@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { DatabaseService } from "@/lib/services/database-service";
 
 export async function GET(req: NextRequest) {
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-read-migrate",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {

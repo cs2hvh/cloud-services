@@ -3,6 +3,7 @@ import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { updateStorageSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
@@ -10,8 +11,20 @@ import { NotificationService, createServiceNotification } from "@/lib/notificati
 export async function PUT(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-storage-update",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {

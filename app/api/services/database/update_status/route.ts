@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { DatabaseService } from "@/lib/services/database-service";
 import type { Database_Connection } from "@/lib/supabase/types";
@@ -8,18 +9,30 @@ import { updateStatusSchema } from "@/lib/validation/database";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-update-status",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: "Too Many Requests",
+        message: `Retry after ${rl.retryAfterSec}s`,
+      },
+      { status: 429 }
+    );
   }
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json(
-      { error: "Failed to update database status" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   try {

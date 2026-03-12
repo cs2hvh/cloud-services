@@ -160,6 +160,17 @@ export interface InternalRetrieveDatabaseRequest {
   name: string;
 }
 
+export interface InternalCreateDatabaseRequest {
+  clusterId: string;
+  name: string;
+  userId: string;
+}
+
+export interface InternalDeleteDatabaseRequest {
+  clusterId: string;
+  dbName: string;
+}
+
 export interface ReadMigrationStatusRequest {
   clusterId: string;
   targetRegion: string;

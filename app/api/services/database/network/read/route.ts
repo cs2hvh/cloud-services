@@ -1,19 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { DatabaseService } from "@/lib/services/database-service";
 import { readNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
   }
 
-  try {
-    const body = await req.json();
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-network-read",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: "Too Many Requests",
+        message: `Retry after ${rl.retryAfterSec}s`,
+      },
+      { status: 429 }
+    );
+  }
 
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  try {
     const validation = validateRequest(readNetworkSchema, body);
     if (!validation.success) {
       return validation.response;

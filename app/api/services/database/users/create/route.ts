@@ -1,14 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { DatabaseService } from "@/lib/services/database-service";
 import { createDatabaseUserSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-user-create",
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {
