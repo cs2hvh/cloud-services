@@ -75,6 +75,8 @@ export const updateNetworkSchema = z.object({
     .string()
     .refine(
       (val) => {
+        const legacyCidrV4Pattern =
+          /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/\d{1,2}$/;
         // Allow special "allow all" values
         if (val === SPECIAL_IPS.ALLOW_ALL_IPV4 || val === SPECIAL_IPS.ALLOW_ALL_IPV6) {
           return true;
@@ -84,6 +86,7 @@ export const updateNetworkSchema = z.object({
           IP_PATTERNS.IPV4.test(val) ||
           IP_PATTERNS.IPV6.test(val) ||
           IP_PATTERNS.CIDR_V4.test(val) ||
+          legacyCidrV4Pattern.test(val) ||
           IP_PATTERNS.CIDR_V6.test(val)
         );
       },

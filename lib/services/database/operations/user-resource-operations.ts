@@ -107,8 +107,8 @@ export const userResourceOperations = {
 
       return { success: true, data: user };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
           error: axiosError?.response?.data?.message ?? "Invalid request",
@@ -176,11 +176,13 @@ export const userResourceOperations = {
         data: users,
       };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
         };
       }
 
@@ -264,8 +266,8 @@ export const userResourceOperations = {
 
       return { success: true };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
           error: axiosError?.response?.data?.message ?? "Invalid request",
@@ -362,11 +364,13 @@ export const userResourceOperations = {
 
       return { success: true, data: user };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
         };
       }
 

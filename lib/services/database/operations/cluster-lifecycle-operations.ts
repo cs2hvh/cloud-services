@@ -41,18 +41,25 @@ export const clusterLifecycleOperations = {
           success: false,
           error: "Insufficient credits",
           errorCode: "INSUFFICIENT_BALANCE",
+          balance: balCheck.balance,
+          required: INITIAL_COST,
         };
       }
 
-      const doPayload = {
+      const doPayload: Record<string, unknown> = {
         name: request.name,
         engine: request.engine,
         version: request.version,
         region: request.region,
         size: request.size,
         num_nodes: request.num_nodes || 1,
-        storage_size_mib: request.storage_size_mib,
+        project_id: request.project_id,
+        owner_id: request.owner_id,
+        plan_id: request.plan_id,
       };
+      if (typeof request.storage_size_mib === "number") {
+        doPayload.storage_size_mib = request.storage_size_mib;
+      }
 
       const database = await axios.post("https://api.digitalocean.com/v2/databases", doPayload, {
         headers: getDigitalOceanHeaders(),
@@ -210,8 +217,8 @@ export const clusterLifecycleOperations = {
         console.error("Failed to create error notification:", notifErr);
       }
 
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         const message = axiosError?.response?.data?.message;
         const status = axiosError?.response?.status;
 
@@ -242,12 +249,12 @@ export const clusterLifecycleOperations = {
     request: UpdateDatabaseClusterProjectRequest,
     req?: NextRequest,
     userEmail?: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
       const beforeState = await Database_Clusters.read(request.clusterId);
       const result = await Database_Clusters.update_project(request.clusterId, request.projectId);
       if (!result.success) {
-        return result;
+        return { ...result, statusCode: 500 };
       }
 
       const clusterData = await Database_Clusters.read(request.clusterId);
@@ -306,9 +313,17 @@ export const clusterLifecycleOperations = {
 
       return result;
     } catch (err: unknown) {
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message,
+          statusCode: 400,
+        };
+      }
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },

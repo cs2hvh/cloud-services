@@ -109,13 +109,17 @@ export const scalingResourceOperations = {
         if (status === 404) {
           return {
             success: false,
-            error: axiosError?.response?.data?.message || err.message,
+            error:
+              axiosError?.response?.data?.message ||
+              (err instanceof Error ? err.message : "Unknown error occurred"),
             errorCode: "NOT_FOUND",
           };
         }
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
           errorCode: "DIGITALOCEAN_API_ERROR",
         };
       }
@@ -205,7 +209,9 @@ export const scalingResourceOperations = {
         const axiosError = parseAxiosError(err);
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
         };
       }
 
@@ -257,11 +263,16 @@ export const scalingResourceOperations = {
   async upsizeStorage(
     request: UpsizeStorageRequest,
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string; errorCode?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string; statusCode?: number }> {
     try {
       const clusterData = await Database_Clusters.read(request.clusterId);
       if (!clusterData.success || !clusterData.data) {
-        return { success: false, error: "Database cluster not found", errorCode: "NOT_FOUND" };
+        return {
+          success: false,
+          error: "Database cluster not found",
+          errorCode: "NOT_FOUND",
+          statusCode: 404,
+        };
       }
 
       const currentSize = clusterData.data.size;
@@ -273,6 +284,7 @@ export const scalingResourceOperations = {
           success: false,
           error: "New storage size must be greater than current storage size",
           errorCode: "INVALID_PARAMETER",
+          statusCode: 400,
         };
       }
 
@@ -307,6 +319,7 @@ export const scalingResourceOperations = {
           success: false,
           error: `Storage size cannot exceed ${limits.maxGiB} GiB for ${engine} with ${ram} RAM`,
           errorCode: "INVALID_PARAMETER",
+          statusCode: 400,
         };
       }
 
@@ -325,6 +338,7 @@ export const scalingResourceOperations = {
           success: false,
           error: "Failed to upsize database storage",
           errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: response.status,
         };
       }
 
@@ -394,14 +408,32 @@ export const scalingResourceOperations = {
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
           errorCode: "NOT_FOUND",
+          statusCode: 404,
+        };
+      }
+      if (axiosError) {
+        return {
+          success: false,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
+          errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: axiosError?.response?.status || 500,
+        };
+      }
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message,
+          errorCode: "UNKNOWN_ERROR",
+          statusCode: 500,
         };
       }
       return {
         success: false,
-        error:
-          axiosError?.response?.data?.message ||
-          (err instanceof Error ? err.message : "Unknown error occurred"),
-        errorCode: axiosError ? "DIGITALOCEAN_API_ERROR" : "UNKNOWN_ERROR",
+        error: "Unknown error occurred",
+        errorCode: "UNKNOWN_ERROR",
+        statusCode: 500,
       };
     }
   },

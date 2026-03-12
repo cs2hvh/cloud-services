@@ -11,7 +11,7 @@ export const maintenanceResourceOperations = {
     clusterId: string,
     day: string,
     hour: string
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     try {
       const response = await axios.put(
         `https://api.digitalocean.com/v2/databases/${clusterId}/maintenance`,
@@ -20,7 +20,11 @@ export const maintenanceResourceOperations = {
       );
 
       if (response.status !== 204) {
-        return { success: false, error: "Failed to update maintenance window" };
+        return {
+          success: false,
+          error: "Failed to update maintenance window",
+          statusCode: response.status,
+        };
       }
 
       await Database_Clusters.update_maintenance_window(clusterId, { day, hour });
@@ -54,17 +58,29 @@ export const maintenanceResourceOperations = {
 
       return { success: true };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError?.response?.status || 500,
+        };
+      }
+
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message,
+          statusCode: 400,
         };
       }
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },

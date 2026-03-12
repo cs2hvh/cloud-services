@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { Projects } from "@/lib/supabase/queries/projects";
+
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { DatabaseService } from "@/lib/services/database-service";
 import { updateMaintenanceSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
 
 export async function PUT(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
     return auth.response;
@@ -17,7 +14,6 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // ✅ VALIDATE REQUEST PAYLOAD
     const validation = validateRequest(updateMaintenanceSchema, body);
     if (!validation.success) {
       return validation.response;
@@ -25,101 +21,26 @@ export async function PUT(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    const payload = {
-      day: validatedData.day,
-      hour: validatedData.hour,
-    };
-
-    // Update maintenance window via DigitalOcean API
-    const response = await axios.put(
-      `https://api.digitalocean.com/v2/databases/${validatedData.database_id}/maintenance`,
-      payload,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
+    const result = await DatabaseService.updateMaintenanceWindow(
+      validatedData.database_id,
+      validatedData.day,
+      validatedData.hour
     );
 
-    console.log(
-      "Maintenance window update response:",
-      response.status,
-      response.statusText
-    );
-
-    if (response.status === 204) {
-      // Update Supabase with new maintenance window
-      const supabaseUpdate = await Database_Clusters.update_maintenance_window(
-        body.database_id,
-        { day: body.day, hour: body.hour }
-      );
-
-      if (!supabaseUpdate.success) {
-        console.error(
-          "[maintenance/route] Failed to update Supabase:",
-          supabaseUpdate.error
-        );
-        // Still return success as DigitalOcean update was successful
-      }
-
-      // Add activity log for maintenance window update
-      const clusterData = await Database_Clusters.read(validatedData.database_id);
-      if (clusterData.success && clusterData.data.project_id) {
-        await Projects.add_log({
-          project_id: clusterData.data.project_id,
-          event: "Settings",
-          text: `Maintenance window updated: ${validatedData.day} at ${validatedData.hour}`
-        });
-        console.log(`[updateMaintenanceWindow] ✅ Activity log added for maintenance window update`);
-      }
-
-      // Create notification for maintenance window update
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: 'info',
-              action: 'updated',
-              serviceType: 'database',
-              serviceName: clusterData.data.name,
-              serviceId: validatedData.database_id,
-              metadata: { updateType: 'maintenance', day: validatedData.day, hour: validatedData.hour }
-            })
-          );
-        } catch (notifErr) {
-          console.error('[updateMaintenanceWindow] Failed to create notification:', notifErr);
-        }
-      }
-
+    if (!result.success) {
       return NextResponse.json(
-        {
-          message: "Maintenance window configured successfully",
-        },
-        { status: 200 }
+        { error: result.error || "Failed to update maintenance window" },
+        { status: result.statusCode || 500 }
       );
     }
 
     return NextResponse.json(
-      { error: "Failed to update maintenance window" },
-      { status: response.status }
+      {
+        message: "Maintenance window configured successfully",
+      },
+      { status: 200 }
     );
   } catch (err: unknown) {
-    console.error("Maintenance window update error:", err);
-    
-    if (axios.isAxiosError(err)) {
-      return NextResponse.json(
-        {
-          error:
-            err.response?.data?.message ||
-            err.message ||
-            "Failed to update maintenance window",
-        },
-        { status: err.response?.status || 500 }
-      );
-    }
-
     if (err instanceof Error) {
       return NextResponse.json(
         { error: err.message ?? "Invalid request" },

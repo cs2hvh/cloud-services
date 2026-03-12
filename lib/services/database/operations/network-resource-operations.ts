@@ -23,7 +23,11 @@ export const networkResourceOperations = {
       );
 
       if (readExistingFirewall.status !== 200) {
-        return { success: false, error: "Failed to fetch existing firewall rules" };
+        return {
+          success: false,
+          error: "Failed to fetch existing firewall rules",
+          statusCode: 500,
+        };
       }
 
       const existingRules = readExistingFirewall.data?.rules || [];
@@ -31,7 +35,11 @@ export const networkResourceOperations = {
         (rule: Rule) => rule.type === "ip_addr" && rule.value === ipAddress
       );
       if (ipExists) {
-        return { success: false, error: "This IP address already exists in the firewall rules" };
+        return {
+          success: false,
+          error: "This IP address already exists in the firewall rules",
+          statusCode: 400,
+        };
       }
 
       const updateFirewall = await axios.put(
@@ -41,7 +49,11 @@ export const networkResourceOperations = {
       );
 
       if (updateFirewall.status !== 204) {
-        return { success: false, error: "Failed to update firewall rules" };
+        return {
+          success: false,
+          error: "Failed to update firewall rules",
+          statusCode: updateFirewall.status,
+        };
       }
 
       const readFirewall = await axios.get(
@@ -50,7 +62,11 @@ export const networkResourceOperations = {
       );
 
       if (readFirewall.status !== 200) {
-        return { success: false, error: "Firewall updated but failed to verify" };
+        return {
+          success: false,
+          error: "Firewall updated but failed to verify",
+          statusCode: 500,
+        };
       }
 
       const supabaseResult = await Database_Clusters.update_network_rules(clusterId, readFirewall.data?.rules);
@@ -58,6 +74,7 @@ export const networkResourceOperations = {
         return {
           success: false,
           error: "Firewall updated but failed to sync with database",
+          statusCode: 500,
         };
       }
 
@@ -112,17 +129,29 @@ export const networkResourceOperations = {
 
       return { success: true, rules: readFirewall.data?.rules };
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
+      const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError?.response?.status || 500,
+        };
+      }
+
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message,
+          statusCode: 400,
         };
       }
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
@@ -152,7 +181,11 @@ export const networkResourceOperations = {
       );
 
       if (readFirewall.status !== 200) {
-        return { success: false, error: "Failed to fetch current firewall rules" };
+        return {
+          success: false,
+          error: "Failed to fetch current firewall rules",
+          statusCode: readFirewall.status,
+        };
       }
 
       const currentRules = (readFirewall.data?.rules || []) as Rule[];
@@ -167,7 +200,11 @@ export const networkResourceOperations = {
       );
 
       if (updateFirewall.status !== 204) {
-        return { success: false, error: "Failed to delete firewall rule" };
+        return {
+          success: false,
+          error: "Failed to delete firewall rule",
+          statusCode: updateFirewall.status,
+        };
       }
 
       const verifyFirewall = await axios.get(
@@ -176,7 +213,11 @@ export const networkResourceOperations = {
       );
 
       if (verifyFirewall.status !== 200) {
-        return { success: false, error: "Firewall updated but failed to verify" };
+        return {
+          success: false,
+          error: "Firewall updated but failed to verify",
+          statusCode: 500,
+        };
       }
 
       const sync = await Database_Clusters.update_network_rules(request.clusterId, verifyFirewall.data?.rules);
@@ -217,11 +258,24 @@ export const networkResourceOperations = {
       return { success: true };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
+      if (axiosError?.response) {
+        return {
+          success: false,
+          error: axiosError?.response?.data?.message || "Unknown error occurred",
+          statusCode: axiosError?.response?.status || 500,
+        };
+      }
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message,
+          statusCode: 400,
+        };
+      }
       return {
         success: false,
-        error:
-          axiosError?.response?.data?.message ||
-          (err instanceof Error ? err.message : "Unknown error occurred"),
+        error: "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },

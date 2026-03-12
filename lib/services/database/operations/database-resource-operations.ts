@@ -262,7 +262,9 @@ export const databaseResourceOperations = {
         const axiosError = parseAxiosError(err);
         return {
           success: false,
-          error: axiosError?.response?.data?.message || err.message,
+          error:
+            axiosError?.response?.data?.message ||
+            (err instanceof Error ? err.message : "Unknown error occurred"),
         };
       }
 

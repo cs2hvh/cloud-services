@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { Projects } from "@/lib/supabase/queries/projects";
+
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { DatabaseService } from "@/lib/services/database-service";
 import { upsizeStorageSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
-import { AuditLogService } from "@/lib/audit";
-import { getAuditContext } from "@/lib/audit/context";
 
 export async function PUT(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
     return auth.response;
@@ -19,7 +14,6 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // ✅ VALIDATE REQUEST PAYLOAD
     const validation = validateRequest(upsizeStorageSchema, body);
     if (!validation.success) {
       return validation.response;
@@ -27,189 +21,49 @@ export async function PUT(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    // Get current database cluster details
-    const clusterData = await Database_Clusters.read(validatedData.database_id);
-    if (!clusterData.success || !clusterData.data) {
-      return NextResponse.json(
-        { error: "Database cluster not found" },
-        { status: 404 }
-      );
-    }
-
-    const currentSize = clusterData.data.size;
-    const currentStorageMib = clusterData.data.storage_size_mib || 0;
-    const engine = clusterData.data.engine || "pg";
-
-    // Validate that new storage is greater than current
-    if (validatedData.storage_size_mib <= currentStorageMib) {
-      return NextResponse.json(
-        { error: "New storage size must be greater than current storage size" },
-        { status: 400 }
-      );
-    }
-
-    // Storage limits based on engine and RAM
-    const STORAGE_LIMITS: Record<string, Record<string, { minGiB: number; maxGiB: number }>> = {
-      pg: {
-        "1gb": { minGiB: 10, maxGiB: 30 },
-        "2gb": { minGiB: 30, maxGiB: 60 },
-        "4gb": { minGiB: 60, maxGiB: 120 },
-        "8gb": { minGiB: 140, maxGiB: 280 },
-        "16gb": { minGiB: 290, maxGiB: 580 },
+    const result = await DatabaseService.upsizeStorage(
+      {
+        clusterId: validatedData.database_id,
+        storageSizeMib: validatedData.storage_size_mib,
       },
-      mysql: {
-        "1gb": { minGiB: 10, maxGiB: 30 },
-        "2gb": { minGiB: 30, maxGiB: 60 },
-        "4gb": { minGiB: 60, maxGiB: 120 },
-        "8gb": { minGiB: 140, maxGiB: 280 },
-        "16gb": { minGiB: 290, maxGiB: 580 },
-      },
-      mongodb: {
-        "1gb": { minGiB: 15, maxGiB: 25 },
-        "2gb": { minGiB: 34, maxGiB: 54 },
-        "32gb": { minGiB: 504, maxGiB: 1014 },
-      },
-    };
+      req
+    );
 
-    // Extract RAM from size string
-    const ramMatch = currentSize.match(/(\d+)gb/i);
-    const ram = ramMatch ? `${ramMatch[1]}gb` : "4gb";
-
-    // Get limits for the engine and RAM combination
-    const limits = STORAGE_LIMITS[engine]?.[ram];
-    
-    if (limits) {
-      const maxAllowedMib = limits.maxGiB * 1024;
-      if (validatedData.storage_size_mib > maxAllowedMib) {
+    if (!result.success) {
+      if (result.errorCode === "NOT_FOUND") {
         return NextResponse.json(
-          { error: `Storage size cannot exceed ${limits.maxGiB} GiB for ${engine} with ${ram} RAM` },
+          { error: result.error || "Database cluster not found" },
+          { status: 404 }
+        );
+      }
+
+      if (result.errorCode === "INVALID_PARAMETER") {
+        return NextResponse.json(
+          { error: result.error || "Failed to upsize database storage" },
           { status: 400 }
         );
       }
-    }
 
-    const payload = {
-      size: currentSize,
-      num_nodes: 1,
-      storage_size_mib: validatedData.storage_size_mib,
-    };
-
-
-    console.log(payload,"...............................payload")
-
-    // Resize database cluster via DigitalOcean API
-    const response = await axios.put(
-      `https://api.digitalocean.com/v2/databases/${validatedData.database_id}/resize`,
-      payload,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    console.log(
-      "[upsize-storage] Database storage upsize response:",
-      response.status,
-      response.statusText
-    );
-
-    if (response.status === 202 || response.status === 204) {
-      // Update Supabase with new storage size
-      const supabaseUpdate = await Database_Clusters.update_storage_size(
-        validatedData.database_id,
-        validatedData.storage_size_mib
-      );
-
-      if (!supabaseUpdate.success) {
-        console.error(
-          "[upsize-storage] Failed to update Supabase:",
-          supabaseUpdate.error
+      if (result.errorCode === "UNKNOWN_ERROR" && result.error === "Unknown error occurred") {
+        return NextResponse.json(
+          { error: "An unexpected error occurred" },
+          { status: 500 }
         );
-        // Still return success as DigitalOcean update was successful
-      }
-
-      // Add activity log for storage upsize
-      if (clusterData.data.project_id) {
-        await Projects.add_log({
-          project_id: clusterData.data.project_id,
-          event: "Settings",
-          text: `Database storage upsized to: ${(validatedData.storage_size_mib / 1024).toFixed(0)} GiB`
-        });
-        console.log(`[upsize-storage] ✅ Activity log added for storage upsize`);
-      }
-
-      // Create audit log
-      try {
-        const context = getAuditContext(req);
-        await AuditLogService.create({
-          user_id: clusterData.data.owner_id,
-          user_role: 'user',
-          action: 'update',
-          service_type: 'database',
-          service_id: validatedData.database_id,
-          service_name: clusterData.data.name,
-          before_state: { storage_size_mib: currentStorageMib },
-          after_state: { storage_size_mib: validatedData.storage_size_mib },
-          metadata: { 
-            update_type: 'storage_upsize',
-            old_storage_gib: (currentStorageMib / 1024).toFixed(0),
-            new_storage_gib: (validatedData.storage_size_mib / 1024).toFixed(0)
-          },
-          ...context,
-        });
-      } catch (auditErr) {
-        console.error('[upsize-storage] Failed to create audit log:', auditErr);
-      }
-
-      // Create notification for storage upsize
-      try {
-        await NotificationService.create(
-          createServiceNotification({
-            userId: clusterData.data.owner_id,
-            type: 'info',
-            action: 'updated',
-            serviceType: 'database',
-            serviceName: clusterData.data.name,
-            serviceId: validatedData.database_id,
-            metadata: { 
-              updateType: 'storage_upsize', 
-              newStorageGiB: (validatedData.storage_size_mib / 1024).toFixed(0)
-            }
-          })
-        );
-      } catch (notifErr) {
-        console.error('[upsize-storage] Failed to create notification:', notifErr);
       }
 
       return NextResponse.json(
-        {
-          message: "Storage upsize initiated. It will reflect changes in some time",
-        },
-        { status: 200 }
+        { error: result.error || "Failed to upsize database storage" },
+        { status: result.statusCode || 500 }
       );
     }
 
     return NextResponse.json(
-      { error: "Failed to upsize database storage" },
-      { status: response.status }
+      {
+        message: "Storage upsize initiated. It will reflect changes in some time",
+      },
+      { status: 200 }
     );
   } catch (err: unknown) {
-    console.error("[upsize-storage] Error:", err);
-    
-    if (axios.isAxiosError(err)) {
-      return NextResponse.json(
-        {
-          error:
-            err.response?.data?.message ||
-            err.message ||
-            "Failed to upsize database storage",
-        },
-        { status: err.response?.status || 500 }
-      );
-    }
-
     if (err instanceof Error) {
       return NextResponse.json(
         { error: err.message || "Failed to upsize database storage" },

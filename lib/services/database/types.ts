@@ -29,6 +29,8 @@ export interface CreateDatabaseClusterResult {
   };
   error?: string;
   errorCode?: string;
+  balance?: number;
+  required?: number;
 }
 
 export interface GetDatabaseClusterRequest {
@@ -134,12 +136,14 @@ export interface AddFirewallRuleResult {
   success: boolean;
   rules?: Rule[];
   error?: string;
+  statusCode?: number;
 }
 
 export interface DeleteFirewallRuleResult {
   success: boolean;
   error?: string;
   warning?: string;
+  statusCode?: number;
 }
 
 export interface RetrieveDatabaseRequest {
