@@ -52,7 +52,7 @@ const TABS = [
       "Real-time 3D rendering and video transcoding",
       "Pre-configured with CUDA, PyTorch, and Jupyter",
     ],
-    imageSrc: "/images/main-page/gpu-instance.svg",
+    imageSrc: "/images/main-page/gpu aniamtion resized.png",
     imageAlt: "GPU server stack",
   },
   {
@@ -116,7 +116,7 @@ const TABS = [
       "99.999999999% data durability guarantee",
       "Versioning, lifecycle rules, and immutability",
     ],
-    imageSrc: "/images/main-page/object-space.svg",
+    imageSrc: "/images/main-page/object-space.png",
     imageAlt: "Object storage illustration",
   },
   {
@@ -132,7 +132,7 @@ const TABS = [
       "Automatic SSL, custom domains, and edge caching",
       "Instant rollbacks and deployment history",
     ],
-    imageSrc: "/images/main-page/app-deploy.svg",
+    imageSrc: "/images/main-page/app-deploy.png",
     imageAlt: "App deployment illustration",
   },
 ] as const;

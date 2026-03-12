@@ -38,7 +38,7 @@ const AppDeploymentHome = () => {
         primaryAction={{ label: "Deploy Your App", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/app-deploy.svg", alt: "App Deployment infrastructure" }}
+        illustration={{ src: "/images/main-page/app-deploy.png", alt: "App Deployment infrastructure" }}
       />
       <AppDeployFrameworksSection />
       <AppDeployShowcaseSection />
