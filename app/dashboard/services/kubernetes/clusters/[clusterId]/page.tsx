@@ -1,4 +1,3 @@
-"use server";
 import SingleCluster from "@/components/dashboard/kubernetes/clusters/singlecluster/singlecluster";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { authenticateUser } from "@/lib/auth/server-auth";

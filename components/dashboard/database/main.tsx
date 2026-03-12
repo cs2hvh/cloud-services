@@ -152,7 +152,7 @@ const DatabasePage = () => {
       try {
         setLoading(true);
         const res = await api.post("/services/database/read_all_owner", {
-          id: user.id,
+          id: user?.id,
         });
 
         if (!mounted) return;

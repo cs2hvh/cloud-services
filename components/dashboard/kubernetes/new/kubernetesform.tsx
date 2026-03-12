@@ -1398,9 +1398,9 @@ const NewClusterPage = ({
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-semibold text-white">
-                        {selectedPlanDetails?.price !== undefined
-                          ? "$" + selectedPlanDetails.price.toFixed(2)
-                          : "-"}
+                       {selectedPlanDetails?.price !== null
+  ? "$" + selectedPlanDetails?.price.toFixed(2)
+  : "-"}
                       </div>
                       <div className="text-xs text-white/45">monthly rate</div>
                     </div>
@@ -1461,8 +1461,8 @@ const NewClusterPage = ({
               <div className="flex items-center justify-between gap-4 text-sm">
                 <span className="text-white/60">Monthly rate</span>
                 <span className="text-lg font-semibold text-white">
-                  {selectedPlanDetails?.price !== undefined
-                    ? "$" + selectedPlanDetails.price.toFixed(2)
+                  {selectedPlanDetails?.price !== null
+                    ? "$" + selectedPlanDetails?.price.toFixed(2)
                     : "Select a plan"}
                 </span>
               </div>
