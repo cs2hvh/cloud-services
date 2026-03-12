@@ -22,7 +22,6 @@ export const DomainStep = ({
 }: StepProps) => {
   //console.log(spectrumApps,"........spectrumApps in domain step........");
   const handleNext = () => {
-    debugger;
     if (!formData.domain.trim()) {
       toast.error("Please enter a domain name");
       return;
@@ -64,7 +63,7 @@ export const DomainStep = ({
   };
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card className="glass-panel overflow-hidden">
       <CardHeader>
         <div className="flex gap-2">
           <Globe className="w-5 h-5 text-blue-400" />
@@ -94,13 +93,13 @@ export const DomainStep = ({
         <Button
           variant="outline"
           onClick={onBack}
-          className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+          className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
         >
           Back
         </Button>
         <Button
           onClick={handleNext}
-          className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+          className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
         >
           Next <ChevronRight size={16} className="ml-2" />
         </Button>

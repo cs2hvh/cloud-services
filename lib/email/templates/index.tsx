@@ -1,0 +1,113 @@
+import { AccountCreatedEmailTemplate } from "@/lib/email/templates/auth/account-created";
+import { ApiKeyActivityEmailTemplate } from "@/lib/email/templates/auth/api-key-activity";
+import { EmailVerificationTemplate } from "@/lib/email/templates/auth/email-verification";
+import { BillingNotificationEmailTemplate } from "@/lib/email/templates/billing/billing-notification";
+import { DeploymentStatusEmailTemplate } from "@/lib/email/templates/deployments/deployment-status";
+import { ForgotPasswordEmailTemplate } from "@/lib/email/templates/auth/forgot-password";
+import { NewLoginAlertEmailTemplate } from "@/lib/email/templates/auth/new-login-alert";
+import { OtpEmailTemplate } from "@/lib/email/templates/auth/otp";
+import { SuspiciousActivityEmailTemplate } from "@/lib/email/templates/auth/suspicious-activity";
+import { SystemAlertEmailTemplate } from "@/lib/email/templates/alerts/system-alert";
+import type { EmailTemplateRegistry } from "@/lib/email/types";
+
+export const emailTemplates: EmailTemplateRegistry = {
+  otp: {
+    subject: () => "AhuraSense | Your OTP Code",
+    previewText: () => "Use this code to complete your registration.",
+    render: (data) => <OtpEmailTemplate {...data} />,
+    text: ({ username, otp }) =>
+      `Hi ${username}, use OTP ${otp} to complete your registration.`,
+    tags: () => [{ name: "category", value: "auth" }],
+  },
+  forgotPassword: {
+    subject: () => "AhuraSense | Your Password Reset OTP",
+    previewText: () => "Use this code to reset your password.",
+    render: (data) => <ForgotPasswordEmailTemplate {...data} />,
+    text: ({ username, otp }) =>
+      `Hi ${username}, use OTP ${otp} to reset your password.`,
+    tags: () => [{ name: "category", value: "auth" }],
+  },
+  accountCreated: {
+    subject: () => "AhuraSense | Your account has been created",
+    previewText: () => "Welcome to AhuraSense.",
+    render: (data) => <AccountCreatedEmailTemplate {...data} />,
+    text: ({ username, email }) =>
+      `Hi ${username}, your account for ${email} has been created successfully.`,
+    tags: () => [{ name: "category", value: "account-security" }],
+  },
+  emailVerification: {
+    subject: () => "AhuraSense | Verify your email address",
+    previewText: () => "Complete your email verification.",
+    render: (data) => <EmailVerificationTemplate {...data} />,
+    text: ({ username, verificationCode }) =>
+      `Hi ${username}, verify your email${verificationCode ? ` with code ${verificationCode}` : ""}.`,
+    tags: () => [{ name: "category", value: "account-security" }],
+  },
+  newLoginAlert: {
+    subject: ({ location }) => `AhuraSense | New login detected from ${location}`,
+    previewText: () => "We noticed a new login on your account.",
+    render: (data) => <NewLoginAlertEmailTemplate {...data} />,
+    text: ({ username, device, location, loggedInAt }) =>
+      `Hi ${username}, a new login was detected from ${device} in ${location} at ${loggedInAt}.`,
+    tags: () => [{ name: "category", value: "account-security" }],
+  },
+  apiKeyActivity: {
+    subject: ({ action, keyName }) =>
+      `AhuraSense | API key ${action}: ${keyName}`,
+    previewText: () => "An API key activity was recorded.",
+    render: (data) => <ApiKeyActivityEmailTemplate {...data} />,
+    text: ({ username, keyName, action }) =>
+      `Hi ${username}, API key "${keyName}" was ${action}.`,
+    tags: ({ action }) => [
+      { name: "category", value: "account-security" },
+      { name: "action", value: action },
+    ],
+  },
+  suspiciousActivity: {
+    subject: () => "AhuraSense | Suspicious activity detected",
+    previewText: () => "We detected suspicious account activity.",
+    render: (data) => <SuspiciousActivityEmailTemplate {...data} />,
+    text: ({ username, activity, detectedAt }) =>
+      `Hi ${username}, suspicious activity was detected: ${activity} at ${detectedAt}.`,
+    tags: () => [{ name: "category", value: "account-security" }],
+  },
+  billingNotification: {
+    subject: ({ invoiceNumber, status }) =>
+      `AhuraSense | Billing ${status} for invoice ${invoiceNumber}`,
+    previewText: ({ invoiceNumber }) =>
+      `Billing update available for invoice ${invoiceNumber}.`,
+    render: (data) => <BillingNotificationEmailTemplate {...data} />,
+    text: ({ customerName, invoiceNumber, amount, dueDate, status }) =>
+      `Hi ${customerName}, invoice ${invoiceNumber} is ${status}. Amount: ${amount}. Due date: ${dueDate}.`,
+    tags: ({ status }) => [
+      { name: "category", value: "billing" },
+      { name: "status", value: status },
+    ],
+  },
+  deploymentStatus: {
+    subject: ({ serviceName, status, environment }) =>
+      `AhuraSense | ${serviceName} deployment ${status} on ${environment}`,
+    previewText: ({ serviceName, status }) =>
+      `${serviceName} deployment ${status}.`,
+    render: (data) => <DeploymentStatusEmailTemplate {...data} />,
+    text: ({ customerName, serviceName, environment, status }) =>
+      `Hi ${customerName}, deployment for ${serviceName} on ${environment} finished with status ${status}.`,
+    tags: ({ status, environment }) => [
+      { name: "category", value: "deployments" },
+      { name: "status", value: status },
+      { name: "environment", value: environment },
+    ],
+  },
+  systemAlert: {
+    subject: ({ severity, alertTitle }) =>
+      `AhuraSense | ${severity.toUpperCase()} alert: ${alertTitle}`,
+    previewText: ({ serviceName }) => `System alert for ${serviceName}.`,
+    render: (data) => <SystemAlertEmailTemplate {...data} />,
+    text: ({ customerName, alertTitle, serviceName, severity }) =>
+      `Hi ${customerName}, ${severity} alert "${alertTitle}" was triggered for ${serviceName}.`,
+    tags: ({ severity }) => [
+      { name: "category", value: "alerts" },
+      { name: "severity", value: severity },
+    ],
+  },
+};

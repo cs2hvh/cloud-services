@@ -60,7 +60,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
   };
 
   return (
-    <Card className="bg-white/5 border-white/10">
+    <Card className="glass-panel overflow-hidden">
       <CardHeader>
         <CardTitle className="text-white">Origin Configuration</CardTitle>
         <p className="text-sm text-white/60">
@@ -207,7 +207,7 @@ export const OriginStep = ({ formData, onUpdate, onNext, onBack }: StepProps) =>
         <Button
           variant="outline"
           onClick={onBack}
-          className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+          className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
         >
           Back
         </Button>

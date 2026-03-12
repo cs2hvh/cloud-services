@@ -510,84 +510,116 @@ const NewClusterPage = ({
   const sleep = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+
+  const panelClassName = "glass-panel overflow-hidden";
+  const wizardStartStep = role === "admin" ? 0 : 1;
+  const progressStep = currentStep - wizardStartStep + 1;
+  const progressPercentage = (progressStep / steps.length) * 100;
+  const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
+  const nodePresets = [1, 2, 3, 5];
+  const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
+
   // Use predefined database types
   //   const dbTypes = Object.keys(databaseInfo);
 
   return (
-    <div >
-      <div className="mb-8">
-        <div className="mb-6 flex items-center">
-          <Link
-            href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
-            className="inline-flex items-center text-sm text-white/70 hover:text-white transition-colors duration-200 bg-white/5 hover:bg-white/10 rounded-lg px-4 py-2 border border-white/10 hover:border-white/20"
-          >
-            <ArrowLeft size={16} className="mr-2" />
-            Back to Clusters
-          </Link>
-        </div>
-        <div className="flex justify-between mb-2 mx-auto">
-          {steps.map((step, index) => (
-            <div
-              key={step.id}
-              className="flex-1 min-w-0 flex flex-col items-center"
+    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className={panelClassName}>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href={role === "admin" ? "/dashboard/admin/kubernetes" : "/dashboard/services/kubernetes"}
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
             >
-              {/* Number/Circle and connecting lines */}
-              <div className="flex items-center w-full">
-                {/* {index > 0 && (
-        <div
-          className={`basis-0 flex-1 h-0.5 transition-colors duration-300 ${
-            currentStep >= step.id ? "bg-blue-600" : "bg-white/10"
-          }`}
-        />
-      )} */}
+              <ArrowLeft size={16} className="mr-2" />
+              Back to clusters
+            </Link>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              Kubernetes Provisioning
+            </p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Create a managed Kubernetes cluster with clearer sizing and deployment controls.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+              Move through cluster identity, region, node count, plan sizing, version, project assignment, and final review in a cleaner enterprise flow.
+            </p>
+          </div>
 
-                <div className="flex flex-col items-center min-w-0">
-                  <div
-                    className={`shrink-0 rounded-full flex items-center justify-center transition-colors duration-300
-                      w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${
-                        currentStep > step.id
-                          ? "bg-blue-600 text-white"
-                          : currentStep === step.id
-                            ? "bg-blue-500 text-white"
-                            : "bg-white/10 text-white/50"
-                      }`}
-                  >
-                    {currentStep > step.id ? (
-                      <CheckCircle2 size={16} />
-                    ) : (
-                      step.id
-                    )}
-                  </div>
-
-                  {/* Tag Name */}
-                  <p
-                    className={`mt-2 text-center truncate max-w-[72px] sm:max-w-[112px] md:max-w-[140px]
-                      text-[10px] sm:text-xs md:text-sm ${
-                        currentStep >= step.id ? "text-white" : "text-white/50"
-                      }`}
-                    title={step.name}
-                  >
-                    {step.name}
-                  </p>
-                </div>
-
-                {index < steps.length - 1 && (
-                  <div
-                    className={`basis-0 flex-1 h-0.5 transition-colors duration-300 ${
-                      currentStep > step.id ? "bg-blue-600" : "bg-white/10"
-                    }`}
-                  />
-                )}
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Progress
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {progressStep} / {steps.length}
               </div>
             </div>
-          ))}
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Plan
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {selectedPlan || "-"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
+            <div
+              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
+            {steps.map((step) => {
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    if (step.id < currentStep) {
+                      setCurrentStep(step.id);
+                    }
+                  }}
+                  className={`border px-3 py-3 text-left transition-colors ${
+                    isActive
+                      ? "border-blue-400/30 bg-blue-500/10"
+                      : isCompleted
+                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
+                        : "border-white/[0.06] bg-transparent"
+                  } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
+                        isActive
+                          ? "border-blue-400/30 text-blue-300"
+                          : "border-white/[0.10] text-white/78"
+                      }`}
+                    >
+                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : step.id}
+                    </div>
+                    <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+
         <div className="lg:col-span-2 space-y-6">
           {currentStep === 0 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Select User</CardTitle>
               </CardHeader>
@@ -661,7 +693,7 @@ const NewClusterPage = ({
               <CardFooter className="flex justify-end">
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -670,7 +702,7 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 1 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">
                   Kubernetes Cluster Name
@@ -702,7 +734,7 @@ const NewClusterPage = ({
                      <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
@@ -710,7 +742,7 @@ const NewClusterPage = ({
                 }
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -719,7 +751,7 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 2 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Location</CardTitle>
               </CardHeader>
@@ -775,13 +807,13 @@ const NewClusterPage = ({
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -790,45 +822,132 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 3 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Number of Nodes</CardTitle>
+            <Card className={panelClassName}>
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-white">Worker topology</CardTitle>
+                <p className="text-sm leading-6 text-white/50">
+                  Choose the worker count for the cluster. One control plane node is
+                  included automatically.
+                </p>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Input
-                    value={selectedNode}
-                    onChange={(e) =>
-                      setState({
-                        ...state,
-                        selectedNode: Number(e.target.value),
-                      })
-                    }
-                    type="number"
-                    min="1"
-                    placeholder="number of nodes (e.g., 3)"
-                    className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
-                      validationErrors.nodes ? "border-red-500" : ""
-                    }`}
-                  />
-                  {validationErrors.nodes && (
-                    <p className="text-sm text-red-500">
-                      {validationErrors.nodes}
-                    </p>
-                  )}
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  {nodePresets.map((count) => {
+                    const isSelected = selectedNode === count;
+
+                    return (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() =>
+                          setState({
+                            ...state,
+                            selectedNode: count,
+                          })
+                        }
+                        className={
+                          isSelected
+                            ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
+                            : "border border-white/[0.08] bg-white/[0.03] p-4 text-left transition-colors hover:bg-white/[0.06]"
+                        }
+                      >
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                          Preset
+                        </div>
+                        <div className="mt-2 text-2xl font-semibold text-white">
+                          {count}
+                        </div>
+                        <div className="mt-1 text-sm text-white/68">
+                          Worker{count === 1 ? "" : "s"}
+                        </div>
+                        <div className="mt-3 text-xs text-white/40">
+                          {count + 1} total nodes with control plane
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <Label
+                      htmlFor="worker-count"
+                      className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/40"
+                    >
+                      Custom count
+                    </Label>
+                    <Input
+                      id="worker-count"
+                      value={selectedNode}
+                      onChange={(e) =>
+                        setState({
+                          ...state,
+                          selectedNode: Number(e.target.value),
+                        })
+                      }
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 3"
+                      className={
+                        "mt-3 h-11 border-white/[0.12] bg-white/[0.04] text-white placeholder:text-white/35 " +
+                        (validationErrors.nodes ? "border-red-500" : "")
+                      }
+                    />
+                    {validationErrors.nodes && (
+                      <p className="mt-2 text-sm text-red-400">
+                        {validationErrors.nodes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Total nodes
+                      </div>
+                      <div className="mt-2 text-lg font-semibold text-white">
+                        {selectedNode ? selectedNode + 1 : 0}
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        Includes one managed control plane node.
+                      </p>
+                    </div>
+                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Best for
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-white">
+                        API services and internal platforms
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        Scale workers later as workloads grow.
+                      </p>
+                    </div>
+                    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Guidance
+                      </div>
+                      <div className="mt-2 text-sm font-medium text-white">
+                        Start lean, expand safely
+                      </div>
+                      <p className="mt-1 text-xs leading-5 text-white/45">
+                        Keep smaller environments efficient during setup.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -837,115 +956,129 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 4 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Cluster Plan</CardTitle>
+            <Card className={panelClassName}>
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-white">Cluster plan</CardTitle>
+                <p className="text-sm leading-6 text-white/50">
+                  Select a compute profile that matches the initial workload. The
+                  plan cards are denser so comparisons feel faster and more precise.
+                </p>
               </CardHeader>
-               <div className="max-h-[400px] overflow-y-auto border border-white/10 rounded-lg">
-              <CardContent>
-               
-                <RadioGroup
-                  value={state.selectedPlan}
-                  onValueChange={(value) =>
-                    setState({ ...state, selectedPlan: value })
-                  }
-                  className="grid grid-cols-1 gap-4"
-                >
-                  {products.map((plan) => (
-                    <div key={plan.id}>
-                      <RadioGroupItem
-                        value={plan.name || ""}
-                        id={plan.name || ""}
-                        className="peer sr-only"
-                      />
-                      <Label
-                        htmlFor={plan.name || ""}
-                        className="block bg-white/10 rounded-lg border-2 border-transparent cursor-pointer p-4 sm:p-5 transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
-                      >
-                        {/* Plan Header */}
-                        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 mb-4">
-                          <div className="flex items-start gap-3 flex-1">
-                            <div className="p-2 bg-blue-500/20 rounded-lg shrink-0">
-                              <Box className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-base sm:text-lg font-bold text-white mb-1 truncate">
-                                {plan.name}
-                              </h3>
-                              {plan.description && (
-                                <p className="text-xs sm:text-sm text-white/60 line-clamp-2">
-                                  {plan.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="text-left sm:text-right ml-11 sm:ml-4 shrink-0">
-                            <div className="text-xl sm:text-2xl font-bold text-green-400">
-                              ${plan.price?.toFixed(2) || "0.00"}
-                            </div>
-                            <div className="text-xs text-white/60">per month</div>
-                            {plan.discount && plan.discount > 0 && (
-                              <div className="text-xs text-orange-400 mt-1">
-                                {plan.discount}% off
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Resources Grid */}
-                        <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-3 sm:pt-4 border-t border-white/10">
-                          <div>
-                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                              <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
-                              <span className="text-[10px] sm:text-xs text-white/60">
-                                CPU
-                              </span>
-                            </div>
-                            <p className="text-sm sm:text-base font-semibold text-white truncate">
-                              {plan.resources.cpu || 0} vCPU
-                            </p>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                              <Server className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-400 shrink-0" />
-                              <span className="text-[10px] sm:text-xs text-white/60">
-                                RAM
-                              </span>
-                            </div>
-                            <p className="text-sm sm:text-base font-semibold text-white truncate">
-                              {plan.resources.ram || 0} GB
-                            </p>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
-                              <HardDrive className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400 shrink-0" />
-                              <span className="text-[10px] sm:text-xs text-white/60">
-                                Storage
-                              </span>
-                            </div>
-                            <p className="text-sm sm:text-base font-semibold text-white truncate">
-                              {plan.resources.storage || 0} GB
-                            </p>
-                          </div>
-                        </div>
-                      </Label>
+              <CardContent className="space-y-4">
+                {selectedPlan && (
+                  <div className="flex flex-col gap-3 border border-blue-400/20 bg-blue-500/8 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/70">
+                        Selected plan
+                      </div>
+                      <div className="mt-1 text-base font-semibold text-white">
+                        {selectedPlan}
+                      </div>
                     </div>
-                  ))}
-                </RadioGroup>
-                
+                    <div className="flex flex-wrap gap-2 text-xs text-white/72">
+                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
+                        {selectedPlanDetails?.resources.cpu || 0} vCPU
+                      </span>
+                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
+                        {selectedPlanDetails?.resources.ram || 0} GB RAM
+                      </span>
+                      <span className="border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5">
+                        {selectedPlanDetails?.resources.storage || 0} GB Storage
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="max-h-[360px] overflow-y-auto pr-1">
+                  <RadioGroup
+                    value={state.selectedPlan}
+                    onValueChange={(value) =>
+                      setState({ ...state, selectedPlan: value })
+                    }
+                    className="space-y-3"
+                  >
+                    {products.map((plan) => (
+                      <div key={plan.id}>
+                        <RadioGroupItem
+                          value={plan.name || ""}
+                          id={plan.name || ""}
+                          className="peer sr-only"
+                        />
+                        <Label
+                          htmlFor={plan.name || ""}
+                          className="grid cursor-pointer gap-4 border border-white/[0.08] bg-white/[0.03] p-4 transition-colors peer-data-[state=checked]:border-blue-400/30 peer-data-[state=checked]:bg-blue-500/10 hover:bg-white/[0.05] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_120px] xl:items-center"
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
+                              <Box className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-sm font-semibold text-white sm:text-base">
+                                  {plan.name}
+                                </h3>
+                                {state.selectedPlan === plan.name && (
+                                  <Badge className="border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/15">
+                                    Selected
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="mt-1 text-sm leading-6 text-white/48">
+                                {plan.description || "Balanced compute profile for Kubernetes workloads."}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 sm:max-w-[360px]">
+                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                                <Cpu className="h-3.5 w-3.5 text-blue-300" /> CPU
+                              </div>
+                              <div className="mt-1.5 text-sm font-semibold text-white">
+                                {plan.resources.cpu || 0} vCPU
+                              </div>
+                            </div>
+                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                                <Server className="h-3.5 w-3.5 text-emerald-300" /> RAM
+                              </div>
+                              <div className="mt-1.5 text-sm font-semibold text-white">
+                                {plan.resources.ram || 0} GB
+                              </div>
+                            </div>
+                            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+                              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                                <HardDrive className="h-3.5 w-3.5 text-violet-300" /> Disk
+                              </div>
+                              <div className="mt-1.5 text-sm font-semibold text-white">
+                                {plan.resources.storage || 0} GB
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-left xl:text-right">
+                            <div className="text-lg font-semibold text-white">
+                              {"$" + (plan.price?.toFixed(2) || "0.00")}
+                            </div>
+                            <div className="text-xs text-white/45">monthly rate</div>
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
               </CardContent>
-              </div>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -954,48 +1087,89 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 5 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Configuration</CardTitle>
+            <Card className={panelClassName}>
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-white">Version policy</CardTitle>
+                <p className="text-sm leading-6 text-white/50">
+                  Pick the Kubernetes version for this cluster. Keep the initial
+                  rollout predictable and aligned with supported workloads.
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="version" className="mb-2 block text-white">
-                    Kubernetes Version
-                  </Label>
-                  <Select
-                    value={selectedVersion}
-                    onValueChange={(value) =>
-                      setState({ ...state, selectedVersion: value })
-                    }
-                  >
-                    <SelectTrigger
-                      id="version"
-                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
-                    >
-                      <SelectValue placeholder="Select version" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-black border-white/20 text-white">
-                      {versions.map((version) => (
-                        <SelectItem key={version} value={version}>
-                          v{version}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {versions.map((version, index) => {
+                    const isSelected = selectedVersion === version;
+
+                    return (
+                      <button
+                        key={version}
+                        type="button"
+                        onClick={() => setState({ ...state, selectedVersion: version })}
+                        className={
+                          isSelected
+                            ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
+                            : "border border-white/[0.08] bg-white/[0.03] p-4 text-left transition-colors hover:bg-white/[0.05]"
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Kubernetes
+                          </div>
+                          {index === 0 && (
+                            <Badge className="border-blue-400/30 bg-blue-500/15 text-blue-100 hover:bg-blue-500/15">
+                              Recommended
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-3 text-xl font-semibold text-white">
+                          {"v" + version}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-white/48">
+                          Stable version for managed cluster provisioning.
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Selected
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedVersion ? "v" + selectedVersion : "Not selected"}
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Track
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      Stable
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Upgrades
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      Managed later
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -1004,48 +1178,67 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 6 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Select Project</CardTitle>
+            <Card className={panelClassName}>
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-white">Project assignment</CardTitle>
+                <p className="text-sm leading-6 text-white/50">
+                  Attach this cluster to the project that should own operations and billing.
+                </p>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div>
-                  <Label htmlFor="version" className="mb-2 block text-white">
-                    Project
-                  </Label>
-                  <Select
-                    value={selectedProject}
-                    onValueChange={(value) =>
-                      setState({ ...state, selectedProject: value })
-                    }
-                  >
-                    <SelectTrigger
-                      id="version"
-                      className="w-full bg-white/10 border-white/20 rounded-md text-white"
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+                  <div>
+                    <Label htmlFor="project" className="mb-2 block text-white">
+                      Project
+                    </Label>
+                    <Select
+                      value={selectedProject}
+                      onValueChange={(value) =>
+                        setState({ ...state, selectedProject: value })
+                      }
                     >
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-black border-white/20 text-white">
-                      {projects.filter(item=>item.owner===selectedUser).map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger
+                        id="project"
+                        className="h-11 w-full border-white/[0.12] bg-white/[0.04] text-white"
+                      >
+                        <SelectValue placeholder="Select project" />
+                      </SelectTrigger>
+                      <SelectContent className="border-white/20 bg-black text-white">
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Selected project
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedProject
+                        ? projects.find((project) => project.id === selectedProject)?.name || "Unknown project"
+                        : "No project selected"}
+                    </div>
+                    <p className="mt-1 text-xs leading-5 text-white/45">
+                      Ownership, grouping, and later operations will follow this project.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -1054,63 +1247,90 @@ const NewClusterPage = ({
           )}
 
           {currentStep === 7 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">Review & Payment</CardTitle>
+            <Card className={panelClassName}>
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-white">Review and confirm</CardTitle>
+                <p className="text-sm leading-6 text-white/50">
+                  Verify the provisioning details before cluster creation begins.
+                </p>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="terms"
-                    checked={termsAccepted}
-                    onCheckedChange={(checked) =>
-                      setTermsAccepted(checked === true)
-                    }
-                    className="rounded-sm"
-                  />
-                  <label
-                    htmlFor="terms"
-                    className="text-sm leading-none text-white"
-                  >
-                    I accept the{" "}
-                    <Link
-                      href="/terms"
-                      className="text-blue-400 hover:underline"
-                    >
-                      Terms of Service
-                    </Link>{" "}
-                    and{" "}
-                    <Link
-                      href="/privacy"
-                      className="text-blue-400 hover:underline"
-                    >
-                      Privacy Policy
-                    </Link>
-                  </label>
+              <CardContent className="space-y-6">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Cluster
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedName || "Not set"}
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Location
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedLocationDetails?.city || "Not set"}
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Workers
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedNode || 0}
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Version
+                    </div>
+                    <div className="mt-2 text-base font-semibold text-white">
+                      {selectedVersion ? "v" + selectedVersion : "Not set"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="terms"
+                      checked={termsAccepted}
+                      onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+                      className="mt-1 border-white/30 data-[state=checked]:border-blue-400 data-[state=checked]:bg-blue-500"
+                    />
+                    <div>
+                      <Label htmlFor="terms" className="text-sm font-medium text-white">
+                        I understand that provisioning starts immediately.
+                      </Label>
+                      <p className="mt-1 text-sm leading-6 text-white/45">
+                        Charges begin when infrastructure is created. Review the selected plan,
+                        project, and version before continuing.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  disabled={isLoading}
-                  className="cursor-pointer rounded-md border-white/20 text-black hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={onSubmit}
-                  size="lg"
                   disabled={isLoading || !termsAccepted}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 w-full sm:w-auto"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                      Processing.. please wait for some time{" "}
+                      <Loader2 size={16} className="mr-2 animate-spin" /> Creating
                     </>
                   ) : (
-                    <>Pay and Deploy</>
+                    <>
+                      Create Cluster <ChevronRight size={16} className="ml-2" />
+                    </>
                   )}
                 </Button>
               </CardFooter>
@@ -1118,97 +1338,97 @@ const NewClusterPage = ({
           )}
         </div>
 
-        <div className="lg:col-span-1">
-          <Card className="sticky top-8 bg-white/5 border-white/10">
+        <div className="space-y-6">
+          <Card className={panelClassName + " sticky top-8"}>
             <CardHeader>
-              <CardTitle className="text-white">Order Summary</CardTitle>
+              <CardTitle className="text-white">Deployment Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {selectedName && (
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-sm text-white/60">Name:</span>
-                  <span className="font-medium text-white">{selectedName}</span>
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-white/60">Cluster</span>
+                    <span className="font-medium text-white">{selectedName}</span>
+                  </div>
                 </div>
               )}
 
               {selectedLocation && (
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-sm text-white/60">Location:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-white">
-                      {
-                        locations.find((loc) => loc.short === selectedLocation)
-                          ?.city
-                      }
-                    </span>
-                    <Image
-                      src={`https://flagsapi.com/${locations.find((loc) => loc.short === selectedLocation)?.country_code}/flat/64.png`}
-                      alt={selectedLocation}
-                      width={20}
-                      height={20}
-                      className="object-contain"
-                    />
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-white/60">Location</span>
+                    <div className="flex items-center gap-2 font-medium text-white">
+                      <span>{selectedLocationDetails?.city}</span>
+                      {selectedLocationDetails?.country_code && (
+                        <Image
+                          src={"https://flagsapi.com/" + selectedLocationDetails.country_code + "/flat/64.png"}
+                          alt={selectedLocation}
+                          width={20}
+                          height={20}
+                          className="object-contain"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
 
               {selectedNode && (
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-sm text-white/60">Node:</span>
-                  <span className="font-medium text-white">{selectedNode}</span>
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-white/60">Workers</span>
+                    <span className="font-medium text-white">{selectedNode}</span>
+                  </div>
+                  <p className="mt-1 text-xs leading-5 text-white/45">
+                    {selectedNode + 1} total nodes including the control plane.
+                  </p>
                 </div>
               )}
 
               {selectedPlan && (
-                <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-white/10 rounded-xl p-4 shadow-lg">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-sm font-medium text-white/80">
-                      Selected Plan
-                    </span>
-                    <div className="px-2 py-1 bg-white/10 rounded-full">
-                      <span className="text-xs font-semibold text-white">
+                <div className="border border-blue-400/20 bg-blue-500/8 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/70">
+                        Plan
+                      </div>
+                      <div className="mt-1 text-base font-semibold text-white">
                         {selectedPlan}
-                      </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-semibold text-white">
+                        {selectedPlanDetails?.price !== undefined
+                          ? "$" + selectedPlanDetails.price.toFixed(2)
+                          : "-"}
+                      </div>
+                      <div className="text-xs text-white/45">monthly rate</div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                      <div className="text-2xl font-bold text-blue-400 mb-1">
-                        {
-                          products.find(
-                            (plan) => plan.name === selectedPlan
-                          )?.resources.cpu
-                        }
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
+                      <div className="text-sm font-semibold text-white">
+                        {selectedPlanDetails?.resources.cpu || 0}
                       </div>
-                      <div className="text-xs text-white/60 uppercase tracking-wide">
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
                         vCPU
                       </div>
                     </div>
-
-                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                      <div className="text-2xl font-bold text-green-400 mb-1">
-                       {
-                          products.find(
-                            (plan) => plan.name === selectedPlan
-                          )?.resources.ram
-                        }
+                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
+                      <div className="text-sm font-semibold text-white">
+                        {selectedPlanDetails?.resources.ram || 0}
                       </div>
-                      <div className="text-xs text-white/60 uppercase tracking-wide">
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
                         RAM
                       </div>
                     </div>
-
-                    <div className="text-center p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors">
-                      <div className="text-2xl font-bold text-purple-400 mb-1">
-                        {
-                          products.find(
-                            (plan) => plan.name === selectedPlan
-                          )?.resources.storage
-                        }
+                    <div className="border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center">
+                      <div className="text-sm font-semibold text-white">
+                        {selectedPlanDetails?.resources.storage || 0}
                       </div>
-                      <div className="text-xs text-white/60 uppercase tracking-wide">
-                        Storage
+                      <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-white/38">
+                        Disk
                       </div>
                     </div>
                   </div>
@@ -1216,24 +1436,35 @@ const NewClusterPage = ({
               )}
 
               {selectedVersion && (
-                <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-                  <span className="text-sm text-white/60">Version:</span>
-                  <span className="font-medium text-white">
-                    {selectedVersion}
-                  </span>
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-white/60">Version</span>
+                    <span className="rounded-full border border-white/[0.08] bg-white/[0.06] px-2.5 py-1 text-sm font-medium text-white">
+                      {"v" + selectedVersion}
+                    </span>
+                  </div>
                 </div>
               )}
 
-              {/* {selectedProject && (
-      <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg">
-        <span className="text-sm text-white/60">Project:</span>
-        <span className="font-medium text-white">{selectedProject}</span>
-      </div>
-    )} */}
+              {selectedProject && (
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-white/60">Project</span>
+                    <span className="font-medium text-white">
+                      {projects.find((project) => project.id === selectedProject)?.name || selectedProject}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <Separator className="bg-white/10" />
-              <div className="flex justify-between items-center font-bold text-lg text-white">
-                <span>Total</span>
+              <div className="flex items-center justify-between gap-4 text-sm">
+                <span className="text-white/60">Monthly rate</span>
+                <span className="text-lg font-semibold text-white">
+                  {selectedPlanDetails?.price !== undefined
+                    ? "$" + selectedPlanDetails.price.toFixed(2)
+                    : "Select a plan"}
+                </span>
               </div>
             </CardContent>
           </Card>
