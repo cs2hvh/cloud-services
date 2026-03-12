@@ -222,15 +222,17 @@ export const clusterReadOperations = {
         resolveCached(request.publicConnection.host as string),
         resolveCached(request.privateConnection.host as string),
       ]);
+      const finalPublicHost = resolvedPublic || (request.publicConnection.host as string);
+      const finalPrivateHost = resolvedPrivate || (request.privateConnection.host as string);
 
       const publicMatch = request.publicConnection.uri.match(/@([^:\/]+)/);
       const privateMatch = request.privateConnection.uri.match(/@([^:\/]+)/);
 
       const publicUriWithIp = publicMatch
-        ? request.publicConnection.uri.replace(publicMatch[1], resolvedPublic)
+        ? request.publicConnection.uri.replace(publicMatch[1], finalPublicHost)
         : request.publicConnection.uri;
       const privateUriWithIp = privateMatch
-        ? request.privateConnection.uri.replace(privateMatch[1], resolvedPrivate)
+        ? request.privateConnection.uri.replace(privateMatch[1], finalPrivateHost)
         : request.privateConnection.uri;
 
       const encryptionKey = process.env.ENCRYPTION_KEY!;
@@ -262,14 +264,14 @@ export const clusterReadOperations = {
       const publicConnectionPayload = {
         ...request.publicConnection,
         uri: Encryption.encrypt(publicUriWithIp, encryptionKey),
-        host: Encryption.encrypt(resolvedPublic, encryptionKey),
+        host: Encryption.encrypt(finalPublicHost, encryptionKey),
         password: encryptedPublicPassword,
       } as unknown as Database_Connection;
 
       const privateConnectionPayload = {
         ...request.privateConnection,
         uri: Encryption.encrypt(privateUriWithIp, encryptionKey),
-        host: Encryption.encrypt(resolvedPrivate, encryptionKey),
+        host: Encryption.encrypt(finalPrivateHost, encryptionKey),
         password: encryptedPrivatePassword,
       } as unknown as Database_Connection;
 

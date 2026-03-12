@@ -16,10 +16,105 @@ import {
 import type {
   CreateDatabaseRequest,
   DeleteDatabaseRequest,
+  InternalListDatabasesRequest,
+  InternalRetrieveDatabaseRequest,
   ListDatabasesRequest,
   ListDatabasesResult,
   RetrieveDatabaseRequest,
 } from "../types";
+
+async function listDatabasesFromProvider(
+  clusterId: string,
+  unknownErrorFallback: string
+): Promise<ListDatabasesResult> {
+  try {
+    const response = await axios.get(
+      `https://api.digitalocean.com/v2/databases/${clusterId}/dbs`,
+      { headers: getDigitalOceanHeaders() }
+    );
+
+    if (response.status !== 200) {
+      return { success: false, error: "Failed to fetch databases from DigitalOcean" };
+    }
+
+    const databases = response.data.dbs as DatabaseInstance[];
+    const formattedDbs = databases.map((db: DatabaseInstance) => ({
+      id: db.name,
+      name: db.name,
+      created_at: new Date().toISOString(),
+    }));
+
+    const syncResult = await Database_Clusters.update_dbs(clusterId, formattedDbs);
+    if (!syncResult.success) {
+      return {
+        success: true,
+        data: databases,
+        warning: syncResult.error,
+      };
+    }
+
+    return {
+      success: true,
+      data: databases,
+    };
+  } catch (err: unknown) {
+    const axiosError = parseAxiosError(err);
+    return {
+      success: false,
+      error:
+        axiosError?.response?.data?.message ||
+        (err instanceof Error ? err.message : unknownErrorFallback),
+    };
+  }
+}
+
+async function retrieveDatabaseFromProvider(
+  clusterId: string,
+  name: string,
+  unknownErrorFallback: string
+): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  try {
+    const response = await axios.get(
+      `https://api.digitalocean.com/v2/databases/${clusterId}/dbs/${name}`,
+      { headers: getDigitalOceanHeaders() }
+    );
+
+    if (response.status !== 200) {
+      return { success: false, error: "Failed to retrieve database" };
+    }
+
+    const retrievedDatabase = response.data?.db as DatabaseInstance | undefined;
+    if (retrievedDatabase?.name === name) {
+      return { success: true, data: retrievedDatabase };
+    }
+
+    const listResponse = await axios.get(
+      `https://api.digitalocean.com/v2/databases/${clusterId}/dbs`,
+      { headers: getDigitalOceanHeaders() }
+    );
+    if (listResponse.status !== 200) {
+      return { success: false, error: "Failed to retrieve database" };
+    }
+
+    const databases = Array.isArray(listResponse.data?.dbs)
+      ? (listResponse.data.dbs as DatabaseInstance[])
+      : [];
+    const matched = databases.find((db) => db.name === name);
+    if (!matched) {
+      return { success: false, error: `database ${name} was not found` };
+    }
+
+    return { success: true, data: matched };
+  } catch (err: unknown) {
+    const axiosError = parseAxiosError(err);
+    return {
+      success: false,
+      error:
+        axiosError?.response?.data?.message ||
+        (err instanceof Error ? err.message : unknownErrorFallback),
+    };
+  }
+}
 
 export const databaseResourceOperations = {
   async createDatabase(
@@ -228,51 +323,24 @@ export const databaseResourceOperations = {
         };
       }
 
-      const response = await axios.get(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs`,
-        { headers: getDigitalOceanHeaders() }
-      );
-
-      if (response.status !== 200) {
-        return { success: false, error: "Failed to fetch databases from DigitalOcean" };
-      }
-
-      const databases = response.data.dbs as DatabaseInstance[];
-      const formattedDbs = databases.map((db: DatabaseInstance) => ({
-        id: db.name,
-        name: db.name,
-        created_at: new Date().toISOString(),
-      }));
-
-      const syncResult = await Database_Clusters.update_dbs(request.clusterId, formattedDbs);
-      if (!syncResult.success) {
-        return {
-          success: true,
-          data: databases,
-          warning: syncResult.error,
-        };
-      }
-
-      return {
-        success: true,
-        data: databases,
-      };
+      return listDatabasesFromProvider(request.clusterId, "Unknown error occurred");
     } catch (err: unknown) {
-      if (err instanceof Error && "response" in err) {
-        const axiosError = parseAxiosError(err);
-        return {
-          success: false,
-          error:
-            axiosError?.response?.data?.message ||
-            (err instanceof Error ? err.message : "Unknown error occurred"),
-        };
-      }
-
+      const axiosError = parseAxiosError(err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error:
+          axiosError?.response?.data?.message ||
+          (err instanceof Error ? err.message : "Unknown error occurred"),
       };
     }
+  },
+
+  // Compatibility method for legacy internal routes that historically called
+  // DigitalOcean directly without cluster engine/precheck gates.
+  async listDatabasesInternal(
+    request: InternalListDatabasesRequest
+  ): Promise<ListDatabasesResult> {
+    return listDatabasesFromProvider(request.clusterId, "Invalid request");
   },
 
   async retrieveDatabase(
@@ -291,39 +359,11 @@ export const databaseResourceOperations = {
         };
       }
 
-      const response = await axios.get(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.name}`,
-        { headers: getDigitalOceanHeaders() }
+      return retrieveDatabaseFromProvider(
+        request.clusterId,
+        request.name,
+        "Unknown error occurred"
       );
-
-      if (response.status !== 200) {
-        return { success: false, error: "Failed to retrieve database" };
-      }
-
-      const retrievedDatabase = response.data?.db as DatabaseInstance | undefined;
-      if (retrievedDatabase?.name === request.name) {
-        return { success: true, data: retrievedDatabase };
-      }
-
-      // Provider responses can be inconsistent for some engines; verify by listing
-      // databases and matching by name before returning a false positive.
-      const listResponse = await axios.get(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs`,
-        { headers: getDigitalOceanHeaders() }
-      );
-      if (listResponse.status !== 200) {
-        return { success: false, error: "Failed to retrieve database" };
-      }
-
-      const databases = Array.isArray(listResponse.data?.dbs)
-        ? (listResponse.data.dbs as DatabaseInstance[])
-        : [];
-      const matched = databases.find((db) => db.name === request.name);
-      if (!matched) {
-        return { success: false, error: `database ${request.name} was not found` };
-      }
-
-      return { success: true, data: matched };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
       return {
@@ -333,5 +373,13 @@ export const databaseResourceOperations = {
           (err instanceof Error ? err.message : "Unknown error occurred"),
       };
     }
+  },
+
+  // Compatibility method for legacy internal routes that historically called
+  // DigitalOcean directly without cluster engine/precheck gates.
+  async retrieveDatabaseInternal(
+    request: InternalRetrieveDatabaseRequest
+  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    return retrieveDatabaseFromProvider(request.clusterId, request.name, "Invalid request");
   },
 };

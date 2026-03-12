@@ -1,149 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { resolveCached } from "@/lib/cache/cached-dns-resolver";
+
 import { authenticateUser } from "@/lib/auth/server-auth";
-import { Encryption } from "@/config/functions";
+import { validateRequest } from "@/lib/middleware/validate-request";
+import { DatabaseService } from "@/lib/services/database-service";
+import type { Database_Connection } from "@/lib/supabase/types";
+import { updateStatusSchema } from "@/lib/validation/database";
 
 export async function POST(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated) {
     return auth.response;
   }
 
+  let body: unknown;
   try {
-    const body = await req.json();
-
-    //console.log(body, "...........in update database status api........");
-
-    // ✅ PERFORMANCE OPTIMIZATION: Resolve both hosts in parallel with caching
-    // If resolution fails, the original host will be returned as fallback
-    const [host_public, host_private] = await Promise.all([
-      resolveCached(body.public_connection.host),
-      resolveCached(body.private_connection.host)
-    ]);
-    
-    // ✅ FALLBACK: Ensure we always have valid hosts (use original if resolution failed)
-    const finalPublicHost = host_public || body.public_connection.host;
-    const finalPrivateHost = host_private || body.private_connection.host;
-    
-    // Host resolution logging (safe - no credentials)
-    console.log("Public host resolved:", !!finalPublicHost, "| Private host resolved:", !!finalPrivateHost);
-
-    // ✅ UPDATE URIs: Replace hostname with IP address in connection URIs
-    // Extract hostname from URI (part after @ and before :port or /)
-    const publicHostnameMatch = body.public_connection.uri.match(/@([^:\/]+)/);
-    const privateHostnameMatch = body.private_connection.uri.match(/@([^:\/]+)/);
-    
-    const public_uri_with_ip = publicHostnameMatch
-      ? body.public_connection.uri.replace(publicHostnameMatch[1], finalPublicHost)
-      : body.public_connection.uri;
-      
-    const private_uri_with_ip = privateHostnameMatch
-      ? body.private_connection.uri.replace(privateHostnameMatch[1], finalPrivateHost)
-      : body.private_connection.uri;
-
-    // URI update logging (credentials redacted)
-    console.log("URI hostname replacement - public:", !!publicHostnameMatch, "| private:", !!privateHostnameMatch);
-
-    //encrypt the host and password here and then store in supabase
-    
-    // Encryption key from environment
-    const encryptionKey = process.env.ENCRYPTION_KEY!;
-    
-    // Encrypt hosts (using resolved IPs or original hosts as fallback)
-    const encryptedPublicHost = Encryption.encrypt(finalPublicHost, encryptionKey);
-    const encryptedPrivateHost = Encryption.encrypt(finalPrivateHost, encryptionKey);
-    
-    // Encrypt passwords (handle empty passwords - DigitalOcean MongoDB may not provide separate password field)
-    // If password is not provided, try to extract it from the URI
-    let publicPassword = body.public_connection.password;
-    let privatePassword = body.private_connection.password;
-    
-    // Extract password from URI if not provided directly
-    if (!publicPassword && body.public_connection.uri) {
-      const uriMatch = body.public_connection.uri.match(/:\/\/[^:]+:([^@]+)@/);
-      if (uriMatch) {
-        publicPassword = decodeURIComponent(uriMatch[1]);
-      }
-    }
-    if (!privatePassword && body.private_connection.uri) {
-      const uriMatch = body.private_connection.uri.match(/:\/\/[^:]+:([^@]+)@/);
-      if (uriMatch) {
-        privatePassword = decodeURIComponent(uriMatch[1]);
-      }
-    }
-    
-    const encryptedPublicPassword = publicPassword 
-      ? Encryption.encrypt(publicPassword, encryptionKey)
-      : null;
-    const encryptedPrivatePassword = privatePassword
-      ? Encryption.encrypt(privatePassword, encryptionKey)
-      : null;
-
-    // Encrypt URIs (with IP addresses)
-    const encryptedPublicUri = Encryption.encrypt(public_uri_with_ip, encryptionKey);
-    const encryptedPrivateUri = Encryption.encrypt(private_uri_with_ip, encryptionKey);
-
-    let caCertificate: string = "";
-
-    // console.log(
-    //   `https://api.digitalocean.com/v2/databases/${body.id}/ca`,
-    //   "...........fetch ca certificate url..........."
-    // );
-    // console.log("Fetching CA certificate...");
-    const database = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${body.id}/ca`,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Failed to update database status" },
+      { status: 400 }
     );
+  }
 
-    // console.log(
-    //   database,
-    //   "............database ca certificate response..........."
-    // );
-
-    if (database.status === 200) {
-      caCertificate = database.data.ca.certificate;
-      //encrypt the caCertificate here before storing in supabase
+  try {
+    const validation = validateRequest(updateStatusSchema, body);
+    if (!validation.success) {
+      return validation.response;
     }
-    
-    // Encrypt CA certificate
-    const encryptedCaCert = caCertificate 
-      ? Encryption.encrypt(caCertificate, encryptionKey)
-      : "";
+    const validatedData = validation.data;
 
-    const supabase_read = await Database_Clusters.update_status(
-      body.id,
-      "online",
-      encryptedCaCert,
-      {
-        ...body.public_connection,
-        uri: encryptedPublicUri,
-        host: encryptedPublicHost,
-        password: encryptedPublicPassword
-      },
-      {
-        ...body.private_connection,
-        uri: encryptedPrivateUri,
-        host: encryptedPrivateHost,
-        password: encryptedPrivatePassword
-      }
-    );
-    if (supabase_read.success) {
+    const result = await DatabaseService.updateStatus({
+      clusterId: validatedData.id,
+      publicConnection: validatedData.public_connection as Database_Connection,
+      privateConnection: validatedData.private_connection as Database_Connection,
+    });
+
+    if (!result.success) {
       return NextResponse.json(
-        {
-          data: supabase_read.data,
-          message: "database updated successfully",
-        },
-        { status: 200 }
+        { error: result.error || "Failed to update database status" },
+        { status: 400 }
       );
     }
+
+    return NextResponse.json(
+      {
+        data: result.data,
+        message: "database updated successfully",
+      },
+      { status: 200 }
+    );
   } catch (err: unknown) {
     console.error("[DatabaseUpdateStatus] Error:", err instanceof Error ? err.message : err);
     return NextResponse.json(

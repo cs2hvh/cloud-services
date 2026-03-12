@@ -151,6 +151,15 @@ export interface RetrieveDatabaseRequest {
   name: string;
 }
 
+export interface InternalListDatabasesRequest {
+  clusterId: string;
+}
+
+export interface InternalRetrieveDatabaseRequest {
+  clusterId: string;
+  name: string;
+}
+
 export interface ReadMigrationStatusRequest {
   clusterId: string;
   targetRegion: string;
