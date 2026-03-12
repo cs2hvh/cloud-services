@@ -281,6 +281,16 @@ registry.registerPath({
     query: z.object({
       force: z.boolean().optional().openapi({ example: true }),
     }),
+    body: {
+      description: 'Optional JSON body for compatibility. If both query and body include `force`, runtime uses the body value.',
+      content: {
+        'application/json': {
+          schema: z.object({
+            force: z.boolean().optional().openapi({ example: true }),
+          }),
+        },
+      },
+    },
   },
   responses: {
     200: {

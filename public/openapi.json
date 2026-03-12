@@ -74,6 +74,7 @@
           },
           "framework": {
             "type": "string",
+            "nullable": true,
             "example": "Next.js"
           },
           "repository_name": {
@@ -94,6 +95,7 @@
             "enum": [
               "pending",
               "deploying",
+              "building",
               "running",
               "failed",
               "stopped"
@@ -102,6 +104,7 @@
           },
           "deployment_url": {
             "type": "string",
+            "nullable": true,
             "format": "uri",
             "example": "https://my-awesome-app.example.com"
           },
@@ -250,27 +253,62 @@
             "properties": {
               "id": {
                 "type": "string",
-                "format": "uuid"
+                "format": "uuid",
+                "example": "8bdf284c-d3df-40f0-9565-b6e26f588c83"
               },
               "name": {
-                "type": "string"
+                "type": "string",
+                "example": "my-awesome-app"
               },
               "slug": {
-                "type": "string"
+                "type": "string",
+                "example": "my-awesome-app"
+              },
+              "framework": {
+                "type": "string",
+                "nullable": true,
+                "example": "Next.js"
+              },
+              "repository_name": {
+                "type": "string",
+                "example": "user/repo"
               },
               "branch": {
-                "type": "string"
+                "type": "string",
+                "example": "main"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "deploying",
+                  "building",
+                  "running",
+                  "failed",
+                  "stopped"
+                ],
+                "example": "running"
+              },
+              "deployment_url": {
+                "type": "string",
+                "nullable": true,
+                "format": "uri",
+                "example": "https://my-awesome-app.example.com"
               },
               "updated_at": {
                 "type": "string",
-                "format": "date-time"
+                "format": "date-time",
+                "example": "2026-02-27T12:00:00Z"
               }
             },
             "required": [
               "id",
               "name",
               "slug",
+              "framework",
+              "repository_name",
               "branch",
+              "status",
               "updated_at"
             ]
           }
@@ -986,6 +1024,7 @@
           },
           "uri": {
             "type": "string",
+            "nullable": true,
             "example": "postgres://doadmin:password@10.10.10.10:25060/defaultdb"
           },
           "protocol": {
@@ -1600,6 +1639,20 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch apps"
+                }
+              }
+            }
           }
         }
       }
@@ -1782,17 +1835,33 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
-                },
-                "example": {
-                  "error": "VALIDATION_ERROR",
-                  "message": "Invalid request body",
-                  "validation_errors": [
+                  "anyOf": [
                     {
-                      "path": "name",
-                      "message": "Must be at least 3 characters"
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
                     }
                   ]
+                },
+                "examples": {
+                  "validation": {
+                    "error": "VALIDATION_ERROR",
+                    "message": "Invalid request body",
+                    "validation_errors": [
+                      {
+                        "path": "name",
+                        "message": "Must be at least 3 characters"
+                      }
+                    ]
+                  },
+                  "invalid_id": {
+                    "error": "INVALID_ID",
+                    "message": "Invalid app ID format",
+                    "details": {
+                      "field": "id"
+                    }
+                  }
                 }
               }
             }
@@ -2656,6 +2725,20 @@
                 }
               }
             }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch buckets"
+                }
+              }
+            }
           }
         }
       }
@@ -2907,11 +2990,8 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "DELETE_FAILED",
-                  "message": "Failed to delete bucket. Infrastructure cleanup may be incomplete.",
-                  "details": {
-                    "details": "S3 deletion timeout"
-                  }
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to delete bucket"
                 }
               }
             }
@@ -2969,6 +3049,20 @@
                   "details": {
                     "retry_after": 58
                   }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch spectrum apps"
                 }
               }
             }
@@ -3934,6 +4028,22 @@
             "in": "query"
           }
         ],
+        "requestBody": {
+          "description": "Optional JSON body for compatibility. If both query and body include `force`, runtime uses the body value.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "force": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Cluster deleted",

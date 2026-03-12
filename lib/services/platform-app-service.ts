@@ -34,6 +34,13 @@ export interface ListAppsOptions {
   includeRollbackInfo?: boolean;  // Check deployment history for rollback capability
 }
 
+export interface UpdateAppMetadataOptions {
+  appId: string;
+  userId: string;
+  name?: string;
+  autoDeploy?: boolean;
+}
+
 export class PlatformAppService {
   /**
    * Get a single app by ID
@@ -130,6 +137,51 @@ export class PlatformAppService {
 
     return appsWithRollback;
   }
+
+  /**
+   * Update safe app metadata fields.
+   * Only supports fields that do not require redeployment.
+   *
+   * @throws Error if app not found, unauthorized, or update fails
+   */
+  static async updateAppMetadata(options: UpdateAppMetadataOptions) {
+    const { appId, userId, name, autoDeploy } = options;
+
+    const existing = await Platform_Apps.get(appId);
+    if (!existing.success || !existing.data) {
+      const error = new Error("App not found") as Error & { code?: string };
+      error.code = "NOT_FOUND";
+      throw error;
+    }
+
+    if (existing.data.user_id !== userId) {
+      const error = new Error("Unauthorized") as Error & { code?: string };
+      error.code = "FORBIDDEN";
+      throw error;
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) {
+      updateData.name = name;
+    }
+    if (autoDeploy !== undefined) {
+      updateData.auto_deploy = autoDeploy;
+    }
+
+    const result = await Platform_Apps.update(appId, updateData);
+    if (!result.success || !result.data) {
+      const error = new Error("Failed to update app") as Error & {
+        code?: string;
+        details?: unknown;
+      };
+      error.code = "UPDATE_FAILED";
+      error.details = result.error;
+      throw error;
+    }
+
+    return result.data;
+  }
+
   /**
    * Delete a platform app with full cleanup
    * - Deletes infrastructure via DeploymentService

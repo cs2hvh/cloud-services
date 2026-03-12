@@ -3,8 +3,8 @@
 // DELETE /api/v1/apps/[id] — delete app and all infrastructure
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
-import { updatePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
+import { z } from "zod";
 
 // Helper to extract and validate app ID
 async function getValidatedAppId(context: { params: Promise<{ [key: string]: string | string[] }> } | undefined) {
@@ -21,6 +21,11 @@ async function getValidatedAppId(context: { params: Promise<{ [key: string]: str
 
   return { error: null, id };
 }
+
+const updateV1AppSchema = z.object({
+  name: z.string().min(3, "App name must be at least 3 characters").max(40, "App name must be at most 40 characters").optional(),
+  auto_deploy: z.boolean().optional(),
+});
 
 export const GET = withV1Auth("apps:get", async (_req, auth, context) => {
   const { error, id } = await getValidatedAppId(context);
@@ -76,12 +81,18 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
   const { error, id } = await getValidatedAppId(context);
   if (error) return error;
 
-  // Parse and validate request body
-  const body = await req.json();
-  const updateData = body;
+  let parsedBody: unknown;
+  try {
+    parsedBody = await req.json();
+  } catch {
+    return v1ValidationError(
+      [{ path: "body", message: "Invalid JSON in request body" }],
+      "Invalid request body"
+    );
+  }
+  const body = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
 
-  // Add app_id to validation (use validated route id)
-  const validation = updatePlatformAppSchema.safeParse({ app_id: id, ...updateData });
+  const validation = updateV1AppSchema.safeParse(body);
 
   if (!validation.success) {
     const errors = validation.error.issues.map((issue) => ({
@@ -91,36 +102,36 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
     return v1ValidationError(errors);
   }
 
-  // Get existing app to verify ownership
-  const existing = await Platform_Apps.get(id!);
-  if (!existing.success) {
-    return v1Error("NOT_FOUND", 404, "App not found");
-  }
-
-  // Verify ownership
-  if (existing.data.user_id !== auth.userId) {
-    return v1Error("FORBIDDEN", 403, "Access denied");
-  }
-
-  // Update app (safe metadata only: name, auto_deploy)
-  // Build config changes (branch, framework, etc) require redeploy endpoint
-  const result = await Platform_Apps.update(id!, updateData);
-
-  if (!result.success) {
-    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: result.error });
+  let result;
+  try {
+    result = await PlatformAppService.updateAppMetadata({
+      appId: id!,
+      userId: auth.userId,
+      name: validation.data.name,
+      autoDeploy: validation.data.auto_deploy,
+    });
+  } catch (updateError: unknown) {
+    const error = updateError as Error & { code?: string; details?: unknown };
+    if (error.code === "NOT_FOUND") {
+      return v1Error("NOT_FOUND", 404, "App not found");
+    }
+    if (error.code === "FORBIDDEN") {
+      return v1Error("FORBIDDEN", 403, "Access denied");
+    }
+    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: error.details || error.message });
   }
 
   return v1Ok({
     data: {
-      id: result.data.id,
-      name: result.data.name,
-      slug: result.data.slug,
-      framework: result.data.framework,
-      repository_name: result.data.repository_name,
-      branch: result.data.branch,
-      status: result.data.status,
-      deployment_url: result.data.deployment_url,
-      updated_at: result.data.updated_at,
+      id: result.id,
+      name: result.name,
+      slug: result.slug,
+      framework: result.framework,
+      repository_name: result.repository_name,
+      branch: result.branch,
+      status: result.status,
+      deployment_url: result.deployment_url,
+      updated_at: result.updated_at,
     },
   });
 });

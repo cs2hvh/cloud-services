@@ -6,12 +6,12 @@ export const AppSchema = z.object({
   id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83' }),
   name: z.string().openapi({ example: 'my-awesome-app' }),
   slug: z.string().openapi({ example: 'my-awesome-app' }),
-  framework: z.string().openapi({ example: 'Next.js' }),
+  framework: z.string().nullable().openapi({ example: 'Next.js' }),
   repository_name: z.string().openapi({ example: 'user/repo' }),
   repository_url: z.string().url().optional().openapi({ example: 'https://github.com/user/repo' }),
   branch: z.string().openapi({ example: 'main' }),
-  status: z.enum(['pending', 'deploying', 'running', 'failed', 'stopped']).openapi({ example: 'running' }),
-  deployment_url: z.string().url().optional().openapi({ example: 'https://my-awesome-app.example.com' }),
+  status: z.enum(['pending', 'deploying', 'building', 'running', 'failed', 'stopped']).openapi({ example: 'running' }),
+  deployment_url: z.string().url().nullable().optional().openapi({ example: 'https://my-awesome-app.example.com' }),
   port: z.number().optional().openapi({ example: 3000 }),
   ip: z.string().optional().openapi({ example: '192.168.1.1' }),
   size: z.string().optional().openapi({ example: 'small' }),
@@ -44,12 +44,16 @@ export const AppResponseSchema = z.object({
 }).openapi('AppResponse');
 
 export const AppUpdateResponseSchema = z.object({
-  data: z.object({
-    id: z.string().uuid(),
-    name: z.string(),
-    slug: z.string(),
-    branch: z.string(),
-    updated_at: z.string().datetime(),
+  data: AppSchema.pick({
+    id: true,
+    name: true,
+    slug: true,
+    framework: true,
+    repository_name: true,
+    branch: true,
+    status: true,
+    deployment_url: true,
+    updated_at: true,
   }),
 }).openapi('AppUpdateResponse');
 

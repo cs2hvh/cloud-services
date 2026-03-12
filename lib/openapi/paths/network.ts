@@ -52,6 +52,18 @@ registry.registerPath({
         },
       },
     },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to fetch spectrum apps'
+          }
+        },
+      },
+    },
   },
 });
 

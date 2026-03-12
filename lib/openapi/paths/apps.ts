@@ -52,6 +52,18 @@ registry.registerPath({
         },
       },
     },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to fetch apps'
+          }
+        },
+      },
+    },
   },
 });
 
@@ -194,13 +206,20 @@ registry.registerPath({
       description: 'Bad request - validation error or invalid app ID',
       content: {
         'application/json': {
-          schema: ValidationErrorResponseSchema,
-          example: {
-            error: 'VALIDATION_ERROR',
-            message: 'Invalid request body',
-            validation_errors: [
-              { path: 'name', message: 'Must be at least 3 characters' }
-            ]
+          schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          examples: {
+            validation: {
+              error: 'VALIDATION_ERROR',
+              message: 'Invalid request body',
+              validation_errors: [
+                { path: 'name', message: 'Must be at least 3 characters' }
+              ]
+            },
+            invalid_id: {
+              error: 'INVALID_ID',
+              message: 'Invalid app ID format',
+              details: { field: 'id' }
+            }
           }
         },
       },

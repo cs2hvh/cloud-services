@@ -8,7 +8,7 @@ export const DatabaseConnectionSchema = z.object({
   user: z.string().openapi({ example: 'doadmin' }),
   database: z.string().optional().openapi({ example: 'defaultdb' }),
   password: z.string().nullable().optional().openapi({ example: 'secret-password' }),
-  uri: z.string().optional().openapi({ example: 'postgres://doadmin:password@10.10.10.10:25060/defaultdb' }),
+  uri: z.string().nullable().optional().openapi({ example: 'postgres://doadmin:password@10.10.10.10:25060/defaultdb' }),
   protocol: z.string().optional().openapi({ example: 'postgresql' }),
   ssl: z.boolean().optional().openapi({ example: true }),
 }).openapi('DatabaseConnection');

@@ -50,6 +50,18 @@ registry.registerPath({
         },
       },
     },
+    500: {
+      description: 'Internal server error',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: {
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to fetch buckets'
+          }
+        },
+      },
+    },
   },
 });
 
@@ -248,9 +260,8 @@ registry.registerPath({
         'application/json': {
           schema: ErrorResponseSchema,
           example: {
-            error: 'DELETE_FAILED',
-            message: 'Failed to delete bucket. Infrastructure cleanup may be incomplete.',
-            details: { details: 'S3 deletion timeout' }
+            error: 'INTERNAL_ERROR',
+            message: 'Failed to delete bucket'
           }
         },
       },
