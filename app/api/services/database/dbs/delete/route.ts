@@ -1,117 +1,72 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { DatabaseService } from "@/lib/services/database-service";
 import { deleteDbSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
-
-interface database_error {
-  response: {
-    data: { message: string };
-  };
-}
 
 export async function POST(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
-  console.log(auth)
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-dbs-delete",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: "Too Many Requests",
+        message: `Retry after ${rl.retryAfterSec}s`,
+      },
+      { status: 429 }
+    );
   }
 
   try {
     const body = await req.json();
-    
-    // Validate request body
+
     const validation = validateRequest(deleteDbSchema, body);
     if (!validation.success) {
       return validation.response;
     }
     const validatedData = validation.data;
 
-    // Delete database from DigitalOcean
-    const response = await axios.delete(
-      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/dbs/${validatedData.db_name}`,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+    const result = await DatabaseService.deleteDatabaseInternal({
+      clusterId: validatedData.cluster_id,
+      dbName: validatedData.db_name,
+    });
 
-    if (response.status === 204) {
-      console.log("[deleteDatabase] Database deleted successfully from DigitalOcean");
-
-      // Remove database from Supabase
-      const supabase_result = await Database_Clusters.remove_db(
-        validatedData.cluster_id,
-        validatedData.db_name
-      );
-
-      if (supabase_result.success) {
-        // Add activity log for database deletion
-        const clusterData = await Database_Clusters.read(validatedData.cluster_id);
-        if (clusterData.success && clusterData.data.project_id) {
-          await Projects.add_log({
-            project_id: clusterData.data.project_id,
-            event: "Trash2",
-            text: `Database '${validatedData.db_name}' deleted from cluster`
-          });
-          console.log(`[deleteDatabase] ✅ Activity log added for database deletion`);
-        }
-
-        // Create notification for database deletion
-        if (clusterData.success) {
-          try {
-            await NotificationService.create(
-              createServiceNotification({
-                userId: clusterData.data.owner_id,
-                type: 'info',
-                action: 'updated',
-                serviceType: 'database',
-                serviceName: clusterData.data.name,
-                serviceId: validatedData.cluster_id,
-                metadata: { updateType: 'database_deleted', dbName: validatedData.db_name }
-              })
-            );
-          } catch (notifErr) {
-            console.error('[deleteDatabase] Failed to create notification:', notifErr);
-          }
-        }
-        
-        return NextResponse.json(
-          {
-            message: "Database deleted successfully",
-          },
-          { status: 200 }
-        );
-      } else {
+    if (!result.success) {
+      if (result.statusCode === 500 && result.details) {
         return NextResponse.json(
           {
             error: "Database deleted from DigitalOcean but failed to sync with database",
-            details: supabase_result.error,
+            details: result.details,
           },
           { status: 500 }
         );
       }
+
+      return NextResponse.json(
+        { error: result.error || "Invalid request" },
+        { status: 400 }
+      );
     }
-    console.log(response.status,".............response data...........");
+
+    return NextResponse.json(
+      {
+        message: "Database deleted successfully",
+      },
+      { status: 200 }
+    );
   } catch (err: unknown) {
-    if (err as database_error) {
-      const message = (err as database_error)?.response?.data?.message;
-      console.error("[deleteDatabase] Error:", message);
-      return NextResponse.json(
-        { error: message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    const message =
+      (err as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message ?? "Invalid request";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

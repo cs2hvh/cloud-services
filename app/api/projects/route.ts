@@ -1,11 +1,11 @@
-
-import { createSSRClient } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
+import { ProjectService } from "@/lib/services/project-service";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
     const { name, description } = await req.json();
-    const supabase = await createSSRClient();
+    const supabase = await createClient();
 
     // Get the current user
     const {
@@ -17,26 +17,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({
+    const result = await ProjectService.createProject({
+      userId: user.id,
+      payload: {
         name,
-        description,
-        owner: user.id,
-        users: [user.id],
-      })
-      .select("id")
-      .single();
+        description: description ?? undefined,
+      },
+      addLog: false,
+    });
 
-    if (error) {
-      console.error("[POST /projects]", error);
-      return NextResponse.json({ message: error.message }, { status: 500 });
+    if (!result.success) {
+      console.error("[POST /projects]", result.error);
+      return NextResponse.json({ message: result.error }, { status: 500 });
     }
 
     return NextResponse.json(
       {
         message: "Project created successfully",
-        id: data.id,
+        id: result.data.id,
       },
       { status: 201 },
     );

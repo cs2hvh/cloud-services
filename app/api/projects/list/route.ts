@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { ProjectService } from "@/lib/services/project-service";
 import { NextResponse } from "next/server";
 
 export async function GET() {
@@ -18,24 +19,22 @@ export async function GET() {
       );
     }
 
-    // Get projects where user is owner or member
-    const { data: projects, error } = await supabase
-      .from("projects")
-      .select("id, name")
-      .or(`owner.eq.${user.id},users.cs.["${user.id}"]`)
-      .order("name");
-
-    if (error) {
-      console.error("[GET /projects/list]", error);
+    const result = await ProjectService.listProjects(user.id);
+    if (!result.success) {
+      console.error("[GET /projects/list]", result.error);
       return NextResponse.json(
-        { success: false, error: error.message }, 
+        { success: false, error: result.error },
         { status: 500 }
       );
     }
 
+    const projects = result.data
+      .map((project) => ({ id: project.id, name: project.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     return NextResponse.json({
       success: true,
-      data: projects || []
+      data: projects
     });
   } catch (error) {
     console.error("[GET /projects/list]", error);

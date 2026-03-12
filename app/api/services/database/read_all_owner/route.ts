@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { Encryption } from "@/config/functions";
 import { EncryptedData } from "@/lib/supabase/types";
 import { readAllOwnerSchema } from "@/lib/validation/database";
@@ -10,8 +11,20 @@ import { requireAdmin } from "@/lib/supabase/auth";
 export async function POST(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-read-owner",
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {
@@ -122,6 +135,5 @@ export async function POST(req: NextRequest) {
     }
   }
 }
-
 
 

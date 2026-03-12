@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { Projects } from "@/lib/supabase/queries/projects";
+import { ProjectService } from "@/lib/services/project-service";
 import { projectSchema } from "@/types/zod/project";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -22,24 +22,15 @@ export async function PATCH(req: Request, { params }: Params) {
     const body = await req.json();
     const parsed = projectSchema.parse(body);
 
-    // Update project
-    const updated = await Projects.update(id, parsed);
-    if (!updated) {
+    const updated = await ProjectService.updateProjectLegacy({
+      projectId: id,
+      payload: parsed,
+    });
+    if (!updated.success) {
       return NextResponse.json(
         { message: "Failed to update project" },
         { status: 500 },
       );
-    }
-
-    // Add log entry
-    const logAdded = await Projects.add_log({
-      event: "Settings",
-      text: `Updated fields: ${Object.keys(parsed).join(", ")}`,
-      project_id: id,
-    });
-
-    if (!logAdded) {
-      console.warn("Failed to add project log");
     }
 
     return NextResponse.json({ message: "Project updated successfully" });
@@ -79,36 +70,19 @@ export async function PUT(req: NextRequest, { params }: Params) {
       return NextResponse.json({ message: "Invalid payload" }, { status: 400 });
     }
 
-    // Get current project data
-    const project = await Projects.get_by_id(id);
-    if (!project) {
+    const result = await ProjectService.updateProjectUsers({
+      projectId: id,
+      event,
+      users,
+    });
+
+    if (!result.success && result.errorCode === "NOT_FOUND") {
       return NextResponse.json(
         { message: "Project not found" },
         { status: 404 },
       );
     }
-
-    let currentUsers: string[] = [];
-    try {
-      currentUsers = Array.isArray(project.users)
-        ? (project.users as string[])
-        : JSON.parse((project.users as string) || "[]");
-    } catch (err) {
-      console.warn("Invalid JSON in existing users field", err);
-      currentUsers = [];
-    }
-
-    let updatedUsers: string[];
-
-    if (event === "add") {
-      const set = new Set([...currentUsers, ...users]);
-      updatedUsers = Array.from(set);
-    } else {
-      updatedUsers = currentUsers.filter((u) => !users.includes(u));
-    }
-
-    const updated = await Projects.update(id, { users: updatedUsers });
-    if (!updated) {
+    if (!result.success) {
       return NextResponse.json(
         { message: "Failed to update project users" },
         { status: 500 },
@@ -117,7 +91,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
     return NextResponse.json({
       message: `Users ${event === "add" ? "added to" : "removed from"} project.`,
-      users: updatedUsers,
+      users: result.data,
     });
   } catch (err) {
     console.error("[PUT /projects/:id/users]", err);
@@ -142,26 +116,26 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    // Get project to verify it exists and user has access
-    const project = await Projects.get_by_id(id);
-    if (!project) {
+    const deleted = await ProjectService.deleteProject({
+      projectId: id,
+      userId: user.id,
+    });
+
+    if (!deleted.success && deleted.errorCode === "NOT_FOUND") {
       return NextResponse.json(
         { message: "Project not found" },
         { status: 404 },
       );
     }
 
-    // Verify user owns the project or has access
-    if (project.owner !== user.id) {
+    if (!deleted.success && deleted.errorCode === "FORBIDDEN") {
       return NextResponse.json(
         { message: "You don't have permission to delete this project" },
         { status: 403 },
       );
     }
 
-    // Delete project (cascade will handle related records)
-    const deleted = await Projects.delete(id);
-    if (!deleted) {
+    if (!deleted.success) {
       return NextResponse.json(
         { message: "Failed to delete project" },
         { status: 500 },

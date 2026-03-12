@@ -3,9 +3,7 @@
 // DELETE /api/v1/network/spectrum/[id] — delete spectrum app
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { updateSpectrumAppSchema } from "@/lib/validation/spectrum";
-import { getSpectrumApp, updateSpectrumApp, deleteSpectrumApp } from "@/config/spectrum-functions";
-import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
-import { Billing } from "@/lib/supabase/queries/billing";
+import { SpectrumService } from "@/lib/services/spectrum-service";
 
 type RouteContext = { params: Promise<{ [key: string]: string | string[] }> };
 
@@ -43,17 +41,10 @@ export const GET = withV1Auth("spectrum:get", async (_req, auth, context) => {
   if (error) return error;
 
   try {
-    const result = await getSpectrumApp(id!);
-
-    // Check if app exists
-    if (!result.local) {
-      return v1Error("NOT_FOUND", 404, "Spectrum app not found");
-    }
-
-    // Check ownership
-    if (result.local.owner_id !== auth.userId) {
-      return v1Error("FORBIDDEN", 403, "Access denied");
-    }
+    const result = await SpectrumService.getApp({
+      appId: id!,
+      userId: auth.userId,
+    });
 
     return v1Ok({
       data: {
@@ -76,6 +67,9 @@ export const GET = withV1Auth("spectrum:get", async (_req, auth, context) => {
     if (error.code === "NOT_FOUND") {
       return v1Error("NOT_FOUND", 404, "Spectrum app not found");
     }
+    if (error.code === "FORBIDDEN") {
+      return v1Error("FORBIDDEN", 403, "Access denied");
+    }
     console.error("[GET /api/v1/network/spectrum/[id]]", error);
     return v1Error("INTERNAL_ERROR", 500, "Failed to fetch spectrum app");
   }
@@ -87,9 +81,18 @@ export const PATCH = withV1Auth(
     const { error, id } = await getValidatedAppId(context);
     if (error) return error;
 
+    let parsedBody: unknown;
     try {
-      const body = await req.json();
+      parsedBody = await req.json();
+    } catch {
+      return v1ValidationError(
+        [{ path: "body", message: "Invalid JSON in request body" }],
+        "Invalid request body"
+      );
+    }
+    const body = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
 
+    try {
       // Validate request
       const validation = updateSpectrumAppSchema.safeParse({
         app_id: id,
@@ -104,18 +107,11 @@ export const PATCH = withV1Auth(
         return v1ValidationError(errors);
       }
 
-      // Check ownership
-      const existing = await Spectrum_Apps.get(id!);
-      if (!existing.success || !existing.data) {
-        return v1Error("NOT_FOUND", 404, "Spectrum app not found");
-      }
-
-      if (existing.data.owner_id !== auth.userId) {
-        return v1Error("FORBIDDEN", 403, "Access denied");
-      }
-
-      // Update app
-      const result = await updateSpectrumApp(validation.data);
+      const result = await SpectrumService.updateApp({
+        appId: id!,
+        userId: auth.userId,
+        payload: validation.data,
+      });
 
       return v1Ok({
         data: {
@@ -134,7 +130,13 @@ export const PATCH = withV1Auth(
         },
       });
     } catch (err: unknown) {
-      const error = err as Error;
+      const error = err as Error & { code?: string };
+      if (error.code === "NOT_FOUND") {
+        return v1Error("NOT_FOUND", 404, "Spectrum app not found");
+      }
+      if (error.code === "FORBIDDEN") {
+        return v1Error("FORBIDDEN", 403, "Access denied");
+      }
       console.error("[PATCH /api/v1/network/spectrum/[id]]", error);
       return v1Error(
         "INTERNAL_ERROR",
@@ -152,29 +154,10 @@ export const DELETE = withV1Auth(
     if (error) return error;
 
     try {
-      // Check ownership
-      const existing = await Spectrum_Apps.get(id!);
-      if (!existing.success || !existing.data) {
-        return v1Error("NOT_FOUND", 404, "Spectrum app not found");
-      }
-
-      if (existing.data.owner_id !== auth.userId) {
-        return v1Error("FORBIDDEN", 403, "Access denied");
-      }
-
-      // Close billing
-      try {
-        await Billing.close_active_service("spectrum", {
-          userId: auth.userId,
-          serviceId: id!,
-          failOnInsufficient: false,
-        });
-      } catch (billErr) {
-        console.warn("[DELETE spectrum] Billing close failed:", billErr);
-      }
-
-      // Delete app
-      await deleteSpectrumApp(id!);
+      await SpectrumService.deleteApp({
+        appId: id!,
+        userId: auth.userId,
+      });
 
       return v1Ok({
         data: {
@@ -183,7 +166,13 @@ export const DELETE = withV1Auth(
         },
       });
     } catch (err: unknown) {
-      const error = err as Error;
+      const error = err as Error & { code?: string };
+      if (error.code === "NOT_FOUND") {
+        return v1Error("NOT_FOUND", 404, "Spectrum app not found");
+      }
+      if (error.code === "FORBIDDEN") {
+        return v1Error("FORBIDDEN", 403, "Access denied");
+      }
       console.error("[DELETE /api/v1/network/spectrum/[id]]", error);
       return v1Error(
         "INTERNAL_ERROR",

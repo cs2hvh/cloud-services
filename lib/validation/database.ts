@@ -22,6 +22,7 @@ import {
  * Prevents: cost overruns, invalid configurations, malicious payloads
  */
 export const createDatabaseSchema = z.object({
+  // This is the provider cluster name, not only a local display label.
   name: z
     .string()
     .min(NAMING_RULES.MIN_CLUSTER_NAME_LENGTH, "Cluster name must be at least 3 characters")
@@ -74,6 +75,8 @@ export const updateNetworkSchema = z.object({
     .string()
     .refine(
       (val) => {
+        const legacyCidrV4Pattern =
+          /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/\d{1,2}$/;
         // Allow special "allow all" values
         if (val === SPECIAL_IPS.ALLOW_ALL_IPV4 || val === SPECIAL_IPS.ALLOW_ALL_IPV6) {
           return true;
@@ -83,6 +86,7 @@ export const updateNetworkSchema = z.object({
           IP_PATTERNS.IPV4.test(val) ||
           IP_PATTERNS.IPV6.test(val) ||
           IP_PATTERNS.CIDR_V4.test(val) ||
+          legacyCidrV4Pattern.test(val) ||
           IP_PATTERNS.CIDR_V6.test(val)
         );
       },
@@ -274,28 +278,21 @@ export type DeleteDatabasePayload = z.infer<typeof deleteDatabaseSchema>;
 /**
  * Update Status Schema (internal use)
  */
+const updateStatusConnectionSchema = z.object({
+  host: z.string(),
+  password: z.string().optional(),
+  port: z.number().optional(),
+  ssl: z.boolean().optional(),
+  uri: z.string(),
+  user: z.string().optional(),
+  database: z.string().optional(),
+  protocol: z.string().optional(),
+});
+
 export const updateStatusSchema = z.object({
   id: z.string().uuid("Database ID must be a valid UUID"),
-  public_connection: z.object({
-    host: z.string(),
-    password: z.string(),
-    port: z.number().optional(),
-    ssl: z.boolean().optional(),
-    uri: z.string().optional(),
-    user: z.string().optional(),
-    database: z.string().optional(),
-    protocol: z.string().optional(),
-  }),
-  private_connection: z.object({
-    host: z.string(),
-    password: z.string(),
-    port: z.number().optional(),
-    ssl: z.boolean().optional(),
-    uri: z.string().optional(),
-    user: z.string().optional(),
-    database: z.string().optional(),
-    protocol: z.string().optional(),
-  }),
+  public_connection: updateStatusConnectionSchema,
+  private_connection: updateStatusConnectionSchema,
 });
 
 export type UpdateStatusPayload = z.infer<typeof updateStatusSchema>;

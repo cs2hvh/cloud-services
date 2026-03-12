@@ -1,177 +1,118 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { DatabaseService } from "@/lib/services/database-service";
 import { createDbSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
-import { AuditLogService } from "@/lib/audit";
-import { getAuditContext } from "@/lib/audit/context";
-
-interface database_error {
-  response: {
-    data: { message: string };
-  };
-}
 
 export async function POST(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
   if (!auth.authenticated || !auth.user) {
     return auth.response;
   }
 
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-dbs-create",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      {
+        error: "Too Many Requests",
+        message: `Retry after ${rl.retryAfterSec}s`,
+      },
+      { status: 429 }
+    );
+  }
+
+  let body: unknown;
   try {
-    const body = await req.json();
-    
-    // Validate request body
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  try {
     const validation = validateRequest(createDbSchema, body);
     if (!validation.success) {
       return validation.response;
     }
     const validatedData = validation.data;
 
-    // Verify cluster exists and user owns it
-    const clusterResult = await Database_Clusters.read(validatedData.cluster_id);
-    if (!clusterResult.success || !clusterResult.data) {
-      return NextResponse.json(
-        { error: "Database cluster not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check ownership
-    if (clusterResult.data.owner_id !== auth.user.id) {
-      return NextResponse.json(
-        { error: "You are not authorized to create databases in this cluster" },
-        { status: 403 }
-      );
-    }
-
-    // Create database in DigitalOcean
-    const response = await axios.post(
-      `https://api.digitalocean.com/v2/databases/${validatedData.cluster_id}/dbs`,
-      { name: validatedData.name },
+    const result = await DatabaseService.createDatabaseInternal(
       {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
+        clusterId: validatedData.cluster_id,
+        name: validatedData.name,
+        userId: auth.user.id,
+      },
+      req,
+      auth.user.email
     );
 
-    if (response.status === 201) {
-    //  console.log("[createDatabase] Database created successfully:", response.data.db);
-
-      const database = response.data.db;
-      const dbData = {
-        id: database.name,
-        name: database.name,
-        created_at: new Date().toISOString(),
-      };
-
-      
-
-      // Add database to Supabase
-      const supabase_result = await Database_Clusters.add_db(
-        validatedData.cluster_id,
-        dbData
-      );
-
-      if (supabase_result.success) {
-        // Add activity log for database creation
-        const clusterData = await Database_Clusters.read(validatedData.cluster_id);
-        if (clusterData.success && clusterData.data.project_id) {
-          await Projects.add_log({
-            project_id: clusterData.data.project_id,
-            event: "Database",
-            text: `Database '${validatedData.name}' created in cluster`
-          });
-          console.log(`[createDatabase] ✅ Activity log added for database creation`);
-        }
-
-        // Create audit log
-        if (clusterData.success) {
-          try {
-            const context = getAuditContext(req);
-            await AuditLogService.create({
-              user_id: clusterData.data.owner_id,
-              user_role: 'user',
-              action: 'create',
-              service_type: 'database',
-              service_id: validatedData.cluster_id,
-              service_name: clusterData.data.name,
-              after_state: { database_name: validatedData.name },
-              metadata: { operation: 'database_created' },
-              ...context,
-            });
-          } catch (auditErr) {
-            console.error('[createDatabase] Failed to create audit log:', auditErr);
-          }
-        }
-
-        // Create notification for database creation
-        if (clusterData.success) {
-          try {
-            await NotificationService.create(
-              createServiceNotification({
-                userId: clusterData.data.owner_id,
-                type: 'info',
-                action: 'updated',
-                serviceType: 'database',
-                serviceName: clusterData.data.name,
-                serviceId: validatedData.cluster_id,
-                metadata: { updateType: 'database_created', dbName: validatedData.name }
-              })
-            );
-          } catch (notifErr) {
-            console.error('[createDatabase] Failed to create notification:', notifErr);
-          }
-        }
-        
+    if (!result.success) {
+      if (result.statusCode === 404) {
         return NextResponse.json(
-          {
-            database: database,
-            message: "Database created successfully",
-          },
-          { status: 201 }
+          { error: result.error || "Database cluster not found" },
+          { status: 404 }
         );
-      } else {
+      }
+
+      if (result.statusCode === 403) {
         return NextResponse.json(
           {
-            error: "there is some issue in creating database in our database",
-            details: supabase_result.error,
+            error:
+              result.error || "You are not authorized to create databases in this cluster",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (result.statusCode === 409) {
+        return NextResponse.json(
+          { error: result.error || "Database already exists" },
+          { status: 409 }
+        );
+      }
+
+      if (result.statusCode === 500 && result.details) {
+        return NextResponse.json(
+          {
+            error:
+              result.error || "there is some issue in creating database in our database",
+            details: result.details,
           },
           { status: 500 }
         );
       }
+
+      return NextResponse.json(
+        { error: result.error || "Invalid request" },
+        { status: result.statusCode === 400 ? 400 : 500 }
+      );
     }
+
+    return NextResponse.json(
+      {
+        database: result.data,
+        message: "Database created successfully",
+      },
+      { status: 201 }
+    );
   } catch (err: unknown) {
-    if (err as database_error) {
-      const axiosError = err as database_error;
-      const message = axiosError?.response?.data?.message;
-      const status = (err as { response?: { status?: number } })?.response?.status || 500;
-      
-      console.error("[createDatabase] Error:", message);
-      
-      // Handle duplicate database (409)
-      if (status === 409) {
-        return NextResponse.json(
-          { error: message ?? "Database already exists" },
-          { status: 409 }
-        );
-      }
-      
-      return NextResponse.json(
-        { error: message ?? "Invalid request" },
-        { status: status === 400 ? 400 : 500 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 500 }
-      );
+    const message =
+      (err as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message ?? "Invalid request";
+    const status =
+      (err as { response?: { status?: number } })?.response?.status ?? 500;
+
+    if (status === 409) {
+      return NextResponse.json({ error: message }, { status: 409 });
     }
+
+    return NextResponse.json(
+      { error: message },
+      { status: status === 400 ? 400 : 500 }
+    );
   }
 }

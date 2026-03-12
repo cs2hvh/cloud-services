@@ -3,6 +3,7 @@ import axios from "axios";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
 import { Encryption } from "@/config/functions";
 import { DatabaseUser, EncryptedData } from "@/lib/supabase/types";
 import { readDatabaseSchema } from "@/lib/validation/database";
@@ -14,8 +15,20 @@ export async function POST(req: NextRequest) {
   // Check authentication
   const auth = await authenticateUser();
  // console.log(auth.authenticated,"....................");
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-read",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {
@@ -326,7 +339,6 @@ export async function POST(req: NextRequest) {
     }
   }
 }
-
 
 
 

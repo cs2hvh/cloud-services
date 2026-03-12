@@ -2,9 +2,7 @@
 // POST /api/v1/network/spectrum — create a new spectrum app
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
-import { listSpectrumApps, createSpectrumApp } from "@/config/spectrum-functions";
-import { ensureBalance } from "@/config/billing-flow";
-import { getRatesForSpectrum } from "@/config/pricing";
+import { SpectrumService } from "@/lib/services/spectrum-service";
 
 function getDnsOriginalName(dns: unknown): string | null {
   if (!dns || typeof dns !== "object") return null;
@@ -14,10 +12,10 @@ function getDnsOriginalName(dns: unknown): string | null {
 
 export const GET = withV1Auth("spectrum:list", async (_req, auth) => {
   try {
-    const result = await listSpectrumApps(auth.userId);
+    const apps = await SpectrumService.listApps(auth.userId);
 
     return v1Ok({
-      data: result.local.map((app) => {
+      data: apps.map((app) => {
         return {
           id: app.spectrum_id,
           dns_name: getDnsOriginalName(app.dns),
@@ -33,7 +31,7 @@ export const GET = withV1Auth("spectrum:list", async (_req, auth) => {
         };
       }),
       meta: {
-        total: result.local.length,
+        total: apps.length,
       },
     });
   } catch (err: unknown) {
@@ -44,9 +42,18 @@ export const GET = withV1Auth("spectrum:list", async (_req, auth) => {
 });
 
 export const POST = withV1Auth("spectrum:create", async (req, auth) => {
+  let parsedBody: unknown;
   try {
-    const body = await req.json();
+    parsedBody = await req.json();
+  } catch {
+    return v1ValidationError(
+      [{ path: "body", message: "Invalid JSON in request body" }],
+      "Invalid request body"
+    );
+  }
+  const body = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
 
+  try {
     // Validate request
     const validation = createSpectrumAppSchema.safeParse({
       ...body,
@@ -61,44 +68,33 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
       return v1ValidationError(errors);
     }
 
-    // Check billing
-    const { initialCost } = await getRatesForSpectrum();
-    const balCheck = await ensureBalance(auth.userId, initialCost);
-
-    if (!balCheck.ok) {
-      return v1Error(
-        "INSUFFICIENT_CREDITS",
-        402,
-        "Insufficient credits",
-        {
-          balance: balCheck.balance,
-          required: initialCost,
-        }
-      );
-    }
-
-    // Create app
-    const result = await createSpectrumApp(validation.data, "user");
+    const app = await SpectrumService.createApp({
+      userId: auth.userId,
+      payload: validation.data,
+    });
 
     return v1Ok(
       {
         data: {
-          id: result.app.spectrum_id,
-          dns_name: result.app.dns?.original_name || null,
-          protocol: result.app.protocol,
-          origin_direct: result.app.origin_direct,
-          tls: result.app.tls,
-          ip_firewall: result.app.ip_firewall,
-          traffic_type: result.app.traffic_type,
-          proxy_protocol: result.app.proxy_protocol,
-          status: result.app.status,
-          created_at: result.app.created_at,
+          id: app.spectrum_id,
+          dns_name: app.dns?.original_name || null,
+          protocol: app.protocol,
+          origin_direct: app.origin_direct,
+          tls: app.tls,
+          ip_firewall: app.ip_firewall,
+          traffic_type: app.traffic_type,
+          proxy_protocol: app.proxy_protocol,
+          status: app.status,
+          created_at: app.created_at,
         },
       },
       201
     );
   } catch (err: unknown) {
-    const error = err as Error;
+    const error = err as Error & { code?: string; details?: Record<string, unknown> };
+    if (error.code === "INSUFFICIENT_CREDITS") {
+      return v1Error("INSUFFICIENT_CREDITS", 402, "Insufficient credits", error.details);
+    }
     console.error("[POST /api/v1/network/spectrum]", error);
     return v1Error("INTERNAL_ERROR", 500, error.message || "Failed to create spectrum app");
   }

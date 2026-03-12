@@ -49,7 +49,7 @@ export type Admin_Database = {
   version: string | null;
   region: string | null;
   cluster_id: string;
-  status: "pending" | "online" | "creating" | "migrating";
+  status: "pending" | "online" | "creating" | "migrating" | "resizing" | "deleted";
   owner_id: string;
   owner_email: string | null;
   owner_username: string | null;
@@ -1034,7 +1034,7 @@ export type Database = {
           cluster_id?: UUID;
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
-          status: "pending" | "online" | "creating" | "migrating" | "resizing" ;
+          status: "pending" | "online" | "creating" | "migrating" | "resizing" | "deleted";
           password: string | EncryptedData;
           // resource_config?:{ cpu: number; ram: number; storage: number }
           size:string;
@@ -1057,7 +1057,7 @@ export type Database = {
           cluster_id?: UUID;
           public_connection?: Database_Connection;
           private_connection?: Database_Connection;
-          status: "pending" | "online" | "creating" ;
+          status: "pending" | "online" | "creating" | "migrating" | "resizing" | "deleted";
           password: string | EncryptedData;
           ca_certificate?: string | EncryptedData;
           region?:string;

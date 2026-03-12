@@ -1,26 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { Projects } from "@/lib/supabase/queries/projects";
+
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { DatabaseService } from "@/lib/services/database-service";
 import { updateNetworkSchema } from "@/lib/validation/database";
 import { validateRequest } from "@/lib/middleware/validate-request";
-import { Rule } from "@/lib/supabase/types";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
-import { AuditLogService } from "@/lib/audit";
-import { getAuditContext } from "@/lib/audit/context";
 
 export async function POST(req: NextRequest) {
-  // Check authentication
   const auth = await authenticateUser();
-  if (!auth.authenticated) {
+  if (!auth.authenticated || !auth.user) {
     return auth.response;
+  }
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:db-network-update",
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too Many Requests", message: `Retry after ${rl.retryAfterSec}s` },
+      { status: 429 }
+    );
   }
 
   try {
     const body = await req.json();
 
-    // ✅ VALIDATE REQUEST PAYLOAD
     const validation = validateRequest(updateNetworkSchema, body);
     if (!validation.success) {
       return validation.response;
@@ -28,157 +34,14 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    // ✅ STEP 1: Read existing firewall rules first
-    const read_existing_firewall = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${validatedData.id}/firewall`,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
+    const result = await DatabaseService.addFirewallRule(
+      validatedData.id,
+      validatedData.ip_address,
+      req
     );
 
-    if (read_existing_firewall.status !== 200) {
-      return NextResponse.json(
-        { error: "Failed to fetch existing firewall rules" },
-        { status: 500 }
-      );
-    }
-
-    const existingRules = read_existing_firewall.data?.rules || [];
-    console.log("Existing firewall rules:", existingRules);
-
-    // ✅ STEP 2: Check if the IP already exists (prevent duplicates)
-    const ipExists = existingRules.some(
-      (rule: Rule) =>
-        rule.type === "ip_addr" && rule.value === validatedData.ip_address
-    );
-
-    if (ipExists) {
-      return NextResponse.json(
-        { error: "This IP address already exists in the firewall rules" },
-        { status: 400 }
-      );
-    }
-
-    // ✅ STEP 3: Append the new rule to existing rules
-    const newRule = {
-      type: "ip_addr",
-      value: validatedData.ip_address,
-    };
-
-    const updatedRules = [...existingRules, newRule];
-    console.log("Updated rules array:", updatedRules);
-
-    // ✅ STEP 4: Update firewall with ALL rules (existing + new)
-    const payload = {
-      rules: updatedRules,
-    };
-
-    const update_firewall = await axios.put(
-      `https://api.digitalocean.com/v2/databases/${validatedData.id}/firewall`,
-      payload,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    console.log(
-      update_firewall.status,
-      "...........update firewall response status..........."
-    );
-
-    if (update_firewall.status === 204) {
-      // ✅ STEP 5: Read back the updated firewall rules to confirm
-      const read_firewall = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${validatedData.id}/firewall`,
-      {
-        headers: {
-          Authorization: process.env.DIGITAL_OCEAN_TOKEN,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (read_firewall.status === 200) {
-      console.log(
-        read_firewall.data,
-        "...........read firewall response after update..........."
-      );
-
-      // ✅ Update Supabase with the new rules
-      const supabase_read = await Database_Clusters.update_network_rules(
-        validatedData.id,
-        read_firewall.data?.rules
-      );
-
-      if (supabase_read.success) {
-        // Add activity log for firewall rule addition
-        const clusterData = await Database_Clusters.read(validatedData.id);
-        if (clusterData.success && clusterData.data.project_id) {
-          await Projects.add_log({
-            project_id: clusterData.data.project_id,
-            event: "Shield",
-            text: `Added firewall rule: ${validatedData.ip_address}`
-          });
-          console.log(`[updateNetworkRules] ✅ Activity log added for firewall rule addition`);
-        }
-
-        // Create audit log
-        if (clusterData.success) {
-          try {
-            const context = getAuditContext(req);
-            await AuditLogService.create({
-              user_id: clusterData.data.owner_id,
-              user_role: 'user',
-              action: 'update',
-              service_type: 'database',
-              service_id: validatedData.id,
-              service_name: clusterData.data.name,
-              before_state: { rules: existingRules },
-              after_state: { rules: read_firewall.data?.rules },
-              metadata: { 
-                operation: 'firewall_rule_added',
-                ip_address: validatedData.ip_address 
-              },
-              ...context,
-            });
-          } catch (auditErr) {
-            console.error('[updateNetworkRules] Failed to create audit log:', auditErr);
-          }
-        }
-
-        // Create notification for firewall rule addition
-        if (clusterData.success) {
-          try {
-            await NotificationService.create(
-              createServiceNotification({
-                userId: clusterData.data.owner_id,
-                type: 'info',
-                action: 'updated',
-                serviceType: 'database',
-                serviceName: clusterData.data.name,
-                serviceId: validatedData.id,
-                metadata: { updateType: 'firewall', ipAddress: validatedData.ip_address }
-              })
-            );
-          } catch (notifErr) {
-            console.error('[updateNetworkRules] Failed to create notification:', notifErr);
-          }
-        }
-        
-        return NextResponse.json(
-          {
-            message: "IP address added to firewall successfully",
-            rules: read_firewall.data?.rules,
-          },
-          { status: 200 }
-        );
-      } else {
+    if (!result.success) {
+      if (result.error === "Firewall updated but failed to sync with database") {
         return NextResponse.json(
           {
             error: "Firewall updated but failed to sync with database",
@@ -186,29 +49,31 @@ export async function POST(req: NextRequest) {
           { status: 500 }
         );
       }
-    } else {
+
       return NextResponse.json(
-        { error: "Failed to verify firewall update" },
-        { status: 500 }
+        { error: result.error ?? "Invalid request" },
+        { status: result.statusCode || 400 }
       );
     }
-  } else {
+
     return NextResponse.json(
-      { error: "Failed to update firewall rules" },
-      { status: update_firewall.status }
+      {
+        message: "IP address added to firewall successfully",
+        rules: result.rules,
+      },
+      { status: 200 }
     );
-  }
   } catch (err: unknown) {
     if (err instanceof Error) {
       return NextResponse.json(
         { error: err.message ?? "Invalid request" },
         { status: 400 }
       );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
     }
+
+    return NextResponse.json(
+      { error: "Unknown error occurred" },
+      { status: 400 }
+    );
   }
 }

@@ -56,6 +56,12 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Default per-user rate-limit mock for API route tests.
+// Individual tests can override to simulate 429 behavior.
+vi.mock('@/lib/cooldown/userbased', () => ({
+  limitByUser: vi.fn(async () => ({ allowed: true })),
+}));
+
 // Cleanup after each test
 afterEach(() => {
   cleanup();
