@@ -22,169 +22,192 @@ import type {
   UpdateDatabaseStatusRequest,
 } from "../types";
 
-export const clusterReadOperations = {
-  async getCluster(request: GetDatabaseClusterRequest): Promise<GetDatabaseClusterResult> {
-    try {
-      let doStatus: string | null = null;
+async function getClusterInternalImpl(
+  request: GetDatabaseClusterRequest
+): Promise<GetDatabaseClusterResult> {
+  try {
+    let status = false;
+    let doStatus: string | null = null;
 
-      if (request.checkStatus) {
-        const database = await axios.get(
+    if (request.checkStatus) {
+      const database = await axios.get(
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}`,
+        { headers: getDigitalOceanHeaders() }
+      );
+
+      if (database.status === 200) {
+        doStatus = database.data.database.status;
+        status = doStatus === "online";
+      }
+    }
+
+    const supabaseRead = await Database_Clusters.read(request.clusterId);
+
+    if (status && supabaseRead.success && supabaseRead.data.status !== doStatus) {
+      if (doStatus === "online") {
+        const fullClusterData = await axios.get(
           `https://api.digitalocean.com/v2/databases/${request.clusterId}`,
           { headers: getDigitalOceanHeaders() }
         );
 
-        if (database.status === 200) {
-          doStatus = database.data.database.status;
-          const supabaseRead = await Database_Clusters.read(request.clusterId);
+        if (fullClusterData.status === 200) {
+          const dbData = fullClusterData.data.database;
+          const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
+          const encryptionKey = process.env.ENCRYPTION_KEY!;
 
-          if (doStatus === "online" && supabaseRead.success && supabaseRead.data.status !== doStatus) {
-            const fullClusterData = await axios.get(
-              `https://api.digitalocean.com/v2/databases/${request.clusterId}`,
-              { headers: getDigitalOceanHeaders() }
+          let encryptedPublicPassword: string | EncryptedData | undefined = undefined;
+          let encryptedPrivatePassword: string | EncryptedData | undefined = undefined;
+
+          if (shouldResolveIP) {
+            encryptedPublicPassword = Encryption.encrypt(dbData.connection.password, encryptionKey);
+            encryptedPrivatePassword = Encryption.encrypt(
+              dbData.private_connection.password,
+              encryptionKey
             );
+          }
 
-            if (fullClusterData.status === 200) {
-              const dbData = fullClusterData.data.database;
-              const shouldResolveIP = dbData.engine === "mysql" || dbData.engine === "pg";
-              const encryptionKey = process.env.ENCRYPTION_KEY!;
+          let publicHostIP = dbData.connection.host;
+          let privateHostIP = dbData.private_connection.host;
+          let encryptedPublicURI = dbData.connection.uri;
 
-              let encryptedPublicPassword: string | EncryptedData | undefined = undefined;
-              let encryptedPrivatePassword: string | EncryptedData | undefined = undefined;
-
-              if (shouldResolveIP) {
-                encryptedPublicPassword = Encryption.encrypt(dbData.connection.password, encryptionKey);
-                encryptedPrivatePassword = Encryption.encrypt(
-                  dbData.private_connection.password,
-                  encryptionKey
-                );
-              }
-
-              let publicHostIP = dbData.connection.host;
-              let privateHostIP = dbData.private_connection.host;
-              let encryptedPublicURI = dbData.connection.uri;
-
-              if (shouldResolveIP) {
-                try {
-                  const publicHostResult = await resolveHost(dbData.connection.host);
-                  if (!publicHostResult.error && publicHostResult.records.length > 0) {
-                    const aRecord = publicHostResult.records.find((r) => r.type === "A");
-                    if (aRecord && aRecord.records.length > 0) {
-                      publicHostIP = aRecord.records[0] as string;
-                      const uriMatch = dbData.connection.uri.match(/^(.+@)([^:\/]+)(.+)$/);
-                      if (uriMatch) {
-                        encryptedPublicURI = `${uriMatch[1]}${publicHostIP}${uriMatch[3]}`;
-                      }
-                    }
+          if (shouldResolveIP) {
+            try {
+              const publicHostResult = await resolveHost(dbData.connection.host);
+              if (!publicHostResult.error && publicHostResult.records.length > 0) {
+                const aRecord = publicHostResult.records.find((r) => r.type === "A");
+                if (aRecord && aRecord.records.length > 0) {
+                  publicHostIP = aRecord.records[0] as string;
+                  const uriMatch = dbData.connection.uri.match(/^(.+@)([^:\/]+)(.+)$/);
+                  if (uriMatch) {
+                    encryptedPublicURI = `${uriMatch[1]}${publicHostIP}${uriMatch[3]}`;
                   }
-
-                  const privateHostResult = await resolveHost(dbData.private_connection.host);
-                  if (!privateHostResult.error && privateHostResult.records.length > 0) {
-                    const aRecord = privateHostResult.records.find((r) => r.type === "A");
-                    if (aRecord && aRecord.records.length > 0) {
-                      privateHostIP = aRecord.records[0] as string;
-                    }
-                  }
-                } catch (error) {
-                  console.error("[getCluster] Failed to resolve host to IP:", error);
                 }
               }
 
-              const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
-              const encryptedPrivateHost = Encryption.encrypt(privateHostIP, encryptionKey);
-              const encryptedPublicURIValue = Encryption.encrypt(encryptedPublicURI, encryptionKey);
-
-              let caCertificate = "";
-              if (shouldResolveIP) {
-                try {
-                  const caResponse = await axios.get(
-                    `https://api.digitalocean.com/v2/databases/${request.clusterId}/ca`,
-                    { headers: getDigitalOceanHeaders() }
-                  );
-                  if (caResponse.status === 200) {
-                    caCertificate = caResponse.data.ca.certificate;
-                  }
-                } catch (error) {
-                  console.error("[getCluster] Failed to fetch CA certificate:", error);
+              const privateHostResult = await resolveHost(dbData.private_connection.host);
+              if (!privateHostResult.error && privateHostResult.records.length > 0) {
+                const aRecord = privateHostResult.records.find((r) => r.type === "A");
+                if (aRecord && aRecord.records.length > 0) {
+                  privateHostIP = aRecord.records[0] as string;
                 }
               }
-
-              const encryptedCaCert = caCertificate
-                ? Encryption.encrypt(caCertificate, encryptionKey)
-                : "";
-
-              await Database_Clusters.update_status(
-                request.clusterId,
-                "online",
-                encryptedCaCert,
-                {
-                  ...dbData.connection,
-                  host: encryptedPublicHost,
-                  password: encryptedPublicPassword,
-                  uri: encryptedPublicURIValue,
-                },
-                {
-                  ...dbData.private_connection,
-                  host: encryptedPrivateHost,
-                  password: encryptedPrivatePassword,
-                }
-              );
-
-              const updatedRead = await Database_Clusters.read(request.clusterId);
-              if (updatedRead.success) {
-                if (updatedRead.data.project_id) {
-                  await Projects.add_log({
-                    project_id: updatedRead.data.project_id,
-                    event: "Database",
-                    text: `Database cluster '${updatedRead.data.name}' is now online`,
-                  });
-                }
-
-                try {
-                  await NotificationService.create(
-                    createServiceNotification({
-                      userId: updatedRead.data.owner_id,
-                      type: "success",
-                      action: "deployed",
-                      serviceType: "database",
-                      serviceName: updatedRead.data.name,
-                      serviceId: request.clusterId,
-                    })
-                  );
-                } catch (notifErr) {
-                  console.error("[getCluster] Failed to create notification:", notifErr);
-                }
-
-                return {
-                  success: true,
-                  data: redactClusterSecrets(decryptClusterData(updatedRead.data, encryptionKey)),
-                };
-              }
+            } catch (error) {
+              console.error("[getCluster] Failed to resolve host to IP:", error);
             }
+          }
+
+          const encryptedPublicHost = Encryption.encrypt(publicHostIP, encryptionKey);
+          const encryptedPrivateHost = Encryption.encrypt(privateHostIP, encryptionKey);
+          const encryptedPublicURIValue = Encryption.encrypt(encryptedPublicURI, encryptionKey);
+
+          let caCertificate = "";
+          if (shouldResolveIP) {
+            try {
+              const caResponse = await axios.get(
+                `https://api.digitalocean.com/v2/databases/${request.clusterId}/ca`,
+                { headers: getDigitalOceanHeaders() }
+              );
+              if (caResponse.status === 200) {
+                caCertificate = caResponse.data.ca.certificate;
+              }
+            } catch (error) {
+              console.error("[getCluster] Failed to fetch CA certificate:", error);
+            }
+          }
+
+          const encryptedCaCert = caCertificate
+            ? Encryption.encrypt(caCertificate, encryptionKey)
+            : "";
+
+          await Database_Clusters.update_status(
+            request.clusterId,
+            "online",
+            encryptedCaCert,
+            {
+              ...dbData.connection,
+              host: encryptedPublicHost,
+              password: encryptedPublicPassword,
+              uri: encryptedPublicURIValue,
+            },
+            {
+              ...dbData.private_connection,
+              host: encryptedPrivateHost,
+              password: encryptedPrivatePassword,
+            }
+          );
+
+          const updatedRead = await Database_Clusters.read(request.clusterId);
+          if (updatedRead.success) {
+            if (updatedRead.data.project_id) {
+              await Projects.add_log({
+                project_id: updatedRead.data.project_id,
+                event: "Database",
+                text: `Database cluster '${updatedRead.data.name}' is now online`,
+              });
+            }
+
+            try {
+              await NotificationService.create(
+                createServiceNotification({
+                  userId: updatedRead.data.owner_id,
+                  type: "success",
+                  action: "deployed",
+                  serviceType: "database",
+                  serviceName: updatedRead.data.name,
+                  serviceId: request.clusterId,
+                })
+              );
+            } catch (notifErr) {
+              console.error("[getCluster] Failed to create notification:", notifErr);
+            }
+
+            return {
+              success: true,
+              data: decryptClusterData(updatedRead.data, encryptionKey),
+            };
           }
         }
       }
+    }
 
-      const supabaseRead = await Database_Clusters.read(request.clusterId);
-      if (!supabaseRead.success || !supabaseRead.data) {
-        return {
-          success: false,
-          error: "Database cluster not found",
-          errorCode: "NOT_FOUND",
-        };
-      }
-
-      const encryptionKey = process.env.ENCRYPTION_KEY!;
-      return {
-        success: true,
-        data: redactClusterSecrets(decryptClusterData(supabaseRead.data, encryptionKey)),
-      };
-    } catch (err: unknown) {
+    const supabaseReadLatest = await Database_Clusters.read(request.clusterId);
+    if (!supabaseReadLatest.success || !supabaseReadLatest.data) {
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
-        errorCode: "UNKNOWN_ERROR",
+        error: "Database cluster not found",
+        errorCode: "NOT_FOUND",
       };
     }
+
+    const encryptionKey = process.env.ENCRYPTION_KEY!;
+    return {
+      success: true,
+      data: decryptClusterData(supabaseReadLatest.data, encryptionKey),
+    };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Unknown error occurred",
+      errorCode: "UNKNOWN_ERROR",
+    };
+  }
+}
+
+export const clusterReadOperations = {
+  async getCluster(request: GetDatabaseClusterRequest): Promise<GetDatabaseClusterResult> {
+    const result = await getClusterInternalImpl(request);
+    if (!result.success || !result.data) {
+      return result;
+    }
+
+    return {
+      ...result,
+      data: redactClusterSecrets(result.data as Record<string, unknown>),
+    };
+  },
+
+  async getClusterInternal(request: GetDatabaseClusterRequest): Promise<GetDatabaseClusterResult> {
+    return getClusterInternalImpl(request);
   },
 
   async readAllOwner(
@@ -204,6 +227,31 @@ export const clusterReadOperations = {
           redactClusterSecrets(
             decryptClusterDataWithoutUri(cluster as Record<string, unknown>, encryptionKey)
           )
+        ),
+      };
+    } catch (err: unknown) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : "Unknown error occurred",
+      };
+    }
+  },
+
+  async readAllOwnerInternal(
+    ownerId: string
+  ): Promise<{ success: boolean; data?: Record<string, unknown>[]; error?: string }> {
+    try {
+      const result = await Database_Clusters.read_all_owner(ownerId);
+      if (!result.success) {
+        return { success: false, error: result.error || "Failed to fetch database clusters" };
+      }
+
+      const encryptionKey = process.env.ENCRYPTION_KEY!;
+      const rows = Array.isArray(result.data) ? result.data : [];
+      return {
+        success: true,
+        data: rows.map((cluster) =>
+          decryptClusterDataWithoutUri(cluster as Record<string, unknown>, encryptionKey)
         ),
       };
     } catch (err: unknown) {

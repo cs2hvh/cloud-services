@@ -5,8 +5,8 @@ This folder centralizes business logic previously implemented inside `app/api/se
 ## Route to service mapping
 
 - `create/route.ts` -> `DatabaseService.createCluster`
-- `read/route.ts` -> `DatabaseService.getCluster`
-- `read_all_owner/route.ts` -> `DatabaseService.readAllOwner`
+- `read/route.ts` -> `DatabaseService.getClusterInternal` (legacy decrypted response compatibility)
+- `read_all_owner/route.ts` -> `DatabaseService.readAllOwnerInternal` (legacy decrypted response compatibility)
 - `update_status/route.ts` -> `DatabaseService.updateStatus`
 - `update/route.ts` -> `DatabaseService.updateClusterProject`
 - `delete/route.ts` -> `DatabaseService.deleteCluster`
@@ -24,6 +24,6 @@ This folder centralizes business logic previously implemented inside `app/api/se
 - `maintenance/route.ts` -> `DatabaseService.updateMaintenanceWindow`
 - `maintenance/read/route.ts` -> `DatabaseService.readMaintenanceWindow`
 - `region/route.ts` -> `DatabaseService.updateRegion`
-- `storage/route.ts` -> `DatabaseService.updateStorage`
+- `storage/route.ts` -> `DatabaseService.updateStorageInternal` (legacy fixed resize payload compatibility)
 - `upsize-storage/route.ts` -> `DatabaseService.upsizeStorage`
 - `readForMigrate/route.ts` -> `DatabaseService.readMigrationStatus`

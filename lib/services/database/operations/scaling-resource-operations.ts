@@ -132,6 +132,94 @@ export const scalingResourceOperations = {
     }
   },
 
+  // Compatibility method for legacy internal route that used a fixed payload
+  // for provider resize while storing requested size in Supabase.
+  async updateStorageInternal(
+    clusterId: string,
+    requestedSize: string
+  ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
+    try {
+      const payload = {
+        size: "db-s-2vcpu-4gb",
+        num_nodes: 1,
+        storage_size_mib: 75680,
+      };
+
+      const response = await axios.put(
+        `https://api.digitalocean.com/v2/databases/${clusterId}/resize`,
+        payload,
+        { headers: getDigitalOceanHeaders() }
+      );
+
+      if (response.status === 202 || response.status === 204) {
+        const supabaseUpdate = await Database_Clusters.update_storage(clusterId, requestedSize);
+        if (!supabaseUpdate.success) {
+          console.error("[updateStorageInternal] Failed to update Supabase:", supabaseUpdate.error);
+        }
+
+        const clusterData = await Database_Clusters.read(clusterId);
+        if (clusterData.success && clusterData.data.project_id) {
+          await Projects.add_log({
+            project_id: clusterData.data.project_id,
+            event: "Settings",
+            text: `Database storage tier upgraded to: ${requestedSize}`,
+          });
+        }
+
+        if (clusterData.success) {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: clusterData.data.owner_id,
+                type: "info",
+                action: "updated",
+                serviceType: "database",
+                serviceName: clusterData.data.name,
+                serviceId: clusterId,
+                metadata: { updateType: "storage", newSize: requestedSize },
+              })
+            );
+          } catch (notifErr) {
+            console.error("[updateStorageInternal] Failed to create notification:", notifErr);
+          }
+        }
+
+        return { success: true, statusCode: 200 };
+      }
+
+      return {
+        success: false,
+        error: "Failed to upgrade database storage tier",
+        statusCode: response.status,
+      };
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        return {
+          success: false,
+          error:
+            err.response?.data?.message ||
+            err.message ||
+            "Failed to upgrade database storage tier",
+          statusCode: err.response?.status || 500,
+        };
+      }
+
+      if (err instanceof Error) {
+        return {
+          success: false,
+          error: err.message || "Failed to upgrade database storage tier",
+          statusCode: 500,
+        };
+      }
+
+      return {
+        success: false,
+        error: "An unexpected error occurred",
+        statusCode: 500,
+      };
+    }
+  },
+
   async updateRegion(
     clusterId: string,
     region: string,
