@@ -30,17 +30,15 @@ const ObjectStorageSuspense = async () => {
 
 const ObjectStoragePage = () => {
   return (
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center py-20">
-            <LoadingSpinner />
-          </div>
-        }
-      >
-        <ObjectStorageSuspense />
-      </Suspense>
-    </div>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-20">
+          <LoadingSpinner />
+        </div>
+      }
+    >
+      <ObjectStorageSuspense />
+    </Suspense>
   );
 };
 

@@ -29,7 +29,7 @@ export default function ObjectStorageReleaseSection() {
           {/* Object Storage logo */}
           <div className="relative w-14 h-14 shrink-0">
             <Image
-              src="/images/main-page/object-space.svg"
+              src="/images/main-page/object-space.png"
               alt="Object Storage"
               fill
               className="object-contain"

@@ -1,47 +1,99 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { Copy, Check, Archive, Plus, Ban, Loader2, CheckCircle } from "lucide-react";
-import { ObjectSpaceBucket } from "@/lib/supabase/types";
+import {
+  Archive,
+  Ban,
+  Check,
+  CheckCircle2,
+  Copy,
+  Loader2,
+  Plus,
+} from "lucide-react";
 import { format } from "date-fns";
-import { toast } from "sonner";
 import Link from "next/link";
+import { toast } from "sonner";
+
 import { Button } from "@/components/ui/button";
+import { ObjectSpaceBucket } from "@/lib/supabase/types";
 
 interface BucketsTableProps {
   buckets: ObjectSpaceBucket[];
 }
 
+function formatSize(bytes: number | null | undefined) {
+  const value = bytes || 0;
+  if (value === 0) return "0 KB";
+  if (value < 1024) return value + " B";
+  if (value < 1024 * 1024) return (value / 1024).toFixed(2) + " KB";
+  if (value < 1024 * 1024 * 1024) return (value / (1024 * 1024)).toFixed(2) + " MB";
+  return (value / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  if (status === "active") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Active
+      </span>
+    );
+  }
+
+  if (status === "creating") {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Creating
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300">
+      <Ban className="h-3.5 w-3.5" />
+      {status || "Error"}
+    </span>
+  );
+}
+
 const BucketsTable = ({ buckets }: BucketsTableProps) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
- 
+
+  const rows = useMemo(
+    () => [...buckets].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))),
+    [buckets],
+  );
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(text);
-    toast.success(`${type} copied to clipboard`);
+    toast.success(type + " copied to clipboard");
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (buckets.length === 0) {
+  if (rows.length === 0) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center py-12 border border-white/10 rounded-lg bg-white/5"
+        className="border border-dashed border-white/[0.1] bg-white/[0.02]"
       >
-        <Archive className="mx-auto h-12 w-12 text-white/20" />
-        <h3 className="mt-4 text-lg font-semibold">No buckets</h3>
-        <p className="mt-2 text-sm text-white/60">
-          Get started by creating your first bucket.
-        </p>
-        <div className="mt-6">
+        <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+          <div className="flex h-14 w-14 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
+            <Archive className="h-6 w-6" />
+          </div>
+          <h3 className="mt-5 text-lg font-semibold text-white">No buckets yet</h3>
+          <p className="mt-2 max-w-lg text-sm leading-6 text-white/45">
+            Create your first object storage bucket to store files, static assets, and
+            application data without operational clutter.
+          </p>
           <Link
             href="/dashboard/services/object-storage/new"
-            className="cursor-pointer group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+            className="mt-6 inline-flex items-center gap-2 border border-blue-400/25 bg-blue-500/90 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
           >
-            <Plus className="-ml-1 mr-2 h-5 w-5" />
+            <Plus className="h-4 w-4" />
             Create Bucket
           </Link>
         </div>
@@ -50,120 +102,89 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
   }
 
   return (
-    <>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="border border-white/10 rounded-lg bg-white/5 overflow-hidden"
-      >
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="overflow-hidden border border-white/[0.08] bg-white/[0.02]">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-neutral-800/50 border-b border-neutral-800">
+          <table className="min-w-full divide-y divide-white/[0.08]">
+            <thead className="bg-white/[0.04]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Bucket ID
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Created
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Actions
-                </th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 sm:px-5">Bucket</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 sm:px-5">Region</th>
+                <th className="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 md:table-cell sm:px-5">Access</th>
+                <th className="hidden px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 lg:table-cell sm:px-5">Usage</th>
+                <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 sm:px-5">Status</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35 sm:px-5">Actions</th>
               </tr>
             </thead>
-
-            <tbody className="divide-y divide-neutral-800">
-              {buckets.map((bucket) => (
-                <tr
-                  key={bucket.id}
-                  className="hover:bg-neutral-800/30 transition-colors"
-                >
-                  {/* Name */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
+            <tbody className="divide-y divide-white/[0.06]">
+              {rows.map((bucket) => (
+                <tr key={bucket.id} className="transition-colors hover:bg-white/[0.04]">
+                  <td className="px-4 py-4 sm:px-5">
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
+                        <Archive className="h-4 w-4" />
+                      </div>
                       <div className="min-w-0">
-                        <div className="font-medium text-white text-sm truncate">
-                          {bucket.name}
+                        <div className="truncate text-sm font-medium text-white">{bucket.name}</div>
+                        <div className="mt-1 flex items-center gap-2">
+                          <code className="truncate rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] text-white/60">
+                            {bucket.id}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => copyToClipboard(bucket.id || "", "Bucket ID")}
+                            className="rounded p-1.5 transition-colors hover:bg-white/[0.08]"
+                          >
+                            {copiedId === bucket.id ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-300" />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5 text-white/45" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     </div>
                   </td>
-
-                  {/* Bucket ID with Copy */}
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <code className="text-xs text-white/70 bg-white/5 px-2 py-1 rounded border border-white/10">
-                        {bucket.id}
-                      </code>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(bucket?.id || "", "Bucket ID");
-                        }}
-                        className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
-                      >
-                        {copiedId === bucket.id ? (
-                          <Check className="h-3.5 w-3.5 text-green-400" />
-                        ) : (
-                          <Copy className="h-3.5 w-3.5 text-white/50" />
-                        )}
-                      </button>
+                  <td className="px-4 py-4 text-sm text-white/72 sm:px-5">{bucket.region || "N/A"}</td>
+                  <td className="hidden px-4 py-4 md:table-cell sm:px-5">
+                    <div className="flex flex-wrap gap-2">
+                      <span className={
+                        "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-medium " +
+                        (bucket.acl === "public-read"
+                          ? "border-blue-500/20 bg-blue-500/10 text-blue-200"
+                          : "border-white/10 bg-white/[0.05] text-white/55")
+                      }>
+                        {bucket.acl === "public-read" ? "Public read" : "Private"}
+                      </span>
+                      {bucket.versioning_enabled && (
+                        <span className="inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+                          Versioning
+                        </span>
+                      )}
                     </div>
                   </td>
-
-                  {/* Status Badge */}
-                  <td className="px-6 py-4">
-                    {bucket.status === "active" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-emerald-950/50 text-emerald-400 border border-emerald-900">
-                        <CheckCircle className="h-3 w-3" />
-                        Active
-                      </span>
-                    ) : bucket.status === "creating" ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-yellow-950/50 text-yellow-400 border border-yellow-900">
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                        Creating
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-red-950/50 text-red-400 border border-red-900">
-                        <Ban className="h-3 w-3" />
-                        Error
-                      </span>
-                    )}
+                  <td className="hidden px-4 py-4 lg:table-cell sm:px-5">
+                    <div className="flex flex-col gap-1 text-sm text-white/72">
+                      <span>{bucket.object_count || 0} objects</span>
+                      <span className="text-xs text-white/35">{formatSize(bucket.size_bytes)}</span>
+                    </div>
                   </td>
-
-                  {/* Created Date */}
-                  <td className="px-6 py-4 text-sm text-neutral-400">
-                    <div className="flex flex-col">
-                      <span>
+                  <td className="px-4 py-4 sm:px-5">
+                    <StatusBadge status={bucket.status} />
+                  </td>
+                  <td className="px-4 py-4 sm:px-5">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="hidden text-xs text-white/35 xl:inline-block">
                         {format(new Date(bucket.created_at), "MMM d, yyyy")}
                       </span>
-                      <span className="text-xs text-neutral-600">
-                        {format(new Date(bucket.created_at), "HH:mm:ss")}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-6 py-4">
-                    <div className="flex gap-1.5">
-                      <Link
-                        href={`/dashboard/services/object-storage/${bucket.id}`}
-                        className="cursor-pointer"
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 border border-white/[0.1] bg-white/[0.03] px-3 text-white/80 hover:bg-white/[0.08]"
+                        asChild
                       >
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="cursor-pointer h-8 px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300 border-0"
-                        >
-                          View
-                        </Button>
-                      </Link>
+                        <Link href={"/dashboard/services/object-storage/" + bucket.id}>View</Link>
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -171,13 +192,12 @@ const BucketsTable = ({ buckets }: BucketsTableProps) => {
             </tbody>
           </table>
         </div>
-      </motion.div>
-    </>
+        <div className="border-t border-white/[0.08] px-4 py-3 text-xs text-white/40 sm:px-5 md:hidden">
+          Open a bucket to view credentials, endpoint details, and settings.
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
 export default BucketsTable;
-
-
-
-

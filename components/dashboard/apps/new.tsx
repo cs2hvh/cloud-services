@@ -15,12 +15,14 @@ import {
   CheckCircle2,
   ChevronRight,
   Code,
-  Loader2,
+  Cpu,
   FolderKanban,
-  // GitBranch,
-  // Globe,
-  // Settings,
-  // ExternalLink,
+  GitBranch,
+  Globe2,
+  Layers3,
+  Loader2,
+  Rocket,
+  Settings2,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -198,6 +200,54 @@ interface PricingRates {
 interface PageProps {
   projects: Tables<"projects">[];
   pricing?: Record<string, PricingRates>;
+}
+
+const STEP_META = [
+  {
+    id: 1,
+    name: "Provider",
+    title: "Select source control provider",
+    description: "Connect an approved Git provider and choose the account you want to deploy from.",
+    icon: Code,
+  },
+  {
+    id: 2,
+    name: "Repository",
+    title: "Choose repository and branch",
+    description: "Select the repository, review available branches, and confirm the code source for deployment.",
+    icon: GitBranch,
+  },
+  {
+    id: 3,
+    name: "Configure",
+    title: "Define runtime and capacity",
+    description: "Set the application name, framework profile, environment variables, and resource sizing.",
+    icon: Cpu,
+  },
+  {
+    id: 4,
+    name: "Deploy",
+    title: "Review and launch",
+    description: "Confirm deployment settings, billing impact, and rollout preferences before provisioning begins.",
+    icon: Rocket,
+  },
+] as const;
+
+const panelClassName = "glass-panel overflow-hidden";
+
+function SummaryRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <span className="text-sm text-white/42">{label}</span>
+      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    </div>
+  );
 }
 
 const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
@@ -738,17 +788,24 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     }
   };
 
-  const steps = [
-    { id: 1, name: "Provider" },
-    { id: 2, name: "Repository" },
-    { id: 3, name: "Configure" },
-    { id: 4, name: "Deploy" },
-  ];
+  const steps = STEP_META;
 
   const selectedRepoData = repositories.find((r) => r.id === selectedRepo);
   const selectedProviderData = gitProviders.find(
     (p) => p.id === selectedProvider,
   );
+  const activeStepMeta = STEP_META[currentStep - 1];
+  const progressPercentage = (currentStep / STEP_META.length) * 100;
+  const selectedSizeConfig =
+    instanceSizeConfigs[size as keyof typeof instanceSizeConfigs] || instanceSizeConfigs.small;
+  const selectedSizePrice = pricing?.[size];
+  const selectedFrameworkConfig = framework
+    ? frameworkConfigs[framework as keyof typeof frameworkConfigs]
+    : undefined;
+  const selectedProjectName =
+    selectedProject && selectedProject !== "none"
+      ? projects.find((project) => project.id === selectedProject)?.name || "Assigned"
+      : "Not attached";
 
   // Filter repositories based on search term
   const filteredRepositories = repositories.filter((repo) => {
@@ -761,48 +818,100 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   });
 
   return (
-    <div className="py-4">
-      {/* Progress Steps */}
-      <div className="mb-8">
-        <div className="flex justify-between mb-2">
-          {steps.map((step, index) => (
-            <div key={step.id} className="flex-1 flex flex-col items-center">
-              <div className="flex items-center w-full">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-300 ${
-                    currentStep > step.id
-                      ? "bg-blue-600 text-white"
-                      : currentStep === step.id
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/10 text-white/50"
-                  }`}
-                >
-                  {currentStep > step.id ? <CheckCircle2 size={16} /> : step.id}
-                </div>
-                {index < steps.length - 1 && (
-                  <div
-                    className={`flex-1 h-0.5 transition-colors duration-300 ${
-                      currentStep > step.id ? "bg-blue-600" : "bg-white/10"
-                    }`}
-                  ></div>
-                )}
+    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className={panelClassName}>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              Application Deployment
+            </p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Deploy repository-backed applications with a cleaner rollout workflow.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+              {activeStepMeta.description}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Progress
               </div>
-              <p
-                className={`mt-2 text-xs ${currentStep >= step.id ? "text-white" : "text-white/50"}`}
-              >
-                {step.name}
-              </p>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {currentStep} / {STEP_META.length}
+              </div>
             </div>
-          ))}
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Monthly
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {selectedSizePrice?.price ? `$${selectedSizePrice.price.toFixed(2)}/mo` : "Free"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
+            <div
+              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            {steps.map((step) => {
+              const Icon = step.icon;
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    if (step.id < currentStep) {
+                      setCurrentStep(step.id);
+                    }
+                  }}
+                  className={`border px-3 py-3 text-left transition-colors ${
+                    isActive
+                      ? "border-blue-400/30 bg-blue-500/10"
+                      : isCompleted
+                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
+                        : "border-white/[0.06] bg-transparent"
+                  } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
+                        isActive
+                          ? "border-blue-400/30 text-blue-300"
+                          : "border-white/[0.10] text-white/78"
+                      }`}
+                    >
+                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                    </div>
+                    <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                  </div>
+                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
+                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">
+                    {step.title}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="space-y-6">
           {/* Step 1: Git Provider */}
           {currentStep === 1 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">
                   Select Git Provider
@@ -877,12 +986,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                   connectProvider(provider.id);
                                 }}
                                 size="sm"
-                                style={{ backgroundColor: "white" }}
-                                className={`${
-                                  isLoading || connectingProvider !== null
-                                    ? "bg-white text-black hover:bg-gray-200"
-                                    : "cursor-pointer bg-white text-black hover:bg-gray-200"
-                                }`}
+                                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                                 disabled={
                                   isLoading || connectingProvider !== null
                                 }
@@ -916,7 +1020,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     onClick={fetchProviderStatus}
                     size="sm"
                     variant="outline"
-                    className="border-white/20 text-white hover:bg-white/10"
+                    className="border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                     disabled={loadingProviders}
                   >
                     {loadingProviders ? (
@@ -931,7 +1035,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 <Button
                   onClick={handleNextStep}
                   disabled={loadingProviders || !selectedProvider}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -941,7 +1045,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
           {/* Step 2: Repository Selection */}
           {currentStep === 2 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Select Repository</CardTitle>
               </CardHeader>
@@ -1089,7 +1193,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                             return (
                               <div className="mt-4 pt-4 border-t border-white/10">
                                 <p className="text-xs text-white/40 text-center mb-2">
-                                  Page {currentPage} of {totalPages} •{" "}
+                                  Page {currentPage} of {totalPages} - {filteredRepositories.length} repositories
                                   {filteredRepositories.length} repositories
                                 </p>
                                 <div className="flex items-center justify-center gap-1">
@@ -1105,7 +1209,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                     size="sm"
                                     className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
                                   >
-                                    ←
+                                    Prev
                                   </Button>
 
                                   {/* Page Numbers */}
@@ -1153,7 +1257,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                     size="sm"
                                     className="text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed"
                                   >
-                                    →
+                                    Next
                                   </Button>
                                 </div>
                               </div>
@@ -1170,7 +1274,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           onClick={() => setRepoSearchTerm("")}
                           size="sm"
                           variant="outline"
-                          className="mt-3 border-white/20 text-white hover:bg-white/10"
+                          className="mt-3 border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                         >
                           Clear Search
                         </Button>
@@ -1189,7 +1293,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     <div className="flex gap-2 justify-center">
                       <Button
                         onClick={() => fetchRepositories(selectedProvider)}
-                        className="bg-white text-black hover:bg-gray-200"
+                        className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                       >
                         Refresh Repositories
                       </Button>
@@ -1214,14 +1318,14 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
                   disabled={loadingRepos}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -1229,609 +1333,552 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             </Card>
           )}
 
+
           {/* Step 3: Configuration */}
           {currentStep === 3 && (
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white">
-                  Configure Deployment
+            <Card className={panelClassName}>
+              <CardHeader className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                  Runtime Configuration
+                </p>
+                <CardTitle className="mt-2 text-xl font-semibold tracking-tight text-white">
+                  Configure deployment
                 </CardTitle>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-white/48">
+                  Define the service name, deploy branch, build profile, capacity, and release
+                  behavior before provisioning begins.
+                </p>
               </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Project Selection */}
-                <div>
-                  <Label className="text-white flex items-center gap-2">
-                    <FolderKanban className="w-4 h-4" />
-                    Select Project
-                  </Label>
-                  <Select
-                    value={selectedProject}
-                    onValueChange={setSelectedProject}
-                  >
-                    <SelectTrigger className="bg-white/10 border-white/20 text-white mt-2">
-                      <SelectValue placeholder="Select a project (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Project</SelectItem>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-white/50 mt-1">
-                    Associate this app with a project to track activity logs
-                  </p>
-                </div>
-
-                <Separator className="bg-white/10" />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-white">Application Name</Label>
-                    <Input
-                      value={appName}
-                      onChange={(e) => setAppName(e.target.value)}
-                      placeholder="my-awesome-app"
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-white">Deploy Branch</Label>
-                    {loadingBranches ? (
-                      <div className="flex items-center gap-2 p-3 bg-white/10 rounded-md">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span className="text-white/60 text-sm">
-                          Loading branches...
-                        </span>
-                      </div>
-                    ) : branches.length > 0 ? (
-                      <div className="space-y-2">
-                        <Select
-                          value={selectedBranch}
-                          onValueChange={setSelectedBranch}
-                        >
-                          <SelectTrigger className="bg-white/10 border-white/20 text-white">
-                            <SelectValue placeholder="Select branch" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {branches.map((branch) => (
-                              <SelectItem key={branch.name} value={branch.name}>
-                                <div className="flex items-center gap-2">
-                                  <span>{branch.name}</span>
-                                  {branch.protected && (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-xs text-yellow-400 border-yellow-400/30"
-                                    >
-                                      Protected
-                                    </Badge>
-                                  )}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          onClick={async () => {
-                            if (!selectedRepoData) return;
-                            await fetchBranches(
-                              selectedProvider,
-                              selectedRepoData,
-                            );
-                            const branchToDetect =
-                              selectedBranch || selectedRepoData.defaultBranch;
-                            detectFramework(
-                              selectedProvider,
-                              selectedRepoData,
-                              branchToDetect,
-                            );
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="border-white/20 text-white hover:bg-white/10"
-                          disabled={loadingBranches}
-                        >
-                          <Loader2
-                            className={`w-4 h-4 mr-2 ${loadingBranches ? "animate-spin" : "hidden"}`}
-                          />
-                          Refresh Branches
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Input
-                          value={selectedBranch}
-                          onChange={(e) => setSelectedBranch(e.target.value)}
-                          placeholder="main"
-                          className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                        />
-                        <Button
-                          onClick={async () => {
-                            if (!selectedRepoData) return;
-                            await fetchBranches(
-                              selectedProvider,
-                              selectedRepoData,
-                            );
-                            const branchToDetect =
-                              selectedBranch || selectedRepoData.defaultBranch;
-                            detectFramework(
-                              selectedProvider,
-                              selectedRepoData,
-                              branchToDetect,
-                            );
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="border-white/20 text-white hover:bg-white/10"
-                          disabled={loadingBranches}
-                        >
-                          <Loader2
-                            className={`w-4 h-4 mr-2 ${loadingBranches ? "animate-spin" : "hidden"}`}
-                          />
-                          Refresh Branches
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <Label className="text-white">
-                    Framework / Pipeline Type
-                  </Label>
-                  <div className="flex gap-2">
-                    <Select value={framework} onValueChange={setFramework}>
-                      <SelectTrigger className="bg-white/10 border-white/20 text-white flex-1">
-                        <SelectValue placeholder="Select framework" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {/* Test Pipeline */}
-                        <SelectItem value="simple-test">
-                          Simple Test (No Build/Deploy)
-                        </SelectItem>
-
-                        {/* Java (Dockerfile) */}
-                        <SelectItem value="Java">
-                          Java (uses your Dockerfile)
-                        </SelectItem>
-                        {/* Dockerfile (Custom) */}
-                        <SelectItem value="Dockerfile">
-                          Dockerfile (uses your existing Dockerfile)
-                        </SelectItem>
-
-                        {/* Node.js Frameworks - Auto Dockerfile */}
-                        <SelectItem value="Next.js">
-                          {" "}
-                          Next.js (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Nuxt.js">
-                          {" "}
-                          Nuxt.js (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Vite-React">
-                          {" "}
-                          React + Vite (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Vue.js">
-                          {" "}
-                          Vue.js (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Angular">
-                          {" "}
-                          Angular (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="SvelteKit">
-                          {" "}
-                          SvelteKit (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="express">
-                          {" "}
-                          Express.js (auto-Dockerfile)
-                        </SelectItem>
-
-                        {/* Node.js Frameworks - Bring Dockerfile */}
-                        <SelectItem value="React">
-                          {" "}
-                          React CRA (bring Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Svelte">
-                          {" "}
-                          Svelte (bring Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="Node.js">
-                          {" "}
-                          Node.js (bring Dockerfile)
-                        </SelectItem>
-
-                        {/* Python Frameworks */}
-                        <SelectItem value="python">
-                          {" "}
-                          Python (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="django">
-                          {" "}
-                          Django (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="flask">
-                          {" "}
-                          Flask (auto-Dockerfile)
-                        </SelectItem>
-                        <SelectItem value="fastapi">
-                          {" "}
-                          FastAPI (auto-Dockerfile)
-                        </SelectItem>
-
-                        {/* Static */}
-                        <SelectItem value="Static">Static Site</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={async () => {
-                        if (!selectedRepoData) return;
-                        await detectFramework(
-                          selectedProvider,
-                          selectedRepoData,
-                          selectedBranch,
-                        );
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="border-white/20 text-white hover:bg-white/10"
-                      disabled={detectingFramework || !selectedRepoData}
-                    >
-                      <Loader2
-                        className={`w-4 h-4 mr-2 ${detectingFramework ? "animate-spin" : "hidden"}`}
-                      />
-                      {detectingFramework ? "Detecting..." : "Detect"}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Build Configuration Info */}
-                {framework &&
-                  frameworkConfigs[
-                    framework as keyof typeof frameworkConfigs
-                  ] && (
-                    <div
-                      className={`p-4 border rounded-lg ${
-                        hasDockerfile
-                          ? "bg-green-500/10 border-green-500/20"
-                          : "bg-blue-500/10 border-blue-500/20"
-                      }`}
-                    >
+              <CardContent className="space-y-6 px-6 py-6 sm:px-7 sm:py-7">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)]">
+                  <div className="space-y-6">
+                    <div className="border border-white/[0.08] bg-white/[0.04] p-5 sm:p-6">
                       <div className="flex items-start gap-3">
-                        <div
-                          className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
-                            hasDockerfile ? "bg-green-500/20" : "bg-blue-500/20"
-                          }`}
-                        >
-                          {hasDockerfile ? (
-                            <svg
-                              className="w-4 h-4 text-green-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                              />
-                            </svg>
-                          ) : (
-                            <svg
-                              className="w-4 h-4 text-blue-400"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                              />
-                            </svg>
-                          )}
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.1] bg-white/[0.05] text-blue-300">
+                          <Settings2 className="h-4 w-4" />
                         </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-white font-medium mb-1">
-                              Build & Deployment
-                            </h3>
-                            {detectingFramework && (
-                              <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Deployment Basics
+                          </p>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            Name, grouping, and branch strategy
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/45">
+                            Keep naming and branch selection explicit so operators can map each
+                            deployment to the right workload and release stream.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 grid gap-5">
+                        <div>
+                          <Label className="mb-2 flex items-center gap-2 text-sm font-medium text-white/82">
+                            <FolderKanban className="h-4 w-4 text-blue-300" />
+                            Project association
+                          </Label>
+                          <Select value={selectedProject} onValueChange={setSelectedProject}>
+                            <SelectTrigger className="border-white/[0.14] bg-white/[0.05] text-white">
+                              <SelectValue placeholder="Select a project (optional)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No project</SelectItem>
+                              {projects.map((project) => (
+                                <SelectItem key={project.id} value={project.id}>
+                                  {project.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="mt-2 text-sm text-white/42">
+                            Current assignment: <span className="text-white/72">{selectedProjectName}</span>
+                          </p>
+                        </div>
+
+                        <div className="grid gap-5 md:grid-cols-2">
+                          <div>
+                            <Label className="mb-2 block text-sm font-medium text-white/82">
+                              Application name
+                            </Label>
+                            <Input
+                              value={appName}
+                              onChange={(e) => setAppName(e.target.value)}
+                              placeholder="my-awesome-app"
+                              className="border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30"
+                            />
+                            <p className="mt-2 text-xs leading-5 text-white/42">
+                              Use a stable, lowercase service name that is easy to recognize in logs
+                              and the app inventory.
+                            </p>
+                          </div>
+
+                          <div>
+                            <Label className="mb-2 block text-sm font-medium text-white/82">
+                              Deploy branch
+                            </Label>
+                            {loadingBranches ? (
+                              <div className="flex items-center gap-2 border border-white/[0.12] bg-white/[0.04] px-3 py-3 text-sm text-white/55">
+                                <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
+                                Loading repository branches...
+                              </div>
+                            ) : branches.length > 0 ? (
+                              <div className="space-y-3">
+                                <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+                                  <SelectTrigger className="border-white/[0.14] bg-white/[0.05] text-white">
+                                    <SelectValue placeholder="Select branch" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {branches.map((branch) => (
+                                      <SelectItem key={branch.name} value={branch.name}>
+                                        {branch.protected ? `${branch.name} (Protected)` : branch.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  onClick={async () => {
+                                    if (!selectedRepoData) return;
+                                    await fetchBranches(selectedProvider, selectedRepoData);
+                                    const branchToDetect =
+                                      selectedBranch || selectedRepoData.defaultBranch;
+                                    detectFramework(
+                                      selectedProvider,
+                                      selectedRepoData,
+                                      branchToDetect,
+                                    );
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
+                                  disabled={loadingBranches}
+                                >
+                                  <Loader2
+                                    className={`mr-2 h-4 w-4 ${loadingBranches ? "animate-spin" : "hidden"}`}
+                                  />
+                                  Refresh branches
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                <Input
+                                  value={selectedBranch}
+                                  onChange={(e) => setSelectedBranch(e.target.value)}
+                                  placeholder="main"
+                                  className="border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30"
+                                />
+                                <Button
+                                  onClick={async () => {
+                                    if (!selectedRepoData) return;
+                                    await fetchBranches(selectedProvider, selectedRepoData);
+                                    const branchToDetect =
+                                      selectedBranch || selectedRepoData.defaultBranch;
+                                    detectFramework(
+                                      selectedProvider,
+                                      selectedRepoData,
+                                      branchToDetect,
+                                    );
+                                  }}
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
+                                  disabled={loadingBranches}
+                                >
+                                  <Loader2
+                                    className={`mr-2 h-4 w-4 ${loadingBranches ? "animate-spin" : "hidden"}`}
+                                  />
+                                  Refresh branches
+                                </Button>
+                              </div>
                             )}
                           </div>
-
-                          {/* Show Dockerfile status */}
-                          {hasDockerfile ? (
-                            <div className="mb-3">
-                              <p className="text-sm text-green-300 font-medium mb-1">
-                                ✓ Using your repository&apos;s Dockerfile
-                              </p>
-                              <p className="text-xs text-white/60">
-                                {framework === "Java"
-                                  ? "Your custom Dockerfile will be used for the Java/Maven build."
-                                  : "Your custom Dockerfile will be used for the build. The platform defaults below are for reference only."}
-                              </p>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-white/70 mb-3">
-                              {
-                                frameworkConfigs[
-                                  framework as keyof typeof frameworkConfigs
-                                ].description
-                              }
-                            </p>
-                          )}
-
-                          {/* Show build defaults (for reference or actual use) */}
-                          {frameworkConfigs[
-                            framework as keyof typeof frameworkConfigs
-                          ].buildCommand && (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="text-white/60 min-w-[120px]">
-                                  {hasDockerfile
-                                    ? "Platform default:"
-                                    : "Build command:"}
-                                </span>
-                                <code
-                                  className={`px-2 py-1 rounded font-mono ${
-                                    hasDockerfile
-                                      ? "text-white/50 bg-white/5"
-                                      : "text-blue-400 bg-white/5"
-                                  }`}
-                                >
-                                  {
-                                    frameworkConfigs[
-                                      framework as keyof typeof frameworkConfigs
-                                    ].buildCommand
-                                  }
-                                </code>
-                              </div>
-                              <div className="flex items-center gap-2 text-sm">
-                                <span className="text-white/60 min-w-[120px]">
-                                  {hasDockerfile
-                                    ? "Platform default:"
-                                    : "Output directory:"}
-                                </span>
-                                <code
-                                  className={`px-2 py-1 rounded font-mono ${
-                                    hasDockerfile
-                                      ? "text-white/50 bg-white/5"
-                                      : "text-blue-400 bg-white/5"
-                                  }`}
-                                >
-                                  {
-                                    frameworkConfigs[
-                                      framework as keyof typeof frameworkConfigs
-                                    ].outputDir
-                                  }
-                                </code>
-                              </div>
-                            </div>
-                          )}
-
-                          {!hasDockerfile && (
-                            <p className="text-xs text-white/50 mt-3">
-                              💡 For full control over the build process, add a{" "}
-                              <code className="text-blue-300">Dockerfile</code>{" "}
-                              to your repository.
-                            </p>
-                          )}
                         </div>
                       </div>
                     </div>
-                  )}
 
-                {/* Container Port - Show only when Dockerfile exists or framework is Dockerfile or Java */}
-                {(hasDockerfile ||
-                  framework === "Dockerfile" ||
-                  framework === "Java") && (
-                  <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
-                    <Label className="text-white font-medium mb-2 block">
-                      Container Port
-                    </Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={containerPort ?? ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setContainerPort(val ? parseInt(val, 10) : undefined);
-                      }}
-                      placeholder={
-                        detectedPort ? detectedPort.toString() : "3000"
-                      }
-                      className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    />
-                    {detectedPort && (
-                      <p className="text-xs text-green-400 mt-2">
-                        ℹ️ Detected from Dockerfile:{" "}
-                        <span className="font-mono">EXPOSE {detectedPort}</span>
-                      </p>
-                    )}
-                    {!detectedPort && containerPort === undefined && (
-                      <p className="text-xs text-yellow-400 mt-2">
-                        ⚠️ Could not detect port from Dockerfile. Using
-                        framework default. Please confirm.
-                      </p>
-                    )}
-                    <p className="text-xs text-white/50 mt-2">
-                      The port your application listens on inside the container
-                      (1-65535).
-                      {!detectedPort &&
-                        " Kubernetes will route traffic to this port."}
-                    </p>
-                  </div>
-                )}
+                    <div className="border border-white/[0.08] bg-white/[0.04] p-5 sm:p-6">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.1] bg-white/[0.05] text-blue-300">
+                          <Layers3 className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Build Profile
+                          </p>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            Framework and runtime defaults
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/45">
+                            Choose the build pipeline that best matches the repository. Platform
+                            defaults stay visible so teams know exactly what is generated.
+                          </p>
+                        </div>
+                      </div>
 
-                <div className="mt-4">
-                  <Label className="text-white">Instance Size</Label>
-                  <p className="text-xs text-white/50 mt-1 mb-3">
-                    Select the resources for your application. You can resize
-                    anytime.
-                  </p>
-                  <RadioGroup
-                    value={size}
-                    onValueChange={setSize}
-                    className="grid grid-cols-1 gap-3"
-                  >
-                    {(["small", "medium", "large"] as const).map(
-                      (sizeOption) => {
-                        const config = instanceSizeConfigs[sizeOption];
-                        const sizePrice = pricing?.[sizeOption];
-                        const monthlyPrice = sizePrice?.price ?? 0;
-                        const hourlyRate = sizePrice?.hourlyRate ?? 0;
+                      <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-start">
+                        <div className="min-w-0 flex-1">
+                          <Label className="mb-2 block text-sm font-medium text-white/82">
+                            Framework or pipeline type
+                          </Label>
+                          <Select value={framework} onValueChange={setFramework}>
+                            <SelectTrigger className="border-white/[0.14] bg-white/[0.05] text-white">
+                              <SelectValue placeholder="Select framework" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="simple-test">Simple test (no build or deploy)</SelectItem>
+                              <SelectItem value="Java">Java (uses your Dockerfile)</SelectItem>
+                              <SelectItem value="Dockerfile">Dockerfile (uses your existing Dockerfile)</SelectItem>
+                              <SelectItem value="Next.js">Next.js (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="Nuxt.js">Nuxt.js (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="Vite-React">React + Vite (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="Vue.js">Vue.js (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="Angular">Angular (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="SvelteKit">SvelteKit (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="express">Express.js (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="React">React CRA (bring Dockerfile)</SelectItem>
+                              <SelectItem value="Svelte">Svelte (bring Dockerfile)</SelectItem>
+                              <SelectItem value="Node.js">Node.js (bring Dockerfile)</SelectItem>
+                              <SelectItem value="python">Python (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="django">Django (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="flask">Flask (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="fastapi">FastAPI (auto-Dockerfile)</SelectItem>
+                              <SelectItem value="Static">Static site</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
 
-                        return (
-                          <div key={sizeOption}>
-                            <RadioGroupItem
-                              value={sizeOption}
-                              id={`size-${sizeOption}`}
-                              className="peer sr-only"
+                        <div className="lg:pt-7">
+                          <Button
+                            onClick={async () => {
+                              if (!selectedRepoData) return;
+                              await detectFramework(
+                                selectedProvider,
+                                selectedRepoData,
+                                selectedBranch,
+                              );
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="w-full border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07] lg:w-auto"
+                            disabled={detectingFramework || !selectedRepoData}
+                          >
+                            <Loader2
+                              className={`mr-2 h-4 w-4 ${detectingFramework ? "animate-spin" : "hidden"}`}
                             />
-                            <Label
-                              htmlFor={`size-${sizeOption}`}
-                              className="flex items-center justify-between p-4 bg-white/10 rounded-lg border-2 border-transparent cursor-pointer transition-all peer-data-[state=checked]:border-blue-500 hover:bg-white/15"
+                            {detectingFramework ? "Detecting..." : "Detect from repository"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {selectedFrameworkConfig && (
+                        <div
+                          className={`mt-5 rounded-xl border p-4 sm:p-5 ${
+                            hasDockerfile
+                              ? "border-emerald-500/20 bg-emerald-500/10"
+                              : "border-blue-500/20 bg-blue-500/10"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full ${
+                                hasDockerfile ? "bg-emerald-500/20 text-emerald-300" : "bg-blue-500/20 text-blue-300"
+                              }`}
                             >
-                              <div className="flex items-center gap-4">
-                                <div
-                                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                                    size === sizeOption
-                                      ? "border-blue-500 bg-blue-500"
-                                      : "border-white/30"
-                                  }`}
-                                >
-                                  {size === sizeOption && (
-                                    <div className="w-2 h-2 rounded-full bg-white"></div>
-                                  )}
-                                </div>
-                                <div>
-                                  <div className="font-semibold text-white capitalize">
-                                    {sizeOption}
-                                  </div>
-                                  <div className="text-xs text-white/60">
-                                    {config.cpu} CPU / {config.ram} RAM /{" "}
-                                    {config.replicas} replica
-                                    {config.replicas > 1 ? "s" : ""}
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                {monthlyPrice > 0 ? (
-                                  <>
-                                    <div className="font-bold text-white">
-                                      ${monthlyPrice.toFixed(2)}
-                                      <span className="text-xs text-white/60">
-                                        /mo
-                                      </span>
-                                    </div>
-                                    <div className="text-xs text-white/50">
-                                      ${(hourlyRate * 24 * 30).toFixed(2)}/mo
-                                      based on usage
-                                    </div>
-                                  </>
-                                ) : (
-                                  <div className="font-bold text-green-400">
-                                    Free
-                                  </div>
+                              {hasDockerfile ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                              ) : (
+                                <Layers3 className="h-4 w-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-semibold text-white">
+                                  Build pipeline details
+                                </h4>
+                                {detectingFramework && (
+                                  <Loader2 className="h-4 w-4 animate-spin text-blue-300" />
                                 )}
                               </div>
-                            </Label>
+                              <p className="mt-2 text-sm leading-6 text-white/55">
+                                {hasDockerfile
+                                  ? framework === "Java"
+                                    ? "A repository Dockerfile is detected and will be used for the Java build path. Platform defaults remain visible for reference."
+                                    : "A repository Dockerfile is detected and will be used during deployment. Platform defaults remain visible for reference."
+                                  : selectedFrameworkConfig.description}
+                              </p>
+
+                              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                {selectedFrameworkConfig.installCommand && (
+                                  <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                      Install command
+                                    </div>
+                                    <code className="mt-2 block break-all text-[12px] leading-5 text-white/82">
+                                      {selectedFrameworkConfig.installCommand}
+                                    </code>
+                                  </div>
+                                )}
+
+                                <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                    {hasDockerfile ? "Platform default build" : "Build command"}
+                                  </div>
+                                  <code className="mt-2 block break-all text-[12px] leading-5 text-white/82">
+                                    {selectedFrameworkConfig.buildCommand || "Not required"}
+                                  </code>
+                                </div>
+
+                                <div className="rounded-lg border border-white/[0.08] bg-black/20 p-3">
+                                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35">
+                                    {hasDockerfile ? "Platform default output" : "Output directory"}
+                                  </div>
+                                  <code className="mt-2 block break-all text-[12px] leading-5 text-white/82">
+                                    {selectedFrameworkConfig.outputDir || "."}
+                                  </code>
+                                </div>
+                              </div>
+
+                              {!hasDockerfile && (
+                                <p className="mt-4 text-xs leading-5 text-white/48">
+                                  Add a <code className="text-blue-300">Dockerfile</code> to the
+                                  repository when you need full control over the container build.
+                                </p>
+                              )}
+                            </div>
                           </div>
-                        );
-                      },
-                    )}
-                  </RadioGroup>
-                </div>
+                        </div>
+                      )}
 
-                {/* Auto-Deploy Toggle */}
-                <div className="mt-4 p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-1">
-                      <Label className="text-white font-medium">
-                        Auto-Deploy on Git Push
-                      </Label>
-                      <p className="text-xs text-white/60">
-                        Automatically deploy when you push to the{" "}
-                        <span className="font-mono text-blue-400">
-                          {selectedBranch || "selected branch"}
-                        </span>
-                      </p>
+                      {(hasDockerfile || framework === "Dockerfile" || framework === "Java") && (
+                        <div className="mt-5 rounded-xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
+                          <Label className="mb-2 block text-sm font-medium text-white/82">
+                            Container port
+                          </Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            max="65535"
+                            value={containerPort ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setContainerPort(val ? parseInt(val, 10) : undefined);
+                            }}
+                            placeholder={detectedPort ? detectedPort.toString() : "3000"}
+                            className="border-white/[0.14] bg-white/[0.05] text-white placeholder:text-white/30"
+                          />
+                          {detectedPort && (
+                            <p className="mt-2 text-xs text-emerald-300">
+                              Detected from Dockerfile: <span className="font-mono">EXPOSE {detectedPort}</span>
+                            </p>
+                          )}
+                          {!detectedPort && containerPort === undefined && (
+                            <p className="mt-2 text-xs text-amber-300">
+                              Port was not detected automatically. Confirm the listening port before
+                              deployment.
+                            </p>
+                          )}
+                          <p className="mt-2 text-xs leading-5 text-white/45">
+                            This is the internal port your container listens on. The platform routes
+                            traffic to this port after provisioning.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                    <Switch
-                      checked={autoDeploy}
-                      onCheckedChange={setAutoDeploy}
-                      className="data-[state=checked]:bg-blue-500"
-                    />
                   </div>
-                  {autoDeploy && (
-                    <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-md">
-                      <p className="text-xs text-blue-300">
-                        ✓ A webhook will be created in your repository to
-                        trigger deployments automatically when you push commits.
-                      </p>
-                    </div>
-                  )}
-                </div>
 
-                {/* Environment Variables */}
-                <EnvVarsEditor value={envVars} onChange={setEnvVars} />
+                  <div className="space-y-6">
+                    <div className="border border-white/[0.08] bg-white/[0.04] p-5 sm:p-6">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.1] bg-white/[0.05] text-blue-300">
+                          <Cpu className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Capacity
+                          </p>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            Instance sizing and cost profile
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/45">
+                            Pick a runtime size that matches the application footprint. Capacity can
+                            be resized later as traffic and workload change.
+                          </p>
+                        </div>
+                      </div>
 
-                {/* Custom Domain Info */}
-                <div className="p-4 bg-white/5 rounded-lg border border-white/10">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center flex-shrink-0">
-                      <span className="text-blue-400">🌐</span>
+                      <RadioGroup value={size} onValueChange={setSize} className="mt-6 grid gap-3">
+                        {(["small", "medium", "large"] as const).map((sizeOption) => {
+                          const config = instanceSizeConfigs[sizeOption];
+                          const sizePrice = pricing?.[sizeOption];
+                          const monthlyPrice = sizePrice?.price ?? 0;
+                          const hourlyRate = sizePrice?.hourlyRate ?? 0;
+
+                          return (
+                            <div key={sizeOption}>
+                              <RadioGroupItem
+                                value={sizeOption}
+                                id={`size-${sizeOption}`}
+                                className="peer sr-only"
+                              />
+                              <Label
+                                htmlFor={`size-${sizeOption}`}
+                                className="block cursor-pointer border border-white/[0.08] bg-white/[0.03] p-4 transition-colors peer-data-[state=checked]:border-blue-400/35 peer-data-[state=checked]:bg-blue-500/10 hover:bg-white/[0.05]"
+                              >
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="flex min-w-0 items-start gap-3">
+                                    <div
+                                      className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-full border-2 ${
+                                        size === sizeOption ? "border-blue-400 bg-blue-400" : "border-white/30"
+                                      }`}
+                                    >
+                                      {size === sizeOption && <div className="h-2 w-2 rounded-full bg-white" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-semibold capitalize text-white">
+                                        {sizeOption}
+                                      </div>
+                                      <div className="mt-1 text-sm leading-6 text-white/50">
+                                        {config.cpu} CPU / {config.ram} RAM / {config.replicas} replica{config.replicas > 1 ? "s" : ""}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-left sm:text-right">
+                                    {monthlyPrice > 0 ? (
+                                      <>
+                                        <div className="text-sm font-semibold text-white">
+                                          ${monthlyPrice.toFixed(2)}
+                                          <span className="ml-1 text-xs text-white/50">/mo</span>
+                                        </div>
+                                        <div className="mt-1 text-xs text-white/45">
+                                          ${hourlyRate.toFixed(4)}/hour usage rate
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <div className="text-sm font-semibold text-emerald-300">Free</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </RadioGroup>
                     </div>
-                    <div>
-                      <Label className="text-white font-medium">
-                        Custom Domain
-                      </Label>
-                      <p className="text-xs text-white/60 mt-1">
-                        Your app will be available at{" "}
-                        <span className="font-mono text-blue-400">
+
+                    <div className="border border-white/[0.08] bg-white/[0.04] p-5 sm:p-6">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.1] bg-white/[0.05] text-blue-300">
+                          <GitBranch className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Release Behavior
+                          </p>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            Automatic delivery on branch updates
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/45">
+                            Control whether pushes to the selected branch trigger new deployments
+                            after the initial rollout completes.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 rounded-xl border border-white/[0.08] bg-black/20 p-4 sm:p-5">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <Label className="text-sm font-medium text-white/82">
+                              Auto-deploy on git push
+                            </Label>
+                            <p className="mt-2 text-sm leading-6 text-white/48">
+                              New commits on <span className="break-all font-mono text-blue-300">{selectedBranch || "selected branch"}</span> trigger deployment automatically when enabled.
+                            </p>
+                          </div>
+                          <Switch
+                            checked={autoDeploy}
+                            onCheckedChange={setAutoDeploy}
+                            className="data-[state=checked]:bg-blue-500"
+                          />
+                        </div>
+
+                        <div className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] p-3 text-sm leading-6 text-white/50">
+                          {autoDeploy
+                            ? "A repository webhook is created so future pushes trigger fresh deployments automatically."
+                            : "Deployments remain manual after launch, which is useful for controlled release processes."}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border border-white/[0.08] bg-white/[0.04] p-5 sm:p-6">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center border border-white/[0.1] bg-white/[0.05] text-blue-300">
+                          <Globe2 className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                            Access URL
+                          </p>
+                          <h3 className="mt-2 text-base font-semibold text-white">
+                            Platform hostname and custom domain path
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-white/45">
+                            Each deployment gets a platform URL immediately. Custom domains can be
+                            attached after DNS verification in the application detail view.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 rounded-xl border border-blue-400/20 bg-blue-500/10 p-4 sm:p-5">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
+                          Default hostname
+                        </div>
+                        <div className="mt-2 break-all font-mono text-sm text-white">
                           {appName || "your-app"}.galaxyhvh.com
-                        </span>
-                      </p>
-                      <p className="text-xs text-white/50 mt-2">
-                        You can add a custom domain (e.g., example.com) after
-                        deployment from the app&apos;s <strong>Domains</strong>{" "}
-                        tab. Custom domains require DNS verification before
-                        activation.
-                      </p>
+                        </div>
+                        <p className="mt-3 text-sm leading-6 text-white/55">
+                          Add a custom domain such as <span className="text-white/78">example.com</span> after deployment from the app&apos;s <span className="text-white/78">Domains</span> tab.
+                        </p>
+                      </div>
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Secrets
+                    </p>
+                    <h3 className="mt-2 text-base font-semibold text-white">
+                      Environment variables
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-white/45">
+                      Provide runtime secrets and service configuration. You can add values one by
+                      one, paste an existing env file, or upload a file directly.
+                    </p>
+                  </div>
+                  <EnvVarsEditor value={envVars} onChange={setEnvVars} />
                 </div>
               </CardContent>
-              <CardFooter className="flex justify-between">
+              <CardFooter className="flex justify-between border-t border-white/[0.06] px-6 py-5 sm:px-7">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
               </CardFooter>
             </Card>
           )}
-
           {/* Step 4: Review & Deploy */}
           {currentStep === 4 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Review & Deploy</CardTitle>
               </CardHeader>
@@ -1904,7 +1951,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           autoDeploy ? "text-green-400" : "text-white/60"
                         }
                       >
-                        {autoDeploy ? "✓ Enabled" : "Disabled"}
+                        {autoDeploy ? "Enabled" : "Disabled"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -1931,43 +1978,19 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 </div>
 
                 <Separator className="bg-white/10" />
-
-                {/* Deployment Info */}
-                <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                  <h4 className="text-white font-medium mb-2">
-                    What happens next?
-                  </h4>
-                  <ul className="text-sm text-white/70 space-y-1">
-                    <li>• Your repository will be cloned and built</li>
-                    <li>
-                      • Application will be deployed to our global
-                      infrastructure
-                    </li>
-                    <li>• SSL certificate will be automatically provisioned</li>
-                    <li>
-                      • You&apos;ll receive a deployment URL to access your app
-                    </li>
-                    {autoDeploy && (
-                      <li className="text-green-400">
-                        • A webhook will be set up to auto-deploy on push to{" "}
-                        <span className="font-mono">{selectedBranch}</span>
-                      </li>
-                    )}
-                  </ul>
-                </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+                  className="cursor-pointer rounded-md border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={onSubmit}
                   disabled={isLoading}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-white/90"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   {isLoading ? (
                     <>
@@ -1984,106 +2007,77 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         </div>
 
         {/* Summary Sidebar */}
-        <div className="lg:col-span-1">
-          <Card className="bg-white/5 border-white/10 sticky top-6">
-            <CardHeader>
-              <CardTitle className="text-white">Deployment Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <div className="text-sm text-white/60">Git Provider</div>
-                <div className="text-white">
-                  {selectedProviderData?.name || "Not selected"}
-                </div>
-              </div>
-
-              {selectedRepoData && (
-                <div>
-                  <div className="text-sm text-white/60">Repository</div>
-                  <div className="text-white">{selectedRepoData.name}</div>
-                  <div className="text-xs text-white/60">
-                    {selectedRepoData.language}
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <div className="text-sm text-white/60">Application Name</div>
-                <div className="text-white">{appName || "Not set"}</div>
-              </div>
-
-              {framework && (
-                <div>
-                  <div className="text-sm text-white/60">Framework</div>
-                  <div className="text-white">{framework}</div>
-                </div>
-              )}
-
-              <div>
-                <div className="text-sm text-white/60">Deploy Branch</div>
-                <div className="text-white">{selectedBranch || "Not set"}</div>
-              </div>
-
-              <div>
-                <div className="text-sm text-white/60">Instance Size</div>
-                <div className="text-white capitalize">{size}</div>
-                <div className="text-xs text-white/60">
-                  {
-                    instanceSizeConfigs[
-                      size as keyof typeof instanceSizeConfigs
-                    ]?.cpu
-                  }{" "}
-                  CPU /{" "}
-                  {
-                    instanceSizeConfigs[
-                      size as keyof typeof instanceSizeConfigs
-                    ]?.ram
-                  }{" "}
-                  RAM
-                </div>
-              </div>
-
-              <Separator className="bg-white/10" />
-
-              <div className="text-center">
-                <div className="text-sm text-white/60">Estimated Cost</div>
-                {(() => {
-                  const sizePrice = pricing?.[size];
-                  const monthlyPrice = sizePrice?.price ?? 0;
-                  const initialCost = sizePrice?.initialCost ?? 0;
-
-                  if (monthlyPrice > 0) {
-                    return (
-                      <>
-                        <div className="text-lg font-bold text-white">
-                          ${monthlyPrice.toFixed(2)}
-                          <span className="text-sm text-white/60">/mo</span>
-                        </div>
-                        {initialCost > 0 && (
-                          <div className="text-xs text-white/60">
-                            + ${initialCost.toFixed(2)} setup fee
-                          </div>
-                        )}
-                        <div className="text-xs text-white/50 mt-1">
-                          Billed hourly based on usage
-                        </div>
-                      </>
-                    );
+        <div>
+          <div className="sticky top-6 space-y-6">
+            <Card className={`${panelClassName} sticky top-6`}>
+              <CardHeader className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
+                  Deployment Summary
+                </p>
+                <CardTitle className="mt-2 text-xl font-semibold tracking-tight text-white">
+                  Current rollout profile
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-6 py-6 sm:px-7 sm:py-7">
+                <SummaryRow label="Step" value={activeStepMeta.name} />
+                <SummaryRow label="Git provider" value={selectedProviderData?.name || "Pending"} />
+                <SummaryRow label="Repository" value={selectedRepoData?.name || "Pending"} />
+                <SummaryRow label="Application name" value={appName || "Pending"} />
+                <SummaryRow
+                  label="Deploy branch"
+                  value={selectedBranch || selectedRepoData?.defaultBranch || "Pending"}
+                />
+                <SummaryRow label="Framework" value={framework || "Pending"} />
+                <SummaryRow
+                  label="Project"
+                  value={
+                    selectedProject && selectedProject !== "none"
+                      ? projects.find((project) => project.id === selectedProject)?.name || "Assigned"
+                      : "Not attached"
                   }
-                  return (
+                />
+                <SummaryRow
+                  label="Instance"
+                  value={`${size.charAt(0).toUpperCase() + size.slice(1)} / ${selectedSizeConfig.cpu} CPU / ${selectedSizeConfig.ram} RAM`}
+                />
+                <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
+
+                <Separator className="my-4 bg-white/[0.08]" />
+
+                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
+                    Estimated cost
+                  </p>
+                  {selectedSizePrice?.price ? (
                     <>
-                      <div className="text-lg font-bold text-green-400">
-                        FREE
+                      <div className="mt-2 text-2xl font-semibold text-white">
+                        ${selectedSizePrice.price.toFixed(2)}
+                        <span className="ml-1 text-sm font-medium text-white/50">/mo</span>
                       </div>
-                      <div className="text-xs text-white/60">
-                        Included with platform
-                      </div>
+                      <p className="mt-1 text-sm text-white/55">
+                        {selectedSizePrice.hourlyRate > 0
+                          ? `$${selectedSizePrice.hourlyRate.toFixed(4)}/hour usage rate`
+                          : "Billed hourly based on runtime usage."}
+                      </p>
+                      {selectedSizePrice.initialCost > 0 && (
+                        <p className="mt-2 text-sm text-white/55">
+                          + ${selectedSizePrice.initialCost.toFixed(2)} one-time setup fee
+                        </p>
+                      )}
                     </>
-                  );
-                })()}
-              </div>
-            </CardContent>
-          </Card>
+                  ) : (
+                    <>
+                      <div className="mt-2 text-2xl font-semibold text-white">Free</div>
+                      <p className="mt-1 text-sm text-white/55">
+                        Included with the current platform profile.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
         </div>
       </div>
     </div>
@@ -2091,3 +2085,4 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 };
 
 export default AppDeploymentSelect;
+

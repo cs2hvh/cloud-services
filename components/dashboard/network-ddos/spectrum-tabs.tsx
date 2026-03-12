@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { motion } from "motion/react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Tables } from "@/lib/supabase/types";
-import { Shield } from "lucide-react";
-import SpectrumAppInfo from "./spectrum-info";
-import SpectrumAppSettings from "./spectrum-settings";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tables } from "@/lib/supabase/types";
+
+import SpectrumAppInfo from "./spectrum-info";
+import SpectrumAppSettings from "./spectrum-settings";
 
 interface SpectrumAppTabsProps {
   spectrumApp: Tables<"spectrum_apps">;
@@ -20,20 +23,17 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const searchParams = useSearchParams();
 
-  // Get tab from query params, default to "info"
   const tabParam = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(
-    tabParam === "settings" ? "settings" : "info"
+    tabParam === "settings" ? "settings" : "info",
   );
 
-  // Update active tab when query param changes
   useEffect(() => {
     if (tabParam === "settings") {
       setActiveTab("settings");
     }
   }, [tabParam]);
 
-  // Function to refresh spectrum app data
   const refreshAppData = async () => {
     setIsRefreshing(true);
     try {
@@ -53,78 +53,122 @@ const SpectrumAppTabs = ({ spectrumApp: initialApp }: SpectrumAppTabsProps) => {
     }
   };
 
-  // Extract DNS info
   const dns = spectrumApp.dns as {
     name: unknown;
     type: string;
     decrypted_name?: string;
   } | null;
+
   const dnsType = dns?.type || "Unknown";
+  const dnsName = (dns?.decrypted_name as string) || (dns?.name as string) || "Protected application";
+  const statusClassName =
+    spectrumApp.status === "created" || spectrumApp.status === "updated"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+      : spectrumApp.status === "creating"
+        ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+        : "border-white/10 bg-white/[0.05] text-white/60";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="w-full max-w-7xl mx-auto"
+      className="mx-auto w-full max-w-7xl px-2 sm:px-3 lg:px-4"
     >
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 sm:mb-8"
+        className="mb-6"
       >
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 sm:h-12 sm:w-12 bg-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-white/80" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-white truncate">
-                Spectrum App
-              </h1>
-              <p className="text-slate-400 text-xs sm:text-sm mt-1 break-words">
-                <span className="inline-block">{spectrumApp.protocol}</span>
-                <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">{dnsType} Record</span>
-                <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block">TLS: {spectrumApp.tls}</span>
-                <span className="mx-1 hidden sm:inline">/</span>
-                <span className="inline-block capitalize">
-                  {spectrumApp.status || "active"}
-                </span>
+        <div className="glass-panel overflow-hidden">
+          <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl">
+              <Link
+                href="/dashboard/services/network-ddos"
+                className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to protection inventory
+              </Link>
+              <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+                Network Security
               </p>
+              <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                Spectrum application operations and routing controls.
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+                Review protocol mappings, DNS posture, and protection settings from a cleaner management surface.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:min-w-[420px]">
+              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  DNS
+                </div>
+                <div className="mt-2 truncate text-sm font-semibold text-white">
+                  {dnsName}
+                </div>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Protocol
+                </div>
+                <div className="mt-2 text-sm font-semibold text-white">
+                  {spectrumApp.protocol}
+                </div>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Status
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-blue-300" />
+                  <span className={"inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize " + statusClassName}>
+                    {spectrumApp.status || "active"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-white/[0.06] px-5 py-3 sm:px-6">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-white/45">
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 capitalize">
+                {dnsType} record
+              </span>
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
+                TLS {spectrumApp.tls}
+              </span>
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 font-mono text-white/60">
+                {spectrumApp.spectrum_id}
+              </span>
             </div>
           </div>
         </div>
       </motion.div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-white/5 border border-white/10 p-1 w-fit">
+        <TabsList className="grid w-full grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
           <TabsTrigger
             value="info"
-            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white/10 data-[state=active]:text-white text-white/60 data-[state=active]:shadow"
+            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all data-[state=active]:bg-blue-500/90 data-[state=active]:text-white text-white/60"
           >
             App Info
           </TabsTrigger>
           <TabsTrigger
             value="settings"
-            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:bg-white/10 data-[state=active]:text-white text-white/60 data-[state=active]:shadow"
+            className="cursor-pointer inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium transition-all data-[state=active]:bg-blue-500/90 data-[state=active]:text-white text-white/60"
           >
             Settings
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-4 sm:mt-6">
-          <SpectrumAppInfo
-            spectrumApp={spectrumApp}
-            isRefreshing={isRefreshing}
-          />
+          <SpectrumAppInfo spectrumApp={spectrumApp} isRefreshing={isRefreshing} />
         </TabsContent>
 
         <TabsContent value="settings" className="mt-4 sm:mt-6">
-          <SpectrumAppSettings
-            spectrumApp={spectrumApp}
-            onUpdate={refreshAppData}
-          />
+          <SpectrumAppSettings spectrumApp={spectrumApp} onUpdate={refreshAppData} />
         </TabsContent>
       </Tabs>
     </motion.div>

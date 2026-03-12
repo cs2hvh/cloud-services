@@ -15,7 +15,8 @@ import {
   Unlock,
   Globe,
   User,
-  Search
+  Search,
+  ArrowLeft
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -365,65 +366,111 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     ? projects.filter((project) => project.owner === formData.selectedUser)
     : projects;
 
+  const panelClassName = "glass-panel overflow-hidden";
+  const wizardStartStep = role === "admin" ? 0 : 1;
+  const progressStep = currentStep - wizardStartStep + 1;
+  const progressPercentage = (progressStep / steps.length) * 100;
+
   return (
-    <div className="py-4">
-      {/* Breadcrumb - Fixed Layout Like Database */}
-      <div className="mb-8">
-        <div className="flex justify-between mb-2">
-          {steps.map((step, index) => (
-            <div
-              key={step.id}
-              className="flex-1 min-w-0 flex flex-col items-center"
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className={panelClassName}>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href="/dashboard/services/object-storage"
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
             >
-              <div className="flex items-center w-full">
-                <div className="flex flex-col items-center min-w-0">
-                  <div
-                    className={`shrink-0 rounded-full flex items-center justify-center transition-colors duration-300
-                      w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${
-                        currentStep > step.id
-                          ? "bg-green-600 text-white-1000 border border-green-500"
-                          : currentStep === step.id
-                            ? "bg-blue-500 text-white"
-                            : "bg-white/10 text-white/50"
-                      }`}
-                  >
-                    {currentStep > step.id ? (
-                      <CheckCircle2 size={16} />
-                    ) : (
-                      step.id
-                    )}
-                  </div>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to buckets
+            </Link>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              Storage Provisioning
+            </p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Create an object storage bucket with clear region, access, and ownership controls.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+              Move through naming, location, access settings, and project assignment with a
+              focused review before the bucket is created.
+            </p>
+          </div>
 
-                  <p
-                    className={`mt-2 text-center truncate max-w-[72px] sm:max-w-[112px] md:max-w-[140px]
-                      text-[10px] sm:text-xs md:text-sm ${
-                        currentStep >= step.id ? "text-white" : "text-white/50"
-                      }`}
-                    title={step.name}
-                  >
-                    {step.name}
-                  </p>
-                </div>
-
-                {index < steps.length - 1 && (
-                  <div
-                    className={`basis-0 flex-1 h-0.5 transition-colors duration-300 ${
-                      currentStep > step.id ? "bg-blue-600" : "bg-white/10"
-                    }`}
-                  />
-                )}
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Progress
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {progressStep} / {steps.length}
               </div>
             </div>
-          ))}
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Status
+              </div>
+              <div className="mt-1.5 text-sm font-semibold text-white">
+                {currentStep === maxStep ? "Review" : "In progress"}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="h-1.5 w-full overflow-hidden bg-white/[0.06]">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+
+          <div className={`mt-4 grid gap-3 ${role === "admin" ? "md:grid-cols-3 xl:grid-cols-5" : "md:grid-cols-2 xl:grid-cols-4"}`}>
+            {steps.map((step) => {
+              const isActive = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+              const StepIcon = step.icon;
+
+              return (
+                <div
+                  key={step.id}
+                  className={`border px-3 py-3 transition-colors ${
+                    isActive
+                      ? "border-blue-400/30 bg-blue-500/10"
+                      : isCompleted
+                        ? "border-emerald-500/20 bg-emerald-500/10"
+                        : "border-white/[0.08] bg-white/[0.03]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center border ${
+                        isActive
+                          ? "border-blue-400/30 bg-blue-500/15 text-blue-200"
+                          : isCompleted
+                            ? "border-emerald-500/20 bg-emerald-500/15 text-emerald-300"
+                            : "border-white/[0.08] bg-white/[0.04] text-white/55"
+                      }`}
+                    >
+                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
+                        Step {step.id - wizardStartStep + 1}
+                      </div>
+                      <div className="truncate text-sm font-medium text-white">{step.name}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Grid Layout: Left (Form) + Right (Summary) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+        <div className="space-y-6 xl:min-w-0">
           {/* Step 0: User Selection (Admin Only) */}
           {currentStep === 0 && role === "admin" && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <User className="h-5 w-5" />
@@ -547,7 +594,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 <Button
                   onClick={handleNextStep}
                   disabled={!formData.selectedUser}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 disabled:opacity-50"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500 disabled:opacity-50"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -557,7 +604,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
 
           {/* Step 1: Bucket Name */}
           {currentStep === 1 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Bucket Name</CardTitle>
               </CardHeader>
@@ -615,7 +662,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 <Button
                   onClick={handleNextStep}
                   disabled={isCheckingName}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200 disabled:opacity-60"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500 disabled:opacity-60"
                 >
                   {isCheckingName ? (
                     <>
@@ -633,7 +680,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
 
           {/* Step 2: Location/Region */}
           {currentStep === 2 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Location</CardTitle>
               </CardHeader>
@@ -698,13 +745,13 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -714,7 +761,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
 
           {/* Step 3: Bucket Settings */}
           {currentStep === 3 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Bucket Settings</CardTitle>
                 <CardDescription className="text-white/60">
@@ -804,12 +851,12 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                 </div>
               </CardContent>
               <CardFooter className="flex justify-between">
-                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10">
+                <Button variant="outline" onClick={handlePrevStep} className="cursor-pointer rounded-md border border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]">
                   Back
                 </Button>
                 <Button
                   onClick={handleNextStep}
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   Next <ChevronRight size={16} className="ml-2" />
                 </Button>
@@ -819,7 +866,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
 
           {/* Step 4: Project Selection - Changed to Dropdown */}
           {currentStep === 4 && (
-            <Card className="bg-white/5 border-white/10">
+            <Card className={panelClassName}>
               <CardHeader>
                 <CardTitle className="text-white">Project</CardTitle>
                 {role === "admin" && selectedUser && (
@@ -905,7 +952,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                   variant="outline"
                   onClick={handlePrevStep}
                   disabled={isLoading}
-                  className="cursor-pointer rounded-md border-white/20 text-dark hover:bg-white/10"
+                  className="cursor-pointer rounded-md border border-white/[0.14] bg-white/[0.03] text-white/82 hover:bg-white/[0.07]"
                 >
                   Back
                 </Button>
@@ -913,7 +960,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                   onClick={handleNextStep}
                   disabled={isLoading || !termsAccepted}
                   size="lg"
-                  className="cursor-pointer bg-white text-black rounded-md hover:bg-gray-200"
+                  className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500"
                 >
                   {isLoading ? (
                     <>
@@ -933,12 +980,12 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
         </div>
 
         {/* Right Side: Summary Card */}
-        <div className="lg:col-span-1">
-          <Card className="sticky top-8 bg-white/5 border-white/10">
+        <div className="xl:min-w-0">
+          <Card className={`${panelClassName} xl:sticky xl:top-8`}>
             <CardHeader>
-              <CardTitle className="text-white">Order Summary</CardTitle>
-              <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
-                <HardDrive className="h-16 w-16 text-white/40" />
+              <CardTitle className="text-white">Deployment Summary</CardTitle>
+              <div className="mt-4 flex justify-center border border-white/[0.08] bg-white/[0.04] px-4 py-5">
+                <HardDrive className="h-14 w-14 text-blue-300/70" />
               </div>
             </CardHeader>
             <CardContent className="space-y-4">

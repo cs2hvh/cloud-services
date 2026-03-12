@@ -1,15 +1,25 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Database, Loader2, Plus } from "lucide-react";
+import {
+  ArrowUpRight,
+  Clock3,
+  Database,
+  Layers3,
+  Loader2,
+  MapPin,
+  Plus,
+  Server,
+} from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import api from "@/lib/axios/axios";
+
+import { useSession } from "@/app/dashboard/provider";
 import { DatabaseIcon } from "@/components/dashboard/database/database-icon";
 import { serviceLocations, vmLocations } from "@/config/locations";
-import { useSession } from "@/app/dashboard/provider";
+import api from "@/lib/axios/axios";
 
 type DbCluster = {
   id: string;
@@ -17,235 +27,386 @@ type DbCluster = {
   engine: string;
   status: string;
   num_nodes: number;
-  created_at: string; // ISO
+  created_at: string;
   version: string;
   cluster_id: string;
   region: string;
 };
 
-// Helper function to get location name from region code
 const getLocationName = (regionCode: string): string => {
-  // Combine both location arrays
   const allLocations = [...serviceLocations, ...vmLocations];
-  
-  // Find location by matching the region code with the short code
   const location = allLocations.find(
-    (loc) => loc.short.toLowerCase() === regionCode.toLowerCase()
+    (loc) => loc.short.toLowerCase() === regionCode.toLowerCase(),
   );
-  
-  if (location) {
-    return `${location.city}`;
-  }
-  
-  // If not found, return the region code in a more readable format
-  return regionCode || "Unknown";
+
+  return location ? location.city : regionCode || "Unknown";
 };
 
-const DatabasePage = () => {
- 
-  const session = useSession();
-  const router = useRouter();
-  const userId = session?.user?.id;
+const formatStatus = (status: string): string => {
+  if (!status) return "Unknown";
+  return status
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
 
-  const [clusters, setClusters] = useState([] as DbCluster[]);
+const formatCreatedAt = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const formatRelativeTime = (dateString: string): string => {
+  const createdAt = new Date(dateString);
+  const seconds = Math.floor((Date.now() - createdAt.getTime()) / 1000);
+
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 2592000) return `${Math.floor(seconds / 86400)}d ago`;
+
+  return formatCreatedAt(dateString);
+};
+
+const getStatusClasses = (status: string): string => {
+  switch (status) {
+    case "online":
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    case "creating":
+    case "migrating":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+    case "failed":
+      return "border-red-500/20 bg-red-500/10 text-red-300";
+    default:
+      return "border-white/10 bg-white/[0.06] text-white/60";
+  }
+};
+
+function MetricCard({
+  label,
+  value,
+  meta,
+  icon: Icon,
+  accentClassName = "text-white/60",
+}: {
+  label: string;
+  value: string | number;
+  meta: string;
+  icon: React.ElementType;
+  accentClassName?: string;
+}) {
+  return (
+    <div className="glass-panel p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
+            {label}
+          </p>
+          <p className="mt-3 text-2xl font-semibold tracking-tight text-white">
+            {value}
+          </p>
+          <p className="mt-1 text-sm text-white/45">{meta}</p>
+        </div>
+        <div className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${accentClassName}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${getStatusClasses(status)}`}
+    >
+      {formatStatus(status)}
+    </span>
+  );
+}
+
+const DatabasePage = () => {
+  const { user } = useSession();
+  const router = useRouter();
+  const [clusters, setClusters] = useState<DbCluster[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!userId) {
+    if (user === null) {
+      router.push("/login");
+      toast.error("You must be logged in to access the dashboard.");
+    }
+  }, [router, user]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setLoading(false);
       return;
     }
+
+    let mounted = true;
 
     async function fetchClusters() {
       try {
         setLoading(true);
         const res = await api.post("/services/database/read_all_owner", {
-          id: userId,
+          id: user?.id,
         });
+
+        if (!mounted) return;
+
         if (res.status === 200) {
-          setClusters(
-            res.data.data
-          );
+          setClusters(Array.isArray(res.data.data) ? res.data.data : []);
         }
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
-        toast.error("Failed to fetch databases");
+        console.error("Error fetching database clusters:", error);
+        if (mounted) {
+          toast.error("Failed to load database clusters.");
+        }
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     }
-    fetchClusters();
-  }, [userId]);
 
-  useEffect(() => {
-    if (!session?.user) {
-      router.push("/login");
-      toast.error("You must be logged in to access the dashboard.");
-    }
-  }, [router, session?.user]);
+    fetchClusters();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id]);
+
+  const sortedClusters = useMemo(
+    () =>
+      [...clusters].sort(
+        (first, second) =>
+          new Date(second.created_at).getTime() -
+          new Date(first.created_at).getTime(),
+      ),
+    [clusters],
+  );
+
+  const onlineClusters = clusters.filter((cluster) => cluster.status === "online").length;
+  const provisioningClusters = clusters.filter((cluster) =>
+    ["creating", "migrating", "restoring", "updating"].includes(cluster.status),
+  ).length;
+  const uniqueRegions = new Set(clusters.map((cluster) => cluster.region)).size;
+  const totalNodes = clusters.reduce(
+    (sum, cluster) => sum + Math.max(cluster.num_nodes || 0, 1),
+    0,
+  );
 
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Loading database cluster...</p>
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-6 py-16 text-white">
+        <div className="glass-panel w-full max-w-md p-10 text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-white/70" />
+          <h2 className="mt-4 text-lg font-semibold text-white">Loading database services</h2>
+          <p className="mt-2 text-sm text-white/45">
+            Fetching cluster inventory and current status.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
+    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex justify-between items-center mb-8"
+        transition={{ duration: 0.28 }}
+        className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"
       >
-        <div>
-          <h1 className="text-3xl font-bold">Databases</h1>
-          <p className="text-white/60">
-            Manage and provision your database clusters.
+        <div className="max-w-3xl">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+            Database Services
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            Managed databases for production workloads.
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-white/50 sm:text-[15px]">
+            Provision, monitor, and operate managed database clusters with clear lifecycle
+            visibility, predictable capacity, and fast access to each environment.
           </p>
         </div>
+
         <Link
           href="/dashboard/services/database/new"
-          className="group relative inline-flex items-center justify-center px-6 py-2.5 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+          className="inline-flex items-center justify-center gap-2 border border-blue-400/25 bg-blue-500/90 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
         >
-          <Plus className="-ml-1 mr-2 h-5 w-5" />
-          New Database
+          <Plus className="h-4 w-4" />
+          New Cluster
         </Link>
       </motion.div>
 
-      {clusters.length > 0 ? (
-        <div className="overflow-hidden rounded-2xl bg-slate-1000 ring-1 ring-slate-700 shadow-lg text-white">
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05, duration: 0.28 }}
+        className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4"
+      >
+        <MetricCard
+          label="Total Clusters"
+          value={clusters.length}
+          meta="Managed database environments"
+          icon={Database}
+          accentClassName="text-blue-300"
+        />
+        <MetricCard
+          label="Healthy"
+          value={onlineClusters}
+          meta="Currently online and serving"
+          icon={Layers3}
+        />
+        <MetricCard
+          label="Provisioning"
+          value={provisioningClusters}
+          meta="In progress or updating"
+          icon={Clock3}
+        />
+        <MetricCard
+          label="Footprint"
+          value={uniqueRegions > 0 ? `${uniqueRegions} regions` : totalNodes}
+          meta={
+            uniqueRegions > 0
+              ? `${totalNodes} total node${totalNodes === 1 ? "" : "s"}`
+              : "No deployed capacity yet"
+          }
+          icon={Server}
+        />
+      </motion.div>
+
+      {sortedClusters.length > 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1, duration: 0.28 }}
+          className="glass-panel overflow-hidden"
+        >
+          <div className="h-px w-full bg-gradient-to-r from-blue-400/45 via-blue-300/10 to-transparent" />
+          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-white/92">Cluster Inventory</h2>
+              <p className="mt-1 text-sm text-white/45">
+                Review cluster health, capacity, versioning, and regional placement.
+              </p>
+            </div>
+            <div className="text-sm text-white/45">
+              {sortedClusters.length} active record{sortedClusters.length === 1 ? "" : "s"}
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-700">
-              <thead className="bg-neutral-800/50 border-b border-neutral-800">
-                <tr>
-                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Cluster Name</th>
-                   <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Engine</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Location</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Date</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Version</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Status</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">Actions</th>
+            <table className="min-w-full divide-y divide-white/[0.06]">
+              <thead>
+                <tr className="text-left">
+                  <Th>Cluster</Th>
+                  <Th>Region</Th>
+                  <Th>Capacity</Th>
+                  <Th>Created</Th>
+                  <Th>Status</Th>
+                  <Th className="text-right">Action</Th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800">
-                {clusters.map((c) => (
-                  <tr
-                    key={c.id}
-                    className="hover:bg-neutral-800/30 transition-colors"
-                  >
+              <tbody className="divide-y divide-white/[0.05]">
+                {sortedClusters.map((cluster) => (
+                  <tr key={cluster.id} className="transition-colors hover:bg-white/[0.025]">
                     <Td>
-                      <div className="font-medium text-white">{c.name}</div>
-                      <div className="text-xs text-slate-400 font-mono mt-1">
-                        {c.id}
-                      </div>
-                    </Td>
-                    <Td>
-                      <DatabaseIcon engine={c.engine} className="h-8 w-8" />
-                    </Td>
-
-                    <Td>
-                      <span className="text-slate-300">
-                        {getLocationName(c.region)}
-                      </span>
-                    </Td>
-                    <Td>
-                      <div className="flex flex-col leading-tight text-xs text-slate-300">
-                        <time
-                          dateTime={c.created_at}
-                          className="font-medium text-slate-100"
-                          title={new Date(c.created_at).toLocaleString()}
-                        >
-                          {new Date(c.created_at).toLocaleDateString(
-                            undefined,
-                            {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            }
-                          )}
-                        </time>
-                        <span className="text-slate-400 text-[11px]">
-                          {new Date(c.created_at).toLocaleTimeString(
-                            undefined,
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 items-center justify-center border border-white/[0.08] bg-white/[0.05]">
+                          <DatabaseIcon engine={cluster.engine} className="h-6 w-6" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-white">
+                            {cluster.name}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs text-white/45">
+                            <span className="capitalize">{cluster.engine}</span>
+                            <span className="text-white/20">•</span>
+                            <span className="truncate">{cluster.cluster_id}</span>
+                          </div>
+                        </div>
                       </div>
                     </Td>
 
                     <Td>
-                      <span className="text-slate-300">{c.version}</span>
-                    </Td>
-                    <Td>
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          c.status === "online"
-                            ? "bg-green-500/20 text-green-400"
-                            : c.status === "creating"
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : c.status === "migrating"
-                                ? "bg-orange-500/20 text-orange-400"
-                                : c.status === "failed"
-                                  ? "bg-red-500/20 text-red-400"
-                                  : "bg-slate-500/20 text-slate-400"
-                        }`}
-                      >
-                        {c.status}
-                      </span>
+                      <div className="flex items-center gap-2 text-sm text-white/72">
+                        <MapPin className="h-3.5 w-3.5 text-white/35" />
+                        <div>
+                          <div>{getLocationName(cluster.region)}</div>
+                          <div className="mt-0.5 text-xs uppercase tracking-wide text-white/35">
+                            {cluster.region}
+                          </div>
+                        </div>
+                      </div>
                     </Td>
 
                     <Td>
+                      <div className="text-sm text-white/72">
+                        <div>v{cluster.version}</div>
+                        <div className="mt-0.5 text-xs text-white/35">
+                          {cluster.num_nodes || 1} node{cluster.num_nodes === 1 ? "" : "s"}
+                        </div>
+                      </div>
+                    </Td>
+
+                    <Td>
+                      <div className="text-sm text-white/72">
+                        <div>{formatRelativeTime(cluster.created_at)}</div>
+                        <div className="mt-0.5 text-xs text-white/35">
+                          {formatCreatedAt(cluster.created_at)}
+                        </div>
+                      </div>
+                    </Td>
+
+                    <Td>
+                      <StatusBadge status={cluster.status} />
+                    </Td>
+
+                    <Td className="text-right">
                       <Link
-                          href={{
-                            pathname: `/dashboard/services/database/clusters/${encodeURIComponent(c.cluster_id)}`,
-                            query: { clusterStatus: c.status },
-                          }}
-                          className="
-                            inline-flex items-center justify-center
-                            rounded-md border border-blue-500
-                            px-3 py-1.5 text-sm font-medium
-                            text-blue-400
-                            hover:bg-blue-500/15 hover:text-blue-300
-                            active:scale-[0.97]
-                            transition-all duration-200
-                            w-full sm:w-auto
-                          "
-                        >
-                          View Cluster
-                        </Link>
+                        href={{
+                          pathname: `/dashboard/services/database/clusters/${encodeURIComponent(cluster.cluster_id)}`,
+                          query: { clusterStatus: cluster.status },
+                        }}
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-white/62 transition-colors hover:text-white"
+                      >
+                        Open
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                      </Link>
                     </Td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
+        </motion.div>
       ) : (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-center py-20 border-2 border-dashed border-white/10 rounded-lg"
+          transition={{ delay: 0.1, duration: 0.28 }}
+          className="glass-panel px-6 py-16 text-center sm:px-10"
         >
-          <Database className="mx-auto h-16 w-16 text-white/20" />
-          <h3 className="mt-4 text-xl font-semibold">No Databases Found</h3>
-          <p className="mt-2 text-sm text-white/50">
-            Get started by provisioning a new database cluster.
+          <div className="mx-auto flex h-16 w-16 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
+            <Database className="h-7 w-7" />
+          </div>
+          <h2 className="mt-6 text-xl font-semibold text-white">No database clusters yet</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-white/45">
+            Create your first managed cluster to start provisioning databases with structured
+            networking, user management, and operational controls.
           </p>
-          <div className="mt-6">
+          <div className="mt-8">
             <Link
               href="/dashboard/services/database/new"
-              className="group relative inline-flex items-center justify-center px-5 py-2 font-medium text-black transition-all duration-200 bg-white rounded-md hover:bg-gray-200"
+              className="inline-flex items-center justify-center gap-2 border border-blue-400/25 bg-blue-500/90 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-500"
             >
-              <Plus className="-ml-1 mr-2 h-5 w-5" />
-              Create Database
+              <Plus className="h-4 w-4" />
+              Create Database Cluster
             </Link>
           </div>
         </motion.div>
@@ -254,13 +415,30 @@ const DatabasePage = () => {
   );
 };
 
-
-function Td({ children }: { children: React.ReactNode }) {
+function Th({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <td className="px-6 py-4 text-sm text-slate-800 align-middle">
+    <th
+      className={`px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white/34 ${className}`}
+    >
       {children}
-    </td>
+    </th>
   );
+}
+
+function Td({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <td className={`px-5 py-4 align-middle ${className}`}>{children}</td>;
 }
 
 export default DatabasePage;
