@@ -61,7 +61,7 @@ export function createAngularPipeline(
   // Angular static builds: All env vars are build-time (no runtime env injection)
   // BUT we still need to be careful about secrets in build logs
   // Generate empty secret for consistency (Angular doesn't use runtime env vars)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
+  const { secretYaml, secretName, createInPipeline } = generateEnvSecret(name, []);
   const envFromSection = generateEnvFromSection(secretName, false); // No secret needed
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
   
@@ -306,7 +306,7 @@ ${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

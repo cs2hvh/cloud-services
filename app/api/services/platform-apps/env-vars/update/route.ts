@@ -5,67 +5,8 @@ import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
-import { KubernetesInfoService } from "@/lib/services/kubernetes-info";
-
-/**
- * Determine if framework requires rebuild for build-time env vars
- * or can use runtime-only updates (K8s Secret + rolling restart)
- * 
- * Build-time vars are BAKED into the bundle during npm run build
- * Runtime vars are injected as K8s Secrets when container starts
- */
-function requiresRebuildForEnvVars(
-  framework: string | null,
-  envVars: Array<{ key: string; value: string }>
-): { needsRebuild: boolean; reason?: string } {
-  if (!framework) {
-    return { needsRebuild: false };
-  }
-
-  // Normalize framework id (handle values like "Next.js", "Nuxt.js", "vite-react")
-  // Remove dots/spaces to make comparisons robust (e.g. "Next.js" -> "nextjs")
-  let fw = framework.toLowerCase().replace(/[.\s]/g, '');
-  if (fw === 'vite-react') fw = 'vitereact';
-
-  // Static SPAs ALWAYS need rebuild (no server to read runtime env vars)
-  // Use includes() to catch variants like "vue" or "react" inside names
-  if (fw.includes('vue') || fw.includes('react') || fw.includes('angular') || fw === 'vitereact') {
-    return { 
-      needsRebuild: true, 
-      reason: 'Static SPA requires rebuild to update environment variables' 
-    };
-  }
-
-  // SSR Frameworks: Only rebuild if build-time vars present
-  const hasBuildTimeVars = envVars.some(ev => {
-    const key = ev.key;
-    switch (fw) {
-      case 'nextjs':
-      case 'next':
-        return key.startsWith('NEXT_PUBLIC_');
-      case 'nuxtjs':
-      case 'nuxt':
-        return key.startsWith('NUXT_PUBLIC_') || key.startsWith('VITE_') || key.startsWith('PUBLIC_');
-      case 'sveltekit':
-        return key.startsWith('PUBLIC_');
-      case 'vitereact':
-      case 'vue':
-        return key.startsWith('VITE_');
-      default:
-        return false;
-    }
-  });
-
-  if (hasBuildTimeVars) {
-    return {
-      needsRebuild: true,
-      reason: 'Build-time environment variables detected (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, or VITE_*)'
-    };
-  }
-
-  // Backend frameworks or SSR with only runtime vars: No rebuild needed
-  return { needsRebuild: false };
-}
+import { analyzeEnvLifecycle } from "@/lib/env/lifecycle";
+import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -126,9 +67,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    // Determine if we need rebuild or can just update K8s Secret + restart pods
-    const rebuildCheck = requiresRebuildForEnvVars(app.framework, env_vars);
-
+    // Determine live apply vs rebuild requirement based on Jenkins pipeline behavior.
+    const lifecycle = analyzeEnvLifecycle(app.framework, env_vars);
+    const ignoredHint = lifecycle.ignoredKeys.length > 0
+      ? `Ignored by ${lifecycle.pipeline} pipeline (missing required prefix): ${lifecycle.ignoredKeys.join(", ")}`
+      : null;
     // Check if app is actually running before attempting K8s update
     if (app.status !== 'running') {
       console.log(`[env-vars/update] ${app.name}: App not running (status: ${app.status}), saved to DB only`);
@@ -136,28 +79,80 @@ export async function POST(req: NextRequest) {
         message: "Environment variables saved to database",
         requiresRedeploy: true,
         reason: `App is not currently running (status: ${app.status})`,
-        hint: "Click 'Redeploy' to build and apply changes"
+        hint: ignoredHint || "Click 'Redeploy' to build and apply changes",
+        applyMode: "persisted_only",
       });
     }
 
-    // ALWAYS apply runtime env vars to K8s immediately (even if rebuild is needed for build-time vars)
-    // This ensures: runtime vars take effect NOW, build-time vars take effect after rebuild
-    console.log(`[env-vars/update] ${app.name}: Applying env vars to K8s (${env_vars.length} vars)${rebuildCheck.needsRebuild ? ' + rebuild required' : ''}`);
-    
-    const k8sResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-      app.name,
-      env_vars
-    );
+    const syncAction = lifecycle.mode === "build_time_only" || lifecycle.ignoredOnly
+      ? "secret_only"
+      : "secret_and_restart";
+    const runtimeSync = await reconcileRuntimeEnv({
+      appName: app.name,
+      framework: app.framework ?? null,
+      envVars: env_vars,
+      policy: "best_effort",
+      action: syncAction,
+      cleanupWhenEmpty: true,
+      reconcileDeploymentEnvFrom: syncAction === "secret_only",
+    });
 
-    if (!k8sResult.success) {
-      console.error(`[env-vars/update] K8s update failed:`, k8sResult.error);
+    if (runtimeSync.status === "warning" || runtimeSync.status === "failed") {
+      console.error(`[env-vars/update] ${app.name}: ${runtimeSync.reason}`);
       return NextResponse.json({
-        message: "Environment variables saved to database, but live update failed",
+        message: "Environment variables saved to database, but runtime reconciliation failed",
         requiresRedeploy: true,
-        reason: k8sResult.error,
-        hint: "Click 'Redeploy' to apply changes"
-      }, { status: 207 }); // 207 Multi-Status
+        appliedLive: false,
+        reason: runtimeSync.reason,
+        hint: ignoredHint || "Changes were persisted. Retry update or redeploy after Kubernetes connectivity is restored.",
+        applyMode: "persisted_only",
+      }, { status: 207 });
     }
+
+    if (runtimeSync.status === "skipped" && syncAction === "secret_and_restart") {
+      return NextResponse.json({
+        message: "Environment variables saved to database",
+        requiresRedeploy: true,
+        appliedLive: false,
+        reason: runtimeSync.reason,
+        hint: ignoredHint || "Redeploy to apply changes.",
+        applyMode: "persisted_only",
+      });
+    }
+
+    // Client-only pipeline with non-matching keys: nothing can be applied at runtime or build-time.
+    if (lifecycle.ignoredOnly) {
+      console.log(
+        `[env-vars/update] ${app.name}: All ${env_vars.length} key(s) ignored by ${lifecycle.pipeline} pipeline; runtime cleanup reconciled`
+      );
+      return NextResponse.json({
+        message: "Environment variables saved, but ignored by current framework pipeline",
+        requiresRedeploy: false,
+        appliedLive: false,
+        reason: lifecycle.reason,
+        hint: ignoredHint || "Use the framework's required public prefix for variables to take effect.",
+        applyMode: "persisted_only",
+      });
+    }
+
+    // Build-time-only updates cannot be applied live. Persist and require redeploy.
+    if (lifecycle.mode === "build_time_only") {
+      console.log(`[env-vars/update] ${app.name}: Build-time-only env update; runtime cleanup reconciled`);
+      return NextResponse.json({
+        message: "Build-time environment variables saved to database",
+        requiresRedeploy: true,
+        appliedLive: false,
+        reason: lifecycle.reason,
+        hint: ignoredHint || "Click 'Redeploy' to apply build-time variables",
+        applyMode: lifecycle.mode,
+      });
+    }
+
+    // Runtime-capable updates are reconciled live.
+    console.log(
+      `[env-vars/update] ${app.name}: Applied runtime env vars to K8s (${runtimeSync.runtimeEnvVars.length} vars)` +
+      `${lifecycle.requiresRedeploy ? " + redeploy required" : ""}`
+    );
 
     console.log(`[env-vars/update] ✅ ${app.name}: Env vars updated and pods restarted`);
     
@@ -165,7 +160,7 @@ export async function POST(req: NextRequest) {
     try {
       const { AppStatusService } = await import('@/lib/services/app-status');
       const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-      if (syncResult.changed) {
+      if (syncResult?.changed) {
         console.log(`[env-vars/update] Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
       }
     } catch (syncError) {
@@ -173,16 +168,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Return response based on whether rebuild is needed
-    if (rebuildCheck.needsRebuild) {
+    if (lifecycle.requiresRedeploy) {
       // Mixed scenario: runtime vars applied NOW, build-time vars need rebuild
-      console.log(`[env-vars/update] ${app.name}: Requires rebuild - ${rebuildCheck.reason}`);
+      console.log(`[env-vars/update] ${app.name}: Requires redeploy - ${lifecycle.reason}`);
       
       return NextResponse.json({
         message: "Runtime environment variables applied immediately",
         requiresRedeploy: true,
         appliedLive: true, // Runtime vars are live
-        reason: rebuildCheck.reason,
-        hint: "Runtime vars are live now. Click 'Redeploy' to apply build-time variables (NEXT_PUBLIC_*, etc.)"
+        reason: lifecycle.reason,
+        hint: ignoredHint || "Runtime vars are live now. Click 'Redeploy' to apply build-time variables.",
+        applyMode: lifecycle.mode,
       });
     } else {
       // Pure runtime scenario: all vars applied, no rebuild needed
@@ -190,7 +186,8 @@ export async function POST(req: NextRequest) {
         message: "Environment variables updated and applied successfully",
         requiresRedeploy: false,
         appliedLive: true,
-        hint: "All changes applied instantly via rolling restart (no rebuild needed)"
+        hint: ignoredHint || "All changes applied instantly via rolling restart (no rebuild needed)",
+        applyMode: lifecycle.mode,
       });
     }
   } catch (err: unknown) {

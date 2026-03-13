@@ -55,7 +55,7 @@ export function createNodeJsPipeline(
   const port = containerPort ?? 3000;
 
   // Generate Kubernetes Secret for environment variables (secure approach)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -289,7 +289,7 @@ ${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

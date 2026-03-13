@@ -27,10 +27,10 @@ const FRAMEWORK_RULES = {
     description: 'NEXT_PUBLIC_* → public (build-time), others → server-only (runtime)'
   },
   nuxtjs: {
-    publicPrefixes: ['NUXT_PUBLIC_', 'VITE_'], // Nuxt 3 supports both
+    publicPrefixes: ['NUXT_PUBLIC_', 'PUBLIC_', 'VITE_'],
     supportsRuntime: true,
     displayName: 'Nuxt.js',
-    description: 'NUXT_PUBLIC_* or VITE_* → public (build-time), others → server-only (runtime)'
+    description: 'NUXT_PUBLIC_*, PUBLIC_*, or VITE_* → public (build-time), others → server-only (runtime)'
   },
   sveltekit: {
     publicPrefixes: ['PUBLIC_'],
@@ -56,6 +56,18 @@ const FRAMEWORK_RULES = {
     displayName: 'Angular',
     description: 'Angular does not natively support runtime environment variables. Values are baked at build time via environment.ts file replacements.'
   },
+  react: {
+    publicPrefixes: [],
+    supportsRuntime: true,
+    displayName: 'React',
+    description: 'Current platform React pipeline treats variables as runtime server environment variables.'
+  },
+  static: {
+    publicPrefixes: [],
+    supportsRuntime: true,
+    displayName: 'Static Site',
+    description: 'Current platform static pipeline treats variables as runtime server environment variables.'
+  },
   nodejs: {
     publicPrefixes: [], // All vars are runtime
     supportsRuntime: true,
@@ -79,6 +91,27 @@ const FRAMEWORK_RULES = {
 // Map hyphenated framework names to internal keys
 const FRAMEWORK_KEY_MAP: Record<string, keyof typeof FRAMEWORK_RULES> = {
   'vite-react': 'vitereact',
+  'react-vite': 'vitereact',
+  next: 'nextjs',
+  nuxt: 'nuxtjs',
+  vuejs: 'vue',
+  expressjs: 'express',
+
+  // Deployment pipeline maps many frameworks to shared runtime pipelines.
+  svelte: 'nodejs',
+  dockerfile: 'nodejs',
+  custom: 'nodejs',
+  java: 'nodejs',
+  maven: 'nodejs',
+  spring: 'nodejs',
+  'spring-boot': 'nodejs',
+  springboot: 'nodejs',
+  'simple-test': 'nodejs',
+  test: 'nodejs',
+
+  django: 'python',
+  flask: 'python',
+  fastapi: 'python',
 };
 
 /**
@@ -143,7 +176,7 @@ export function validateEnvVars(
 
   // For frameworks with prefix requirements
   if (rules.publicPrefixes.length > 0 && !rules.supportsRuntime) {
-    // Client-only frameworks (Vue, Vite-React)
+    // Client-only frameworks with required public prefixes (Vue, Vite-React)
     const nonPrefixedVars = envVars.filter(e => !startsWithAnyPrefix(e.key, rules.publicPrefixes));
     
     if (nonPrefixedVars.length > 0) {
@@ -244,7 +277,7 @@ export function getFrameworkEnvHints(framework: string): {
   };
 
   if (rules.publicPrefixes.length > 0 && !rules.supportsRuntime) {
-    // Client-only (Vue, Vite, React)
+    // Client-only frameworks with required public prefixes (Vue, Vite)
     const prefix = rules.publicPrefixes[0];
     hints.example.good = [
       `${prefix}API_URL=https://api.example.com`,
@@ -313,7 +346,7 @@ export function splitEnvVarsByFramework(
       runtimeVars: envVars.filter(e => !startsWithAnyPrefix(e.key, rules.publicPrefixes))
     };
   } else if (rules.publicPrefixes.length > 0 && !rules.supportsRuntime) {
-    // Client-only with prefix (Vue, Vite, React): only prefixed vars work
+    // Client-only with prefix (Vue, Vite): only prefixed vars work
     return {
       buildTimeVars: envVars.filter(e => startsWithAnyPrefix(e.key, rules.publicPrefixes)),
       runtimeVars: []
