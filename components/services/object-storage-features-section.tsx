@@ -10,13 +10,13 @@ const LEFT_FEATURES = [
     title: "S3-Compatible API",
     description:
       "Use existing S3 SDKs and tools seamlessly. Drop-in replacement for AWS S3 with full bucket and object API support.",
-    image: "/images/kubernetes-ui/auto%20scaling%20nodespng.png",
+    image: "/images/kubernetes-ui/11 nINES dURABILITY.png",
   },
   {
     title: "Multi-Region Replication",
     description:
       "Replicate objects across multiple regions automatically. Disaster recovery and low-latency global access built-in.",
-    image: "/images/kubernetes-ui/Multi%20region%20clusters%20png.png",
+    image: "/images/kubernetes-ui/Global CDN Integration.png",
   },
   {
     title: "Lifecycle Management",
@@ -31,13 +31,13 @@ const RIGHT_FEATURES = [
     title: "Versioning & Locking",
     description:
       "Track object versions and prevent deletion with object locking. Perfect for compliance, audit trails, and data protection.",
-    image: "/images/kubernetes-ui/fullymanged_clusters.gif",
+    image: "/images/kubernetes-ui/versoning.png",
   },
   {
     title: "Built-in CDN Integration",
     description:
       "Native integration with global CDN for fast content delivery. Cache objects at edge locations with automatic SSL.",
-    image: "/images/kubernetes-ui/Built%20in%20load%20balancing%20png.png",
+    image: "/images/kubernetes-ui/built-in-load-balancing.png",
   },
 ];
 

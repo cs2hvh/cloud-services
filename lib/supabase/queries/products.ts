@@ -105,6 +105,8 @@ export const Products = {
         .order("sort_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: false });
 
+        console.log(`Fetched featured products for service type "${serviceType}":`, data);
+
       if (error) {
         handleQueryError(
           "getting featured products by service type",

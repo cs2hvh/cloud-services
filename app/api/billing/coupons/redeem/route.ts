@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     const rl = await limitByUser(user.id, {
-      prefix: "rl:bucket-create",
+      prefix: "rl:coupon-redeem",
       limit: 3,
       windowMs: 60_000,
     });

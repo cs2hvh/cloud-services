@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X, Download } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
 
@@ -132,19 +132,19 @@ export default function BillingTabs({
   return (
     <div className="max-w-[1600px] mx-auto">
       <Tabs value={tab} onValueChange={(v) => setTab(v as "balance" | "payment" | "coupons" | "transactions")} className="w-full">
-        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 bg-transparent p-0 h-auto mb-6">
+        <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 gap-2 bg-transparent p-0 h-auto mb-6">
           <TabsTrigger
             value="balance"
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
           >
             Balance
           </TabsTrigger>
-          <TabsTrigger
+          {/* <TabsTrigger
             value="payment"
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
           >
             Payment Method
-          </TabsTrigger>
+          </TabsTrigger> */}
           <TabsTrigger
             value="coupons"
             className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
@@ -428,6 +428,7 @@ interface Transaction {
   type: string;
   balance_after: number | null;
   description: string | null;
+  receipt_url: string | null;
   created_at: string;
 }
 
@@ -647,10 +648,13 @@ function TransactionsTab() {
                     Amount
                   </th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Balance After
+                    Balance
                   </th>
                   <th className="text-center py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
                     Status
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                    Invoice
                   </th>
                 </tr>
               </thead>
@@ -684,6 +688,21 @@ function TransactionsTab() {
                       >
                         {txn.status}
                       </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {txn.receipt_url ? (
+                        <a
+                          href={txn.receipt_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 hover:bg-blue-500/25 transition-colors"
+                        >
+                          <Download className="w-3 h-3" />
+                          Receipt
+                        </a>
+                      ) : (
+                        <span className="text-neutral-600">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -731,6 +750,17 @@ function TransactionsTab() {
                   <div className="text-xs text-neutral-500">
                     Code: {txn.description}
                   </div>
+                )}
+                {txn.receipt_url && (
+                  <a
+                    href={txn.receipt_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-blue-500/15 text-blue-300 border border-blue-500/20 hover:bg-blue-500/25 transition-colors w-fit"
+                  >
+                    <Download className="w-3 h-3" />
+                    Download Receipt
+                  </a>
                 )}
               </div>
             ))}

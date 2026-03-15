@@ -17,6 +17,25 @@ import { Container } from "@/components/ui/container";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Spotlight } from "@/components/ui/spotlight";
 
+interface Plan {
+  nodes: number;
+  vcpu: number;
+  ram: string;
+  storage: string;
+  price: number;
+  gpu?: string;
+}
+
+interface KubernetesCategory {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tagline: string;
+  description: string;
+  features: string[];
+  plans: Plan[];
+}
+
 /* ─── Stat Strip ─── */
 const STATS = [
   { value: "100%", label: "Managed" },
@@ -27,7 +46,7 @@ const STATS = [
 ];
 
 /* ─── Cluster Categories ─── */
-const CATEGORIES = [
+const FALLBACK_CATEGORIES: KubernetesCategory[] = [
   {
     key: "dev",
     label: "Dev / Test",
@@ -113,18 +132,13 @@ const CATEGORIES = [
   },
 ];
 
-interface Plan {
-  nodes: number;
-  vcpu: number;
-  ram: string;
-  storage: string;
-  price: number;
-  gpu?: string;
+interface KubernetesPricingSectionProps {
+  categories?: KubernetesCategory[];
 }
 
-export default function KubernetesPricingSection() {
+export default function KubernetesPricingSection({ categories = FALLBACK_CATEGORIES }: KubernetesPricingSectionProps) {
   const [activeKey, setActiveKey] = useState("dev");
-  const active = CATEGORIES.find((c) => c.key === activeKey)!;
+  const active = categories.find((c) => c.key === activeKey)!;
   const isGPU = active.key === "gpu";
 
   return (
@@ -191,7 +205,7 @@ export default function KubernetesPricingSection() {
 
         {/* Category tabs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-12">
-          {CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const isActive = cat.key === activeKey;
             const Icon = cat.icon;
             return (

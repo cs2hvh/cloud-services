@@ -6,7 +6,19 @@ import { Container } from "@/components/ui/container";
 
 type Cycle = "monthly" | "yearly";
 
-const PLANS = [
+interface Plan {
+  name: string;
+  description: string;
+  monthly: number;
+  yearly: number;
+  cta: string;
+  featured: boolean;
+  isCustom?: boolean;
+  features: string[];
+  highlighted?: boolean;
+}
+
+const FALLBACK_PLANS: Plan[] = [
   {
     name: "Starter",
     description: "For hobby projects and experiments.",
@@ -62,7 +74,11 @@ const PLANS = [
   },
 ];
 
-export default function AppDeployPricingSection() {
+interface AppDeployPricingSectionProps {
+  plans?: Plan[];
+}
+
+export default function AppDeployPricingSection({ plans = FALLBACK_PLANS }: AppDeployPricingSectionProps) {
   const [cycle, setCycle] = useState<Cycle>("monthly");
 
   return (
@@ -116,7 +132,7 @@ export default function AppDeployPricingSection() {
 
         {/* Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-px bg-white/[0.06] border border-white/[0.06]">
-          {PLANS.map((plan) => (
+          {plans.map((plan) => (
             <div
               key={plan.name}
               className={`relative bg-[#0a0a0a] p-8 lg:p-10 flex flex-col ${
@@ -124,7 +140,7 @@ export default function AppDeployPricingSection() {
               }`}
             >
               {/* Featured badge */}
-              {plan.featured && (
+              {plan.highlighted && (
                 <div className="absolute top-0 left-0 right-0 h-px bg-[#0095FF]" />
               )}
 
@@ -134,7 +150,7 @@ export default function AppDeployPricingSection() {
                   <h3 className="text-[18px] font-[500] text-white">
                     {plan.name}
                   </h3>
-                  {plan.featured && (
+                  {plan.highlighted && (
                     <span className="text-[10px] font-medium text-[#0095FF] bg-[#0095FF]/[0.1] px-2 py-0.5 uppercase tracking-wider">
                       Popular
                     </span>

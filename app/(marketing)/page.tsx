@@ -23,7 +23,7 @@ export default function Home() {
       {/* Everything you build */}
       <EverythingSection />
       {/* AI agents features section */}
-      <AiAgentsSection />
+      {/* <AiAgentsSection /> */}
       <GlobalNetworkSection />
       {/* <HomeFeaturesSection /> */}
       <WhyTrustUs />

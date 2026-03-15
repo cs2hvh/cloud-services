@@ -38,6 +38,17 @@ interface BareMetalPlan {
   price: number;
 }
 
+interface ComputeCategory {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tagline: string;
+  description: string;
+  features: string[];
+  isBareMetalCategory?: boolean;
+  plans: (VirtualPlan | BareMetalPlan)[];
+}
+
 
 /* ─── Hardware Highlights ─── */
 const HIGHLIGHTS = [
@@ -80,7 +91,7 @@ const HIGHLIGHTS = [
 ];
 
 /* ─── Instance Categories ─── */
-const CATEGORIES = [
+const FALLBACK_CATEGORIES: ComputeCategory[] = [
   {
     key: "shared",
     label: "Shared CPU",
@@ -211,9 +222,13 @@ const CATEGORIES = [
   },
 ];
 
-export default function ComputePricingSection() {
+interface ComputePricingSectionProps {
+  categories?: ComputeCategory[];
+}
+
+export default function ComputePricingSection({ categories = FALLBACK_CATEGORIES }: ComputePricingSectionProps) {
   const [activeKey, setActiveKey] = useState("shared");
-  const active = CATEGORIES.find((c) => c.key === activeKey)!;
+  const active = categories.find((c) => c.key === activeKey)!;
   const isBM = !!(active.isBareMetalCategory);
 
   return (
@@ -297,7 +312,7 @@ export default function ComputePricingSection() {
 
         {/* Category tabs — card style */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-12">
-          {CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const isActive = cat.key === activeKey;
             const Icon = cat.icon;
             return (

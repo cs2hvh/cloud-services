@@ -109,9 +109,6 @@ export const Billing = {
       .eq("user_id", userId)
       .maybeSingle();
 
-    const prevBal = existing?.credit_balance ?? 0;
-    // const prevTop = (existing as any)?.topup_credits ?? 0;
-
     if (!existing) {
       console.log("user has no existing credits, creating new record");
       const { data, error } = await supabase
@@ -128,20 +125,34 @@ export const Billing = {
       };
     }
 
-    const next = {
-      credit_balance: prevBal + amount,
-    };
+    // Atomic increment — prevents race conditions with concurrent webhooks
+    const { data, error } = await supabase.rpc("billing_topup", {
+      p_user_id: userId,
+      p_amount: amount,
+    });
 
-    const { data, error } = await supabase
-      .schema("billing")
-      .from("user_credits")
-      .update(next)
-      .eq("user_id", userId)
-      .select("credit_balance")
-      .single();
-    if (error) throw new Error(`Top-up failed: ${error.message}`);
+    if (error) {
+      // Fallback to non-atomic update if RPC not available yet
+      console.warn("[Billing] RPC billing_topup not available, using fallback:", error.message);
+      const prevBal = existing.credit_balance ?? 0;
+      const next = { credit_balance: prevBal + amount };
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .schema("billing")
+        .from("user_credits")
+        .update(next)
+        .eq("user_id", userId)
+        .select("credit_balance")
+        .single();
+      if (fallbackErr) throw new Error(`Top-up failed: ${fallbackErr.message}`);
+      return {
+        credit_balance: fallbackData?.credit_balance ?? next.credit_balance,
+        promo_credits: 0,
+        topup_credits: 0,
+      };
+    }
+
     return {
-      credit_balance: data?.credit_balance ?? next.credit_balance,
+      credit_balance: data as number,
       promo_credits: 0,
       topup_credits: 0,
     };
@@ -156,19 +167,35 @@ export const Billing = {
   },
 
   deduct: async (userId: string, amount: number): Promise<number> => {
-    // console.log(amount,"amount to deduct")
     const supabase = await createServiceClient();
-    const bal = await Billing.get_balance(userId);
-    if (bal < amount) throw new Error("Insufficient balance");
-    const { data, error } = await supabase
-      .schema("billing")
-      .from("user_credits")
-      .update({ credit_balance: bal - amount })
-      .eq("user_id", userId)
-      .select("credit_balance")
-      .single();
-    if (error) throw new Error(`Credit deduction failed: ${error.message}`);
-    return (data?.credit_balance as number) ?? bal - amount;
+
+    // Atomic deduction — prevents race conditions and overdraft
+    const { data, error } = await supabase.rpc("billing_deduct", {
+      p_user_id: userId,
+      p_amount: amount,
+    });
+    console.log(data, "deduct result", error?.message, "deduct error")
+
+    if (error) {
+      // Fallback to non-atomic if RPC not available yet
+      console.warn("[Billing] RPC billing_deduct not available, using fallback:", error.message);
+      const bal = await Billing.get_balance(userId);
+      if (bal < amount) throw new Error("Insufficient balance");
+      const { data: fallbackData, error: fallbackErr } = await supabase
+        .schema("billing")
+        .from("user_credits")
+        .update({ credit_balance: bal - amount })
+        .eq("user_id", userId)
+        .select("credit_balance")
+        .single();
+      if (fallbackErr) throw new Error(`Credit deduction failed: ${fallbackErr.message}`);
+      return (fallbackData?.credit_balance as number) ?? bal - amount;
+    }
+
+    if (data === null || data < 0) {
+      throw new Error("Insufficient balance");
+    }
+    return data as number;
   },
 
   add_active_kubernetes: async (params: {
@@ -492,6 +519,7 @@ export const Billing = {
     type?: "topup" | "refund" | "coupon";
     balanceAfter?: number;
     description?: string;
+    receiptUrl?: string;
   }): Promise<void> => {
     const supabase = await createServiceClient();
     const { error } = await supabase
@@ -507,6 +535,7 @@ export const Billing = {
         type: params.type ?? "topup",
         balance_after: params.balanceAfter ?? null,
         description: params.description ?? null,
+        receipt_url: params.receiptUrl ?? null,
         completed_at: params.status === "completed" ? new Date().toISOString() : null,
       });
     if (error) throw new Error(`Failed to save transaction: ${error.message}`);
@@ -543,6 +572,7 @@ export const Billing = {
       type: string;
       balance_after: number | null;
       description: string | null;
+      receipt_url: string | null;
       created_at: string;
     }>;
     total: number;
@@ -554,7 +584,7 @@ export const Billing = {
     let query = supabase
       .schema("billing")
       .from("transactions")
-      .select("id, stripe_session_id, amount, currency, status, type, balance_after, description, created_at", { count: "exact" })
+      .select("id, stripe_session_id, amount, currency, status, type, balance_after, description, receipt_url, created_at", { count: "exact" })
       .eq("user_id", userId);
 
     if (opts?.status && ["pending", "completed", "failed"].includes(opts.status)) {
