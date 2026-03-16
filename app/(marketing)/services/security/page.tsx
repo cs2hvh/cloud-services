@@ -102,7 +102,7 @@ const CloudService = () => {
         primaryAction={{ label: "Get Started", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/security.png", alt: "security infrastructure" }}
+        illustration={{ src: "/images/Features/protection.png", alt: "security infrastructure" }}
       />
       {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
         <ComputeMarqueeSection />
