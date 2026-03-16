@@ -1,10 +1,21 @@
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
-}
+let stripeClient: Stripe | null = null;
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2026-02-25.clover",
-  typescript: true,
-});
+/**
+ * Lazy Stripe client getter.
+ * Avoids throwing at module import time during Next.js build collection.
+ */
+export function getStripeClient(): Stripe {
+  if (!stripeClient) {
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
+    }
+    stripeClient = new Stripe(secretKey, {
+      apiVersion: "2026-02-25.clover",
+      typescript: true,
+    });
+  }
+  return stripeClient;
+}

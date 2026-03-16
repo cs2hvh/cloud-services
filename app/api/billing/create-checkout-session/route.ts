@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { stripe } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 import { Billing } from "@/lib/supabase/queries/billing";
 
 const MIN_AMOUNT = 1;
@@ -8,6 +8,7 @@ const MAX_AMOUNT = 10000;
 
 export async function POST(request: Request) {
   try {
+    const stripe = getStripeClient();
     const supabase = await createClient();
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;

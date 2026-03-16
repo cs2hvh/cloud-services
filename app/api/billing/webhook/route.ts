@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripeClient } from "@/lib/stripe";
 import { Billing } from "@/lib/supabase/queries/billing";
 import Stripe from "stripe";
 
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   let event: Stripe.Event;
   try {
-    //const stripe = getStripeClient();
+    const stripe = getStripeClient();
     // Read raw body as text for signature verification
     const rawBody = await request.text();
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
       }
 
       try {
+        const stripe = getStripeClient();
         // Credit the user's balance
         const topupResult = await Billing.topup(userId, amount);
 
