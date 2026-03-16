@@ -3,7 +3,7 @@
   "info": {
     "title": "Cloud Services - API v1",
     "version": "1.0.0",
-    "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\nMarketplace dashboard routes under `/api/services/platform-apps/domains/market/*` use authenticated browser session cookies instead of API keys.\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limit headers are included in all responses:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
+    "description": "# Cloud Services REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limit headers are included in all responses:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://galaxyhvh.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://galaxyhvh.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
     "contact": {
       "name": "Cloud Services Support",
       "email": "support@galaxyhvh.com",
@@ -51,7 +51,7 @@
     },
     {
       "name": "Domain Marketplace",
-      "description": "Search, purchase, and track marketplace domain purchase requests through the dashboard session."
+      "description": "Search, purchase, and track domain marketplace purchase requests."
     }
   ],
   "components": {
@@ -2036,7 +2036,7 @@
           },
           "message": {
             "type": "string",
-            "example": "Use /api/services/platform-apps/domains/market/summary for reseller metadata."
+            "example": "Use /api/v1/domains/market/summary for reseller metadata."
           }
         },
         "required": [
@@ -7044,13 +7044,18 @@
         }
       }
     },
-    "/api/services/platform-apps/domains/market/summary": {
+    "/api/v1/domains/market/summary": {
       "get": {
         "tags": [
           "Domain Marketplace"
         ],
         "summary": "Get domain marketplace summary",
-        "description": "Returns marketplace channel and capabilities for dashboard purchase flows.",
+        "description": "Returns marketplace channel and capabilities.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Marketplace summary",
@@ -7063,7 +7068,17 @@
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Provider account action required",
             "content": {
               "application/json": {
                 "schema": {
@@ -7080,8 +7095,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7095,11 +7113,21 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "Registrar upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/api/services/platform-apps/domains/market/providers": {
+    "/api/v1/domains/market/providers": {
       "get": {
         "tags": [
           "Domain Marketplace"
@@ -7107,6 +7135,11 @@
         "summary": "Get domain marketplace provider metadata",
         "description": "Legacy compatibility endpoint that mirrors marketplace summary data.",
         "deprecated": true,
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Provider metadata",
@@ -7119,7 +7152,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7136,8 +7169,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7155,13 +7191,18 @@
         }
       }
     },
-    "/api/services/platform-apps/domains/market/search": {
+    "/api/v1/domains/market/search": {
       "post": {
         "tags": [
           "Domain Marketplace"
         ],
         "summary": "Search purchasable domains",
         "description": "Searches registrar-backed domain availability and pricing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -7187,13 +7228,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7210,8 +7258,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7229,13 +7280,18 @@
         }
       }
     },
-    "/api/services/platform-apps/domains/market/purchase-requests": {
+    "/api/v1/domains/market/purchase-requests": {
       "get": {
         "tags": [
           "Domain Marketplace"
         ],
         "summary": "List domain purchase requests",
-        "description": "Lists purchase requests for the authenticated user, optionally filtered by app.",
+        "description": "Lists purchase requests for the authenticated API user, optionally filtered by app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "schema": {
@@ -7275,13 +7331,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7318,8 +7381,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7342,6 +7408,11 @@
         ],
         "summary": "Create domain purchase request",
         "description": "Creates or reuses an idempotent purchase request and attempts registrar fulfillment.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "schema": {
@@ -7380,13 +7451,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7443,8 +7521,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7472,13 +7553,18 @@
         }
       }
     },
-    "/api/services/platform-apps/domains/market/purchase-requests/{requestId}": {
+    "/api/v1/domains/market/purchase-requests/{requestId}": {
       "get": {
         "tags": [
           "Domain Marketplace"
         ],
         "summary": "Get purchase request by id",
-        "description": "Returns a single purchase request for the authenticated user.",
+        "description": "Returns a single purchase request for the authenticated API user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "schema": {
@@ -7513,7 +7599,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7540,8 +7626,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }
@@ -7559,13 +7648,18 @@
         }
       }
     },
-    "/api/services/platform-apps/domains/market/checkout": {
+    "/api/v1/domains/market/checkout": {
       "post": {
         "tags": [
           "Domain Marketplace"
         ],
         "summary": "Checkout domain purchase",
         "description": "Compatibility checkout endpoint that delegates to the purchase request flow.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
           {
             "schema": {
@@ -7604,13 +7698,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
                 }
               }
             }
           },
           "401": {
-            "description": "Unauthorized - requires authenticated session",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
@@ -7667,8 +7768,11 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "TOO_MANY_REQUESTS",
-                  "message": "Retry after 60s"
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
                 }
               }
             }

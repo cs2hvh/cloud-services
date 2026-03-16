@@ -44,6 +44,12 @@ const DomainMarketplacePurchaseRequestListOpenApiQuerySchema = z
   })
   .openapi("DomainMarketplacePurchaseRequestListOpenApiQuery");
 
+const V1RateLimitErrorExample = {
+  error: "RATE_LIMIT_EXCEEDED",
+  message: "Too many requests. Please try again later.",
+  details: { retry_after: 58 },
+};
+
 export function registerDomainPaths(registry: OpenAPIRegistry) {
   registry.registerPath({
     method: "get",
@@ -265,17 +271,22 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "get",
-    path: "/api/services/platform-apps/domains/market/summary",
+    path: "/api/v1/domains/market/summary",
     tags: ["Domain Marketplace"],
     summary: "Get domain marketplace summary",
-    description: "Returns marketplace channel and capabilities for dashboard purchase flows.",
+    description: "Returns marketplace channel and capabilities.",
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: "Marketplace summary",
         content: { "application/json": { schema: DomainMarketplaceSummaryResponseSchema } },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      402: {
+        description: "Provider account action required",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       429: {
@@ -283,10 +294,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -294,23 +302,28 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         description: "Internal error",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
+      502: {
+        description: "Registrar upstream error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
     },
   });
 
   registry.registerPath({
     method: "get",
-    path: "/api/services/platform-apps/domains/market/providers",
+    path: "/api/v1/domains/market/providers",
     tags: ["Domain Marketplace"],
     summary: "Get domain marketplace provider metadata",
     description: "Legacy compatibility endpoint that mirrors marketplace summary data.",
     deprecated: true,
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: "Provider metadata",
         content: { "application/json": { schema: DomainMarketplaceProvidersResponseSchema } },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       429: {
@@ -318,10 +331,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -334,10 +344,11 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "post",
-    path: "/api/services/platform-apps/domains/market/search",
+    path: "/api/v1/domains/market/search",
     tags: ["Domain Marketplace"],
     summary: "Search purchasable domains",
     description: "Searches registrar-backed domain availability and pricing.",
+    security: [{ bearerAuth: [] }],
     request: {
       body: {
         content: {
@@ -354,10 +365,14 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       400: {
         description: "Invalid search payload or validation error",
-        content: { "application/json": { schema: ErrorResponseSchema } },
+        content: {
+          "application/json": {
+            schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          },
+        },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       429: {
@@ -365,10 +380,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -381,10 +393,11 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "get",
-    path: "/api/services/platform-apps/domains/market/purchase-requests",
+    path: "/api/v1/domains/market/purchase-requests",
     tags: ["Domain Marketplace"],
     summary: "List domain purchase requests",
-    description: "Lists purchase requests for the authenticated user, optionally filtered by app.",
+    description: "Lists purchase requests for the authenticated API user, optionally filtered by app.",
+    security: [{ bearerAuth: [] }],
     request: {
       query: DomainMarketplacePurchaseRequestListOpenApiQuerySchema,
     },
@@ -395,10 +408,14 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       400: {
         description: "Invalid query parameters",
-        content: { "application/json": { schema: ErrorResponseSchema } },
+        content: {
+          "application/json": {
+            schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          },
+        },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       403: {
@@ -414,10 +431,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -430,10 +444,11 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "post",
-    path: "/api/services/platform-apps/domains/market/purchase-requests",
+    path: "/api/v1/domains/market/purchase-requests",
     tags: ["Domain Marketplace"],
     summary: "Create domain purchase request",
     description: "Creates or reuses an idempotent purchase request and attempts registrar fulfillment.",
+    security: [{ bearerAuth: [] }],
     request: {
       headers: IdempotencyHeaderSchema,
       body: {
@@ -451,10 +466,14 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       400: {
         description: "Invalid payload or domain validation error",
-        content: { "application/json": { schema: ErrorResponseSchema } },
+        content: {
+          "application/json": {
+            schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          },
+        },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       402: {
@@ -478,10 +497,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -498,10 +514,11 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "get",
-    path: "/api/services/platform-apps/domains/market/purchase-requests/{requestId}",
+    path: "/api/v1/domains/market/purchase-requests/{requestId}",
     tags: ["Domain Marketplace"],
     summary: "Get purchase request by id",
-    description: "Returns a single purchase request for the authenticated user.",
+    description: "Returns a single purchase request for the authenticated API user.",
+    security: [{ bearerAuth: [] }],
     request: {
       params: DomainMarketplacePurchaseRequestIdParamSchema,
     },
@@ -515,7 +532,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       404: {
@@ -527,10 +544,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },
@@ -543,10 +557,11 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
 
   registry.registerPath({
     method: "post",
-    path: "/api/services/platform-apps/domains/market/checkout",
+    path: "/api/v1/domains/market/checkout",
     tags: ["Domain Marketplace"],
     summary: "Checkout domain purchase",
     description: "Compatibility checkout endpoint that delegates to the purchase request flow.",
+    security: [{ bearerAuth: [] }],
     request: {
       headers: IdempotencyHeaderSchema,
       body: {
@@ -564,10 +579,14 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       400: {
         description: "Invalid payload or domain validation error",
-        content: { "application/json": { schema: ErrorResponseSchema } },
+        content: {
+          "application/json": {
+            schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          },
+        },
       },
       401: {
-        description: "Unauthorized - requires authenticated session",
+        description: "Unauthorized",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
       402: {
@@ -591,10 +610,7 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
         content: {
           "application/json": {
             schema: ErrorResponseSchema,
-            example: {
-              error: "TOO_MANY_REQUESTS",
-              message: "Retry after 60s",
-            },
+            example: V1RateLimitErrorExample,
           },
         },
       },

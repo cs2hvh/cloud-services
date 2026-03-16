@@ -77,17 +77,26 @@ export const DomainMarketplacePurchaseRequestSchema = z
 export const DomainMarketplacePurchaseRequestListQuerySchema = z
   .object({
     app_id: z.string().uuid().optional().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
-    limit: z
-      .string()
-      .optional()
-      .transform((value) => {
-        if (!value) return undefined;
-        const n = Number.parseInt(value, 10);
-        return Number.isNaN(n) ? undefined : n;
-      })
-      .refine((n) => n === undefined || (n >= 1 && n <= 100), {
-        message: "limit must be between 1 and 100",
-      }),
+    limit: z.preprocess(
+      (value) => {
+        if (value === undefined || value === null || value === "") return undefined;
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (!trimmed) return undefined;
+          if (!/^\d+$/.test(trimmed)) return value;
+          return Number.parseInt(trimmed, 10);
+        }
+        return value;
+      },
+      z
+        .number({
+          invalid_type_error: "limit must be a number",
+        })
+        .int("limit must be an integer")
+        .min(1, "limit must be between 1 and 100")
+        .max(100, "limit must be between 1 and 100")
+        .optional()
+    ),
   })
   .openapi("DomainMarketplacePurchaseRequestListQuery");
 
@@ -226,7 +235,7 @@ export const DomainMarketplaceProvidersResponseSchema = z
     data: DomainMarketplaceSummarySchema,
     deprecated: z.literal(true).openapi({ example: true }),
     message: z.string().openapi({
-      example: "Use /api/services/platform-apps/domains/market/summary for reseller metadata.",
+      example: "Use /api/v1/domains/market/summary for reseller metadata.",
     }),
   })
   .openapi("DomainMarketplaceProvidersResponse");
