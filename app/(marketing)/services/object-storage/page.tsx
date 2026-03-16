@@ -1,13 +1,12 @@
 import { ServiceHeroSection } from "@/components/services/service-hero-section";
 // import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
-import ServicesHomeSectionFour from "@/components/serviceshome/section-4";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 import ObjectStorageReleaseSection from "@/components/services/object-storage-release-section";
 import ObjectStorageFeaturesSection from "@/components/services/object-storage-features-section";
 import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
 import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
-import { getStorageCategories, getStorageOverviewPlans } from "@/lib/helpers/storage-categories";
+import { getStorageCategories} from "@/lib/helpers/storage-categories";
 
 const GpuHome = async () => {
   // Fetch dynamic storage categories from database
@@ -15,7 +14,7 @@ const GpuHome = async () => {
   console.log("Fetched storage categories:", categories);
   
   // Fetch dynamic overview plans for ServicesHomeSectionFour
-  const plans = await getStorageOverviewPlans();
+  // const plans = await getStorageOverviewPlans();
 
   const cases = [
     {
