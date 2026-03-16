@@ -45,7 +45,7 @@ const DatabaseHome = async () => {
         primaryAction={{ label: "Launch a Database", href: "/signup" }}
         secondaryAction={{ label: "View Documentation", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/service-home-db-section-1.png", alt: "Database infrastructure" }}
+        illustration={{ src: "/images/public/images/Global CDN Integration.png", alt: "Database infrastructure" }}
       />
       <DatabaseEnginesSection />
       <DatabaseShowcaseSection />

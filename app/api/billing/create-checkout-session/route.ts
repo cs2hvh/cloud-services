@@ -36,19 +36,32 @@ export async function POST(request: Request) {
       await Billing.save_stripe_customer_id(user.id, stripeCustomerId);
     }
 
-    const origin = request.headers.get("origin") || process.env.DOMAIN || "http://localhost:3000";
+    const origin = request.headers.get("origin") || "";
+    const allowedDomain = process.env.DOMAIN || "http://localhost:3000";
+    // Validate origin to prevent open redirect
+    const baseUrl = origin && new URL(allowedDomain).origin === origin ? origin : allowedDomain;
 
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       mode: "payment",
+      payment_intent_data: {
+        description: `AhuraSense Cloud Services - Account Top-Up ($${amount.toFixed(2)})`,
+      },
+      invoice_creation: {
+        enabled: true,
+        invoice_data: {
+          description: `Account balance top-up of $${amount.toFixed(2)}`,
+          footer: "Thank you for choosing AhuraSense Cloud Services.",
+        },
+      },
       line_items: [
         {
           price_data: {
             currency: "usd",
             unit_amount: Math.round(amount * 100), // Stripe uses cents
             product_data: {
-              name: "Account Top-Up",
-              description: `Add $${amount.toFixed(2)} to your balance`,
+              name: "AhuraSense Cloud Services — Account Top-Up",
+              description: `Add $${amount.toFixed(2)} credit to your AhuraSense Cloud account balance. Credits are used for cloud compute, storage, databases, and other services.`,
             },
           },
           quantity: 1,
@@ -58,8 +71,8 @@ export async function POST(request: Request) {
         user_id: user.id,
         amount: String(amount),
       },
-      success_url: `${origin}/dashboard/nav/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/dashboard/nav/billing?status=cancelled`,
+      success_url: `${baseUrl}/dashboard/nav/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/dashboard/nav/billing?status=cancelled`,
     });
 
     return NextResponse.json({ url: session.url });

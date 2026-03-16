@@ -34,7 +34,11 @@ export async function POST(request: Request) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
       const userId = session.metadata?.user_id;
-      const amount = parseFloat(session.metadata?.amount ?? "0");
+      const metadataAmount = parseFloat(session.metadata?.amount ?? "0");
+
+      // Use the actual amount Stripe charged (in cents), NOT metadata — prevents price tampering
+      const actualAmountCents = session.amount_total;
+      const amount = actualAmountCents ? actualAmountCents / 100 : metadataAmount;
 
       if (!userId || !amount || amount <= 0) {
         console.error("[Stripe Webhook] Invalid metadata in session:", session.id);
@@ -53,17 +57,52 @@ export async function POST(request: Request) {
         // Credit the user's balance
         const topupResult = await Billing.topup(userId, amount);
 
+        // Retrieve receipt URL from Stripe
+        let receiptUrl: string | undefined;
+        const paymentIntentId = typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id;
+
+        if (paymentIntentId) {
+          try {
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+            const chargeId = typeof paymentIntent.latest_charge === "string"
+              ? paymentIntent.latest_charge
+              : paymentIntent.latest_charge?.id;
+            if (chargeId) {
+              const charge = await stripe.charges.retrieve(chargeId);
+              receiptUrl = charge.receipt_url ?? undefined;
+            }
+          } catch (receiptErr) {
+            console.warn("[Stripe Webhook] Could not retrieve receipt URL:", receiptErr);
+          }
+        }
+
+        // Check if an invoice was created (via invoice_creation on checkout)
+        if (!receiptUrl && session.invoice) {
+          try {
+            const invoiceId = typeof session.invoice === "string"
+              ? session.invoice
+              : session.invoice?.id;
+            if (invoiceId) {
+              const invoice = await stripe.invoices.retrieve(invoiceId);
+              receiptUrl = invoice.hosted_invoice_url ?? undefined;
+            }
+          } catch (invoiceErr) {
+            console.warn("[Stripe Webhook] Could not retrieve invoice URL:", invoiceErr);
+          }
+        }
+
         // Record the transaction
         await Billing.save_transaction({
           userId,
           stripeSessionId: session.id,
-          stripePaymentIntent: typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : session.payment_intent?.id,
+          stripePaymentIntent: paymentIntentId,
           amount,
           status: "completed",
           type: "topup",
           balanceAfter: topupResult.credit_balance,
+          receiptUrl,
         });
 
         console.log(`[Stripe Webhook] Credited $${amount} to user ${userId} (session: ${session.id})`);

@@ -7,96 +7,15 @@ import ObjectStorageReleaseSection from "@/components/services/object-storage-re
 import ObjectStorageFeaturesSection from "@/components/services/object-storage-features-section";
 import ObjectStoragePricingSection from "@/components/services/object-storage-pricing-section";
 import ObjectStorageCtaSection from "@/components/services/object-storage-cta-section";
+import { getStorageCategories, getStorageOverviewPlans } from "@/lib/helpers/storage-categories";
 
-const GpuHome = () => {
-//   const defaultItems = [
-// 	{
-// 		title: "Latest GPU Hardware",
-// 		description:
-// 			"Access NVIDIA H100, A100, and RTX 4090 GPUs for maximum performance. Updated regularly with the latest hardware.",
-// 		iconSrc: "/images/main-page/service-home-gpu-1.svg",
-// 		iconAlt: "GPU hardware",
-// 	},
-// 	{
-// 		title: "Multi-GPU Support",
-// 		description:
-// 			"Scale from single GPU to multi-node clusters with NVLink interconnect for distributed training workloads.",
-// 		iconSrc: "/images/main-page/service-home-gpu-2.svg",
-// 		iconAlt: "Multi GPU",
-// 	},
-// 	{
-// 		title: "Fast Storage",
-// 		description:
-// 			"High-bandwidth NVMe storage optimized for training data. Local SSD for maximum IOPS.",
-// 		iconSrc: "/images/main-page/service-home-gpu-3.svg",
-// 		iconAlt: "Fast storage",
-// 	},
-// 	{
-// 		title: "Spot Instances",
-// 		description:
-// 			"Save up to 90% with spot instances for fault-tolerant workloads. Automatic checkpointing included.",
-// 		iconSrc: "/images/main-page/service-home-gpu-4.svg",
-// 		iconAlt: "Spot instances",
-// 	},
-// 	{
-// 		title: "Pre-configured Environments",
-// 		description:
-// 			"Start faster with pre-installed CUDA, cuDNN, PyTorch, TensorFlow, and other ML frameworks.",
-// 		iconSrc: "/images/main-page/service-home-gpu-5.svg",
-// 		iconAlt: "Preconfigured environments",
-// 	},
-// ];
-
-// const plans = [
-//     {
-//         badge: "New",
-//         badgePlacement: "outside",
-//         title: "Basic",
-//         description:
-//             "With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-//         features: ["1-4 vCPU core", "2-8 GB RAM", "50-200 GB NVMe disk space", "4 TB bandwidth"],
-//     },
-//     {
-//         badge: "Most Recommended",
-//         badgePlacement: "inside",
-//         title: "General Use",
-//         description:
-//             "For growing teams and production workloads. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine in just a few clicks.",
-//         features: ["4-16 vCPU cores", "8-32 GB RAM", "200-400 GB NVMe disk space", "16 TB bandwidth"],
-//     },
-//     {
-//         badge: "Most Scalable",
-//         badgePlacement: "inside",
-//         title: "High Performance",
-//         description:
-//             "For organizations with advanced needs. With OVHcloud, you can rely on our expertise in bare-metal technology. Host your website, deploy your high-resilience infrastructure, or customise your machine to suit your projects in just a few clicks.",
-//         features: ["16-64 vCPU cores", "32-256 GB RAM", "400-1000 GB NVMe disk space", "32 TB bandwidth"],
-//     },
-// ];
-
- const plans = [
-    {
-      badge: "Starter",
-      badgePlacement: "outside",
-      title: "Starter",
-      description: "Cost-effective object storage for small projects and backups.",
-      features: ["50 GB storage", "5 GB/month transfer", "S3-compatible API", "Basic support"],
-    },
-    {
-      badge: "Most Popular",
-      badgePlacement: "inside",
-      title: "Standard",
-      description: "Durable and scalable object storage for web apps and media.",
-      features: ["1 TB storage", "1 TB/month transfer", "S3 API + lifecycle rules", "99.99% durability"],
-    },
-    {
-      badge: "Enterprise",
-      badgePlacement: "inside",
-      title: "Enterprise",
-      description: "High-performance storage with SLA and dedicated support.",
-      features: ["Custom capacity", "Unlimited transfer", "Private networking", "Dedicated support"],
-    },
-  ];
+const GpuHome = async () => {
+  // Fetch dynamic storage categories from database
+  const categories = await getStorageCategories();
+  console.log("Fetched storage categories:", categories);
+  
+  // Fetch dynamic overview plans for ServicesHomeSectionFour
+  const plans = await getStorageOverviewPlans();
 
   const cases = [
     {
@@ -159,18 +78,9 @@ const GpuHome = () => {
         illustration={{ src: "/images/main-page/object-space.png", alt: "Object Storage infrastructure" }}
       />
       <ObjectStorageReleaseSection />
-      {/* <div className="relative z-20 -mt-6 sm:-mt-18 lg:-mt-20">
-        <div className="relative z-10 -mt-16 sm:-mt-20 lg:-mt-28">
-          <ComputeFeaturesCurveSection
-            backgroundImage="/images/compute-page/curve-feature-section-bg.png"
-            curveImage="/images/main-page/service-home-object-section-3.png"
-          />
-        </div>
-      </div> */}
-
-      <ObjectStoragePricingSection />
+      <ObjectStoragePricingSection categories={categories || undefined} />
       <ObjectStorageFeaturesSection />
-      <ServicesHomeSectionFour plans={plans} />
+      {/* <ServicesHomeSectionFour plans={plans} /> */}
       <ServicesHomeSectionFive title="Frequently Asked Questions" faqs={faqs} />
       <ObjectStorageCtaSection />
       <ServicesHomeSectionSix cases={cases} />

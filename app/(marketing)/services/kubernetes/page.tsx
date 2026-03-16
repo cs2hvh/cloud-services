@@ -4,8 +4,11 @@ import KubernetesFeaturesSection from "@/components/services/kubernetes-features
 import KubernetesPricingSection from "@/components/services/kubernetes-pricing-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import { getKubernetesCategories } from "@/lib/helpers/kubernetes-categories";
 
-const KubernetesPage = () => {
+const KubernetesPage = async () => {
+  // Fetch dynamic kubernetes categories from database
+  const categories = await getKubernetesCategories();
   const cases = [
     {
       title: "AI/ML Training",
@@ -42,7 +45,7 @@ const KubernetesPage = () => {
       />
       <KubernetesReleaseSection />
       <KubernetesFeaturesSection />
-      <KubernetesPricingSection />
+      <KubernetesPricingSection categories={categories || undefined} />
       <ServicesHomeSectionFive />
       <ServicesHomeSectionSix cases={cases} />
     </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory} from "@/lib/supabase/queries/pricing";
 import { PricingContent } from "@/components/pricing/pricing-content";
@@ -14,7 +14,39 @@ export default function PricingClient({ categories }: PricingClientProps) {
   const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id || "compute");
   const [expandedTierId, setExpandedTierId] = useState<string>("performance");
 
-  const currentCategory = categories.find((cat) => cat.id === activeCategory);
+  // Track active section based on scroll position
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = categories.map(cat => document.getElementById(cat.id));
+      const scrollPosition = window.scrollY + 200; // offset for header
+
+      for (let i = sections.length - 1; i >= 0; i--) {
+        const section = sections[i];
+        if (section && section.offsetTop <= scrollPosition) {
+          setActiveCategory(categories[i].id);
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [categories]);
+
+  const handleCategoryClick = (categoryId: string) => {
+    setActiveCategory(categoryId);
+    const element = document.getElementById(categoryId);
+    if (element) {
+      const offset = 100; // adjust for header
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#191919] text-white pt-20">
@@ -28,9 +60,9 @@ export default function PricingClient({ categories }: PricingClientProps) {
             Pricing that scales from starter to enterprise
           </p>
           <p className="text-white/40 text-xs md:text-sm mb-8">
-            Pick a category from the left and compare tiers. Designed to match a
-            thoughtful→lean <br className="hidden sm:block" />
-            deploy, scale navigation, easy cost, HTML, and simple top-offs.
+            Browse all categories below or jump to a specific service using the navigation menu.
+            <br className="hidden sm:block" />
+            Transparent pricing with no hidden fees. Scale up or down anytime.
           </p>
 
           {/* Toggle Switch */}
@@ -81,7 +113,7 @@ export default function PricingClient({ categories }: PricingClientProps) {
                 {categories.map((category) => (
                   <button
                     key={category.id}
-                    onClick={() => setActiveCategory(category.id)}
+                    onClick={() => handleCategoryClick(category.id)}
                     className={cn(
                       "cursor-pointer w-full text-left px-3 py-2 text-sm font-medium transition-all duration-200",
                       activeCategory === category.id
@@ -96,12 +128,25 @@ export default function PricingClient({ categories }: PricingClientProps) {
             </div>
           </aside>
 
-          <PricingContent
-            category={currentCategory}
-            billingCycle={billingCycle}
-            expandedTierId={expandedTierId}
-            setExpandedTierId={setExpandedTierId}
-          />
+          <div className="flex-1 space-y-8">
+            {categories.map((category, index) => (
+              <div
+                key={category.id}
+                id={category.id}
+                className={cn(
+                  "scroll-mt-24",
+                  index > 0 && "border-t border-white pt-8"
+                )}
+              >
+                <PricingContent
+                  category={category}
+                  billingCycle={billingCycle}
+                  expandedTierId={expandedTierId}
+                  setExpandedTierId={setExpandedTierId}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </main>

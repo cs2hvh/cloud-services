@@ -10,13 +10,13 @@ const LEFT_FEATURES = [
     title: "Auto-Scaling Nodes",
     description:
       "Automatically scale your node pools based on workload demands. Save costs during low traffic and handle spikes effortlessly.",
-    image: "/images/kubernetes-ui/auto%20scaling%20nodespng.png",
+    image: "/images/kubernetes-ui/auto scaling.png",
   },
   {
     title: "Multi-Region Clusters",
     description:
       "Deploy clusters across multiple regions for high availability and disaster recovery. Automatic failover keeps your apps running.",
-    image: "/images/kubernetes-ui/Multi%20region%20clusters%20png.png",
+    image: "/images/kubernetes-ui/Multi region clusters png.png",
   },
   {
     title: "GitOps Ready",
@@ -31,7 +31,7 @@ const RIGHT_FEATURES = [
     title: "Fully Managed Clusters",
     description:
       "We handle the control plane, upgrades, and maintenance so you can focus on deploying your applications. Zero operational overhead.",
-    image: "/images/kubernetes-ui/fullymanged_clusters.gif",
+    image: "/images/kubernetes-ui/fully managed.png",
   },
   {
     title: "Built-in Load Balancing",
