@@ -16,6 +16,7 @@ import {
   Database,
   FileText,
   Gamepad2,
+  Globe,
   HardDrive,
   HelpCircle,
   Key,
@@ -227,6 +228,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/apps",
       current: pathname.includes("/services/apps"),
       icon: Rocket,
+    },
+    {
+      name: "Domain Marketplace",
+      href: "/dashboard/services/domains",
+      current: pathname.includes("/services/domains"),
+      icon: Globe,
     },
     {
       name: "Kubernetes",

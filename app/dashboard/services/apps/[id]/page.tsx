@@ -50,6 +50,7 @@ import {
 } from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
+import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
@@ -609,6 +610,16 @@ export default function AppDetailPage() {
           </div>
 
           <div className="flex gap-2">
+            <Link href={`/dashboard/services/apps/${app.id}/domain-market`}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-white/20 text-white hover:bg-white/10"
+              >
+                <Globe className="w-4 h-4 mr-2" />
+                Domain Market
+              </Button>
+            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -714,6 +725,10 @@ export default function AppDetailPage() {
             <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
               <Link2 className="w-4 h-4 mr-2" />
               Domains
+            </TabsTrigger>
+            <TabsTrigger value="domain-market" className="data-[state=active]:bg-white/10">
+              <Globe className="w-4 h-4 mr-2" />
+              Domain Market
             </TabsTrigger>
             <TabsTrigger value="build-logs" className="data-[state=active]:bg-white/10">
               <Terminal className="w-4 h-4 mr-2" />
@@ -931,6 +946,24 @@ export default function AppDetailPage() {
               appStatus={app.status}
               platformDomain={domain}
             />
+          </TabsContent>
+
+          <TabsContent value="domain-market" className="space-y-4">
+            <Card className="bg-cyan-500/10 border-cyan-400/20">
+              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-white">Need full workspace for domain purchasing?</p>
+                  <p className="text-xs text-white/60">Open the dedicated responsive Domain Marketplace page for this app.</p>
+                </div>
+                <Link href={`/dashboard/services/apps/${app.id}/domain-market`}>
+                  <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto">
+                    Open Full Page
+                    <ExternalLink className="w-3.5 h-3.5 ml-2" />
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+            <DomainMarketplaceTab appId={app.id} />
           </TabsContent>
 
           {/* Build Logs Tab */}

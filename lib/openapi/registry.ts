@@ -6,6 +6,7 @@ import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-open
 
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
 import { registerDatabasePaths } from '@/lib/openapi/paths/databases';
+import { registerDomainPaths } from '@/lib/openapi/paths/domains';
 import { registerNetworkPaths } from '@/lib/openapi/paths/network';
 import { registerProjectPaths } from '@/lib/openapi/paths/projects';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
@@ -24,6 +25,7 @@ registerProjectPaths(registry);
 registerStoragePaths(registry);
 registerNetworkPaths(registry);
 registerDatabasePaths(registry);
+registerDomainPaths(registry);
 
 /**
  * Generate the complete OpenAPI document
@@ -138,6 +140,10 @@ For more examples, see the API reference below.
       {
         name: 'Network DDoS (Spectrum)',
         description: 'Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP).',
+      },
+      {
+        name: 'Domains',
+        description: 'Manage custom domains, verification, activation, and operation status.',
       },
     ],
   });

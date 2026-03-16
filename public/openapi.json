@@ -44,6 +44,10 @@
     {
       "name": "Network DDoS (Spectrum)",
       "description": "Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP)."
+    },
+    {
+      "name": "Domains",
+      "description": "Manage custom domains, verification, activation, and operation status."
     }
   ],
   "components": {
@@ -1580,6 +1584,367 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "DomainStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "verified",
+          "active",
+          "failed",
+          "removed"
+        ]
+      },
+      "Domain": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "domain": {
+            "type": "string",
+            "example": "api.example.com"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DomainStatus"
+          },
+          "verification_method": {
+            "type": "string",
+            "enum": [
+              "txt",
+              "cname"
+            ],
+            "example": "txt"
+          },
+          "verification_token": {
+            "type": "string",
+            "example": "verify_7f23cbb6500c31f7"
+          },
+          "verified_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "activated_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "ssl_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "issuing",
+              "active",
+              "failed"
+            ],
+            "example": "pending"
+          },
+          "is_primary": {
+            "type": "boolean",
+            "example": false
+          },
+          "redirect_to_primary": {
+            "type": "boolean",
+            "example": false
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "last_check_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "app_id",
+          "domain",
+          "status",
+          "verification_method",
+          "verification_token",
+          "verified_at",
+          "activated_at",
+          "ssl_status",
+          "is_primary",
+          "redirect_to_primary",
+          "last_error",
+          "last_check_at",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "DomainListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Domain"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "example": 2
+              }
+            },
+            "required": [
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainVerificationInstruction": {
+        "type": "object",
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "enum": [
+              "TXT"
+            ],
+            "example": "TXT"
+          },
+          "record_name": {
+            "type": "string",
+            "example": "galaxyhvh-verify.api.example.com"
+          },
+          "record_value": {
+            "type": "string",
+            "example": "verify_7f23cbb6500c31f7"
+          },
+          "ttl": {
+            "type": "number",
+            "example": 300
+          }
+        },
+        "required": [
+          "record_type",
+          "record_name",
+          "record_value",
+          "ttl"
+        ]
+      },
+      "AddDomainResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "$ref": "#/components/schemas/Domain"
+              },
+              "verification_instructions": {
+                "$ref": "#/components/schemas/DomainVerificationInstruction"
+              }
+            },
+            "required": [
+              "domain",
+              "verification_instructions"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AddDomainRequest": {
+        "type": "object",
+        "properties": {
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 253,
+            "example": "api.example.com"
+          }
+        },
+        "required": [
+          "app_id",
+          "domain"
+        ]
+      },
+      "DomainResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Domain"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "VerifyDomainRequest": {
+        "type": "object",
+        "properties": {
+          "force_refresh": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "DomainActivationQueuedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "operation_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending"
+                ],
+                "example": "pending"
+              }
+            },
+            "required": [
+              "operation_id",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SetPrimaryDomainRequest": {
+        "type": "object",
+        "properties": {
+          "redirect_to_primary": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "DomainOperationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "DomainOperation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+          },
+          "action": {
+            "type": "string",
+            "example": "domain.activate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DomainOperationStatus"
+          },
+          "domain_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+          },
+          "error_code": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "retryable": {
+            "type": "boolean",
+            "example": false
+          },
+          "started_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": "2026-03-16T09:02:00Z"
+          },
+          "finished_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:01:59Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:02:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "status",
+          "domain_id",
+          "error_code",
+          "error_message",
+          "retryable",
+          "started_at",
+          "finished_at",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "DomainOperationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainOperation"
+          }
+        },
+        "required": [
+          "data"
         ]
       }
     },
@@ -5576,6 +5941,707 @@
                 "example": {
                   "error": "UPDATE_FAILED",
                   "message": "Failed to reset database user password"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "List domains by app",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "app_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Domain list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Add custom domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Domain added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Domain already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/verify": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Verify domain ownership",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Domain verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation/verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/activate": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Activate verified domain",
+        "description": "Queues DNS + ingress reconciliation and returns operation id.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Activation queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainActivationQueuedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Domain not eligible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Operation already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/set-primary": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Set primary domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrimaryDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Primary domain updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Domain not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}": {
+      "delete": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Remove domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Domain removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "domain_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "deleted",
+                        "domain_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domain-operations/{operationId}": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Get operation status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+            },
+            "required": true,
+            "name": "operationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainOperationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Operation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
