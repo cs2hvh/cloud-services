@@ -18,6 +18,9 @@
 /playwright-report
 /playwright/.cache
 tests/e2e/.auth/
+test-results*.json
+test-output.json
+vitest-report.json
 
 # next.js
 /.next/
