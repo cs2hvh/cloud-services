@@ -38,7 +38,7 @@ export interface ComputeCategory {
 export async function getComputeCategories(): Promise<ComputeCategory[] | null> {
   try {
     // Fetch featured compute products
-    const products = await Products.get_featured_by_service_type("compute");
+    const products = await Products.get_featured_by_service_type("kubernetes");
     
     if (products.length === 0) {
       return null; // Use component fallback

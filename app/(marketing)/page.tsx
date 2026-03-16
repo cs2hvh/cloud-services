@@ -6,6 +6,7 @@ import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
 // import { HomeFeaturesSection } from "@/components/home/features-section";
 import GlobalNetworkSection from "@/components/global-network-section";
+import FeatureSection from "@/components/feature-section";
 
 export default function Home() {
   return (
@@ -17,6 +18,12 @@ export default function Home() {
       
       {/* Hero Section */}
       <Hero />
+
+
+      {/* Feature section */}
+      <FeatureSection/>
+
+
       {/* Figma Services Section */}
       <ServicesSection />
       {/* Everything you build */}

@@ -120,7 +120,7 @@ const TABS = [
     imageAlt: "Object storage illustration",
   },
   {
-    id: "App-Deploy",
+    id: "app-deployment",
     label: "App Deploy",
     title: "App Deploy",
     heading: "Push code, we handle the rest",
