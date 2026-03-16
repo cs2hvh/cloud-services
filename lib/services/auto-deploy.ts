@@ -16,6 +16,7 @@ import { GitHubProvider } from '@/lib/providers/github';
 import { gitlabTokenManager } from '@/lib/providers/gitlab/token-manager';
 import { bitbucketTokenManager } from '@/lib/providers/bitbucket/token-manager';
 import { KubernetesInfoService } from './kubernetes-info';
+import { reconcileRuntimeEnv } from '@/lib/services/runtime-env-reconciler';
 
 export interface AutoDeployConfig {
   appId: string;
@@ -97,6 +98,23 @@ export class AutoDeployService {
       }));
       
       console.log(`[AutoDeploy] Found ${envVars.length} environment variables`);
+
+      const runtimeSync = await reconcileRuntimeEnv({
+        appName,
+        framework: framework ?? null,
+        envVars,
+        policy: 'strict',
+        action: 'secret_only',
+        // Keep existing runtime secret until the deployment pipeline applies the new manifest.
+        // This avoids transient failures if current pods still reference the secret.
+        cleanupWhenEmpty: false,
+        retryCount: 3,
+        retryDelayMs: 1000,
+        timeoutMs: 8000,
+      });
+      if (runtimeSync.status === 'failed') {
+        throw new Error(runtimeSync.error || runtimeSync.reason);
+      }
 
       // Step 4: Update Jenkins job configuration with fresh token
       console.log(`[AutoDeploy] Step 3/4: Updating Jenkins job config...`);

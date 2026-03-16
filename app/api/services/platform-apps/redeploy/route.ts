@@ -10,6 +10,7 @@ import { AppStatusService } from "@/lib/services/app-status";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
+import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 
 const redeploySchema = z.object({
   app_id: z.string().uuid(),
@@ -56,7 +57,6 @@ export async function POST(req: NextRequest) {
     }
 
     const app = existing.data;
-
     // Check if app is in a state that can be redeployed
     if (app.status === 'building') {
       return NextResponse.json(
@@ -84,6 +84,24 @@ export async function POST(req: NextRequest) {
       }));
       
       console.log(`[Redeploy] Found ${envVars.length} environment variables for ${app.name}`);
+
+      // Runtime secret sync is mandatory now that Jenkins no longer creates runtime secrets.
+      const runtimeSync = await reconcileRuntimeEnv({
+        appName: app.name,
+        framework: app.framework ?? null,
+        envVars,
+        policy: "strict",
+        action: "secret_only",
+        // Keep existing runtime secret until the deployment pipeline applies the new manifest.
+        // This avoids transient failures if current pods still reference the secret.
+        cleanupWhenEmpty: false,
+        retryCount: 3,
+        retryDelayMs: 1000,
+        timeoutMs: 8000,
+      });
+      if (runtimeSync.status === "failed") {
+        throw new Error(runtimeSync.error || runtimeSync.reason);
+      }
 
       // Get repository URL (database uses repository_url, not git_url)
       let gitUrl = (app as { repository_url?: string; git_url?: string }).repository_url || (app as { repository_url?: string; git_url?: string }).git_url;

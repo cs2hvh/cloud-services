@@ -58,7 +58,7 @@ export function createJavaPipeline(
   const port = containerPort ?? 8080;
 
   // Generate Kubernetes Secret for environment variables
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('java', port);
 
@@ -238,7 +238,7 @@ ${generateImageScanStage({ language: 'docker' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

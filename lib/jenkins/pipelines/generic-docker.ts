@@ -57,7 +57,7 @@ export function createDockerfilePipeline(
   }
 
   // Generate Kubernetes Secret for environment variables
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, envVars);
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
 
   const pipelineXml = `<?xml version='1.0' encoding='UTF-8'?>
@@ -217,7 +217,7 @@ ${generateImageScanStage({ language: 'docker' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

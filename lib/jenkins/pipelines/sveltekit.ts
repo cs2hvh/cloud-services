@@ -65,7 +65,7 @@ export function createSvelteKitPipeline(
   const serverEnvVars = envVars.filter(e => !e.key.startsWith('PUBLIC_'));
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, serverEnvVars);
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -304,7 +304,7 @@ ${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

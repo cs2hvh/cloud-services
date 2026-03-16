@@ -10,6 +10,7 @@ import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { GitHubProvider } from "@/lib/providers/github";
 import { getRatesForPlatformApp } from "@/config/pricing";
+import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 
 // Size order for validation (upsize only)
 const SIZE_ORDER: Record<string, number> = {
@@ -133,7 +134,6 @@ export async function POST(req: NextRequest) {
 
     const app = existing.data;
     const currentSize = app.size || "small";
-
     // Validate upsize only
     if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
       return NextResponse.json(
@@ -201,6 +201,23 @@ export async function POST(req: NextRequest) {
       }));
       
       console.log(`[Resize] Found ${envVars.length} environment variables`);
+
+      const runtimeSync = await reconcileRuntimeEnv({
+        appName: app.name,
+        framework: app.framework ?? null,
+        envVars,
+        policy: "strict",
+        action: "secret_only",
+        // Keep existing runtime secret until the deployment pipeline applies the new manifest.
+        // This avoids transient failures if current pods still reference the secret.
+        cleanupWhenEmpty: false,
+        retryCount: 3,
+        retryDelayMs: 1000,
+        timeoutMs: 8000,
+      });
+      if (runtimeSync.status === "failed") {
+        throw new Error(runtimeSync.error || runtimeSync.reason);
+      }
 
       // Update Jenkins job configuration with new size
       await JenkinsService.updateJobConfig(

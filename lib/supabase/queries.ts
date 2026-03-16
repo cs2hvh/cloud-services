@@ -2934,28 +2934,50 @@ export const Platform_Apps = {
       }
 
       const supabase = await createServiceClient();
-      
-      // Delete existing env vars for this app
-      await supabase
-        .from("platform_app_env_vars")
-        .delete()
-        .eq("app_id", app_id);
-      
-      // Insert new env vars with encrypted values
+
+      // Upsert first, then delete stale keys. This avoids full data loss on partial failures.
       if (env_vars.length > 0) {
         const encryptedEnvVars = env_vars.map(ev => ({
           app_id,
           key: ev.key,
           value: encryptEnvValue(ev.value), // Encrypt the value before storing
         }));
-        
-        const { error } = await supabase
+
+        const { error: upsertError } = await supabase
           .from("platform_app_env_vars")
-          .insert(encryptedEnvVars);
-        
-        if (error) return { success: false, error: error.message };
+          .upsert(encryptedEnvVars, { onConflict: "app_id,key" });
+
+        if (upsertError) return { success: false, error: upsertError.message };
+
+        const { data: existingRows, error: existingRowsError } = await supabase
+          .from("platform_app_env_vars")
+          .select("key")
+          .eq("app_id", app_id);
+
+        if (existingRowsError) return { success: false, error: existingRowsError.message };
+
+        const staleKeys = (existingRows || [])
+          .map((row: { key: string }) => row.key)
+          .filter((key) => !uniqueKeys.has(key));
+
+        if (staleKeys.length > 0) {
+          const { error: pruneError } = await supabase
+            .from("platform_app_env_vars")
+            .delete()
+            .eq("app_id", app_id)
+            .in("key", staleKeys);
+
+          if (pruneError) return { success: false, error: pruneError.message };
+        }
+      } else {
+        const { error: clearError } = await supabase
+          .from("platform_app_env_vars")
+          .delete()
+          .eq("app_id", app_id);
+
+        if (clearError) return { success: false, error: clearError.message };
       }
-      
+
       return { success: true };
     } catch (err) {
       return { success: false, error: String(err) };

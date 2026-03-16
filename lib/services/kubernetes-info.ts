@@ -12,6 +12,9 @@ import {
 } from '@kubernetes/client-node';
 import kubeConfig from '@/lib/kubernetes';
 
+// Kubernetes managedFields owner label for patch operations from this service.
+const K8S_FIELD_MANAGER = 'platform-app-controller';
+
 // Interfaces for structured data
 export interface PodInfo {
   name: string;
@@ -160,6 +163,74 @@ export class KubernetesInfoService {
     return parts.length > 1 ? parts[parts.length - 1] : 'latest';
   }
 
+  private static extractKubernetesStatusCode(error: unknown): number | undefined {
+    const err = error as {
+      statusCode?: number | string;
+      code?: number | string;
+      body?: {
+        code?: number | string;
+        statusCode?: number | string;
+      };
+      response?: {
+        statusCode?: number | string;
+        status?: number | string;
+        body?: {
+          code?: number | string;
+          statusCode?: number | string;
+        };
+      };
+    };
+
+    const raw =
+      err.statusCode ??
+      err.code ??
+      err.body?.statusCode ??
+      err.body?.code ??
+      err.response?.statusCode ??
+      err.response?.status ??
+      err.response?.body?.statusCode ??
+      err.response?.body?.code;
+    if (raw === undefined || raw === null) return undefined;
+
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  private static getKubernetesErrorText(error: unknown): string {
+    const err = error as {
+      message?: string;
+      body?: { message?: string; reason?: string };
+      response?: { body?: { message?: string; reason?: string } };
+    };
+
+    return [
+      err.message,
+      err.body?.reason,
+      err.body?.message,
+      err.response?.body?.reason,
+      err.response?.body?.message,
+    ]
+      .filter((v): v is string => typeof v === 'string' && v.length > 0)
+      .join(' ')
+      .toLowerCase();
+  }
+
+  private static isKubernetesNotFoundError(error: unknown): boolean {
+    const statusCode = this.extractKubernetesStatusCode(error);
+    if (statusCode === 404) return true;
+
+    const text = this.getKubernetesErrorText(error);
+    return text.includes('notfound') || text.includes('not found') || text.includes('404');
+  }
+
+  private static isKubernetesAlreadyExistsError(error: unknown): boolean {
+    const statusCode = this.extractKubernetesStatusCode(error);
+    if (statusCode === 409) return true;
+
+    const text = this.getKubernetesErrorText(error);
+    return text.includes('alreadyexists') || text.includes('already exists') || text.includes('409');
+  }
+
   /**
    * Patch the Deployment container image for an app.
    * Used for rollback (no build). Best-effort and returns structured status.
@@ -187,7 +258,7 @@ export class KubernetesInfoService {
           name: deploymentName,
           namespace,
           body: jsonPatch,
-          fieldManager: 'cloud-services',
+          fieldManager: K8S_FIELD_MANAGER,
           // @ts-expect-error - headers option is valid but not in type definition
           headers: {
             'Content-Type': 'application/json-patch+json',
@@ -202,6 +273,250 @@ export class KubernetesInfoService {
       console.error('[KubernetesInfoService] patchAppDeploymentImage error:', errorMessage);
       return { success: false, error: errorMessage };
     }
+  }
+
+  /**
+   * Sync only the Kubernetes Secret for app environment variables.
+   * Does not patch deployment envFrom or restart pods.
+   */
+  static async syncEnvSecret(
+    appName: string,
+    envVars: Array<{ key: string; value: string }>,
+    namespace = 'default'
+  ): Promise<{ success: boolean; error?: string }> {
+    const secretName = `${appName}-env-secret`;
+
+    try {
+      const { core } = this.getApis();
+
+      // Build secret data from normalized string values
+      const secretData: Record<string, string> = {};
+      for (const env of envVars) {
+        const value = typeof env.value === 'string'
+          ? env.value
+          : typeof env.value === 'object'
+            ? JSON.stringify(env.value)
+            : String(env.value);
+        secretData[env.key] = Buffer.from(value, 'utf8').toString('base64');
+      }
+
+      let secretExists = false;
+      let existingSecret: {
+        metadata?: {
+          resourceVersion?: string;
+          labels?: Record<string, string>;
+          annotations?: Record<string, string>;
+        };
+      } | null = null;
+
+      try {
+        existingSecret = await core.readNamespacedSecret({ name: secretName, namespace });
+        secretExists = true;
+      } catch (error) {
+        if (!this.isKubernetesNotFoundError(error)) {
+          throw error;
+        }
+      }
+
+      if (envVars.length > 0) {
+        if (secretExists) {
+          await core.replaceNamespacedSecret({
+            name: secretName,
+            namespace,
+            body: {
+              apiVersion: 'v1',
+              kind: 'Secret',
+              metadata: {
+                name: secretName,
+                namespace,
+                ...(existingSecret?.metadata?.resourceVersion
+                  ? { resourceVersion: existingSecret.metadata.resourceVersion }
+                  : {}),
+                ...(existingSecret?.metadata?.labels
+                  ? { labels: existingSecret.metadata.labels }
+                  : {}),
+                ...(existingSecret?.metadata?.annotations
+                  ? { annotations: existingSecret.metadata.annotations }
+                  : {}),
+              },
+              type: 'Opaque',
+              data: secretData,
+            },
+          });
+          console.log(`[KubernetesInfoService] ✅ Replaced secret ${secretName} with ${envVars.length} vars`);
+        } else {
+          try {
+            await core.createNamespacedSecret({
+              namespace,
+              body: {
+                apiVersion: 'v1',
+                kind: 'Secret',
+                metadata: {
+                  name: secretName,
+                  namespace,
+                },
+                type: 'Opaque',
+                data: secretData,
+              },
+            });
+            console.log(`[KubernetesInfoService] ✅ Created secret ${secretName} with ${envVars.length} vars`);
+          } catch (createError) {
+            // Another actor may have created the secret between our read and create.
+            // In that case, replace to converge to the desired state.
+            if (!this.isKubernetesAlreadyExistsError(createError)) {
+              throw createError;
+            }
+
+            existingSecret = await core.readNamespacedSecret({ name: secretName, namespace });
+            await core.replaceNamespacedSecret({
+              name: secretName,
+              namespace,
+              body: {
+                apiVersion: 'v1',
+                kind: 'Secret',
+                metadata: {
+                  name: secretName,
+                  namespace,
+                  ...(existingSecret?.metadata?.resourceVersion
+                    ? { resourceVersion: existingSecret.metadata.resourceVersion }
+                    : {}),
+                  ...(existingSecret?.metadata?.labels
+                    ? { labels: existingSecret.metadata.labels }
+                    : {}),
+                  ...(existingSecret?.metadata?.annotations
+                    ? { annotations: existingSecret.metadata.annotations }
+                    : {}),
+                },
+                type: 'Opaque',
+                data: secretData,
+              },
+            });
+            console.log(`[KubernetesInfoService] ✅ Replaced secret ${secretName} after concurrent create`);
+          }
+        }
+      } else if (secretExists) {
+        try {
+          await core.deleteNamespacedSecret({ name: secretName, namespace });
+          console.log(`[KubernetesInfoService] ✅ Deleted secret ${secretName} (no env vars)`);
+        } catch (deleteError) {
+          // Treat as success if already deleted by another actor.
+          if (!this.isKubernetesNotFoundError(deleteError)) {
+            throw deleteError;
+          }
+        }
+      }
+
+      return { success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] syncEnvSecret error:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Reconcile only Deployment envFrom reference to the app secret.
+   * Does not update secret data and does not restart pods.
+   */
+  private static async reconcileDeploymentEnvFrom(
+    appName: string,
+    hasRuntimeEnv: boolean,
+    namespace = 'default'
+  ): Promise<{ success: boolean; error?: string }> {
+    const secretName = `${appName}-env-secret`;
+    const deploymentName = `${appName}-app`;
+
+    try {
+      const { apps } = this.getApis();
+
+      let deployment: Awaited<ReturnType<AppsV1Api['readNamespacedDeployment']>>;
+      try {
+        deployment = await apps.readNamespacedDeployment({
+          name: deploymentName,
+          namespace,
+        });
+      } catch (error) {
+        // Deployment may not exist yet for pre-build flows. Treat as no-op success.
+        if (this.isKubernetesNotFoundError(error)) {
+          console.log(`[KubernetesInfoService] Deployment ${deploymentName} not found; skipping envFrom reconciliation`);
+          return { success: true };
+        }
+        throw error;
+      }
+
+      const containers = deployment.spec?.template?.spec?.containers || [];
+      const mainContainer = containers[0];
+      const envFromArray = mainContainer?.envFrom || [];
+
+      const secretIndex = envFromArray.findIndex(
+        (ef) => ef.secretRef?.name === secretName
+      );
+      const hasEnvFrom = secretIndex !== -1;
+
+      if (hasRuntimeEnv && !hasEnvFrom) {
+        const envFromPatch = mainContainer?.envFrom
+          ? [
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom/-',
+                value: { secretRef: { name: secretName } },
+              },
+            ]
+          : [
+              {
+                op: 'add',
+                path: '/spec/template/spec/containers/0/envFrom',
+                value: [{ secretRef: { name: secretName } }],
+              },
+            ];
+
+        await apps.patchNamespacedDeployment({
+          name: deploymentName,
+          namespace,
+          body: envFromPatch,
+          fieldManager: K8S_FIELD_MANAGER,
+          // @ts-expect-error - headers option is valid but not in type definition
+          headers: {
+            'Content-Type': 'application/json-patch+json',
+          },
+        });
+        console.log(`[KubernetesInfoService] ✅ Added envFrom secretRef to deployment ${deploymentName}`);
+      } else if (!hasRuntimeEnv && hasEnvFrom) {
+        const removePatch =
+          envFromArray.length === 1
+            ? [{ op: 'remove', path: '/spec/template/spec/containers/0/envFrom' }]
+            : [{ op: 'remove', path: `/spec/template/spec/containers/0/envFrom/${secretIndex}` }];
+
+        await apps.patchNamespacedDeployment({
+          name: deploymentName,
+          namespace,
+          body: removePatch,
+          fieldManager: K8S_FIELD_MANAGER,
+          // @ts-expect-error - headers option is valid but not in type definition
+          headers: {
+            'Content-Type': 'application/json-patch+json',
+          },
+        });
+        console.log(`[KubernetesInfoService] ✅ Removed envFrom secretRef from deployment ${deploymentName}`);
+      }
+
+      return { success: true };
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('[KubernetesInfoService] reconcileDeploymentEnvFrom error:', errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Public wrapper for envFrom-only reconciliation (no restart).
+   */
+  static async reconcileEnvFromReference(
+    appName: string,
+    hasRuntimeEnv: boolean,
+    namespace = 'default'
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.reconcileDeploymentEnvFrom(appName, hasRuntimeEnv, namespace);
   }
 
   /**
@@ -221,162 +536,33 @@ export class KubernetesInfoService {
     envVars: Array<{ key: string; value: string }>,
     namespace = 'default'
   ): Promise<{ success: boolean; error?: string }> {
-    const secretName = `${appName}-env-secret`;
     const deploymentName = `${appName}-app`;
 
     console.log(`[KubernetesInfoService] Updating env vars for ${appName} (${envVars.length} vars)`);
 
     try {
-      const { core, apps } = this.getApis();
+      const secretResult = await this.syncEnvSecret(appName, envVars, namespace);
+      if (!secretResult.success) {
+        return secretResult;
+      }
 
-      // ========================================
-      // Step 1: Build the new Secret data
-      // Ensure all values are strings (K8s stringData requires string values)
-      // ========================================
-      const stringData: Record<string, string> = {};
-      for (const env of envVars) {
-        // Safety check: convert any non-string values to string
-        const value = typeof env.value === 'string' 
-          ? env.value 
-          : typeof env.value === 'object' 
-            ? JSON.stringify(env.value) 
-            : String(env.value);
-        stringData[env.key] = value;
+      const { apps } = this.getApis();
+
+      // Step 4: Ensure deployment envFrom is consistent with runtime env secret.
+      const envFromResult = await this.reconcileDeploymentEnvFrom(appName, envVars.length > 0, namespace);
+      if (!envFromResult.success) {
+        return envFromResult;
       }
 
       // ========================================
-      // Step 2: Check if secret exists
-      // ========================================
-      let secretExists = false;
-      try {
-        await core.readNamespacedSecret({ name: secretName, namespace });
-        secretExists = true;
-      } catch {
-        // Secret doesn't exist
-        secretExists = false;
-      }
-
-      // ========================================
-      // Step 3: Create or Replace the Secret
-      // Delete and recreate to avoid K8s API issues with stringData on replace
-      // ========================================
-      if (secretExists) {
-        // Delete existing secret first
-        await core.deleteNamespacedSecret({ name: secretName, namespace });
-        console.log(`[KubernetesInfoService] Deleted old secret ${secretName}`);
-      }
-
-      if (envVars.length > 0) {
-        // Create new secret with env vars
-        await core.createNamespacedSecret({
-          namespace,
-          body: {
-            apiVersion: 'v1',
-            kind: 'Secret',
-            metadata: {
-              name: secretName,
-              namespace,
-            },
-            type: 'Opaque',
-            stringData,
-          },
-        });
-        console.log(`[KubernetesInfoService] ✅ Created secret ${secretName} with ${envVars.length} vars`);
-      }
-
-      // ========================================
-      // Step 4: Check if deployment has envFrom referencing our secret
-      // If not, we need to add it so the pods can read the env vars
+      // Step 5: Trigger rolling restart
+      // Patch the restartedAt annotation to force pods to restart
       // ========================================
       const deployment = await apps.readNamespacedDeployment({
         name: deploymentName,
         namespace,
       });
 
-      const containers = deployment.spec?.template?.spec?.containers || [];
-      const mainContainer = containers[0];
-      
-      // Check if envFrom already references our secret
-      let hasEnvFrom = false;
-      if (mainContainer?.envFrom) {
-        hasEnvFrom = mainContainer.envFrom.some(
-          ef => ef.secretRef?.name === secretName
-        );
-      }
-
-      // ========================================
-      // Step 5: Patch deployment to add envFrom if missing and we have env vars
-      // ========================================
-      if (envVars.length > 0 && !hasEnvFrom) {
-        console.log(`[KubernetesInfoService] Adding envFrom to deployment (was not referencing secret)`);
-        
-        // Use JSON patch to add envFrom
-        // If envFrom doesn't exist, we add it as an array
-        // If it exists but doesn't have our secret, we append to it
-        const envFromPatch = mainContainer?.envFrom 
-          ? [
-              // Append to existing envFrom array
-              {
-                op: 'add',
-                path: '/spec/template/spec/containers/0/envFrom/-',
-                value: { secretRef: { name: secretName } },
-              },
-            ]
-          : [
-              // Create new envFrom array
-              {
-                op: 'add',
-                path: '/spec/template/spec/containers/0/envFrom',
-                value: [{ secretRef: { name: secretName } }],
-              },
-            ];
-
-        await apps.patchNamespacedDeployment({
-          name: deploymentName,
-          namespace,
-          body: envFromPatch,
-          fieldManager: 'cloud-services',
-          // @ts-expect-error - headers option is valid but not in type definition
-          headers: {
-            'Content-Type': 'application/json-patch+json',
-          },
-        });
-        console.log(`[KubernetesInfoService] ✅ Added envFrom secretRef to deployment`);
-      } else if (envVars.length === 0 && hasEnvFrom) {
-        // Remove envFrom reference if no env vars
-        console.log(`[KubernetesInfoService] Removing envFrom from deployment (no env vars)`);
-        
-        // Find the index of our secret in envFrom array
-        const envFromArray = mainContainer?.envFrom || [];
-        const secretIndex = envFromArray.findIndex(
-          ef => ef.secretRef?.name === secretName
-        );
-        
-        if (secretIndex !== -1) {
-          // If this is the only entry, remove the entire envFrom
-          // Otherwise, remove just this entry
-          const removePatch = envFromArray.length === 1
-            ? [{ op: 'remove', path: '/spec/template/spec/containers/0/envFrom' }]
-            : [{ op: 'remove', path: `/spec/template/spec/containers/0/envFrom/${secretIndex}` }];
-
-          await apps.patchNamespacedDeployment({
-            name: deploymentName,
-            namespace,
-            body: removePatch,
-            fieldManager: 'cloud-services',
-            // @ts-expect-error - headers option is valid but not in type definition
-            headers: {
-              'Content-Type': 'application/json-patch+json',
-            },
-          });
-          console.log(`[KubernetesInfoService] ✅ Removed envFrom secretRef from deployment`);
-        }
-      }
-
-      // ========================================
-      // Step 6: Trigger rolling restart
-      // Patch the restartedAt annotation to force pods to restart
-      // ========================================
       const annotations = deployment.spec?.template?.metadata?.annotations;
       const hasAnnotations = !!annotations;
       const hasRestartAnnotation = annotations?.['kubectl.kubernetes.io/restartedAt'] !== undefined;
@@ -417,7 +603,7 @@ export class KubernetesInfoService {
         name: deploymentName,
         namespace,
         body: jsonPatch,
-        fieldManager: 'cloud-services',
+        fieldManager: K8S_FIELD_MANAGER,
         // @ts-expect-error - headers option is valid but not in type definition
         headers: {
           'Content-Type': 'application/json-patch+json',

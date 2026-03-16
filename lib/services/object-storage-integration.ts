@@ -18,7 +18,8 @@ import { ObjectStorage_Integrations } from "@/lib/supabase/queries/object_storag
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { Projects } from "@/lib/supabase/queries/projects";
-import { KubernetesInfoService } from "./kubernetes-info";
+import type { EnvApplyMode } from "@/lib/env/lifecycle";
+import { applyLifecycleAwareIntegrationEnvSync } from "./integration-env-sync";
 import { Encryption } from "@/config/functions";
 import type { 
   ObjectSpaceBucket,
@@ -44,6 +45,11 @@ export interface StorageLinkResult {
   integration_id?: string;
   injected_vars?: string[];
   redeploy_triggered?: boolean;
+  applied_live?: boolean;
+  requires_redeploy?: boolean;
+  apply_mode?: EnvApplyMode;
+  hint?: string;
+  reason?: string;
   conflicts?: string[];
   error?: string;
   code?: string;
@@ -59,6 +65,11 @@ export interface StorageUnlinkResult {
   success: boolean;
   removed_vars?: string[];
   redeploy_triggered?: boolean;
+  applied_live?: boolean;
+  requires_redeploy?: boolean;
+  apply_mode?: EnvApplyMode;
+  hint?: string;
+  reason?: string;
   error?: string;
   code?: string;
 }
@@ -366,34 +377,16 @@ export class ObjectStorageIntegrationService {
       await ObjectStorage_Integrations.mark_linked(integration.id, generated.keys);
 
       // ========================================
-      // Step 10: Update K8s Secret and trigger rolling restart
+      // Step 10: Apply env vars using lifecycle-aware reconciliation
       // ========================================
-      let redeployTriggered = false;
-      if (app.status === "running" || app.status === "failed") {
-        try {
-          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-            app.name,
-            mergedVars
-          );
-          redeployTriggered = restartResult.success;
-          
-          if (restartResult.success) {
-            console.log(`[ObjectStorageIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
-            
-            // Sync status from K8s after restart
-            const { AppStatusService } = await import('./app-status');
-            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-            if (syncResult.changed) {
-              console.log(`[ObjectStorageIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
-            }
-          } else {
-            console.error(`[ObjectStorageIntegrationService] K8s update failed:`, restartResult.error);
-          }
-        } catch (deployError) {
-          console.error(`[ObjectStorageIntegrationService] K8s update failed:`, deployError);
-          // Don't fail the link - env vars saved to DB, will apply on next full deploy
-        }
-      }
+      const syncOutcome = await applyLifecycleAwareIntegrationEnvSync({
+        appId: app_id,
+        appName: app.name,
+        appStatus: app.status,
+        framework: app.framework,
+        envVars: mergedVars,
+        logPrefix: "ObjectStorageIntegrationService",
+      });
 
       // ========================================
       // Step 11: Log activity
@@ -412,7 +405,12 @@ export class ObjectStorageIntegrationService {
         success: true,
         integration_id: integration.id,
         injected_vars: generated.keys,
-        redeploy_triggered: redeployTriggered,
+        redeploy_triggered: syncOutcome.redeployTriggered,
+        applied_live: syncOutcome.appliedLive,
+        requires_redeploy: syncOutcome.requiresRedeploy,
+        apply_mode: syncOutcome.applyMode,
+        hint: syncOutcome.hint,
+        reason: syncOutcome.reason,
       };
 
     } catch (error) {
@@ -494,32 +492,16 @@ export class ObjectStorageIntegrationService {
       await ObjectStorage_Integrations.mark_unlinked(integration.id, user_id);
 
       // ========================================
-      // Step 6: Update K8s Secret and trigger rolling restart
+      // Step 6: Apply env vars using lifecycle-aware reconciliation
       // ========================================
-      let redeployTriggered = false;
-      if (app.status === "running" || app.status === "failed") {
-        try {
-          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-            app.name,
-            filteredVars
-          );
-          redeployTriggered = restartResult.success;
-          
-          if (restartResult.success) {
-            console.log(`[ObjectStorageIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
-            
-            const { AppStatusService } = await import('./app-status');
-            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-            if (syncResult.changed) {
-              console.log(`[ObjectStorageIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
-            }
-          } else {
-            console.error(`[ObjectStorageIntegrationService] K8s update failed:`, restartResult.error);
-          }
-        } catch (deployError) {
-          console.error(`[ObjectStorageIntegrationService] K8s update failed:`, deployError);
-        }
-      }
+      const syncOutcome = await applyLifecycleAwareIntegrationEnvSync({
+        appId: app_id,
+        appName: app.name,
+        appStatus: app.status,
+        framework: app.framework,
+        envVars: filteredVars,
+        logPrefix: "ObjectStorageIntegrationService",
+      });
 
       // ========================================
       // Step 7: Log activity
@@ -537,7 +519,12 @@ export class ObjectStorageIntegrationService {
       return {
         success: true,
         removed_vars: integration.injected_env_keys || [],
-        redeploy_triggered: redeployTriggered,
+        redeploy_triggered: syncOutcome.redeployTriggered,
+        applied_live: syncOutcome.appliedLive,
+        requires_redeploy: syncOutcome.requiresRedeploy,
+        apply_mode: syncOutcome.applyMode,
+        hint: syncOutcome.hint,
+        reason: syncOutcome.reason,
       };
 
     } catch (error) {

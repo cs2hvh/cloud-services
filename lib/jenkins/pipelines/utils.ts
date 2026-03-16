@@ -3,7 +3,7 @@
  * 
  * PLATFORM DEPLOYMENT CONTRACT:
  * 1. Build stage - builds the container image
- * 2. Create Environment Secret stage - creates/updates K8s secret
+ * 2. Runtime secret sync is handled by backend API/Kubernetes service (NOT Jenkins templates)
  * 3. Deploy to Kubernetes stage - deploys the application
  * 
  * All pipelines MUST follow this order. No exceptions.
@@ -20,41 +20,26 @@ export interface EnvVar {
 export type Runtime = 'node' | 'python' | 'java';
 
 /**
- * Generate Kubernetes Secret YAML for environment variables
- * Secrets are base64 encoded automatically by Kubernetes when using stringData
+ * Generate runtime secret metadata for deployment manifests.
+ * Secret values are intentionally not embedded in Jenkins pipeline XML.
  * 
  * @param appName - The application name (used for secret naming)
- * @param envVars - User-defined environment variables
- * @returns Object with secretYaml, secretName, and hasSecret flag
+ * @param envVars - User-defined environment variables (used only to detect whether runtime secret ref is needed)
+ * @returns Secret reference metadata and whether Jenkins should create the secret (always false)
  */
 export function generateEnvSecret(
   appName: string,
   envVars: EnvVar[]
-): { secretYaml: string; secretName: string; hasSecret: boolean } {
+): { secretYaml: string; secretName: string; hasSecret: boolean; createInPipeline: boolean } {
   const secretName = `${appName}-env-secret`;
   
   if (!envVars || envVars.length === 0) {
-    return { secretYaml: '', secretName, hasSecret: false };
+    return { secretYaml: '', secretName, hasSecret: false, createInPipeline: false };
   }
-  
-  // Generate stringData entries (Kubernetes will base64 encode automatically)
-  const stringDataEntries = envVars.map(env => {
-    // Escape special characters for YAML
-    // Single quotes in YAML need to be escaped as ''
-    const escapedValue = env.value.replace(/'/g, "''");
-    return `  ${env.key}: '${escapedValue}'`;
-  }).join('\n');
-  
-  const secretYaml = `apiVersion: v1
-kind: Secret
-metadata:
-  name: ${secretName}
-  namespace: default
-type: Opaque
-stringData:
-${stringDataEntries}`;
-  
-  return { secretYaml, secretName, hasSecret: true };
+
+  // Runtime values are synced by backend (KubernetesInfoService) before deployment.
+  // Keep Jenkins pipeline XML free of secret values.
+  return { secretYaml: '', secretName, hasSecret: true, createInPipeline: false };
 }
 
 /**

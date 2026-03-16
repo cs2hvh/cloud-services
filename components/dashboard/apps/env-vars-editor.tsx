@@ -29,6 +29,12 @@ interface EnvVarsEditorProps {
   onChange: (vars: EnvVar[]) => void;
 }
 
+const ENV_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function normalizeEnvKey(key: string): string {
+  return key.trim().replace(/[^A-Za-z0-9_]/g, "_");
+}
+
 // Common environment variable suggestions
 const ENV_SUGGESTIONS = [
   'DATABASE_URL', 'DB_HOST', 'DB_PORT', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
@@ -79,7 +85,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
     if (field === 'key' && pastedText.includes('=') && !pastedText.includes('\n')) {
       e.preventDefault();
       const eqIdx = pastedText.indexOf('=');
-      const key = pastedText.substring(0, eqIdx).trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      const key = normalizeEnvKey(pastedText.substring(0, eqIdx));
       let value = pastedText.substring(eqIdx + 1).trim();
       // Remove quotes if present
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
@@ -101,7 +107,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
   // Validation
   const validateKey = (key: string): { valid: boolean; error?: string } => {
     if (!key) return { valid: true };
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+    if (!ENV_KEY_REGEX.test(key)) {
       return { valid: false, error: 'Invalid format' };
     }
     if (envVars.filter(e => e.key === key).length > 1) {
@@ -152,7 +158,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
       const eqIdx = trimmed.indexOf('=');
       if (eqIdx === -1) continue;
       
-      const key = trimmed.substring(0, eqIdx).trim();
+      const key = normalizeEnvKey(trimmed.substring(0, eqIdx));
       let value = trimmed.substring(eqIdx + 1).trim();
       
       if ((value.startsWith('"') && value.endsWith('"')) ||
@@ -160,7 +166,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
         value = value.slice(1, -1);
       }
       
-      if (key) {
+      if (key && ENV_KEY_REGEX.test(key)) {
         result.push({ key, value, visible: false });
       }
     }

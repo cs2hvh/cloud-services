@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { NAMING_RULES } from "./constants";
+import {
+  ENV_KEY_REGEX,
+  MAX_ENV_KEY_LENGTH,
+  MAX_ENV_VALUE_LENGTH,
+  MAX_ENV_VARS,
+} from "@/lib/env/lifecycle";
 
 // Reserved names that cannot be used for apps (DNS, K8s, system conflicts)
 const RESERVED_APP_NAMES = [
@@ -51,6 +57,40 @@ const appNameValidation = z
 
 // Validation schemas for platform apps
 
+const envVarItemSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1, "Environment variable key is required")
+    .max(MAX_ENV_KEY_LENGTH, `Environment variable key must be <= ${MAX_ENV_KEY_LENGTH} characters`)
+    .regex(
+      ENV_KEY_REGEX,
+      "Environment variable key must use letters, digits, and underscores"
+    ),
+  value: z
+    .string()
+    .min(1, "Environment variable value is required")
+    .max(MAX_ENV_VALUE_LENGTH, `Environment variable value must be <= ${MAX_ENV_VALUE_LENGTH} characters`),
+});
+
+const envVarListSchema = z
+  .array(envVarItemSchema)
+  .max(MAX_ENV_VARS, `Too many environment variables (max ${MAX_ENV_VARS})`)
+  .superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    for (const [idx, item] of items.entries()) {
+      if (seen.has(item.key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate environment variable key: ${item.key}`,
+          path: [idx, "key"],
+        });
+      } else {
+        seen.add(item.key);
+      }
+    }
+  });
+
 export const createPlatformAppSchema = z.object({
   name: appNameValidation,
   
@@ -92,12 +132,7 @@ export const createPlatformAppSchema = z.object({
   
   project_id: z.string().uuid("Project ID must be a valid UUID").optional(),
   
-  env_vars: z.array(
-    z.object({
-      key: z.string().min(1, "Environment variable key is required"),
-      value: z.string().min(1, "Environment variable value is required"),
-    })
-  ).optional().default([]),
+  env_vars: envVarListSchema.optional().default([]),
   size: z.enum(["small", "medium", "large"]).optional().default("small"),
   auto_deploy: z.boolean().optional().default(false),
   deploy_branch: z.string().optional(),
@@ -139,12 +174,7 @@ export type GetPlatformAppPayload = z.infer<typeof getPlatformAppSchema>;
 
 export const updateEnvVarsSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
-  env_vars: z.array(
-    z.object({
-      key: z.string().min(1, "Environment variable key is required"),
-      value: z.string().min(1, "Environment variable value is required"),
-    })
-  ),
+  env_vars: envVarListSchema,
 });
 
 export type UpdateEnvVarsPayload = z.infer<typeof updateEnvVarsSchema>;

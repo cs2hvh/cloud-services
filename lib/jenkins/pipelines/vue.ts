@@ -60,7 +60,7 @@ export function createVuePipeline(
   const clientEnvVars = envVars.filter(e => e.key.startsWith('VITE_'));
 
   // Generate empty Kubernetes Secret (Vue.js doesn't support runtime server vars)
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, []);
+  const { secretYaml, secretName, createInPipeline } = generateEnvSecret(name, []);
   const envFromSection = generateEnvFromSection(secretName, false);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -298,7 +298,7 @@ ${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {

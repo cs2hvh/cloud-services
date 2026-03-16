@@ -7,6 +7,7 @@ import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
 import { InfrastructureCleanupService } from "./infrastructure-cleanup";
 import { AppStatusService } from "./app-status";
+import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { randomBytes } from "crypto";
 
 // Generate a random ID
@@ -44,6 +45,28 @@ export interface DeploymentResult {
 }
 
 export class DeploymentService {
+  private static async syncRuntimeEnvSecret(
+    appName: string,
+    framework: string | undefined,
+    envVars: Array<{ key: string; value: string }>
+  ): Promise<void> {
+    const syncResult = await reconcileRuntimeEnv({
+      appName,
+      framework: framework ?? null,
+      envVars,
+      policy: "strict",
+      action: "secret_only",
+      cleanupWhenEmpty: false,
+      retryCount: 3,
+      retryDelayMs: 1000,
+      timeoutMs: 8000,
+    });
+
+    if (syncResult.status === "failed") {
+      throw new Error(syncResult.error || "Failed to sync runtime environment secret");
+    }
+  }
+
   /**
    * Get standard container port based on framework
    */
@@ -153,6 +176,9 @@ export class DeploymentService {
         
         // Get env vars to pass to Jenkins/Kubernetes
         const envVarsToPass = config.env_vars || [];
+
+        // Sync runtime secrets via backend service (do not embed runtime secret values in Jenkins job XML).
+        await this.syncRuntimeEnvSecret(config.name, config.framework, envVarsToPass);
         
         await JenkinsService.createJob(
           config.name,

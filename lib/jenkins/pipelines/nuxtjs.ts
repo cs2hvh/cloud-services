@@ -128,16 +128,16 @@ export function createNuxtJsPipeline(
   // Use provided container port or default to 3000 (Nuxt 3 with Nitro)
   const port = containerPort ?? 3000;
 
-  // Split env vars: NUXT_PUBLIC_*/PUBLIC_* → client-side (build args), others → server-side (K8s Secrets)
+  // Split env vars: NUXT_PUBLIC_*/PUBLIC_*/VITE_* → client-side (build args), others → server-side (K8s Secrets)
   const clientEnvVars = envVars.filter(e => 
-    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_')
+    e.key.startsWith('NUXT_PUBLIC_') || e.key.startsWith('PUBLIC_') || e.key.startsWith('VITE_')
   );
   const serverEnvVars = envVars.filter(e => 
-    !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('PUBLIC_')
+    !e.key.startsWith('NUXT_PUBLIC_') && !e.key.startsWith('PUBLIC_') && !e.key.startsWith('VITE_')
   );
 
   // Generate Kubernetes Secret for SERVER-SIDE environment variables only
-  const { secretYaml, secretName, hasSecret } = generateEnvSecret(name, serverEnvVars);
+  const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, serverEnvVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
   const defaultEnvYaml = generateRuntimeDefaultEnvYaml('node', port);
 
@@ -326,7 +326,7 @@ ${generateImageScanStage({ language: 'node' })}
 
     stage('Create Environment Secret') {
       when {
-        expression { return ${hasSecret} }
+        expression { return ${createInPipeline} }
       }
       steps {
         container('kubectl') {
