@@ -148,6 +148,25 @@ export async function POST(req: NextRequest) {
     }
 
     // Success response
+    const hasLifecycleFields =
+      typeof result.applied_live === "boolean" || typeof result.requires_redeploy === "boolean";
+    const ignoredByPipeline =
+      hasLifecycleFields &&
+      result.applied_live === false &&
+      result.requires_redeploy === false &&
+      result.apply_mode === "persisted_only";
+    const message = ignoredByPipeline
+      ? "Bucket linked successfully, but injected keys are ignored by this framework pipeline."
+      : hasLifecycleFields
+        ? result.applied_live
+          ? result.requires_redeploy
+            ? "Bucket linked successfully. Runtime changes are live; redeploy to apply build-time variables."
+            : "Bucket linked successfully. Changes applied with app restart."
+          : result.requires_redeploy
+            ? "Bucket linked successfully. Changes are saved; redeploy to apply them."
+            : `Bucket linked successfully. ${result.injected_vars?.length || 0} environment variables injected.`
+        : `Bucket linked successfully. ${result.injected_vars?.length || 0} environment variables injected.`;
+
     if (result.success) {
       // Create audit log
       try {
@@ -166,7 +185,10 @@ export async function POST(req: NextRequest) {
           },
           metadata: { 
             operation: 'bucket_linked',
-            redeploy_triggered: result.redeploy_triggered 
+            redeploy_triggered: result.redeploy_triggered,
+            applied_live: result.applied_live,
+            requires_redeploy: result.requires_redeploy,
+            apply_mode: result.apply_mode,
           },
           ...context,
         });
@@ -180,7 +202,12 @@ export async function POST(req: NextRequest) {
       integration_id: result.integration_id,
       injected_vars: result.injected_vars,
       redeploy_triggered: result.redeploy_triggered,
-      message: `Bucket linked successfully. ${result.injected_vars?.length || 0} environment variables injected.`,
+      applied_live: result.applied_live,
+      requires_redeploy: result.requires_redeploy,
+      apply_mode: result.apply_mode,
+      hint: result.hint,
+      reason: result.reason,
+      message,
     });
 
   } catch (error) {

@@ -120,11 +120,35 @@ export async function POST(req: NextRequest) {
     }
 
     // Success response
+    const hasLifecycleFields =
+      typeof result.applied_live === "boolean" || typeof result.requires_redeploy === "boolean";
+    const ignoredByPipeline =
+      hasLifecycleFields &&
+      result.applied_live === false &&
+      result.requires_redeploy === false &&
+      result.apply_mode === "persisted_only";
+    const message = ignoredByPipeline
+      ? "Bucket unlinked successfully, but affected keys are ignored by this framework pipeline."
+      : hasLifecycleFields
+        ? result.applied_live
+          ? result.requires_redeploy
+            ? "Bucket unlinked successfully. Runtime changes are live; redeploy to apply build-time variables."
+            : "Bucket unlinked successfully. Changes applied with app restart."
+          : result.requires_redeploy
+            ? "Bucket unlinked successfully. Changes are saved; redeploy to apply them."
+            : `Bucket unlinked successfully. ${result.removed_vars?.length || 0} environment variables removed.`
+        : `Bucket unlinked successfully. ${result.removed_vars?.length || 0} environment variables removed.`;
+
     return NextResponse.json({
       success: true,
       removed_vars: result.removed_vars,
       redeploy_triggered: result.redeploy_triggered,
-      message: `Bucket unlinked successfully. ${result.removed_vars?.length || 0} environment variables removed.`,
+      applied_live: result.applied_live,
+      requires_redeploy: result.requires_redeploy,
+      apply_mode: result.apply_mode,
+      hint: result.hint,
+      reason: result.reason,
+      message,
     });
 
   } catch (error) {

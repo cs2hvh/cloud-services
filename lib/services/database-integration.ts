@@ -19,7 +19,8 @@ import {
   Database_Clusters, 
   Projects 
 } from "@/lib/supabase/queries";
-import { KubernetesInfoService } from "./kubernetes-info";
+import type { EnvApplyMode } from "@/lib/env/lifecycle";
+import { applyLifecycleAwareIntegrationEnvSync } from "./integration-env-sync";
 import { Encryption } from "@/config/functions";
 import type { 
   Database_Connection, 
@@ -45,6 +46,11 @@ export interface LinkResult {
   integration_id?: string;
   injected_vars?: string[];
   redeploy_triggered?: boolean;
+  applied_live?: boolean;
+  requires_redeploy?: boolean;
+  apply_mode?: EnvApplyMode;
+  hint?: string;
+  reason?: string;
   app_name?: string;
   database_name?: string;
   conflicts?: string[];
@@ -62,6 +68,11 @@ export interface UnlinkResult {
   success: boolean;
   removed_vars?: string[];
   redeploy_triggered?: boolean;
+  applied_live?: boolean;
+  requires_redeploy?: boolean;
+  apply_mode?: EnvApplyMode;
+  hint?: string;
+  reason?: string;
   error?: string;
   code?: string;
 }
@@ -90,7 +101,7 @@ export interface LinkedApp {
 // ============================================
 
 export class DatabaseIntegrationService {
-  
+ 
   /**
    * Get the encryption key from environment
    */
@@ -472,34 +483,16 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_linked(integration.id, generated.keys);
 
       // ========================================
-      // Step 10: Update K8s Secret and trigger rolling restart
+      // Step 10: Apply env vars using lifecycle-aware reconciliation
       // ========================================
-      let redeployTriggered = false;
-      if (app.status === "running" || app.status === "failed") {
-        try {
-          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-            app.name,
-            mergedVars
-          );
-          redeployTriggered = restartResult.success;
-          
-          if (restartResult.success) {
-            console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
-            
-            // Sync status from K8s after restart
-            const { AppStatusService } = await import('./app-status');
-            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-            if (syncResult.changed) {
-              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
-            }
-          } else {
-            console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
-          }
-        } catch (deployError) {
-          console.error(`[DatabaseIntegrationService] K8s update failed:`, deployError);
-          // Don't fail the link - env vars saved to DB, will apply on next full deploy
-        }
-      }
+      const syncOutcome = await applyLifecycleAwareIntegrationEnvSync({
+        appId: app_id,
+        appName: app.name,
+        appStatus: app.status,
+        framework: app.framework,
+        envVars: mergedVars,
+        logPrefix: "DatabaseIntegrationService",
+      });
 
       // ========================================
       // Step 11: Log activity
@@ -518,7 +511,12 @@ export class DatabaseIntegrationService {
         success: true,
         integration_id: integration.id,
         injected_vars: generated.keys,
-        redeploy_triggered: redeployTriggered,
+        redeploy_triggered: syncOutcome.redeployTriggered,
+        applied_live: syncOutcome.appliedLive,
+        requires_redeploy: syncOutcome.requiresRedeploy,
+        apply_mode: syncOutcome.applyMode,
+        hint: syncOutcome.hint,
+        reason: syncOutcome.reason,
         app_name: app.name,
         database_name: database.name,
       };
@@ -603,34 +601,16 @@ export class DatabaseIntegrationService {
       await Database_Integrations.mark_unlinked(integration.id, user_id);
 
       // ========================================
-      // Step 6: Update K8s Secret and trigger rolling restart (NOT full rebuild)
+      // Step 6: Apply env vars using lifecycle-aware reconciliation
       // ========================================
-      let redeployTriggered = false;
-      if (app.status === "running" || app.status === "failed") {
-        try {
-          const restartResult = await KubernetesInfoService.updateEnvVarsAndRestart(
-            app.name,
-            filteredVars
-          );
-          redeployTriggered = restartResult.success;
-          
-          if (restartResult.success) {
-            console.log(`[DatabaseIntegrationService] ✅ K8s Secret updated and restart triggered for ${app.name}`);
-            
-            // Sync status from K8s after restart
-            const { AppStatusService } = await import('./app-status');
-            const syncResult = await AppStatusService.syncAfterK8sOperation(app_id, app.name, 5000);
-            if (syncResult.changed) {
-              console.log(`[DatabaseIntegrationService] ✅ Status synced: ${syncResult.previousStatus} → ${syncResult.currentStatus}`);
-            }
-          } else {
-            console.error(`[DatabaseIntegrationService] K8s update failed:`, restartResult.error);
-          }
-        } catch (deployError) {
-          console.error(`[DatabaseIntegrationService] K8s update failed:`, deployError);
-          // Don't fail the unlink - env vars removed from DB, will apply on next full deploy
-        }
-      }
+      const syncOutcome = await applyLifecycleAwareIntegrationEnvSync({
+        appId: app_id,
+        appName: app.name,
+        appStatus: app.status,
+        framework: app.framework,
+        envVars: filteredVars,
+        logPrefix: "DatabaseIntegrationService",
+      });
 
       // ========================================
       // Step 7: Log activity
@@ -648,7 +628,12 @@ export class DatabaseIntegrationService {
       return {
         success: true,
         removed_vars: integration.injected_env_keys || [],
-        redeploy_triggered: redeployTriggered,
+        redeploy_triggered: syncOutcome.redeployTriggered,
+        applied_live: syncOutcome.appliedLive,
+        requires_redeploy: syncOutcome.requiresRedeploy,
+        apply_mode: syncOutcome.applyMode,
+        hint: syncOutcome.hint,
+        reason: syncOutcome.reason,
       };
 
     } catch (error) {

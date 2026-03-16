@@ -113,13 +113,37 @@ export async function POST(req: NextRequest) {
     }
 
     // Success response
+    const hasLifecycleFields =
+      typeof result.applied_live === "boolean" || typeof result.requires_redeploy === "boolean";
+    const ignoredByPipeline =
+      hasLifecycleFields &&
+      result.applied_live === false &&
+      result.requires_redeploy === false &&
+      result.apply_mode === "persisted_only";
+    const message = ignoredByPipeline
+      ? "Database unlinked successfully, but affected keys are ignored by this framework pipeline."
+      : hasLifecycleFields
+        ? result.applied_live
+          ? result.requires_redeploy
+            ? "Database unlinked successfully. Runtime changes are live; redeploy to apply build-time variables."
+            : "Database unlinked successfully. Changes applied with app restart."
+          : result.requires_redeploy
+            ? "Database unlinked successfully. Changes are saved; redeploy to apply them."
+            : "Database unlinked successfully."
+        : result.redeploy_triggered
+          ? "Database unlinked successfully. Redeploy triggered to apply changes."
+          : "Database unlinked successfully. Changes will apply on next deploy.";
+
     return NextResponse.json({
       success: true,
       removed_vars: result.removed_vars,
       redeploy_triggered: result.redeploy_triggered,
-      message: result.redeploy_triggered
-        ? "Database unlinked successfully. Redeploy triggered to apply changes."
-        : "Database unlinked successfully. Changes will apply on next deploy.",
+      applied_live: result.applied_live,
+      requires_redeploy: result.requires_redeploy,
+      apply_mode: result.apply_mode,
+      hint: result.hint,
+      reason: result.reason,
+      message,
     });
 
   } catch (error) {
