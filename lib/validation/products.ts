@@ -45,7 +45,8 @@ export const createProductSchema = z.object({
   sort_order: z.number().int().optional(),
   discount: z.number().min(0).max(100).optional(),
   slug: z.string().optional(),
-  cpu_type: z.enum(['basic', 'general_purpose', 'storage_optimized']).optional(),
+  cpu_type: z.enum(['basic', 'general_purpose', 'storage_optimized', 'shared', 'dedicated', 'gpu']).optional(),
+  machine_type: z.string().optional(),
 });
 
 export const updateProductSchema = z.object({
@@ -80,7 +81,8 @@ export const updateProductSchema = z.object({
   sort_order: z.number().int().optional(),
   discount: z.number().min(0).max(100).optional(),
   slug: z.string().optional(),
-  cpu_type: z.enum(['basic', 'general_purpose', 'storage_optimized']).optional(),
+  cpu_type: z.enum(['basic', 'general_purpose', 'storage_optimized', 'shared', 'dedicated', 'gpu']).optional(),
+  machine_type: z.string().optional(),
 });
 
 export const deleteProductSchema = z.object({

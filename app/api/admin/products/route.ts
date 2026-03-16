@@ -78,8 +78,10 @@ export async function POST(req: NextRequest) {
 
     // Create product
     const result = await Products.create(validatedData);
+  
 
     if (!result.success) {
+      console.log("[Products API] POST error - creation failed:", result.error);
       return NextResponse.json(
         { error: result.error || "Failed to create product" },
         { status: 400 }

@@ -80,7 +80,7 @@ const GpuHome = async () => {
       <ObjectStorageReleaseSection />
       <ObjectStoragePricingSection categories={categories || undefined} />
       <ObjectStorageFeaturesSection />
-      <ServicesHomeSectionFour plans={plans} />
+      {/* <ServicesHomeSectionFour plans={plans} /> */}
       <ServicesHomeSectionFive title="Frequently Asked Questions" faqs={faqs} />
       <ObjectStorageCtaSection />
       <ServicesHomeSectionSix cases={cases} />

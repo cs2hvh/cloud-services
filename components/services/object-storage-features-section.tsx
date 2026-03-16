@@ -10,34 +10,35 @@ const LEFT_FEATURES = [
     title: "S3-Compatible API",
     description:
       "Use existing S3 SDKs and tools seamlessly. Drop-in replacement for AWS S3 with full bucket and object API support.",
-    image: "/images/kubernetes-ui/11 nINES dURABILITY.png",
+    image: "/images/kubernetes-ui/s3 Compatible API.png",
   },
-  {
-    title: "Multi-Region Replication",
-    description:
-      "Replicate objects across multiple regions automatically. Disaster recovery and low-latency global access built-in.",
-    image: "/images/kubernetes-ui/Global CDN Integration.png",
-  },
-  {
+   {
     title: "Lifecycle Management",
     description:
       "Automate object transitions between storage tiers. Set expiration policies and archival rules for compliance and cost optimization.",
-    image: "/images/kubernetes-ui/gitops%20ready.png",
+    image: "/images/kubernetes-ui/life cycle.png",
   },
+  {
+    title: "Versioning & Immutability",
+    description:
+      "Protect against accidental deletions with object versioning. Enable immutability locks for compliance requirements.",
+    image: "/images/kubernetes-ui/versoning.png",
+  },
+ 
 ];
 
 const RIGHT_FEATURES = [
   {
-    title: "Versioning & Locking",
+    title: "Global CDN Integration",
     description:
-      "Track object versions and prevent deletion with object locking. Perfect for compliance, audit trails, and data protection.",
-    image: "/images/kubernetes-ui/versoning.png",
+      "Automatic edge caching across 200+ locations worldwide. Deliver content to users with sub-50ms latency globally.",
+    image: "/images/kubernetes-ui/Global CDN Integration.png",
   },
   {
-    title: "Built-in CDN Integration",
+    title: "11 Nines Durability",
     description:
-      "Native integration with global CDN for fast content delivery. Cache objects at edge locations with automatic SSL.",
-    image: "/images/kubernetes-ui/built-in-load-balancing.png",
+      "99.999999999% data durability with automatic replication across multiple data centers. Your data is always safe.",
+    image: "/images/kubernetes-ui/11 nine.png",
   },
 ];
 

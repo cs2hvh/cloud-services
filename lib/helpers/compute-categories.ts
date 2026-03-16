@@ -1,3 +1,4 @@
+import type React from "react";
 import { Products } from "@/lib/supabase/queries/products";
 
 interface VirtualPlan {
@@ -21,7 +22,7 @@ interface BareMetalPlan {
 export interface ComputeCategory {
   key: string;
   label: string;
-  icon: any; // React.ComponentType will be mapped in component
+  icon: React.ComponentType<{ className?: string }>;
   tagline: string;
   description: string;
   features: string[];

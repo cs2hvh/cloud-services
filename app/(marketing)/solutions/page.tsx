@@ -11,7 +11,7 @@ export default function SolutionsPage() {
   return (
     <main style={{backgroundColor:"#0E0F0F"}}>
       <SolutionsHeroSection />
-      <SolutionsDiscoverySection activeTab={activeTab} setActiveTab={setActiveTab} />
+      <SolutionsDiscoverySection activeTab={activeTab} setActiveTabAction={setActiveTab} />
       <SolutionsAdvisorySection activeTab={activeTab} />
     </main>
   );

@@ -317,10 +317,10 @@ function ProductCard({ card }: { card: ProductCardData }) {
 
 export function SolutionsDiscoverySection({
   activeTab,
-  setActiveTab,
+  setActiveTabAction,
 }: {
   activeTab: "solutions" | "products";
-  setActiveTab: (tab: "solutions" | "products") => void;
+  setActiveTabAction: (tab: "solutions" | "products") => void;
 }) {
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -345,12 +345,6 @@ export function SolutionsDiscoverySection({
     );
   }, [cardsBySearch, selectedProducts]);
 
-  const productCounts = useMemo(() => {
-    return PRODUCT_FILTERS.reduce<Record<string, number>>((acc, product) => {
-      acc[product] = cardsBySearch.filter((card) => card.products.includes(product)).length;
-      return acc;
-    }, {});
-  }, [cardsBySearch]);
 
   const toggleProduct = (product: string) => {
     setSelectedProducts((current) =>
@@ -401,7 +395,7 @@ export function SolutionsDiscoverySection({
           <ToolbarSurface
             asButton
             active={activeTab === "solutions"}
-            onClick={() => setActiveTab("solutions")}
+            onClick={() => setActiveTabAction("solutions")}
           >
             <Image src="/solution/secondsection/Solutions.svg" alt="" width={35} height={35} />
             <span
@@ -417,7 +411,7 @@ export function SolutionsDiscoverySection({
           <ToolbarSurface
             asButton
             active={activeTab === "products"}
-            onClick={() => setActiveTab("products")}
+            onClick={() => setActiveTabAction("products")}
           >
             <Image src="/solution/secondsection/Product.svg" alt="" width={35} height={35} />
             <span

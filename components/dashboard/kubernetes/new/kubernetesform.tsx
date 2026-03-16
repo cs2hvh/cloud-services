@@ -1,6 +1,6 @@
 "use client";
 import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -49,6 +49,7 @@ import { useRouter } from "next/navigation";
 // import { stat } from "fs";
 import z from "zod";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 // import { Clusters } from "@/lib/supabase/queries";
 // import { send } from "process";
 
@@ -101,6 +102,52 @@ type SendPayload = {
   ips: string[];
   planId?: string;
 };
+
+type K8sCpuType = "shared" | "dedicated" | "gpu";
+
+const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
+  shared: {
+    label: "Shared CPU",
+    description: "Cost-effective shared vCPU plans for development, staging, and lighter workloads.",
+  },
+  dedicated: {
+    label: "Dedicated CPU",
+    description: "Dedicated vCPU plans for production traffic requiring consistent performance.",
+  },
+  gpu: {
+    label: "GPU",
+    description: "GPU-accelerated instances for AI/ML, rendering, and compute-heavy tasks.",
+  },
+};
+
+const K8S_MACHINE_TYPES: Record<K8sCpuType, { value: string; label: string }[]> = {
+  shared: [
+    { value: "basic", label: "Basic" },
+    { value: "premium-intel", label: "Premium Intel" },
+    { value: "premium-amd", label: "Premium AMD" },
+  ],
+  dedicated: [
+    { value: "general-purpose", label: "General Purpose" },
+    { value: "cpu-optimized", label: "CPU-Optimized" },
+    { value: "memory-optimized", label: "Memory-Optimized" },
+    { value: "storage-optimized", label: "Storage-Optimized" },
+  ],
+  gpu: [
+    { value: "gpu", label: "GPU Droplet" },
+  ],
+};
+
+function getProductCpuType(product: Tables<"products">): K8sCpuType {
+  const cpuType = (product as { cpu_type?: string }).cpu_type;
+  if (cpuType && ["shared", "dedicated", "gpu"].includes(cpuType)) {
+    return cpuType as K8sCpuType;
+  }
+  return "shared";
+}
+
+function getProductMachineType(product: Tables<"products">): string {
+  return (product as { machine_type?: string }).machine_type || "basic";
+}
 
 const NewClusterPage = ({
   locations,
@@ -163,6 +210,18 @@ const NewClusterPage = ({
     selectedProject: "", // Selected project (if applicable)
     versions: ["1.31.1"] as string[], // Available versions
   });
+
+  const [selectedCpuType, setSelectedCpuType] = useState<K8sCpuType>("shared");
+  const [selectedMachineType, setSelectedMachineType] = useState<string>("basic");
+
+  // Filter products by selected cpu type and machine type
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const productCpu = getProductCpuType(product);
+      const productMachine = getProductMachineType(product);
+      return productCpu === selectedCpuType && productMachine === selectedMachineType;
+    }).sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+  }, [products, selectedCpuType, selectedMachineType]);
 
   // Filter users based on search query
   const filteredUsers = allUsers.filter(
@@ -960,11 +1019,72 @@ const NewClusterPage = ({
               <CardHeader className="space-y-2">
                 <CardTitle className="text-white">Cluster plan</CardTitle>
                 <p className="text-sm leading-6 text-white/50">
-                  Select a compute profile that matches the initial workload. The
-                  plan cards are denser so comparisons feel faster and more precise.
+                  Select a compute profile that matches the initial workload. Choose CPU type,
+                  machine type, then pick the right plan size.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* CPU Type Tabs */}
+                <div>
+                  <Label className="mb-3 block text-sm font-medium text-white/78">
+                    CPU type
+                  </Label>
+                  <Tabs
+                    value={selectedCpuType}
+                    onValueChange={(value) => {
+                      const newCpu = value as K8sCpuType;
+                      setSelectedCpuType(newCpu);
+                      setSelectedMachineType(K8S_MACHINE_TYPES[newCpu]?.[0]?.value || "basic");
+                      setState((prev) => ({ ...prev, selectedPlan: "" }));
+                    }}
+                    className="w-full"
+                  >
+                    <TabsList className="grid h-auto w-full grid-cols-3 border border-white/[0.08] bg-white/[0.04] p-1">
+                      {(Object.keys(K8S_CPU_META) as K8sCpuType[]).map((type) => (
+                        <TabsTrigger
+                          key={type}
+                          value={type}
+                          className="rounded-none px-3 py-2 text-xs data-[state=active]:bg-blue-500/90 data-[state=active]:text-white"
+                        >
+                          {K8S_CPU_META[type].label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                  <p className="mt-3 text-sm text-white/45">{K8S_CPU_META[selectedCpuType].description}</p>
+                </div>
+
+                {/* Machine Type Selector */}
+                <div>
+                  <Label className="mb-3 block text-sm font-medium text-white/78">
+                    Machine type
+                  </Label>
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    {K8S_MACHINE_TYPES[selectedCpuType].map((mt) => {
+                      const isSelected = selectedMachineType === mt.value;
+                      return (
+                        <button
+                          key={mt.value}
+                          type="button"
+                          onClick={() => {
+                            setSelectedMachineType(mt.value);
+                            setState((prev) => ({ ...prev, selectedPlan: "" }));
+                          }}
+                          className={`border px-4 py-3 text-left transition-colors ${
+                            isSelected
+                              ? "border-blue-400/30 bg-blue-500/10"
+                              : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          <div className="text-sm font-semibold text-white">
+                            {mt.label}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {selectedPlan && (
                   <div className="flex flex-col gap-3 border border-blue-400/20 bg-blue-500/8 p-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -989,15 +1109,25 @@ const NewClusterPage = ({
                   </div>
                 )}
 
-                <div className="max-h-[360px] overflow-y-auto pr-1">
-                  <RadioGroup
-                    value={state.selectedPlan}
-                    onValueChange={(value) =>
-                      setState({ ...state, selectedPlan: value })
-                    }
-                    className="space-y-3"
-                  >
-                    {products.map((plan) => (
+                {filteredProducts.length === 0 ? (
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center">
+                    <Box className="mx-auto h-8 w-8 text-white/40" />
+                    <h3 className="mt-4 text-lg font-semibold text-white">No plans available</h3>
+                    <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-white/45">
+                      No plans match this CPU type and machine type. Try a different combination
+                      or contact support.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-[360px] overflow-y-auto pr-1">
+                    <RadioGroup
+                      value={state.selectedPlan}
+                      onValueChange={(value) =>
+                        setState({ ...state, selectedPlan: value })
+                      }
+                      className="space-y-3"
+                    >
+                      {filteredProducts.map((plan) => (
                       <div key={plan.id}>
                         <RadioGroupItem
                           value={plan.name || ""}
@@ -1067,6 +1197,7 @@ const NewClusterPage = ({
                     ))}
                   </RadioGroup>
                 </div>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button

@@ -49,7 +49,6 @@ export default function BillingTabs({
     } else if (paymentStatus === "cancelled") {
       pushToast("error", "Payment was cancelled.");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentStatus]);
 
   const remaining = balance;

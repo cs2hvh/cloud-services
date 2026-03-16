@@ -4,7 +4,6 @@ import { ServicesSection } from "@/components/services-section";
 import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
-import { AiAgentsSection } from "@/components/ai-agents-section";
 // import { HomeFeaturesSection } from "@/components/home/features-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 

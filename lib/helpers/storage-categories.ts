@@ -1,3 +1,4 @@
+import type React from "react";
 import { Products } from "@/lib/supabase/queries/products";
 
 interface Plan {
@@ -13,7 +14,7 @@ interface Plan {
 export interface StorageCategory {
   key: string;
   label: string;
-  icon: any; // React.ComponentType will be mapped in component
+  icon: React.ComponentType<{ className?: string }>;
   tagline: string;
   description: string;
   features: string[];
