@@ -6,6 +6,13 @@ import {
   AddDomainRequestSchema,
   AddDomainResponseSchema,
   DomainListQuerySchema,
+  DomainMarketplaceProvidersResponseSchema,
+  DomainMarketplacePurchaseRequestListResponseSchema,
+  DomainMarketplacePurchaseRequestResponseSchema,
+  DomainMarketplacePurchaseRequestSchema,
+  DomainMarketplaceSearchRequestSchema,
+  DomainMarketplaceSearchResponseSchema,
+  DomainMarketplaceSummaryResponseSchema,
   DomainListResponseSchema,
   DomainOperationResponseSchema,
   DomainResponseSchema,
@@ -23,6 +30,19 @@ const IdempotencyHeaderSchema = z
       .openapi({ example: "req_01hxy89q5xwq7v3j" }),
   })
   .openapi("DomainIdempotencyHeader");
+
+const DomainMarketplacePurchaseRequestIdParamSchema = z
+  .object({
+    requestId: z.string().uuid().openapi({ example: "656bb6a3-9905-46d0-9704-b127cc296957" }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestIdParam");
+
+const DomainMarketplacePurchaseRequestListOpenApiQuerySchema = z
+  .object({
+    app_id: z.string().uuid().optional().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
+    limit: z.number().int().min(1).max(100).optional().openapi({ example: 20 }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestListOpenApiQuery");
 
 export function registerDomainPaths(registry: OpenAPIRegistry) {
   registry.registerPath({
@@ -240,6 +260,352 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       403: { description: "Forbidden", content: { "application/json": { schema: ErrorResponseSchema } } },
       404: { description: "Operation not found", content: { "application/json": { schema: ErrorResponseSchema } } },
       500: { description: "Internal error", content: { "application/json": { schema: ErrorResponseSchema } } },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/services/platform-apps/domains/market/summary",
+    tags: ["Domain Marketplace"],
+    summary: "Get domain marketplace summary",
+    description: "Returns marketplace channel and capabilities for dashboard purchase flows.",
+    responses: {
+      200: {
+        description: "Marketplace summary",
+        content: { "application/json": { schema: DomainMarketplaceSummaryResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/services/platform-apps/domains/market/providers",
+    tags: ["Domain Marketplace"],
+    summary: "Get domain marketplace provider metadata",
+    description: "Legacy compatibility endpoint that mirrors marketplace summary data.",
+    deprecated: true,
+    responses: {
+      200: {
+        description: "Provider metadata",
+        content: { "application/json": { schema: DomainMarketplaceProvidersResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/services/platform-apps/domains/market/search",
+    tags: ["Domain Marketplace"],
+    summary: "Search purchasable domains",
+    description: "Searches registrar-backed domain availability and pricing.",
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: DomainMarketplaceSearchRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      200: {
+        description: "Search results",
+        content: { "application/json": { schema: DomainMarketplaceSearchResponseSchema } },
+      },
+      400: {
+        description: "Invalid search payload or validation error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/services/platform-apps/domains/market/purchase-requests",
+    tags: ["Domain Marketplace"],
+    summary: "List domain purchase requests",
+    description: "Lists purchase requests for the authenticated user, optionally filtered by app.",
+    request: {
+      query: DomainMarketplacePurchaseRequestListOpenApiQuerySchema,
+    },
+    responses: {
+      200: {
+        description: "Purchase request list",
+        content: { "application/json": { schema: DomainMarketplacePurchaseRequestListResponseSchema } },
+      },
+      400: {
+        description: "Invalid query parameters",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      403: {
+        description: "Forbidden for this app",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "App not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/services/platform-apps/domains/market/purchase-requests",
+    tags: ["Domain Marketplace"],
+    summary: "Create domain purchase request",
+    description: "Creates or reuses an idempotent purchase request and attempts registrar fulfillment.",
+    request: {
+      headers: IdempotencyHeaderSchema,
+      body: {
+        content: {
+          "application/json": {
+            schema: DomainMarketplacePurchaseRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: "Purchase request created or idempotently reused",
+        content: { "application/json": { schema: DomainMarketplacePurchaseRequestResponseSchema } },
+      },
+      400: {
+        description: "Invalid payload or domain validation error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      402: {
+        description: "Insufficient credits or provider payment required",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      403: {
+        description: "Forbidden for this app",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "App not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      409: {
+        description: "Domain unavailable or purchase conflict",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      502: {
+        description: "Registrar or billing upstream error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/services/platform-apps/domains/market/purchase-requests/{requestId}",
+    tags: ["Domain Marketplace"],
+    summary: "Get purchase request by id",
+    description: "Returns a single purchase request for the authenticated user.",
+    request: {
+      params: DomainMarketplacePurchaseRequestIdParamSchema,
+    },
+    responses: {
+      200: {
+        description: "Purchase request",
+        content: { "application/json": { schema: DomainMarketplacePurchaseRequestResponseSchema } },
+      },
+      400: {
+        description: "Invalid request id",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "Purchase request not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/services/platform-apps/domains/market/checkout",
+    tags: ["Domain Marketplace"],
+    summary: "Checkout domain purchase",
+    description: "Compatibility checkout endpoint that delegates to the purchase request flow.",
+    request: {
+      headers: IdempotencyHeaderSchema,
+      body: {
+        content: {
+          "application/json": {
+            schema: DomainMarketplacePurchaseRequestSchema,
+          },
+        },
+      },
+    },
+    responses: {
+      201: {
+        description: "Checkout purchase request created",
+        content: { "application/json": { schema: DomainMarketplacePurchaseRequestResponseSchema } },
+      },
+      400: {
+        description: "Invalid payload or domain validation error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      401: {
+        description: "Unauthorized - requires authenticated session",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      402: {
+        description: "Insufficient credits or provider payment required",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      403: {
+        description: "Forbidden for this app",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      404: {
+        description: "App not found",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      409: {
+        description: "Domain unavailable or purchase conflict",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      429: {
+        description: "Too many requests",
+        content: {
+          "application/json": {
+            schema: ErrorResponseSchema,
+            example: {
+              error: "TOO_MANY_REQUESTS",
+              message: "Retry after 60s",
+            },
+          },
+        },
+      },
+      500: {
+        description: "Internal error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
+      502: {
+        description: "Registrar or billing upstream error",
+        content: { "application/json": { schema: ErrorResponseSchema } },
+      },
     },
   });
 }

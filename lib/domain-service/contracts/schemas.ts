@@ -91,6 +91,74 @@ export const DomainMarketplacePurchaseRequestListQuerySchema = z
   })
   .openapi("DomainMarketplacePurchaseRequestListQuery");
 
+export const DomainMarketplaceSummarySchema = z
+  .object({
+    channel: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+    configured: z.boolean().openapi({ example: true }),
+    mode: z.literal("managed_reseller").openapi({ example: "managed_reseller" }),
+    capabilities: z.object({
+      search: z.literal(true).openapi({ example: true }),
+      purchase_requests: z.literal(true).openapi({ example: true }),
+      auto_fulfillment: z.boolean().openapi({ example: true }),
+    }),
+    notes: z.string().openapi({
+      example: "Domain purchases are completed through AhuraCloud using our registrar backend.",
+    }),
+  })
+  .openapi("DomainMarketplaceSummary");
+
+export const DomainMarketplaceResultSchema = z
+  .object({
+    domainName: z.string().openapi({ example: "mybrand.com" }),
+    available: z.boolean().openapi({ example: true }),
+    premium: z.boolean().openapi({ example: false }),
+    purchasePrice: z.number().nullable().openapi({ example: 12.99 }),
+    renewalPrice: z.number().nullable().openapi({ example: 14.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+    purchaseType: z.string().nullable().openapi({ example: "registration" }),
+    reason: z.string().nullable().openapi({ example: null }),
+    fulfillment: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+  })
+  .openapi("DomainMarketplaceResult");
+
+export const DomainMarketplaceSearchDataSchema = z
+  .object({
+    channel: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+    query: z.string().openapi({ example: "mybrand" }),
+    results: z.array(DomainMarketplaceResultSchema),
+  })
+  .openapi("DomainMarketplaceSearchData");
+
+export const DomainPurchaseRequestStatusSchema = z
+  .enum(["requested", "processing", "completed", "failed", "cancelled"])
+  .openapi("DomainPurchaseRequestStatus");
+
+export const DomainMarketplacePurchaseRequestRecordSchema = z
+  .object({
+    id: z.string().uuid().openapi({ example: "656bb6a3-9905-46d0-9704-b127cc296957" }),
+    user_id: z.string().uuid().openapi({ example: "ccf391ef-271b-45e7-9799-3b1be3422363" }),
+    app_id: z.string().uuid().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
+    domain: z.string().openapi({ example: "mybrand.com" }),
+    status: DomainPurchaseRequestStatusSchema,
+    purchase_price: z.number().nullable().openapi({ example: 12.99 }),
+    renewal_price: z.number().nullable().openapi({ example: 14.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+    provider: z.string().openapi({ example: "namecom" }),
+    idempotency_key: z.string().nullable().openapi({ example: "idem-domain-001" }),
+    provider_request_id: z.string().nullable().openapi({ example: "123456" }),
+    last_error: z.string().nullable().openapi({ example: null }),
+    metadata: z.record(z.unknown()).openapi({
+      example: {
+        purchase_type: "registration",
+        premium: false,
+        source: "dashboard-marketplace",
+      },
+    }),
+    created_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:20.000Z" }),
+    updated_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:21.000Z" }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestRecord");
+
 export const AddDomainRequestSchema = z
   .object({
     app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
@@ -146,6 +214,43 @@ export const DomainOperationResponseSchema = z
     data: DomainOperationSchema,
   })
   .openapi("DomainOperationResponse");
+
+export const DomainMarketplaceSummaryResponseSchema = z
+  .object({
+    data: DomainMarketplaceSummarySchema,
+  })
+  .openapi("DomainMarketplaceSummaryResponse");
+
+export const DomainMarketplaceProvidersResponseSchema = z
+  .object({
+    data: DomainMarketplaceSummarySchema,
+    deprecated: z.literal(true).openapi({ example: true }),
+    message: z.string().openapi({
+      example: "Use /api/services/platform-apps/domains/market/summary for reseller metadata.",
+    }),
+  })
+  .openapi("DomainMarketplaceProvidersResponse");
+
+export const DomainMarketplaceSearchResponseSchema = z
+  .object({
+    data: DomainMarketplaceSearchDataSchema,
+  })
+  .openapi("DomainMarketplaceSearchResponse");
+
+export const DomainMarketplacePurchaseRequestResponseSchema = z
+  .object({
+    data: DomainMarketplacePurchaseRequestRecordSchema,
+  })
+  .openapi("DomainMarketplacePurchaseRequestResponse");
+
+export const DomainMarketplacePurchaseRequestListResponseSchema = z
+  .object({
+    data: z.array(DomainMarketplacePurchaseRequestRecordSchema),
+    meta: z.object({
+      total: z.number().openapi({ example: 1 }),
+    }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestListResponse");
 
 export type AddDomainRequest = z.infer<typeof AddDomainRequestSchema>;
 export type VerifyDomainRequest = z.infer<typeof VerifyDomainRequestSchema>;

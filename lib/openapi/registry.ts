@@ -53,6 +53,8 @@ Authorization: Bearer sk_live_YOUR_API_KEY
 
 You can generate API keys from your [dashboard settings](https://galaxyhvh.com/dashboard/settings/api-keys).
 
+Marketplace dashboard routes under \`/api/services/platform-apps/domains/market/*\` use authenticated browser session cookies instead of API keys.
+
 ## Rate Limits
 
 - **Free Plan:** 30 requests per minute per operation
@@ -144,6 +146,10 @@ For more examples, see the API reference below.
       {
         name: 'Domains',
         description: 'Manage custom domains, verification, activation, and operation status.',
+      },
+      {
+        name: 'Domain Marketplace',
+        description: 'Search, purchase, and track marketplace domain purchase requests through the dashboard session.',
       },
     ],
   });
