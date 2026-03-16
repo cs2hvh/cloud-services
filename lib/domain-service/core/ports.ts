@@ -1,5 +1,6 @@
 import type {
   AppRecord,
+  DomainAuditContext,
   DomainOperation,
   DomainPurchaseRequest,
   DomainPurchaseRequestStatus,
@@ -136,5 +137,63 @@ export interface DomainPurchaseRequestRepositoryPort {
     status: DomainPurchaseRequestStatus;
     providerRequestId?: string | null;
     lastError?: string | null;
+  }): Promise<void>;
+}
+
+export interface DomainBillingPort {
+  chargeDomainPurchase(params: {
+    userId: string;
+    purchaseRequestId: string;
+    domain: string;
+    amount: number;
+    currency: string;
+  }): Promise<void>;
+  refundDomainPurchase(params: {
+    userId: string;
+    purchaseRequestId: string;
+    domain: string;
+    amount: number;
+    currency: string;
+    reason: string;
+  }): Promise<void>;
+}
+
+export interface DomainAuditLogPort {
+  log(params: {
+    userId: string;
+    userEmail?: string;
+    userName?: string;
+    userRole?: "user" | "admin" | "system";
+    action: "create" | "update" | "delete";
+    serviceId?: string;
+    serviceName?: string;
+    metadata?: Record<string, unknown>;
+    context?: DomainAuditContext;
+  }): Promise<void>;
+}
+
+export interface DomainNotificationPort {
+  notify(params: {
+    userId: string;
+    action: "created" | "updated" | "deleted" | "attached" | "failed";
+    serviceName: string;
+    serviceId?: string;
+    type?: "success" | "info" | "warning" | "error";
+    error?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void>;
+}
+
+export interface DomainEmailPort {
+  sendImportantEvent(params: {
+    to: string;
+    customerName?: string;
+    severity: "info" | "warning" | "critical";
+    alertTitle: string;
+    serviceName: string;
+    summary: string;
+    metadata?: Record<string, string | number | boolean>;
+    actionUrl?: string;
+    actionLabel?: string;
   }): Promise<void>;
 }

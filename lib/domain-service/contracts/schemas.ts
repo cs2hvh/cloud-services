@@ -59,6 +59,38 @@ export const DomainListQuerySchema = z
   })
   .openapi("DomainListQuery");
 
+export const DomainMarketplaceSearchRequestSchema = z
+  .object({
+    query: z.string().min(1).max(253).openapi({ example: "mybrand" }),
+    tlds: z.array(z.string().min(2).max(20)).max(15).optional().openapi({ example: ["com", "io", "app"] }),
+  })
+  .openapi("DomainMarketplaceSearchRequest");
+
+export const DomainMarketplacePurchaseRequestSchema = z
+  .object({
+    app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+    domain: z.string().min(3).max(253).openapi({ example: "mybrand.com" }),
+    idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "idem-domain-001" }),
+  })
+  .openapi("DomainMarketplacePurchaseRequest");
+
+export const DomainMarketplacePurchaseRequestListQuerySchema = z
+  .object({
+    app_id: z.string().uuid().optional().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+    limit: z
+      .string()
+      .optional()
+      .transform((value) => {
+        if (!value) return undefined;
+        const n = Number.parseInt(value, 10);
+        return Number.isNaN(n) ? undefined : n;
+      })
+      .refine((n) => n === undefined || (n >= 1 && n <= 100), {
+        message: "limit must be between 1 and 100",
+      }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestListQuery");
+
 export const AddDomainRequestSchema = z
   .object({
     app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),

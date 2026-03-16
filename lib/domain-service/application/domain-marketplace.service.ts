@@ -1,7 +1,11 @@
 import { DOMAIN_ERROR_CODES, DomainServiceError } from "@/lib/domain-service/core/errors";
 import type {
   AppReadPort,
+  DomainAuditLogPort,
+  DomainBillingPort,
+  DomainEmailPort,
   DomainMarketplaceRegistrarPort,
+  DomainNotificationPort,
   DomainPurchaseRequestRepositoryPort,
 } from "@/lib/domain-service/core/ports";
 import type { ActorContext, DomainPurchaseRequest } from "@/lib/domain-service/core/types";
@@ -39,11 +43,26 @@ export interface DomainSearchResponse {
 const DEFAULT_TLDS = ["com", "net", "io", "app", "dev", "org"];
 
 export class DomainMarketplaceService {
+  private readonly deps: {
+    billing?: DomainBillingPort;
+    audit?: DomainAuditLogPort;
+    notifications?: DomainNotificationPort;
+    email?: DomainEmailPort;
+  };
+
   constructor(
     private readonly registrar: DomainMarketplaceRegistrarPort,
     private readonly appRead: AppReadPort,
-    private readonly purchaseRequests: DomainPurchaseRequestRepositoryPort
-  ) {}
+    private readonly purchaseRequests: DomainPurchaseRequestRepositoryPort,
+    deps: {
+      billing?: DomainBillingPort;
+      audit?: DomainAuditLogPort;
+      notifications?: DomainNotificationPort;
+      email?: DomainEmailPort;
+    } = {}
+  ) {
+    this.deps = deps;
+  }
 
   getSummary(): DomainMarketplaceSummary {
     const configured = Boolean(process.env.NAMECOM_USERNAME && process.env.NAMECOM_API_TOKEN)
@@ -117,6 +136,7 @@ export class DomainMarketplaceService {
   }): Promise<DomainPurchaseRequest> {
     const cleanDomain = normalizeDomainCandidate(input.domain);
     ensureDomainFormat(cleanDomain);
+    const actor = input.actor;
 
     await this.appRead.getOwnedApp(input.appId, input.actor.userId);
 
@@ -186,6 +206,45 @@ export class DomainMarketplaceService {
       status: "processing",
     });
 
+    let chargedAmount = 0;
+    try {
+      const purchasePrice = Number(first.purchasePrice || 0);
+      if (purchasePrice > 0 && this.deps.billing) {
+        await this.deps.billing.chargeDomainPurchase({
+          userId: input.actor.userId,
+          purchaseRequestId: request.id,
+          domain: cleanDomain,
+          amount: purchasePrice,
+          currency: "USD",
+        });
+        chargedAmount = purchasePrice;
+      }
+    } catch (error: unknown) {
+      const serviceError = error instanceof DomainServiceError
+        ? error
+        : new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
+            message: error instanceof Error ? error.message : "Domain billing charge failed",
+          });
+
+      await this.purchaseRequests.updateStatus({
+        requestId: request.id,
+        status: "failed",
+        lastError: serviceError.message,
+      });
+
+      await this.emitFailureEvents({
+        actor,
+        requestId: request.id,
+        domain: cleanDomain,
+        appId: input.appId,
+        error: serviceError,
+        event: "domain_purchase_billing_failed",
+      });
+
+      throw serviceError;
+    }
+
     let purchase: Awaited<ReturnType<DomainMarketplaceRegistrarPort["purchaseDomain"]>>;
     try {
       purchase = await this.registrar.purchaseDomain(
@@ -199,34 +258,49 @@ export class DomainMarketplaceService {
         }
       );
     } catch (error: unknown) {
-      const serviceError = error instanceof DomainServiceError
+      const rawError = error instanceof DomainServiceError
         ? error
         : new DomainServiceError({
             code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
             message: error instanceof Error ? error.message : "Unknown purchase error",
           });
-
-      if (
-        serviceError.code === DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED
-        && /already|registered|unavailable|not available|taken/i.test(serviceError.message)
-      ) {
-        await this.purchaseRequests.updateStatus({
-          requestId: request.id,
-          status: "failed",
-          lastError: `Domain ${cleanDomain} is no longer available for registration`,
-        });
-
-        throw new DomainServiceError({
-          code: DOMAIN_ERROR_CODES.DOMAIN_NOT_AVAILABLE,
-          message: `Domain ${cleanDomain} is no longer available for registration`,
-          details: { domain: cleanDomain },
-        });
-      }
+      const serviceError = (
+        rawError.code === DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED
+        && /already|registered|unavailable|not available|taken/i.test(rawError.message)
+      )
+        ? new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.DOMAIN_NOT_AVAILABLE,
+            message: `Domain ${cleanDomain} is no longer available for registration`,
+            details: { domain: cleanDomain },
+          })
+        : rawError;
 
       await this.purchaseRequests.updateStatus({
         requestId: request.id,
         status: "failed",
         lastError: serviceError.message,
+      });
+
+      if (chargedAmount > 0 && this.deps.billing) {
+        await this.emitNonBlocking(async () => {
+          await this.deps.billing!.refundDomainPurchase({
+            userId: input.actor.userId,
+            purchaseRequestId: request.id,
+            domain: cleanDomain,
+            amount: chargedAmount,
+            currency: "USD",
+            reason: "purchase_failed",
+          });
+        });
+      }
+
+      await this.emitFailureEvents({
+        actor,
+        requestId: request.id,
+        domain: cleanDomain,
+        appId: input.appId,
+        error: serviceError,
+        event: "domain_purchase_failed",
       });
 
       throw serviceError;
@@ -237,6 +311,49 @@ export class DomainMarketplaceService {
       status: "completed",
       providerRequestId: purchase.order ? String(purchase.order) : null,
       lastError: null,
+    });
+
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor,
+        action: "create",
+        serviceId: request.id,
+        serviceName: cleanDomain,
+        metadata: {
+          event: "domain_purchase_completed",
+          app_id: input.appId,
+          provider: "namecom",
+          provider_order_id: purchase.order ? String(purchase.order) : null,
+          amount: first.purchasePrice ?? null,
+          currency: "USD",
+        },
+      });
+      await this.emitNotification({
+        userId: input.actor.userId,
+        action: "created",
+        serviceName: cleanDomain,
+        serviceId: request.id,
+        type: "success",
+        metadata: {
+          event: "domain_purchase_completed",
+          app_id: input.appId,
+          amount: first.purchasePrice ?? null,
+          renewal_price: first.renewalPrice ?? null,
+          currency: "USD",
+        },
+      });
+      await this.emitEmail({
+        actor,
+        severity: "info",
+        alertTitle: "Domain purchase completed",
+        serviceName: cleanDomain,
+        summary: `Your domain purchase for ${cleanDomain} has completed successfully.`,
+        metadata: {
+          app_id: input.appId,
+          amount: first.purchasePrice ?? 0,
+          charged: chargedAmount,
+        },
+      });
     });
 
     return {
@@ -277,6 +394,116 @@ export class DomainMarketplaceService {
     }
 
     return request;
+  }
+
+  private async emitFailureEvents(params: {
+    actor: ActorContext;
+    requestId: string;
+    domain: string;
+    appId: string;
+    error: DomainServiceError;
+    event: string;
+  }): Promise<void> {
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor: params.actor,
+        action: "update",
+        serviceId: params.requestId,
+        serviceName: params.domain,
+        metadata: {
+          event: params.event,
+          app_id: params.appId,
+          error_code: params.error.code,
+          error_message: params.error.message,
+        },
+      });
+      await this.emitNotification({
+        userId: params.actor.userId,
+        action: "failed",
+        serviceName: params.domain,
+        serviceId: params.requestId,
+        type: "error",
+        error: params.error.message,
+        metadata: {
+          event: params.event,
+          app_id: params.appId,
+          error_code: params.error.code,
+        },
+      });
+      await this.emitEmail({
+        actor: params.actor,
+        severity: "warning",
+        alertTitle: "Domain purchase failed",
+        serviceName: params.domain,
+        summary: `Domain purchase failed for ${params.domain}: ${params.error.message}`,
+        metadata: {
+          app_id: params.appId,
+          error_code: params.error.code,
+        },
+      });
+    });
+  }
+
+  private async emitAudit(params: {
+    actor: ActorContext;
+    action: "create" | "update" | "delete";
+    serviceId?: string;
+    serviceName?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deps.audit) return;
+    await this.deps.audit.log({
+      userId: params.actor.userId,
+      userEmail: params.actor.userEmail,
+      userName: params.actor.userName,
+      userRole: params.actor.userRole || "user",
+      action: params.action,
+      serviceId: params.serviceId,
+      serviceName: params.serviceName,
+      metadata: params.metadata,
+      context: params.actor.auditContext,
+    });
+  }
+
+  private async emitNotification(params: {
+    userId: string;
+    action: "created" | "updated" | "deleted" | "attached" | "failed";
+    serviceName: string;
+    serviceId?: string;
+    type?: "success" | "info" | "warning" | "error";
+    error?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deps.notifications) return;
+    await this.deps.notifications.notify(params);
+  }
+
+  private async emitEmail(params: {
+    actor: ActorContext;
+    severity: "info" | "warning" | "critical";
+    alertTitle: string;
+    serviceName: string;
+    summary: string;
+    metadata?: Record<string, string | number | boolean>;
+  }): Promise<void> {
+    if (!this.deps.email || !params.actor.userEmail) return;
+    await this.deps.email.sendImportantEvent({
+      to: params.actor.userEmail,
+      customerName: params.actor.userName,
+      severity: params.severity,
+      alertTitle: params.alertTitle,
+      serviceName: params.serviceName,
+      summary: params.summary,
+      metadata: params.metadata,
+    });
+  }
+
+  private async emitNonBlocking(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (error) {
+      console.warn("[DomainMarketplaceService] Observability event failed", error);
+    }
   }
 }
 

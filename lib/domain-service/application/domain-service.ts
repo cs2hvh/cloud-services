@@ -8,6 +8,9 @@ import {
 import type {
   AppReadPort,
   DnsProviderPort,
+  DomainAuditLogPort,
+  DomainEmailPort,
+  DomainNotificationPort,
   DomainOperationRepositoryPort,
   DomainRegistrarPort,
   DomainRepositoryPort,
@@ -22,6 +25,9 @@ interface DomainServiceDeps {
   registrar: DomainRegistrarPort;
   dns: DnsProviderPort;
   ingress: IngressPort;
+  audit?: DomainAuditLogPort;
+  notifications?: DomainNotificationPort;
+  email?: DomainEmailPort;
 }
 
 export class DomainService {
@@ -109,6 +115,27 @@ export class DomainService {
       responseData: response as unknown as Record<string, unknown>,
     });
 
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "create",
+        serviceId: domain.id,
+        serviceName: cleanDomain,
+        metadata: {
+          app_id: input.appId,
+          event: "domain_added",
+        },
+      });
+      await this.emitNotification({
+        userId: input.actor.userId,
+        action: "created",
+        serviceName: cleanDomain,
+        serviceId: domain.id,
+        type: "success",
+        metadata: { app_id: input.appId },
+      });
+    });
+
     return response;
   }
 
@@ -141,6 +168,27 @@ export class DomainService {
         domain.id,
         `Verification token not found in TXT records for ${recordName}`
       );
+      await this.emitNonBlocking(async () => {
+        await this.emitAudit({
+          actor: input.actor,
+          action: "update",
+          serviceId: domain.id,
+          serviceName: domain.domain,
+          metadata: {
+            event: "domain_verification_failed",
+            record_name: recordName,
+          },
+        });
+        await this.emitNotification({
+          userId: input.actor.userId,
+          action: "failed",
+          serviceName: domain.domain,
+          serviceId: domain.id,
+          type: "warning",
+          error: "Verification token not found in DNS TXT records",
+          metadata: { record_name: recordName },
+        });
+      });
       throw new DomainServiceError({
         code: DOMAIN_ERROR_CODES.DOMAIN_NOT_VERIFIED,
         message: "Verification token not found in DNS TXT records",
@@ -159,6 +207,24 @@ export class DomainService {
         domain_id: input.domainId,
       },
       responseData: updated as unknown as Record<string, unknown>,
+    });
+
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "update",
+        serviceId: updated.id,
+        serviceName: updated.domain,
+        metadata: { event: "domain_verified" },
+      });
+      await this.emitNotification({
+        userId: input.actor.userId,
+        action: "updated",
+        serviceName: updated.domain,
+        serviceId: updated.id,
+        type: "success",
+        metadata: { event: "domain_verified" },
+      });
     });
 
     return updated;
@@ -195,7 +261,7 @@ export class DomainService {
       status: "pending",
     });
 
-    void this.processActivationOperation(operation.id, input.actor.userId);
+    void this.processActivationOperation(operation.id, input.actor);
 
     return operation;
   }
@@ -239,6 +305,30 @@ export class DomainService {
       responseData: updated as unknown as Record<string, unknown>,
     });
 
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "update",
+        serviceId: updated.id,
+        serviceName: updated.domain,
+        metadata: {
+          event: "domain_set_primary",
+          redirect_to_primary: input.redirectToPrimary ?? null,
+        },
+      });
+      await this.emitNotification({
+        userId: input.actor.userId,
+        action: "updated",
+        serviceName: updated.domain,
+        serviceId: updated.id,
+        type: "info",
+        metadata: {
+          event: "domain_set_primary",
+          redirect_to_primary: input.redirectToPrimary ?? null,
+        },
+      });
+    });
+
     return updated;
   }
 
@@ -276,6 +366,24 @@ export class DomainService {
       responseData: response as unknown as Record<string, unknown>,
     });
 
+    await this.emitNonBlocking(async () => {
+      await this.emitAudit({
+        actor: input.actor,
+        action: "delete",
+        serviceId: domain.id,
+        serviceName: domain.domain,
+        metadata: { event: "domain_removed", app_id: domain.app_id },
+      });
+      await this.emitNotification({
+        userId: input.actor.userId,
+        action: "deleted",
+        serviceName: domain.domain,
+        serviceId: domain.id,
+        type: "warning",
+        metadata: { app_id: domain.app_id },
+      });
+    });
+
     return response;
   }
 
@@ -292,7 +400,8 @@ export class DomainService {
     return operation;
   }
 
-  private async processActivationOperation(operationId: string, userId: string): Promise<void> {
+  private async processActivationOperation(operationId: string, actor: ActorContext): Promise<void> {
+    const userId = actor.userId;
     try {
       const operation = await this.deps.operations.findByIdForUser(operationId, userId);
       if (!operation || !operation.domain_id) {
@@ -320,6 +429,42 @@ export class DomainService {
         status: updated.status,
         activated_at: updated.activated_at,
       });
+
+      await this.emitNonBlocking(async () => {
+        await this.emitAudit({
+          actor,
+          action: "update",
+          serviceId: updated.id,
+          serviceName: updated.domain,
+          metadata: {
+            event: "domain_activated",
+            operation_id: operation.id,
+            app_id: updated.app_id,
+          },
+        });
+        await this.emitNotification({
+          userId,
+          action: "attached",
+          serviceName: updated.domain,
+          serviceId: updated.id,
+          type: "success",
+          metadata: {
+            operation_id: operation.id,
+            app_id: updated.app_id,
+          },
+        });
+        await this.emitEmail({
+          actor,
+          severity: "info",
+          alertTitle: "Domain activated",
+          serviceName: updated.domain,
+          summary: `Domain ${updated.domain} has been activated and attached to app ${app.name}.`,
+          metadata: {
+            operation_id: operation.id,
+            app_name: app.name,
+          },
+        });
+      });
     } catch (error: unknown) {
       const serviceError = toDomainServiceError(error);
 
@@ -328,12 +473,53 @@ export class DomainService {
         if (operation?.domain_id) {
           await this.deps.domains.updateLastError(operation.domain_id, serviceError.message);
         }
+        const failedDomain = operation?.domain_id
+          ? await this.deps.domains.findByIdForUser(operation.domain_id, userId).catch(() => null)
+          : null;
 
         await this.deps.operations.markFailed({
           operationId,
           code: serviceError.code,
           message: serviceError.message,
           retryable: serviceError.retryable,
+        });
+
+        await this.emitNonBlocking(async () => {
+          await this.emitAudit({
+            actor,
+            action: "update",
+            serviceId: operation?.domain_id || operationId,
+            serviceName: failedDomain?.domain || "domain",
+            metadata: {
+              event: "domain_activation_failed",
+              operation_id: operationId,
+              error_code: serviceError.code,
+              error_message: serviceError.message,
+            },
+          });
+          await this.emitNotification({
+            userId,
+            action: "failed",
+            serviceName: failedDomain?.domain || "domain",
+            serviceId: operation?.domain_id || undefined,
+            type: "error",
+            error: serviceError.message,
+            metadata: {
+              operation_id: operationId,
+              error_code: serviceError.code,
+            },
+          });
+          await this.emitEmail({
+            actor,
+            severity: "critical",
+            alertTitle: "Domain activation failed",
+            serviceName: failedDomain?.domain || "domain",
+            summary: `Domain activation failed: ${serviceError.message}`,
+            metadata: {
+              operation_id: operationId,
+              error_code: serviceError.code,
+            },
+          });
         });
       } catch (markError) {
         console.error("[DomainService] Failed to persist operation failure", markError);
@@ -432,6 +618,69 @@ export class DomainService {
       responseData: params.responseData,
       status: "succeeded",
     });
+  }
+
+  private async emitAudit(params: {
+    actor: ActorContext;
+    action: "create" | "update" | "delete";
+    serviceId?: string;
+    serviceName?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deps.audit) return;
+
+    await this.deps.audit.log({
+      userId: params.actor.userId,
+      userEmail: params.actor.userEmail,
+      userName: params.actor.userName,
+      userRole: params.actor.userRole || "user",
+      action: params.action,
+      serviceId: params.serviceId,
+      serviceName: params.serviceName,
+      metadata: params.metadata,
+      context: params.actor.auditContext,
+    });
+  }
+
+  private async emitNotification(params: {
+    userId: string;
+    action: "created" | "updated" | "deleted" | "attached" | "failed";
+    serviceName: string;
+    serviceId?: string;
+    type?: "success" | "info" | "warning" | "error";
+    error?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    if (!this.deps.notifications) return;
+    await this.deps.notifications.notify(params);
+  }
+
+  private async emitEmail(params: {
+    actor: ActorContext;
+    severity: "info" | "warning" | "critical";
+    alertTitle: string;
+    serviceName: string;
+    summary: string;
+    metadata?: Record<string, string | number | boolean>;
+  }): Promise<void> {
+    if (!this.deps.email || !params.actor.userEmail) return;
+    await this.deps.email.sendImportantEvent({
+      to: params.actor.userEmail,
+      customerName: params.actor.userName,
+      severity: params.severity,
+      alertTitle: params.alertTitle,
+      serviceName: params.serviceName,
+      summary: params.summary,
+      metadata: params.metadata,
+    });
+  }
+
+  private async emitNonBlocking(fn: () => Promise<void>): Promise<void> {
+    try {
+      await fn();
+    } catch (error) {
+      console.warn("[DomainService] Observability event failed", error);
+    }
   }
 }
 

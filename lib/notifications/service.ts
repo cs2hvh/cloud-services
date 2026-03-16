@@ -178,6 +178,7 @@ export function createServiceNotification(params: {
     spectrum: 'Spectrum App',
     ai_agent: 'AI Agent',
     knowledge_base: 'Knowledge Base',
+    domain: 'Domain',
   };
 
   const { type: defaultType, verb } = actionMessages[action];

@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
 import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
+import { createDomainActor } from "@/lib/domain-service/http/request-context";
 
 export async function GET(
   _req: Request,
@@ -41,7 +42,11 @@ export async function GET(
 
     const service = getDomainMarketplaceService();
     const request = await service.getPurchaseRequest({
-      actor: { userId: auth.user!.id },
+      actor: createDomainActor({
+        req: _req,
+        userId: auth.user!.id,
+        userEmail: auth.user!.email || undefined,
+      }),
       requestId,
     });
 

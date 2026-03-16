@@ -64,8 +64,18 @@ export interface DomainPurchaseRequest {
   updated_at: string;
 }
 
+export interface DomainAuditContext {
+  ipAddress?: string;
+  userAgent?: string;
+  requestId?: string;
+}
+
 export interface ActorContext {
   userId: string;
+  userEmail?: string;
+  userName?: string;
+  userRole?: "user" | "admin" | "system";
+  auditContext?: DomainAuditContext;
 }
 
 export interface AppRecord {
@@ -74,4 +84,5 @@ export interface AppRecord {
   name: string;
   slug: string;
   status?: string;
+  project_id?: string | null;
 }

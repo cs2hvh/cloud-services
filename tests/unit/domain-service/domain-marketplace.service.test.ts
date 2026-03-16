@@ -5,6 +5,10 @@ import { DomainMarketplaceService } from "@/lib/domain-service/application/domai
 function createService(overrides?: {
   purchasable?: boolean;
   latestStatus?: "requested" | "processing" | "completed" | "failed" | "cancelled" | null;
+  billing?: {
+    chargeDomainPurchase: ReturnType<typeof vi.fn>;
+    refundDomainPurchase: ReturnType<typeof vi.fn>;
+  };
 }) {
   const nameCom = {
     checkAvailability: vi.fn().mockResolvedValue({
@@ -84,7 +88,14 @@ function createService(overrides?: {
     updateStatus: vi.fn(),
   };
 
-  const service = new DomainMarketplaceService(nameCom as never, appRead as never, purchaseRequests as never);
+  const service = new DomainMarketplaceService(
+    nameCom as never,
+    appRead as never,
+    purchaseRequests as never,
+    {
+      billing: overrides?.billing as never,
+    }
+  );
   return { service, nameCom, appRead, purchaseRequests };
 }
 
@@ -111,7 +122,11 @@ describe("DomainMarketplaceService", () => {
   });
 
   it("creates purchase request for available domain", async () => {
-    const { service, purchaseRequests, nameCom } = createService();
+    const billing = {
+      chargeDomainPurchase: vi.fn().mockResolvedValue(undefined),
+      refundDomainPurchase: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service, purchaseRequests, nameCom } = createService({ billing });
 
     const request = await service.createPurchaseRequest({
       actor: { userId: "user-1" },
@@ -120,6 +135,13 @@ describe("DomainMarketplaceService", () => {
     });
 
     expect(purchaseRequests.create).toHaveBeenCalled();
+    expect(billing.chargeDomainPurchase).toHaveBeenCalledWith({
+      userId: "user-1",
+      purchaseRequestId: "req-1",
+      domain: "hello.com",
+      amount: 12.99,
+      currency: "USD",
+    });
     expect(nameCom.purchaseDomain).toHaveBeenCalled();
     expect(purchaseRequests.updateStatus).toHaveBeenCalledWith({
       requestId: "req-1",
@@ -160,7 +182,11 @@ describe("DomainMarketplaceService", () => {
   });
 
   it("maps registrar validation availability race to DOMAIN_NOT_AVAILABLE", async () => {
-    const { service, nameCom, purchaseRequests } = createService();
+    const billing = {
+      chargeDomainPurchase: vi.fn().mockResolvedValue(undefined),
+      refundDomainPurchase: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service, nameCom, purchaseRequests } = createService({ billing });
     nameCom.purchaseDomain.mockRejectedValue(
       new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
@@ -182,6 +208,44 @@ describe("DomainMarketplaceService", () => {
       requestId: "req-1",
       status: "failed",
       lastError: "Domain hello.com is no longer available for registration",
+    });
+    expect(billing.refundDomainPurchase).toHaveBeenCalledWith({
+      userId: "user-1",
+      purchaseRequestId: "req-1",
+      domain: "hello.com",
+      amount: 12.99,
+      currency: "USD",
+      reason: "purchase_failed",
+    });
+  });
+
+  it("fails fast when billing charge fails", async () => {
+    const billing = {
+      chargeDomainPurchase: vi.fn().mockRejectedValue(
+        new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS,
+          message: "Insufficient credits",
+        })
+      ),
+      refundDomainPurchase: vi.fn().mockResolvedValue(undefined),
+    };
+    const { service, nameCom, purchaseRequests } = createService({ billing });
+
+    await expect(
+      service.createPurchaseRequest({
+        actor: { userId: "user-1" },
+        appId: "app-1",
+        domain: "hello.com",
+      })
+    ).rejects.toMatchObject({
+      code: DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS,
+    });
+
+    expect(nameCom.purchaseDomain).not.toHaveBeenCalled();
+    expect(purchaseRequests.updateStatus).toHaveBeenCalledWith({
+      requestId: "req-1",
+      status: "failed",
+      lastError: "Insufficient credits",
     });
   });
 

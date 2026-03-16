@@ -14,6 +14,8 @@ export const DOMAIN_ERROR_CODES = {
   PROVIDER_PAYMENT_REQUIRED: "PROVIDER_PAYMENT_REQUIRED",
   PROVIDER_VALIDATION_FAILED: "PROVIDER_VALIDATION_FAILED",
   PROVIDER_RATE_LIMITED: "PROVIDER_RATE_LIMITED",
+  INSUFFICIENT_CREDITS: "INSUFFICIENT_CREDITS",
+  BILLING_CHARGE_FAILED: "BILLING_CHARGE_FAILED",
   INGRESS_APPLY_FAILED: "INGRESS_APPLY_FAILED",
   INTEGRATION_CONFIG_ERROR: "INTEGRATION_CONFIG_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
@@ -78,10 +80,12 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
     case DOMAIN_ERROR_CODES.PROVIDER_UNAUTHORIZED:
       return { status: 502, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.PROVIDER_PAYMENT_REQUIRED:
+    case DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS:
       return { status: 402, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.PROVIDER_RATE_LIMITED:
       return { status: 429, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED:
+    case DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED:
       return { status: 502, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR:
     case DOMAIN_ERROR_CODES.INTERNAL_ERROR:

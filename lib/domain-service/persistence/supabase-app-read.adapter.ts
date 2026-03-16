@@ -26,6 +26,7 @@ export class SupabaseAppReadAdapter implements AppReadPort {
       name: result.data.name,
       slug: result.data.slug,
       status: result.data.status,
+      project_id: result.data.project_id || null,
     };
   }
 }

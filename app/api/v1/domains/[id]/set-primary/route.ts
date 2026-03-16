@@ -3,6 +3,7 @@ import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { getDomainService } from "@/lib/domain-service";
 import { SetPrimaryDomainRequestSchema } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
+import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
 
 export const POST = withV1Auth("domains:set-primary", async (req, auth, context) => {
   const idResult = await v1ExtractId(context);
@@ -20,10 +21,15 @@ export const POST = withV1Auth("domains:set-primary", async (req, auth, context)
     }
 
     const service = getDomainService();
-    const idempotencyKey = req.headers.get("idempotency-key") || undefined;
+    const idempotencyKey = resolveIdempotencyKey(req);
+    const actor = createDomainActor({
+      req,
+      userId: auth.userId,
+      userEmail: auth.kind === "session" ? auth.email : undefined,
+    });
 
     const domain = await service.setPrimaryDomain({
-      actor: { userId: auth.userId },
+      actor,
       domainId: idResult.id,
       redirectToPrimary: validation.data.redirect_to_primary,
       idempotencyKey,

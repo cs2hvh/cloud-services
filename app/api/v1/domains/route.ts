@@ -5,6 +5,7 @@ import {
   DomainListQuerySchema,
 } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
+import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
 
 export const GET = withV1Auth("domains:list", async (req, auth) => {
   try {
@@ -23,8 +24,13 @@ export const GET = withV1Auth("domains:list", async (req, auth) => {
     }
 
     const service = getDomainService();
+    const actor = createDomainActor({
+      req,
+      userId: auth.userId,
+      userEmail: auth.kind === "session" ? auth.email : undefined,
+    });
     const domains = await service.listDomains({
-      actor: { userId: auth.userId },
+      actor,
       appId: validation.data.app_id,
     });
 
@@ -50,10 +56,15 @@ export const POST = withV1Auth("domains:add", async (req, auth) => {
     }
 
     const service = getDomainService();
-    const idempotencyKey = req.headers.get("idempotency-key") || undefined;
+    const idempotencyKey = resolveIdempotencyKey(req);
+    const actor = createDomainActor({
+      req,
+      userId: auth.userId,
+      userEmail: auth.kind === "session" ? auth.email : undefined,
+    });
 
     const result = await service.addDomain({
-      actor: { userId: auth.userId },
+      actor,
       appId: validation.data.app_id,
       domain: validation.data.domain,
       idempotencyKey,
