@@ -43,7 +43,7 @@ type DomainInventoryItem = {
 };
 
 function normalizeDomain(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/\.$/, "");
 }
 
 async function loadNameComDomainMeta(): Promise<Map<string, { expires_at: string | null; auto_renew: boolean | null }>> {

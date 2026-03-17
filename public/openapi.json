@@ -1727,6 +1727,7 @@
       },
       "DomainVerificationInstruction": {
         "type": "object",
+        "nullable": true,
         "properties": {
           "record_type": {
             "type": "string",
@@ -1753,7 +1754,13 @@
           "record_name",
           "record_value",
           "ttl"
-        ]
+        ],
+        "example": {
+          "record_type": "TXT",
+          "record_name": "galaxyhvh-verify.api.example.com",
+          "record_value": "verify_7f23cbb6500c31f7",
+          "ttl": 300
+        }
       },
       "AddDomainResponse": {
         "type": "object",
@@ -1764,12 +1771,32 @@
               "domain": {
                 "$ref": "#/components/schemas/Domain"
               },
+              "verification_required": {
+                "type": "boolean",
+                "example": true
+              },
+              "managed_zone_detected": {
+                "type": "boolean",
+                "example": false
+              },
+              "ownership_source": {
+                "type": "string",
+                "enum": [
+                  "purchase_request",
+                  "registrar",
+                  "external"
+                ],
+                "example": "external"
+              },
               "verification_instructions": {
                 "$ref": "#/components/schemas/DomainVerificationInstruction"
               }
             },
             "required": [
               "domain",
+              "verification_required",
+              "managed_zone_detected",
+              "ownership_source",
               "verification_instructions"
             ]
           }
@@ -2222,7 +2249,7 @@
           },
           "provider": {
             "type": "string",
-            "example": "namecom"
+            "example": "ahuracloud"
           },
           "idempotency_key": {
             "type": "string",

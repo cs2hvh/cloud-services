@@ -47,7 +47,10 @@ export interface DomainRegistrarPort {
 
 export interface DnsProviderPort {
   listTxtRecords(recordName: string): Promise<string[]>;
+  ensureRoutingRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
+  removeRoutingRecord(params: { fqdn: string; target?: string }): Promise<void>;
   ensureCnameRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
+  removeCnameRecord(params: { fqdn: string; target?: string }): Promise<void>;
 }
 
 export interface IngressPort {

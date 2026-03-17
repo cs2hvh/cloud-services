@@ -32,6 +32,9 @@ describe('POST /api/domains', () => {
       listDomains: vi.fn().mockResolvedValue([]),
       addDomain: vi.fn().mockResolvedValue({
         domain: { id: 'domain-1', domain: 'example.com' },
+        verification_required: true,
+        managed_zone_detected: false,
+        ownership_source: 'external',
         verification_instructions: {
           record_type: 'TXT',
           record_name: 'galaxyhvh-verify.example.com',
@@ -147,6 +150,7 @@ describe('POST /api/domains', () => {
       const data = await expectResponseStatus(response, 201);
 
       expect(data.success).toBe(true);
+      expect(data.verification_required).toBe(true);
       expect(data.verification_instructions.record_type).toBe('TXT');
     });
 

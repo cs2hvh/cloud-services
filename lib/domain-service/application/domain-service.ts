@@ -12,6 +12,7 @@ import type {
   DomainEmailPort,
   DomainNotificationPort,
   DomainOperationRepositoryPort,
+  DomainPurchaseRequestRepositoryPort,
   DomainRegistrarPort,
   DomainRepositoryPort,
   IngressPort,
@@ -25,10 +26,24 @@ interface DomainServiceDeps {
   registrar: DomainRegistrarPort;
   dns: DnsProviderPort;
   ingress: IngressPort;
+  purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   audit?: DomainAuditLogPort;
   notifications?: DomainNotificationPort;
   email?: DomainEmailPort;
 }
+
+type AddDomainResult = {
+  domain: DomainRecord;
+  verification_required: boolean;
+  managed_zone_detected: boolean;
+  ownership_source: "purchase_request" | "registrar" | "external";
+  verification_instructions: {
+    record_type: "TXT";
+    record_name: string;
+    record_value: string;
+    ttl: number;
+  } | null;
+};
 
 export class DomainService {
   constructor(private readonly deps: DomainServiceDeps) {}
@@ -43,35 +58,23 @@ export class DomainService {
     appId: string;
     domain: string;
     idempotencyKey?: string;
-  }): Promise<{
-    domain: DomainRecord;
-    verification_instructions: {
-      record_type: "TXT";
-      record_name: string;
-      record_value: string;
-      ttl: number;
-    };
-  }> {
+  }): Promise<AddDomainResult> {
     const cleanDomain = normalizeDomain(input.domain);
     ensureDomainFormat(cleanDomain);
 
-    const fromIdempotency = await this.tryIdempotentResult<{
-      domain: DomainRecord;
-      verification_instructions: {
-        record_type: "TXT";
-        record_name: string;
-        record_value: string;
-        ttl: number;
-      };
-    }>(input.actor.userId, "domain.add", input.idempotencyKey);
+    const fromIdempotency = await this.tryIdempotentResult<AddDomainResult>(
+      input.actor.userId,
+      "domain.add",
+      input.idempotencyKey
+    );
     if (fromIdempotency) {
-      return fromIdempotency;
+      return normalizeAddDomainResult(fromIdempotency);
     }
 
     await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
 
     const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
-    if (existing && existing.status !== "removed") {
+    if (existing) {
       throw new DomainServiceError({
         code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
         message:
@@ -81,29 +84,36 @@ export class DomainService {
       });
     }
 
-    // Optional registrar read (best effort metadata check for managed domains).
-    try {
-      await this.deps.registrar.getDomainSummary(cleanDomain);
-    } catch {
-      // Ignore registrar lookup failures here; activation handles integration errors explicitly.
-    }
+    const ownership = await this.resolveOwnershipMode({
+      domain: cleanDomain,
+      userId: input.actor.userId,
+    });
 
     const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
-    const domain = await this.deps.domains.createPending({
+    const createdDomain = await this.deps.domains.createPending({
       appId: input.appId,
       userId: input.actor.userId,
       domain: cleanDomain,
       verificationToken,
     });
 
+    const domain = ownership.managedByPlatform
+      ? await this.deps.domains.markVerified(createdDomain.id)
+      : createdDomain;
+
     const response = {
       domain,
-      verification_instructions: {
-        record_type: "TXT" as const,
-        record_name: `galaxyhvh-verify.${cleanDomain}`,
-        record_value: verificationToken,
-        ttl: 300,
-      },
+      verification_required: !ownership.managedByPlatform,
+      managed_zone_detected: ownership.managedByPlatform,
+      ownership_source: ownership.source,
+      verification_instructions: ownership.managedByPlatform
+        ? null
+        : {
+            record_type: "TXT" as const,
+            record_name: `galaxyhvh-verify.${cleanDomain}`,
+            record_value: verificationToken,
+            ttl: 300,
+          },
     };
 
     await this.persistCompletedIdempotentOperation({
@@ -124,6 +134,8 @@ export class DomainService {
         metadata: {
           app_id: input.appId,
           event: "domain_added",
+          managed_zone_detected: ownership.managedByPlatform,
+          ownership_source: ownership.source,
         },
       });
       await this.emitNotification({
@@ -132,7 +144,11 @@ export class DomainService {
         serviceName: cleanDomain,
         serviceId: domain.id,
         type: "success",
-        metadata: { app_id: input.appId },
+        metadata: {
+          app_id: input.appId,
+          managed_zone_detected: ownership.managedByPlatform,
+          ownership_source: ownership.source,
+        },
       });
     });
 
@@ -142,6 +158,7 @@ export class DomainService {
   async verifyDomain(input: {
     actor: ActorContext;
     domainId: string;
+    forceRefresh?: boolean;
     idempotencyKey?: string;
   }): Promise<DomainRecord> {
     const fromIdempotency = await this.tryIdempotentResult<DomainRecord>(
@@ -155,7 +172,7 @@ export class DomainService {
 
     const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
 
-    if (domain.status === "active" || domain.status === "verified") {
+    if (!input.forceRefresh && (domain.status === "active" || domain.status === "verified")) {
       return domain;
     }
 
@@ -351,6 +368,32 @@ export class DomainService {
 
     if (domain.status === "active") {
       await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
+
+      const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
+      try {
+        await this.deps.dns.removeRoutingRecord({
+          fqdn: domain.domain,
+          target: cnameTarget,
+        });
+      } catch (error: unknown) {
+        const dnsError = toDomainServiceError(error);
+        if (!shouldSkipManagedDnsAutomation(dnsError)) {
+          await this.emitNonBlocking(async () => {
+            await this.emitAudit({
+              actor: input.actor,
+              action: "update",
+              serviceId: domain.id,
+              serviceName: domain.domain,
+              metadata: {
+                event: "domain_dns_cleanup_failed",
+                app_id: domain.app_id,
+                error_code: dnsError.code,
+                error_message: dnsError.message,
+              },
+            });
+          });
+        }
+      }
     }
 
     await this.deps.domains.markRemoved(domain.id);
@@ -418,7 +461,7 @@ export class DomainService {
       let dnsAutomationMessage: string | null = null;
 
       try {
-        await this.deps.dns.ensureCnameRecord({
+        await this.deps.dns.ensureRoutingRecord({
           fqdn: domain.domain,
           target: cnameTarget,
           ttl: 300,
@@ -699,12 +742,62 @@ export class DomainService {
       console.warn("[DomainService] Observability event failed", error);
     }
   }
+
+  private async resolveOwnershipMode(input: {
+    domain: string;
+    userId: string;
+  }): Promise<{
+    managedByPlatform: boolean;
+    source: "purchase_request" | "registrar" | "external";
+  }> {
+    const candidates = buildManagedZoneCandidates(input.domain);
+
+    for (const candidate of candidates) {
+      if (this.deps.purchaseRequests) {
+        try {
+          const request = await this.deps.purchaseRequests.findLatestByDomain({
+            userId: input.userId,
+            domain: candidate,
+          });
+          if (request?.status === "completed") {
+            return {
+              managedByPlatform: true,
+              source: "purchase_request",
+            };
+          }
+        } catch {
+          // Keep add-domain flow resilient; fallback to registrar probe and manual TXT.
+        }
+      }
+
+      try {
+        const summary = await this.deps.registrar.getDomainSummary(candidate);
+        if (summary?.domainName) {
+          return {
+            managedByPlatform: true,
+            source: "registrar",
+          };
+        }
+      } catch (error: unknown) {
+        const serviceError = toDomainServiceError(error);
+        if (serviceError.code === DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND) {
+          continue;
+        }
+        // Do not block adding external domains if registrar metadata lookup fails.
+      }
+    }
+
+    return {
+      managedByPlatform: false,
+      source: "external",
+    };
+  }
 }
 
 function shouldSkipManagedDnsAutomation(error: DomainServiceError): boolean {
   return (
     error.code === DOMAIN_ERROR_CODES.DOMAIN_INVALID
-    && /No managed Name\.com zone found/i.test(error.message)
+    && /No (platform-managed DNS|managed) zone found/i.test(error.message)
   );
 }
 
@@ -721,4 +814,32 @@ function ensureDomainFormat(domain: string): void {
       details: { domain },
     });
   }
+}
+
+function buildManagedZoneCandidates(domain: string): string[] {
+  const labels = domain.split(".").map((label) => label.trim()).filter(Boolean);
+  if (labels.length < 2) {
+    return [domain];
+  }
+
+  const candidates: string[] = [];
+  for (let index = 0; index <= labels.length - 2; index += 1) {
+    candidates.push(labels.slice(index).join("."));
+  }
+  return candidates;
+}
+
+function normalizeAddDomainResult(input: AddDomainResult): AddDomainResult {
+  if (typeof input.verification_required === "boolean") {
+    return input;
+  }
+
+  const hasInstructions = Boolean(input.verification_instructions);
+  return {
+    ...input,
+    verification_required: hasInstructions,
+    managed_zone_detected: !hasInstructions,
+    ownership_source: hasInstructions ? "external" : "registrar",
+    verification_instructions: input.verification_instructions || null,
+  };
 }

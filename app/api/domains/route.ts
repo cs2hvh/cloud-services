@@ -112,7 +112,12 @@ export async function POST(req: NextRequest) {
         success: true,
         domain: result.domain,
         verification_instructions: result.verification_instructions,
-        message: "Domain added successfully. Add the DNS TXT record to verify ownership.",
+        verification_required: result.verification_required,
+        managed_zone_detected: result.managed_zone_detected,
+        ownership_source: result.ownership_source,
+        message: result.verification_required
+          ? "Domain added successfully. Add the DNS TXT record to verify ownership."
+          : "Domain added successfully. Ownership verified automatically for this managed domain.",
       },
       { status: 201 }
     );

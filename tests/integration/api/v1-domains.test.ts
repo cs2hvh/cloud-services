@@ -80,6 +80,9 @@ describe("v1 domains routes", () => {
           created_at: "2026-03-16T00:00:00Z",
           updated_at: "2026-03-16T00:00:00Z",
         },
+        verification_required: true,
+        managed_zone_detected: false,
+        ownership_source: "external",
         verification_instructions: {
           record_type: "TXT",
           record_name: "galaxyhvh-verify.api.example.com",
@@ -141,6 +144,7 @@ describe("v1 domains routes", () => {
     const body = await res.json();
 
     expect(res.status).toBe(201);
+    expect(body.data.verification_required).toBe(true);
     expect(body.data.verification_instructions.record_type).toBe("TXT");
   });
 

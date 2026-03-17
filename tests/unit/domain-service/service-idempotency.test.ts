@@ -56,6 +56,9 @@ function createService() {
           domain: {
             id: "domain-1",
           },
+          verification_required: true,
+          managed_zone_detected: false,
+          ownership_source: "external",
           verification_instructions: {
             record_type: "TXT",
             record_name: "galaxyhvh-verify.api.example.com",
@@ -81,7 +84,10 @@ function createService() {
     },
     dns: {
       listTxtRecords: vi.fn().mockResolvedValue([]),
+      ensureRoutingRecord: vi.fn(),
+      removeRoutingRecord: vi.fn(),
       ensureCnameRecord: vi.fn(),
+      removeCnameRecord: vi.fn(),
     },
     ingress: {
       addDomainToAppIngress: vi.fn(),
@@ -101,7 +107,8 @@ describe("DomainService idempotency", () => {
       idempotencyKey: "idem-1",
     });
 
-    expect(result.verification_instructions.record_type).toBe("TXT");
+    expect(result.verification_instructions?.record_type).toBe("TXT");
+    expect(result.verification_required).toBe(true);
     expect((result.domain as { id: string }).id).toBe("domain-1");
   });
 

@@ -152,7 +152,7 @@ export const DomainMarketplacePurchaseRequestRecordSchema = z
     purchase_price: z.number().nullable().openapi({ example: 12.99 }),
     renewal_price: z.number().nullable().openapi({ example: 14.99 }),
     currency: z.string().openapi({ example: "USD" }),
-    provider: z.string().openapi({ example: "namecom" }),
+    provider: z.string().openapi({ example: "ahuracloud" }),
     idempotency_key: z.string().nullable().openapi({ example: "idem-domain-001" }),
     provider_request_id: z.string().nullable().openapi({ example: "123456" }),
     last_error: z.string().nullable().openapi({ example: null }),
@@ -204,7 +204,19 @@ export const AddDomainResponseSchema = z
   .object({
     data: z.object({
       domain: DomainSchema,
-      verification_instructions: VerificationInstructionSchema,
+      verification_required: z.boolean().openapi({ example: true }),
+      managed_zone_detected: z.boolean().openapi({ example: false }),
+      ownership_source: z
+        .enum(["purchase_request", "registrar", "external"])
+        .openapi({ example: "external" }),
+      verification_instructions: VerificationInstructionSchema.nullable().openapi({
+        example: {
+          record_type: "TXT",
+          record_name: "galaxyhvh-verify.api.example.com",
+          record_value: "verify_7f23cbb6500c31f7",
+          ttl: 300,
+        },
+      }),
     }),
   })
   .openapi("AddDomainResponse");

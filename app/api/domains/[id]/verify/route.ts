@@ -58,6 +58,7 @@ export async function POST(
         userEmail: auth.user.email || undefined,
       }),
       domainId: params.data.id,
+      forceRefresh: parsed.data.force_refresh,
       idempotencyKey: resolveIdempotencyKey(req),
     });
 

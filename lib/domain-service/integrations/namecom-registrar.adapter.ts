@@ -97,6 +97,12 @@ export interface NameComUpdateRecordInput {
   priority?: number;
 }
 
+export interface NameComUpdateDomainInput {
+  autorenewEnabled?: boolean;
+  locked?: boolean;
+  privacyEnabled?: boolean;
+}
+
 type NameComAdapterOptions = {
   baseUrl?: string;
   username?: string;
@@ -147,6 +153,35 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
   async getDomain(domainName: string): Promise<NameComDomainResponse> {
     const encodedDomain = encodeURIComponent(domainName);
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`);
+  }
+
+  async updateDomain(domainName: string, input: NameComUpdateDomainInput): Promise<NameComDomainResponse> {
+    const encodedDomain = encodeURIComponent(domainName);
+    const body: Record<string, unknown> = {};
+
+    if (typeof input.autorenewEnabled === "boolean") {
+      body.autorenewEnabled = input.autorenewEnabled;
+    }
+    if (typeof input.locked === "boolean") {
+      body.locked = input.locked;
+    }
+    if (typeof input.privacyEnabled === "boolean") {
+      body.privacyEnabled = input.privacyEnabled;
+    }
+
+    return this.request<NameComDomainResponse>(`/domains/${encodedDomain}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  }
+
+  async setNameservers(domainName: string, nameservers: string[]): Promise<NameComDomainResponse> {
+    const encodedDomain = encodeURIComponent(domainName);
+
+    return this.request<NameComDomainResponse>(`/domains/${encodedDomain}:setNameservers`, {
+      method: "POST",
+      body: JSON.stringify({ nameservers }),
+    });
   }
 
   async listDomains(params?: { page?: number; perPage?: number }): Promise<NameComListDomainsResponse> {
@@ -322,7 +357,7 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
       throw new DomainServiceError({
         code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
         message:
-          "Name.com credentials are not configured. Set NAMECOM_USERNAME + NAMECOM_API_TOKEN (Core API uses Basic auth username:token).",
+          "Domain registrar credentials are not configured.",
       });
     }
   }
@@ -342,49 +377,49 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort {
     if (status === 400) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
-        message: `Name.com request validation failed: ${message}`,
+        message: `Registrar request validation failed: ${message}`,
       });
     }
 
     if (status === 401) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_UNAUTHORIZED,
-        message: `Name.com authorization failed: ${message}`,
+        message: `Registrar authorization failed: ${message}`,
       });
     }
 
     if (status === 402) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_PAYMENT_REQUIRED,
-        message: `Name.com account action required: ${message}`,
+        message: `Registrar account action required: ${message}`,
       });
     }
 
     if (status === 404) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND,
-        message: `Name.com resource not found: ${message}`,
+        message: `Registrar resource not found: ${message}`,
       });
     }
 
     if (status === 422) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
-        message: `Name.com validation failed: ${message}`,
+        message: `Registrar validation failed: ${message}`,
       });
     }
 
     if (status === 429) {
       return new DomainServiceError({
         code: DOMAIN_ERROR_CODES.PROVIDER_RATE_LIMITED,
-        message: "Name.com rate limit exceeded",
+        message: "Registrar rate limit exceeded",
         retryable: true,
       });
     }
 
     return new DomainServiceError({
       code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
-      message: `Name.com request failed: ${message}`,
+      message: `Registrar request failed: ${message}`,
       retryable: status >= 500,
     });
   }
@@ -424,7 +459,7 @@ async function parseResponseBody(res: Response): Promise<unknown> {
 
 function extractErrorMessage(payload: NameComErrorPayload | string | null, status: number): string {
   if (!payload) {
-    return `Name.com API returned ${status}`;
+    return `Registrar API returned ${status}`;
   }
 
   if (typeof payload === "string") {
@@ -435,5 +470,5 @@ function extractErrorMessage(payload: NameComErrorPayload | string | null, statu
     return `${payload.message || "Error"}: ${payload.details}`;
   }
 
-  return payload.message || `Name.com API returned ${status}`;
+  return payload.message || `Registrar API returned ${status}`;
 }

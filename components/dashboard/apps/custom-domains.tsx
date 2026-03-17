@@ -198,8 +198,14 @@ export function CustomDomainsManager({
         return;
       }
 
-      toast.success('Domain added! Add the DNS TXT record to verify ownership.');
-      setVerificationInstructions(data.verification_instructions);
+      if (data?.verification_required) {
+        toast.success('Domain added. Add the TXT record to verify external ownership.');
+        setVerificationInstructions(data.verification_instructions || null);
+      } else {
+        toast.success('Domain added and ownership auto-verified. Activate when DNS is ready.');
+        setVerificationInstructions(null);
+        setAddDialogOpen(false);
+      }
       setNewDomain('');
       fetchDomains();
     } catch (error) {
@@ -444,7 +450,7 @@ export function CustomDomainsManager({
               <DialogHeader>
                 <DialogTitle>Add Custom Domain</DialogTitle>
                 <DialogDescription className="text-white/60">
-                  Enter a root or subdomain. We will guide you to verify and activate it.
+                  Enter a root or subdomain. AhuraCloud-managed domains verify automatically; external domains require TXT verification.
                 </DialogDescription>
               </DialogHeader>
               
@@ -542,8 +548,8 @@ export function CustomDomainsManager({
             </div>
             <div className="rounded-md border border-white/10 bg-black/20 p-3">
               <p className="text-xs text-yellow-300">Step 2</p>
-              <p className="text-sm text-white mt-1">Verify ownership</p>
-              <p className="text-xs text-white/55 mt-1">Add TXT record, then click Verify</p>
+              <p className="text-sm text-white mt-1">Ownership check</p>
+              <p className="text-xs text-white/55 mt-1">Auto for managed domains, TXT verify for external</p>
             </div>
             <div className="rounded-md border border-white/10 bg-black/20 p-3">
               <p className="text-xs text-green-300">Step 3</p>
@@ -705,7 +711,7 @@ export function CustomDomainsManager({
                   <AlertCircle className="h-4 w-4 text-yellow-400" />
                   <AlertTitle className="text-yellow-400 text-sm">Verification Required</AlertTitle>
                   <AlertDescription className="text-white/70 text-xs space-y-2">
-                    <p>Add this TXT record in the DNS settings of your domain to verify ownership:</p>
+                    <p>Add this TXT record at your DNS provider to verify external ownership:</p>
                     <div className="bg-black/30 rounded p-2 font-mono text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-white/50">Name:</span>

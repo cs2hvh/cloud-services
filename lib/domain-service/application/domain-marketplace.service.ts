@@ -147,7 +147,7 @@ export class DomainMarketplaceService {
       domain: cleanDomain,
     });
     if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
-      return existingByDomain;
+      return toPublicPurchaseRequest(existingByDomain);
     }
 
     if (input.idempotencyKey) {
@@ -166,7 +166,7 @@ export class DomainMarketplaceService {
             },
           });
         }
-        return existing;
+        return toPublicPurchaseRequest(existing);
       }
     }
 
@@ -323,7 +323,7 @@ export class DomainMarketplaceService {
         metadata: {
           event: "domain_purchase_completed",
           source_app_id: input.appId || null,
-          provider: "namecom",
+          provider: "ahuracloud",
           provider_order_id: purchase.order ? String(purchase.order) : null,
           amount: first.purchasePrice ?? null,
           currency: "USD",
@@ -357,12 +357,12 @@ export class DomainMarketplaceService {
       });
     });
 
-    return {
+    return toPublicPurchaseRequest({
       ...request,
       status: "completed",
       provider_request_id: purchase.order ? String(purchase.order) : null,
       last_error: null,
-    };
+    });
   }
 
   async listPurchaseRequests(input: {
@@ -374,11 +374,12 @@ export class DomainMarketplaceService {
       await this.appRead.getOwnedApp(input.appId, input.actor.userId);
     }
 
-    return this.purchaseRequests.listByUser({
+    const requests = await this.purchaseRequests.listByUser({
       userId: input.actor.userId,
       appId: input.appId,
       limit: input.limit || 20,
     });
+    return requests.map(toPublicPurchaseRequest);
   }
 
   async getPurchaseRequest(input: {
@@ -394,7 +395,7 @@ export class DomainMarketplaceService {
       });
     }
 
-    return request;
+    return toPublicPurchaseRequest(request);
   }
 
   private async emitFailureEvents(params: {
@@ -569,4 +570,11 @@ function toMarketplaceResult(item: {
 
 function isBlockingPurchaseStatus(status: DomainPurchaseRequest["status"]): boolean {
   return status === "requested" || status === "processing" || status === "completed";
+}
+
+function toPublicPurchaseRequest(request: DomainPurchaseRequest): DomainPurchaseRequest {
+  return {
+    ...request,
+    provider: "ahuracloud",
+  };
 }
