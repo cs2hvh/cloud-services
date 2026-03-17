@@ -129,7 +129,7 @@ export class DomainMarketplaceService {
 
   async createPurchaseRequest(input: {
     actor: ActorContext;
-    appId: string;
+    appId?: string;
     domain: string;
     idempotencyKey?: string;
     metadata?: Record<string, unknown>;
@@ -138,11 +138,12 @@ export class DomainMarketplaceService {
     ensureDomainFormat(cleanDomain);
     const actor = input.actor;
 
-    await this.appRead.getOwnedApp(input.appId, input.actor.userId);
+    if (input.appId) {
+      await this.appRead.getOwnedApp(input.appId, input.actor.userId);
+    }
 
-    const existingByDomain = await this.purchaseRequests.findLatestByAppAndDomain({
+    const existingByDomain = await this.purchaseRequests.findLatestByDomain({
       userId: input.actor.userId,
-      appId: input.appId,
       domain: cleanDomain,
     });
     if (existingByDomain && isBlockingPurchaseStatus(existingByDomain.status)) {
@@ -155,7 +156,7 @@ export class DomainMarketplaceService {
         input.idempotencyKey
       );
       if (existing) {
-        if (existing.app_id !== input.appId || existing.domain !== cleanDomain) {
+        if ((existing.app_id || null) !== (input.appId || null) || existing.domain !== cleanDomain) {
           throw new DomainServiceError({
             code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
             message: "Idempotency key already used with a different purchase request payload",
@@ -190,7 +191,7 @@ export class DomainMarketplaceService {
 
     const request = await this.purchaseRequests.create({
       userId: input.actor.userId,
-      appId: input.appId,
+      appId: input.appId || null,
       domain: cleanDomain,
       purchasePrice: first.purchasePrice ?? null,
       renewalPrice: first.renewalPrice ?? null,
@@ -321,7 +322,7 @@ export class DomainMarketplaceService {
         serviceName: cleanDomain,
         metadata: {
           event: "domain_purchase_completed",
-          app_id: input.appId,
+          source_app_id: input.appId || null,
           provider: "namecom",
           provider_order_id: purchase.order ? String(purchase.order) : null,
           amount: first.purchasePrice ?? null,
@@ -336,7 +337,7 @@ export class DomainMarketplaceService {
         type: "success",
         metadata: {
           event: "domain_purchase_completed",
-          app_id: input.appId,
+          source_app_id: input.appId || null,
           amount: first.purchasePrice ?? null,
           renewal_price: first.renewalPrice ?? null,
           currency: "USD",
@@ -349,7 +350,7 @@ export class DomainMarketplaceService {
         serviceName: cleanDomain,
         summary: `Your domain purchase for ${cleanDomain} has completed successfully.`,
         metadata: {
-          app_id: input.appId,
+          source_app_id: input.appId || "none",
           amount: first.purchasePrice ?? 0,
           charged: chargedAmount,
         },
@@ -400,7 +401,7 @@ export class DomainMarketplaceService {
     actor: ActorContext;
     requestId: string;
     domain: string;
-    appId: string;
+    appId?: string;
     error: DomainServiceError;
     event: string;
   }): Promise<void> {
@@ -412,7 +413,7 @@ export class DomainMarketplaceService {
         serviceName: params.domain,
         metadata: {
           event: params.event,
-          app_id: params.appId,
+          source_app_id: params.appId || null,
           error_code: params.error.code,
           error_message: params.error.message,
         },
@@ -426,7 +427,7 @@ export class DomainMarketplaceService {
         error: params.error.message,
         metadata: {
           event: params.event,
-          app_id: params.appId,
+          source_app_id: params.appId || null,
           error_code: params.error.code,
         },
       });
@@ -437,7 +438,7 @@ export class DomainMarketplaceService {
         serviceName: params.domain,
         summary: `Domain purchase failed for ${params.domain}: ${params.error.message}`,
         metadata: {
-          app_id: params.appId,
+          source_app_id: params.appId || "none",
           error_code: params.error.code,
         },
       });

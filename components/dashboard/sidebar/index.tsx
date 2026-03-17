@@ -230,9 +230,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       icon: Rocket,
     },
     {
-      name: "Domain Marketplace",
-      href: "/dashboard/services/domains",
-      current: pathname.includes("/services/domains"),
+      name: "Domains",
+      href: "/dashboard/domains",
+      current: pathname.includes("/dashboard/domains"),
       icon: Globe,
     },
     {

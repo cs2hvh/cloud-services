@@ -2195,6 +2195,7 @@
           },
           "app_id": {
             "type": "string",
+            "nullable": true,
             "format": "uuid",
             "example": "00aefffd-e676-4ebe-b02e-9f936b1d04b4"
           },
@@ -2338,7 +2339,6 @@
           }
         },
         "required": [
-          "app_id",
           "domain"
         ]
       }

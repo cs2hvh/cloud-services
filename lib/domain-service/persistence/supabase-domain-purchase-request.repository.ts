@@ -8,7 +8,7 @@ const TABLE = "domain_purchase_requests";
 export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRequestRepositoryPort {
   async create(params: {
     userId: string;
-    appId: string;
+    appId?: string | null;
     domain: string;
     purchasePrice?: number | null;
     renewalPrice?: number | null;
@@ -24,7 +24,7 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
       .from(TABLE)
       .insert({
         user_id: params.userId,
-        app_id: params.appId,
+        app_id: params.appId ?? null,
         domain: params.domain,
         status: params.status || "requested",
         purchase_price: params.purchasePrice ?? null,
@@ -96,9 +96,8 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
     return (data || null) as DomainPurchaseRequest | null;
   }
 
-  async findLatestByAppAndDomain(params: {
+  async findLatestByDomain(params: {
     userId: string;
-    appId: string;
     domain: string;
   }): Promise<DomainPurchaseRequest | null> {
     const supabase = await createServiceClient();
@@ -106,7 +105,6 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
       .from(TABLE)
       .select("*")
       .eq("user_id", params.userId)
-      .eq("app_id", params.appId)
       .eq("domain", params.domain)
       .order("created_at", { ascending: false })
       .limit(1)

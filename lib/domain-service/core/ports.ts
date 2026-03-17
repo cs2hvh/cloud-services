@@ -109,7 +109,7 @@ export interface DomainOperationRepositoryPort {
 export interface DomainPurchaseRequestRepositoryPort {
   create(params: {
     userId: string;
-    appId: string;
+    appId?: string | null;
     domain: string;
     purchasePrice?: number | null;
     renewalPrice?: number | null;
@@ -122,9 +122,8 @@ export interface DomainPurchaseRequestRepositoryPort {
   }): Promise<DomainPurchaseRequest>;
   findByIdForUser(requestId: string, userId: string): Promise<DomainPurchaseRequest | null>;
   findByIdempotencyKey(userId: string, idempotencyKey: string): Promise<DomainPurchaseRequest | null>;
-  findLatestByAppAndDomain(params: {
+  findLatestByDomain(params: {
     userId: string;
-    appId: string;
     domain: string;
   }): Promise<DomainPurchaseRequest | null>;
   listByUser(params: {

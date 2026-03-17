@@ -63,7 +63,7 @@ function createService(overrides?: {
     }),
     findByIdForUser: vi.fn(),
     findByIdempotencyKey: vi.fn().mockResolvedValue(null),
-    findLatestByAppAndDomain: vi.fn().mockResolvedValue(
+    findLatestByDomain: vi.fn().mockResolvedValue(
       overrides?.latestStatus
         ? {
             id: "req-existing",
@@ -150,6 +150,23 @@ describe("DomainMarketplaceService", () => {
       lastError: null,
     });
     expect(request.status).toBe("completed");
+  });
+
+  it("creates global purchase request without app assignment", async () => {
+    const { service, appRead, purchaseRequests } = createService();
+
+    await service.createPurchaseRequest({
+      actor: { userId: "user-1" },
+      domain: "hello.com",
+    });
+
+    expect(appRead.getOwnedApp).not.toHaveBeenCalled();
+    expect(purchaseRequests.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: null,
+        domain: "hello.com",
+      })
+    );
   });
 
   it("returns latest blocking request for same app/domain", async () => {

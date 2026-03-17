@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   AddDomainRequestSchema,
+  DomainMarketplacePurchaseRequestSchema,
   DomainMarketplacePurchaseRequestListQuerySchema,
   DomainListQuerySchema,
 } from "@/lib/domain-service/contracts/schemas";
@@ -29,5 +30,12 @@ describe("domain contracts", () => {
 
     const invalid = DomainMarketplacePurchaseRequestListQuerySchema.safeParse({ limit: "abc" });
     expect(invalid.success).toBe(false);
+  });
+
+  it("allows marketplace purchase request without app id", () => {
+    const parsed = DomainMarketplacePurchaseRequestSchema.safeParse({
+      domain: "mybrand.com",
+    });
+    expect(parsed.success).toBe(true);
   });
 });

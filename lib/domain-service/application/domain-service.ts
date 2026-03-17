@@ -414,12 +414,23 @@ export class DomainService {
       const app = await this.deps.appRead.getOwnedApp(domain.app_id, userId);
 
       const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
+      let dnsAutoConfigured = true;
+      let dnsAutomationMessage: string | null = null;
 
-      await this.deps.dns.ensureCnameRecord({
-        fqdn: domain.domain,
-        target: cnameTarget,
-        ttl: 300,
-      });
+      try {
+        await this.deps.dns.ensureCnameRecord({
+          fqdn: domain.domain,
+          target: cnameTarget,
+          ttl: 300,
+        });
+      } catch (error: unknown) {
+        const dnsError = toDomainServiceError(error);
+        if (!shouldSkipManagedDnsAutomation(dnsError)) {
+          throw dnsError;
+        }
+        dnsAutoConfigured = false;
+        dnsAutomationMessage = dnsError.message;
+      }
 
       await this.deps.ingress.addDomainToAppIngress(app.name, domain.domain);
       const updated = await this.deps.domains.markActive(domain.id);
@@ -428,6 +439,8 @@ export class DomainService {
         domain_id: updated.id,
         status: updated.status,
         activated_at: updated.activated_at,
+        dns_auto_configured: dnsAutoConfigured,
+        dns_automation_message: dnsAutomationMessage,
       });
 
       await this.emitNonBlocking(async () => {
@@ -440,6 +453,8 @@ export class DomainService {
             event: "domain_activated",
             operation_id: operation.id,
             app_id: updated.app_id,
+            dns_auto_configured: dnsAutoConfigured,
+            dns_automation_message: dnsAutomationMessage,
           },
         });
         await this.emitNotification({
@@ -451,6 +466,7 @@ export class DomainService {
           metadata: {
             operation_id: operation.id,
             app_id: updated.app_id,
+            dns_auto_configured: dnsAutoConfigured,
           },
         });
         await this.emitEmail({
@@ -462,6 +478,7 @@ export class DomainService {
           metadata: {
             operation_id: operation.id,
             app_name: app.name,
+            dns_auto_configured: dnsAutoConfigured,
           },
         });
       });
@@ -682,6 +699,13 @@ export class DomainService {
       console.warn("[DomainService] Observability event failed", error);
     }
   }
+}
+
+function shouldSkipManagedDnsAutomation(error: DomainServiceError): boolean {
+  return (
+    error.code === DOMAIN_ERROR_CODES.DOMAIN_INVALID
+    && /No managed Name\.com zone found/i.test(error.message)
+  );
 }
 
 function normalizeDomain(domain: string): string {

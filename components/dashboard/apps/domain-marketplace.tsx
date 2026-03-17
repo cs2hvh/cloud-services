@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { DomainAttachAction, type DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -35,6 +36,7 @@ interface SearchResultItem {
 interface PurchaseRequest {
   id: string;
   domain: string;
+  app_id: string | null;
   status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
   purchase_price: number | null;
   renewal_price: number | null;
@@ -44,10 +46,24 @@ interface PurchaseRequest {
 }
 
 interface DomainMarketplaceTabProps {
-  appId: string;
+  sourceAppId?: string;
+  appOptions?: DomainAppOption[];
+  defaultAttachAppId?: string;
+  onDomainAttached?: (appId: string) => void;
+  showAttachActions?: boolean;
+  modeLabel?: string;
+  purchaseRequestAppIdFilter?: string;
 }
 
-export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
+export function DomainMarketplaceTab({
+  sourceAppId,
+  appOptions,
+  defaultAttachAppId,
+  onDomainAttached,
+  showAttachActions = true,
+  modeLabel = 'Search and purchase domains',
+  purchaseRequestAppIdFilter,
+}: DomainMarketplaceTabProps) {
   const [summary, setSummary] = useState<MarketplaceSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -57,6 +73,14 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
   const [requestingDomain, setRequestingDomain] = useState<string | null>(null);
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
+  const attachOptions = useMemo(
+    () => appOptions && appOptions.length > 0
+      ? appOptions
+      : sourceAppId
+        ? [{ id: sourceAppId, name: 'Selected App', status: 'selected' }]
+        : [],
+    [appOptions, sourceAppId]
+  );
 
   const parsedTlds = useMemo(
     () =>
@@ -66,6 +90,15 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
         .filter(Boolean)
         .slice(0, 15),
     [tldsInput]
+  );
+
+  const orderedResults = useMemo(
+    () =>
+      [...results].sort((a, b) => {
+        if (a.available === b.available) return 0;
+        return a.available ? -1 : 1;
+      }),
+    [results]
   );
 
   const loadSummary = async () => {
@@ -91,7 +124,12 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
   const loadPurchaseRequests = async () => {
     setRequestsLoading(true);
     try {
-      const res = await fetch(`/api/domains/market/purchase-requests?app_id=${appId}&limit=15`);
+      const params = new URLSearchParams({ limit: '15' });
+      if (purchaseRequestAppIdFilter) {
+        params.set('app_id', purchaseRequestAppIdFilter);
+      }
+
+      const res = await fetch(`/api/domains/market/purchase-requests?${params.toString()}`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -114,7 +152,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
     void loadSummary();
     void loadPurchaseRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appId]);
+  }, [purchaseRequestAppIdFilter]);
 
   const handleSearch = async () => {
     const cleanQuery = query.trim();
@@ -155,18 +193,31 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
     }
   };
 
+  const applyTldPreset = (tld: string) => {
+    const next = new Set(parsedTlds);
+    if (next.has(tld)) {
+      next.delete(tld);
+    } else {
+      next.add(tld);
+    }
+    setTldsInput(Array.from(next).join(','));
+  };
+
   const handleRequestPurchase = async (domain: string) => {
     setRequestingDomain(domain);
     try {
-      const idempotencyKey = `${appId}:${domain}:${Date.now()}`;
+      const requestBody: { app_id?: string; domain: string; idempotency_key: string } = {
+        domain,
+        idempotency_key: `${sourceAppId || 'global'}:${domain}:${Date.now()}`,
+      };
+      if (sourceAppId) {
+        requestBody.app_id = sourceAppId;
+      }
+
       const res = await fetch('/api/domains/market/purchase-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          app_id: appId,
-          domain,
-          idempotency_key: idempotencyKey,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const data = await res.json();
@@ -208,11 +259,20 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
           AhuraCloud Domain Marketplace
         </CardTitle>
         <CardDescription className="text-white/50">
-          Discover domains and submit managed purchase requests directly through AhuraCloud.
+          {modeLabel}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-5">
+        <div className="rounded-lg border border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-blue-500/5 p-3">
+          <p className="text-xs uppercase tracking-wide text-cyan-200/80">Fast Flow</p>
+          <p className="text-sm text-white mt-1">
+            {showAttachActions
+              ? 'Search domain, request purchase, then attach it in the Domains tab.'
+              : 'Search domain and submit purchase requests. App connection can be done later.'}
+          </p>
+        </div>
+
         <div className="rounded-lg border border-white/10 bg-black/20 p-3">
           {summaryLoading ? (
             <div className="flex items-center gap-2 text-xs text-white/60">
@@ -239,6 +299,12 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleSearch();
+                }
+              }}
               placeholder="mybrand or mybrand.com"
               className="bg-black/30 border-white/10"
             />
@@ -252,6 +318,25 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
               placeholder="com,io,app"
               className="bg-black/30 border-white/10"
             />
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {['com', 'io', 'app', 'dev', 'net'].map((tld) => {
+                const active = parsedTlds.includes(tld);
+                return (
+                  <button
+                    key={tld}
+                    type="button"
+                    onClick={() => applyTldPreset(tld)}
+                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
+                      active
+                        ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-200'
+                        : 'border-white/15 bg-black/20 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    .{tld}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex items-end">
@@ -267,13 +352,17 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
         </div>
 
         <div className="space-y-3">
-          {results.length === 0 ? (
+          {orderedResults.length === 0 ? (
             <div className="text-sm text-white/40 border border-dashed border-white/15 rounded-md p-4">
               <Globe className="w-4 h-4 inline-block mr-2" />
               Run a search to see domain suggestions and pricing.
             </div>
           ) : (
-            results.map((result) => {
+            <>
+              <p className="text-xs text-white/50">
+                {orderedResults.filter((item) => item.available).length} available of {orderedResults.length} results
+              </p>
+              {orderedResults.map((result) => {
               const requestDisabled = !result.available || requestingDomain === result.domainName;
 
               return (
@@ -297,7 +386,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
                     <div className="text-xs text-white/50 flex flex-wrap gap-3">
                       <span>Purchase: {result.purchasePrice !== null ? `$${result.purchasePrice}` : 'N/A'}</span>
                       <span>Renewal: {result.renewalPrice !== null ? `$${result.renewalPrice}` : 'N/A'}</span>
-                      <span>Currency: {result.currency}</span>
+                      <span>{result.currency}</span>
                     </div>
 
                     {result.reason && <p className="text-xs text-white/40">{result.reason}</p>}
@@ -313,12 +402,13 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
                       ) : (
                         <ShoppingCart className="w-4 h-4 mr-2" />
                       )}
-                      Purchase via AhuraCloud
+                      Request Purchase
                     </Button>
                   </div>
                 </div>
               );
-            })
+            })}
+            </>
           )}
         </div>
 
@@ -341,7 +431,9 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
           {requestsLoading ? (
             <p className="text-xs text-white/55">Loading requests...</p>
           ) : requests.length === 0 ? (
-            <p className="text-xs text-white/55">No purchase requests yet for this app.</p>
+            <p className="text-xs text-white/55">
+              {purchaseRequestAppIdFilter ? 'No purchase requests yet for this app.' : 'No purchase requests yet.'}
+            </p>
           ) : (
             <div className="space-y-2">
               {requests.map((request) => (
@@ -355,6 +447,24 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
                     <span>Renewal: {request.renewal_price !== null ? `$${request.renewal_price}` : 'N/A'}</span>
                     <span>{new Date(request.created_at).toLocaleString()}</span>
                   </div>
+                  {showAttachActions && request.status === 'completed' && attachOptions.length > 0 && (
+                    <div className="mt-2">
+                      <DomainAttachAction
+                        domain={request.domain}
+                        appOptions={attachOptions}
+                        defaultAppId={defaultAttachAppId}
+                        buttonLabel="Add To App Domains"
+                        onAttached={(attachedAppId) => {
+                          onDomainAttached?.(attachedAppId);
+                        }}
+                      />
+                    </div>
+                  )}
+                  {showAttachActions && request.status === 'completed' && attachOptions.length === 0 && (
+                    <p className="text-xs text-white/55 mt-2">
+                      Deploy an app first to connect this domain.
+                    </p>
+                  )}
                   {request.last_error && <p className="text-xs text-red-300 mt-1">{request.last_error}</p>}
                 </div>
               ))}

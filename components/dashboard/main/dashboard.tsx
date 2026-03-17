@@ -208,7 +208,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
           transition={{ delay: 0.2, duration: 0.3 }}
         >
           <Link
-            href="/dashboard/services/domains"
+            href="/dashboard/domains/marketplace"
             className="group block glass-card p-5 h-full transition-all relative overflow-hidden"
           >
             <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.12), transparent)' }} />

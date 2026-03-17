@@ -49,7 +49,7 @@ export interface DomainOperation {
 export interface DomainPurchaseRequest {
   id: string;
   user_id: string;
-  app_id: string;
+  app_id: string | null;
   domain: string;
   status: DomainPurchaseRequestStatus;
   purchase_price: number | null;

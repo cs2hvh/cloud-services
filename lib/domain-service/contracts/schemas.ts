@@ -68,7 +68,7 @@ export const DomainMarketplaceSearchRequestSchema = z
 
 export const DomainMarketplacePurchaseRequestSchema = z
   .object({
-    app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
+    app_id: z.string().uuid().optional().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
     domain: z.string().min(3).max(253).openapi({ example: "mybrand.com" }),
     idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "idem-domain-001" }),
   })
@@ -146,7 +146,7 @@ export const DomainMarketplacePurchaseRequestRecordSchema = z
   .object({
     id: z.string().uuid().openapi({ example: "656bb6a3-9905-46d0-9704-b127cc296957" }),
     user_id: z.string().uuid().openapi({ example: "ccf391ef-271b-45e7-9799-3b1be3422363" }),
-    app_id: z.string().uuid().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
+    app_id: z.string().uuid().nullable().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
     domain: z.string().openapi({ example: "mybrand.com" }),
     status: DomainPurchaseRequestStatusSchema,
     purchase_price: z.number().nullable().openapi({ example: 12.99 }),

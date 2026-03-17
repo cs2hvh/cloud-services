@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -50,7 +50,6 @@ import {
 } from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
-import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
@@ -151,7 +150,9 @@ function getStatusBadge(status: string, building?: boolean) {
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const appId = params.id as string;
+  const initialTab = searchParams.get('tab') === 'domains' ? 'domains' : 'overview';
   const { projects } = useProjects();
 
   const [app, setApp] = useState<AppDetail | null>(null);
@@ -610,14 +611,14 @@ export default function AppDetailPage() {
           </div>
 
           <div className="flex gap-2">
-            <Link href={`/dashboard/services/apps/${app.id}/domain-market`}>
+            <Link href="/dashboard/domains/marketplace">
               <Button
                 variant="outline"
                 size="sm"
                 className="border-white/20 text-white hover:bg-white/10"
               >
                 <Globe className="w-4 h-4 mr-2" />
-                Domain Market
+                Domain Marketplace
               </Button>
             </Link>
             <Button
@@ -712,7 +713,7 @@ export default function AppDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
       >
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs defaultValue={initialTab} className="space-y-4">
           <TabsList className="bg-white/5 border border-white/10 flex-wrap">
             <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">
               <Activity className="w-4 h-4 mr-2" />
@@ -725,10 +726,6 @@ export default function AppDetailPage() {
             <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
               <Link2 className="w-4 h-4 mr-2" />
               Domains
-            </TabsTrigger>
-            <TabsTrigger value="domain-market" className="data-[state=active]:bg-white/10">
-              <Globe className="w-4 h-4 mr-2" />
-              Domain Market
             </TabsTrigger>
             <TabsTrigger value="build-logs" className="data-[state=active]:bg-white/10">
               <Terminal className="w-4 h-4 mr-2" />
@@ -940,30 +937,26 @@ export default function AppDetailPage() {
           </TabsContent>
 
           {/* Domains Tab */}
-          <TabsContent value="domains">
-            <CustomDomainsManager
-              appId={app.id}
-              appStatus={app.status}
-              platformDomain={domain}
-            />
-          </TabsContent>
-
-          <TabsContent value="domain-market" className="space-y-4">
+          <TabsContent value="domains" className="space-y-4">
             <Card className="bg-cyan-500/10 border-cyan-400/20">
               <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                  <p className="text-sm font-medium text-white">Need full workspace for domain purchasing?</p>
-                  <p className="text-xs text-white/60">Open the dedicated responsive Domain Marketplace page for this app.</p>
+                  <p className="text-sm font-medium text-white">Need to buy a new domain?</p>
+                  <p className="text-xs text-white/60">Domain purchasing is global and lives in the dedicated Marketplace.</p>
                 </div>
-                <Link href={`/dashboard/services/apps/${app.id}/domain-market`}>
+                <Link href="/dashboard/domains/marketplace">
                   <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto">
-                    Open Full Page
+                    Open Domain Marketplace
                     <ExternalLink className="w-3.5 h-3.5 ml-2" />
                   </Button>
                 </Link>
               </CardContent>
             </Card>
-            <DomainMarketplaceTab appId={app.id} />
+            <CustomDomainsManager
+              appId={app.id}
+              appStatus={app.status}
+              platformDomain={domain}
+            />
           </TabsContent>
 
           {/* Build Logs Tab */}
