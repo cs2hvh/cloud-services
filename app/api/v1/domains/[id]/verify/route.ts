@@ -31,6 +31,7 @@ export const POST = withV1Auth("domains:verify", async (req, auth, context) => {
     const domain = await service.verifyDomain({
       actor,
       domainId: idResult.id,
+      forceRefresh: validation.data.force_refresh,
       idempotencyKey,
     });
 
