@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
-import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
 import { DomainMarketplacePurchaseRequestSchema } from "@/lib/domain-service/contracts/schemas";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: Request) {
@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(auth.user.id, {
       prefix: "rl:domain-market:checkout",
       limit: 60,
       windowMs: 60_000,
@@ -37,14 +37,14 @@ export async function POST(req: Request) {
     const request = await service.createPurchaseRequest({
       actor: createDomainActor({
         req,
-        userId: auth.user!.id,
-        userEmail: auth.user!.email || undefined,
+        userId: auth.user.id,
+        userEmail: auth.user.email || undefined,
       }),
       appId: parsed.data.app_id,
       domain: parsed.data.domain,
       idempotencyKey,
       metadata: {
-        source: "legacy-checkout-route",
+        source: "domain-marketplace-checkout",
       },
     });
 
@@ -55,14 +55,6 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }

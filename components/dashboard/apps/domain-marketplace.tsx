@@ -71,7 +71,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
   const loadSummary = async () => {
     setSummaryLoading(true);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/market/summary');
+      const res = await fetch('/api/domains/market/summary');
       const data = await res.json();
 
       if (!res.ok) {
@@ -91,7 +91,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
   const loadPurchaseRequests = async () => {
     setRequestsLoading(true);
     try {
-      const res = await fetch(`/api/services/platform-apps/domains/market/purchase-requests?app_id=${appId}&limit=15`);
+      const res = await fetch(`/api/domains/market/purchase-requests?app_id=${appId}&limit=15`);
       const data = await res.json();
 
       if (!res.ok) {
@@ -125,7 +125,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
 
     setSearching(true);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/market/search', {
+      const res = await fetch('/api/domains/market/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -159,7 +159,7 @@ export function DomainMarketplaceTab({ appId }: DomainMarketplaceTabProps) {
     setRequestingDomain(domain);
     try {
       const idempotencyKey = `${appId}:${domain}:${Date.now()}`;
-      const res = await fetch('/api/services/platform-apps/domains/market/purchase-requests', {
+      const res = await fetch('/api/domains/market/purchase-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

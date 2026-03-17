@@ -2,18 +2,18 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
-import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
 import { createDomainActor } from "@/lib/domain-service/http/request-context";
+import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ requestId: string }> }
 ) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(auth.user.id, {
       prefix: "rl:domain-market:purchase-requests:get",
       limit: 80,
       windowMs: 60_000,
@@ -41,25 +41,17 @@ export async function GET(
     }
 
     const service = getDomainMarketplaceService();
-    const request = await service.getPurchaseRequest({
+    const requestData = await service.getPurchaseRequest({
       actor: createDomainActor({
-        req: _req,
-        userId: auth.user!.id,
-        userEmail: auth.user!.email || undefined,
+        req,
+        userId: auth.user.id,
+        userEmail: auth.user.email || undefined,
       }),
       requestId,
     });
 
-    return NextResponse.json({ data: request });
+    return NextResponse.json({ data: requestData });
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }

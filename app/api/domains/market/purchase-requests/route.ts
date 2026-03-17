@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
-import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
 import {
   DomainMarketplacePurchaseRequestListQuerySchema,
   DomainMarketplacePurchaseRequestSchema,
 } from "@/lib/domain-service/contracts/schemas";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function GET(req: Request) {
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(auth.user.id, {
       prefix: "rl:domain-market:purchase-requests:list",
       limit: 60,
       windowMs: 60_000,
@@ -52,8 +52,8 @@ export async function GET(req: Request) {
     const requests = await service.listPurchaseRequests({
       actor: createDomainActor({
         req,
-        userId: auth.user!.id,
-        userEmail: auth.user!.email || undefined,
+        userId: auth.user.id,
+        userEmail: auth.user.email || undefined,
       }),
       appId: parsed.data.app_id,
       limit: parsed.data.limit,
@@ -64,15 +64,7 @@ export async function GET(req: Request) {
       meta: { total: requests.length },
     });
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }
 
@@ -81,7 +73,7 @@ export async function POST(req: Request) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(auth.user.id, {
       prefix: "rl:domain-market:purchase-requests:create",
       limit: 20,
       windowMs: 60_000,
@@ -106,8 +98,8 @@ export async function POST(req: Request) {
     const request = await service.createPurchaseRequest({
       actor: createDomainActor({
         req,
-        userId: auth.user!.id,
-        userEmail: auth.user!.email || undefined,
+        userId: auth.user.id,
+        userEmail: auth.user.email || undefined,
       }),
       appId: parsed.data.app_id,
       domain: parsed.data.domain,
@@ -124,14 +116,6 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }

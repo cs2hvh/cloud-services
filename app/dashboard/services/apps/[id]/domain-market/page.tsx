@@ -77,7 +77,7 @@ export default function AppDomainMarketPage() {
       try {
         const [appRes, summaryRes] = await Promise.all([
           api.post('/services/platform-apps/get', { app_id: appId }),
-          fetch('/api/services/platform-apps/domains/market/summary'),
+          fetch('/api/domains/market/summary'),
         ]);
 
         if (!appRes.data) {

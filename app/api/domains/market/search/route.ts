@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
-import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
 import { DomainMarketplaceSearchRequestSchema } from "@/lib/domain-service/contracts/schemas";
+import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 import { validateRequest } from "@/lib/middleware/validate-request";
 
 export async function POST(req: Request) {
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(auth.user.id, {
       prefix: "rl:domain-market:search",
       limit: 40,
       windowMs: 60_000,
@@ -39,14 +39,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: result });
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }

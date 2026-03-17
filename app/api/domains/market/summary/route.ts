@@ -2,15 +2,15 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
-import { mapDomainErrorToHttp, toDomainServiceError } from "@/lib/domain-service/core/errors";
+import { toDashboardDomainErrorResponse } from "@/lib/domain-service/http/dashboard-error-mapper";
 
 export async function GET() {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
   try {
-    const rl = await limitByUser(auth.user!.id, {
-      prefix: "rl:domain-market:providers",
+    const rl = await limitByUser(auth.user.id, {
+      prefix: "rl:domain-market:summary",
       limit: 60,
       windowMs: 60_000,
     });
@@ -26,22 +26,8 @@ export async function GET() {
     }
 
     const service = getDomainMarketplaceService();
-    const summary = service.getSummary();
-
-    return NextResponse.json({
-      data: summary,
-      deprecated: true,
-      message: "Use /api/services/platform-apps/domains/market/summary for reseller metadata.",
-    });
+    return NextResponse.json({ data: service.getSummary() });
   } catch (error: unknown) {
-    const mapped = mapDomainErrorToHttp(toDomainServiceError(error));
-    return NextResponse.json(
-      {
-        error: mapped.code,
-        message: mapped.message,
-        details: mapped.details,
-      },
-      { status: mapped.status }
-    );
+    return toDashboardDomainErrorResponse(error);
   }
 }

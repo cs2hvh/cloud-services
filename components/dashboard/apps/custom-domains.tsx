@@ -87,7 +87,7 @@ export function CustomDomainsManager({
 
   const fetchDomains = useCallback(async () => {
     try {
-      const res = await fetch(`/api/services/platform-apps/domains?app_id=${appId}`);
+      const res = await fetch(`/api/domains?app_id=${appId}`);
       if (res.ok) {
         const data = await res.json();
         setDomains(data.domains || []);
@@ -117,7 +117,7 @@ export function CustomDomainsManager({
 
     setAdding(true);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/add', {
+      const res = await fetch('/api/domains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ app_id: appId, domain: newDomain }),
@@ -145,10 +145,8 @@ export function CustomDomainsManager({
   const handleVerifyDomain = async (domainId: string) => {
     setVerifyingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/verify', {
+      const res = await fetch(`/api/domains/${domainId}/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
@@ -167,6 +165,32 @@ export function CustomDomainsManager({
     }
   };
 
+  const pollOperation = async (operationId: string) => {
+    const maxAttempts = 45;
+    const delayMs = 2000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const res = await fetch(`/api/domains/operations/${operationId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to get operation status');
+      }
+
+      const status = data?.operation?.status;
+      if (status === 'succeeded') {
+        return;
+      }
+      if (status === 'failed') {
+        throw new Error(data?.operation?.error_message || 'Domain activation failed');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error('Domain activation timed out. Please check operation status again.');
+  };
+
   const handleActivateDomain = async (domainId: string) => {
     if (appStatus !== 'running') {
       toast.error('App must be running to activate custom domain');
@@ -175,23 +199,30 @@ export function CustomDomainsManager({
 
     setActivatingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/activate', {
+      const res = await fetch(`/api/domains/${domainId}/activate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
 
-      if (data.success) {
-        toast.success('Domain activated! SSL certificate is being issued.');
-        fetchDomains();
-      } else {
-        toast.error(data.error || 'Activation failed');
+      if (!res.ok || !data.success) {
+        toast.error(data?.message || data?.error || 'Activation failed');
+        return;
       }
+
+      if (!data.operation_id) {
+        toast.success('Domain activation requested.');
+        fetchDomains();
+        return;
+      }
+
+      toast.info('Domain activation in progress. Applying ingress and SSL...');
+      await pollOperation(data.operation_id);
+      toast.success('Domain activated! SSL certificate is being issued.');
+      fetchDomains();
     } catch (error) {
       console.error('Error activating domain:', error);
-      toast.error('Failed to activate domain');
+      toast.error(error instanceof Error ? error.message : 'Failed to activate domain');
     } finally {
       setActivatingId(null);
     }
@@ -200,10 +231,8 @@ export function CustomDomainsManager({
   const handleRemoveDomain = async (domainId: string) => {
     setRemovingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
+      const res = await fetch(`/api/domains/${domainId}`, {
+        method: 'DELETE',
       });
 
       const data = await res.json();
@@ -256,10 +285,8 @@ export function CustomDomainsManager({
 
   const handleSetPrimary = async (domainId: string) => {
     try {
-      const res = await fetch('/api/services/platform-apps/domains/set-primary', {
+      const res = await fetch(`/api/domains/${domainId}/set-primary`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
