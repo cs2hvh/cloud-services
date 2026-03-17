@@ -4,18 +4,17 @@ import React from "react";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
-  XCircle,
+  Download,
+  Globe,
   Loader2,
+  Lock,
+  RefreshCw,
   Server,
   HardDrive,
   Cpu,
   MapPin,
   Shield,
-  Globe,
-  Lock,
-  DollarSign,
-  RefreshCw,
-  Download,
+  XCircle,
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import {
@@ -27,7 +26,6 @@ import {
   extractRegion,
   downloadCACertificate,
 } from "../singledb-helpers";
-import { DatabaseIcon } from "../database-icon";
 
 interface OverviewTabProps {
   database: Tables<"database_clusters">;
@@ -38,36 +36,42 @@ interface OverviewTabProps {
   copyToClipboard: (text: string, label: string) => void;
 }
 
-// Status badge component
 const StatusBadge = ({ status }: { status: string }) => {
   const statusConfig = {
     online: {
-      color: "text-green-400",
-      bg: "bg-green-500/20",
-      border: "border-green-500",
+      color: "text-emerald-300",
+      bg: "bg-emerald-500/10",
+      border: "border-emerald-400/20",
       icon: CheckCircle2,
       text: "Online",
     },
     creating: {
-      color: "text-yellow-400",
-      bg: "bg-yellow-500/20",
-      border: "border-yellow-500",
+      color: "text-amber-300",
+      bg: "bg-amber-500/10",
+      border: "border-amber-400/20",
       icon: Loader2,
-      text: "Creating",
+      text: "Provisioning",
+    },
+    migrating: {
+      color: "text-amber-300",
+      bg: "bg-amber-500/10",
+      border: "border-amber-400/20",
+      icon: Loader2,
+      text: "Migrating",
     },
     failed: {
-      color: "text-red-400",
-      bg: "bg-red-500/20",
-      border: "border-red-500",
+      color: "text-red-300",
+      bg: "bg-red-500/10",
+      border: "border-red-400/20",
       icon: XCircle,
       text: "Failed",
     },
-     migrating: {
-      color: "text-yellow-400",
-      bg: "bg-yellow-500/20",
-      border: "border-yellow-500",
-      icon: Loader2,
-      text: "Creating",
+    pending: {
+      color: "text-red-300",
+      bg: "bg-red-500/10",
+      border: "border-red-400/20",
+      icon: XCircle,
+      text: "Pending",
     },
   };
 
@@ -77,12 +81,14 @@ const StatusBadge = ({ status }: { status: string }) => {
 
   return (
     <div
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border-2 ${config.border} ${config.bg}`}
+      className={`inline-flex items-center gap-2 border px-3 py-1.5 text-sm font-medium ${config.border} ${config.bg} ${config.color}`}
     >
       <Icon
-        className={`h-5 w-5 ${config.color} ${status === "creating"||status==="migrating" ? "animate-spin" : ""}`}
+        className={`h-4 w-4 ${
+          status === "creating" || status === "migrating" ? "animate-spin" : ""
+        }`}
       />
-      <span className={`font-semibold ${config.color}`}>{status}</span>
+      {config.text}
     </div>
   );
 };
@@ -95,341 +101,343 @@ export const OverviewTab = ({
   setActiveTab,
   copyToClipboard,
 }: OverviewTabProps) => {
+  if (database.status === "creating" || database.status === "migrating") {
+    return (
+      <motion.div
+        key="creating"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="border border-white/[0.08] bg-white/[0.03] px-6 py-12 text-center"
+      >
+        <Loader2 className="mx-auto mb-5 h-14 w-14 animate-spin text-blue-400" />
+        <h3 className="text-2xl font-semibold tracking-tight text-white">
+          Database cluster is being provisioned
+        </h3>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/45">
+          Credentials, networking controls, and operational settings will become
+          available once the managed cluster reports a healthy online status.
+        </p>
+        <div className="mt-5 inline-flex items-center gap-2 text-sm text-white/38">
+          <RefreshCw className="h-4 w-4 animate-spin" />
+          Checking status every minute
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (database.status === "pending" || database.status === "failed") {
+    return (
+      <motion.div
+        key="failed"
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="border border-red-400/20 bg-red-500/8 px-6 py-12 text-center"
+      >
+        <XCircle className="mx-auto mb-5 h-14 w-14 text-red-300" />
+        <h3 className="text-2xl font-semibold tracking-tight text-white">
+          Cluster requires attention
+        </h3>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-white/45">
+          The database did not finish provisioning successfully. Review the
+          request details with your team or contact support before retrying.
+        </p>
+      </motion.div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Header with Database Info */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-start gap-4"
+        className="border border-white/[0.08] bg-white/[0.03]"
       >
-        {/* Left Section - Icon */}
-        <div className="p-2 border border-slate-600 rounded-full">
-          <DatabaseIcon engine={database.engine} className="h-6 w-6" />
-        </div>
-
-        {/* Right Section - Contents */}
-        <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex-1">
-            <h1 className="text-xl font-semibold text-white mb-2">
-              {database.name}
-            </h1>
-           
-            <p className="text-slate-400 text-sm mt-1">
-              {database.size[11]}GB RAM / {database.size[5]}vCPU / {database.version}/ {database.engine.toUpperCase()} {database.version} •{" "}
-              {database.num_nodes} node{database.num_nodes !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <div className="flex items-center">
+        <div className="border-b border-white/[0.06] px-5 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+                Access
+              </div>
+              <h2 className="mt-1 text-lg font-semibold text-white">
+                Connection Details
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-white/45">
+                Use the public or private endpoint below to connect application
+                workloads, migration tools, or operators.
+              </p>
+            </div>
             <StatusBadge status={database.status} />
           </div>
         </div>
-      </motion.div>
 
-      {/* Show content based on status */}
-      {(database.status === "creating" || database.status === "migrating") && (
-        <motion.div
-          key="creating"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-12 text-center"
-        >
-          <Loader2 className="h-16 w-16 text-blue-500 animate-spin mx-auto mb-6" />
-          <h3 className="text-2xl font-bold text-white mb-3">
-            Creating Your Database Cluster
-          </h3>
-          <p className="text-slate-400 text-lg mb-6">
-            Your database cluster is being provisioned. This may take a few
-            minutes.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-slate-500">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Checking status every minute...</span>
+        <div className="px-5 py-5">
+          <div className="mb-5 flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTab("public")}
+              className={`inline-flex cursor-pointer items-center gap-2 border px-3 py-2 text-sm font-medium transition-colors ${
+                activeTab === "public"
+                  ? "border-blue-400/25 bg-blue-500/10 text-white"
+                  : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.06]"
+              }`}
+            >
+              <Globe className="h-4 w-4" />
+              Public
+            </button>
+            {database.private_connection && (
+              <button
+                onClick={() => setActiveTab("private")}
+                className={`inline-flex cursor-pointer items-center gap-2 border px-3 py-2 text-sm font-medium transition-colors ${
+                  activeTab === "private"
+                    ? "border-blue-400/25 bg-blue-500/10 text-white"
+                    : "border-white/[0.08] bg-white/[0.03] text-white/55 hover:bg-white/[0.06]"
+                }`}
+              >
+                <Lock className="h-4 w-4" />
+                Private
+              </button>
+            )}
           </div>
-        </motion.div>
-      )}
 
-      {database.status === "pending" && (
-        <motion.div
-          key="pending"
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="rounded-2xl bg-red-500/10 border-2 border-red-500/30 shadow-lg p-12 text-center"
-        >
-          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-6" />
-          <h3 className="text-2xl font-bold text-white mb-3">
-            Cluster Creation Failed
-          </h3>
-          <p className="text-slate-300 text-lg mb-6">
-            There was an error creating your database cluster. Please contact
-            support or try again later.
-          </p>
-          <button className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors">
-            Contact Support
-          </button>
-        </motion.div>
-      )}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <div className="space-y-3">
+              <ConnectionField
+                label="Host"
+                value={safeStringValue(
+                  activeTab === "public"
+                    ? database.public_connection?.host
+                    : database.private_connection?.host
+                )}
+                onCopy={() =>
+                  copyToClipboard(
+                    safeStringValue(
+                      activeTab === "public"
+                        ? database.public_connection?.host
+                        : database.private_connection?.host
+                    ),
+                    "Host"
+                  )
+                }
+              />
+              <ConnectionField
+                label="Port"
+                value={safeStringValue(
+                  activeTab === "public"
+                    ? database.public_connection?.port
+                    : database.private_connection?.port
+                )}
+                onCopy={() =>
+                  copyToClipboard(
+                    safeStringValue(
+                      activeTab === "public"
+                        ? database.public_connection?.port
+                        : database.private_connection?.port
+                    ),
+                    "Port"
+                  )
+                }
+              />
+              <ConnectionField
+                label="Username"
+                value={safeStringValue(database.public_connection?.user)}
+                onCopy={() =>
+                  copyToClipboard(
+                    safeStringValue(database.public_connection?.user),
+                    "Username"
+                  )
+                }
+              />
+              {database.engine !== "mongodb" && (
+                <ConnectionField
+                  label="Password"
+                  value={safeStringValue(database.public_connection?.password)}
+                  isPassword
+                  showPassword={showPassword}
+                  onTogglePassword={() => setShowPassword(!showPassword)}
+                  onCopy={() =>
+                    copyToClipboard(
+                      safeStringValue(database.public_connection?.password),
+                      "Password"
+                    )
+                  }
+                />
+              )}
+            </div>
 
-      {database.status === "online" && (
-       <>
-  {/* Section 2: Connection Details */}
-  <motion.section
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.2 }}
-    className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4"
-  >
-    <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-      <Shield className="h-5 w-5 text-green-400" />
-      Connection Details
-    </h2>
-
-    {/* Tabs */}
-    <div className="flex gap-2 mb-4">
-      <button
-        onClick={() => setActiveTab("public")}
-        className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
-          activeTab === "public"
-            ? "bg-white text-black shadow-md"
-            : "bg-white/10 text-slate-400 hover:bg-white/20"
-        }`}
-      >
-        <Globe className="h-4 w-4" />
-        Public
-      </button>
-      {database.private_connection && (
-        <button
-          onClick={() => setActiveTab("private")}
-          className={`cursor-pointer flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
-            activeTab === "private"
-              ? "bg-white text-black shadow-md"
-              : "bg-white/10 text-slate-400 hover:bg-white/20"
-          }`}
-        >
-          <Lock className="h-4 w-4" />
-          Private
-        </button>
-      )}
-    </div>
-
-    {/* Connection Info - Two Column Layout */}
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      {/* Left Section */}
-      <div className="space-y-3">
-        <ConnectionField
-          label="Host"
-          value={safeStringValue(
-            activeTab === "public"
-              ? database.public_connection?.host
-              : database.private_connection?.host
-          )}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(
-                activeTab === "public"
-                  ? database.public_connection?.host
-                  : database.private_connection?.host
-              ),
-              "Host"
-            )
-          }
-        />
-        <ConnectionField
-          label="Port"
-          value={safeStringValue(
-            activeTab === "public"
-              ? database.public_connection?.port
-              : database.private_connection?.port
-          )}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(
-                activeTab === "public"
-                  ? database.public_connection?.port
-                  : database.private_connection?.port
-              ),
-              "Port"
-            )
-          }
-        />
-        <ConnectionField
-          label="Username"
-          value={safeStringValue(database.public_connection?.user)}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(database.public_connection?.user),
-              "Username"
-            )
-          }
-        />
-       {
-        database.engine!='mongodb' &&
-         <ConnectionField
-          label="Password"
-          value={safeStringValue(database.public_connection?.password)}
-          isPassword
-          showPassword={showPassword}
-          onTogglePassword={() => setShowPassword(!showPassword)}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(database.public_connection?.password),
-              "Password"
-            )
-          }
-        />
-       }
-      </div>
-
-      {/* Right Section */}
-      <div className="space-y-3">
-        <ConnectionField
-          label="Database"
-          value={safeStringValue(database.public_connection?.database)}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(database.public_connection?.database),
-              "Database"
-            )
-          }
-        />
-        <ConnectionField
-          label="SSL Mode"
-          value={database.public_connection?.ssl ? "require" : "disable"}
-        />
-        <ConnectionField
-          label="Connection URI"
-          value={safeStringValue(
-            activeTab === "public"
-              ? database.public_connection?.uri
-              : database.private_connection?.uri
-          )}
-          onCopy={() =>
-            copyToClipboard(
-              safeStringValue(
-                activeTab === "public"
-                  ? database.public_connection?.uri
-                  : database.private_connection?.uri
-              ),
-              "Connection URI"
-            )
-          }
-          multiline
-        />
-      </div>
-    </div>
-  </motion.section>
-
-  {/* Section 3 & 4: Configuration and CA Certificate */}
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-    {/* Configuration */}
-    <motion.section
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3 }}
-      className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4"
-    >
-      <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-        <Server className="h-5 w-5 text-purple-400" />
-        Configuration
-      </h2>
-      <div className="grid grid-cols-2 gap-3">
-        <ConfigCard
-          icon={Cpu}
-          label="vCPU"
-          value={extractCpu(database.size)}
-          color="text-blue-400"
-        />
-        <ConfigCard
-          icon={Server}
-          label="RAM"
-          value={extractRam(database.size)}
-          color="text-green-400"
-        />
-        <ConfigCard
-          icon={HardDrive}
-          label="Disk"
-          value={database.storage_size_mib?(database.storage_size_mib/1024).toString():"0"}
-          color="text-purple-400"
-        />
-        <ConfigCard
-          icon={MapPin}
-          label="Region"
-          value={extractRegion(database.region)}
-          color="text-orange-400"
-        />
-      </div>
-    </motion.section>
-
-    {/* CA Certificate */}
-    {
-      database.engine !== "mongodb" && (
-        <motion.section
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.4 }}
-      className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4"
-    >
-      <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-        <Shield className="h-5 w-5 text-yellow-400" />
-        CA Certificate
-      </h2>
-      <div className="flex flex-col gap-3">
-        <p className="text-slate-300 text-sm">
-          Download the CA certificate to establish secure SSL connections to your database cluster.
-        </p>
-        <div className="bg-slate-900/50 rounded-lg p-3">
-          <p className="text-slate-400 text-xs font-mono mb-1">
-            Usage example:
-          </p>
-          <code className="text-green-400 text-xs block break-all">
-            {`psql "sslmode=require sslrootcert=ca-certificate.crt host=${safeStringValue(database.public_connection?.host)} port=${safeStringValue(database.public_connection?.port)}"`}
-          </code>
+            <div className="space-y-3">
+              <ConnectionField
+                label="Database"
+                value={safeStringValue(database.public_connection?.database)}
+                onCopy={() =>
+                  copyToClipboard(
+                    safeStringValue(database.public_connection?.database),
+                    "Database"
+                  )
+                }
+              />
+              <ConnectionField
+                label="SSL Mode"
+                value={database.public_connection?.ssl ? "require" : "disable"}
+              />
+              <ConnectionField
+                label="Connection URI"
+                value={safeStringValue(
+                  activeTab === "public"
+                    ? database.public_connection?.uri
+                    : database.private_connection?.uri
+                )}
+                onCopy={() =>
+                  copyToClipboard(
+                    safeStringValue(
+                      activeTab === "public"
+                        ? database.public_connection?.uri
+                        : database.private_connection?.uri
+                    ),
+                    "Connection URI"
+                  )
+                }
+                multiline
+              />
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() =>
-            downloadCACertificate(
-              database.cluster_id,
-              database.ca_certificate
-            )
-          }
-          className="cursor-pointer inline-flex items-center justify-center gap-2 px-4 py-2 bg-white text-black hover:bg-gray-100 rounded-lg font-semibold transition-colors"
-        >
-          <Download className="h-4 w-4" />
-          Download Certificate
-        </button>
-      </div>
-    </motion.section>
-      )
-    }
-  </div>
+      </motion.section>
 
-  {/* Section 5: Monthly Cost */}
-  <motion.section
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.5 }}
-    className="rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border-2 border-blue-500/30 shadow-lg p-6"
-  >
-    <div className="flex items-center justify-between">
-      <div>
-        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-          <DollarSign className="h-5 w-5 text-green-400" />
-          Monthly Cost
-        </h2>
-        <p className="text-slate-400">
-          Estimated cost for this database cluster
-        </p>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <motion.section
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.05 }}
+          className="border border-white/[0.08] bg-white/[0.03]"
+        >
+          <div className="border-b border-white/[0.06] px-5 py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+                  Capacity
+                </div>
+                <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                  <Server className="h-5 w-5 text-blue-300" />
+                  Service Profile
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-white/45">
+                  Current compute, storage, and regional placement for the
+                  managed cluster.
+                </p>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-right">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Plan Size
+                </div>
+                <div className="mt-1.5 text-sm font-semibold text-white">
+                  {database.size || "Managed"}
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4 px-5 py-5">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="border border-white/[0.08] bg-black/20 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Engine
+                </div>
+                <div className="mt-1.5 text-sm font-semibold text-white">
+                  {database.engine?.toUpperCase()} {database.version}
+                </div>
+              </div>
+              <div className="border border-white/[0.08] bg-black/20 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Nodes
+                </div>
+                <div className="mt-1.5 text-sm font-semibold text-white">
+                  {database.num_nodes} node{database.num_nodes !== 1 ? "s" : ""}
+                </div>
+              </div>
+              <div className="border border-white/[0.08] bg-black/20 px-4 py-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Region Code
+                </div>
+                <div className="mt-1.5 text-sm font-semibold text-white">
+                  {database.region || "N/A"}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+            <ConfigCard
+              icon={Cpu}
+              label="vCPU"
+              value={extractCpu(database.size)}
+              color="text-blue-300"
+            />
+            <ConfigCard
+              icon={Server}
+              label="RAM"
+              value={extractRam(database.size)}
+              color="text-emerald-300"
+            />
+            <ConfigCard
+              icon={HardDrive}
+              label="Disk"
+              value={
+                database.storage_size_mib
+                  ? `${Math.round(database.storage_size_mib / 1024)} GB`
+                  : "N/A"
+              }
+              color="text-violet-300"
+            />
+            <ConfigCard
+              icon={MapPin}
+              label="Region"
+              value={extractRegion(database.region)}
+              color="text-amber-300"
+            />
+            </div>
+          </div>
+        </motion.section>
+
+        {database.engine !== "mongodb" && (
+          <motion.section
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="border border-white/[0.08] bg-white/[0.03]"
+          >
+            <div className="border-b border-white/[0.06] px-5 py-4">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+                <Shield className="h-5 w-5 text-amber-300" />
+                CA Certificate
+              </h2>
+            </div>
+            <div className="space-y-4 px-5 py-5">
+              <p className="text-sm leading-6 text-white/45">
+                Download the CA certificate to establish secure client
+                connections from local machines, CI jobs, or managed
+                applications.
+              </p>
+              <div className="border border-white/[0.08] bg-black/20 p-4">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Example
+                </p>
+                <code className="block break-all text-xs leading-6 text-emerald-300">
+                  {`psql "sslmode=require sslrootcert=ca-certificate.crt host=${safeStringValue(database.public_connection?.host)} port=${safeStringValue(database.public_connection?.port)}"`}
+                </code>
+              </div>
+              <button
+                onClick={() =>
+                  downloadCACertificate(
+                    database.cluster_id,
+                    database.ca_certificate
+                  )
+                }
+                className="inline-flex cursor-pointer items-center justify-center gap-2 border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/[0.08]"
+              >
+                <Download className="h-4 w-4" />
+                Download Certificate
+              </button>
+            </div>
+          </motion.section>
+        )}
       </div>
-      <div className="text-right">
-        <p className="text-4xl font-bold text-white">
-          {/* ${database.monthly_cost || calculateMonthlyCost(database.size)} */}
-        </p>
-        <p className="text-slate-400 text-sm">per month</p>
-      </div>
-    </div>
-  </motion.section>
-</>
-      )}
     </div>
   );
 };

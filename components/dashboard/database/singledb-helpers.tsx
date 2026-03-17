@@ -27,8 +27,8 @@ export const ConnectionField = ({
   multiline,
 }: ConnectionFieldProps) => {
   return (
-    <div className="bg-slate-900/50 rounded-lg p-4">
-      <label className="text-slate-400 text-sm font-medium block mb-2">
+    <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
         {label}
       </label>
       <div className="flex items-center gap-2">
@@ -36,7 +36,7 @@ export const ConnectionField = ({
           type={isPassword && !showPassword ? "password" : "text"}
           value={value}
           readOnly
-          className={`flex-1 bg-transparent text-white font-mono text-sm border-0 outline-none ${
+          className={`flex-1 border-0 bg-transparent font-mono text-sm text-white outline-none ${
             multiline ? "overflow-x-auto" : ""
           }`}
         />
@@ -44,21 +44,21 @@ export const ConnectionField = ({
           {isPassword && onTogglePassword && (
             <button
               onClick={onTogglePassword}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
             >
               {showPassword ? (
-                <EyeOff className="h-4 w-4 text-slate-400" />
+                <EyeOff className="h-4 w-4 text-white/55" />
               ) : (
-                <Eye className="h-4 w-4 text-slate-400" />
+                <Eye className="h-4 w-4 text-white/55" />
               )}
             </button>
           )}
           {onCopy && (
             <button
               onClick={onCopy}
-              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              className="border border-white/[0.08] bg-white/[0.03] p-2 transition-colors hover:bg-white/[0.08]"
             >
-              <Copy className="h-4 w-4 text-slate-400" />
+              <Copy className="h-4 w-4 text-white/55" />
             </button>
           )}
         </div>
@@ -76,10 +76,10 @@ interface ConfigCardProps {
 
 export const ConfigCard = ({ icon: Icon, label, value, color }: ConfigCardProps) => {
   return (
-    <div className="bg-slate-900/50 rounded-lg p-4 text-center">
+    <div className="border border-white/[0.08] bg-white/[0.03] p-4 text-center">
       <Icon className={`h-6 w-6 ${color} mx-auto mb-2`} />
-      <p className="text-slate-400 text-sm mb-1">{label}</p>
-      <p className="text-white font-bold text-lg">{value}</p>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">{label}</p>
+      <p className="text-lg font-semibold text-white">{value}</p>
     </div>
   );
 };
@@ -164,7 +164,6 @@ export const calculateMonthlyCost = (size: string): string => {
 
 export const downloadCACertificate = async (databaseId: UUID | undefined, ca_certificate: string | EncryptedData | undefined) => {
   try {
-    debugger
     if (!ca_certificate) {
       toast.error("CA Certificate not available");
       return;

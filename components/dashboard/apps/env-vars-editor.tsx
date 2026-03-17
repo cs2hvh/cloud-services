@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,14 @@ interface EnvVarsEditorProps {
 
 const ENV_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+function normalizeEnvVar(env: Partial<EnvVar> | undefined): EnvVar {
+  return {
+    key: env?.key ?? '',
+    value: env?.value ?? '',
+    visible: env?.visible ?? false,
+  };
+}
+
 function normalizeEnvKey(key: string): string {
   return key.trim().replace(/[^A-Za-z0-9_]/g, "_");
 }
@@ -54,12 +62,13 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
   const [searchQuery, setSearchQuery] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const normalizedEnvVars = envVars.map((env) => normalizeEnvVar(env));
 
   // CRUD operations
-  const addVar = () => setEnvVars([...envVars, { key: '', value: '', visible: false }]);
-  const removeVar = (index: number) => setEnvVars(envVars.filter((_, i) => i !== index));
+  const addVar = () => setEnvVars([...normalizedEnvVars, { key: '', value: '', visible: false }]);
+  const removeVar = (index: number) => setEnvVars(normalizedEnvVars.filter((_, i) => i !== index));
   const updateVar = (index: number, field: 'key' | 'value', val: string) => {
-    setEnvVars(envVars.map((env, i) => i === index ? { ...env, [field]: val } : env));
+    setEnvVars(normalizedEnvVars.map((env, i) => i === index ? { ...env, [field]: val } : env));
   };
 
   // Handle paste - detect if user is pasting multiple env vars
@@ -72,9 +81,9 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
       const parsed = parseEnvContent(pastedText);
       if (parsed.length > 1) {
         // Multiple env vars detected - merge with existing
-        const existingKeys = new Set(envVars.map(env => env.key));
+        const existingKeys = new Set(normalizedEnvVars.map((env) => env.key));
         const newVars = parsed.filter(p => !existingKeys.has(p.key));
-        const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+        const updated = normalizedEnvVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
         setEnvVars([...updated, ...newVars]);
         toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from paste`);
         return;
@@ -91,12 +100,12 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
       if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
         value = value.slice(1, -1);
       }
-      setEnvVars(envVars.map((env, i) => i === index ? { ...env, key, value } : env));
+      setEnvVars(normalizedEnvVars.map((env, i) => i === index ? { ...env, key, value } : env));
       toast.success('Parsed KEY=VALUE from paste');
     }
   };
   const toggleVisibility = (index: number) => {
-    setEnvVars(envVars.map((env, i) => i === index ? { ...env, visible: !env.visible } : env));
+    setEnvVars(normalizedEnvVars.map((env, i) => i === index ? { ...env, visible: !env.visible } : env));
   };
   const clearAll = () => {
     setEnvVars([]);
@@ -110,7 +119,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
     if (!ENV_KEY_REGEX.test(key)) {
       return { valid: false, error: 'Invalid format' };
     }
-    if (envVars.filter(e => e.key === key).length > 1) {
+    if (normalizedEnvVars.filter((env) => env.key === key).length > 1) {
       return { valid: false, error: 'Duplicate' };
     }
     return { valid: true };
@@ -118,7 +127,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
   // Suggestions
   const getSuggestions = (current: string): string[] => {
-    const existing = new Set(envVars.map(e => e.key));
+    const existing = new Set(normalizedEnvVars.map((env) => env.key));
     return ENV_SUGGESTIONS
       .filter(s => s.toLowerCase().includes(current.toLowerCase()) && !existing.has(s))
       .slice(0, 5);
@@ -129,7 +138,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
   const handleDragOver = (e: React.DragEvent, index: number) => {
     e.preventDefault();
     if (draggedIndex === null || draggedIndex === index) return;
-    const newVars = [...envVars];
+    const newVars = [...normalizedEnvVars];
     const item = newVars[draggedIndex];
     newVars.splice(draggedIndex, 1);
     newVars.splice(index, 0, item);
@@ -140,11 +149,11 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
   // Filter
   const filtered = searchQuery
-    ? envVars.map((env, idx) => ({ ...env, idx })).filter(env =>
+    ? normalizedEnvVars.map((env, idx) => ({ ...env, idx })).filter(env =>
         env.key.toLowerCase().includes(searchQuery.toLowerCase()) ||
         env.value.toLowerCase().includes(searchQuery.toLowerCase())
       )
-    : envVars.map((env, idx) => ({ ...env, idx }));
+    : normalizedEnvVars.map((env, idx) => ({ ...env, idx }));
 
   // Parse .env content
   const parseEnvContent = (content: string): EnvVar[] => {
@@ -180,9 +189,9 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
       toast.error('No valid variables found. Format: KEY=value');
       return;
     }
-    const existingKeys = new Set(envVars.map(e => e.key));
+    const existingKeys = new Set(normalizedEnvVars.map((env) => env.key));
     const newVars = parsed.filter(p => !existingKeys.has(p.key));
-    const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+    const updated = normalizedEnvVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
     setEnvVars([...updated, ...newVars]);
     setBulkText('');
     setInputMode('single');
@@ -218,9 +227,9 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
         return;
       }
 
-      const existingKeys = new Set(envVars.map(e => e.key));
+      const existingKeys = new Set(normalizedEnvVars.map((env) => env.key));
       const newVars = parsed.filter(p => !existingKeys.has(p.key));
-      const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+      const updated = normalizedEnvVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
       setEnvVars([...updated, ...newVars]);
       toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from ${file.name}`);
     };
@@ -261,9 +270,9 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
         return;
       }
 
-      const existingKeys = new Set(envVars.map(e => e.key));
+      const existingKeys = new Set(normalizedEnvVars.map((env) => env.key));
       const newVars = parsed.filter(p => !existingKeys.has(p.key));
-      const updated = envVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
+      const updated = normalizedEnvVars.map(existing => parsed.find(p => p.key === existing.key) || existing);
       setEnvVars([...updated, ...newVars]);
       toast.success(`Imported ${parsed.length} variable${parsed.length > 1 ? 's' : ''} from ${file.name}`);
     };
@@ -296,9 +305,9 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
       <div className="flex justify-between items-center">
         <Label className="text-white">Environment Variables</Label>
-        {envVars.length > 0 && (
+        {normalizedEnvVars.length > 0 && (
           <Button onClick={clearAll} size="sm" variant="outline" className="border-red-500/50 text-red-400 hover:bg-red-500/10">
-            <Trash2 className="h-3 w-3 mr-1" /> Clear All ({envVars.length})
+            <Trash2 className="h-3 w-3 mr-1" /> Clear All ({normalizedEnvVars.length})
           </Button>
         )}
       </div>
@@ -333,7 +342,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
         <TabsContent value="single" className="space-y-3 mt-4">
           {/* Search */}
-          {envVars.length > 3 && (
+          {normalizedEnvVars.length > 3 && (
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
               <Input
@@ -366,7 +375,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
                   <div className="flex-1">
                     <Input
-                      value={env.key}
+                      value={env.key ?? ''}
                       onChange={(e) => updateVar(env.idx, 'key', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
                       onPaste={(e) => handlePaste(e, env.idx, 'key')}
                       placeholder="VARIABLE_NAME"
@@ -376,7 +385,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
                       list={`suggestions-${env.idx}`}
                     />
                     <datalist id={`suggestions-${env.idx}`}>
-                      {getSuggestions(env.key).map(s => <option key={s} value={s} />)}
+                      {getSuggestions(env.key ?? '').map(s => <option key={s} value={s} />)}
                     </datalist>
                     {!validation.valid && (
                       <div className="flex items-center gap-1 mt-1 text-red-400 text-xs">
@@ -387,7 +396,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
 
                   <div className="flex-1 relative">
                     <Input
-                      value={env.value}
+                      value={env.value ?? ''}
                       onChange={(e) => updateVar(env.idx, 'value', e.target.value)}
                       onPaste={(e) => handlePaste(e, env.idx, 'value')}
                       placeholder="value"
@@ -424,7 +433,7 @@ export function EnvVarsEditor({ value: envVars, onChange: setEnvVars }: EnvVarsE
             <Button onClick={addVar} size="sm" variant="outline" className="border-white/20 text-white hover:bg-white/10">
               <Plus className="h-3 w-3 mr-1" /> Add Variable
             </Button>
-            {envVars.length > 0 && (
+            {normalizedEnvVars.length > 0 && (
               <span className="text-xs text-white/40">Drag to reorder</span>
             )}
           </div>
@@ -464,3 +473,4 @@ API_KEY=your-key`}
     </div>
   );
 }
+

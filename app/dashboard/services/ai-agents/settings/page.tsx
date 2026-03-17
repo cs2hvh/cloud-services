@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { fetchAIAgentApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 
 interface ModelKey {
@@ -80,7 +81,6 @@ const PROVIDERS = [
 
 export default function AIAgentsSettingsPage() {
   const supabase = createClient();
-
   const [keys, setKeys] = useState<ModelKey[]>([]);
   const [agentApiKeys, setAgentApiKeys] = useState<AgentApiKey[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,12 +136,7 @@ export default function AIAgentsSettingsPage() {
   const loadAgentApiKeys = async () => {
     setLoadingAgentKeys(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch('/api/ai-agents/api-keys', {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
+      const res = await fetchAIAgentApi('/api/ai-agents/api-keys');
 
       if (!res.ok) throw new Error('Failed to load agent API keys');
 
@@ -236,14 +231,10 @@ export default function AIAgentsSettingsPage() {
 
     setSavingAgentKey(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch('/api/ai-agents/api-keys', {
+      const res = await fetchAIAgentApi('/api/ai-agents/api-keys', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           name: newAgentKeyName.trim(),
@@ -275,12 +266,8 @@ export default function AIAgentsSettingsPage() {
 
     setDeletingAgentKey(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/api-keys/${deleteAgentKey.id}`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/api-keys/${deleteAgentKey.id}`, {
         method: 'DELETE',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
 
       if (!res.ok) throw new Error('Failed to delete');

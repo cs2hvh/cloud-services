@@ -33,7 +33,7 @@ import {
   Download,
 } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 
 interface KnowledgeBase {
@@ -65,7 +65,6 @@ export default function KnowledgeBaseDetailsPage({
 }) {
   const { id } = use(params);
   const router = useRouter();
-  const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
@@ -88,14 +87,9 @@ export default function KnowledgeBaseDetailsPage({
   const loadKnowledgeBase = async () => {
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const headers: HeadersInit = {};
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
       const [kbRes, docsRes] = await Promise.all([
-        fetch(`/api/knowledge-bases/${id}`, { headers }),
-        fetch(`/api/knowledge-bases/${id}/documents`, { headers }),
+        fetchAuthenticatedApi(`/api/knowledge-bases/${id}`),
+        fetchAuthenticatedApi(`/api/knowledge-bases/${id}/documents`),
       ]);
 
       if (!kbRes.ok) {
@@ -132,14 +126,10 @@ export default function KnowledgeBaseDetailsPage({
 
     setSaving(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/knowledge-bases/${id}`, {
+      const res = await fetchAuthenticatedApi(`/api/knowledge-bases/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           name: name.trim(),
@@ -162,12 +152,8 @@ export default function KnowledgeBaseDetailsPage({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/knowledge-bases/${id}`, {
+      const res = await fetchAuthenticatedApi(`/api/knowledge-bases/${id}`, {
         method: 'DELETE',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
 
       if (!res.ok) throw new Error('Failed to delete');
@@ -190,9 +176,6 @@ export default function KnowledgeBaseDetailsPage({
     setUploadProgress(0);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
       const totalFiles = files.length;
       let completed = 0;
 
@@ -211,22 +194,18 @@ export default function KnowledgeBaseDetailsPage({
             const formData = new FormData();
             formData.append('file', file);
 
-            res = await fetch(`/api/knowledge-bases/${id}/documents`, {
+            res = await fetchAuthenticatedApi(`/api/knowledge-bases/${id}/documents`, {
               method: 'POST',
-              headers: {
-                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-              },
               body: formData,
             });
           } else {
             // Use JSON for text-based files
             const content = await file.text();
 
-            res = await fetch(`/api/knowledge-bases/${id}/documents`, {
+            res = await fetchAuthenticatedApi(`/api/knowledge-bases/${id}/documents`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
               },
               body: JSON.stringify({
                 name: file.name,

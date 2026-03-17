@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AgentKnowledgeBases } from '@/lib/supabase/queries/ai_agents';
 import { KnowledgeBaseInsert } from '@/lib/ai/types';
@@ -27,8 +27,8 @@ const createKBSchema = z.object({
  * GET /api/knowledge-bases
  * List all knowledge bases for the authenticated user
  */
-export async function GET() {
-  const auth = await authenticateUser();
+export async function GET(request: NextRequest) {
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   try {
@@ -65,7 +65,7 @@ export async function GET() {
  * Create a new knowledge base
  */
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   try {

@@ -1,6 +1,6 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
@@ -34,13 +34,14 @@ import {
   AlertTriangle,
   FolderOpen,
   Edit2,
+  type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -99,10 +100,84 @@ const SIZE_SPECS = {
 
 type SizeKey = keyof typeof SIZE_SPECS;
 
+const SECTION_META: Array<{
+  value: string;
+  label: string;
+  description: string;
+  eyebrow: string;
+  icon: LucideIcon;
+  helper: string;
+}> = [
+  {
+    value: 'overview',
+    label: 'Overview',
+    description: 'Inspect status, health, traffic, and runtime capacity.',
+    eyebrow: 'Operations',
+    icon: Activity,
+    helper: 'Start here to verify runtime health, network readiness, and workload capacity before making changes.',
+  },
+  {
+    value: 'integrations',
+    label: 'Integrations',
+    description: 'Review connected services and storage integrations.',
+    eyebrow: 'Connectivity',
+    icon: Zap,
+    helper: 'Confirm downstream services and storage targets before promoting traffic or changing runtime settings.',
+  },
+  {
+    value: 'domains',
+    label: 'Domains',
+    description: 'Manage custom domains, DNS, and certificate routing.',
+    eyebrow: 'Routing',
+    icon: Link2,
+    helper: 'Keep routing clean and verify domain coverage before switching production traffic.',
+  },
+  {
+    value: 'build-logs',
+    label: 'Build Logs',
+    description: 'Trace build output, pipeline execution, and release logs.',
+    eyebrow: 'Build',
+    icon: Terminal,
+    helper: 'Use build logs to validate pipeline output and diagnose release failures quickly.',
+  },
+  {
+    value: 'runtime-logs',
+    label: 'Runtime Logs',
+    description: 'Inspect instance output and live application runtime logs.',
+    eyebrow: 'Runtime',
+    icon: Server,
+    helper: 'Check runtime output after deploys to catch boot, network, or dependency regressions early.',
+  },
+  {
+    value: 'issues',
+    label: 'Issues',
+    description: 'Review surfaced application issues and failure signals.',
+    eyebrow: 'Health',
+    icon: AlertTriangle,
+    helper: 'Triage issues here before scaling, resizing, or changing rollout settings.',
+  },
+  {
+    value: 'deployments',
+    label: 'Deployments',
+    description: 'Track historical deployments and live rollout updates.',
+    eyebrow: 'History',
+    icon: Layers,
+    helper: 'Deployment history shows release timing, failure reasons, and active rollout state in one place.',
+  },
+  {
+    value: 'settings',
+    label: 'Settings',
+    description: 'Manage sizing, redeploys, env vars, and project assignment.',
+    eyebrow: 'Configuration',
+    icon: Settings,
+    helper: 'Use settings for controlled changes to capacity, environment configuration, and ownership.',
+  },
+];
+
 function getStatusBadge(status: string, building?: boolean) {
   if (building) {
     return (
-      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+      <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
         <Loader2 className="w-3 h-3 mr-1 animate-spin" />
         Building
       </Badge>
@@ -112,35 +187,35 @@ function getStatusBadge(status: string, building?: boolean) {
   switch (status) {
     case 'running':
       return (
-        <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
+        <Badge className="rounded-none border-green-500/30 bg-green-500/20 text-green-400">
           <CheckCircle2 className="w-3 h-3 mr-1" />
           Running
         </Badge>
       );
     case 'failed':
       return (
-        <Badge className="bg-red-500/20 text-red-400 border-red-500/30">
+        <Badge className="rounded-none border-red-500/30 bg-red-500/20 text-red-400">
           <XCircle className="w-3 h-3 mr-1" />
           Failed
         </Badge>
       );
     case 'building':
       return (
-        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
+        <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
           <Loader2 className="w-3 h-3 mr-1 animate-spin" />
           Building
         </Badge>
       );
     case 'deleting':
       return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
           <Loader2 className="w-3 h-3 mr-1 animate-spin" />
           Deleting
         </Badge>
       );
     default:
       return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30">
+        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
           Pending
         </Badge>
       );
@@ -160,6 +235,7 @@ export default function AppDetailPage() {
   const [buildLogs, setBuildLogs] = useState<string>('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Environment variables editing state
   const [editedEnvVars, setEditedEnvVars] = useState<EnvVar[]>([]);
@@ -288,7 +364,13 @@ export default function AppDetailPage() {
   // Initialize edited env vars when app data loads
   useEffect(() => {
     if (app?.env_vars) {
-      setEditedEnvVars(app.env_vars.map(env => ({ ...env, visible: false })));
+      setEditedEnvVars(
+        app.env_vars.map((env) => ({
+          key: env?.key ?? '',
+          value: env?.value ?? '',
+          visible: false,
+        }))
+      );
     }
   }, [app?.env_vars]);
 
@@ -326,7 +408,13 @@ export default function AppDetailPage() {
     if (!app) return;
     
     // Filter out empty entries and validate
-    const validEnvVars = editedEnvVars.filter(env => env.key.trim() !== '');
+    const validEnvVars = editedEnvVars
+      .map((env) => ({
+        key: env.key ?? '',
+        value: env.value ?? '',
+        visible: env.visible ?? false,
+      }))
+      .filter((env) => env.key.trim() !== '');
     
     // Check for duplicate keys
     const keys = validEnvVars.map(e => e.key.trim());
@@ -365,7 +453,7 @@ export default function AppDetailPage() {
         setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
         toast.success('Environment changes saved', {
           description:
-            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect — click Redeploy to trigger a rebuild.',
+            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect â€” click Redeploy to trigger a rebuild.',
           duration: 7000,
         });
       } else if (data.requiresRedeploy) {
@@ -378,7 +466,7 @@ export default function AppDetailPage() {
       } else if (data.appliedLive) {
         // Pure runtime scenario: all vars applied
         setEnvVarSuccess(data.message);
-        toast.success('All changes applied instantly! ⚡', {
+        toast.success('All changes applied immediately.', {
           description: data.hint || 'Environment variables updated without rebuild',
           duration: 4000,
         });
@@ -516,6 +604,11 @@ export default function AppDetailPage() {
     router.push('/dashboard/services/apps');
   };
 
+  const activeSection = useMemo(
+    () => SECTION_META.find((section) => section.value === activeTab) ?? SECTION_META[0],
+    [activeTab]
+  );
+
   if (loading) {
     return (
       <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white flex items-center justify-center">
@@ -544,67 +637,80 @@ export default function AppDetailPage() {
   const domain = app.deployment_url
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
+  const ActiveSectionIcon = activeSection.icon;
+  const currentSize = (app.size || 'small') as SizeKey;
+  const currentSizeSpec = SIZE_SPECS[currentSize];
 
   return (
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      {/* Header */}
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
+        initial={{ opacity: 0, y: -16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6"
+        className="glass-panel overflow-hidden rounded-none"
       >
-        <Link
-          href="/dashboard/services/apps"
-          className="inline-flex items-center text-white/60 hover:text-white mb-4 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Apps
-        </Link>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href="/dashboard/services/apps"
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to application inventory
+            </Link>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold">{app.name}</h1>
-              <button
-                onClick={() => copyToClipboard(app.name, 'app-name')}
-                className="text-white/30 hover:text-white/70 transition-colors"
-                title="Copy app name"
-              >
-                {copiedField === 'app-name' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-              {getStatusBadge(app.status, buildInfo?.building)}
-              {appConnectionStatus === 'connected' && (
-                <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs" title="Real-time app status updates enabled">
-                  <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
-                  Live
-                </Badge>
-              )}
-            </div>
-            {/* Show failure reason if app failed */}
-            {app.status === 'failed' && app.last_failure_reason && (
-              <div className="flex items-center gap-2 text-sm text-red-400 mb-2 bg-red-500/10 rounded-lg px-3 py-2">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <span>{app.last_failure_reason}</span>
+            <div className="mt-5">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+                  Application Deployment
+                </p>
+                {getStatusBadge(app.status, buildInfo?.building)}
+                {appConnectionStatus === 'connected' && (
+                  <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
+                    <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                    Live
+                  </Badge>
+                )}
               </div>
-            )}
-            <div className="flex items-center gap-2">
-              <a
-                href={`https://${domain}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/50 hover:text-blue-400 flex items-center gap-1 transition-colors"
-              >
-                <Globe className="w-4 h-4" />
-                {domain}
-                <ExternalLink className="w-3 h-3" />
-              </a>
-              <button
-                onClick={() => copyToClipboard(`https://${domain}`, 'domain')}
-                className="text-white/30 hover:text-white/70 transition-colors"
-                title="Copy URL"
-              >
-                {copiedField === 'domain' ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-              </button>
+
+              <div className="mt-2 flex items-center gap-3">
+                <h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  {app.name}
+                </h1>
+                <button
+                  onClick={() => copyToClipboard(app.name, 'app-name')}
+                  className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white/75"
+                  title="Copy app name"
+                >
+                  {copiedField === 'app-name' ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                </button>
+              </div>
+
+              {app.status === 'failed' && app.last_failure_reason && (
+                <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>{app.last_failure_reason}</span>
+                </div>
+              )}
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <a
+                  href={`https://${domain}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-white/50 transition-colors hover:text-white"
+                >
+                  <Globe className="h-4 w-4" />
+                  {domain}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                <button
+                  onClick={() => copyToClipboard(`https://${domain}`, 'domain')}
+                  className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white/75"
+                  title="Copy URL"
+                >
+                  {copiedField === 'domain' ? <Check className="h-4 w-4 text-green-400" /> : <Copy className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -616,166 +722,216 @@ export default function AppDetailPage() {
                 if (app.name) fetchBuildInfo(app.name);
                 refetchDetails();
               }}
-              className="border-white/20 text-white hover:bg-white/10"
+              className="rounded-none border-white/[0.12] bg-white/[0.03] text-white hover:bg-white/[0.08]"
             >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh Metrics
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
             </Button>
             <Button
               variant="destructive"
               size="sm"
               onClick={() => setDeleteModalOpen(true)}
+              className="rounded-none"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <Trash2 className="mr-2 h-4 w-4" />
               Delete
             </Button>
           </div>
         </div>
+
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                App ID
+              </div>
+              <div className="mt-1.5 flex items-center gap-2">
+                <p className="min-w-0 flex-1 truncate font-mono text-sm text-white">{app.id}</p>
+                <button
+                  onClick={() => copyToClipboard(app.id, 'app-id')}
+                  className="text-white/35 transition-colors hover:text-white/70"
+                  title="Copy app ID"
+                >
+                  {copiedField === 'app-id' ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Framework
+              </div>
+              <div className="mt-1.5 text-sm font-semibold text-white">{app.framework || 'Not specified'}</div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Branch
+              </div>
+              <div className="mt-1.5 flex items-center gap-1 text-sm font-semibold text-white">
+                <GitBranch className="h-3.5 w-3.5 text-blue-300" />
+                {app.branch || 'Not specified'}
+              </div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Runtime Size
+              </div>
+              <div className="mt-1.5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold capitalize text-white">{currentSize}</p>
+                  <p className="text-xs text-white/45">
+                    {currentSizeSpec.cpu} · {currentSizeSpec.memory}
+                  </p>
+                </div>
+                <Badge className="rounded-none border-white/[0.08] bg-white/[0.04] text-white/75">
+                  {currentSizeSpec.price}
+                </Badge>
+              </div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Created
+              </div>
+              <div className="mt-1.5 text-sm font-semibold text-white">
+                {new Date(app.created_at).toLocaleDateString()}
+              </div>
+            </div>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Quick Stats */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+        transition={{ delay: 0.15 }}
       >
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-4">
-            <p className="text-xs text-white/50 mb-1">App ID</p>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-mono text-white truncate flex-1">{app.id}</p>
-              <button
-                onClick={() => copyToClipboard(app.id, 'app-id')}
-                className="text-white/30 hover:text-white/70 transition-colors flex-shrink-0"
-                title="Copy app ID"
-              >
-                {copiedField === 'app-id' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-4">
-            <p className="text-xs text-white/50 mb-1">Framework</p>
-            <p className="text-sm font-medium text-white">{app.framework || 'Not specified'}</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-4">
-            <p className="text-xs text-white/50 mb-1">Branch</p>
-            <p className="text-sm font-medium text-white flex items-center gap-1">
-              <GitBranch className="w-3 h-3" />
-              {app.branch}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-4">
-            <p className="text-xs text-white/50 mb-1">Port</p>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-mono text-white">{app.port}</p>
-              <button
-                onClick={() => copyToClipboard(app.port.toString(), 'port')}
-                className="text-white/30 hover:text-white/70 transition-colors"
-                title="Copy port"
-              >
-                {copiedField === 'port' ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white/5 border-white/10">
-          <CardContent className="p-4">
-            <p className="text-xs text-white/50 mb-1">Created</p>
-            <p className="text-sm text-white">
-              {new Date(app.created_at).toLocaleDateString()}
-            </p>
-          </CardContent>
-        </Card>
-      </motion.div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[272px_minmax(0,1fr)] xl:items-start">
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.18, duration: 0.24 }}
+              className="space-y-4 xl:sticky xl:top-8"
+            >
+              <Card className="glass-panel overflow-hidden rounded-none">
+                <CardContent className="p-4">
+                  <div className="mb-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Application Areas
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-white/45">
+                      Move between runtime health, domains, logs, deployments, and settings without leaving the page.
+                    </p>
+                  </div>
 
-      {/* Tabs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-      >
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">
-              <Activity className="w-4 h-4 mr-2" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="integrations" className="data-[state=active]:bg-white/10">
-              <Zap className="w-4 h-4 mr-2" />
-              Integrations
-            </TabsTrigger>
-            <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
-              <Link2 className="w-4 h-4 mr-2" />
-              Domains
-            </TabsTrigger>
-            <TabsTrigger value="build-logs" className="data-[state=active]:bg-white/10">
-              <Terminal className="w-4 h-4 mr-2" />
-              Build Logs
-            </TabsTrigger>
-            <TabsTrigger value="runtime-logs" className="data-[state=active]:bg-white/10">
-              <Server className="w-4 h-4 mr-2" />
-              Runtime Logs
-            </TabsTrigger>
-            <TabsTrigger value="issues" className="data-[state=active]:bg-white/10">
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              Issues
-            </TabsTrigger>
-            <TabsTrigger value="deployments" className="data-[state=active]:bg-white/10">
-              <Layers className="w-4 h-4 mr-2" />
-              Deployments
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-white/10">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+                  <div className="space-y-2">
+                    {SECTION_META.map((section) => {
+                      const SectionIcon = section.icon;
+                      const isActive = activeTab === section.value;
+                      return (
+                        <button
+                          key={section.value}
+                          type="button"
+                          onClick={() => setActiveTab(section.value)}
+                          className={`w-full border px-3 py-3 text-left transition-colors ${
+                            isActive
+                              ? 'border-blue-400/24 bg-white/[0.05]'
+                              : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`flex h-9 w-9 items-center justify-center border ${
+                                isActive
+                                  ? 'border-blue-400/24 bg-white/[0.05] text-blue-200'
+                                  : 'border-white/[0.08] bg-white/[0.03] text-white/55'
+                              }`}
+                            >
+                              <SectionIcon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-white">{section.label}</div>
+                              <div className="mt-1 text-xs leading-5 text-white/40">
+                                {section.description}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2, duration: 0.24 }}
+            >
+              <Card className="glass-panel overflow-hidden rounded-none">
+                <CardContent className="p-0">
+                  <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 items-center justify-center border border-blue-500/18 bg-white/[0.03] text-blue-200">
+                        <ActiveSectionIcon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                          {activeSection.eyebrow}
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold text-white">{activeSection.label}</h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+                          {activeSection.description}
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/35">
+                          {activeSection.helper}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-5 sm:px-6 sm:py-6">
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
             {/* Health & Metrics */}
             {app.status === 'running' && (
-              <Card className="bg-white/5 border-white/10">
-                <CardHeader>
+              <Card className="glass-panel rounded-none border-white/[0.08]">
+                <CardHeader className="border-b border-white/[0.06]">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Box className="w-5 h-5" />
                     Health & Metrics
                     {(detailsLoading || metricsLoading) && <Loader2 className="w-4 h-4 animate-spin" />}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 pt-5">
                   {details || metrics ? (
                     <>
                       {/* Health Status */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-black/30 rounded-lg p-4">
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <p className="text-xs text-white/40 mb-1">Status</p>
-                          <Badge className={`${
+                          <Badge className={`rounded-none ${
                             health?.status === 'healthy' || details?.pod?.phase === 'Running' ? 'bg-green-500/20 text-green-400' :
                             'bg-yellow-500/20 text-yellow-400'
                           }`}>
                             {health?.status || details?.pod?.phase || 'Unknown'}
                           </Badge>
                         </div>
-                        <div className="bg-black/30 rounded-lg p-4">
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <p className="text-xs text-white/40 mb-1">Pods</p>
                           <p className="text-xl font-bold text-white">
                             {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
                           </p>
                         </div>
-                        <div className="bg-black/30 rounded-lg p-4">
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <p className="text-xs text-white/40 mb-1">Restarts</p>
                           <p className="text-xl font-bold text-white">
                             {details?.container?.restartCount || health?.restart_count || 0}
                           </p>
                         </div>
-                        <div className="bg-black/30 rounded-lg p-4">
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <p className="text-xs text-white/40 mb-1">Uptime</p>
                           <p className="text-sm text-white">{details?.pod?.uptime || '-'}</p>
                         </div>
@@ -784,7 +940,7 @@ export default function AppDetailPage() {
                       {/* Resource Usage */}
                       {metrics && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="bg-black/30 rounded-lg p-4">
+                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-xs text-white/40 flex items-center gap-1">
                                 <Cpu className="w-3.5 h-3.5" /> CPU Usage
@@ -795,7 +951,7 @@ export default function AppDetailPage() {
                             </div>
                             <Progress value={metrics.cpu_usage ?? 0} className="h-2" />
                           </div>
-                          <div className="bg-black/30 rounded-lg p-4">
+                          <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-xs text-white/40 flex items-center gap-1">
                                 <HardDrive className="w-3.5 h-3.5" /> Memory Usage
@@ -811,7 +967,7 @@ export default function AppDetailPage() {
 
                       {/* Network Info */}
                       {details?.network && (
-                        <div className="bg-black/30 rounded-lg p-4">
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
                             <Network className="w-4 h-4" />
                             Network
@@ -832,7 +988,7 @@ export default function AppDetailPage() {
                             </div>
                             <div>
                               <p className="text-xs text-white/40 mb-1">TLS</p>
-                              <Badge className={details.network.tlsEnabled ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}>
+                              <Badge className={`rounded-none ${details.network.tlsEnabled ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
                                 {details.network.tlsEnabled ? 'Enabled' : 'Disabled'}
                               </Badge>
                             </div>
@@ -868,16 +1024,16 @@ export default function AppDetailPage() {
             )}
 
             {/* Repository Info */}
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
+            <Card className="glass-panel rounded-none border-white/[0.08]">
+              <CardHeader className="border-b border-white/[0.06]">
                 <CardTitle className="text-lg flex items-center gap-2">
                   <GitBranch className="w-5 h-5" />
                   Repository
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Repository URL</p>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-mono text-white truncate flex-1">
@@ -891,17 +1047,17 @@ export default function AppDetailPage() {
                       </button>
                     </div>
                   </div>
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Git Provider</p>
                     <p className="text-sm text-white capitalize">{app.git_provider}</p>
                   </div>
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Auto Deploy</p>
-                    <Badge className={app.auto_deploy ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/50'}>
+                    <Badge className={`rounded-none ${app.auto_deploy ? 'bg-green-500/20 text-green-400' : 'bg-white/10 text-white/50'}`}>
                       {app.auto_deploy ? 'Enabled' : 'Disabled'}
                     </Badge>
                   </div>
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Deploy Branch</p>
                     <p className="text-sm text-white">{app.deploy_branch || app.branch}</p>
                   </div>
@@ -963,8 +1119,8 @@ export default function AppDetailPage() {
 
           {/* Deployments Tab */}
           <TabsContent value="deployments">
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
+            <Card className="glass-panel rounded-none border-white/[0.08]">
+              <CardHeader className="border-b border-white/[0.06]">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Layers className="w-5 h-5" />
@@ -972,19 +1128,19 @@ export default function AppDetailPage() {
                   </CardTitle>
                   <div className="flex items-center gap-2">
                     {connectionStatus === 'connected' && (
-                      <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                      <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
                         <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
                         Live Updates
                       </Badge>
                     )}
                     {connectionStatus === 'connecting' && (
-                      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
+                      <Badge className="rounded-none bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
                         <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                         Connecting...
                       </Badge>
                     )}
                     {connectionStatus === 'disconnected' && (
-                      <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
+                      <Badge className="rounded-none bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
                         <XCircle className="w-3 h-3 mr-1" />
                         Disconnected
                       </Badge>
@@ -992,7 +1148,7 @@ export default function AppDetailPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-5">
                 {deploymentsLoading && deployments.length === 0 ? (
                   <div className="text-center py-8 text-white/50">
                     <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin" />
@@ -1003,18 +1159,18 @@ export default function AppDetailPage() {
                     {deployments.map((deployment) => (
                       <div
                         key={deployment.id}
-                        className="flex flex-col p-3 bg-black/30 rounded-lg gap-2"
+                        className="flex flex-col gap-3 border border-white/[0.08] bg-white/[0.03] px-4 py-4"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-mono text-white">
                               #{deployment.build_number}
                             </span>
-                            <Badge className={
+                            <Badge className={`rounded-none ${
                               deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
                               deployment.status === 'FAILURE' ? 'bg-red-500/20 text-red-400' :
                               'bg-yellow-500/20 text-yellow-400'
-                            }>
+                            }`}>
                               {deployment.status}
                             </Badge>
                           </div>
@@ -1028,14 +1184,14 @@ export default function AppDetailPage() {
                         {deployment.commit_sha && (
                           <div className="flex items-center gap-2 text-xs text-white/60 pl-1">
                             <GitCommit className="w-3 h-3 text-white/40" />
-                            <code className="px-1.5 py-0.5 bg-white/10 rounded text-blue-400 font-mono">
+                            <code className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-200">
                               {deployment.commit_sha.substring(0, 7)}
                             </code>
                           </div>
                         )}
                         {/* Failure Reason Row */}
                         {deployment.status === 'FAILURE' && deployment.failure_reason && (
-                          <div className="flex items-center gap-2 text-xs text-red-400/80 pl-1 bg-red-500/10 rounded px-2 py-1.5">
+                          <div className="flex items-center gap-2 border border-red-500/20 bg-red-500/10 px-2 py-2 text-xs text-red-300">
                             <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                             <span>{deployment.failure_reason}</span>
                           </div>
@@ -1043,7 +1199,7 @@ export default function AppDetailPage() {
                         {/* Trigger Badge */}
                         {deployment.trigger && (
                           <div className="flex items-center gap-2 text-xs text-white/40 pl-1">
-                            <Badge variant="outline" className="text-xs capitalize">
+                            <Badge variant="outline" className="rounded-none text-xs capitalize">
                               {deployment.trigger}
                             </Badge>
                           </div>
@@ -1063,8 +1219,8 @@ export default function AppDetailPage() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card className="bg-white/5 border-white/10">
-              <CardHeader>
+            <Card className="glass-panel rounded-none border-white/[0.08]">
+              <CardHeader className="border-b border-white/[0.06]">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
                     <Settings className="w-5 h-5" />
@@ -1073,7 +1229,7 @@ export default function AppDetailPage() {
                   <Button
                     onClick={handleRedeploy}
                     disabled={redeploying || app.status === 'building' || app.status === 'deleting'}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                    className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {redeploying ? (
                       <>
@@ -1089,17 +1245,17 @@ export default function AppDetailPage() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5 pt-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Build Command</p>
-                    <p className="text-sm font-mono text-white bg-black/30 p-2 rounded">
+                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
                       {app.build_command || 'Default'}
                     </p>
                   </div>
-                  <div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                     <p className="text-xs text-white/40 mb-1">Output Directory</p>
-                    <p className="text-sm font-mono text-white bg-black/30 p-2 rounded">
+                    <p className="border border-white/[0.08] bg-black/20 px-3 py-3 text-sm font-mono text-white">
                       {app.output_directory || 'Default'}
                     </p>
                   </div>
@@ -1120,7 +1276,7 @@ export default function AppDetailPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => setEditingProject(true)}
-                        className="h-8 text-white/70 hover:bg-white/10"
+                        className="h-8 rounded-none text-white/70 hover:bg-white/10"
                       >
                         <Edit2 className="w-3.5 h-3.5 mr-1" />
                         Edit
@@ -1134,7 +1290,7 @@ export default function AppDetailPage() {
                         value={projectId || "none"}
                         onValueChange={(value) => setProjectId(value === "none" ? null : value)}
                       >
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                        <SelectTrigger className="rounded-none bg-white/5 border-white/10 text-white">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="bg-black border-white/10">
@@ -1151,7 +1307,7 @@ export default function AppDetailPage() {
                         <Button
                           onClick={handleSaveProject}
                           disabled={savingProject}
-                          className="bg-green-600 hover:bg-green-700 text-white"
+                          className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                           size="sm"
                         >
                           {savingProject ? (
@@ -1170,7 +1326,7 @@ export default function AppDetailPage() {
                           variant="outline"
                           onClick={handleCancelProjectEdit}
                           disabled={savingProject}
-                          className="border-white/20 text-white hover:bg-white/10"
+                          className="rounded-none border-white/20 text-white hover:bg-white/10"
                           size="sm"
                         >
                           <X className="w-3.5 h-3.5 mr-1" />
@@ -1180,7 +1336,7 @@ export default function AppDetailPage() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+                      <span className="border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm font-medium text-yellow-200">
                         {getProjectName(projectId)}
                       </span>
                     </div>
@@ -1196,12 +1352,12 @@ export default function AppDetailPage() {
 
                   {/* Resize Messages */}
                   {resizeError && (
-                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
+                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                       {resizeError}
                     </div>
                   )}
                   {resizeSuccess && (
-                    <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm flex items-center gap-2">
+                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
                       <CheckCircle2 className="w-4 h-4" />
                       {resizeSuccess}
                     </div>
@@ -1222,23 +1378,23 @@ export default function AppDetailPage() {
                         <div
                           key={size}
                           onClick={() => !isDisabled && setSelectedSize(isSelected ? null : size)}
-                          className={`relative p-4 rounded-lg border-2 transition-all cursor-pointer ${
+                          className={`relative border px-4 py-4 transition-all cursor-pointer ${
                             isCurrent
-                              ? 'border-blue-500 bg-blue-500/10'
+                              ? 'border-blue-500/40 bg-white/[0.05]'
                               : isSelected
-                              ? 'border-green-500 bg-green-500/10'
+                              ? 'border-green-500/40 bg-white/[0.05]'
                               : isUpgrade
-                              ? 'border-white/20 bg-white/5 hover:border-white/40'
+                              ? 'border-white/20 bg-white/[0.03] hover:border-white/40'
                               : 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed'
                           }`}
                         >
                           {isCurrent && (
-                            <Badge className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs">
+                            <Badge className="absolute -top-2 -right-2 rounded-none bg-blue-500 text-white text-xs">
                               Current
                             </Badge>
                           )}
                           {isUpgrade && !isCurrent && (
-                            <Badge className="absolute -top-2 -right-2 bg-green-500/20 text-green-400 border-green-500/30 text-xs">
+                            <Badge className="absolute -top-2 -right-2 rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
                               <ArrowUpCircle className="w-3 h-3 mr-1" />
                               Upgrade
                             </Badge>
@@ -1274,7 +1430,7 @@ export default function AppDetailPage() {
                       <Button
                         onClick={handleResize}
                         disabled={resizing || app.status === 'building'}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {resizing ? (
                           <>
@@ -1291,7 +1447,7 @@ export default function AppDetailPage() {
                       <Button
                         variant="outline"
                         onClick={() => setSelectedSize(null)}
-                        className="border-white/20 text-white hover:bg-white/10"
+                        className="rounded-none border-white/20 text-white hover:bg-white/10"
                       >
                         Cancel
                       </Button>
@@ -1306,12 +1462,12 @@ export default function AppDetailPage() {
                 <div className="border-t border-white/10 pt-4">
                   {/* Success/Error Messages */}
                   {envVarError && (
-                    <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-red-400 text-sm">
+                    <div className="mb-3 border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                       {envVarError}
                     </div>
                   )}
                   {envVarSuccess && (
-                    <div className="mb-3 p-2 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm flex items-center gap-2">
+                    <div className="mb-3 flex items-center gap-2 border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm text-green-300">
                       <CheckCircle2 className="w-4 h-4" />
                       {envVarSuccess}
                     </div>
@@ -1326,7 +1482,7 @@ export default function AppDetailPage() {
                       <Button
                         onClick={handleSaveEnvVars}
                         disabled={savingEnvVars}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {savingEnvVars ? (
                           <>
@@ -1343,15 +1499,15 @@ export default function AppDetailPage() {
                       <span className="text-xs text-white/50">
                         {envVarSuccess && envVarSuccess.toLowerCase().includes('applied') && envVarSuccess.toLowerCase().includes('immediately') ? (
                           <span className="text-yellow-400">
-                            ⚡ Runtime vars live now. Build-time vars need redeploy.
+                            Runtime variables apply immediately. Build-time variables require a redeploy.
                           </span>
                         ) : envVarSuccess && (envVarSuccess.includes('applied instantly') || envVarSuccess.includes('All changes applied')) ? (
                           <span className="text-green-400">
-                            ⚡ All changes applied instantly (no rebuild needed)
+                            All changes applied immediately. No rebuild required.
                           </span>
                         ) : envVarSuccess && envVarSuccess.toLowerCase().includes('redeploy') ? (
                           <span className="text-yellow-400">
-                            ⚠️ Changes require clicking &quot;Redeploy&quot; to take effect
+                            Changes require clicking &quot;Redeploy&quot; to take effect.
                           </span>
                         ) : (
                           'Auto-detects if hot update or rebuild is needed'
@@ -1367,7 +1523,7 @@ export default function AppDetailPage() {
                   <Button
                     variant="destructive"
                     onClick={() => setDeleteModalOpen(true)}
-                    className="w-full md:w-auto"
+                    className="w-full rounded-none md:w-auto"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete Application
@@ -1376,6 +1532,11 @@ export default function AppDetailPage() {
               </CardContent>
             </Card>
           </TabsContent>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
         </Tabs>
       </motion.div>
 
@@ -1392,3 +1553,5 @@ export default function AppDetailPage() {
     </div>
   );
 }
+
+

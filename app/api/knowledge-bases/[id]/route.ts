@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AgentKnowledgeBases, AgentKBDocuments } from '@/lib/supabase/queries/ai_agents';
 import { KnowledgeBaseUpdate } from '@/lib/ai/types';
@@ -29,7 +29,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Get knowledge base details with documents
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Update knowledge base settings
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;
@@ -189,7 +189,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  * Delete a knowledge base and all its documents
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;

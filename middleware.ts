@@ -113,10 +113,17 @@ function applyIpCooldown(req: NextRequest): NextResponse | null {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const hasAuthorizationHeader = request.headers.has('authorization');
   
   // STREAMING ROUTES: Completely bypass middleware to prevent response buffering
   // These routes use Server-Sent Events (SSE) which must not be touched by middleware
   if (pathname.startsWith('/api/ai-agents/') && pathname.endsWith('/test')) {
+    return NextResponse.next();
+  }
+  if (pathname.startsWith('/api/ai-agents') && hasAuthorizationHeader) {
+    return NextResponse.next();
+  }
+  if (pathname.startsWith('/api/knowledge-bases') && hasAuthorizationHeader) {
     return NextResponse.next();
   }
   if (pathname.startsWith('/api/v1/agents/') && pathname.endsWith('/chat')) {

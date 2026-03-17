@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentInsert } from '@/lib/ai/types';
@@ -43,8 +43,8 @@ const createAgentSchema = z.object({
  * GET /api/ai-agents
  * List all agents for the authenticated user
  */
-export async function GET() {
-  const auth = await authenticateUser();
+export async function GET(request: NextRequest) {
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   try {
@@ -81,7 +81,7 @@ export async function GET() {
  * Create a new AI agent
  */
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   try {
