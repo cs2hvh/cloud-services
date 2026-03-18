@@ -1,7 +1,7 @@
 ﻿'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
   ArrowLeft,
@@ -225,9 +225,7 @@ function getStatusBadge(status: string, building?: boolean) {
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const appId = params.id as string;
-  const initialTab = searchParams.get('tab') === 'domains' ? 'domains' : 'overview';
   const { projects } = useProjects();
 
   const [app, setApp] = useState<AppDetail | null>(null);
@@ -717,16 +715,6 @@ export default function AppDetailPage() {
           </div>
 
           <div className="flex gap-2">
-            <Link href="/dashboard/domains/marketplace">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-white/20 text-white hover:bg-white/10"
-              >
-                <Globe className="w-4 h-4 mr-2" />
-                Domain Marketplace
-              </Button>
-            </Link>
             <Button
               variant="outline"
               size="sm"
@@ -816,41 +804,94 @@ export default function AppDetailPage() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
       >
-        <Tabs defaultValue={initialTab} className="space-y-4">
-          <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-            <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">
-              <Activity className="w-4 h-4 mr-2" />
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="integrations" className="data-[state=active]:bg-white/10">
-              <Zap className="w-4 h-4 mr-2" />
-              Integrations
-            </TabsTrigger>
-            <TabsTrigger value="domains" className="data-[state=active]:bg-white/10">
-              <Link2 className="w-4 h-4 mr-2" />
-              Domains
-            </TabsTrigger>
-            <TabsTrigger value="build-logs" className="data-[state=active]:bg-white/10">
-              <Terminal className="w-4 h-4 mr-2" />
-              Build Logs
-            </TabsTrigger>
-            <TabsTrigger value="runtime-logs" className="data-[state=active]:bg-white/10">
-              <Server className="w-4 h-4 mr-2" />
-              Runtime Logs
-            </TabsTrigger>
-            <TabsTrigger value="issues" className="data-[state=active]:bg-white/10">
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              Issues
-            </TabsTrigger>
-            <TabsTrigger value="deployments" className="data-[state=active]:bg-white/10">
-              <Layers className="w-4 h-4 mr-2" />
-              Deployments
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="data-[state=active]:bg-white/10">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[272px_minmax(0,1fr)] xl:items-start">
+            <motion.div
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.18, duration: 0.24 }}
+              className="space-y-4 xl:sticky xl:top-8"
+            >
+              <Card className="glass-panel overflow-hidden rounded-none">
+                <CardContent className="p-4">
+                  <div className="mb-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      Application Areas
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-white/45">
+                      Move between runtime health, domains, logs, deployments, and settings without leaving the page.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {SECTION_META.map((section) => {
+                      const SectionIcon = section.icon;
+                      const isActive = activeTab === section.value;
+                      return (
+                        <button
+                          key={section.value}
+                          type="button"
+                          onClick={() => setActiveTab(section.value)}
+                          className={`w-full border px-3 py-3 text-left transition-colors ${
+                            isActive
+                              ? 'border-blue-400/24 bg-white/[0.05]'
+                              : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`flex h-9 w-9 items-center justify-center border ${
+                                isActive
+                                  ? 'border-blue-400/24 bg-white/[0.05] text-blue-200'
+                                  : 'border-white/[0.08] bg-white/[0.03] text-white/55'
+                              }`}
+                            >
+                              <SectionIcon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-white">{section.label}</div>
+                              <div className="mt-1 text-xs leading-5 text-white/40">
+                                {section.description}
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.2, duration: 0.24 }}
+            >
+              <Card className="glass-panel overflow-hidden rounded-none">
+                <CardContent className="p-0">
+                  <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 items-center justify-center border border-blue-500/18 bg-white/[0.03] text-blue-200">
+                        <ActiveSectionIcon className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                          {activeSection.eyebrow}
+                        </p>
+                        <h2 className="mt-1 text-xl font-semibold text-white">{activeSection.label}</h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+                          {activeSection.description}
+                        </p>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/35">
+                          {activeSection.helper}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-5 sm:px-6 sm:py-6">
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
@@ -1040,21 +1081,7 @@ export default function AppDetailPage() {
           </TabsContent>
 
           {/* Domains Tab */}
-          <TabsContent value="domains" className="space-y-4">
-            <Card className="bg-cyan-500/10 border-cyan-400/20">
-              <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-white">Need to buy a new domain?</p>
-                  <p className="text-xs text-white/60">Domain purchasing is global and lives in the dedicated Marketplace.</p>
-                </div>
-                <Link href="/dashboard/domains/marketplace">
-                  <Button variant="outline" className="border-white/20 text-white hover:bg-white/10 w-full sm:w-auto">
-                    Open Domain Marketplace
-                    <ExternalLink className="w-3.5 h-3.5 ml-2" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+          <TabsContent value="domains">
             <CustomDomainsManager
               appId={app.id}
               appStatus={app.status}
@@ -1526,5 +1553,4 @@ export default function AppDetailPage() {
     </div>
   );
 }
-
 
