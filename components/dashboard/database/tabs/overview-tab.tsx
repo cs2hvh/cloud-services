@@ -125,7 +125,7 @@ export const OverviewTab = ({
     );
   }
 
-  if (database.status === "pending" || database.status === "failed") {
+  if (database.status === "pending") {
     return (
       <motion.div
         key="failed"
