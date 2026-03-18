@@ -17,6 +17,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -82,6 +92,41 @@ interface VerificationInstructions {
   record_value: string;
 }
 
+// ─── Error helpers ───────────────────────────────────────────────────────────
+
+const API_ERROR_MESSAGES: Record<string, string> = {
+  DOMAIN_LIMIT_REACHED: "You've reached the maximum number of domains for this app. Remove one to add another.",
+  DOMAIN_ALREADY_EXISTS: 'This domain is already connected to an app.',
+  DOMAIN_ALREADY_IN_USE: 'This domain is already in use by another app.',
+  NOT_FOUND: 'Domain not found — it may have already been removed.',
+  DOMAIN_NOT_MANAGED: "This domain isn't managed through your account.",
+  TOO_MANY_REQUESTS: 'Too many requests — please wait a moment and try again.',
+  INTERNAL_ERROR: 'Something went wrong on our end. Please try again.',
+  UNAUTHORIZED: 'Your session has expired. Please sign in again.',
+  FORBIDDEN: "You don't have permission to do that.",
+  VALIDATION_ERROR: 'Please check your input and try again.',
+};
+
+function looksInternal(msg: string): boolean {
+  return /supabase|postgres|sql[\s(]|stack trace|node_modules|\.ts:\d|undefined is not|cannot read property|fetch failed|econnrefused|503|500 internal/i.test(msg);
+}
+
+function friendlyError(data: Record<string, unknown> | null | undefined, fallback: string): string {
+  const code = typeof data?.error === 'string' ? data.error : '';
+  const message = typeof data?.message === 'string' ? data.message : '';
+  if (code && API_ERROR_MESSAGES[code]) return API_ERROR_MESSAGES[code];
+  if (message && !looksInternal(message)) return message;
+  return fallback;
+}
+
+function sanitizeOperationError(msg: string | undefined | null, fallback: string): string {
+  if (!msg) return fallback;
+  if (looksInternal(msg)) return fallback;
+  return msg;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function normalizeDomainInput(value: string): string {
   return value
     .trim()
@@ -115,6 +160,7 @@ export function CustomDomainsManager({
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const [verificationInstructions, setVerificationInstructions] = useState<VerificationInstructions | null>(null);
@@ -174,15 +220,14 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to load app domains');
+        toast.error(friendlyError(data, 'Unable to load your domains. Refresh the page to try again.'));
         setDomains([]);
         return;
       }
 
       setDomains((data?.domains || []) as CustomDomain[]);
-    } catch (error) {
-      console.error('Error fetching app domains:', error);
-      toast.error('Failed to load app domains');
+    } catch {
+      toast.error('Unable to load your domains. Refresh the page to try again.');
       setDomains([]);
     } finally {
       setLoading(false);
@@ -196,15 +241,14 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to load available domains');
+        toast.error(friendlyError(data, 'Unable to load your available domains. Refresh to try again.'));
         setInventoryDomains([]);
         return;
       }
 
       setInventoryDomains((data?.data?.domains || []) as DomainInventoryItem[]);
-    } catch (error) {
-      console.error('Error fetching inventory domains:', error);
-      toast.error('Failed to load available domains');
+    } catch {
+      toast.error('Unable to load your available domains. Refresh to try again.');
       setInventoryDomains([]);
     } finally {
       setInventoryLoading(false);
@@ -240,12 +284,12 @@ export function CustomDomainsManager({
     const domain = selectedTargetDomain;
 
     if (!domain) {
-      toast.error('Please provide a valid domain');
+      toast.error('Please enter a domain name.');
       return;
     }
 
     if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
-      toast.error('Enter a valid domain, for example: example.com');
+      toast.error('Enter a valid domain — for example: example.com or app.example.com');
       return;
     }
 
@@ -261,22 +305,21 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to add domain');
+        toast.error(friendlyError(data, 'Failed to add domain. Please try again.'));
         return;
       }
 
       if (data?.verification_required) {
         setVerificationInstructions(data?.verification_instructions || null);
-        toast.success('Domain added. Complete TXT verification to continue.');
+        toast.success(`${domain} added — add the TXT record shown to verify you own this domain.`);
       } else {
-        toast.success('Domain added and ownership verified. Activate when DNS is ready.');
+        toast.success(`${domain} added. Activate it once your DNS is ready.`);
         closeAddDialog();
       }
 
       await refreshAll();
-    } catch (error) {
-      console.error('Error adding domain:', error);
-      toast.error('Failed to add domain');
+    } catch {
+      toast.error('Failed to add domain. Please check your connection and try again.');
     } finally {
       setAdding(false);
     }
@@ -284,6 +327,7 @@ export function CustomDomainsManager({
 
   const handleVerifyDomain = async (domainId: string) => {
     setVerifyingId(domainId);
+    const domainName = domains.find((d) => d.id === domainId)?.domain;
 
     try {
       const res = await fetch(`/api/domains/${domainId}/verify`, {
@@ -293,14 +337,18 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (data.verified) {
-        toast.success('Domain verified. You can now activate it.');
+        toast.success(`${domainName ? `${domainName} verified` : 'Domain verified'} — you can now activate it.`);
         await fetchDomains();
       } else {
-        toast.error(data.error || 'Verification failed. Make sure DNS record is set correctly.');
+        toast.error(
+          friendlyError(
+            data,
+            'Verification failed — check that your TXT record exactly matches the value shown and try again.',
+          ),
+        );
       }
-    } catch (error) {
-      console.error('Error verifying domain:', error);
-      toast.error('Failed to verify domain');
+    } catch {
+      toast.error('Verification check failed. Check your connection and try again.');
     } finally {
       setVerifyingId(null);
     }
@@ -315,7 +363,7 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data?.message || data?.error || 'Failed to get operation status');
+        throw new Error('Unable to check setup status. Please refresh and try again.');
       }
 
       const status = data?.operation?.status;
@@ -323,21 +371,23 @@ export function CustomDomainsManager({
         return;
       }
       if (status === 'failed') {
-        throw new Error(data?.operation?.error_message || 'Domain activation failed');
+        const rawMsg = data?.operation?.error_message;
+        throw new Error(sanitizeOperationError(rawMsg, 'Domain setup failed. Please try again or contact support.'));
       }
 
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
-    throw new Error('Domain activation timed out. Check status again.');
+    throw new Error('Setup is taking longer than expected. Refresh to check the current status.');
   };
 
   const handleActivateDomain = async (domainId: string) => {
     if (appStatus !== 'running') {
-      toast.error('App must be running to activate custom domain');
+      toast.error('Your app needs to be running before you can activate a custom domain. Start your app first.');
       return;
     }
 
+    const domainName = domains.find((d) => d.id === domainId)?.domain;
     setActivatingId(domainId);
 
     try {
@@ -348,29 +398,26 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        toast.error(data?.message || data?.error || 'Activation failed');
+        toast.error(friendlyError(data, 'Activation failed. Please try again.'));
         return;
       }
 
       if (data.operation_id) {
-        toast.info('Domain activation in progress. Applying routing and SSL...');
+        toast.info(`Setting up ${domainName || 'domain'}\u2026 this may take up to 2 minutes.`);
         await pollOperation(data.operation_id);
       }
 
-      toast.success('Domain activated. SSL issuance started.');
+      toast.success(`${domainName || 'Domain'} is now live\u2014your SSL certificate will be ready shortly.`);
       await fetchDomains();
     } catch (error) {
-      console.error('Error activating domain:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to activate domain');
+      toast.error(error instanceof Error ? error.message : 'Activation failed. Please try again.');
     } finally {
       setActivatingId(null);
     }
   };
 
   const handleRemoveDomain = async (domainId: string) => {
-    const confirmed = window.confirm('Remove this domain from the app?');
-    if (!confirmed) return;
-
+    const domainName = domains.find((d) => d.id === domainId)?.domain;
     setRemovingId(domainId);
 
     try {
@@ -381,22 +428,24 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to remove domain');
+        toast.error(friendlyError(data, 'Failed to remove domain. Please try again.'));
         return;
       }
 
-      toast.success('Domain removed');
+      toast.success(`${domainName || 'Domain'} has been removed from this app.`);
       await fetchDomains();
       await fetchInventoryDomains();
-    } catch (error) {
-      console.error('Error removing domain:', error);
-      toast.error('Failed to remove domain');
+    } catch {
+      toast.error('Failed to remove domain. Please try again.');
     } finally {
       setRemovingId(null);
+      setRemoveConfirmId(null);
     }
   };
 
   const handleSetPrimary = async (domainId: string) => {
+    const primaryDomain = domains.find((d) => d.id === domainId)?.domain;
+
     try {
       const res = await fetch(`/api/domains/${domainId}/set-primary`, {
         method: 'POST',
@@ -405,48 +454,48 @@ export function CustomDomainsManager({
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        toast.error(data?.message || data?.error || 'Failed to set primary domain');
+        toast.error(friendlyError(data, 'Failed to update primary domain. Please try again.'));
         return;
       }
 
-      toast.success('Primary domain set');
+      toast.success(`${primaryDomain || 'Domain'} is now your primary domain.`);
       await fetchDomains();
-    } catch (error) {
-      console.error('Error setting primary domain:', error);
-      toast.error('Failed to set primary domain');
+    } catch {
+      toast.error('Failed to update primary domain. Please try again.');
     }
   };
 
   const renderDnsStatus = (domain: CustomDomain) => {
     if (domain.status === 'removed') return null;
     if (typeof domain.dns_ready !== 'boolean' && !domain.dns_message) return null;
-
-    const expected = domain.dns_expected_ips?.length
-      ? domain.dns_expected_ips.join(', ')
-      : 'platform ingress IP';
+    // Don't show DNS status for pending/unverified domains — verify first
+    if (domain.status === 'pending') return null;
 
     const resolved = domain.dns_resolved_ips?.length
       ? domain.dns_resolved_ips.join(', ')
-      : 'No records detected yet';
+      : null;
+
+    const friendlyMessage = domain.dns_ready
+      ? 'Your DNS is correctly pointing to our servers.'
+      : (domain.dns_message && !looksInternal(domain.dns_message)
+          ? domain.dns_message
+          : "Your DNS isn't pointing to our servers yet — changes can take up to 24 hours.");
 
     return (
       <div
-        className={`mt-3 border p-3 text-sm ${
+        className={`mt-3 rounded border p-3 text-sm ${
           domain.dns_ready
             ? 'border-green-500/30 bg-green-500/5 text-green-300'
             : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-200'
         }`}
       >
-        <div className="mb-1 text-xs uppercase tracking-wide text-white/60">DNS Routing</div>
-        <p className="text-sm font-medium">{domain.dns_message || 'DNS status pending update.'}</p>
-        <div className="mt-2 space-y-1 text-xs text-white/60">
-          <p>
-            <span className="text-white/40">Expected:</span> {expected}
+        <div className="mb-1 text-xs font-medium uppercase tracking-wide text-white/50">DNS Status</div>
+        <p className="text-sm font-medium">{friendlyMessage}</p>
+        {!domain.dns_ready && resolved && (
+          <p className="mt-2 text-xs text-white/55">
+            <span className="text-white/40">Currently resolves to:</span> {resolved}
           </p>
-          <p>
-            <span className="text-white/40">Resolved:</span> {resolved}
-          </p>
-        </div>
+        )}
       </div>
     );
   };
@@ -489,15 +538,15 @@ export function CustomDomainsManager({
     if (domain.status === 'pending') {
       return {
         title: 'Verify ownership',
-        description: 'Add TXT record, wait for propagation, then verify.',
+        description: 'Add the TXT record shown below to your DNS, then click Verify.',
         action: 'verify' as const,
       };
     }
 
     if (domain.status === 'verified' && !dnsReady) {
       return {
-        title: 'Update DNS routing',
-        description: 'Point A/ANAME or CNAME to platform ingress, then activate.',
+        title: 'Update your DNS',
+        description: 'Point this domain to our servers (A or CNAME record), then activate to go live.',
         action: null,
       };
     }
@@ -505,7 +554,7 @@ export function CustomDomainsManager({
     if (domain.status === 'verified' && dnsReady) {
       return {
         title: 'Activate domain',
-        description: 'Create ingress and start SSL issuance.',
+        description: 'Your SSL certificate will be provisioned automatically once activated.',
         action: 'activate' as const,
       };
     }
@@ -513,7 +562,7 @@ export function CustomDomainsManager({
     if (domain.status === 'active' && !domain.is_primary) {
       return {
         title: 'Set as primary (optional)',
-        description: 'Use this domain as canonical URL for your app.',
+        description: 'Make this the main URL shown to visitors.',
         action: 'set-primary' as const,
       };
     }
@@ -521,7 +570,7 @@ export function CustomDomainsManager({
     if (domain.status === 'failed') {
       return {
         title: 'Retry verification',
-        description: 'Fix DNS record mismatch and verify again.',
+        description: 'Check that your DNS TXT record exactly matches the value below, then try again.',
         action: 'verify' as const,
       };
     }
@@ -549,7 +598,7 @@ export function CustomDomainsManager({
               App Domains
             </CardTitle>
             <CardDescription className="mt-1 text-sm text-white/60">
-              Use domains with this app. Buying stays global in Marketplace.
+              Connect a domain to this app. Purchase domains globally from the Marketplace.
             </CardDescription>
           </div>
 
@@ -638,7 +687,7 @@ export function CustomDomainsManager({
                             placeholder="api"
                             className="border-white/20 bg-black/30 text-white"
                           />
-                          <p className="text-xs text-white/55">Leave empty to connect root domain.</p>
+                          <p className="text-xs text-white/55">Leave empty to use the root domain (e.g. example.com).</p>
                         </div>
                       </>
                     )}
@@ -653,7 +702,7 @@ export function CustomDomainsManager({
                         placeholder="example.com or app.example.com"
                         className="border-white/20 bg-black/30 text-white"
                       />
-                      <p className="text-xs text-white/55">For external domains, TXT ownership verification is required.</p>
+                      <p className="text-xs text-white/55">You&apos;ll need to add a short TXT record to prove you own this domain.</p>
                     </div>
                   </TabsContent>
                 </Tabs>
@@ -665,16 +714,16 @@ export function CustomDomainsManager({
                 {verificationInstructions && (
                   <Alert className="border-cyan-500/30 bg-cyan-500/10">
                     <AlertCircle className="h-4 w-4 text-cyan-300" />
-                    <AlertTitle className="text-cyan-200">Ownership verification required</AlertTitle>
+                    <AlertTitle className="text-cyan-200">One more step — verify ownership</AlertTitle>
                     <AlertDescription className="space-y-2 text-white/75">
-                      <p>Add this TXT record in your DNS provider:</p>
+                      <p>Add the following TXT record at your DNS provider, then click Verify in the domain card below.</p>
                       <div className="space-y-2 rounded bg-black/30 p-3 font-mono text-xs">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-white/50">Type</span>
+                          <span className="text-white/50">Record type</span>
                           <span className="text-white">{verificationInstructions.record_type}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-white/50">Name</span>
+                          <span className="text-white/50">Record name</span>
                           <button
                             type="button"
                             onClick={() => copyToClipboard(verificationInstructions.record_name, 'verification-name')}
@@ -685,7 +734,7 @@ export function CustomDomainsManager({
                           </button>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="text-white/50">Value</span>
+                          <span className="text-white/50">Record value</span>
                           <button
                             type="button"
                             onClick={() => copyToClipboard(verificationInstructions.record_value, 'verification-value')}
@@ -696,6 +745,7 @@ export function CustomDomainsManager({
                           </button>
                         </div>
                       </div>
+                      <p className="text-xs text-white/50">DNS changes can take a few minutes to a few hours to take effect.</p>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -758,8 +808,8 @@ export function CustomDomainsManager({
         {domains.length === 0 ? (
           <div className="border border-dashed border-white/15 p-6 text-center text-white/60">
             <Globe className="mx-auto mb-2 h-8 w-8 opacity-60" />
-            <p>No custom domains connected yet.</p>
-            <p className="mt-1 text-xs">Use Add Domain to connect an existing domain or external domain.</p>
+            <p className="font-medium text-white/70">No custom domains yet</p>
+            <p className="mt-1 text-xs">Click <strong>Add Domain</strong> to connect a domain you own, or visit the Marketplace to purchase one.</p>
           </div>
         ) : (
           domains.map((domain) => {
@@ -792,8 +842,11 @@ export function CustomDomainsManager({
                       )}
                     </div>
 
-                    {domain.last_error && (
+                    {domain.last_error && !looksInternal(domain.last_error) && (
                       <p className="mt-1 text-xs text-red-300">{domain.last_error}</p>
+                    )}
+                    {domain.last_error && looksInternal(domain.last_error) && (
+                      <p className="mt-1 text-xs text-red-300">There was an issue with this domain. Try again or contact support.</p>
                     )}
                   </div>
 
@@ -859,12 +912,16 @@ export function CustomDomainsManager({
                 {domain.status === 'pending' && (
                   <Alert className="mt-3 border-yellow-500/30 bg-yellow-500/10">
                     <AlertCircle className="h-4 w-4 text-yellow-300" />
-                    <AlertTitle className="text-yellow-200">Verification Required</AlertTitle>
+                    <AlertTitle className="text-yellow-200">Ownership verification required</AlertTitle>
                     <AlertDescription className="space-y-2 text-xs text-white/75">
-                      <p>Add this TXT record at your DNS provider:</p>
-                      <div className="space-y-1 rounded bg-black/30 p-2 font-mono">
+                      <p>Add this TXT record at your DNS provider, then click <strong>Verify</strong>:</p>
+                      <div className="space-y-1.5 rounded bg-black/30 p-2 font-mono">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-white/50">Name</span>
+                          <span className="text-white/50">Record type</span>
+                          <span className="text-white">TXT</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-white/50">Record name</span>
                           <button
                             type="button"
                             onClick={() => copyToClipboard(`galaxyhvh-verify.${domain.domain}`, `pending-name-${domain.id}`)}
@@ -875,7 +932,7 @@ export function CustomDomainsManager({
                           </button>
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-white/50">Value</span>
+                          <span className="text-white/50">Record value</span>
                           <button
                             type="button"
                             onClick={() => copyToClipboard(domain.verification_token, `pending-token-${domain.id}`)}
@@ -886,6 +943,7 @@ export function CustomDomainsManager({
                           </button>
                         </div>
                       </div>
+                      <p className="text-white/45">DNS changes may take a few minutes to a few hours.</p>
                     </AlertDescription>
                   </Alert>
                 )}
@@ -900,7 +958,7 @@ export function CustomDomainsManager({
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => void handleRemoveDomain(domain.id)}
+                    onClick={() => setRemoveConfirmId(domain.id)}
                     disabled={removingId === domain.id}
                     className="ml-auto border-red-500/30 text-red-200 hover:bg-red-500/10"
                   >
@@ -915,6 +973,32 @@ export function CustomDomainsManager({
             );
           })
         )}
+
+        {/* Remove domain confirmation dialog */}
+        <AlertDialog open={removeConfirmId !== null} onOpenChange={(open) => { if (!open) setRemoveConfirmId(null); }}>
+          <AlertDialogContent className="border-white/10 bg-zinc-900 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Remove domain?</AlertDialogTitle>
+              <AlertDialogDescription className="text-white/60">
+                <strong className="text-white">{domains.find((d) => d.id === removeConfirmId)?.domain}</strong> will be
+                disconnected from this app. It will remain in your domain inventory and can be re-added at any time.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-white/20 bg-transparent text-white hover:bg-white/10">
+                Keep it
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 text-white hover:bg-red-700"
+                onClick={() => {
+                  if (removeConfirmId) void handleRemoveDomain(removeConfirmId);
+                }}
+              >
+                Remove domain
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   );
