@@ -18,7 +18,7 @@ describe('Platform Apps Custom Domains API', () => {
     vi.clearAllMocks();
   });
 
-  describe('POST /api/services/platform-apps/domains/add', () => {
+  describe('POST /api/domains', () => {
     it('TC-PA-I080: should add domain successfully', async () => {
       const { getServerUser } = await import('@/lib/auth/server-auth');
       vi.mocked(getServerUser).mockResolvedValue({ id: 'user-123' } as any);
@@ -40,7 +40,7 @@ describe('Platform Apps Custom Domains API', () => {
     });
   });
 
-  describe('POST /api/services/platform-apps/domains/verify', () => {
+  describe('POST /api/domains/[id]/verify', () => {
     it('TC-PA-I082: should verify domain when DNS is ready', async () => {
       // Stub: DNS verification would pass
       const dnsVerified = true;
@@ -54,7 +54,7 @@ describe('Platform Apps Custom Domains API', () => {
     });
   });
 
-  describe('POST /api/services/platform-apps/domains/activate', () => {
+  describe('POST /api/domains/[id]/activate', () => {
     it('TC-PA-I084: should activate verified domain successfully', async () => {
       // Stub: Activation would succeed
       const result = { success: true, status: 'active' };
@@ -68,7 +68,7 @@ describe('Platform Apps Custom Domains API', () => {
     });
   });
 
-  describe('POST /api/services/platform-apps/domains/remove', () => {
+  describe('DELETE /api/domains/[id]', () => {
     it('TC-PA-I086: should remove domain successfully', async () => {
       // Stub: Removal would succeed
       const result = { success: true };
@@ -76,7 +76,7 @@ describe('Platform Apps Custom Domains API', () => {
     });
   });
 
-  describe('POST /api/services/platform-apps/domains/set-primary', () => {
+  describe('POST /api/domains/[id]/set-primary', () => {
     it('TC-PA-I087: should set domain as primary', async () => {
       // Stub: Set primary would succeed
       const result = { success: true, isPrimary: true };

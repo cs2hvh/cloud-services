@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
+    "namecom:dev": "tsx scripts/namecom-dev.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",

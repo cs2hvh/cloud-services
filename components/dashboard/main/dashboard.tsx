@@ -13,6 +13,7 @@ import {
   Zap,
   ArrowUpRight,
   Clock,
+  Globe,
   Server,
   GitBranch,
   Terminal,
@@ -128,7 +129,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
       </motion.div>
 
       {/* ─── Feature spotlight cards ─── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -197,6 +198,30 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             </p>
             <span className="inline-flex items-center gap-1 text-[12px] font-medium text-white/50 group-hover:text-white/80 transition-colors">
               View GPUs <ArrowUpRight className="w-3.5 h-3.5" />
+            </span>
+          </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.3 }}
+        >
+          <Link
+            href="/dashboard/domains/marketplace"
+            className="group block glass-card p-5 h-full transition-all relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.12), transparent)' }} />
+            <div className="flex items-center gap-2 mb-3">
+              <Globe className="w-4 h-4 text-white/60" />
+              <span className="text-[10px] font-semibold text-white/45 uppercase tracking-widest">Domains</span>
+            </div>
+            <h3 className="text-[15px] font-semibold text-white/95 mb-1.5">Domain Marketplace</h3>
+            <p className="text-[12px] text-white/50 leading-relaxed mb-4">
+              Search availability, submit managed purchase requests, and connect domains to your apps.
+            </p>
+            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-white/50 group-hover:text-white/80 transition-colors">
+              Open marketplace <ArrowUpRight className="w-3.5 h-3.5" />
             </span>
           </Link>
         </motion.div>

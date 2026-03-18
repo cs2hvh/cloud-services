@@ -11,7 +11,8 @@ export type ServiceType =
   | 'firewall'
   | 'spectrum'
   | 'ai_agent'
-  | 'knowledge_base';
+  | 'knowledge_base'
+  | 'domain';
 
 export type ActionType = 
   | 'created' 

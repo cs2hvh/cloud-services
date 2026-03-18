@@ -44,6 +44,14 @@
     {
       "name": "Network DDoS (Spectrum)",
       "description": "Configure Cloudflare Spectrum for DDoS protection on Layer 4 protocols (TCP/UDP)."
+    },
+    {
+      "name": "Domains",
+      "description": "Manage custom domains, verification, activation, and operation status."
+    },
+    {
+      "name": "Domain Marketplace",
+      "description": "Search, purchase, and track domain marketplace purchase requests."
     }
   ],
   "components": {
@@ -218,10 +226,7 @@
             "example": "Invalid request body"
           },
           "details": {
-            "type": "object",
-            "additionalProperties": {
-              "nullable": true
-            },
+            "nullable": true,
             "description": "Additional error details",
             "example": {
               "field": "name",
@@ -1580,6 +1585,788 @@
         },
         "required": [
           "name"
+        ]
+      },
+      "DomainStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "verified",
+          "active",
+          "failed",
+          "removed"
+        ]
+      },
+      "Domain": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "domain": {
+            "type": "string",
+            "example": "api.example.com"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DomainStatus"
+          },
+          "verification_method": {
+            "type": "string",
+            "enum": [
+              "txt",
+              "cname"
+            ],
+            "example": "txt"
+          },
+          "verification_token": {
+            "type": "string",
+            "example": "verify_7f23cbb6500c31f7"
+          },
+          "verified_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "activated_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "ssl_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "issuing",
+              "active",
+              "failed"
+            ],
+            "example": "pending"
+          },
+          "is_primary": {
+            "type": "boolean",
+            "example": false
+          },
+          "redirect_to_primary": {
+            "type": "boolean",
+            "example": false
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "last_check_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:00:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "app_id",
+          "domain",
+          "status",
+          "verification_method",
+          "verification_token",
+          "verified_at",
+          "activated_at",
+          "ssl_status",
+          "is_primary",
+          "redirect_to_primary",
+          "last_error",
+          "last_check_at",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "DomainListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Domain"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "example": 2
+              }
+            },
+            "required": [
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainVerificationInstruction": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "record_type": {
+            "type": "string",
+            "enum": [
+              "TXT"
+            ],
+            "example": "TXT"
+          },
+          "record_name": {
+            "type": "string",
+            "example": "galaxyhvh-verify.api.example.com"
+          },
+          "record_value": {
+            "type": "string",
+            "example": "verify_7f23cbb6500c31f7"
+          },
+          "ttl": {
+            "type": "number",
+            "example": 300
+          }
+        },
+        "required": [
+          "record_type",
+          "record_name",
+          "record_value",
+          "ttl"
+        ],
+        "example": {
+          "record_type": "TXT",
+          "record_name": "galaxyhvh-verify.api.example.com",
+          "record_value": "verify_7f23cbb6500c31f7",
+          "ttl": 300
+        }
+      },
+      "AddDomainResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "$ref": "#/components/schemas/Domain"
+              },
+              "verification_required": {
+                "type": "boolean",
+                "example": true
+              },
+              "managed_zone_detected": {
+                "type": "boolean",
+                "example": false
+              },
+              "ownership_source": {
+                "type": "string",
+                "enum": [
+                  "purchase_request",
+                  "registrar",
+                  "external"
+                ],
+                "example": "external"
+              },
+              "verification_instructions": {
+                "$ref": "#/components/schemas/DomainVerificationInstruction"
+              }
+            },
+            "required": [
+              "domain",
+              "verification_required",
+              "managed_zone_detected",
+              "ownership_source",
+              "verification_instructions"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "AddDomainRequest": {
+        "type": "object",
+        "properties": {
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 253,
+            "example": "api.example.com"
+          }
+        },
+        "required": [
+          "app_id",
+          "domain"
+        ]
+      },
+      "DomainResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Domain"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "VerifyDomainRequest": {
+        "type": "object",
+        "properties": {
+          "force_refresh": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "DomainActivationQueuedResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "operation_id": {
+                "type": "string",
+                "format": "uuid",
+                "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending"
+                ],
+                "example": "pending"
+              }
+            },
+            "required": [
+              "operation_id",
+              "status"
+            ]
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "SetPrimaryDomainRequest": {
+        "type": "object",
+        "properties": {
+          "redirect_to_primary": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "DomainOperationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed"
+        ]
+      },
+      "DomainOperation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+          },
+          "action": {
+            "type": "string",
+            "example": "domain.activate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DomainOperationStatus"
+          },
+          "domain_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+          },
+          "error_code": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "retryable": {
+            "type": "boolean",
+            "example": false
+          },
+          "started_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": "2026-03-16T09:02:00Z"
+          },
+          "finished_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "example": null
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:01:59Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T09:02:00Z"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "status",
+          "domain_id",
+          "error_code",
+          "error_message",
+          "retryable",
+          "started_at",
+          "finished_at",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "DomainOperationResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainOperation"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainMarketplaceSummary": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ahuracloud"
+            ],
+            "example": "ahuracloud"
+          },
+          "configured": {
+            "type": "boolean",
+            "example": true
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "managed_reseller"
+            ],
+            "example": "managed_reseller"
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "search": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ],
+                "example": true
+              },
+              "purchase_requests": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ],
+                "example": true
+              },
+              "auto_fulfillment": {
+                "type": "boolean",
+                "example": true
+              }
+            },
+            "required": [
+              "search",
+              "purchase_requests",
+              "auto_fulfillment"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "example": "Domain purchases are completed through AhuraCloud using our registrar backend."
+          }
+        },
+        "required": [
+          "channel",
+          "configured",
+          "mode",
+          "capabilities",
+          "notes"
+        ]
+      },
+      "DomainMarketplaceSummaryResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainMarketplaceSummary"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainMarketplaceProvidersResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainMarketplaceSummary"
+          },
+          "deprecated": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Use /api/v1/domains/market/summary for reseller metadata."
+          }
+        },
+        "required": [
+          "data",
+          "deprecated",
+          "message"
+        ]
+      },
+      "DomainMarketplaceResult": {
+        "type": "object",
+        "properties": {
+          "domainName": {
+            "type": "string",
+            "example": "mybrand.com"
+          },
+          "available": {
+            "type": "boolean",
+            "example": true
+          },
+          "premium": {
+            "type": "boolean",
+            "example": false
+          },
+          "purchasePrice": {
+            "type": "number",
+            "nullable": true,
+            "example": 12.99
+          },
+          "renewalPrice": {
+            "type": "number",
+            "nullable": true,
+            "example": 14.99
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "purchaseType": {
+            "type": "string",
+            "nullable": true,
+            "example": "registration"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "fulfillment": {
+            "type": "string",
+            "enum": [
+              "ahuracloud"
+            ],
+            "example": "ahuracloud"
+          }
+        },
+        "required": [
+          "domainName",
+          "available",
+          "premium",
+          "purchasePrice",
+          "renewalPrice",
+          "currency",
+          "purchaseType",
+          "reason",
+          "fulfillment"
+        ]
+      },
+      "DomainMarketplaceSearchData": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "ahuracloud"
+            ],
+            "example": "ahuracloud"
+          },
+          "query": {
+            "type": "string",
+            "example": "mybrand"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DomainMarketplaceResult"
+            }
+          }
+        },
+        "required": [
+          "channel",
+          "query",
+          "results"
+        ]
+      },
+      "DomainMarketplaceSearchResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainMarketplaceSearchData"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainMarketplaceSearchRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "example": "mybrand"
+          },
+          "tlds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 20
+            },
+            "maxItems": 15,
+            "example": [
+              "com",
+              "io",
+              "app"
+            ]
+          }
+        },
+        "required": [
+          "query"
+        ]
+      },
+      "DomainPurchaseRequestStatus": {
+        "type": "string",
+        "enum": [
+          "requested",
+          "processing",
+          "completed",
+          "failed",
+          "cancelled"
+        ]
+      },
+      "DomainMarketplacePurchaseRequestRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "656bb6a3-9905-46d0-9704-b127cc296957"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "ccf391ef-271b-45e7-9799-3b1be3422363"
+          },
+          "app_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "example": "00aefffd-e676-4ebe-b02e-9f936b1d04b4"
+          },
+          "domain": {
+            "type": "string",
+            "example": "mybrand.com"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DomainPurchaseRequestStatus"
+          },
+          "purchase_price": {
+            "type": "number",
+            "nullable": true,
+            "example": 12.99
+          },
+          "renewal_price": {
+            "type": "number",
+            "nullable": true,
+            "example": 14.99
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "provider": {
+            "type": "string",
+            "example": "ahuracloud"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "nullable": true,
+            "example": "idem-domain-001"
+          },
+          "provider_request_id": {
+            "type": "string",
+            "nullable": true,
+            "example": "123456"
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            },
+            "example": {
+              "purchase_type": "registration",
+              "premium": false,
+              "source": "dashboard-marketplace"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T14:12:20.000Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-16T14:12:21.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "app_id",
+          "domain",
+          "status",
+          "purchase_price",
+          "renewal_price",
+          "currency",
+          "provider",
+          "idempotency_key",
+          "provider_request_id",
+          "last_error",
+          "metadata",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "DomainMarketplacePurchaseRequestListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestRecord"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "example": 1
+              }
+            },
+            "required": [
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "DomainMarketplacePurchaseRequestResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestRecord"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "DomainMarketplacePurchaseRequest": {
+        "type": "object",
+        "properties": {
+          "app_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "domain": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 253,
+            "example": "mybrand.com"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128,
+            "example": "idem-domain-001"
+          }
+        },
+        "required": [
+          "domain"
         ]
       }
     },
@@ -5576,6 +6363,1463 @@
                 "example": {
                   "error": "UPDATE_FAILED",
                   "message": "Failed to reset database user password"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "List domains by app",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "550e8400-e29b-41d4-a716-446655440000"
+            },
+            "required": true,
+            "name": "app_id",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Domain list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Add custom domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Domain added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Domain already in use",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/verify": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Verify domain ownership",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Domain verified",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation/verification failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/activate": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Activate verified domain",
+        "description": "Queues DNS + ingress reconciliation and returns operation id.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Activation queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainActivationQueuedResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Domain not eligible",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Operation already running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}/set-primary": {
+      "post": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Set primary domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrimaryDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Primary domain updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Domain not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{id}": {
+      "delete": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Remove domain",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "0bc8b49e-4107-4c8a-95ed-a3d86d08753d"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Domain removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean",
+                          "enum": [
+                            true
+                          ]
+                        },
+                        "domain_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "deleted",
+                        "domain_id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domain-operations/{operationId}": {
+      "get": {
+        "tags": [
+          "Domains"
+        ],
+        "summary": "Get operation status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "f5aaf7d2-6b1b-403f-b6a7-f422f978f6f0"
+            },
+            "required": true,
+            "name": "operationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainOperationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Operation not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/summary": {
+      "get": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Get domain marketplace summary",
+        "description": "Returns marketplace channel and capabilities.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marketplace summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplaceSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Provider account action required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Registrar upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/providers": {
+      "get": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Get domain marketplace provider metadata",
+        "description": "Legacy compatibility endpoint that mirrors marketplace summary data.",
+        "deprecated": true,
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provider metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplaceProvidersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/search": {
+      "post": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Search purchasable domains",
+        "description": "Searches registrar-backed domain availability and pricing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainMarketplaceSearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplaceSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid search payload or validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/purchase-requests": {
+      "get": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "List domain purchase requests",
+        "description": "Lists purchase requests for the authenticated API user, optionally filtered by app.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "00aefffd-e676-4ebe-b02e-9f936b1d04b4"
+            },
+            "required": false,
+            "name": "app_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "example": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden for this app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Create domain purchase request",
+        "description": "Creates or reuses an idempotent purchase request and attempts registrar fulfillment.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainMarketplacePurchaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Purchase request created or idempotently reused",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload or domain validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits or provider payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden for this app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Domain unavailable or purchase conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Registrar or billing upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/purchase-requests/{requestId}": {
+      "get": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Get purchase request by id",
+        "description": "Returns a single purchase request for the authenticated API user.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "656bb6a3-9905-46d0-9704-b127cc296957"
+            },
+            "required": true,
+            "name": "requestId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Purchase request not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/market/checkout": {
+      "post": {
+        "tags": [
+          "Domain Marketplace"
+        ],
+        "summary": "Checkout domain purchase",
+        "description": "Compatibility checkout endpoint that delegates to the purchase request flow.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128,
+              "example": "req_01hxy89q5xwq7v3j"
+            },
+            "required": false,
+            "name": "idempotency-key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DomainMarketplacePurchaseRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Checkout purchase request created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainMarketplacePurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload or domain validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Insufficient credits or provider payment required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden for this app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "App not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Domain unavailable or purchase conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Registrar or billing upstream error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
