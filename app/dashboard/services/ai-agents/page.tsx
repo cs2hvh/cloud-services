@@ -18,7 +18,7 @@ import {
   Pause,
 } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAIAgentApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -56,19 +56,10 @@ export default function AIAgentsPage() {
   const [deleteAgent, setDeleteAgent] = useState<Agent | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const supabase = createClient();
-
   const loadAgents = async () => {
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch('/api/ai-agents', {
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-      });
+      const res = await fetchAIAgentApi('/api/ai-agents');
 
       if (!res.ok) {
         throw new Error('Failed to load agents');
@@ -86,7 +77,6 @@ export default function AIAgentsPage() {
 
   useEffect(() => {
     loadAgents();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const copyEndpoint = async (endpointId: string) => {
@@ -101,14 +91,10 @@ export default function AIAgentsPage() {
 
   const toggleAgentStatus = async (agent: Agent) => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${agent.id}`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/${agent.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({ status: agent.status === 'active' ? 'paused' : 'active' }),
       });
@@ -128,14 +114,8 @@ export default function AIAgentsPage() {
 
     setDeleting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${deleteAgent.id}`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/${deleteAgent.id}`, {
         method: 'DELETE',
-        headers: {
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
       });
 
       if (!res.ok) throw new Error('Failed to delete agent');

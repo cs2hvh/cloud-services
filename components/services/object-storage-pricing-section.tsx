@@ -16,6 +16,26 @@ import { Container } from "@/components/ui/container";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Spotlight } from "@/components/ui/spotlight";
 
+interface Plan {
+  storage: string;
+  priceStorage: number | string;
+  priceTransfer: number | string;
+  retrievalFee?: number;
+  retrievalTime?: string;
+  sla?: string;
+  free?: boolean;
+}
+
+interface StorageCategory {
+  key: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tagline: string;
+  description: string;
+  features: string[];
+  plans: Plan[];
+}
+
 /* ─── Stat Strip ─── */
 const STATS = [
   { value: "99.999%", label: "Durability" },
@@ -26,7 +46,7 @@ const STATS = [
 ];
 
 /* ─── Storage Categories ─── */
-const CATEGORIES = [
+const FALLBACK_CATEGORIES: StorageCategory[] = [
   {
     key: "standard",
     label: "Standard",
@@ -113,19 +133,13 @@ const CATEGORIES = [
   },
 ];
 
-interface Plan {
-  storage: string;
-  priceStorage: number | string;
-  priceTransfer: number | string;
-  retrievalFee?: number;
-  retrievalTime?: string;
-  sla?: string;
-  free?: boolean;
+interface ObjectStoragePricingSectionProps {
+  categories?: StorageCategory[];
 }
 
-export default function ObjectStoragePricingSection() {
+export default function ObjectStoragePricingSection({ categories = FALLBACK_CATEGORIES }: ObjectStoragePricingSectionProps) {
   const [activeKey, setActiveKey] = useState("standard");
-  const active = CATEGORIES.find((c) => c.key === activeKey)!;
+  const active = categories.find((c) => c.key === activeKey)!;
   const isEnterprise = active.key === "enterprise";
   const hasRetrieval = active.key === "infrequent";
   const isArchive = active.key === "glacier";
@@ -194,7 +208,7 @@ export default function ObjectStoragePricingSection() {
 
         {/* Category tabs */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-12">
-          {CATEGORIES.map((cat) => {
+          {categories.map((cat) => {
             const isActive = cat.key === activeKey;
             const Icon = cat.icon;
             return (

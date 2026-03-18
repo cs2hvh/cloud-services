@@ -236,6 +236,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             <div className="w-7 h-7 rounded-full bg-white/10 animate-pulse" />
           ) : user ? (
             <div className="relative">
+              {dropdownOpen && (
+                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
+              )}
               <button
                 onClick={() => setDropdownOpen(!dropdownOpen)}
                 className="cursor-pointer flex items-center gap-2 px-2 py-1.5 rounded-full hover:bg-white/[0.06] transition-colors duration-200"
@@ -514,9 +517,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
         )}
       </AnimatePresence>
 
-      {dropdownOpen && (
-        <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
-      )}
+      
     </nav>
   );
 }

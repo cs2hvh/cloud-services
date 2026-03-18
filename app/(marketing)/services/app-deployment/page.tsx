@@ -4,8 +4,12 @@ import AppDeployShowcaseSection from "@/components/services/app-deploy-showcase-
 import AppDeployPricingSection from "@/components/services/app-deploy-pricing-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
+import { getAppDeployPlans } from "@/lib/helpers/app-deploy-plans";
 
-const AppDeploymentHome = () => {
+const AppDeploymentHome = async () => {
+  // Fetch dynamic app deployment plans from database
+  const plans = await getAppDeployPlans();
+  console.log("Fetched app deployment plans:", plans);
   const cases = [
     {
       title: "SaaS & Web Applications",
@@ -42,7 +46,7 @@ const AppDeploymentHome = () => {
       />
       <AppDeployFrameworksSection />
       <AppDeployShowcaseSection />
-      <AppDeployPricingSection />
+      <AppDeployPricingSection plans={plans} />
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
         faqs={[

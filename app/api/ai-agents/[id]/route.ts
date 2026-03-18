@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents } from '@/lib/supabase/queries/ai_agents';
 import { AIAgentUpdate } from '@/lib/ai/types';
@@ -46,7 +46,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Get agent details
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Update agent settings
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;
@@ -210,7 +210,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
  * Soft delete an agent
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;

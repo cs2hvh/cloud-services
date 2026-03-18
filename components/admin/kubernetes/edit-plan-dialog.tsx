@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Save, Loader2, Package, Server, Cpu, HardDrive, DollarSign } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getErrorMessage } from "@/config/functions";
 
 interface DropletSize {
@@ -29,6 +30,54 @@ interface DropletSize {
   regions: string[];
   available: boolean;
   description: string;
+}
+
+type K8sCpuType = "shared" | "dedicated" | "gpu";
+
+const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
+  shared: {
+    label: "Shared CPU",
+    description: "Cost-effective shared vCPU plans for development, staging, and lighter workloads.",
+  },
+  dedicated: {
+    label: "Dedicated CPU",
+    description: "Dedicated vCPU plans for production traffic requiring consistent performance.",
+  },
+  gpu: {
+    label: "GPU",
+    description: "GPU-accelerated instances for AI/ML, rendering, and compute-heavy tasks.",
+  },
+};
+
+const MACHINE_TYPES: Record<K8sCpuType, { value: string; label: string }[]> = {
+  shared: [
+    { value: "basic", label: "Basic" },
+    { value: "premium-intel", label: "Premium Intel" },
+    { value: "premium-amd", label: "Premium AMD" },
+  ],
+  dedicated: [
+    { value: "general-purpose", label: "General Purpose" },
+    { value: "cpu-optimized", label: "CPU-Optimized" },
+    { value: "memory-optimized", label: "Memory-Optimized" },
+    { value: "storage-optimized", label: "Storage-Optimized" },
+  ],
+  gpu: [
+    { value: "gpu", label: "GPU Droplet" },
+  ],
+};
+
+function inferSlugCategory(slug: string): { cpuType: K8sCpuType; machineType: string } {
+  if (slug.startsWith("gpu-")) return { cpuType: "gpu", machineType: "gpu" };
+  if (slug.startsWith("g-") || slug.startsWith("gd-")) return { cpuType: "dedicated", machineType: "general-purpose" };
+  if (slug.startsWith("c-") || slug.startsWith("c2-")) return { cpuType: "dedicated", machineType: "cpu-optimized" };
+  if (slug.startsWith("m-") || slug.startsWith("m3-") || slug.startsWith("m6-")) return { cpuType: "dedicated", machineType: "memory-optimized" };
+  if (slug.startsWith("so-") || slug.startsWith("so1_5-")) return { cpuType: "dedicated", machineType: "storage-optimized" };
+  if (slug.startsWith("s-")) {
+    if (slug.endsWith("-intel")) return { cpuType: "shared", machineType: "premium-intel" };
+    if (slug.endsWith("-amd")) return { cpuType: "shared", machineType: "premium-amd" };
+    return { cpuType: "shared", machineType: "basic" };
+  }
+  return { cpuType: "shared", machineType: "basic" };
 }
 
 interface EditPlanDialogProps {
@@ -48,6 +97,8 @@ export default function EditPlanDialog({
   const [isLoadingDroplets, setIsLoadingDroplets] = useState(false);
   const [dropletSizes, setDropletSizes] = useState<DropletSize[]>([]);
   const [selectedDroplet, setSelectedDroplet] = useState<string>("");
+  const [selectedCpuType, setSelectedCpuType] = useState<K8sCpuType>("shared");
+  const [selectedMachineType, setSelectedMachineType] = useState<string>("basic");
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -98,9 +149,20 @@ export default function EditPlanDialog({
     }
   };
 
+  // Filter droplets based on selected cpu type and machine type
+  const filteredDroplets = useMemo(() => {
+    return dropletSizes.filter((d) => {
+      const { cpuType, machineType } = inferSlugCategory(d.slug);
+      return cpuType === selectedCpuType && machineType === selectedMachineType;
+    });
+  }, [dropletSizes, selectedCpuType, selectedMachineType]);
+
   // Initialize form when product changes
   useEffect(() => {
     if (product) {
+      const productCpuType = (product as { cpu_type?: string }).cpu_type as K8sCpuType | undefined;
+      const productMachineType = (product as { machine_type?: string }).machine_type;
+
       setFormData({
         name: product.name || "",
         description: product.description || "",
@@ -113,6 +175,22 @@ export default function EditPlanDialog({
         slug: (product as { slug?: string }).slug || "",
       });
       setSelectedDroplet((product as { slug?: string }).slug || "");
+
+      // Set cpu_type and machine_type from product, or infer from slug
+      if (productCpuType && ["shared", "dedicated", "gpu"].includes(productCpuType)) {
+        setSelectedCpuType(productCpuType);
+        setSelectedMachineType(productMachineType || MACHINE_TYPES[productCpuType]?.[0]?.value || "basic");
+      } else {
+        const slug = (product as { slug?: string }).slug || "";
+        if (slug) {
+          const inferred = inferSlugCategory(slug);
+          setSelectedCpuType(inferred.cpuType);
+          setSelectedMachineType(inferred.machineType);
+        } else {
+          setSelectedCpuType("shared");
+          setSelectedMachineType("basic");
+        }
+      }
     }
   }, [product]);
 
@@ -152,6 +230,8 @@ export default function EditPlanDialog({
         },
         discount: formData.discount > 0 ? formData.discount : 0,
         slug: formData.slug || null,
+        cpu_type: selectedCpuType,
+        machine_type: selectedMachineType,
       });
 
       if (response.status === 200) {
@@ -246,6 +326,68 @@ export default function EditPlanDialog({
               />
             </div>
 
+            {/* CPU Type Tabs */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-neutral-300">
+                CPU Type
+              </Label>
+              <Tabs
+                value={selectedCpuType}
+                onValueChange={(value) => {
+                  const newCpuType = value as K8sCpuType;
+                  setSelectedCpuType(newCpuType);
+                  setSelectedMachineType(MACHINE_TYPES[newCpuType]?.[0]?.value || "basic");
+                  setSelectedDroplet("");
+                }}
+                className="w-full"
+              >
+                <TabsList className="grid h-auto w-full grid-cols-3 bg-neutral-800 border border-neutral-700 p-1">
+                  {(Object.keys(K8S_CPU_META) as K8sCpuType[]).map((type) => (
+                    <TabsTrigger
+                      key={type}
+                      value={type}
+                      className="px-3 py-2 text-xs data-[state=active]:bg-blue-600 data-[state=active]:text-white text-neutral-400"
+                    >
+                      {K8S_CPU_META[type].label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <p className="text-xs text-neutral-500">
+                {K8S_CPU_META[selectedCpuType].description}
+              </p>
+            </div>
+
+            {/* Machine Type Selection */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-neutral-300">
+                Machine Type
+              </Label>
+              <Select
+                value={selectedMachineType}
+                onValueChange={(value) => {
+                  setSelectedMachineType(value);
+                  setSelectedDroplet("");
+                }}
+                disabled={isLoading}
+              >
+                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500">
+                  <SelectValue placeholder="Select machine type" />
+                </SelectTrigger>
+                <SelectContent className="bg-neutral-800 border-neutral-700">
+                  {MACHINE_TYPES[selectedCpuType].map((mt) => (
+                    <SelectItem
+                      key={mt.value}
+                      value={mt.value}
+                      className="text-white hover:bg-neutral-700 focus:bg-neutral-700"
+                    >
+                      {mt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Droplet Size Selection */}
             <div className="space-y-2">
               <Label htmlFor="droplet" className="text-sm font-medium text-neutral-300">
@@ -257,10 +399,10 @@ export default function EditPlanDialog({
                 disabled={isLoading || isLoadingDroplets}
               >
                 <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500">
-                  <SelectValue placeholder={isLoadingDroplets ? "Loading droplets..." : "Select a droplet size (optional)"} />
+                  <SelectValue placeholder={isLoadingDroplets ? "Loading droplets..." : filteredDroplets.length === 0 ? "No droplets for this category" : "Select a droplet size (optional)"} />
                 </SelectTrigger>
                 <SelectContent className="bg-neutral-800 border-neutral-700">
-                  {dropletSizes.map((droplet) => (
+                  {filteredDroplets.map((droplet) => (
                     <SelectItem
                       key={droplet.slug}
                       value={droplet.slug}

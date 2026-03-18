@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import {
   AgentKnowledgeBases,
@@ -39,7 +39,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Supports both JSON body (for text) and multipart form data (for file uploads)
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;
@@ -322,7 +322,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
  * List all documents in a knowledge base
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;

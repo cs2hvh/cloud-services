@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { AgentApiKeys } from '@/lib/supabase/queries/ai_agents';
 
 interface RouteParams {
@@ -15,17 +15,10 @@ interface RouteParams {
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const auth = await authenticateUserFromHeader(request);
+    if (!auth.authenticated) return auth.response;
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const key = await AgentApiKeys.get(id, user.id);
+    const key = await AgentApiKeys.get(id, auth.user!.id);
 
     if (!key) {
       return NextResponse.json(
@@ -50,17 +43,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const auth = await authenticateUserFromHeader(request);
+    if (!auth.authenticated) return auth.response;
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const result = await AgentApiKeys.delete(id, user.id);
+    const result = await AgentApiKeys.delete(id, auth.user!.id);
 
     if (!result.success) {
       return NextResponse.json(

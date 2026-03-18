@@ -194,9 +194,135 @@ function SolutionCard({ card }: { card: SolutionCardData }) {
   );
 }
 
-export function SolutionsDiscoverySection() {
+type ProductCardData = {
+  title: string;
+  subtitle: string;
+  description: string;
+  icon: string;
+  href: string;
+  features: string[];
+};
+
+const PRODUCT_CARDS: ProductCardData[] = [
+  {
+    icon: "/solution/thirdsecion/icon-1.svg",
+    title: "Compute",
+    subtitle: "General Purpose Droplets",
+    description: "Reliable VMs for everyday workloads and quick scaling.",
+    href: "/services/compute",
+    features: ["Instant provisioning", "Global regions", "Flexible sizing", "Root access"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-2.svg",
+    title: "GPU Instance",
+    subtitle: "Accelerated compute",
+    description: "High-performance GPUs for training, inference, rendering and HPC.",
+    href: "/services/gpu",
+    features: ["NVIDIA GPUs", "Bare-metal speed", "Jupyter ready", "CUDA support"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-3.svg",
+    title: "Database",
+    subtitle: "Managed",
+    description: "Fully managed databases with backups, upgrades and monitoring.",
+    href: "/services/database",
+    features: ["PostgreSQL", "MySQL", "Redis", "Auto-backups"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-4.svg",
+    title: "Security",
+    subtitle: "Protect apps & data",
+    description: "Identity, network and workload controls for secure-by-default cloud.",
+    href: "/services/security",
+    features: ["DDoS protection", "Firewall", "Encryption", "IAM controls"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-5.svg",
+    title: "Kubernetes",
+    subtitle: "Managed",
+    description: "Production Kubernetes without the operational overhead.",
+    href: "/services/kubernetes",
+    features: ["Auto-scaling", "Rolling updates", "Service mesh", "Monitoring"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-6.svg",
+    title: "Object Storage",
+    subtitle: "S3 Compatible",
+    description: "Durable object storage for media, backups, logs and artifacts.",
+    href: "/services/object-storage",
+    features: ["S3 compatible", "11 nines durability", "CDN integration", "Versioning"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-7.svg",
+    title: "AI Agents",
+    subtitle: "API Based",
+    description: "Composable AI agents that connect tools, data and workflows via APIs.",
+    href: "/services/ai-agents",
+    features: ["Vector databases", "Model gateways", "Observability", "Workflows"],
+  },
+  {
+    icon: "/solution/thirdsecion/icon-8.svg",
+    title: "Application Deployment",
+    subtitle: "Ship faster",
+    description: "Build, deploy and scale apps with streamlined release workflows.",
+    href: "/services/app-deployment",
+    features: ["Git-based", "Preview environments", "Auto SSL", "Instant rollbacks"],
+  },
+];
+
+function ProductCard({ card }: { card: ProductCardData }) {
+  return (
+    <article className="flex min-h-[288px] flex-col border border-[#F2F2F2]/70 bg-transparent p-5 sm:p-6">
+      <div className="flex items-start gap-3 text-white font-bold">
+        <Image src={card.icon} alt="" width={41} height={41} />
+        <div>
+          <h3 className="text-[16px] font-normal leading-[1.2] text-white">{card.title}</h3>
+          <p className="mt-1 text-[11px] font-light leading-[1.3] text-white/70">{card.subtitle}</p>
+          <p className="mt-2 max-w-[430px] text-[12px] font-light leading-[1.3] text-white">
+            {card.description}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-3 text-[10px] font-light text-white">Key features</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {card.features.map((feature) => (
+          <span
+            key={feature}
+            className="inline-flex h-7 items-center border border-[#737373] px-3 text-[10px] font-light text-white"
+          >
+            {feature}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-auto pt-8">
+        <div className="h-px w-full bg-[#686868]" />
+        <div className="mt-3 flex items-center justify-between">
+          <Link
+            href={card.href}
+            className="text-[10px] font-semibold text-white hover:text-white/80 transition-colors inline-flex items-center gap-2"
+          >
+            <span>View Product</span>
+            <ArrowRight className="w-3.5 h-3.5 text-white/70" />
+          </Link>
+          <Link href="/pricing" className="text-[10px] font-normal text-white hover:text-white/80 transition-colors">
+            View Pricing
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+export function SolutionsDiscoverySection({
+  activeTab,
+  setActiveTabAction,
+}: {
+  activeTab: "solutions" | "products";
+  setActiveTabAction: (tab: "solutions" | "products") => void;
+}) {
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"solutions" | "products">("solutions");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
 
@@ -219,12 +345,6 @@ export function SolutionsDiscoverySection() {
     );
   }, [cardsBySearch, selectedProducts]);
 
-  const productCounts = useMemo(() => {
-    return PRODUCT_FILTERS.reduce<Record<string, number>>((acc, product) => {
-      acc[product] = cardsBySearch.filter((card) => card.products.includes(product)).length;
-      return acc;
-    }, {});
-  }, [cardsBySearch]);
 
   const toggleProduct = (product: string) => {
     setSelectedProducts((current) =>
@@ -251,7 +371,7 @@ export function SolutionsDiscoverySection() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               type="text"
-              placeholder="Search solutions by name, use cases, or outcome...."
+              placeholder={activeTab === "solutions" ? "Search solutions by name, use cases, or outcome...." : "Search products by name or features...."}
               className="ml-2 w-full bg-transparent text-[15px] font-medium text-white outline-none placeholder:text-white/40 sm:text-[18px] lg:text-[20px]"
             />
           </ToolbarSurface>
@@ -259,7 +379,7 @@ export function SolutionsDiscoverySection() {
           <ToolbarSurface asButton onClick={() => setShowFilters((prev) => !prev)}>
             <Image src="/solution/secondsection/Filter.svg" alt="" width={35} height={35} />
             <span className="ml-1 text-[20px] font-medium leading-none text-white">Filters</span>
-            {selectedProducts.length > 0 ? (
+            {activeTab === "solutions" && selectedProducts.length > 0 ? (
               <span className="ml-2 rounded-sm border border-white/35 px-1.5 text-[11px] text-white">
                 {selectedProducts.length}
               </span>
@@ -275,7 +395,7 @@ export function SolutionsDiscoverySection() {
           <ToolbarSurface
             asButton
             active={activeTab === "solutions"}
-            onClick={() => setActiveTab("solutions")}
+            onClick={() => setActiveTabAction("solutions")}
           >
             <Image src="/solution/secondsection/Solutions.svg" alt="" width={35} height={35} />
             <span
@@ -291,7 +411,7 @@ export function SolutionsDiscoverySection() {
           <ToolbarSurface
             asButton
             active={activeTab === "products"}
-            onClick={() => setActiveTab("products")}
+            onClick={() => setActiveTabAction("products")}
           >
             <Image src="/solution/secondsection/Product.svg" alt="" width={35} height={35} />
             <span
@@ -304,7 +424,7 @@ export function SolutionsDiscoverySection() {
             </span>
           </ToolbarSurface>
 
-          {showFilters ? (
+          {showFilters && activeTab === "solutions" ? (
             <div className="absolute right-0 top-[70px] z-20 w-full max-w-[380px] border border-[#666] bg-[#141414] p-4 shadow-[0_14px_40px_rgba(0,0,0,0.45)]">
               <div className="mb-2 flex items-center justify-between">
                 <p className="text-[12px] font-medium uppercase tracking-[0.08em] text-white">
@@ -345,57 +465,35 @@ export function SolutionsDiscoverySection() {
 
         <div className="mt-3 h-px w-full bg-[#686868]" />
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="mr-2 text-[10px] font-medium uppercase text-white">Products</span>
-          {PRODUCT_FILTERS.map((item) => {
-            const selected = selectedProducts.includes(item);
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => toggleProduct(item)}
-                className={cn(
-                  "h-[24px] border px-2 text-[8px] font-medium backdrop-blur-[8.1px] sm:h-[30px] sm:px-3 sm:text-[10px] lg:h-[37px] lg:text-[12px]",
-                  selected
-                    ? "border-white bg-white/16 text-white"
-                    : "border-[#464A4D] bg-[rgba(56,56,56,0.18)] text-white shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
-                )}
-              >
-                {item}
-              </button>
-            );
-          })}
-        </div>
-
-        {activeTab === "products" ? (
-          <div className="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            {PRODUCT_FILTERS.map((product) => {
-              const selected = selectedProducts.includes(product);
+        {activeTab === "solutions" && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="mr-2 text-[10px] font-medium uppercase text-white">Products</span>
+            {PRODUCT_FILTERS.map((item) => {
+              const selected = selectedProducts.includes(item);
               return (
                 <button
-                  key={product}
+                  key={item}
                   type="button"
-                  onClick={() => toggleProduct(product)}
+                  onClick={() => toggleProduct(item)}
                   className={cn(
-                    "flex h-12 items-center justify-between border px-3 text-left",
+                    "h-[24px] border px-2 text-[8px] font-medium backdrop-blur-[8.1px] sm:h-[30px] sm:px-3 sm:text-[10px] lg:h-[37px] lg:text-[12px]",
                     selected
-                      ? "border-white bg-white/10 text-white"
-                      : "border-[#4a4a4a] bg-[#111] text-white/85",
+                      ? "border-white bg-white/16 text-white"
+                      : "border-[#464A4D] bg-[rgba(56,56,56,0.18)] text-white shadow-[0_4px_4px_rgba(0,0,0,0.25)]",
                   )}
                 >
-                  <span className="text-[12px]">{product}</span>
-                  <span className="text-[11px] text-white/70">{productCounts[product]}</span>
+                  {item}
                 </button>
               );
             })}
           </div>
-        ) : null}
+        )}
 
         <div className="mt-4 flex items-center justify-between text-[11px] text-white/70">
           <p>
-            Showing <span className="text-white">{filteredCards.length}</span> solutions
+            Showing <span className="text-white">{activeTab === "solutions" ? filteredCards.length : PRODUCT_CARDS.length}</span> {activeTab === "solutions" ? "solutions" : "products"}
           </p>
-          {selectedProducts.length > 0 ? (
+          {activeTab === "solutions" && selectedProducts.length > 0 ? (
             <button
               type="button"
               onClick={() => setSelectedProducts([])}
@@ -406,15 +504,23 @@ export function SolutionsDiscoverySection() {
           ) : null}
         </div>
 
-        {filteredCards.length > 0 ? (
-          <div className="mt-6 grid gap-6 md:grid-cols-2 lg:gap-10">
-            {filteredCards.map((card) => (
-              <SolutionCard key={card.title} card={card} />
-            ))}
-          </div>
+        {activeTab === "solutions" ? (
+          filteredCards.length > 0 ? (
+            <div className="mt-6 grid gap-6 md:grid-cols-2 lg:gap-10">
+              {filteredCards.map((card) => (
+                <SolutionCard key={card.title} card={card} />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-6 border border-[#4a4a4a] bg-[#101010] p-8 text-center text-[14px] text-white/80">
+              No matching solutions found. Try another keyword or remove filters.
+            </div>
+          )
         ) : (
-          <div className="mt-6 border border-[#4a4a4a] bg-[#101010] p-8 text-center text-[14px] text-white/80">
-            No matching solutions found. Try another keyword or remove filters.
+          <div className="mt-6 grid gap-6 md:grid-cols-2 lg:gap-10">
+            {PRODUCT_CARDS.map((card) => (
+              <ProductCard key={card.title} card={card} />
+            ))}
           </div>
         )}
         </div>

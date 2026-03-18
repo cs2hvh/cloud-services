@@ -234,7 +234,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                     Name
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                    Description
+                    CPU / Machine Type
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
                     Resources
@@ -285,11 +285,19 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                       </td>
 
                       <td className="px-6 py-4">
-                        <div className="text-sm text-neutral-300 max-w-[200px] truncate">
-                          {product.description || (
-                            <span className="text-neutral-600">
-                              No description
-                            </span>
+                        <div className="flex flex-col gap-1.5">
+                          {(product as { cpu_type?: string }).cpu_type && (
+                            <Badge className="bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 border-0 w-fit text-xs px-2 py-0.5">
+                              {(product as { cpu_type?: string }).cpu_type === "shared" ? "Shared CPU" : (product as { cpu_type?: string }).cpu_type === "dedicated" ? "Dedicated CPU" : (product as { cpu_type?: string }).cpu_type === "gpu" ? "GPU" : (product as { cpu_type?: string }).cpu_type}
+                            </Badge>
+                          )}
+                          {(product as { machine_type?: string }).machine_type && (
+                            <Badge className="bg-cyan-500/20 text-cyan-300 hover:bg-cyan-500/30 border-0 w-fit text-xs px-2 py-0.5">
+                              {(product as { machine_type?: string }).machine_type}
+                            </Badge>
+                          )}
+                          {!(product as { cpu_type?: string }).cpu_type && !(product as { machine_type?: string }).machine_type && (
+                            <span className="text-neutral-600 text-xs">Not set</span>
                           )}
                         </div>
                       </td>

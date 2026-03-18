@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { fetchAIAgentApi, fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 
 interface Agent {
@@ -109,7 +110,6 @@ export default function AgentDetailsPage({
   const { id } = use(params);
   const router = useRouter();
   const supabase = createClient();
-
   const [agent, setAgent] = useState<Agent | null>(null);
   const [stats, setStats] = useState<UsageStats | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
@@ -149,14 +149,9 @@ export default function AgentDetailsPage({
   const loadAgent = async () => {
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const headers: HeadersInit = {};
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
       const [agentRes, statsRes] = await Promise.all([
-        fetch(`/api/ai-agents/${id}`, { headers }),
-        fetch(`/api/ai-agents/${id}/stats`, { headers }),
+        fetchAIAgentApi(`/api/ai-agents/${id}`),
+        fetchAIAgentApi(`/api/ai-agents/${id}/stats`),
       ]);
 
       if (!agentRes.ok) {
@@ -215,12 +210,7 @@ export default function AgentDetailsPage({
 
   const loadKnowledgeBases = async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const headers: HeadersInit = {};
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
-      const res = await fetch('/api/knowledge-bases', { headers });
+      const res = await fetchAuthenticatedApi('/api/knowledge-bases');
       if (res.ok) {
         const data = await res.json();
         setKnowledgeBases(data.data || []);
@@ -249,7 +239,7 @@ export default function AgentDetailsPage({
 
   const loadPlatformModels = async () => {
     try {
-      const res = await fetch('/api/ai-agents/platform-models');
+      const res = await fetchAIAgentApi('/api/ai-agents/platform-models');
       if (res.ok) {
         const data = await res.json();
         setPlatformModels(data.data || []);
@@ -271,14 +261,10 @@ export default function AgentDetailsPage({
 
     setSaving(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${id}`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           name: name.trim(),
@@ -318,12 +304,8 @@ export default function AgentDetailsPage({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${id}`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/${id}`, {
         method: 'DELETE',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
 
       if (!res.ok) throw new Error('Failed to delete');

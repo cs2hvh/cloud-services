@@ -3,8 +3,12 @@ import ComputeReleaseSection from "@/components/services/compute-release-section
 import ComputePricingSection from "@/components/services/compute-pricing-section";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
+import { getComputeCategories } from "@/lib/helpers/compute-categories";
 
-const ComputeHome = () => {
+const ComputeHome = async () => {
+  // Fetch dynamic compute categories from database
+  const categories = await getComputeCategories();
+  console.log("Fetched compute categories:", categories);
   const cases = [
     {
       title: "Web & Application Hosting",
@@ -50,7 +54,7 @@ const ComputeHome = () => {
         backgroundImage="/images/compute-page/curve-feature-section-bg.png"
         curveImage="/images/compute-page/curv-logo-and-content.png"
       /> */}
-      <ComputePricingSection />
+      <ComputePricingSection categories={categories || undefined} />
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
         faqs={[

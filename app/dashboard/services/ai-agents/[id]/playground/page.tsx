@@ -18,7 +18,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAIAgentApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -44,8 +44,6 @@ export default function PlaygroundPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const supabase = createClient();
-
   const [agent, setAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -72,12 +70,7 @@ export default function PlaygroundPage({
   const loadAgent = async () => {
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${id}`, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
+      const res = await fetchAIAgentApi(`/api/ai-agents/${id}`);
 
       if (!res.ok) {
         throw new Error('Failed to load agent');
@@ -121,14 +114,10 @@ export default function PlaygroundPage({
     ]);
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/ai-agents/${id}/test`, {
+      const res = await fetchAIAgentApi(`/api/ai-agents/${id}/test`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           message: userMessage.content,
