@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import { AIAgents, AgentUsage, AgentConversations } from '@/lib/supabase/queries/ai_agents';
 
@@ -15,7 +15,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Get usage statistics for an agent
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;

@@ -1,29 +1,79 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
 import {
-  // Database,
-  Loader2,
-  Trash2,
   AlertCircle,
+  ArrowLeft,
+  CheckCircle2,
+  Clock3,
+  Cpu,
+  HardDrive,
+  Loader2,
+  MapPin,
+  Network,
+  Server,
+  Settings2,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSearchParams } from "next/navigation";
 import api from "@/lib/axios/axios";
 import { Tables } from "@/lib/supabase/types";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { UsersDbsTab } from "./tabs/users-dbs-tab";
 import { SettingsTab } from "./tabs/settings-tab";
 import { AxiosError } from "axios";
+import { DatabaseIcon } from "./database-icon";
+import { extractCpu, extractRam, extractRegion } from "./singledb-helpers";
 
 interface SingleDbProps {
   databaseId: string;
-  status: string;
   products: Tables<"products">[];
 }
+
+type TabItem = {
+  value: string;
+  label: string;
+  icon: LucideIcon;
+  eyebrow: string;
+  description: string;
+};
+
+const allTabs: TabItem[] = [
+  {
+    value: "overview",
+    label: "Overview",
+    icon: Server,
+    eyebrow: "Overview",
+    description: "Review connectivity, status, and the deployed service profile.",
+  },
+  {
+    value: "network",
+    label: "Network",
+    icon: Network,
+    eyebrow: "Security",
+    description: "Manage the trusted IP allowlist and inbound access posture.",
+  },
+  {
+    value: "users-dbs",
+    label: "Users & DBs",
+    icon: Users,
+    eyebrow: "Access",
+    description: "Create users, reset credentials, and manage logical databases.",
+  },
+  {
+    value: "settings",
+    label: "Settings",
+    icon: Settings2,
+    eyebrow: "Operations",
+    description: "Handle maintenance, sizing changes, migrations, and deletion.",
+  },
+];
 
 const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const searchParams = useSearchParams();
@@ -38,96 +88,10 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     "public"
   );
   const [activeTab, setActiveTab] = useState<string>(tabParam || "overview");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [isDeleting, setIsDeleting] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const hasShownOnlineToast = useRef<boolean>(false);
+  const hasShownOnlineToast = useRef(false);
   const previousStatus = useRef<string | null>(null);
-  const isFetchingRef = useRef<boolean>(false);
-
-  // Fetch database cluster details
-  const fetchDatabaseCluster = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (isFetchingRef.current) {
-      console.log("⚠️ Fetch already in progress, skipping...");
-      return;
-    }
-
-    try {
-      //debugger
-      isFetchingRef.current = true;
-      console.log("🔄 Fetching database cluster...");
-
-      const response = await api.post(`/services/database/read/`, {
-        id: databaseId,
-        checkStatus: true, // Backend will check DO and update Supabase
-      });
-
-      if (response.status === 200) {
-        const dbData = response.data.data;
-
-        // Debug: Log the structure to identify object issues
-        console.log("📊 [Frontend] Database Data received:", dbData);
-        console.log(
-          "📊 [Frontend] Status from API:",
-          dbData.status,
-          "Type:",
-          typeof dbData.status
-        );
-        console.log("📊 [Frontend] Previous status:", previousStatus.current);
-
-        setDatabase(dbData);
-        setLoading(false);
-
-        // Check if status changed to online
-        const wasCreating = previousStatus.current === "creating";
-        const isNowOnline = dbData.status === "online";
-
-        console.log(
-          `📊 [Frontend] wasCreating: ${wasCreating}, isNowOnline: ${isNowOnline}`
-        );
-
-        // If database is now online, stop polling and show toast
-        if (isNowOnline) {
-          console.log("✅ [Frontend] Database is online, stopping polling");
-
-          // Stop polling
-          if (intervalRef.current) {
-            console.log("🛑 [Frontend] Clearing polling interval");
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-          } else {
-            console.log("⚠️ [Frontend] No interval to clear (already stopped)");
-          }
-
-          // Show toast only if status changed from creating to online
-          if (wasCreating && !hasShownOnlineToast.current) {
-            toast.success("Database cluster is now online!");
-            hasShownOnlineToast.current = true;
-          }
-        } else {
-          console.log(
-            `ℹ️ [Frontend] Database status is "${dbData.status}", polling continues`
-          );
-        }
-
-        // Update previous status
-        previousStatus.current = dbData.status;
-        console.log(
-          `📊 [Frontend] Updated previousStatus.current to: "${dbData.status}"`
-        );
-
-        return dbData.status; // Return status for use in useEffect
-      }
-    } catch (error) {
-      console.error("[fetchDatabaseCluster] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to fetch database details"));
-      setLoading(false);
-    } finally {
-      isFetchingRef.current = false;
-    }
-  }, [databaseId]); // ✅ Only databaseId needed
+  const isFetchingRef = useRef(false);
 
   const getErrorMessage = (error: unknown, defaultMessage: string): string => {
     if (error instanceof AxiosError) {
@@ -139,91 +103,166 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
     return defaultMessage;
   };
 
-  // Initial load and status polling
+  const fetchDatabaseCluster = useCallback(async () => {
+    if (isFetchingRef.current) {
+      return;
+    }
+
+    try {
+      isFetchingRef.current = true;
+
+      const response = await api.post(`/services/database/read/`, {
+        id: databaseId,
+        checkStatus: true,
+      });
+
+      if (response.status === 200) {
+        const dbData = response.data.data;
+        setDatabase(dbData);
+        setLoading(false);
+
+        const wasProvisioning =
+          previousStatus.current === "creating" ||
+          previousStatus.current === "migrating";
+        const isNowOnline = dbData.status === "online";
+
+        if (isNowOnline && intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+        }
+
+        if (wasProvisioning && isNowOnline && !hasShownOnlineToast.current) {
+          toast.success("Database cluster is now online!");
+          hasShownOnlineToast.current = true;
+        }
+
+        previousStatus.current = dbData.status;
+        return dbData.status;
+      }
+    } catch (error) {
+      console.error("[fetchDatabaseCluster] Error:", error);
+      toast.error(getErrorMessage(error, "Failed to fetch database details"));
+      setLoading(false);
+    } finally {
+      isFetchingRef.current = false;
+    }
+  }, [databaseId]);
+
   useEffect(() => {
-    // Initial fetch
     const initializePolling = async () => {
-      console.log("🚀 [Frontend] Initializing polling...");
       const currentStatus = await fetchDatabaseCluster();
 
-      console.log(
-        `📊 [Frontend] Initial status after fetch: "${currentStatus}"`
-      );
-
-      // Only set up polling if the database is not already online
       if (currentStatus !== "online") {
-        console.log(
-          "⏱️ [Frontend] Database is not online, starting polling every 60s..."
-        );
         intervalRef.current = setInterval(() => {
-          console.log(
-            "🔄 [Frontend] Polling interval fired, fetching database status..."
-          );
           fetchDatabaseCluster();
-        }, 60000); // 1 minute
-      } else {
-        console.log(
-          "✅ [Frontend] Database is already online, skipping polling setup"
-        );
+        }, 60000);
       }
     };
 
     initializePolling();
 
-    // Cleanup on unmount
     return () => {
       if (intervalRef.current) {
-        console.log("🧹 [Frontend] Component unmounting, clearing interval");
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ Proper dependency
+  }, [fetchDatabaseCluster]);
 
-  // Copy to clipboard helper
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label} copied to clipboard!`);
-  };
-
-  // Delete database cluster
-  const handleDeleteCluster = async () => {
-    if (deleteConfirmText !== database?.name) {
-      toast.error("Cluster name does not match!");
-      return;
+  useEffect(() => {
+    if (database?.status !== "online" && activeTab !== "overview") {
+      setActiveTab("overview");
     }
+  }, [activeTab, database?.status]);
 
-    setIsDeleting(true);
+  const copyToClipboard = async (text: string, label: string) => {
     try {
-      const response = await api.post(`/services/database/delete`, {
-        id: database?.cluster_id,
-        id2: database?.id,
-      });
-
-      if (response.status === 200) {
-        toast.success("Database cluster deleted successfully!");
-        setShowDeleteModal(false);
-        // Redirect to databases list after a short delay
-        setTimeout(() => {
-          window.location.href = "/dashboard/services/database";
-        }, 1500);
-      }
-    } catch (error) {
-      console.error("[handleDeleteCluster] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
-    } finally {
-      setIsDeleting(false);
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied to clipboard!`);
+    } catch {
+      toast.error(`Failed to copy ${label.toLowerCase()}`);
     }
   };
 
-  // Loading state
+  const statusConfig = useMemo(() => {
+    const status = database?.status ?? "failed";
+
+    if (status === "online") {
+      return {
+        label: "Online",
+        tone: "border-emerald-400/20 bg-emerald-500/10 text-emerald-300",
+        icon: CheckCircle2,
+      };
+    }
+
+    if (status === "creating" || status === "migrating") {
+      return {
+        label: status === "migrating" ? "Migrating" : "Provisioning",
+        tone: "border-amber-400/20 bg-amber-500/10 text-amber-300",
+        icon: Loader2,
+      };
+    }
+
+    return {
+      label: "Attention Required",
+      tone: "border-red-400/20 bg-red-500/10 text-red-300",
+      icon: AlertCircle,
+    };
+  }, [database?.status]);
+
+  const visibleTabs = useMemo(
+    () =>
+      database?.status === "online"
+        ? allTabs
+        : allTabs.filter((tab) => tab.value === "overview"),
+    [database?.status]
+  );
+
+  const activeSection =
+    visibleTabs.find((tab) => tab.value === activeTab) ?? visibleTabs[0];
+
+  const summaryStats = useMemo(() => {
+    if (!database) return [];
+
+    return [
+      {
+        label: "Engine",
+        value: `${database.engine?.toUpperCase() || "Managed"} ${database.version || ""}`.trim(),
+        icon: Server,
+      },
+      {
+        label: "Compute",
+        value: `${extractCpu(database.size)} · ${extractRam(database.size)}`,
+        icon: Cpu,
+      },
+      {
+        label: "Storage",
+        value: database.storage_size_mib
+          ? `${Math.round(database.storage_size_mib / 1024)} GB`
+          : "Managed",
+        icon: HardDrive,
+      },
+      {
+        label: "Region",
+        value: extractRegion(database.region),
+        icon: MapPin,
+      },
+    ];
+  }, [database]);
+
   if (loading) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-blue-500 animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Loading database cluster...</p>
+      <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+        <div className="glass-panel flex min-h-[320px] items-center justify-center overflow-hidden">
+          <div className="text-center">
+            <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-blue-400" />
+            <p className="text-lg font-medium text-white">
+              Loading database cluster...
+            </p>
+            <p className="mt-2 text-sm text-white/45">
+              Fetching current status, credentials, and operational details.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -231,184 +270,281 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
 
   if (!database) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] bg-black flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-white text-lg">Database cluster not found</p>
+      <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+        <div className="glass-panel flex min-h-[320px] items-center justify-center overflow-hidden">
+          <div className="text-center">
+            <AlertCircle className="mx-auto mb-4 h-12 w-12 text-red-400" />
+            <p className="text-lg font-medium text-white">
+              Database cluster not found
+            </p>
+            <p className="mt-2 text-sm text-white/45">
+              The requested cluster may have been removed or is no longer
+              available.
+            </p>
+            <Link
+              href="/dashboard/services/database"
+              className="mt-5 inline-flex items-center gap-2 border border-white/[0.12] bg-white/[0.03] px-4 py-2 text-sm font-medium text-white/82 transition-colors hover:bg-white/[0.07]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to databases
+            </Link>
+          </div>
         </div>
       </div>
     );
   }
 
+  const StatusIcon = statusConfig.icon;
+  const ActiveSectionIcon = activeSection.icon;
+
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-black py-4 px-4 ">
-      <div className="mx-auto max-w-6xl space-y-6 mb-6">
-        {/* Tabs */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
-            {/* Tab Navigation */}
-            <div className="rounded-xl bg-black shadow-md p-1.5 mb-6">
-              <TabsList className="w-full grid grid-cols-2 sm:grid-cols-4 gap-1.5 bg-transparent p-0 h-auto">
-                <TabsTrigger
-                  value="overview"
-                  className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href="/dashboard/services/database"
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to database inventory
+            </Link>
+
+            <div className="mt-5 flex items-start gap-4">
+              <div className="flex h-12 w-12 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
+                <DatabaseIcon engine={database.engine} className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+                  Managed Databases
+                </p>
+                <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                  {database.name}
+                </h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+                  {`${database.engine?.toUpperCase() || "Database"} ${database.version || ""}`.trim()}{" "}
+                  cluster with {database.num_nodes} node
+                  {database.num_nodes !== 1 ? "s" : ""} deployed in{" "}
+                  {extractRegion(database.region)}.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Status
+              </div>
+              <div className="mt-2 inline-flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-2 border px-2.5 py-1 text-sm font-medium ${statusConfig.tone}`}
                 >
-                  Overview
-                </TabsTrigger>
-                {database.status === "online" && (
-                  <>
-                    <TabsTrigger
-                      value="network"
-                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                    >
-                      Network
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="users-dbs"
-                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                    >
-                      Users & DBs
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="settings"
-                      className="cursor-pointer text-sm sm:text-base font-semibold py-2.5 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-black text-white hover:bg-white/10 transition-all border-0"
-                    >
-                      Settings
-                    </TabsTrigger>
-                  </>
-                )}
-              </TabsList>
+                  <StatusIcon
+                    className={`h-4 w-4 ${
+                      database.status === "creating" || database.status === "migrating"
+                        ? "animate-spin"
+                        : ""
+                    }`}
+                  />
+                  {statusConfig.label}
+                </span>
+              </div>
             </div>
 
-            {/* Tab Content */}
-            <TabsContent value="overview" className="mt-0">
-              <OverviewTab
-                database={database}
-                showPassword={showPassword}
-                setShowPassword={setShowPassword}
-                activeTab={connectionTab}
-                setActiveTab={setConnectionTab}
-                copyToClipboard={copyToClipboard}
-              />
-            </TabsContent>
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Topology
+              </div>
+              <div className="mt-1.5 text-lg font-semibold text-white">
+                {database.num_nodes} node{database.num_nodes !== 1 ? "s" : ""}
+              </div>
+            </div>
+          </div>
+        </div>
 
-            <TabsContent value="network" className="mt-0">
-              <NetworkTab
-                clusterId={database.cluster_id || ""}
-                databaseId={database.cluster_id || ""}
-                initialNetworkRules={database.network_rules}
-                onRulesUpdate={fetchDatabaseCluster}
-              />
-            </TabsContent>
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {summaryStats.map((item) => {
+              const Icon = item.icon;
 
-            <TabsContent value="users-dbs" className="mt-0">
-              <UsersDbsTab clusterId={database.cluster_id || ""} />
-            </TabsContent>
-
-            <TabsContent value="settings" className="mt-0">
-              <SettingsTab
-                database={database}
-                onDatabaseUpdate={fetchDatabaseCluster}
-                products={products}
-              />
-            </TabsContent>
-          </Tabs>
-        </motion.div>
-
-        {/* Delete Confirmation Modal */}
-        <AnimatePresence>
-          {showDeleteModal && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-              onClick={() => !isDeleting && setShowDeleteModal(false)}
-            >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={(e) => e.stopPropagation()}
-                className="bg-slate-900 rounded-2xl border-2 border-red-500/30 shadow-2xl max-w-md w-full p-6"
-              >
-                <div className="flex items-start gap-4 mb-6">
-                  <div className="p-3 rounded-full bg-red-500/20">
-                    <AlertCircle className="h-6 w-6 text-red-400" />
+              return (
+                <div
+                  key={item.label}
+                  className="border border-white/[0.08] bg-white/[0.03] px-3 py-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                        {item.label}
+                      </div>
+                      <div className="mt-1.5 text-sm font-semibold text-white">
+                        {item.value}
+                      </div>
+                    </div>
+                    <div className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300">
+                      <Icon className="h-4 w-4" />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-white mb-2">
-                      Delete Database Cluster
-                    </h3>
-                    <p className="text-slate-400 text-sm">
-                      This action cannot be undone. This will permanently delete
-                      the database cluster and all its data.
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)] xl:items-start">
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.08, duration: 0.24 }}
+            className="space-y-4 xl:sticky xl:top-8"
+          >
+            <div className="glass-panel overflow-hidden">
+              <div className="p-4">
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Cluster Areas
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-white/45">
+                    Move between overview, access controls, identities, and
+                    lifecycle operations without leaving the cluster page.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  {visibleTabs.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.value;
+
+                    return (
+                      <button
+                        key={tab.value}
+                        type="button"
+                        onClick={() => setActiveTab(tab.value)}
+                        className={`w-full border px-3 py-3 text-left transition-colors ${
+                          isActive
+                            ? "border-blue-400/22 bg-white/[0.04]"
+                            : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div
+                            className={`flex h-9 w-9 items-center justify-center border ${
+                              isActive
+                                ? "border-blue-400/25 bg-white/[0.04] text-blue-200"
+                                : "border-white/[0.08] bg-white/[0.03] text-white/55"
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-white">
+                              {tab.label}
+                            </div>
+                            <div className="mt-1 text-xs leading-5 text-white/40">
+                              {tab.description}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1, duration: 0.24 }}
+          >
+            <div className="glass-panel overflow-hidden">
+              <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 items-center justify-center border border-blue-500/16 bg-white/[0.03] text-blue-200">
+                    <ActiveSectionIcon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                      {activeSection.eyebrow}
+                    </p>
+                    <h2 className="mt-1 text-xl font-semibold text-white">
+                      {activeSection.label}
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+                      {activeSection.description}
                     </p>
                   </div>
                 </div>
+              </div>
 
-                <div className="mb-6">
-                  <label className="block text-slate-300 text-sm font-medium mb-2">
-                    Type{" "}
-                    <span className="font-bold text-white">
-                      {database?.name}
-                    </span>{" "}
-                    to confirm
-                  </label>
-                  <input
-                    type="text"
-                    value={deleteConfirmText}
-                    onChange={(e) => setDeleteConfirmText(e.target.value)}
-                    placeholder="Enter cluster name"
-                    disabled={isDeleting}
-                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+              <div className="px-5 py-5 sm:px-6 sm:py-6">
+                <TabsContent value="overview" className="mt-0">
+                  <OverviewTab
+                    database={database}
+                    showPassword={showPassword}
+                    setShowPassword={setShowPassword}
+                    activeTab={connectionTab}
+                    setActiveTab={setConnectionTab}
+                    copyToClipboard={copyToClipboard}
                   />
-                </div>
+                </TabsContent>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setShowDeleteModal(false);
-                      setDeleteConfirmText("");
-                    }}
-                    disabled={isDeleting}
-                    className="flex-1 px-4 py-3 bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteCluster}
-                    disabled={
-                      deleteConfirmText !== database?.name || isDeleting
-                    }
-                    className="flex-1 px-4 py-3 bg-red-500 hover:bg-red-600 text-white rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </>
-                    )}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+                <TabsContent value="network" className="mt-0">
+                  <NetworkTab
+                    clusterId={database.cluster_id || ""}
+                    databaseId={database.cluster_id || ""}
+                    initialNetworkRules={database.network_rules}
+                    onRulesUpdate={fetchDatabaseCluster}
+                  />
+                </TabsContent>
+
+                <TabsContent value="users-dbs" className="mt-0">
+                  <UsersDbsTab clusterId={database.cluster_id || ""} />
+                </TabsContent>
+
+                <TabsContent value="settings" className="mt-0">
+                  <SettingsTab
+                    database={database}
+                    onDatabaseUpdate={fetchDatabaseCluster}
+                    products={products}
+                  />
+                </TabsContent>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </Tabs>
+
+      {database.status !== "online" && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-panel overflow-hidden px-5 py-4 sm:px-6"
+        >
+          <div className="flex items-start gap-3">
+            {database.status === "creating" || database.status === "migrating" ? (
+              <Clock3 className="mt-0.5 h-5 w-5 text-amber-300" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-5 w-5 text-red-300" />
+            )}
+            <div>
+              <p className="text-sm font-medium text-white">
+                {database.status === "creating" || database.status === "migrating"
+                  ? "Additional management tabs will appear once the cluster is online."
+                  : "This cluster requires attention before full management is available."}
+              </p>
+              <p className="mt-1 text-sm leading-6 text-white/45">
+                Overview remains available while provisioning finishes or while
+                support investigates an issue with the cluster state.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

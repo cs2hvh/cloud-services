@@ -5,22 +5,15 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { AgentApiKeys } from '@/lib/supabase/queries/ai_agents';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const auth = await authenticateUserFromHeader(request);
+    if (!auth.authenticated) return auth.response;
 
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    const keys = await AgentApiKeys.list_by_user(user.id);
+    const keys = await AgentApiKeys.list_by_user(auth.user!.id);
 
     return NextResponse.json({
       success: true,
@@ -37,15 +30,8 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const auth = await authenticateUserFromHeader(request);
+    if (!auth.authenticated) return auth.response;
 
     const body = await request.json();
     const { name, agent_id, expires_at } = body;
@@ -59,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const result = await AgentApiKeys.create(
       name.trim(),
-      user.id,
+      auth.user!.id,
       agent_id || undefined,
       expires_at || undefined
     );

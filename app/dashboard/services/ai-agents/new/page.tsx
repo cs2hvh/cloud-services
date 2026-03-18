@@ -32,7 +32,7 @@ import {
   Key,
   CreditCard,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAIAgentApi, fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -81,8 +81,6 @@ const STEPS = [
 
 export default function NewAgentPage() {
   const router = useRouter();
-  const supabase = createClient();
-
   // Form state
   const [currentStep, setCurrentStep] = useState(1);
   const [creating, setCreating] = useState(false);
@@ -111,16 +109,10 @@ export default function NewAgentPage() {
 
   const loadData = async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const headers: HeadersInit = {};
-      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
-
       const [kbRes, keysRes, modelsRes] = await Promise.all([
-        fetch('/api/knowledge-bases', { headers }),
-        fetch('/api/ai-model-keys', { headers }),
-        fetch('/api/ai-agents/platform-models', { headers }),
+        fetchAuthenticatedApi('/api/knowledge-bases'),
+        fetch('/api/ai-model-keys'),
+        fetchAIAgentApi('/api/ai-agents/platform-models'),
       ]);
 
       if (kbRes.ok) {
@@ -194,14 +186,10 @@ export default function NewAgentPage() {
 
     setCreating(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch('/api/ai-agents', {
+      const res = await fetchAIAgentApi('/api/ai-agents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           name: name.trim(),

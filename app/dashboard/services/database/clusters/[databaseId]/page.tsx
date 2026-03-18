@@ -10,16 +10,12 @@ type Params = { databaseId: string };
 
 const SingleDbSuspense = async ({
   databaseId,
-  status,
   products,
 }: {
   databaseId: string;
-  status: string;
   products: Tables<"products">[];
 }) => {
-  return (
-    <Singledb databaseId={databaseId} status={status} products={products} />
-  );
+  return <Singledb databaseId={databaseId} products={products} />;
 };
 
 const SingleDbPage = async ({ params }: { params: Promise<Params> }) => {
@@ -30,7 +26,6 @@ const SingleDbPage = async ({ params }: { params: Promise<Params> }) => {
 
   // Fetch database cluster details
   const databaseCluster = await Database_Clusters.read(databaseId);
-  const databaseStatus = databaseCluster?.data?.status ?? "failed";
   const databaseEngine = databaseCluster?.data?.engine ?? "";
 
   // Fetch database products for storage tier options based on database engine type
@@ -41,29 +36,19 @@ const SingleDbPage = async ({ params }: { params: Promise<Params> }) => {
 
   //console.log(databaseStatus,".............database status...........");
   return (
-    <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Manage Database Cluster</h1>
-        <p className="text-white/60">
-          This page contains information about your database cluster.
-        </p>
-      </div>
-
-      <div className="border-t border-white/10 pt-8">
+    <div className="flex-1 min-h-screen bg-black text-white">
         <Suspense
           fallback={
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center px-4 py-20">
               <LoadingSpinner />
             </div>
           }
         >
           <SingleDbSuspense
-            status={databaseStatus}
             databaseId={decodeURIComponent(databaseId)}
             products={databaseProducts}
           />
         </Suspense>
-      </div>
     </div>
   );
 };

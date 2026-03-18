@@ -13,7 +13,7 @@ import {
   Settings,
 } from 'lucide-react';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
 import {
   DropdownMenu,
@@ -49,17 +49,10 @@ export default function KnowledgeBasesPage() {
   const [deleteKb, setDeleteKb] = useState<KnowledgeBase | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const supabase = createClient();
-
   const loadKnowledgeBases = async () => {
     setLoading(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch('/api/knowledge-bases', {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      });
+      const res = await fetchAuthenticatedApi('/api/knowledge-bases');
 
       if (!res.ok) {
         throw new Error('Failed to load knowledge bases');
@@ -77,7 +70,6 @@ export default function KnowledgeBasesPage() {
 
   useEffect(() => {
     loadKnowledgeBases();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleDelete = async () => {
@@ -85,12 +77,8 @@ export default function KnowledgeBasesPage() {
 
     setDeleting(true);
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch(`/api/knowledge-bases/${deleteKb.id}`, {
+      const res = await fetchAuthenticatedApi(`/api/knowledge-bases/${deleteKb.id}`, {
         method: 'DELETE',
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
       });
 
       if (!res.ok) throw new Error('Failed to delete');

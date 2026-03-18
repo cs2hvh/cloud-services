@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateUser } from '@/lib/auth/server-auth';
+import { authenticateUserFromHeader } from '@/lib/auth/server-auth';
 import { limitByUser } from '@/lib/cooldown/userbased';
 import {
   AIAgents,
@@ -45,7 +45,7 @@ type RouteParams = { params: Promise<{ id: string }> };
  * Test an agent (playground mode for owner)
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const auth = await authenticateUser();
+  const auth = await authenticateUserFromHeader(request);
   if (!auth.authenticated) return auth.response;
 
   const { id } = await params;

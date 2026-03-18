@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
+  Copy,
   Database,
-  Users,
   Eye,
   EyeOff,
-  Trash2,
-  RefreshCw,
-  Plus,
   Loader2,
-  AlertCircle,
+  Plus,
+  RefreshCw,
+  Shield,
+  Trash2,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
@@ -36,7 +37,6 @@ interface UsersDbsTabProps {
 }
 
 export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
-  // Users state
   const [users, setUsers] = useState<DatabaseUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [newUserName, setNewUserName] = useState("");
@@ -45,13 +45,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     {}
   );
 
-  // Databases state
   const [databases, setDatabases] = useState<DatabaseDb[]>([]);
   const [loadingDatabases, setLoadingDatabases] = useState(true);
   const [newDbName, setNewDbName] = useState("");
   const [creatingDb, setCreatingDb] = useState(false);
 
-  // Delete modal state
   const [deleteUserModal, setDeleteUserModal] = useState<{
     show: boolean;
     username: string;
@@ -66,17 +64,13 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   const [deletingUser, setDeletingUser] = useState(false);
   const [deletingDb, setDeletingDb] = useState(false);
-
-  // Reset password modal
   const [resetPasswordModal, setResetPasswordModal] = useState<{
     show: boolean;
     username: string;
     newPassword: string;
   }>({ show: false, username: "", newPassword: "" });
 
-  // Error handler utility
   const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-    debugger
     if (error instanceof AxiosError) {
       return error.response?.data?.error || defaultMessage;
     }
@@ -86,8 +80,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     return defaultMessage;
   };
 
-  // Fetch users
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
       const response = await api.post("/services/database/users/list", {
@@ -103,10 +96,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     } finally {
       setLoadingUsers(false);
     }
-  };
+  }, [clusterId]);
 
-  // Fetch databases
-  const fetchDatabases = async () => {
+  const fetchDatabases = useCallback(async () => {
     try {
       setLoadingDatabases(true);
       const response = await api.post("/services/database/dbs/list", {
@@ -122,22 +114,18 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     } finally {
       setLoadingDatabases(false);
     }
-  };
+  }, [clusterId]);
 
-  // Initial fetch
   useEffect(() => {
     fetchUsers();
     fetchDatabases();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusterId]);
+  }, [fetchDatabases, fetchUsers]);
 
-  // Create user
   const handleCreateUser = async () => {
     if (!newUserName.trim()) {
       toast.error("Please enter a username");
       return;
     }
-    debugger
 
     setCreatingUser(true);
     try {
@@ -159,7 +147,6 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }
   };
 
-  // Delete user
   const handleDeleteUser = async () => {
     if (deleteUserModal.confirmText !== deleteUserModal.username) {
       toast.error("Username does not match!");
@@ -178,7 +165,6 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         setDeleteUserModal({ show: false, username: "", confirmText: "" });
         await fetchUsers();
       }
-     
     } catch (error) {
       console.error("[handleDeleteUser] Error:", error);
       toast.error(getErrorMessage(error, "Failed to delete user"));
@@ -187,20 +173,18 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }
   };
 
-  // Reset password
   const handleResetPassword = async (username: string) => {
     try {
       const response = await api.post("/services/database/users/reset", {
         cluster_id: clusterId,
-        username: username,
+        username,
       });
 
       if (response.status === 200) {
-        const newPassword = response.data.data.password;
         setResetPasswordModal({
           show: true,
-          username: username,
-          newPassword: newPassword,
+          username,
+          newPassword: response.data.data.password,
         });
         toast.success("Password reset successfully!");
         await fetchUsers();
@@ -211,9 +195,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }
   };
 
-  // Create database
   const handleCreateDatabase = async () => {
-    debugger
     if (!newDbName.trim()) {
       toast.error("Please enter a database name");
       return;
@@ -239,22 +221,19 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }
   };
 
-  // Delete database
   const handleDeleteDatabase = async () => {
-   // debugger
     if (deleteDbModal.confirmText !== deleteDbModal.dbName) {
       toast.error("Database name does not match!");
       return;
     }
 
+    if (deleteDbModal.dbName === "defaultdb" || deleteDbModal.dbName === "admin") {
+      toast.error("Cannot delete system database!");
+      return;
+    }
+
     setDeletingDb(true);
     try {
-
-      if(deleteDbModal.dbName==='defaultdb'||deleteDbModal.dbName==='admin'){
-        toast.error("Cannot delete system database!");
-        setDeletingDb(false);
-        return;
-      }
       const response = await api.post("/services/database/dbs/delete", {
         cluster_id: clusterId,
         db_name: deleteDbModal.dbName,
@@ -273,7 +252,6 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }
   };
 
-  // Toggle password visibility
   const togglePasswordVisibility = (username: string) => {
     setShowPasswords((prev) => ({
       ...prev,
@@ -281,295 +259,333 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     }));
   };
 
-  // Copy to clipboard
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string, label: string) => {
+    await navigator.clipboard.writeText(text);
     toast.success(`${label} copied to clipboard!`);
   };
 
+  const renderCreateBar = ({
+    value,
+    setValue,
+    placeholder,
+    onSubmit,
+    submitting,
+    disabled,
+    buttonLabel,
+  }: {
+    value: string;
+    setValue: (value: string) => void;
+    placeholder: string;
+    onSubmit: () => void;
+    submitting: boolean;
+    disabled: boolean;
+    buttonLabel: string;
+  }) => (
+    <div className="border-t border-white/[0.06] px-5 py-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+        Add New
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          disabled={submitting}
+          className="h-11 border-white/[0.12] bg-white/[0.04] text-white placeholder:text-white/34 focus:border-blue-400/35 focus:ring-0"
+        />
+        <Button
+          onClick={onSubmit}
+          disabled={submitting || disabled}
+          className="cursor-pointer rounded-none border border-white/[0.1] bg-white/[0.04] text-white hover:bg-white/[0.08]"
+        >
+          {submitting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+          <span className="ml-2">{buttonLabel}</span>
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Users Section */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <motion.section
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: 0, x: -12 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.1 }}
-          className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
+          className="border border-white/[0.08] bg-white/[0.03]"
         >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-400" />
-              Database Users
-            </h2>
-            <button
+          <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+                Identities
+              </div>
+              <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Users className="h-5 w-5 text-blue-300" />
+                Database Users
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-white/45">
+                Create service users, rotate passwords, and remove identities
+                that no longer require access.
+              </p>
+            </div>
+            <Button
               onClick={fetchUsers}
               disabled={loadingUsers}
-              className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
-              title="Refresh users"
+              className="rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              size="sm"
             >
-              <RefreshCw
-                className={`h-4 w-4 text-white ${loadingUsers ? "animate-spin" : ""}`}
-              />
-            </button>
+              <RefreshCw className={`h-4 w-4 ${loadingUsers ? "animate-spin" : ""}`} />
+            </Button>
           </div>
 
-          {/* Users List */}
-          {loadingUsers ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-            </div>
-          ) : users.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">No users found</p>
-            </div>
-          ) : (
-            <div className="space-y-3 mb-6">
-              {users.map((user, index) => (
-                <motion.div
-                  key={user.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-slate-900/50 rounded-lg p-4 border border-white/10"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold mb-1 truncate">
-                        {user.name}
-                      </p>
-                  {
-                    user.password &&
-                        <div className="flex items-center gap-2">
-                        <code className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded font-mono truncate flex-1">
-                          {showPasswords[user.name]
-                            ? user.password
-                            : "••••••••••••"}
-                        </code>
-                        <button
-                          onClick={() => togglePasswordVisibility(user.name)}
-                          className="cursor-pointer p-1 hover:bg-white/10 rounded transition-colors flex-shrink-0"
-                          title={
-                            showPasswords[user.name]
-                              ? "Hide password"
-                              : "Show password"
-                          }
-                        >
-                          {showPasswords[user.name] ? (
-                            <EyeOff className="h-4 w-4 text-slate-400" />
-                          ) : (
-                            <Eye className="h-4 w-4 text-slate-400" />
+          <div className="px-5 py-5">
+            {loadingUsers ? (
+              <div className="flex items-center justify-center py-14">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
+              </div>
+            ) : users.length === 0 ? (
+              <div className="border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
+                <Users className="mx-auto mb-4 h-10 w-10 text-white/30" />
+                <h3 className="text-lg font-semibold text-white">No users yet</h3>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  Create dedicated database users for applications, operators,
+                  or read-only workflows.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {users.map((user, index) => (
+                  <motion.div
+                    key={user.name}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="border border-white/[0.08] bg-black/20 p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="text-sm font-semibold text-white">
+                            {user.name}
+                          </div>
+                          {user.role && (
+                            <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
+                              {user.role}
+                            </span>
                           )}
+                        </div>
+                        {user.password && (
+                          <div className="mt-3 flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] p-3">
+                            <code className="min-w-0 flex-1 truncate font-mono text-xs text-white/60">
+                              {showPasswords[user.name]
+                                ? user.password
+                                : "••••••••••••••••"}
+                            </code>
+                            <button
+                              onClick={() => togglePasswordVisibility(user.name)}
+                              className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
+                              title={
+                                showPasswords[user.name]
+                                  ? "Hide password"
+                                  : "Show password"
+                              }
+                            >
+                              {showPasswords[user.name] ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleResetPassword(user.name)}
+                          className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08]"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Reset
+                        </button>
+                        <button
+                          onClick={() =>
+                            setDeleteUserModal({
+                              show: true,
+                              username: user.name,
+                              confirmText: "",
+                            })
+                          }
+                          className="inline-flex cursor-pointer items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/16"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
                         </button>
                       </div>
-                  }
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={() => handleResetPassword(user.name)}
-                        className="cursor-pointer px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
-                        title="Reset password"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Reset</span>
-                      </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {renderCreateBar({
+            value: newUserName,
+            setValue: setNewUserName,
+            placeholder: "Username",
+            onSubmit: handleCreateUser,
+            submitting: creatingUser,
+            disabled: !newUserName.trim(),
+            buttonLabel: "Add",
+          })}
+        </motion.section>
+
+        <motion.section
+          initial={{ opacity: 0, x: 12 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="border border-white/[0.08] bg-white/[0.03]"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
+                Logical Databases
+              </div>
+              <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold text-white">
+                <Database className="h-5 w-5 text-blue-300" />
+                Databases
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-white/45">
+                Manage logical databases inside the cluster for separate
+                applications, environments, or teams.
+              </p>
+            </div>
+            <Button
+              onClick={fetchDatabases}
+              disabled={loadingDatabases}
+              className="rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              size="sm"
+            >
+              <RefreshCw className={`h-4 w-4 ${loadingDatabases ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+
+          <div className="px-5 py-5">
+            {loadingDatabases ? (
+              <div className="flex items-center justify-center py-14">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
+              </div>
+            ) : databases.length === 0 ? (
+              <div className="border border-white/[0.08] bg-black/20 px-6 py-14 text-center">
+                <Database className="mx-auto mb-4 h-10 w-10 text-white/30" />
+                <h3 className="text-lg font-semibold text-white">
+                  No logical databases yet
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  Create an additional database when workloads should remain
+                  isolated within the same managed cluster.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {databases.map((db, index) => (
+                  <motion.div
+                    key={db.name}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.03 }}
+                    className="border border-white/[0.08] bg-black/20 p-4"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-semibold text-white">
+                            {db.name}
+                          </div>
+                          {(db.name === "defaultdb" || db.name === "admin") && (
+                            <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
+                              System
+                            </span>
+                          )}
+                        </div>
+                        {db.created_at && (
+                          <div className="mt-2 text-xs text-white/38">
+                            Created {new Date(db.created_at).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() =>
-                          setDeleteUserModal({
+                          setDeleteDbModal({
                             show: true,
-                            username: user.name,
+                            dbName: db.name,
                             confirmText: "",
                           })
                         }
-                        className="cursor-pointer  px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
-                        title="Delete user"
+                        className="inline-flex cursor-pointer items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/16"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Delete</span>
+                        <Trash2 className="h-4 w-4" />
+                        Delete
                       </button>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Add User Form */}
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-slate-400 text-sm mb-3">Add New User</p>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Username"
-                value={newUserName}
-                onChange={(e) => setNewUserName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateUser()}
-                disabled={creatingUser}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleCreateUser}
-                disabled={creatingUser || !newUserName.trim()}
-                className="cursor-pointer  flex items-center gap-2"
-              >
-                {creatingUser ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Add
-              </Button>
-            </div>
-          </div>
-        </motion.section>
-
-        {/* Databases Section */}
-        <motion.section
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.2 }}
-          className="rounded-2xl bg-white/5 shadow-lg ring-1 ring-white/10 p-6"
-        >
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Database className="h-5 w-5 text-purple-400" />
-              Databases
-            </h2>
-            <button
-              onClick={fetchDatabases}
-              disabled={loadingDatabases}
-              className="cursor-pointer p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
-              title="Refresh databases"
-            >
-              <RefreshCw
-                className={`h-4 w-4 text-white ${loadingDatabases ? "animate-spin" : ""}`}
-              />
-            </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* Databases List */}
-          {loadingDatabases ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 text-purple-500 animate-spin" />
-            </div>
-          ) : databases.length === 0 ? (
-            <div className="text-center py-12">
-              <Database className="h-12 w-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400">No databases found</p>
-            </div>
-          ) : (
-            <div className="space-y-3 mb-6">
-              {databases.map((db, index) => (
-                <motion.div
-                  key={db.name}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-slate-900/50 rounded-lg p-4 border border-white/10"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-white font-semibold mb-1 truncate">
-                        {db.name}
-                      </p>
-                      {db.created_at && (
-                        <p className="text-xs text-slate-400">
-                          Created: {new Date(db.created_at).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() =>
-                        setDeleteDbModal({
-                          show: true,
-                          dbName: db.name,
-                          confirmText: "",
-                        })
-                      }
-                      className="cursor-pointer px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 flex-shrink-0"
-                      title="Delete database"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Delete</span>
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Add Database Form */}
-          <div className="border-t border-white/10 pt-4">
-            <p className="text-slate-400 text-sm mb-3">Add New Database</p>
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Database name"
-                value={newDbName}
-                onChange={(e) => setNewDbName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCreateDatabase()}
-                disabled={creatingDb}
-                className="flex-1"
-              />
-              <Button
-                onClick={handleCreateDatabase}
-                disabled={creatingDb || !newDbName.trim()}
-                className="cursor-pointer flex items-center gap-2"
-              >
-                {creatingDb ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Add
-              </Button>
-            </div>
-          </div>
+          {renderCreateBar({
+            value: newDbName,
+            setValue: setNewDbName,
+            placeholder: "Database name",
+            onSubmit: handleCreateDatabase,
+            submitting: creatingDb,
+            disabled: !newDbName.trim(),
+            buttonLabel: "Add",
+          })}
         </motion.section>
       </div>
 
-      {/* Delete User Modal */}
       <AnimatePresence>
         {deleteUserModal.show && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
             onClick={() =>
               !deletingUser &&
               setDeleteUserModal({ show: false, username: "", confirmText: "" })
             }
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl border-2 border-red-500/30 shadow-2xl max-w-md w-full p-6"
+              className="w-full max-w-md border border-red-400/20 bg-[#0d1220] p-6 shadow-2xl"
             >
-              <div className="flex items-start gap-4 mb-6">
-                <div className="p-3 rounded-full bg-red-500/20">
-                  <AlertCircle className="h-6 w-6 text-red-400" />
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 items-center justify-center border border-red-400/20 bg-red-500/10 text-red-300">
+                  <Trash2 className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-2">
-                    Delete User
-                  </h3>
-                  <p className="text-slate-400 text-sm">
-                    This action cannot be undone. This will permanently delete
-                    the user <strong>{deleteUserModal.username}</strong>.
+                  <h3 className="text-lg font-semibold text-white">Delete User</h3>
+                  <p className="mt-1 text-sm leading-6 text-white/45">
+                    This permanently removes the user{" "}
+                    <strong>{deleteUserModal.username}</strong> from the
+                    database cluster.
                   </p>
                 </div>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-slate-300 text-sm font-medium mb-2">
-                  Type{" "}
-                  <span className="font-bold text-white">
-                    {deleteUserModal.username}
-                  </span>{" "}
+              <div className="mt-6 space-y-2.5">
+                <label className="block text-sm font-medium text-white">
+                  Type <span className="font-mono">{deleteUserModal.username}</span>{" "}
                   to confirm
                 </label>
                 <Input
@@ -583,10 +599,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   }
                   placeholder="Enter username"
                   disabled={deletingUser}
+                  className="h-11 border-white/[0.12] bg-white/[0.04] text-white placeholder:text-white/34 focus:border-red-400/35 focus:ring-0"
                 />
               </div>
 
-              <div className="flex gap-3">
+              <div className="mt-6 flex gap-3">
                 <Button
                   onClick={() =>
                     setDeleteUserModal({
@@ -596,8 +613,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     })
                   }
                   disabled={deletingUser}
-                  variant="outline"
-                  className="cursor-pointer flex-1"
+                  className="flex-1 rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
                 >
                   Cancel
                 </Button>
@@ -607,17 +623,16 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     deleteUserModal.confirmText !== deleteUserModal.username ||
                     deletingUser
                   }
-                  variant="destructive"
-                  className="cursor-pointer flex-1"
+                  className="flex-1 rounded-none bg-red-500 text-white hover:bg-red-600"
                 >
                   {deletingUser ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Deleting...
                     </>
                   ) : (
                     <>
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </>
                   )}
@@ -628,48 +643,44 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         )}
       </AnimatePresence>
 
-      {/* Delete Database Modal */}
       <AnimatePresence>
         {deleteDbModal.show && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
             onClick={() =>
               !deletingDb &&
               setDeleteDbModal({ show: false, dbName: "", confirmText: "" })
             }
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl border-2 border-red-500/30 shadow-2xl max-w-md w-full p-6"
+              className="w-full max-w-md border border-red-400/20 bg-[#0d1220] p-6 shadow-2xl"
             >
-              <div className="flex items-start gap-4 mb-6">
-                <div className="p-3 rounded-full bg-red-500/20">
-                  <AlertCircle className="h-6 w-6 text-red-400" />
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 items-center justify-center border border-red-400/20 bg-red-500/10 text-red-300">
+                  <Trash2 className="h-5 w-5" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-2">
+                  <h3 className="text-lg font-semibold text-white">
                     Delete Database
                   </h3>
-                  <p className="text-slate-400 text-sm">
-                    This action cannot be undone. This will permanently delete
-                    the database <strong>{deleteDbModal.dbName}</strong> and all
-                    its data.
+                  <p className="mt-1 text-sm leading-6 text-white/45">
+                    This permanently removes the database{" "}
+                    <strong>{deleteDbModal.dbName}</strong> and all data stored
+                    within it.
                   </p>
                 </div>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-slate-300 text-sm font-medium mb-2">
-                  Type{" "}
-                  <span className="font-bold text-white">
-                    {deleteDbModal.dbName}
-                  </span>{" "}
+              <div className="mt-6 space-y-2.5">
+                <label className="block text-sm font-medium text-white">
+                  Type <span className="font-mono">{deleteDbModal.dbName}</span>{" "}
                   to confirm
                 </label>
                 <Input
@@ -683,17 +694,21 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   }
                   placeholder="Enter database name"
                   disabled={deletingDb}
+                  className="h-11 border-white/[0.12] bg-white/[0.04] text-white placeholder:text-white/34 focus:border-red-400/35 focus:ring-0"
                 />
               </div>
 
-              <div className="flex gap-3">
+              <div className="mt-6 flex gap-3">
                 <Button
                   onClick={() =>
-                    setDeleteDbModal({ show: false, dbName: "", confirmText: "" })
+                    setDeleteDbModal({
+                      show: false,
+                      dbName: "",
+                      confirmText: "",
+                    })
                   }
                   disabled={deletingDb}
-                  variant="outline"
-                  className="cursor-pointer flex-1"
+                  className="flex-1 rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
                 >
                   Cancel
                 </Button>
@@ -703,17 +718,16 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     deleteDbModal.confirmText !== deleteDbModal.dbName ||
                     deletingDb
                   }
-                  variant="destructive"
-                  className="cursor-pointer flex-1"
+                  className="flex-1 rounded-none bg-red-500 text-white hover:bg-red-600"
                 >
                   {deletingDb ? (
                     <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Deleting...
                     </>
                   ) : (
                     <>
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="mr-2 h-4 w-4" />
                       Delete
                     </>
                   )}
@@ -724,14 +738,13 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
         )}
       </AnimatePresence>
 
-      {/* Reset Password Modal */}
       <AnimatePresence>
         {resetPasswordModal.show && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
             onClick={() =>
               setResetPasswordModal({
                 show: false,
@@ -741,42 +754,40 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
             }
           >
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
+              exit={{ scale: 0.96, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-slate-900 rounded-2xl border-2 border-blue-500/30 shadow-2xl max-w-md w-full p-6"
+              className="w-full max-w-md border border-white/[0.12] bg-[#0d1220] p-6 shadow-2xl"
             >
-              <div className="text-center mb-6">
-                <div className="mx-auto w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
-                  <RefreshCw className="h-6 w-6 text-green-400" />
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
+                  <Shield className="h-5 w-5" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">
-                  Password Reset Successfully
+                <h3 className="mt-4 text-lg font-semibold text-white">
+                  Password Reset Completed
                 </h3>
-                <p className="text-slate-400 text-sm">
-                  New password for user{" "}
-                  <strong>{resetPasswordModal.username}</strong>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  New password for <strong>{resetPasswordModal.username}</strong>
                 </p>
               </div>
 
-              <div className="bg-slate-800 rounded-lg p-4 mb-6">
-                <p className="text-slate-400 text-sm mb-2">New Password:</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-green-400 font-mono text-sm break-all">
+              <div className="mt-6 border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  New Password
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 break-all font-mono text-sm text-emerald-300">
                     {resetPasswordModal.newPassword}
                   </code>
                   <button
                     onClick={() =>
-                      copyToClipboard(
-                        resetPasswordModal.newPassword,
-                        "Password"
-                      )
+                      copyToClipboard(resetPasswordModal.newPassword, "Password")
                     }
-                    className="cursor-pointer p-2 hover:bg-white/10 rounded transition-colors flex-shrink-0"
+                    className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
                     title="Copy password"
                   >
-                    <Eye className="h-4 w-4 text-slate-400" />
+                    <Copy className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -789,7 +800,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     newPassword: "",
                   })
                 }
-                className="cursor-pointer w-full"
+                className="mt-6 w-full rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
               >
                 Close
               </Button>
