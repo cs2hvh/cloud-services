@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { withV1Auth, v1Ok } from "@/lib/api/v1-middleware";
 import { v1ExtractId } from "@/lib/api/v1-helpers";
 import { getDomainService } from "@/lib/domain-service";
@@ -22,6 +23,8 @@ export const POST = withV1Auth("domains:activate", async (req, auth, context) =>
       domainId: idResult.id,
       idempotencyKey,
     });
+
+    after(() => service.runActivationOperation(operation.id, actor));
 
     return v1Ok(
       {

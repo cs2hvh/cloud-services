@@ -278,8 +278,6 @@ export class DomainService {
       status: "pending",
     });
 
-    void this.processActivationOperation(operation.id, input.actor);
-
     return operation;
   }
 
@@ -443,7 +441,7 @@ export class DomainService {
     return operation;
   }
 
-  private async processActivationOperation(operationId: string, actor: ActorContext): Promise<void> {
+  async runActivationOperation(operationId: string, actor: ActorContext): Promise<void> {
     const userId = actor.userId;
     try {
       const operation = await this.deps.operations.findByIdForUser(operationId, userId);
