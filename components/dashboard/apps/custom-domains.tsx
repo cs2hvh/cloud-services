@@ -1,5 +1,4 @@
 'use client';
-'use client';
 
 import Link from 'next/link';
 import { useState, useCallback, useEffect, useMemo } from 'react';
@@ -308,7 +307,7 @@ export function CustomDomainsManager({
   };
 
   const pollOperation = async (operationId: string) => {
-    const maxAttempts = 45;
+    const maxAttempts = 75; // 75 × 2s = 150s — covers Jenkins 120s pipeline timeout
     const delayMs = 2000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {

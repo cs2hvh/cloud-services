@@ -62,6 +62,15 @@ export interface AppReadPort {
   getOwnedApp(appId: string, userId: string): Promise<AppRecord>;
 }
 
+export interface AppWritePort {
+  setHasCustomDomains(appId: string, hasCustomDomains: boolean): Promise<void>;
+  clearCustomDomain(appId: string, clearedDomain: string): Promise<void>;
+}
+
+export interface DnsRoutingPort {
+  getRoutingStatus(domain: string): Promise<import("./types").DnsRoutingStatus>;
+}
+
 export interface DomainRepositoryPort {
   listByApp(appId: string, userId: string): Promise<DomainRecord[]>;
   findByIdForUser(domainId: string, userId: string): Promise<DomainRecord | null>;
@@ -81,6 +90,7 @@ export interface DomainRepositoryPort {
     options?: { redirectToPrimary?: boolean }
   ): Promise<DomainRecord>;
   updateLastError(domainId: string, message: string | null): Promise<void>;
+  updateSslStatus(domainId: string, status: "pending" | "issuing" | "active" | "failed"): Promise<void>;
 }
 
 export interface DomainOperationRepositoryPort {

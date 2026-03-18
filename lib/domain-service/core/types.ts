@@ -86,3 +86,17 @@ export interface AppRecord {
   status?: string;
   project_id?: string | null;
 }
+
+export interface DnsRoutingStatus {
+  ready: boolean;
+  resolved_ips: string[];
+  expected_ips: string[];
+  message: string;
+}
+
+export type DomainRecordWithRouting = DomainRecord & {
+  dns_ready: boolean;
+  dns_message: string;
+  dns_resolved_ips: string[];
+  dns_expected_ips: string[];
+};

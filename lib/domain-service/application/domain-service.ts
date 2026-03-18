@@ -7,7 +7,9 @@ import {
 } from "@/lib/domain-service/core/errors";
 import type {
   AppReadPort,
+  AppWritePort,
   DnsProviderPort,
+  DnsRoutingPort,
   DomainAuditLogPort,
   DomainEmailPort,
   DomainNotificationPort,
@@ -17,14 +19,26 @@ import type {
   DomainRepositoryPort,
   IngressPort,
 } from "@/lib/domain-service/core/ports";
-import type { ActorContext, DomainOperation, DomainRecord } from "@/lib/domain-service/core/types";
+import type {
+  ActorContext,
+  DomainOperation,
+  DomainRecord,
+  DomainRecordWithRouting,
+} from "@/lib/domain-service/core/types";
+
+// If an activation operation is still "running" beyond this threshold, the
+// server likely restarted mid-Jenkins-job. Auto-fail it so the frontend stops
+// polling and the user can retry. Must exceed Jenkins max build duration (120s).
+const STALE_OPERATION_MS = 3 * 60 * 1000; // 3 minutes
 
 interface DomainServiceDeps {
   appRead: AppReadPort;
+  appWrite?: AppWritePort;
   domains: DomainRepositoryPort;
   operations: DomainOperationRepositoryPort;
   registrar: DomainRegistrarPort;
   dns: DnsProviderPort;
+  dnsRouting?: DnsRoutingPort;
   ingress: IngressPort;
   purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   audit?: DomainAuditLogPort;
@@ -48,9 +62,43 @@ type AddDomainResult = {
 export class DomainService {
   constructor(private readonly deps: DomainServiceDeps) {}
 
-  async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecord[]> {
+  async listDomains(input: { actor: ActorContext; appId: string }): Promise<DomainRecordWithRouting[]> {
     await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
-    return this.deps.domains.listByApp(input.appId, input.actor.userId);
+    const records = await this.deps.domains.listByApp(input.appId, input.actor.userId);
+
+    if (!this.deps.dnsRouting) {
+      return records.map((r) => ({
+        ...r,
+        dns_ready: true,
+        dns_message: "",
+        dns_resolved_ips: [],
+        dns_expected_ips: [],
+      }));
+    }
+
+    const routing = this.deps.dnsRouting;
+    return Promise.all(
+      records.map(async (r) => {
+        try {
+          const status = await routing.getRoutingStatus(r.domain);
+          return {
+            ...r,
+            dns_ready: status.ready,
+            dns_message: status.message,
+            dns_resolved_ips: status.resolved_ips,
+            dns_expected_ips: status.expected_ips,
+          };
+        } catch {
+          return {
+            ...r,
+            dns_ready: false,
+            dns_message: "DNS routing check failed.",
+            dns_resolved_ips: [],
+            dns_expected_ips: [],
+          };
+        }
+      })
+    );
   }
 
   async addDomain(input: {
@@ -396,6 +444,15 @@ export class DomainService {
 
     await this.deps.domains.markRemoved(domain.id);
 
+    // Update app-level denormalised fields so deployment pipeline stays in sync.
+    await this.emitNonBlocking(async () => {
+      if (this.deps.appWrite) {
+        await this.deps.appWrite.clearCustomDomain(domain.app_id, domain.domain).catch((err) => {
+          console.error("[DomainService] clearCustomDomain failed", err);
+        });
+      }
+    });
+
     const response = { deleted: true as const, domain_id: domain.id };
 
     await this.persistCompletedIdempotentOperation({
@@ -438,6 +495,33 @@ export class DomainService {
       });
     }
 
+    // If the operation is stuck in "running" (server restarted mid-Jenkins job),
+    // fail it now so the frontend stops polling and the user can retry.
+    if (operation.status === "running" && operation.started_at) {
+      const ageMs = Date.now() - new Date(operation.started_at).getTime();
+      if (ageMs > STALE_OPERATION_MS) {
+        const errorMessage =
+          "Activation did not complete — the server may have restarted. Please try activating again.";
+        await this.deps.operations
+          .markFailed({
+            operationId: operation.id,
+            code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+            message: errorMessage,
+            retryable: true,
+          })
+          .catch(() => {});
+
+        return {
+          ...operation,
+          status: "failed",
+          error_code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+          error_message: errorMessage,
+          retryable: true,
+          finished_at: new Date().toISOString(),
+        };
+      }
+    }
+
     return operation;
   }
 
@@ -453,6 +537,9 @@ export class DomainService {
 
       const domain = await this.getOwnedDomain(operation.domain_id, userId);
       const app = await this.deps.appRead.getOwnedApp(domain.app_id, userId);
+
+      // Mark TLS as issuing now that we're committing to the activation path.
+      await this.deps.domains.updateSslStatus(domain.id, "issuing").catch(() => {});
 
       const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
       let dnsAutoConfigured = true;
@@ -476,12 +563,31 @@ export class DomainService {
       await this.deps.ingress.addDomainToAppIngress(app.name, domain.domain);
       const updated = await this.deps.domains.markActive(domain.id);
 
+      // Ingress is live — mark TLS as active (cert-manager will issue the cert in the background).
+      await this.deps.domains.updateSslStatus(updated.id, "active").catch(() => {});
+
+      // Update app-level has_custom_domains flag.
+      if (this.deps.appWrite) {
+        await this.deps.appWrite.setHasCustomDomains(domain.app_id, true).catch((err) => {
+          console.error("[DomainService] setHasCustomDomains failed", err);
+        });
+      }
+
       await this.deps.operations.markSucceeded(operation.id, {
         domain_id: updated.id,
         status: updated.status,
         activated_at: updated.activated_at,
         dns_auto_configured: dnsAutoConfigured,
         dns_automation_message: dnsAutomationMessage,
+        ...(!dnsAutoConfigured && {
+          routing_instructions: {
+            record_type: "CNAME",
+            record_name: updated.domain,
+            record_value: cnameTarget,
+            ttl: 300,
+            note: "Point your domain to this CNAME target. For apex domains (no www), use an ANAME or ALIAS record if your DNS provider supports it.",
+          },
+        }),
       });
 
       await this.emitNonBlocking(async () => {
@@ -534,6 +640,10 @@ export class DomainService {
         const failedDomain = operation?.domain_id
           ? await this.deps.domains.findByIdForUser(operation.domain_id, userId).catch(() => null)
           : null;
+
+        if (failedDomain && failedDomain.ssl_status !== "active") {
+          await this.deps.domains.updateSslStatus(failedDomain.id, "failed").catch(() => {});
+        }
 
         await this.deps.operations.markFailed({
           operationId,

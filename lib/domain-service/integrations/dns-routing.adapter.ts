@@ -1,0 +1,105 @@
+import { Resolver } from "dns";
+import type { DnsRoutingPort } from "@/lib/domain-service/core/ports";
+import type { DnsRoutingStatus } from "@/lib/domain-service/core/types";
+
+/**
+ * Resolves A/AAAA addresses for a domain using public DNS and compares
+ * them against the platform ingress IPs from the KUBE_IP env variable.
+ *
+ * Used by DomainService.listDomains() to decorate each DomainRecord with
+ * live DNS routing state so the frontend can gate the Activate button.
+ */
+export class DnsRoutingAdapter implements DnsRoutingPort {
+  private readonly resolver: Resolver;
+  private readonly expectedIps: string[];
+
+  constructor() {
+    this.resolver = new Resolver();
+    this.resolver.setServers(["8.8.8.8", "1.1.1.1"]);
+    this.expectedIps = DnsRoutingAdapter.parseExpectedIps();
+  }
+
+  async getRoutingStatus(domain: string): Promise<DnsRoutingStatus> {
+    if (this.expectedIps.length === 0) {
+      // KUBE_IP not configured — return neutral status so nothing is blocked.
+      return {
+        ready: false,
+        resolved_ips: [],
+        expected_ips: [],
+        message: "Platform ingress IP (KUBE_IP) is not configured.",
+      };
+    }
+
+    let resolved: string[];
+    try {
+      resolved = await this.resolveAll(domain);
+    } catch {
+      return {
+        ready: false,
+        resolved_ips: [],
+        expected_ips: this.expectedIps,
+        message: `Unable to resolve ${domain}. Make sure the domain points to ${this.expectedIps.join(", ")}.`,
+      };
+    }
+
+    if (resolved.length === 0) {
+      return {
+        ready: false,
+        resolved_ips: [],
+        expected_ips: this.expectedIps,
+        message: `No DNS records detected yet. Point ${domain} to ${this.expectedIps.join(", ")} and wait for propagation.`,
+      };
+    }
+
+    const matches = resolved.some((ip) => this.expectedIps.includes(ip));
+    if (matches) {
+      return {
+        ready: true,
+        resolved_ips: resolved,
+        expected_ips: this.expectedIps,
+        message: "DNS is correctly pointing to the platform ingress.",
+      };
+    }
+
+    return {
+      ready: false,
+      resolved_ips: resolved,
+      expected_ips: this.expectedIps,
+      message: `DNS currently resolves to ${resolved.join(", ")}. Update the record to ${this.expectedIps.join(", ")} before activation.`,
+    };
+  }
+
+  private async resolveAll(domain: string): Promise<string[]> {
+    const [ipv4, ipv6] = await Promise.all([
+      this.resolve(domain, 4),
+      this.resolve(domain, 6),
+    ]);
+    return [...ipv4, ...ipv6];
+  }
+
+  private resolve(domain: string, family: 4 | 6): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+      const handler = (err: NodeJS.ErrnoException | null, addresses: string[]) => {
+        if (err) {
+          if (err.code === "ENOTFOUND" || err.code === "ENODATA" || err.code === "EAI_AGAIN") {
+            return resolve([]);
+          }
+          return reject(err);
+        }
+        resolve(addresses || []);
+      };
+
+      if (family === 4) {
+        this.resolver.resolve4(domain, handler);
+      } else {
+        this.resolver.resolve6(domain, handler);
+      }
+    });
+  }
+
+  private static parseExpectedIps(): string[] {
+    const raw = process.env.KUBE_IP?.trim();
+    if (!raw) return [];
+    return raw.split(",").map((ip) => ip.trim()).filter(Boolean);
+  }
+}

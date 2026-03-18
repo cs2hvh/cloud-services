@@ -31,6 +31,7 @@ export class SupabaseDomainRepository implements DomainRepositoryPort {
       .select("*")
       .eq("id", domainId)
       .eq("user_id", userId)
+      .neq("status", "removed")
       .maybeSingle();
 
     if (error) {
@@ -168,6 +169,28 @@ export class SupabaseDomainRepository implements DomainRepositoryPort {
       throw new DomainServiceError({
         code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
         message: `Failed to update domain error state: ${error.message}`,
+      });
+    }
+  }
+
+  async updateSslStatus(
+    domainId: string,
+    status: "pending" | "issuing" | "active" | "failed"
+  ): Promise<void> {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .from("platform_app_domains")
+      .update({
+        ssl_status: status,
+        last_check_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", domainId);
+
+    if (error) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: `Failed to update ssl_status: ${error.message}`,
       });
     }
   }

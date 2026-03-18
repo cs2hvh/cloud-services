@@ -40,6 +40,7 @@ function createService() {
       markRemoved: vi.fn(),
       setPrimary: vi.fn(),
       updateLastError: vi.fn(),
+      updateSslStatus: vi.fn(),
     },
     operations: {
       create: vi.fn(),
@@ -93,6 +94,9 @@ function createService() {
       addDomainToAppIngress: vi.fn(),
       removeDomainFromAppIngress: vi.fn(),
     },
+    // Optional ports — omitted in tests so service stays unit-testable
+    appWrite: undefined,
+    dnsRouting: undefined,
   });
 }
 
