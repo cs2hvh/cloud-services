@@ -14,8 +14,6 @@ import {
   Trash2,
   Star,
   RefreshCw,
-  ChevronDown,
-  ChevronUp,
   BookOpen,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -52,10 +50,10 @@ interface CustomDomain {
   is_primary: boolean;
   last_error: string | null;
   created_at: string;
-  dns_ready: boolean;
-  dns_message: string;
-  dns_resolved_ips: string[];
-  dns_expected_ips: string[];
+  dns_ready?: boolean;
+  dns_message?: string;
+  dns_resolved_ips?: string[];
+  dns_expected_ips?: string[];
 }
 
 interface CustomDomainsManagerProps {
@@ -78,7 +76,6 @@ export function CustomDomainsManager({
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [showGuide, setShowGuide] = useState(true);
   const [verificationInstructions, setVerificationInstructions] = useState<{
     record_type: string;
     record_name: string;
@@ -87,7 +84,7 @@ export function CustomDomainsManager({
 
   const fetchDomains = useCallback(async () => {
     try {
-      const res = await fetch(`/api/services/platform-apps/domains?app_id=${appId}`);
+      const res = await fetch(`/api/domains?app_id=${appId}`);
       if (res.ok) {
         const data = await res.json();
         setDomains(data.domains || []);
@@ -109,29 +106,106 @@ export function CustomDomainsManager({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const normalizeDomainInput = (value: string) =>
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/.*$/, '')
+      .replace(/\.$/, '');
+
+  const getNextAction = (domain: CustomDomain) => {
+    const dnsReady = domain.dns_ready !== false;
+
+    if (domain.status === 'pending') {
+      return {
+        title: 'Verify ownership',
+        description: 'Add TXT record, wait for propagation, then verify.',
+        tone: 'warning' as const,
+        action: 'verify' as const,
+      };
+    }
+
+    if (domain.status === 'verified' && !dnsReady) {
+      return {
+        title: 'Update DNS routing',
+        description: 'Point A/CNAME to platform ingress, then activate.',
+        tone: 'warning' as const,
+      };
+    }
+
+    if (domain.status === 'verified' && dnsReady) {
+      return {
+        title: 'Activate domain',
+        description: 'Create ingress and start SSL issuance.',
+        tone: 'info' as const,
+        action: 'activate' as const,
+      };
+    }
+
+    if (domain.status === 'active' && !domain.is_primary) {
+      return {
+        title: 'Optional: set as primary',
+        description: 'Use this domain as canonical URL for your app.',
+        tone: 'info' as const,
+        action: 'set-primary' as const,
+      };
+    }
+
+    if (domain.status === 'active' && domain.is_primary) {
+      return {
+        title: 'Live and primary',
+        description: 'Traffic and SSL are active on this domain.',
+        tone: 'success' as const,
+      };
+    }
+
+    if (domain.status === 'failed') {
+      return {
+        title: 'Retry verification',
+        description: 'Fix DNS record mismatch and verify again.',
+        tone: 'warning' as const,
+        action: 'verify' as const,
+      };
+    }
+
+    return null;
+  };
+
   const handleAddDomain = async () => {
-    if (!newDomain.trim()) {
+    const normalizedDomain = normalizeDomainInput(newDomain);
+    if (!normalizedDomain) {
       toast.error('Please enter a domain');
+      return;
+    }
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalizedDomain)) {
+      toast.error('Enter a valid domain, for example: example.com');
       return;
     }
 
     setAdding(true);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/add', {
+      const res = await fetch('/api/domains', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ app_id: appId, domain: newDomain }),
+        body: JSON.stringify({ app_id: appId, domain: normalizedDomain }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        toast.error(data.error || 'Failed to add domain');
+        toast.error(data?.message || data?.error || 'Failed to add domain');
         return;
       }
 
-      toast.success('Domain added! Add the DNS TXT record to verify ownership.');
-      setVerificationInstructions(data.verification_instructions);
+      if (data?.verification_required) {
+        toast.success('Domain added. Add the TXT record to verify external ownership.');
+        setVerificationInstructions(data.verification_instructions || null);
+      } else {
+        toast.success('Domain added and ownership auto-verified. Activate when DNS is ready.');
+        setVerificationInstructions(null);
+        setAddDialogOpen(false);
+      }
       setNewDomain('');
       fetchDomains();
     } catch (error) {
@@ -145,10 +219,8 @@ export function CustomDomainsManager({
   const handleVerifyDomain = async (domainId: string) => {
     setVerifyingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/verify', {
+      const res = await fetch(`/api/domains/${domainId}/verify`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
@@ -167,6 +239,32 @@ export function CustomDomainsManager({
     }
   };
 
+  const pollOperation = async (operationId: string) => {
+    const maxAttempts = 45;
+    const delayMs = 2000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const res = await fetch(`/api/domains/operations/${operationId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || 'Failed to get operation status');
+      }
+
+      const status = data?.operation?.status;
+      if (status === 'succeeded') {
+        return;
+      }
+      if (status === 'failed') {
+        throw new Error(data?.operation?.error_message || 'Domain activation failed');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    throw new Error('Domain activation timed out. Please check operation status again.');
+  };
+
   const handleActivateDomain = async (domainId: string) => {
     if (appStatus !== 'running') {
       toast.error('App must be running to activate custom domain');
@@ -175,35 +273,43 @@ export function CustomDomainsManager({
 
     setActivatingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/activate', {
+      const res = await fetch(`/api/domains/${domainId}/activate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
 
-      if (data.success) {
-        toast.success('Domain activated! SSL certificate is being issued.');
-        fetchDomains();
-      } else {
-        toast.error(data.error || 'Activation failed');
+      if (!res.ok || !data.success) {
+        toast.error(data?.message || data?.error || 'Activation failed');
+        return;
       }
+
+      if (!data.operation_id) {
+        toast.success('Domain activation requested.');
+        fetchDomains();
+        return;
+      }
+
+      toast.info('Domain activation in progress. Applying ingress and SSL...');
+      await pollOperation(data.operation_id);
+      toast.success('Domain activated! SSL certificate is being issued.');
+      fetchDomains();
     } catch (error) {
       console.error('Error activating domain:', error);
-      toast.error('Failed to activate domain');
+      toast.error(error instanceof Error ? error.message : 'Failed to activate domain');
     } finally {
       setActivatingId(null);
     }
   };
 
   const handleRemoveDomain = async (domainId: string) => {
+    const confirmed = window.confirm('Remove this domain from the app?');
+    if (!confirmed) return;
+
     setRemovingId(domainId);
     try {
-      const res = await fetch('/api/services/platform-apps/domains/remove', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
+      const res = await fetch(`/api/domains/${domainId}`, {
+        method: 'DELETE',
       });
 
       const data = await res.json();
@@ -224,6 +330,7 @@ export function CustomDomainsManager({
 
   const renderDnsStatus = (domain: CustomDomain) => {
     if (domain.status === 'removed') return null;
+    if (typeof domain.dns_ready !== 'boolean' && !domain.dns_message) return null;
 
     const expected = domain.dns_expected_ips?.length
       ? domain.dns_expected_ips.join(', ')
@@ -241,7 +348,7 @@ export function CustomDomainsManager({
         }`}
       >
         <div className="text-xs uppercase tracking-wide text-white/60 mb-1">DNS Routing</div>
-        <p className="text-sm font-medium">{domain.dns_message}</p>
+        <p className="text-sm font-medium">{domain.dns_message || 'DNS status pending update.'}</p>
         <div className="text-xs text-white/60 mt-2 space-y-1">
           <p>
             <span className="text-white/40">Expected:</span> {expected}
@@ -256,10 +363,8 @@ export function CustomDomainsManager({
 
   const handleSetPrimary = async (domainId: string) => {
     try {
-      const res = await fetch('/api/services/platform-apps/domains/set-primary', {
+      const res = await fetch(`/api/domains/${domainId}/set-primary`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain_id: domainId }),
       });
 
       const data = await res.json();
@@ -345,7 +450,7 @@ export function CustomDomainsManager({
               <DialogHeader>
                 <DialogTitle>Add Custom Domain</DialogTitle>
                 <DialogDescription className="text-white/60">
-                  Connect your own domain to this application
+                  Enter a root or subdomain. AhuraCloud-managed domains verify automatically; external domains require TXT verification.
                 </DialogDescription>
               </DialogHeader>
               
@@ -430,160 +535,31 @@ export function CustomDomainsManager({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Step-by-Step Guide */}
-        <div className="rounded-lg border border-white/10 bg-gradient-to-br from-blue-500/5 to-purple-500/5 overflow-hidden">
-          <button
-            onClick={() => setShowGuide(!showGuide)}
-            className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <BookOpen className="w-4 h-4 text-blue-400" />
-              </div>
-              <div className="text-left">
-                <h3 className="text-sm font-semibold text-white">How to Configure Your Custom Domain</h3>
-                <p className="text-xs text-white/50">Step-by-step guide to connect your own domain</p>
-              </div>
+        <div className="rounded-lg border border-white/10 bg-gradient-to-br from-cyan-500/10 to-blue-500/5 p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-4 h-4 text-cyan-300" />
+            <p className="text-sm font-semibold text-white">Quick Setup</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="rounded-md border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-cyan-300">Step 1</p>
+              <p className="text-sm text-white mt-1">Add domain</p>
+              <p className="text-xs text-white/55 mt-1">example.com or app.example.com</p>
             </div>
-            {showGuide ? (
-              <ChevronUp className="w-5 h-5 text-white/50" />
-            ) : (
-              <ChevronDown className="w-5 h-5 text-white/50" />
-            )}
-          </button>
-          
-          {showGuide && (
-            <div className="px-4 pb-4 space-y-4">
-              <div className="h-px bg-white/10" />
-              
-              {/* Step 1 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-400">i</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">Add Your Domain</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    Click the <span className="text-blue-400 font-medium">&quot;Add Domain&quot;</span> button above and enter your domain name 
-                    (e.g., <span className="font-mono text-white/80">example.com</span> or <span className="font-mono text-white/80">app.example.com</span>). 
-                    Don&apos;t include <span className="font-mono text-white/80">http://</span> or <span className="font-mono text-white/80">https://</span>.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-yellow-400">ii</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">Add TXT Record for Verification</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    Go to your domain registrar&apos;s DNS settings (e.g., GoDaddy, Namecheap, Cloudflare) and add a <span className="font-mono text-yellow-400">TXT</span> record 
-                    with the name and value we provide. This proves you own the domain.
-                  </p>
-                  <div className="mt-2 p-2 rounded bg-black/30 border border-white/5">
-                    <p className="text-xs text-white/50">Example TXT Record:</p>
-                    <p className="text-xs font-mono text-white/80 mt-1">
-                      Name: <span className="text-yellow-400">galaxyhvh-verify.yourdomain.com</span>
-                    </p>
-                    <p className="text-xs font-mono text-white/80">
-                      Value: <span className="text-yellow-400">[verification-token]</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-purple-400">iii</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">Verify Domain Ownership</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    After adding the TXT record, wait a few minutes for DNS propagation (can take up to 24-48 hours, but usually 5-15 minutes). 
-                    Then click the <span className="text-purple-400 font-medium">&quot;Verify&quot;</span> button on your pending domain.
-                  </p>
-                  <p className="text-xs text-white/40 mt-1 italic">
-                    💡 Tip: Use <a href="https://dnschecker.org" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">dnschecker.org</a> to check if your TXT record has propagated.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-orange-500/20 border border-orange-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-orange-400">iv</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">Point Domain to Platform (A/CNAME Record)</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    Once verified, add an <span className="font-mono text-orange-400">A</span> record or <span className="font-mono text-orange-400">CNAME</span> record 
-                    to point your domain to our platform. You&apos;ll see the required IP address in the DNS Routing section below your domain.
-                  </p>
-                  <div className="mt-2 p-2 rounded bg-black/30 border border-white/5">
-                    <p className="text-xs text-white/50">For root domain (example.com):</p>
-                    <p className="text-xs font-mono text-white/80 mt-1">
-                      Type: <span className="text-orange-400">A</span> | Name: <span className="text-orange-400">@</span> | Value: <span className="text-orange-400">[Platform IP]</span>
-                    </p>
-                    <p className="text-xs text-white/50 mt-2">For subdomain (app.example.com):</p>
-                    <p className="text-xs font-mono text-white/80 mt-1">
-                      Type: <span className="text-orange-400">A</span> | Name: <span className="text-orange-400">app</span> | Value: <span className="text-orange-400">[Platform IP]</span>
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 5 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-green-400">v</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">Activate Your Domain</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    Once the DNS is pointing correctly (shown as &quot;DNS Ready&quot; in green), click the <span className="text-green-400 font-medium">&quot;Activate&quot;</span> button. 
-                    We&apos;ll automatically provision an SSL certificate for your domain.
-                  </p>
-                </div>
-              </div>
-
-              {/* Step 6 */}
-              <div className="flex gap-4">
-                <div className="flex-shrink-0">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-emerald-400">vi</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-white mb-1">You&apos;re Live! 🎉</h4>
-                  <p className="text-xs text-white/60 leading-relaxed">
-                    Your custom domain is now active with HTTPS enabled. You can optionally set it as your <span className="text-emerald-400 font-medium">Primary Domain</span> 
-                    using the &quot;Set Primary&quot; button. The primary domain will be used for redirects and canonical URLs.
-                  </p>
-                </div>
-              </div>
-
-              {/* Help Note */}
-              <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10">
-                <p className="text-xs text-white/60">
-                  <span className="text-white/80 font-medium">Need help?</span> DNS changes can take time to propagate. 
-                  If verification fails, wait 15-30 minutes and try again. Make sure you&apos;ve saved the DNS record in your registrar&apos;s panel.
-                </p>
-              </div>
+            <div className="rounded-md border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-yellow-300">Step 2</p>
+              <p className="text-sm text-white mt-1">Ownership check</p>
+              <p className="text-xs text-white/55 mt-1">Auto for managed domains, TXT verify for external</p>
             </div>
-          )}
+            <div className="rounded-md border border-white/10 bg-black/20 p-3">
+              <p className="text-xs text-green-300">Step 3</p>
+              <p className="text-sm text-white mt-1">Activate</p>
+              <p className="text-xs text-white/55 mt-1">Point DNS, activate, SSL auto-starts</p>
+            </div>
+          </div>
+          <p className="text-xs text-white/45">
+            DNS propagation typically takes a few minutes but can take longer depending on your provider.
+          </p>
         </div>
 
         {/* Platform Domain (Always shown) */}
@@ -622,11 +598,20 @@ export function CustomDomainsManager({
             <p className="text-xs mt-1">Add a custom domain to use your own domain name</p>
           </div>
         ) : (
-          domains.map((domain) => (
-            <div 
-              key={domain.id} 
-              className="p-4 bg-black/30 rounded-lg border border-white/5 space-y-3"
-            >
+          domains.map((domain) => {
+            const nextAction = getNextAction(domain);
+            const nextActionToneClass =
+              nextAction?.tone === 'success'
+                ? 'border-green-500/20 bg-green-500/5'
+                : nextAction?.tone === 'warning'
+                ? 'border-yellow-500/20 bg-yellow-500/5'
+                : 'border-cyan-500/20 bg-cyan-500/5';
+
+            return (
+              <div
+                key={domain.id}
+                className="p-4 bg-black/30 rounded-lg border border-white/5 space-y-3"
+              >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${
@@ -666,7 +651,59 @@ export function CustomDomainsManager({
                 </div>
               </div>
 
-              {renderDnsStatus(domain)}
+                {renderDnsStatus(domain)}
+
+                {nextAction && (
+                  <div className={`rounded-lg border p-3 ${nextActionToneClass}`}>
+                    <p className="text-xs uppercase tracking-wide text-white/45">Next Step</p>
+                    <p className="text-sm font-medium text-white mt-1">{nextAction.title}</p>
+                    <p className="text-xs text-white/55 mt-1">{nextAction.description}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      {nextAction.action === 'verify' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleVerifyDomain(domain.id)}
+                          disabled={verifyingId === domain.id}
+                          className="border-white/20 text-white hover:bg-white/10"
+                        >
+                          {verifyingId === domain.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                          ) : (
+                            <RefreshCw className="w-3 h-3 mr-1" />
+                          )}
+                          Verify
+                        </Button>
+                      )}
+                      {nextAction.action === 'activate' && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleActivateDomain(domain.id)}
+                          disabled={activatingId === domain.id || appStatus !== 'running' || domain.dns_ready === false}
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                        >
+                          {activatingId === domain.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                          ) : (
+                            <Check className="w-3 h-3 mr-1" />
+                          )}
+                          Activate
+                        </Button>
+                      )}
+                      {nextAction.action === 'set-primary' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSetPrimary(domain.id)}
+                          className="border-white/20 text-white hover:bg-white/10"
+                        >
+                          <Star className="w-3 h-3 mr-1" />
+                          Set Primary
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
 
               {/* Verification Instructions for pending domains */}
               {domain.status === 'pending' && (
@@ -674,7 +711,7 @@ export function CustomDomainsManager({
                   <AlertCircle className="h-4 w-4 text-yellow-400" />
                   <AlertTitle className="text-yellow-400 text-sm">Verification Required</AlertTitle>
                   <AlertDescription className="text-white/70 text-xs space-y-2">
-                    <p>Add this TXT record in the DNS settings of your domain to verify ownership:</p>
+                    <p>Add this TXT record at your DNS provider to verify external ownership:</p>
                     <div className="bg-black/30 rounded p-2 font-mono text-xs">
                       <div className="flex items-center justify-between">
                         <span className="text-white/50">Name:</span>
@@ -705,87 +742,35 @@ export function CustomDomainsManager({
                 </Alert>
               )}
 
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 pt-2 border-t border-white/5">
-                {domain.status === 'pending' && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleVerifyDomain(domain.id)}
-                    disabled={verifyingId === domain.id}
-                    className="border-white/20 text-white hover:bg-white/10"
-                  >
-                    {verifyingId === domain.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <RefreshCw className="w-3 h-3 mr-1" />
-                    )}
-                    Verify
-                  </Button>
-                )}
-                
-                {domain.status === 'verified' && (
-                  <Button
-                    size="sm"
-                    onClick={() => handleActivateDomain(domain.id)}
-                    disabled={
-                      activatingId === domain.id ||
-                      appStatus !== 'running' ||
-                      !domain.dns_ready
-                    }
-                    title={
-                      !domain.dns_ready
-                        ? 'Update the domain DNS to point to the platform ingress IP before activating.'
-                        : undefined
-                    }
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    {activatingId === domain.id ? (
-                      <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                    ) : (
-                      <Check className="w-3 h-3 mr-1" />
-                    )}
-                    Activate
-                  </Button>
-                )}
-                {domain.status === 'verified' && !domain.dns_ready && (
-                  <span className="text-xs text-yellow-300">
-                    Point the domain to{' '}
+                {/* Secondary Actions */}
+                <div className="flex items-center gap-2 pt-2 border-t border-white/5">
+                  {domain.status === 'verified' && domain.dns_ready === false && (
+                    <span className="text-xs text-yellow-300">
+                      Point the domain to{' '}
                     {domain.dns_expected_ips?.length
                       ? domain.dns_expected_ips.join(', ')
                       : 'the platform ingress IP'}
                     {' '}before activating.
-                  </span>
-                )}
+                    </span>
+                  )}
 
-                {domain.status === 'active' && !domain.is_primary && (
                   <Button
                     size="sm"
-                    variant="outline"
-                    onClick={() => handleSetPrimary(domain.id)}
-                    className="border-white/20 text-white hover:bg-white/10"
+                    variant="ghost"
+                    onClick={() => handleRemoveDomain(domain.id)}
+                    disabled={removingId === domain.id}
+                    className="text-red-400 hover:text-red-300 hover:bg-red-500/10 ml-auto"
                   >
-                    <Star className="w-3 h-3 mr-1" />
-                    Set Primary
+                    {removingId === domain.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3 h-3" />
+                    )}
                   </Button>
-                )}
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleRemoveDomain(domain.id)}
-                  disabled={removingId === domain.id}
-                  className="text-red-400 hover:text-red-300 hover:bg-red-500/10 ml-auto"
-                >
-                  {removingId === domain.id ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3 h-3" />
-                  )}
-                </Button>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </CardContent>
     </Card>

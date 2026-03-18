@@ -13,7 +13,8 @@ export type AuditServiceType =
   | 'auth'
   | 'git_webhook'
   | 'ai_agent'
-  | 'knowledge_base';
+  | 'knowledge_base'
+  | 'domain';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 
