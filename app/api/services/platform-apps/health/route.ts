@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     // Get app_id from query params
     const { searchParams } = new URL(req.url);
     const appId = searchParams.get("app_id");
+    const force = searchParams.get("force") === "true";
 
     if (!appId) {
       return NextResponse.json(
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
 
     // Sync status from K8s to DB (single source of truth)
     // This ensures DB status matches actual K8s state
-    const syncResult = await AppStatusService.syncStatus(appId, app.name, app.status as "running" | "failed" | "pending" | "building" | "stopped");
+    const syncResult = await AppStatusService.syncStatus(appId, app.name, app.status as "running" | "failed" | "pending" | "building" | "stopped", force);
     
     return NextResponse.json({
       app_id: appId,

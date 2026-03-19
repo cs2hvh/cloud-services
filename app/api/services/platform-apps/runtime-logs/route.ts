@@ -129,8 +129,8 @@ export async function GET(req: NextRequest) {
 
       const podIndex = pods.findIndex(p => p.name === targetPod!.name);
       const stream = await RuntimeLogsService.streamLogs(
-        targetPod.name, 
-        logOptions, 
+        targetPod.name,
+        logOptions,
         'default',
         abortSignal
       );
@@ -140,6 +140,10 @@ export async function GET(req: NextRequest) {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
+          // Prevent nginx / Caddy / reverse proxies from buffering SSE frames.
+          // Without this, events are held in the proxy buffer and the browser
+          // sees nothing until the buffer fills — stream appears silent.
+          'X-Accel-Buffering': 'no',
           // Return masked instance ID, not pod name
           'X-Instance-Id': `instance-${podIndex + 1}`,
           'X-Restart-Count': String(targetPod.restartCount),
