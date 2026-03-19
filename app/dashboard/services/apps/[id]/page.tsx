@@ -328,7 +328,7 @@ export default function AppDetailPage() {
     buildNumber: number,
     raw = false,
     append = false,
-  ) => {
+  ): Promise<boolean /* more */> => {
     if (!append) {
       // Full replacement (initial fetch or build switch) — show skeleton
       setInitialLogLoading(true);
@@ -347,16 +347,18 @@ export default function AppDetailPage() {
         } else if (!append) {
           setBuildLogs(newChunk || 'No logs available');
         }
-        // Store next offset for subsequent incremental fetches
+        // Use the byte offset returned by Jenkins (X-Text-Size header), not character count
         if (res.data.next_start != null) {
           logOffsetRef.current = res.data.next_start;
         }
+        return !!res.data.more;
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
     } finally {
       if (!append) setInitialLogLoading(false);
     }
+    return false;
   }, []);
 
   useEffect(() => {
@@ -390,17 +392,41 @@ export default function AppDetailPage() {
     }
   }, [app?.name, buildInfo?.number, buildInfo?.building, fetchBuildLogs]);
 
-  // Poll build info and APPEND new log lines while a build is actively running
+  // Poll build info and APPEND new log lines while a build is actively running.
+  // - 2s interval (down from 5s) for faster perceived updates
+  // - fetchBuildInfo and fetchBuildLogs run in parallel to halve per-tick latency
+  // - when Jenkins signals more data is ready (X-More-Data: true), schedule
+  //   a catch-up fetch 400ms later instead of waiting the full 2s
   useEffect(() => {
-    if (!app?.name || !buildInfo?.building) return;
+    if (!app?.name || !buildInfo?.building || !buildInfo?.number) return;
+
+    // Capture stable values to avoid stale closures inside the interval
+    const appName = app.name;
+    const buildNum = buildInfo.number;
+    let catchupId: ReturnType<typeof setTimeout> | null = null;
+
     const interval = setInterval(async () => {
-      await fetchBuildInfo(app.name);
-      if (buildInfo.number) {
-        // append=true: fetch only new bytes since last offset, no skeleton
-        fetchBuildLogs(app.name, buildInfo.number, true, true);
+      // Cancel any pending catch-up — the regular tick covers it
+      if (catchupId) { clearTimeout(catchupId); catchupId = null; }
+
+      const [, more] = await Promise.all([
+        fetchBuildInfo(appName),
+        fetchBuildLogs(appName, buildNum, true, true),
+      ]);
+
+      // Jenkins has more buffered output  — fetch again quickly without waiting the full 2s
+      if (more) {
+        catchupId = setTimeout(async () => {
+          catchupId = null;
+          await fetchBuildLogs(appName, buildNum, true, true);
+        }, 400);
       }
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      if (catchupId) clearTimeout(catchupId);
+    };
   }, [app?.name, buildInfo?.building, buildInfo?.number, fetchBuildInfo, fetchBuildLogs]);
 
   // Initialize edited env vars when app data loads

@@ -63,21 +63,27 @@ export function BuildLogsPanel({
   // True while user is at (or near) the bottom — drives auto-scroll on new content
   const wasAtBottomRef = useRef(true);
 
-  // Build options — prepend a synthetic entry while an active build has no DB record yet
+  // Track the live build independently — only set when a build is active, never cleared
+  // when the user switches to a historical build (so the entry stays in the dropdown).
+  const liveBuildRef = useRef<{ number: number; timestamp: number } | null>(null);
+  if (buildInfo?.building && buildInfo.number != null) {
+    liveBuildRef.current = { number: buildInfo.number, timestamp: buildInfo.timestamp || Date.now() };
+  }
+
+  // Build options — prepend a synthetic entry while an active build has no DB record yet.
+  // Uses liveBuildRef so the entry survives even when the user switches to a historical build.
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
     const opts = [...deployments];
-    if (
-      buildInfo?.building &&
-      buildInfo.number != null &&
-      !opts.some((d) => d.build_number === buildInfo.number)
-    ) {
+    const live = liveBuildRef.current;
+    if (live != null && !opts.some((d) => d.build_number === live.number)) {
       opts.unshift({
-        build_number: buildInfo.number,
+        build_number: live.number,
         status: 'BUILDING',
-        started_at: new Date(buildInfo.timestamp || Date.now()).toISOString(),
+        started_at: new Date(live.timestamp).toISOString(),
       });
     }
     return opts;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deployments, buildInfo]);
 
   // Track whether user is near the bottom

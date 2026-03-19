@@ -36,19 +36,33 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Check if deployment logs are specifically requested via query param
     const deploymentOnly = searchParams.get("deployment") === "true";
-    
-    const logs = deploymentOnly 
-      ? await JenkinsService.getDeploymentLog(appName, buildNum)
-      : await JenkinsService.getBuildLog(appName, buildNum, startOffset);
+
+    if (deploymentOnly) {
+      const raw = await JenkinsService.getDeploymentLog(appName, buildNum);
+      const logs = raw ?? '';
+      return NextResponse.json({
+        app_name: appName,
+        build_number: buildNum,
+        start: startOffset,
+        logs,
+        next_start: startOffset + logs.length,
+        more: false,
+      });
+    }
+
+    // Progressive log fetch — returns proper byte offset (X-Text-Size) and more flag
+    const result = await JenkinsService.getBuildLog(appName, buildNum, startOffset);
+    // Jenkins may not have flushed anything yet for a brand-new build
+    const logs = result.text ?? '';
 
     return NextResponse.json({
       app_name: appName,
       build_number: buildNum,
       start: startOffset,
       logs,
-      next_start: startOffset + logs.length,
+      next_start: result.nextStart,
+      more: result.more,
     });
   } catch (error: unknown) {
     console.error("[API] Error getting build logs:", error);

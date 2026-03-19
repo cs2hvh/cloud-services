@@ -12,7 +12,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { AppsList, BuildInfo } from "@/components/dashboard/apps";
@@ -80,6 +80,15 @@ export default function ApplicationDeploymentPage() {
   const [logsError, setLogsError] = useState<Record<string, string>>({});
   const [localApps, setLocalApps] = useState<typeof realtimeApps>([]);
 
+  // Per-app byte offset for incremental log fetches during active builds
+  const logOffsetRef = useRef<Record<string, number>>({});
+  // Stable ref to buildInfo so poll callbacks don't capture stale state
+  const buildInfoRef = useRef(buildInfo);
+  buildInfoRef.current = buildInfo;
+  // Stable ref to buildLogs so we can check if logs have been loaded for an app
+  const buildLogsRef = useRef(buildLogs);
+  buildLogsRef.current = buildLogs;
+
   useEffect(() => {
     const getUser = async () => {
       const supabase = createClient();
@@ -129,26 +138,47 @@ export default function ApplicationDeploymentPage() {
     }
   }, []);
 
-  const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
-    setLogsLoading((prev) => ({ ...prev, [appName]: true }));
-    setLogsError((prev) => ({ ...prev, [appName]: "" }));
+  const fetchBuildLogs = useCallback(async (
+    appName: string,
+    buildNumber: number,
+    append = false,
+  ) => {
+    if (!append) {
+      setLogsLoading((prev) => ({ ...prev, [appName]: true }));
+      setLogsError((prev) => ({ ...prev, [appName]: '' }));
+      logOffsetRef.current[appName] = 0;
+    }
+
+    const isBuilding = buildInfoRef.current[appName]?.building;
+    const start = append ? (logOffsetRef.current[appName] ?? 0) : 0;
+
+    // While building: raw progressive logs show all stages (scheduling, cloning, etc.).
+    // After build completes: deployment-filtered view for a clean summary.
+    const url = isBuilding
+      ? `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=${start}`
+      : `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`;
 
     try {
-      const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`,
-      );
+      const res = await api.get(url);
+      const chunk: string = res?.data?.logs ?? '';
 
-      if (res?.data?.logs) {
-        setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
-        setLogsError((prev) => ({ ...prev, [appName]: "" }));
+      if (append) {
+        if (chunk) setBuildLogs((prev) => ({ ...prev, [appName]: (prev[appName] ?? '') + chunk }));
       } else {
-        setLogsError((prev) => ({ ...prev, [appName]: "No logs available" }));
+        setBuildLogs((prev) => ({ ...prev, [appName]: chunk || 'No logs available' }));
+        setLogsError((prev) => ({ ...prev, [appName]: '' }));
+      }
+
+      if (res?.data?.next_start != null) {
+        logOffsetRef.current[appName] = res.data.next_start;
       }
     } catch (error) {
       console.error(`[fetchBuildLogs] Failed to fetch logs for ${appName}:`, error);
-      setLogsError((prev) => ({ ...prev, [appName]: "Failed to load logs. Click to retry." }));
+      if (!append) {
+        setLogsError((prev) => ({ ...prev, [appName]: 'Failed to load logs. Click to retry.' }));
+      }
     } finally {
-      setLogsLoading((prev) => ({ ...prev, [appName]: false }));
+      if (!append) setLogsLoading((prev) => ({ ...prev, [appName]: false }));
     }
   }, []);
 
@@ -168,21 +198,26 @@ export default function ApplicationDeploymentPage() {
   useEffect(() => {
     const buildingApps = deployedApps.filter((app) => {
       const build = buildInfo[app.name];
-      return build?.building || app.status === "building";
+      return build?.building || app.status === 'building';
     });
 
-    if (buildingApps.length === 0) {
-      return;
-    }
+    if (buildingApps.length === 0) return;
 
     const interval = setInterval(() => {
       buildingApps.forEach((app) => {
+        // Refresh build status
         fetchBuildInfo(app.name);
+
+        // Refresh logs for apps whose logs have already been loaded (card was expanded)
+        const currentBuild = buildInfoRef.current[app.name];
+        if (currentBuild?.number && app.name in buildLogsRef.current) {
+          fetchBuildLogs(app.name, currentBuild.number, true);
+        }
       });
-    }, 30000);
+    }, 5000);
 
     return () => clearInterval(interval);
-  }, [deployedApps, buildInfo, fetchBuildInfo]);
+  }, [deployedApps, buildInfo, fetchBuildInfo, fetchBuildLogs]);
 
   const runningApps = deployedApps.filter((app) => app.status === "running").length;
   const buildingApps = deployedApps.filter(

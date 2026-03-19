@@ -325,17 +325,32 @@ export class JenkinsService {
   }
 
   /**
-   * Get build logs (all stages)
+   * Get build logs (all stages).
+   * Returns progressive log text plus Jenkins metadata:
+   *   - nextStart: the actual byte offset for the next request (from X-Text-Size header)
+   *   - more: whether Jenkins has more data ready right now (X-More-Data header)
    */
-  static async getBuildLog(appName: string, buildNumber: number, start = 0): Promise<string> {
+  static async getBuildLog(
+    appName: string,
+    buildNumber: number,
+    start = 0,
+  ): Promise<{ text: string; more: boolean; nextStart: number }> {
     const jobName = `${appName}-job`;
-    
+
     try {
-      const log = await jenkins.build.log(jobName, buildNumber, {
+      const data = await jenkins.build.log(jobName, buildNumber, {
         start,
-        type: 'text'
-      });
-      return log;
+        type: 'text',
+        meta: true,
+      }) as { text: string; more: boolean; size?: string };
+
+      const text = data.text ?? '';
+      const more = data.more === true;
+      // X-Text-Size is the byte offset Jenkins expects on the next request.
+      // Prefer it over character count so multi-byte characters don't drift.
+      const nextStart = data.size != null ? parseInt(data.size, 10) : start + text.length;
+
+      return { text, more, nextStart };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Error getting build log:`, errorMessage);
