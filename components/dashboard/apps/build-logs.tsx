@@ -12,24 +12,43 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { BuildInfo } from '@/components/dashboard/apps/types';
+
+interface DeploymentSummary {
+  build_number: number;
+  status: string;
+  started_at: string;
+}
 
 interface BuildLogsPanelProps {
   buildInfo: BuildInfo | null;
   buildLogs: string;
+  logsLoading?: boolean;
   appName: string;
   fetchBuildLogs: (appName: string, buildNumber: number) => void;
+  deployments?: DeploymentSummary[];
+  onSelectBuild?: (buildNumber: number) => void;
 }
 
 export function BuildLogsPanel({
   buildInfo,
   buildLogs,
+  logsLoading = false,
   appName,
-  fetchBuildLogs
+  fetchBuildLogs,
+  deployments = [],
+  onSelectBuild,
 }: BuildLogsPanelProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [copied, setCopied] = useState(false);
@@ -91,6 +110,20 @@ export function BuildLogsPanel({
 
   // Render log content with highlighting
   const renderLogContent = () => {
+    if (logsLoading) {
+      return (
+        <div className="space-y-2 py-2">
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-3 rounded bg-white/[0.06] animate-pulse"
+              style={{ width: `${40 + ((i * 37) % 55)}%` }}
+            />
+          ))}
+        </div>
+      );
+    }
+
     if (!filteredLogs) {
       return (
         <div className="flex items-center gap-2 text-white/30 italic">
@@ -138,65 +171,117 @@ export function BuildLogsPanel({
   };
 
   return (
-    <Card className="bg-white/5 border-white/10">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Terminal className="w-5 h-5" />
-            Build Logs
-            {buildInfo && <span className="text-white/50">#{buildInfo.number}</span>}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {/* Toggle Filters */}
+    <Card className="bg-white/5 border-white/10 rounded-none">
+      <CardHeader className="border-b border-white/[0.06] py-3 px-4">
+        {/* Single toolbar row */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Title */}
+          <div className="flex items-center gap-2 mr-1">
+            <Terminal className="w-4 h-4 text-white/60" />
+            <span className="text-sm font-semibold text-white">
+              Build Logs
+            </span>
+            {buildInfo?.number != null && (
+              <span className="font-mono text-xs text-white/40">#{buildInfo.number}</span>
+            )}
+            {buildInfo?.building && (
+              <Badge className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] px-1.5 py-0">
+                <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
+                Building
+              </Badge>
+            )}
+          </div>
+
+          {/* Build selector */}
+          {deployments.length > 0 && onSelectBuild && (
+            <Select
+              value={buildInfo?.number?.toString() ?? ''}
+              onValueChange={(val) => onSelectBuild(Number(val))}
+            >
+              <SelectTrigger className="h-7 w-auto min-w-[180px] max-w-[260px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
+                <SelectValue placeholder="Select build" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
+                {deployments.map((d) => (
+                  <SelectItem
+                    key={d.build_number}
+                    value={d.build_number.toString()}
+                    className="text-xs font-mono cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="text-white/80">#{d.build_number}</span>
+                      <span
+                        className={`text-[10px] font-sans ${
+                          d.status === 'SUCCESS' ? 'text-green-400' : 'text-red-400'
+                        }`}
+                      >
+                        ● {d.status}
+                      </span>
+                      <span className="text-white/30 font-sans">
+                        {new Date(d.started_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1.5">
             <Button
               size="sm"
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
-              className={`border-white/20 h-8 ${showFilters ? 'bg-blue-500/20 text-blue-400' : ''}`}
+              className={`h-7 px-2 rounded-none border-white/[0.12] ${
+                showFilters ? 'bg-blue-500/15 border-blue-500/30 text-blue-400' : 'bg-white/[0.03] text-white/60 hover:text-white'
+              }`}
             >
-              <Filter className="w-4 h-4" />
+              <Filter className="w-3.5 h-3.5" />
             </Button>
 
-            {/* Refresh */}
             {buildInfo && (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => fetchBuildLogs(appName, buildInfo.number)}
-                className="border-white/20 h-8"
+                disabled={logsLoading}
+                className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+                title="Refresh logs"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
               </Button>
             )}
 
-            {/* Copy */}
             <Button
               size="sm"
               variant="outline"
               onClick={copyLogs}
-              disabled={!filteredLogs}
-              className="border-white/20 h-8"
+              disabled={!filteredLogs || logsLoading}
+              className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+              title="Copy logs"
             >
-              {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
             </Button>
 
-            {/* Download */}
             <Button
               size="sm"
               variant="outline"
               onClick={downloadLogs}
-              disabled={!buildLogs}
-              className="border-white/20 h-8"
+              disabled={!buildLogs || logsLoading}
+              className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
+              title="Download logs"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
             </Button>
-
-            {buildInfo?.building && (
-              <Badge className="bg-blue-500/20 text-blue-400">
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                Building
-              </Badge>
-            )}
           </div>
         </div>
 
