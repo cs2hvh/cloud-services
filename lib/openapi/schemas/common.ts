@@ -9,7 +9,7 @@ export const ErrorResponseSchema = z.object({
     example: 'Invalid request body',
     description: 'Human-readable error message',
   }),
-  details: z.record(z.unknown()).optional().openapi({
+  details: z.unknown().optional().openapi({
     example: { field: 'name', issue: 'Must be at least 3 characters' },
     description: 'Additional error details',
   }),

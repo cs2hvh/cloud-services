@@ -125,13 +125,16 @@ export class ApiMocks {
    * Mock custom domain endpoints
    */
   async mockDomainAdd(status = 200) {
-    await this.page.route('**/api/services/platform-apps/domains/add', async (route) => {
+    await this.page.route('**/api/domains', async (route) => {
+      if (route.request().method() !== 'POST') {
+        return route.fallback();
+      }
       await route.fulfill({
         status,
         contentType: 'application/json',
         body: JSON.stringify(
-          status === 200
-            ? { message: 'Domain added successfully' }
+          status === 200 || status === 201
+            ? { success: true, message: 'Domain added successfully' }
             : status === 409
             ? { error: 'Domain already exists' }
             : { error: 'Failed to add domain' }
@@ -141,7 +144,10 @@ export class ApiMocks {
   }
 
   async mockDomainsList(domains: any[], status = 200) {
-    await this.page.route('**/api/services/platform-apps/domains*', async (route) => {
+    await this.page.route('**/api/domains*', async (route) => {
+      if (route.request().method() !== 'GET') {
+        return route.fallback();
+      }
       await route.fulfill({
         status,
         contentType: 'application/json',
@@ -151,12 +157,13 @@ export class ApiMocks {
   }
 
   async mockDomainVerify(verified = true, status = 200) {
-    await this.page.route('**/api/services/platform-apps/domains/verify', async (route) => {
+    await this.page.route('**/api/domains/**/verify', async (route) => {
       await route.fulfill({
         status,
         contentType: 'application/json',
         body: JSON.stringify({
           verified,
+          success: verified,
           message: verified ? 'Domain verified successfully' : 'DNS not configured correctly',
         }),
       });
@@ -164,23 +171,44 @@ export class ApiMocks {
   }
 
   async mockDomainActivate(status = 200) {
-    await this.page.route('**/api/services/platform-apps/domains/activate', async (route) => {
+    await this.page.route('**/api/domains/**/activate', async (route) => {
       await route.fulfill({
         status,
         contentType: 'application/json',
         body: JSON.stringify({
-          message: 'Domain activated successfully',
+          success: true,
+          operation_id: 'op-1',
+          status: 'pending',
+          message: 'Domain activation started',
+        }),
+      });
+    });
+
+    await this.page.route('**/api/domains/operations/*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          operation: {
+            id: 'op-1',
+            status: 'succeeded',
+          },
         }),
       });
     });
   }
 
   async mockDomainRemove(status = 200) {
-    await this.page.route('**/api/services/platform-apps/domains/remove', async (route) => {
+    await this.page.route('**/api/domains/*', async (route) => {
+      if (route.request().method() !== 'DELETE') {
+        return route.fallback();
+      }
       await route.fulfill({
         status,
         contentType: 'application/json',
         body: JSON.stringify({
+          success: true,
           message: 'Domain removed successfully',
         }),
       });
