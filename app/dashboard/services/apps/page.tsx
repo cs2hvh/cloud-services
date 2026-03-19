@@ -88,6 +88,17 @@ export default function ApplicationDeploymentPage() {
   // Stable ref to buildLogs so we can check if logs have been loaded for an app
   const buildLogsRef = useRef(buildLogs);
   buildLogsRef.current = buildLogs;
+  // Tracks previous buildInfo to detect building → done transitions
+  const prevBuildInfoRef = useRef<Record<string, BuildInfo>>({});
+  // Tracks per-app Supabase status to detect non-building → building transitions
+  const prevAppStatusRef = useRef<Record<string, string>>({});
+  // Apps whose Supabase status just flipped to 'building' in the current render.
+  // Written synchronously by the eviction effect and read by the reconciliation effect
+  // (both run in the same commit). Cleared when Jenkins confirms building=true, so the
+  // reconciliation can fire once the build genuinely finishes.
+  const justStartedBuildingRef = useRef<Set<string>>(new Set());
+  // Tracks which apps have already had their stale-build health check fired
+  const reconciledRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const getUser = async () => {
@@ -195,6 +206,85 @@ export default function ApplicationDeploymentPage() {
     });
   }, [deployedApps, fetchedBuilds, fetchBuildInfo]);
 
+  // Build-start cache eviction: when Supabase transitions an app from any status INTO
+  // 'building', the cached Jenkins buildInfo is stale (from the previous build). Evict
+  // it immediately so the stale-build reconciliation below cannot fire force=true against
+  // old snapshot data — that would check K8s while pods are still deploying and
+  // incorrectly flip the status to 'failed'. The polling interval repopulates buildInfo
+  // with a fresh Jenkins response within 5 s, which will correctly say building=true.
+  useEffect(() => {
+    deployedApps.forEach((app) => {
+      const prev = prevAppStatusRef.current[app.id];
+      if (app.status === 'building' && prev !== undefined && prev !== 'building') {
+        setBuildInfo((curr) => {
+          const updated = { ...curr };
+          delete updated[app.name];
+          return updated;
+        });
+        reconciledRef.current.delete(app.id);
+        // Mark synchronously so the reconciliation effect (same commit) knows this
+        // app just transitioned into building and should not be force-reconciled yet.
+        justStartedBuildingRef.current.add(app.id);
+      }
+      prevAppStatusRef.current[app.id] = app.status;
+    });
+  }, [deployedApps]);
+
+  // Stale-build reconciliation: if the DB says an app is 'building' on page load,
+  // the BuildPollingService may have died (dev server restart, production crash) and
+  // never written the final status. Call the health endpoint once per app to let the
+  // server check actual K8s pod state and correct the Supabase record. The realtime
+  // subscription will push the corrected status back to the UI automatically.
+  useEffect(() => {
+    deployedApps.forEach((app) => {
+      if (app.status === 'building' && !reconciledRef.current.has(app.id)) {
+        const info = buildInfo[app.name];
+
+        // Once Jenkins confirms the build is genuinely in-progress, the
+        // justStartedBuilding guard is no longer needed — clear it so that when
+        // the build eventually finishes (info.building flips back to false) the
+        // reconciliation is allowed to fire.
+        if (info?.building) {
+          justStartedBuildingRef.current.delete(app.id);
+          return;
+        }
+
+        // Only reconcile when Jenkins confirms the build is no longer in-progress
+        // AND the eviction effect did not just transition this app into 'building'
+        // in the same render (justStartedBuildingRef guard).
+        // Without justStartedBuildingRef: setBuildInfo (eviction) is async, so
+        // reconciliation here sees the stale snapshot where building=false and would
+        // fire force=true against a genuinely-starting build.
+        if (info && !info.building && !justStartedBuildingRef.current.has(app.id)) {
+          reconciledRef.current.add(app.id);
+          api.get(`/services/platform-apps/health?app_id=${app.id}&force=true`).catch(() => {
+            reconciledRef.current.delete(app.id);
+          });
+        }
+      }
+    });
+  }, [deployedApps, buildInfo]);
+
+  // Supabase is authoritative on build completion — its real-time push is faster
+  // than the Jenkins poll cycle. When an app's status flips to running/failed,
+  // immediately clear the local buildInfo.building flag so the badge and polling
+  // stop instantly without waiting for the next 5s Jenkins tick.
+  // This also triggers the completion-log effect below (wasBuilding → false transition).
+  useEffect(() => {
+    let anyChanged = false;
+    const reconciled = { ...buildInfoRef.current };
+
+    deployedApps.forEach((app) => {
+      const build = reconciled[app.name];
+      if (build?.building && (app.status === 'running' || app.status === 'failed')) {
+        reconciled[app.name] = { ...build, building: false };
+        anyChanged = true;
+      }
+    });
+
+    if (anyChanged) setBuildInfo(reconciled);
+  }, [deployedApps]);
+
   useEffect(() => {
     const buildingApps = deployedApps.filter((app) => {
       const build = buildInfo[app.name];
@@ -218,6 +308,20 @@ export default function ApplicationDeploymentPage() {
 
     return () => clearInterval(interval);
   }, [deployedApps, buildInfo, fetchBuildInfo, fetchBuildLogs]);
+
+  // When a build transitions from building → done, do a clean deployment-filtered
+  // log replacement for any card that was already expanded. The transition effect
+  // runs after React commits the new buildInfo state, so buildInfoRef.current already
+  // reflects building=false — fetchBuildLogs will use the deployment=true URL correctly.
+  useEffect(() => {
+    Object.entries(buildInfo).forEach(([appName, info]) => {
+      const wasBuilding = prevBuildInfoRef.current[appName]?.building;
+      if (wasBuilding && !info.building && info.number && appName in buildLogsRef.current) {
+        fetchBuildLogs(appName, info.number, false);
+      }
+    });
+    prevBuildInfoRef.current = buildInfo;
+  }, [buildInfo, fetchBuildLogs]);
 
   const runningApps = deployedApps.filter((app) => app.status === "running").length;
   const buildingApps = deployedApps.filter(

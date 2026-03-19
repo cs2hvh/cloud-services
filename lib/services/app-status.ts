@@ -96,7 +96,8 @@ export class AppStatusService {
   static async syncStatus(
     appId: string,
     appName: string,
-    currentDbStatus?: AppStatus
+    currentDbStatus?: AppStatus,
+    force = false
   ): Promise<StatusSyncResult> {
     try {
       // Get current DB status if not provided
@@ -115,8 +116,20 @@ export class AppStatusService {
         previousStatus = appResult.data.status as AppStatus;
       }
 
-      // Don't sync certain states - they're managed by other flows
-      if (previousStatus === "pending" || previousStatus === "building" || previousStatus === "stopped") {
+      // pending and stopped are never K8s-managed — always skip, even when force=true.
+      if (previousStatus === "pending" || previousStatus === "stopped") {
+        return {
+          success: true,
+          previousStatus,
+          currentStatus: previousStatus,
+          changed: false,
+          reason: `Status '${previousStatus}' is not synced from K8s`,
+        };
+      }
+
+      // building is managed by BuildPollingService; skip unless force=true, which is only
+      // used for stale-build recovery (BuildPollingService died before writing final status).
+      if (!force && previousStatus === "building") {
         return {
           success: true,
           previousStatus,

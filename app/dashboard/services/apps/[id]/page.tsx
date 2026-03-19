@@ -749,7 +749,8 @@ export default function AppDetailPage() {
                   Application Deployment
                 </p>
                 {getStatusBadge(app.status, buildInfo?.building)}
-                {appConnectionStatus === 'connected' && (
+                {/* Only show Live when the Supabase connection is up AND the app is actually running */}
+                {appConnectionStatus === 'connected' && app.status === 'running' && !buildInfo?.building && (
                   <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
                     <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
                     Live
