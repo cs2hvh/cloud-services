@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
-import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
+import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains/manager';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
