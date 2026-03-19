@@ -46,6 +46,72 @@ const LOG_LEVELS: { value: LogLevel; label: string; color: string }[] = [
   { value: 'success', label: 'Success', color: 'text-green-400' },
 ];
 
+// ─── Pure helpers ───────────────────────────────────────────────────────────
+
+/** Raw K8s timestamp prefix  : "2024-01-01T00:00:00.000Z message" */
+const K8S_TS_RE     = /^(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\s+(.*)/;
+/** Already-normalised format : "[2024-01-01T00:00:00.000Z] message" */
+const BRACKET_TS_RE = /^\[(\d{4}-\d{2}-\d{2}T[^\]]+)\]/;
+
+/**
+ * Converts a raw Kubernetes log line to "[timestamp] message" format.
+ * Lines already in that format are returned unchanged.
+ * Returns both the formatted line and the extracted timestamp string.
+ */
+function normalizeLogLine(line: string): { formatted: string; timestamp: string } {
+  const raw = line.match(K8S_TS_RE);
+  if (raw) return { formatted: `[${raw[1]}] ${raw[2]}`, timestamp: raw[1] };
+  const bracket = line.match(BRACKET_TS_RE);
+  if (bracket) return { formatted: line, timestamp: bracket[1] };
+  return { formatted: line, timestamp: '' };
+}
+
+/**
+ * Returns true if a log line matches the given level filter.
+ */
+function matchesLogLevel(line: string, level: LogLevel): boolean {
+  if (level === 'all') return true;
+  const l = line.toLowerCase();
+  switch (level) {
+    case 'error':   return l.includes('error') || l.includes('err') || l.includes('fatal') || l.includes('panic') || l.includes('exception') || l.includes('fail');
+    case 'warn':    return l.includes('warn') || l.includes('warning');
+    case 'info':    return l.includes('info') || l.includes('log') || l.includes('debug');
+    case 'success': return l.includes('success') || l.includes('done') || l.includes('complete');
+    default: return true;
+  }
+}
+
+/**
+ * Normalises existing static log text to bracket format so it's consistent
+ * with streaming events. Also returns per-line counts for safe replay
+ * deduplication when the stream starts (without dropping valid same-timestamp
+ * lines that happen later).
+ */
+function prepareStreamSeed(rawLogs: string): { lines: string[]; seedCounts: Map<string, number> } {
+  if (!rawLogs.trim()) return { lines: [], seedCounts: new Map() };
+  const lines = rawLogs.split('\n').map(line => {
+    const { formatted } = normalizeLogLine(line);
+    return formatted;
+  });
+
+  const seedCounts = new Map<string, number>();
+  for (const line of lines) {
+    seedCounts.set(line, (seedCounts.get(line) || 0) + 1);
+  }
+
+  return { lines, seedCounts };
+}
+
+function consumeSeedLine(seedCounts: Map<string, number>, line: string): boolean {
+  const remaining = seedCounts.get(line);
+  if (!remaining) return false;
+  if (remaining === 1) seedCounts.delete(line);
+  else seedCounts.set(line, remaining - 1);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Component to render log content with search highlighting and log level coloring
 function LogContent({ content, searchTerm }: { content: string; searchTerm: string }) {
   if (!content) return null;
@@ -110,6 +176,8 @@ interface InstanceLogs {
   restartCount: number;
   logs: string;
   previousLogs: string | null;
+  // Present only on filtered results (computed by filteredLogs useMemo)
+  matchCount?: number;
 }
 
 interface RuntimeLogsProps {
@@ -142,53 +210,33 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
   // Refs so streaming callbacks always read latest values without stale closures
   const isPausedRef = useRef(false);
   const autoScrollRef = useRef(true);
+  // Keeps a readable copy of `logs` state for use inside startStreaming without
+  // needing to add `logs` to the useCallback dependency array.
+  const logsRef = useRef<InstanceLogs[]>([]);
 
   // Keep refs in sync
   useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]);
   useEffect(() => { autoScrollRef.current = autoScroll; }, [autoScroll]);
+  useEffect(() => { logsRef.current = logs; }, [logs]);
 
 
   // Filter logs based on search term and log level
   const filteredLogs = useMemo(() => {
     return logs.map(instanceLog => {
-      let filteredLogText = instanceLog.logs;
-      
-      // Apply log level filter
-      if (logLevel !== 'all' && filteredLogText) {
-        const lines = filteredLogText.split('\n');
-        filteredLogText = lines.filter(line => {
-          const lowerLine = line.toLowerCase();
-          switch (logLevel) {
-            case 'error':
-              return lowerLine.includes('error') || lowerLine.includes('err') || 
-                     lowerLine.includes('fatal') || lowerLine.includes('panic') ||
-                     lowerLine.includes('exception') || lowerLine.includes('fail');
-            case 'warn':
-              return lowerLine.includes('warn') || lowerLine.includes('warning');
-            case 'info':
-              return lowerLine.includes('info') || lowerLine.includes('log') ||
-                     lowerLine.includes('debug');
-            case 'success':
-              return lowerLine.includes('success') || lowerLine.includes('done') ||
-                     lowerLine.includes('complete');
-            default:
-              return true;
-          }
-        }).join('\n');
-      }
-      
-      // Apply search filter
-      if (searchTerm && filteredLogText) {
-        const lines = filteredLogText.split('\n');
-        filteredLogText = lines.filter(line => 
-          line.toLowerCase().includes(searchTerm.toLowerCase())
-        ).join('\n');
-      }
-      
+      let text = instanceLog.logs;
+
+      if (logLevel !== 'all' && text)
+        text = text.split('\n').filter(l => matchesLogLevel(l, logLevel)).join('\n');
+
+      if (searchTerm && text)
+        text = text.split('\n').filter(l => l.toLowerCase().includes(searchTerm.toLowerCase())).join('\n');
+
       return {
         ...instanceLog,
-        logs: filteredLogText,
-        matchCount: searchTerm ? (filteredLogText.match(new RegExp(searchTerm, 'gi')) || []).length : 0,
+        logs: text,
+        matchCount: searchTerm
+          ? (text.match(new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')) || []).length
+          : 0,
       };
     });
   }, [logs, searchTerm, logLevel]);
@@ -275,82 +323,47 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
 
   // Start streaming logs
   const startStreaming = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+    if (eventSourceRef.current) eventSourceRef.current.close();
 
-    const instance = selectedInstance !== 'all' ? `&instance=${selectedInstance}` : '';
-    const url = `/api/services/platform-apps/runtime-logs?app_id=${appId}${instance}&follow=true&tail=100`;
+    const instanceParam = selectedInstance !== 'all' ? `&instance=${selectedInstance}` : '';
+    const url = `/api/services/platform-apps/runtime-logs?app_id=${appId}${instanceParam}&follow=true&tail=100&since=${timeRange}`;
+    const displayName = selectedInstance === 'all'
+      ? 'All Instances'
+      : instances.find(i => i.instanceId === selectedInstance)?.displayName ?? selectedInstance;
 
-    const instanceLabel =
-      selectedInstance === 'all'
-        ? 'All Instances'
-        : instances.find((i) => i.instanceId === selectedInstance)?.displayName ?? selectedInstance;
+    // Normalize existing static snapshot and track seeded lines so we can
+    // skip only replayed duplicates from stream startup.
+    const existing = logsRef.current.find(l => selectedInstance === 'all' || l.instance === selectedInstance);
+    const { lines, seedCounts } = prepareStreamSeed(existing?.logs ?? '');
+    streamLogsRef.current = lines;
+
+    // Show normalized snapshot immediately, then append live events on top.
+    const makeEntry = (logs: string): InstanceLogs => ({
+      instance: selectedInstance, displayName, status: 'Running', restartCount: 0, logs, previousLogs: null,
+    });
+    setStreaming(true);
+    setLogs([makeEntry(lines.join('\n'))]);
 
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
-    streamLogsRef.current = [];
-    setStreaming(true);
-    setLogs([{
-      instance: selectedInstance,
-      displayName: instanceLabel,
-      status: 'Running',
-      restartCount: 0,
-      logs: '',
-      previousLogs: null,
-    }]);
 
     eventSource.onmessage = (event) => {
-      // Use ref so we always read latest isPaused value (not stale closure)
       if (isPausedRef.current) return;
-
       try {
         const data = JSON.parse(event.data);
-
-        if (data.type === 'error') {
-          setError(data.message);
-          eventSource.close();
-          setStreaming(false);
-          return;
-        }
-
-        if (data.type === 'end') {
-          setStreaming(false);
-          return;
-        }
-
+        if (data.type === 'error') { setError(data.message); eventSource.close(); setStreaming(false); return; }
+        if (data.type === 'end')   { setStreaming(false); return; }
         const logLine = `[${data.timestamp}] ${data.message}`;
+        if (consumeSeedLine(seedCounts, logLine)) return;
         streamLogsRef.current.push(logLine);
-
-        // Keep last 1000 lines
-        if (streamLogsRef.current.length > 1000) {
-          streamLogsRef.current = streamLogsRef.current.slice(-1000);
-        }
-
-        const joined = streamLogsRef.current.join('\n');
-        setLogs([{
-          instance: selectedInstance,
-          displayName: instanceLabel,
-          status: 'Running',
-          restartCount: 0,
-          logs: joined,
-          previousLogs: null,
-        }]);
-
-        // Only auto-scroll if enabled (use ref to avoid stale closure)
-        if (autoScrollRef.current) {
-          logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-      } catch (e) {
-        console.error('Failed to parse log entry:', e);
-      }
+        if (streamLogsRef.current.length > 1000) streamLogsRef.current = streamLogsRef.current.slice(-1000);
+        setLogs([makeEntry(streamLogsRef.current.join('\n'))]);
+        if (autoScrollRef.current) logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      } catch { /* malformed SSE frame — ignore */ }
     };
 
-    eventSource.onerror = () => {
-      setStreaming(false);
-      eventSource.close();
-    };
-  }, [appId, selectedInstance, instances]);
+    eventSource.onerror = () => { setStreaming(false); eventSource.close(); };
+  }, [appId, selectedInstance, instances, timeRange]);
 
   // Stop streaming
   const stopStreaming = useCallback(() => {
@@ -703,6 +716,8 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                 <p className="text-yellow-400/70">Container is starting — logs will appear shortly</p>
               ) : instances.some((i) => i.status === 'Failed') ? (
                 <p className="text-red-400/70">Instance failed to start. Check build logs for errors.</p>
+              ) : streaming ? (
+                <p className="text-white/30">Waiting for log data…</p>
               ) : (
                 <>
                   <p>No logs in the selected time range</p>
@@ -731,9 +746,9 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                       {instanceLog.restartCount > 0 && (
                         <span className="text-[10px] text-yellow-400">↺ {instanceLog.restartCount} restarts</span>
                       )}
-                      {searchTerm && (instanceLog as typeof instanceLog & { matchCount?: number }).matchCount != null && (instanceLog as typeof instanceLog & { matchCount?: number }).matchCount! > 0 && (
+                      {searchTerm && !!instanceLog.matchCount && (
                         <span className="text-[10px] text-yellow-400">
-                          {(instanceLog as typeof instanceLog & { matchCount?: number }).matchCount} match{(instanceLog as typeof instanceLog & { matchCount?: number }).matchCount !== 1 ? 'es' : ''}
+                          {instanceLog.matchCount} match{instanceLog.matchCount !== 1 ? 'es' : ''}
                         </span>
                       )}
                     </div>

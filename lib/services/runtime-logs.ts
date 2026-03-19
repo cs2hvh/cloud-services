@@ -10,9 +10,9 @@
  * - These are completely separate concerns
  */
 
-import { CoreV1Api, V1Pod, CoreV1Event } from '@kubernetes/client-node';
+import { CoreV1Api, V1Pod, CoreV1Event, Log } from '@kubernetes/client-node';
 import kubeConfig from '@/lib/kubernetes';
-import { Readable, PassThrough } from 'stream';
+import { PassThrough } from 'stream';
 
 // Default namespace for platform apps
 const DEFAULT_NAMESPACE = 'default';
@@ -219,11 +219,15 @@ export class RuntimeLogsService {
   }
 
   /**
-   * Stream logs from a specific pod using Server-Sent Events format
-   * Returns a readable stream that emits SSE-formatted data
-   * 
-   * IMPORTANT: Pass an AbortSignal to properly cleanup when client disconnects.
-   * Without this, the K8s log stream keeps running and leaks resources.
+   * Stream logs from a specific pod using Server-Sent Events format.
+   * Returns a Web ReadableStream that emits SSE-formatted JSON events.
+   *
+   * Uses the @kubernetes/client-node `Log` class for true HTTP streaming.
+   * The OpenAPI-generated `readNamespacedPodLog({ follow: true })` awaits the
+   * entire response body which never resolves for a live pod — the Log class
+   * pipes the response directly into a Writable stream as lines arrive.
+   *
+   * IMPORTANT: Pass an AbortSignal to stop the K8s stream on client disconnect.
    */
   static async streamLogs(
     podName: string,
@@ -231,31 +235,61 @@ export class RuntimeLogsService {
     namespace = DEFAULT_NAMESPACE,
     abortSignal?: AbortSignal
   ): Promise<ReadableStream<Uint8Array>> {
-    const api = this.getApi();
     const encoder = new TextEncoder();
-    
-    // Track the K8s stream for cleanup
-    let k8sStream: Readable | null = null;
 
     // Apply safe limits
-    const tailLines = Math.min(options.tailLines || DEFAULT_TAIL_LINES, MAX_TAIL_LINES);
-    const sinceSeconds = Math.min(options.sinceSeconds || DEFAULT_SINCE_SECONDS, MAX_SINCE_SECONDS);
+    const tailLines = Math.min(options.tailLines ?? DEFAULT_TAIL_LINES, MAX_TAIL_LINES);
+    const sinceSeconds = Math.min(options.sinceSeconds ?? DEFAULT_SINCE_SECONDS, MAX_SINCE_SECONDS);
 
-    // Create a passthrough stream to convert K8s log stream to SSE format
-    const passthrough = new PassThrough();
-    
-    // Cleanup function to stop K8s stream
-    const cleanup = () => {
-      if (k8sStream) {
-        k8sStream.destroy();
-        k8sStream = null;
-      }
-      if (!passthrough.destroyed) {
-        passthrough.destroy();
-      }
+    // sseStream is what we expose to the browser — SSE-formatted JSON lines.
+    // rawStream receives raw K8s log lines which we transform into SSE events.
+    const sseStream = new PassThrough();
+    const rawStream = new PassThrough();
+
+    let rawBuffer = '';
+
+    const safeWrite = (payload: string) => {
+      if (!sseStream.destroyed) sseStream.write(payload);
     };
-    
-    // Listen for abort signal (client disconnect)
+
+    rawStream.on('data', (chunk: Buffer | string) => {
+      rawBuffer += chunk.toString();
+      const lines = rawBuffer.split('\n');
+      rawBuffer = lines.pop() || ''; // Keep incomplete line in buffer
+      for (const line of lines) {
+        if (line.trim()) {
+          const entry = RuntimeLogsService.parseLogLine(line, podName, options.container);
+          safeWrite(`data: ${JSON.stringify(entry)}\n\n`);
+        }
+      }
+    });
+
+    rawStream.on('end', () => {
+      if (rawBuffer.trim()) {
+        const entry = RuntimeLogsService.parseLogLine(rawBuffer, podName, options.container);
+        safeWrite(`data: ${JSON.stringify(entry)}\n\n`);
+      }
+      safeWrite(`data: ${JSON.stringify({ type: 'end', message: 'Log stream ended' })}\n\n`);
+      if (!sseStream.destroyed) sseStream.end();
+    });
+
+    rawStream.on('error', (err: Error) => {
+      console.error(`[RuntimeLogsService] Raw stream error for ${podName}:`, err.message);
+      safeWrite(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
+      if (!sseStream.destroyed) sseStream.end();
+    });
+
+    let logAbortController: AbortController | null = null;
+
+    const cleanup = () => {
+      if (logAbortController) {
+        logAbortController.abort();
+        logAbortController = null;
+      }
+      if (!rawStream.destroyed) rawStream.destroy();
+      if (!sseStream.destroyed) sseStream.destroy();
+    };
+
     if (abortSignal) {
       abortSignal.addEventListener('abort', () => {
         console.log(`[RuntimeLogsService] Client disconnected, stopping stream for ${podName}`);
@@ -263,87 +297,44 @@ export class RuntimeLogsService {
       });
     }
 
-    // Start the log stream in the background
-    (async () => {
-      try {
-        // Get log stream with follow=true
-        const logStream = await api.readNamespacedPodLog({
-          name: podName,
-          namespace,
-          container: options.container,
-          follow: options.follow !== false, // Default to true for streaming
-          previous: options.previous || false,
-          sinceSeconds,
-          tailLines,
-          timestamps: true,
-        });
-
-        // If it's a string (non-follow response), write it and end
-        if (typeof logStream === 'string') {
-          const lines = logStream.split('\n').filter(Boolean);
-          for (const line of lines) {
-            const entry = this.parseLogLine(line, podName, options.container);
-            passthrough.write(`data: ${JSON.stringify(entry)}\n\n`);
-          }
-          passthrough.end();
-          return;
-        }
-
-        // If it's a stream, pipe it through
-        if (logStream && typeof (logStream as Readable).on === 'function') {
-          const stream = logStream as Readable;
-          k8sStream = stream; // Store reference for cleanup
-          let buffer = '';
-
-          stream.on('data', (chunk: Buffer | string) => {
-            buffer += chunk.toString();
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || ''; // Keep incomplete line in buffer
-
-            for (const line of lines) {
-              if (line.trim()) {
-                const entry = this.parseLogLine(line, podName, options.container);
-                passthrough.write(`data: ${JSON.stringify(entry)}\n\n`);
-              }
-            }
-          });
-
-          stream.on('end', () => {
-            if (buffer.trim()) {
-              const entry = this.parseLogLine(buffer, podName, options.container);
-              passthrough.write(`data: ${JSON.stringify(entry)}\n\n`);
-            }
-            passthrough.write(`data: ${JSON.stringify({ type: 'end', message: 'Log stream ended' })}\n\n`);
-            passthrough.end();
-          });
-
-          stream.on('error', (err: Error) => {
-            console.error(`[RuntimeLogsService] Stream error for ${podName}:`, err.message);
-            passthrough.write(`data: ${JSON.stringify({ type: 'error', message: err.message })}\n\n`);
-            passthrough.end();
-          });
+    // Start streaming via the Log helper — this properly handles follow=true
+    // by piping the Kubernetes HTTP response body directly into rawStream.
+    const logHelper = new Log(kubeConfig);
+    logHelper
+      .log(namespace, podName, options.container || '', rawStream, {
+        follow: true,
+        tailLines,
+        sinceSeconds: options.previous ? undefined : sinceSeconds,
+        timestamps: true,
+        previous: options.previous,
+      })
+      .then((controller) => {
+        // Guard: if the client already disconnected before the K8s stream
+        // connected, abort immediately so we don't leak the HTTP connection.
+        if (abortSignal?.aborted) {
+          controller.abort();
         } else {
-          passthrough.write(`data: ${JSON.stringify({ type: 'error', message: 'Unexpected log response format' })}\n\n`);
-          passthrough.end();
+          logAbortController = controller;
         }
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`[RuntimeLogsService] streamLogs error for ${podName}:`, errorMessage);
-        passthrough.write(`data: ${JSON.stringify({ type: 'error', message: errorMessage })}\n\n`);
-        passthrough.end();
-      }
-    })();
+      })
+      .catch((error: Error) => {
+        console.error(`[RuntimeLogsService] streamLogs error for ${podName}:`, error.message);
+        if (!sseStream.destroyed) {
+          sseStream.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
+          sseStream.end();
+        }
+      });
 
-    // Convert Node.js stream to Web ReadableStream
+    // Convert Node.js PassThrough to a Web ReadableStream for Next.js Response
     return new ReadableStream({
       start(controller) {
-        passthrough.on('data', (chunk: Buffer) => {
+        sseStream.on('data', (chunk: Buffer) => {
           controller.enqueue(encoder.encode(chunk.toString()));
         });
-        passthrough.on('end', () => {
+        sseStream.on('end', () => {
           controller.close();
         });
-        passthrough.on('error', (err: Error) => {
+        sseStream.on('error', (err: Error) => {
           controller.error(err);
         });
       },
