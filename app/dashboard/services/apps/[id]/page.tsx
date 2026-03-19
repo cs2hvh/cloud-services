@@ -50,7 +50,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
-import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains';
+import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains/manager';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
@@ -233,6 +233,7 @@ export default function AppDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
   const [buildLogs, setBuildLogs] = useState<string>('');
+  const [logsLoading, setLogsLoading] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -320,15 +321,18 @@ export default function AppDetailPage() {
   }, []);
 
   const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
+    setLogsLoading(true);
     try {
-       const res = await api.get(
+      const res = await api.get(
         `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`
       );
-        if (res.data) {
+      if (res.data) {
         setBuildLogs(res.data.logs || 'No logs available');
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
+    } finally {
+      setLogsLoading(false);
     }
   }, []);
 
@@ -360,6 +364,18 @@ export default function AppDetailPage() {
       fetchBuildLogs(app.name, buildInfo.number);
     }
   }, [app?.name, buildInfo?.number, fetchBuildLogs]);
+
+  // Poll build info (and refresh logs) while a build is actively running
+  useEffect(() => {
+    if (!app?.name || !buildInfo?.building) return;
+    const interval = setInterval(async () => {
+      await fetchBuildInfo(app.name);
+      if (buildInfo.number) {
+        fetchBuildLogs(app.name, buildInfo.number);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [app?.name, buildInfo?.building, buildInfo?.number, fetchBuildInfo, fetchBuildLogs]);
 
   // Initialize edited env vars when app data loads
   useEffect(() => {
@@ -487,6 +503,19 @@ export default function AppDetailPage() {
     }
   };
 
+  // Navigate to build logs for a specific historical build
+  const handleSelectBuild = (buildNumber: number) => {
+    if (!app?.name) return;
+    // Only update if it's actually a different build
+    if (buildInfo?.number !== buildNumber) {
+      setBuildInfo({ number: buildNumber, building: false, result: null, duration: 0, timestamp: 0, url: '' });
+    } else {
+      // Same build — force a log refresh
+      fetchBuildLogs(app.name, buildNumber);
+    }
+    setActiveTab('build-logs');
+  };
+
   const handleRedeploy = async () => {
     if (!app) return;
 
@@ -508,9 +537,9 @@ export default function AppDetailPage() {
 
       const data = await res.json();
       setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
-      
-      // Real-time will update status automatically
-      // No need to call fetchApp() - WebSocket handles it
+
+      // Immediately reflect the new build so the logs effect re-fires
+      setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to trigger redeploy';
       setEnvVarError(message);
@@ -541,9 +570,9 @@ export default function AppDetailPage() {
 
       setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
       setSelectedSize(null);
-      
-      // Real-time will update status and size automatically
-      // No need to call fetchApp() - WebSocket handles it
+
+      // Immediately reflect the new build so the logs effect re-fires
+      setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resize app';
       setResizeError(message);
@@ -1093,9 +1122,12 @@ export default function AppDetailPage() {
           <TabsContent value="build-logs">
             <BuildLogsPanel 
               buildInfo={buildInfo} 
-              buildLogs={buildLogs} 
+              buildLogs={buildLogs}
+              logsLoading={logsLoading}
               appName={app.name}
               fetchBuildLogs={fetchBuildLogs}
+              deployments={deployments}
+              onSelectBuild={handleSelectBuild}
             />
           </TabsContent>
 
@@ -1178,6 +1210,15 @@ export default function AppDetailPage() {
                             <span>
                               {new Date(deployment.started_at).toLocaleString()}
                             </span>
+                            {deployment.build_number > 0 && (
+                              <button
+                                onClick={() => handleSelectBuild(deployment.build_number)}
+                                className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
+                              >
+                                <Terminal className="w-3 h-3" />
+                                View Logs
+                              </button>
+                            )}
                           </div>
                         </div>
                         {/* Commit Info Row */}
