@@ -216,6 +216,9 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
   // ─── Effect 5: Active-build polling ──────────────────────────────────────
   // Polls Jenkins every 5 s for apps that are building. Refreshes both build
   // status and (for expanded cards) streaming logs.
+  // 5 s is intentional for the listing page — lower frequency reduces API load
+  // when tracking multiple apps simultaneously. The detail page uses 2 s (faster
+  // perceived updates for a single focused build).
 
   useEffect(() => {
     const buildingApps = deployedApps.filter((app) => {

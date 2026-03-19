@@ -38,7 +38,10 @@ interface BuildLogsPanelProps {
   /** Show skeleton instead of logs — only for initial/build-switch fetch, not live polling */
   initialLoading?: boolean;
   appName: string;
-  fetchBuildLogs: (appName: string, buildNumber: number) => void;
+  // raw: true = raw Jenkins log (used while building); false = deployment-filtered view.
+  // append: true = incremental append; false = full replacement.
+  // Returns Promise<boolean> (more data available) — callers may ignore the return value.
+  fetchBuildLogs: (appName: string, buildNumber: number, raw?: boolean, append?: boolean) => Promise<boolean | void>;
   deployments?: DeploymentSummary[];
   onSelectBuild?: (buildNumber: number) => void;
 }
