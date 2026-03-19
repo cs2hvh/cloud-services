@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
@@ -233,7 +233,10 @@ export default function AppDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
   const [buildLogs, setBuildLogs] = useState<string>('');
-  const [logsLoading, setLogsLoading] = useState(false);
+  // true only for the very first fetch of a build (shows skeleton, hides old logs)
+  const [initialLogLoading, setInitialLogLoading] = useState(false);
+  // tracks the byte/char offset for incremental raw log fetches during active builds
+  const logOffsetRef = useRef(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -320,19 +323,39 @@ export default function AppDetailPage() {
     }
   }, []);
 
-  const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
-    setLogsLoading(true);
+  const fetchBuildLogs = useCallback(async (
+    appName: string,
+    buildNumber: number,
+    raw = false,
+    append = false,
+  ) => {
+    if (!append) {
+      // Full replacement (initial fetch or build switch) — show skeleton
+      setInitialLogLoading(true);
+      logOffsetRef.current = 0;
+    }
     try {
-      const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`
-      );
+      const start = append ? logOffsetRef.current : 0;
+      const url = raw
+        ? `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=${start}`
+        : `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`;
+      const res = await api.get(url);
       if (res.data) {
-        setBuildLogs(res.data.logs || 'No logs available');
+        const newChunk: string = res.data.logs || '';
+        if (append && newChunk) {
+          setBuildLogs((prev) => prev + newChunk);
+        } else if (!append) {
+          setBuildLogs(newChunk || 'No logs available');
+        }
+        // Store next offset for subsequent incremental fetches
+        if (res.data.next_start != null) {
+          logOffsetRef.current = res.data.next_start;
+        }
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
     } finally {
-      setLogsLoading(false);
+      if (!append) setInitialLogLoading(false);
     }
   }, []);
 
@@ -361,17 +384,20 @@ export default function AppDetailPage() {
 
   useEffect(() => {
     if (app?.name && buildInfo?.number) {
-      fetchBuildLogs(app.name, buildInfo.number);
+      // Use raw logs while building (deployment stage hasn't run yet),
+      // switch to deployment-filtered summary once the build completes.
+      fetchBuildLogs(app.name, buildInfo.number, !!buildInfo.building);
     }
-  }, [app?.name, buildInfo?.number, fetchBuildLogs]);
+  }, [app?.name, buildInfo?.number, buildInfo?.building, fetchBuildLogs]);
 
-  // Poll build info (and refresh logs) while a build is actively running
+  // Poll build info and APPEND new log lines while a build is actively running
   useEffect(() => {
     if (!app?.name || !buildInfo?.building) return;
     const interval = setInterval(async () => {
       await fetchBuildInfo(app.name);
       if (buildInfo.number) {
-        fetchBuildLogs(app.name, buildInfo.number);
+        // append=true: fetch only new bytes since last offset, no skeleton
+        fetchBuildLogs(app.name, buildInfo.number, true, true);
       }
     }, 5000);
     return () => clearInterval(interval);
@@ -538,7 +564,9 @@ export default function AppDetailPage() {
       const data = await res.json();
       setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
 
-      // Immediately reflect the new build so the logs effect re-fires
+      // Clear stale logs immediately and reflect the new in-progress build
+      setBuildLogs('');
+      logOffsetRef.current = 0;
       setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to trigger redeploy';
@@ -571,7 +599,9 @@ export default function AppDetailPage() {
       setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
       setSelectedSize(null);
 
-      // Immediately reflect the new build so the logs effect re-fires
+      // Clear stale logs immediately and reflect the new in-progress build
+      setBuildLogs('');
+      logOffsetRef.current = 0;
       setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resize app';
@@ -1123,7 +1153,7 @@ export default function AppDetailPage() {
             <BuildLogsPanel 
               buildInfo={buildInfo} 
               buildLogs={buildLogs}
-              logsLoading={logsLoading}
+              initialLoading={initialLogLoading}
               appName={app.name}
               fetchBuildLogs={fetchBuildLogs}
               deployments={deployments}

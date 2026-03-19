@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   Terminal,
   Loader2,
@@ -11,6 +11,7 @@ import {
   Filter,
   Search,
   X,
+  ArrowDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +35,8 @@ interface DeploymentSummary {
 interface BuildLogsPanelProps {
   buildInfo: BuildInfo | null;
   buildLogs: string;
-  logsLoading?: boolean;
+  /** Show skeleton instead of logs — only for initial/build-switch fetch, not live polling */
+  initialLoading?: boolean;
   appName: string;
   fetchBuildLogs: (appName: string, buildNumber: number) => void;
   deployments?: DeploymentSummary[];
@@ -44,7 +46,7 @@ interface BuildLogsPanelProps {
 export function BuildLogsPanel({
   buildInfo,
   buildLogs,
-  logsLoading = false,
+  initialLoading = false,
   appName,
   fetchBuildLogs,
   deployments = [],
@@ -53,7 +55,54 @@ export function BuildLogsPanel({
   const [searchTerm, setSearchTerm] = useState('');
   const [copied, setCopied] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn'>('all');
+  const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
+  const [showJumpButton, setShowJumpButton] = useState(false);
+
+  // Ref on the <pre> element for imperative scroll control
+  const preRef = useRef<HTMLPreElement>(null);
+  // True while user is at (or near) the bottom — drives auto-scroll on new content
+  const wasAtBottomRef = useRef(true);
+
+  // Build options — prepend a synthetic entry while an active build has no DB record yet
+  const buildOptions = useMemo<DeploymentSummary[]>(() => {
+    const opts = [...deployments];
+    if (
+      buildInfo?.building &&
+      buildInfo.number != null &&
+      !opts.some((d) => d.build_number === buildInfo.number)
+    ) {
+      opts.unshift({
+        build_number: buildInfo.number,
+        status: 'BUILDING',
+        started_at: new Date(buildInfo.timestamp || Date.now()).toISOString(),
+      });
+    }
+    return opts;
+  }, [deployments, buildInfo]);
+
+  // Track whether user is near the bottom
+  const handleScroll = useCallback(() => {
+    const el = preRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    wasAtBottomRef.current = atBottom;
+    setShowJumpButton(!atBottom && buildLogs.length > 0);
+  }, [buildLogs.length]);
+
+  // After every log update: scroll to bottom only if the user was already there
+  useEffect(() => {
+    if (wasAtBottomRef.current && preRef.current) {
+      preRef.current.scrollTop = preRef.current.scrollHeight;
+    }
+  }, [buildLogs]);
+
+  const jumpToBottom = () => {
+    if (preRef.current) {
+      preRef.current.scrollTop = preRef.current.scrollHeight;
+      wasAtBottomRef.current = true;
+      setShowJumpButton(false);
+    }
+  };
 
   // Filter and search logs
   const filteredLogs = useMemo(() => {
@@ -70,6 +119,9 @@ export function BuildLogsPanel({
         }
         if (logLevel === 'warn') {
           return lower.includes('warn') || lower.includes('warning');
+        }
+        if (logLevel === 'success') {
+          return lower.includes('success') || lower.includes('done') || lower.includes('complete');
         }
         return true;
       });
@@ -88,7 +140,7 @@ export function BuildLogsPanel({
   // Count matches
   const matchCount = useMemo(() => {
     if (!searchTerm || !buildLogs) return 0;
-    const regex = new RegExp(searchTerm, 'gi');
+    const regex = new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     return (buildLogs.match(regex) || []).length;
   }, [buildLogs, searchTerm]);
 
@@ -108,27 +160,16 @@ export function BuildLogsPanel({
     URL.revokeObjectURL(url);
   };
 
-  // Render log content with highlighting
+  // Render actual log content (skeleton handled separately as absolute overlay)
   const renderLogContent = () => {
-    if (logsLoading) {
-      return (
-        <div className="space-y-2 py-2">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-3 rounded bg-white/[0.06] animate-pulse"
-              style={{ width: `${40 + ((i * 37) % 55)}%` }}
-            />
-          ))}
-        </div>
-      );
-    }
-
     if (!filteredLogs) {
       return (
         <div className="flex items-center gap-2 text-white/30 italic">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Waiting for logs...
+          {buildInfo?.building ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Waiting for build output…</>
+          ) : (
+            'No logs available'
+          )}
         </div>
       );
     }
@@ -192,17 +233,17 @@ export function BuildLogsPanel({
             )}
           </div>
 
-          {/* Build selector */}
-          {deployments.length > 0 && onSelectBuild && (
+          {/* Build selector — also shows active in-progress build via buildOptions synthetic entry */}
+          {buildOptions.length > 0 && onSelectBuild && (
             <Select
               value={buildInfo?.number?.toString() ?? ''}
               onValueChange={(val) => onSelectBuild(Number(val))}
             >
-              <SelectTrigger className="h-7 w-auto min-w-[180px] max-w-[260px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Select build" />
+              <SelectTrigger className="h-7 w-auto min-w-[200px] max-w-[280px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
+                <SelectValue placeholder="Select build…" />
               </SelectTrigger>
               <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
-                {deployments.map((d) => (
+                {buildOptions.map((d) => (
                   <SelectItem
                     key={d.build_number}
                     value={d.build_number.toString()}
@@ -212,10 +253,14 @@ export function BuildLogsPanel({
                       <span className="text-white/80">#{d.build_number}</span>
                       <span
                         className={`text-[10px] font-sans ${
-                          d.status === 'SUCCESS' ? 'text-green-400' : 'text-red-400'
+                          d.status === 'SUCCESS'
+                            ? 'text-green-400'
+                            : d.status === 'BUILDING'
+                            ? 'text-blue-400'
+                            : 'text-red-400'
                         }`}
                       >
-                        ● {d.status}
+                        {d.status === 'BUILDING' ? '⟳' : '●'} {d.status}
                       </span>
                       <span className="text-white/30 font-sans">
                         {new Date(d.started_at).toLocaleDateString(undefined, {
@@ -253,11 +298,11 @@ export function BuildLogsPanel({
                 size="sm"
                 variant="outline"
                 onClick={() => fetchBuildLogs(appName, buildInfo.number)}
-                disabled={logsLoading}
+                disabled={initialLoading}
                 className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
                 title="Refresh logs"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${logsLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${initialLoading ? 'animate-spin' : ''}`} />
               </Button>
             )}
 
@@ -265,7 +310,7 @@ export function BuildLogsPanel({
               size="sm"
               variant="outline"
               onClick={copyLogs}
-              disabled={!filteredLogs || logsLoading}
+              disabled={!filteredLogs || initialLoading}
               className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
               title="Copy logs"
             >
@@ -276,7 +321,7 @@ export function BuildLogsPanel({
               size="sm"
               variant="outline"
               onClick={downloadLogs}
-              disabled={!buildLogs || logsLoading}
+              disabled={!buildLogs || initialLoading}
               className="h-7 px-2 rounded-none border-white/[0.12] bg-white/[0.03] text-white/60 hover:text-white"
               title="Download logs"
             >
@@ -287,45 +332,47 @@ export function BuildLogsPanel({
 
         {/* Expandable Filter Bar */}
         {showFilters && (
-          <div className="mt-3 pt-3 border-t border-white/10 flex items-center gap-3 flex-wrap">
+          <div className="mt-3 pt-3 border-t border-white/[0.06] flex items-center gap-3 flex-wrap">
             {/* Search Input */}
             <div className="relative flex-1 min-w-[200px] max-w-[400px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40" />
               <Input
-                placeholder="Search build logs..."
+                placeholder="Search build logs…"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-8 h-8 bg-black/30 border-white/20 text-sm"
+                className="pl-9 pr-8 h-7 bg-black/30 border-white/[0.12] text-xs rounded-none"
               />
               {searchTerm && (
                 <button
                   onClick={() => setSearchTerm('')}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
             {/* Log Level Filter */}
             <div className="flex items-center gap-1">
-              {(['all', 'error', 'warn'] as const).map((level) => (
+              {(['all', 'error', 'warn', 'success'] as const).map((level) => (
                 <Button
                   key={level}
                   size="sm"
                   variant="outline"
                   onClick={() => setLogLevel(level)}
-                  className={`h-7 text-xs border-white/20 ${
+                  className={`h-7 text-xs rounded-none border-white/[0.12] ${
                     logLevel === level
                       ? level === 'error'
-                        ? 'bg-red-500/20 text-red-400'
+                        ? 'bg-red-500/20 text-red-400 border-red-500/20'
                         : level === 'warn'
-                        ? 'bg-yellow-500/20 text-yellow-400'
+                        ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/20'
+                        : level === 'success'
+                        ? 'bg-green-500/20 text-green-400 border-green-500/20'
                         : 'bg-white/10 text-white'
-                      : ''
+                      : 'bg-white/[0.03] text-white/50'
                   }`}
                 >
-                  {level === 'all' ? 'All' : level === 'error' ? 'Errors' : 'Warnings'}
+                  {level === 'all' ? 'All' : level === 'error' ? 'Errors' : level === 'warn' ? 'Warnings' : 'Success'}
                 </Button>
               ))}
             </div>
@@ -355,10 +402,43 @@ export function BuildLogsPanel({
         )}
       </CardHeader>
       <CardContent className="p-0">
-        <div className="bg-[#0c0c0c] rounded-b-lg border-t border-white/5 font-mono text-xs">
-          <pre className="p-4 overflow-auto max-h-[600px] whitespace-pre [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
-            {renderLogContent()}
-          </pre>
+        <div className="relative bg-[#0c0c0c] border-t border-white/[0.05] font-mono text-xs h-[600px]">
+          {initialLoading ? (
+            <div className="h-full p-4 space-y-2 overflow-hidden">
+              {Array.from({ length: 30 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-3 rounded bg-white/[0.06] animate-pulse"
+                  style={{ width: `${38 + ((i * 41) % 52)}%` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <pre
+              ref={preRef}
+              onScroll={handleScroll}
+              className="h-full overflow-auto p-4 whitespace-pre
+                [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5
+                [&::-webkit-scrollbar-track]:bg-transparent
+                [&::-webkit-scrollbar-thumb]:bg-white/10
+                hover:[&::-webkit-scrollbar-thumb]:bg-white/20"
+            >
+              {renderLogContent()}
+            </pre>
+          )}
+
+          {/* Jump-to-bottom pill — appears when user scrolled up during live streaming */}
+          {showJumpButton && (
+            <button
+              onClick={jumpToBottom}
+              className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5
+                bg-white/10 hover:bg-white/15 border border-white/[0.15] backdrop-blur
+                text-white/70 hover:text-white text-[11px] px-3 py-1 rounded-full transition-colors"
+            >
+              <ArrowDown className="w-3 h-3" />
+              Jump to latest
+            </button>
+          )}
         </div>
       </CardContent>
     </Card>
