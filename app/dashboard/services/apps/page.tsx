@@ -12,12 +12,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { AppsList, BuildInfo } from "@/components/dashboard/apps";
+import { AppsList } from "@/components/dashboard/apps";
 import { useRealtimeApps } from "@/hooks/use-realtime-apps";
-import api from "@/lib/axios/axios";
+import { useAppBuildState } from "@/hooks/use-app-build-state";
 import { createClient } from "@/lib/supabase/client";
 
 function MetricCard({
@@ -73,11 +73,6 @@ const formatRelativeTime = (dateString?: string) => {
 
 export default function ApplicationDeploymentPage() {
   const [userId, setUserId] = useState<string | null>(null);
-  const [buildInfo, setBuildInfo] = useState<Record<string, BuildInfo>>({});
-  const [buildLogs, setBuildLogs] = useState<Record<string, string>>({});
-  const [fetchedBuilds, setFetchedBuilds] = useState<Set<string>>(new Set());
-  const [logsLoading, setLogsLoading] = useState<Record<string, boolean>>({});
-  const [logsError, setLogsError] = useState<Record<string, string>>({});
   const [localApps, setLocalApps] = useState<typeof realtimeApps>([]);
 
   useEffect(() => {
@@ -115,74 +110,8 @@ export default function ApplicationDeploymentPage() {
     setLocalApps(updater);
   };
 
-  const fetchBuildInfo = useCallback(async (appName: string) => {
-    try {
-      const res = await api.get(`/jenkins/build-info?app=${appName}`, {
-        validateStatus: (status) => status < 500,
-      });
-
-      if (res?.status === 200 && res?.data && !res.data.error) {
-        setBuildInfo((prev) => ({ ...prev, [appName]: res.data }));
-      }
-    } catch (error) {
-      console.log(`[fetchBuildInfo] Build info not available for ${appName}:`, error);
-    }
-  }, []);
-
-  const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
-    setLogsLoading((prev) => ({ ...prev, [appName]: true }));
-    setLogsError((prev) => ({ ...prev, [appName]: "" }));
-
-    try {
-      const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`,
-      );
-
-      if (res?.data?.logs) {
-        setBuildLogs((prev) => ({ ...prev, [appName]: res.data.logs }));
-        setLogsError((prev) => ({ ...prev, [appName]: "" }));
-      } else {
-        setLogsError((prev) => ({ ...prev, [appName]: "No logs available" }));
-      }
-    } catch (error) {
-      console.error(`[fetchBuildLogs] Failed to fetch logs for ${appName}:`, error);
-      setLogsError((prev) => ({ ...prev, [appName]: "Failed to load logs. Click to retry." }));
-    } finally {
-      setLogsLoading((prev) => ({ ...prev, [appName]: false }));
-    }
-  }, []);
-
-  useEffect(() => {
-    deployedApps.forEach((app) => {
-      if (app.status === "pending" || app.status === "deleting") {
-        return;
-      }
-
-      if (!fetchedBuilds.has(app.name)) {
-        fetchBuildInfo(app.name);
-        setFetchedBuilds((prev) => new Set(prev).add(app.name));
-      }
-    });
-  }, [deployedApps, fetchedBuilds, fetchBuildInfo]);
-
-  useEffect(() => {
-    const buildingApps = deployedApps.filter((app) => {
-      const build = buildInfo[app.name];
-      return build?.building || app.status === "building";
-    });
-
-    if (buildingApps.length === 0) {
-      return;
-    }
-
-    const interval = setInterval(() => {
-      buildingApps.forEach((app) => {
-        fetchBuildInfo(app.name);
-      });
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [deployedApps, buildInfo, fetchBuildInfo]);
+  const { buildInfo, buildLogs, logsLoading, logsError, fetchBuildLogs } =
+    useAppBuildState(deployedApps);
 
   const runningApps = deployedApps.filter((app) => app.status === "running").length;
   const buildingApps = deployedApps.filter(

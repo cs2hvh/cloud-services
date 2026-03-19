@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'motion/react';
 import {
@@ -233,7 +233,10 @@ export default function AppDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [buildInfo, setBuildInfo] = useState<BuildInfo | null>(null);
   const [buildLogs, setBuildLogs] = useState<string>('');
-  const [logsLoading, setLogsLoading] = useState(false);
+  // true only for the very first fetch of a build (shows skeleton, hides old logs)
+  const [initialLogLoading, setInitialLogLoading] = useState(false);
+  // tracks the byte/char offset for incremental raw log fetches during active builds
+  const logOffsetRef = useRef(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -320,20 +323,42 @@ export default function AppDetailPage() {
     }
   }, []);
 
-  const fetchBuildLogs = useCallback(async (appName: string, buildNumber: number) => {
-    setLogsLoading(true);
+  const fetchBuildLogs = useCallback(async (
+    appName: string,
+    buildNumber: number,
+    raw = false,
+    append = false,
+  ): Promise<boolean /* more */> => {
+    if (!append) {
+      // Full replacement (initial fetch or build switch) — show skeleton
+      setInitialLogLoading(true);
+      logOffsetRef.current = 0;
+    }
     try {
-      const res = await api.get(
-        `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`
-      );
+      const start = append ? logOffsetRef.current : 0;
+      const url = raw
+        ? `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=${start}`
+        : `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`;
+      const res = await api.get(url);
       if (res.data) {
-        setBuildLogs(res.data.logs || 'No logs available');
+        const newChunk: string = res.data.logs || '';
+        if (append && newChunk) {
+          setBuildLogs((prev) => prev + newChunk);
+        } else if (!append) {
+          setBuildLogs(newChunk || 'No logs available');
+        }
+        // Use the byte offset returned by Jenkins (X-Text-Size header), not character count
+        if (res.data.next_start != null) {
+          logOffsetRef.current = res.data.next_start;
+        }
+        return !!res.data.more;
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
     } finally {
-      setLogsLoading(false);
+      if (!append) setInitialLogLoading(false);
     }
+    return false;
   }, []);
 
   useEffect(() => {
@@ -361,20 +386,47 @@ export default function AppDetailPage() {
 
   useEffect(() => {
     if (app?.name && buildInfo?.number) {
-      fetchBuildLogs(app.name, buildInfo.number);
+      // Use raw logs while building (deployment stage hasn't run yet),
+      // switch to deployment-filtered summary once the build completes.
+      fetchBuildLogs(app.name, buildInfo.number, !!buildInfo.building);
     }
-  }, [app?.name, buildInfo?.number, fetchBuildLogs]);
+  }, [app?.name, buildInfo?.number, buildInfo?.building, fetchBuildLogs]);
 
-  // Poll build info (and refresh logs) while a build is actively running
+  // Poll build info and APPEND new log lines while a build is actively running.
+  // - 2s interval (down from 5s) for faster perceived updates
+  // - fetchBuildInfo and fetchBuildLogs run in parallel to halve per-tick latency
+  // - when Jenkins signals more data is ready (X-More-Data: true), schedule
+  //   a catch-up fetch 400ms later instead of waiting the full 2s
   useEffect(() => {
-    if (!app?.name || !buildInfo?.building) return;
+    if (!app?.name || !buildInfo?.building || !buildInfo?.number) return;
+
+    // Capture stable values to avoid stale closures inside the interval
+    const appName = app.name;
+    const buildNum = buildInfo.number;
+    let catchupId: ReturnType<typeof setTimeout> | null = null;
+
     const interval = setInterval(async () => {
-      await fetchBuildInfo(app.name);
-      if (buildInfo.number) {
-        fetchBuildLogs(app.name, buildInfo.number);
+      // Cancel any pending catch-up — the regular tick covers it
+      if (catchupId) { clearTimeout(catchupId); catchupId = null; }
+
+      const [, more] = await Promise.all([
+        fetchBuildInfo(appName),
+        fetchBuildLogs(appName, buildNum, true, true),
+      ]);
+
+      // Jenkins has more buffered output  — fetch again quickly without waiting the full 2s
+      if (more) {
+        catchupId = setTimeout(async () => {
+          catchupId = null;
+          await fetchBuildLogs(appName, buildNum, true, true);
+        }, 400);
       }
-    }, 5000);
-    return () => clearInterval(interval);
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      if (catchupId) clearTimeout(catchupId);
+    };
   }, [app?.name, buildInfo?.building, buildInfo?.number, fetchBuildInfo, fetchBuildLogs]);
 
   // Initialize edited env vars when app data loads
@@ -538,7 +590,9 @@ export default function AppDetailPage() {
       const data = await res.json();
       setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
 
-      // Immediately reflect the new build so the logs effect re-fires
+      // Clear stale logs immediately and reflect the new in-progress build
+      setBuildLogs('');
+      logOffsetRef.current = 0;
       setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to trigger redeploy';
@@ -571,7 +625,9 @@ export default function AppDetailPage() {
       setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
       setSelectedSize(null);
 
-      // Immediately reflect the new build so the logs effect re-fires
+      // Clear stale logs immediately and reflect the new in-progress build
+      setBuildLogs('');
+      logOffsetRef.current = 0;
       setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resize app';
@@ -693,7 +749,8 @@ export default function AppDetailPage() {
                   Application Deployment
                 </p>
                 {getStatusBadge(app.status, buildInfo?.building)}
-                {appConnectionStatus === 'connected' && (
+                {/* Only show Live when the Supabase connection is up AND the app is actually running */}
+                {appConnectionStatus === 'connected' && app.status === 'running' && !buildInfo?.building && (
                   <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
                     <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
                     Live
@@ -1123,7 +1180,7 @@ export default function AppDetailPage() {
             <BuildLogsPanel 
               buildInfo={buildInfo} 
               buildLogs={buildLogs}
-              logsLoading={logsLoading}
+              initialLoading={initialLogLoading}
               appName={app.name}
               fetchBuildLogs={fetchBuildLogs}
               deployments={deployments}
