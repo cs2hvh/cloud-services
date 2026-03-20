@@ -740,8 +740,8 @@ export class JenkinsService {
   ): string {
     const fw = framework?.toLowerCase();
     
-    // Priority: WEBHOOK_BASE_URL (ngrok) > NEXT_PUBLIC_WEBHOOK_URL (public) > DOMAIN (localhost fallback)
-    const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.NEXT_PUBLIC_WEBHOOK_URL || process.env.DOMAIN || '';
+    // WEBHOOK_BASE_URL (ngrok / tunnel) takes priority in dev; DOMAIN is the production fallback
+    const webhookBaseUrl = process.env.WEBHOOK_BASE_URL || process.env.DOMAIN || '';
 
     switch (fw) {
       case 'simple-test':

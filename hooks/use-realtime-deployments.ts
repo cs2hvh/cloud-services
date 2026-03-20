@@ -37,7 +37,7 @@ interface DeploymentRecord extends Record<string, unknown> {
   commit_sha: string | null;
   image_tag: string | null;
   image_digest: string | null;
-  status: 'success' | 'failed'; // Database values
+  status: 'success' | 'failed' | 'building'; // Database values
   trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
   failure_reason: string | null;
   created_at: string;
@@ -51,7 +51,7 @@ interface Deployment {
   commit_sha: string | null;
   image_tag: string | null;
   image_digest: string | null;
-  status: 'SUCCESS' | 'FAILURE'; // UI values
+  status: 'SUCCESS' | 'FAILURE' | 'BUILDING'; // UI values
   trigger: string;
   failure_reason: string | null;
   created_at: string;
@@ -72,11 +72,11 @@ function transformDeployment(record: DeploymentRecord): Deployment {
   return {
     id: record.id,
     app_id: record.app_id,
-    build_number: record.build_number || 0,
+    build_number: record.build_number ?? 0,
     commit_sha: record.commit_sha,
     image_tag: record.image_tag,
     image_digest: record.image_digest,
-    status: record.status === 'success' ? 'SUCCESS' : 'FAILURE',
+    status: record.status === 'success' ? 'SUCCESS' : record.status === 'building' ? 'BUILDING' : 'FAILURE',
     trigger: record.trigger,
     failure_reason: record.failure_reason,
     created_at: record.created_at,
@@ -112,7 +112,9 @@ export function useRealtimeDeployments({
   });
 
   return {
-    deployments,
+    // Filter out records where build_number was null in the DB;
+    // they coalesce to 0 in transformDeployment and are not useful in the UI.
+    deployments: deployments.filter((d) => d.build_number > 0),
     loading,
     error,
     connectionStatus,

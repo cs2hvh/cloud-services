@@ -17,7 +17,7 @@
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { KubernetesInfoService } from "./kubernetes-info";
 
-export type AppStatus = "pending" | "building" | "running" | "failed" | "stopped";
+export type AppStatus = "pending" | "building" | "running" | "failed" | "stopped" | "deleting";
 
 export interface StatusSyncResult {
   success: boolean;
@@ -37,6 +37,14 @@ export interface K8sHealthCheck {
 }
 
 export class AppStatusService {
+  /** Grace period (ms) after an explicit setStatus() call during which
+   *  syncStatus() will NOT flip running → failed. This prevents the brief
+   *  "Failed" flash that occurs while K8s pods are still stabilising after
+   *  a deployment completes. */
+  private static readonly STATUS_GRACE_PERIOD_MS = 120_000; // 2 minutes
+
+  /** appId → timestamp of last explicit setStatus() call */
+  private static recentStatusSets = new Map<string, number>();
   /**
    * Check the actual health state from Kubernetes
    * This is the SOURCE OF TRUTH
@@ -116,8 +124,8 @@ export class AppStatusService {
         previousStatus = appResult.data.status as AppStatus;
       }
 
-      // pending and stopped are never K8s-managed — always skip, even when force=true.
-      if (previousStatus === "pending" || previousStatus === "stopped") {
+      // pending, stopped, and deleting are never K8s-managed — always skip, even when force=true.
+      if (previousStatus === "pending" || previousStatus === "stopped" || previousStatus === "deleting") {
         return {
           success: true,
           previousStatus,
@@ -127,15 +135,18 @@ export class AppStatusService {
         };
       }
 
-      // building is managed by BuildPollingService; skip unless force=true, which is only
-      // used for stale-build recovery (BuildPollingService died before writing final status).
-      if (!force && previousStatus === "building") {
+      // building is exclusively managed by BuildPollingService — always skip.
+      // Even force=true must not override it: the client-side stale-build
+      // reconciliation (use-app-build-state Effect 3) races with
+      // BuildPollingService.waitForHealthy(), causing a brief "Failed" flash
+      // when K8s pods aren't ready yet during normal deployments.
+      if (previousStatus === "building") {
         return {
           success: true,
           previousStatus,
           currentStatus: previousStatus,
           changed: false,
-          reason: `Status '${previousStatus}' is not synced from K8s`,
+          reason: `Status '${previousStatus}' is managed by BuildPollingService`,
         };
       }
 
@@ -144,6 +155,21 @@ export class AppStatusService {
 
       // Determine new status based on K8s state
       const newStatus: AppStatus = health.healthy ? "running" : "failed";
+
+      // Grace period: after a deployment completes, pods may still be stabilising
+      // (rolling update). Don't flip running → failed during the grace window.
+      if (previousStatus === "running" && newStatus === "failed") {
+        const lastSet = this.recentStatusSets.get(appId);
+        if (lastSet && Date.now() - lastSet < this.STATUS_GRACE_PERIOD_MS) {
+          return {
+            success: true,
+            previousStatus,
+            currentStatus: previousStatus,
+            changed: false,
+            reason: `Skipping running→failed transition during grace period (${health.reason})`,
+          };
+        }
+      }
 
       // Only update if changed
       if (newStatus === previousStatus) {
@@ -216,6 +242,9 @@ export class AppStatusService {
       if (!result.success) {
         return { success: false, error: result.error };
       }
+
+      // Record the timestamp so syncStatus() can enforce a grace period
+      this.recentStatusSets.set(appId, Date.now());
 
       console.log(`[AppStatusService] ✅ Status set: ${appId} → ${status}${reason ? ` (${reason})` : ''}`);
       return { success: true };

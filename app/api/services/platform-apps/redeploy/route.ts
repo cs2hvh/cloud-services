@@ -3,7 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { AppStatusService } from "@/lib/services/app-status";
@@ -195,6 +195,15 @@ export async function POST(req: NextRequest) {
       const buildNumber = await JenkinsService.triggerBuild(app.name);
 
       console.log(`[Redeploy] Triggered build #${buildNumber} for app: ${app.name}`);
+
+      // Create deployment row immediately so Supabase Realtime pushes it to the UI.
+      // BuildPollingService will UPDATE this row on completion (success/failed).
+      await Platform_App_Deployments.create({
+        app_id: app.id,
+        build_number: buildNumber,
+        status: 'building',
+        trigger: 'manual',
+      });
 
       // Start background polling for build status
       BuildPollingService.startPolling({

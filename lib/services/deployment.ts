@@ -2,6 +2,7 @@
  * Deployment Service - Orchestrates app deployment
  */
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
+import { Platform_App_Deployments } from "@/lib/supabase/queries";
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
@@ -192,6 +193,15 @@ export class DeploymentService {
           containerPort
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
+
+        // Create deployment row immediately so Supabase Realtime pushes it to the UI.
+        // BuildPollingService will UPDATE this row on completion (success/failed).
+        await Platform_App_Deployments.create({
+          app_id: app.id,
+          build_number: 1,
+          status: 'building',
+          trigger: 'manual',
+        });
 
         // Start background polling for build status
         BuildPollingService.startPolling({

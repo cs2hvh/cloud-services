@@ -3037,7 +3037,7 @@ export const Platform_App_Deployments = {
     commit_sha?: string | null;
     image_tag?: string | null;
     image_digest?: string | null;
-    status: 'success' | 'failed';
+    status: 'success' | 'failed' | 'building';
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     failure_reason?: string | null;
   }) => {
@@ -3125,6 +3125,38 @@ export const Platform_App_Deployments = {
 
       const previous = (data || [])[0] || null;
       return { success: true, data: previous };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_status: async (
+    appId: string,
+    buildNumber: number,
+    updates: {
+      status: 'success' | 'failed';
+      image_tag?: string | null;
+      image_digest?: string | null;
+      failure_reason?: string | null;
+    }
+  ) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .update({
+          status: updates.status,
+          ...(updates.image_tag !== undefined && { image_tag: updates.image_tag }),
+          ...(updates.image_digest !== undefined && { image_digest: updates.image_digest }),
+          ...(updates.failure_reason !== undefined && { failure_reason: updates.failure_reason }),
+        })
+        .eq('app_id', appId)
+        .eq('build_number', buildNumber)
+        .select('*')
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
     } catch (err) {
       return { success: false, error: String(err) };
     }
