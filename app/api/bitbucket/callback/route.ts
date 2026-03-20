@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function GET(request: NextRequest) {
   // Define domain once at the top for all redirects
-  const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
+  const domain = process.env.DOMAIN;
   
   try {
     const { searchParams } = new URL(request.url);

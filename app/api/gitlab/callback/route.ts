@@ -17,7 +17,7 @@ import { NextResponse } from "next/server";
  */
 export async function GET(request: NextRequest) {
   // Define domain once at the top for all redirects
-  const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const domain = process.env.DOMAIN || 'http://localhost:3000';
   
   try {
     const { searchParams } = new URL(request.url);
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("[GitLab Callback] Error:", error);
-    const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
+    const domain = process.env.DOMAIN;
     return NextResponse.redirect(`${domain}/dashboard/settings?error=unknown`);
   }
 }

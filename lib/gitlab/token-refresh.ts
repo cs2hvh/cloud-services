@@ -32,7 +32,7 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
   try {
     const clientId = process.env.GITLAB_CLIENT_ID;
     const clientSecret = process.env.GITLAB_CLIENT_SECRET;
-    const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
+    const domain = process.env.DOMAIN;
     
     // Validate required configuration
     if (!clientId || !clientSecret) {
@@ -41,7 +41,7 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
     }
     
     if (!domain) {
-      console.error('[GitLab Token Refresh] Missing DOMAIN or NEXT_PUBLIC_SITE_URL environment variable');
+      console.error('[GitLab Token Refresh] Missing DOMAIN  environment variable');
       return { accessToken: null, newRefreshToken: null, expiresIn: null };
     }
     

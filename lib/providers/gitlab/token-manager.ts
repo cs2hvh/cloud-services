@@ -45,7 +45,7 @@ export class GitLabTokenManager {
 
       // GitLab requires redirect_uri to match the original authorization request
       // IMPORTANT: Must match the redirect_uri used in /api/gitlab/callback/route.ts
-      const redirectUri = `${process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL}/api/gitlab/callback`;
+      const redirectUri = `${process.env.DOMAIN}/api/gitlab/callback`;
 
       const response = await fetch('https://gitlab.com/oauth/token', {
         method: 'POST',

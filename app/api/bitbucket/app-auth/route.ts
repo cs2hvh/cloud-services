@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     // Bitbucket App OAuth flow for repository access
     const clientId = process.env.BITBUCKET_CLIENT_ID;
-    const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
+    const domain = process.env.DOMAIN;
     const redirectUri = `${domain}/api/bitbucket/callback`;
     
     if (!clientId) {
