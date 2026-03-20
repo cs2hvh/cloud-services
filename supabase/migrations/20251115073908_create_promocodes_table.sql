@@ -35,26 +35,28 @@ COMMENT ON COLUMN billing.promocodes.is_active IS 'Whether the coupon is active 
 ALTER TABLE billing.promocodes ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Admins can do everything
-CREATE POLICY "Admins have full access to promocodes"
-ON billing.promocodes
-FOR ALL
-USING (
-    EXISTS (
-        SELECT 1 FROM public.user_profiles
-        WHERE user_profiles.id = auth.uid()
-        AND 'admin' = ANY(user_profiles.roles)
-    )
-);
+DO $$ BEGIN
+    CREATE POLICY "Admins have full access to promocodes"
+    ON billing.promocodes FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1 FROM public.user_profiles
+            WHERE user_profiles.id = auth.uid()
+            AND 'admin' = ANY(user_profiles.roles)
+        )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Policy: Users can read active, non-expired coupons they haven't redeemed
-CREATE POLICY "Users can view available promocodes"
-ON billing.promocodes
-FOR SELECT
-USING (
-    is_active = true 
-    AND valid_till > NOW()
-    AND auth.uid() IS NOT NULL
-);
+DO $$ BEGIN
+    CREATE POLICY "Users can view available promocodes"
+    ON billing.promocodes FOR SELECT
+    USING (
+        is_active = true 
+        AND valid_till > NOW()
+        AND auth.uid() IS NOT NULL
+    );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Grant necessary permissions
 GRANT SELECT ON billing.promocodes TO authenticated;
