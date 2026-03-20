@@ -316,7 +316,17 @@ export default function AppDetailPage() {
     try {
        const res = await api.get(`/jenkins/build-info?app=${appName}`);
       if (res.data) {
-        setBuildInfo(res.data);
+        setBuildInfo((prev) => {
+          // Guard: after triggering a redeploy, Jenkins takes ~5s to register
+          // the new build. During that window it returns the PREVIOUS build's
+          // info (older number, building=false). Don't let that overwrite our
+          // optimistic state for the new build. Once Jenkins knows about the
+          // new build number, accept all updates (including completion).
+          if (prev?.building && res.data.number < prev.number) {
+            return prev;
+          }
+          return res.data;
+        });
       }
     } catch (error) {
       console.error('Error fetching build info:', error);

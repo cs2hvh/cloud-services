@@ -5,6 +5,8 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
+import { AppStatusService } from "@/lib/services/app-status";
+import { Platform_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -50,6 +52,27 @@ export async function POST(req: NextRequest) {
 
     // Delete using shared service (handles all cleanup)
     try {
+      // Verify app exists and check ownership before setting status
+      const existing = await Platform_Apps.get(app_id);
+      if (!existing.success || !existing.data) {
+        return NextResponse.json({ error: "App not found", message: "App not found" }, { status: 404 });
+      }
+      if (!isAdminUser && existing.data.user_id !== auth.user!.id) {
+        return NextResponse.json({ error: "Unauthorized", message: "Unauthorized" }, { status: 403 });
+      }
+
+      // Block deletion while a build is actively in progress
+      if (existing.data.status === 'building') {
+        return NextResponse.json(
+          { error: "Cannot delete while a build is in progress. Wait for the build to complete or fail.", message: "Cannot delete while building" },
+          { status: 409 }
+        );
+      }
+
+      // Mark as "deleting" in DB so syncStatus skips this app and
+      // Supabase Realtime pushes the visual "Deleting…" state to all clients.
+      await AppStatusService.setStatus(app_id, "deleting");
+
       await PlatformAppService.deleteApp({
         appId: app_id,
         userId: auth.user!.id,
@@ -61,7 +84,12 @@ export async function POST(req: NextRequest) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       const statusCode = errorMsg === "App not found" ? 404 :
                         errorMsg === "Unauthorized" ? 403 : 400;
-      
+
+      // Revert status from "deleting" back to "failed" so the user can retry
+      try {
+        await AppStatusService.setStatus(app_id, "failed", `Deletion failed: ${errorMsg}`);
+      } catch { /* best-effort revert */ }
+
       return NextResponse.json(
         { error: errorMsg, message: errorMsg },
         { status: statusCode }
