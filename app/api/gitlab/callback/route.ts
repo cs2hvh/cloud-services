@@ -149,7 +149,6 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error("[GitLab Callback] Error:", error);
-    const domain = process.env.DOMAIN;
     return NextResponse.redirect(`${domain}/dashboard/settings?error=unknown`);
   }
 }
