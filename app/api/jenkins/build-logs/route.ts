@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   let searchParams: URLSearchParams;
   try {
     searchParams = new URL(req.url).searchParams;
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Invalid request URL" }, { status: 400 });
   }
 

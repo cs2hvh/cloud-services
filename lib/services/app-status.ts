@@ -110,8 +110,7 @@ export class AppStatusService {
   static async syncStatus(
     appId: string,
     appName: string,
-    currentDbStatus?: AppStatus,
-    force = false
+    currentDbStatus?: AppStatus
   ): Promise<StatusSyncResult> {
     try {
       // Get current DB status if not provided
@@ -130,7 +129,7 @@ export class AppStatusService {
         previousStatus = appResult.data.status as AppStatus;
       }
 
-      // pending, stopped, and deleting are never K8s-managed — always skip, even when force=true.
+      // pending, stopped, and deleting are never K8s-managed — always skip.
       if (previousStatus === "pending" || previousStatus === "stopped" || previousStatus === "deleting") {
         return {
           success: true,
@@ -142,10 +141,10 @@ export class AppStatusService {
       }
 
       // building is exclusively managed by BuildPollingService — always skip.
-      // Even force=true must not override it: the client-side stale-build
+      // syncStatus must never override it: the client-side stale-build
       // reconciliation (use-app-build-state Effect 3) races with
-      // BuildPollingService.waitForHealthy(), causing a brief "Failed" flash
-      // when K8s pods aren't ready yet during normal deployments.
+      // BuildPollingService.waitForHealthy(); letting syncStatus write
+      // "failed" here causes a brief flash before BuildPolling sets "running".
       if (previousStatus === "building") {
         return {
           success: true,

@@ -134,8 +134,7 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
   // When Supabase transitions an app into 'building', the cached Jenkins buildInfo
   // belongs to the previous build and must be evicted. Without eviction, the
   // reconciliation effect (Effect 3) would see the stale {building:false} entry
-  // and fire force=true against a genuinely-starting build, potentially flipping
-  // its DB status to 'running/failed' based on transient K8s pod state.
+  // and trigger a health check against a genuinely-starting build.
   //
   // justStartedBuildingRef is written synchronously here and read by Effect 3
   // (both run in the same React commit). setBuildInfo is async (schedules re-render),
@@ -161,8 +160,8 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
   // If the DB says 'building' but BuildPollingService died before writing the
   // final status (dev server restart, process crash), the status stays stale
   // forever. Once Jenkins confirms the build finished (building=false), call the
-  // health endpoint with force=true to let the server check actual K8s pod state
-  // and write the corrected status. Supabase Realtime then pushes the fix to the UI.
+  // health endpoint to let the server sync actual K8s pod state and write the
+  // corrected status. Supabase Realtime then pushes the fix to the UI.
   //
   // justStartedBuildingRef prevents firing during the window between Supabase
   // pushing 'building' and Jenkins returning building=true — see Effect 2.
@@ -183,7 +182,7 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
       if (info && !info.building && !justStartedBuildingRef.current.has(app.id)) {
         reconciledRef.current.add(app.id);
         api
-          .get(`/services/platform-apps/health?app_id=${app.id}&force=true`)
+          .get(`/services/platform-apps/health?app_id=${app.id}`)
           .catch(() => {
             // Allow retry on transient failure (429, network blip)
             reconciledRef.current.delete(app.id);
