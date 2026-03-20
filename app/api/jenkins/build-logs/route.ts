@@ -6,7 +6,15 @@ import { JenkinsService } from "@/lib/services/jenkins";
  * Get Jenkins build logs for an app
  */
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
+  // Parse URL/search params inside try so malformed URLs don't throw outside
+  // the route handler and cause an unhandled exception in Next.
+  let searchParams: URLSearchParams;
+  try {
+    searchParams = new URL(req.url).searchParams;
+  } catch (err) {
+    return NextResponse.json({ error: "Invalid request URL" }, { status: 400 });
+  }
+
   const appName = searchParams.get("app");
   const buildNumber = searchParams.get("build");
   const start = searchParams.get("start") || "0";

@@ -44,6 +44,12 @@ export class AppStatusService {
   private static readonly STATUS_GRACE_PERIOD_MS = 120_000; // 2 minutes
 
   /** appId → timestamp of last explicit setStatus() call */
+  // NOTE: This is an in-memory map and is not shared across instances. In a
+  // multi-process or multi-node deployment, a server restart or different
+  // process will not have this history, which means the grace period can be
+  // bypassed if the process that recorded the setStatus() is gone. This is a
+  // known limitation; a durable store would be required to make the grace
+  // period resilient across restarts/replicas.
   private static recentStatusSets = new Map<string, number>();
   /**
    * Check the actual health state from Kubernetes

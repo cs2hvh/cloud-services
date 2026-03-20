@@ -196,6 +196,11 @@ export class DeploymentService {
 
         // Create deployment row immediately so Supabase Realtime pushes it to the UI.
         // BuildPollingService will UPDATE this row on completion (success/failed).
+        // Note: we seed the initial deployment row with build_number: 1 for
+        // brand-new jobs. This assumes Jenkins will start numbering builds at
+        // 1 for a new job. If your CI setup can retry or replay jobs that reuse
+        // build numbers, consider deriving the build number from Jenkins' job
+        // creation response or querying the next expected build number.
         await Platform_App_Deployments.create({
           app_id: app.id,
           build_number: 1,
