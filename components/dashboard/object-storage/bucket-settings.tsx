@@ -245,12 +245,12 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
               setSettings((prev) => ({ ...prev, acl: value }))
             }
           >
-            <SelectTrigger className="bg-white/5 border-white/10 text-white">
+            <SelectTrigger className="bg-white/5 border-white/10 text-white cursor-pointer">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-black border-white/10">
-              <SelectItem value="private">Private</SelectItem>
-              <SelectItem value="public-read">Public Read</SelectItem>
+            <SelectContent className="bg-black border-white/10 cursor-pointer">
+              <SelectItem className="cursor-pointer" value="private">Private</SelectItem>
+              <SelectItem className="cursor-pointer" value="public-read">Public Read</SelectItem>
             </SelectContent>
           </Select>
         ) : (
@@ -282,6 +282,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
         {editMode.cors ? (
           <div className="flex items-center gap-3">
             <Switch
+              className="cursor-pointer"
               checked={settings.corsEnabled}
               onCheckedChange={(checked) =>
                 setSettings((prev) => ({ ...prev, corsEnabled: checked }))
@@ -319,6 +320,7 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
         {editMode.versioning ? (
           <div className="flex items-center gap-3">
             <Switch
+              className="cursor-pointer"
               checked={settings.versioningEnabled}
               onCheckedChange={(checked) =>
                 setSettings((prev) => ({ ...prev, versioningEnabled: checked }))
@@ -363,13 +365,13 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
               }))
             }
           >
-            <SelectTrigger className="bg-white/5 border-white/10 text-white">
+            <SelectTrigger className="bg-white/5 border-white/10 text-white cursor-pointer">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-black border-white/10">
               <SelectItem value="none">No project</SelectItem>
               {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
+                <SelectItem className="cursor-pointer" key={project.id} value={project.id}>
                   {project.name}
                   
                 </SelectItem>

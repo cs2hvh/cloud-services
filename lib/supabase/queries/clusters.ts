@@ -296,4 +296,93 @@ export const Clusters = {
       return [];
     }
   },
+
+  /**
+   * Create a new Kubernetes cluster
+   */
+  create: async (clusterData: {
+    cluster_id: string;
+    cluster_name: string;
+    status: string;
+    owner_id: string;
+    project_id?: string;
+    kubeconfig?: string | null;
+    k8s_version?: string;
+    create_status?: boolean;
+    connect_status?: boolean;
+    verify_status?: boolean;
+    node_config?: Record<string, unknown>;
+  }): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      const { data, error } = await supabase
+        .from("clusters")
+        .insert({
+          cluster_id: clusterData.cluster_id,
+          cluster_name: clusterData.cluster_name,
+          status: clusterData.status || "pending",
+          owner_id: clusterData.owner_id,
+          project_id: clusterData.project_id || null,
+          kubeconfig: clusterData.kubeconfig || null,
+          k8s_version: clusterData.k8s_version || null,
+          create_status: clusterData.create_status ?? false,
+          connect_status: clusterData.connect_status ?? false,
+          verify_status: clusterData.verify_status ?? false,
+          node_config: clusterData.node_config || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[Clusters] Insert failed:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error("[Clusters] Create error:", errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  },
+
+  /**
+   * Update a Kubernetes cluster
+   */
+  update: async (
+    cluster_id: string,
+    updates: {
+      status?: string;
+      project_id?: string;
+      kubeconfig?: string | null;
+      k8s_version?: string;
+      create_status?: boolean;
+      connect_status?: boolean;
+      verify_status?: boolean;
+      node_config?: Record<string, unknown>;
+    }
+  ): Promise<{ success: boolean; data?: any; error?: string }> => {
+    try {
+      const supabase = await createServiceClient();
+      
+      const { data, error } = await supabase
+        .from("clusters")
+        .update(updates)
+        .eq("cluster_id", cluster_id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[Clusters] Update failed:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data };
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error("[Clusters] Update error:", errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  },
 };

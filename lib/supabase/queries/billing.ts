@@ -606,4 +606,29 @@ export const Billing = {
 
     return { transactions: data ?? [], total: count ?? 0 };
   },
+
+  /**
+   * Stop billing for a Kubernetes cluster and charge for remaining time
+   */
+  remove_active_kubernetes: async (serviceId: string): Promise<void> => {
+    // We need userId to properly close the service, but we can look it up from the active record
+    const supabase = await createServiceClient();
+    const { data: active } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .select("user_id")
+      .eq("service_id", serviceId)
+      .maybeSingle();
+
+    if (!active) {
+      console.warn(`[Billing.remove_active_kubernetes] No active record found for ${serviceId}`);
+      return;
+    }
+
+    await Billing.close_active_service("kubernetes", {
+      userId: active.user_id,
+      serviceId,
+      failOnInsufficient: false,
+    });
+  },
 };

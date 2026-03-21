@@ -78,6 +78,7 @@ const SolutionsDatabasePage = () => {
       { name: "workload", placeholder: "Tell us about your database needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Managed Databases",
   };
 
   return (

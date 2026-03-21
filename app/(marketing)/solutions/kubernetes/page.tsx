@@ -77,6 +77,7 @@ const SolutionsKubernetesPage = () => {
       { name: "workload", placeholder: "Tell us about your K8s workload...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Cloud-Native Kubernetes",
   };
 
   return (

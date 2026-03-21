@@ -78,6 +78,7 @@ const AiMlPage = () => {
       { name: "workload", placeholder: "Tell us about your AI workload...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "AI & ML",
   };
   return (
     <main  style={{backgroundColor:"#0E0F0F"}} >
