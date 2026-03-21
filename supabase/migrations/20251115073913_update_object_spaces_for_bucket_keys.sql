@@ -6,6 +6,15 @@
 ALTER TABLE object_spaces DROP CONSTRAINT IF EXISTS valid_access_key;
 ALTER TABLE object_spaces DROP CONSTRAINT IF EXISTS valid_bucket;
 
+-- Table shape may differ depending on previous history; ensure referenced columns exist.
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS key_id TEXT;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS secret_key TEXT;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS bucket_id TEXT;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS endpoint TEXT;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS acl TEXT;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS size_bytes BIGINT DEFAULT 0;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS object_count INTEGER DEFAULT 0;
+ALTER TABLE object_spaces ADD COLUMN IF NOT EXISTS parent_access_key_id UUID REFERENCES object_spaces(id) ON DELETE CASCADE;
 -- Add new constraints that allow buckets to have access keys
 ALTER TABLE object_spaces ADD CONSTRAINT valid_access_key CHECK (
   type != 'access_key' OR (
@@ -19,7 +28,6 @@ ALTER TABLE object_spaces ADD CONSTRAINT valid_access_key CHECK (
     AND object_count = 0
   )
 );
-
 -- Updated constraint: Buckets can now have access_key and secret_key fields
 -- parent_access_key_id is now optional since keys are stored directly
 ALTER TABLE object_spaces ADD CONSTRAINT valid_bucket CHECK (
@@ -31,7 +39,6 @@ ALTER TABLE object_spaces ADD CONSTRAINT valid_bucket CHECK (
     -- parent_access_key_id is now optional
   )
 );
-
 -- Add comments
 COMMENT ON COLUMN object_spaces.key_id IS 'Access key ID - for access_key type, or optionally stored with bucket type';
 COMMENT ON COLUMN object_spaces.secret_key IS 'Encrypted secret key - for access_key type, or optionally stored with bucket type';

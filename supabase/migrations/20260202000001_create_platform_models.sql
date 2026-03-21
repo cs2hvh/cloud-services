@@ -32,36 +32,29 @@ CREATE TABLE IF NOT EXISTS agents.platform_models (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
-
 -- Indexes
 CREATE INDEX idx_platform_models_provider ON agents.platform_models(provider);
 CREATE INDEX idx_platform_models_active ON agents.platform_models(is_active);
 CREATE INDEX idx_platform_models_sort ON agents.platform_models(sort_order);
-
 -- Enable RLS
 ALTER TABLE agents.platform_models ENABLE ROW LEVEL SECURITY;
-
 -- Policies: Anyone can read active models, only admins can modify
 CREATE POLICY "Anyone can view active platform models"
   ON agents.platform_models FOR SELECT
   USING (is_active = true);
-
 CREATE POLICY "Service role can manage platform models"
   ON agents.platform_models FOR ALL
   TO service_role
   USING (true)
   WITH CHECK (true);
-
 -- Grant permissions
 GRANT SELECT ON agents.platform_models TO authenticated;
 GRANT ALL ON agents.platform_models TO service_role;
-
 -- Updated at trigger
 CREATE TRIGGER update_platform_models_updated_at
   BEFORE UPDATE ON agents.platform_models
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
 -- ============================================================
 -- Insert default OpenRouter models
 -- ============================================================
@@ -190,7 +183,6 @@ ON CONFLICT (model_id) DO UPDATE SET
   input_cost_per_million = EXCLUDED.input_cost_per_million,
   output_cost_per_million = EXCLUDED.output_cost_per_million,
   updated_at = now();
-
 -- ============================================================
 -- Comments
 -- ============================================================

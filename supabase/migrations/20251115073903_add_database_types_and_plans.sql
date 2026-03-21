@@ -9,7 +9,6 @@ CREATE TABLE IF NOT EXISTS database_types (
     available BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
 -- Insert sample database types with versions
 INSERT INTO database_types (code, name, description, icon_url, versions, available) VALUES
 ('mysql', 'MySQL', 'Popular open-source relational database', 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mysql/mysql-original.svg', '["8"]'::jsonb, true),
@@ -22,36 +21,34 @@ ON CONFLICT (code) DO UPDATE SET
     icon_url = EXCLUDED.icon_url,
     versions = EXCLUDED.versions,
     available = EXCLUDED.available;
-
--- Insert sample database plans into products table (if they don't exist)
--- MySQL plans
-INSERT INTO products (id, name, description, type, sub, resources, discount, price) VALUES
-('db-mysql-starter', 'Starter', 'Entry-level MySQL database', 'database', 'mysql', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null, 15.00),
-('db-mysql-basic', 'Basic', 'Basic MySQL database', 'database', 'mysql', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null, 35.00),
-('db-mysql-professional', 'Professional', 'Professional MySQL database', 'database', 'mysql', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null, 75.00),
-('db-mysql-business', 'Business', 'Business MySQL database', 'database', 'mysql', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null, 150.00)
-ON CONFLICT (id) DO NOTHING;
-
--- PostgreSQL plans
-INSERT INTO products (id, name, description, type, sub, resources, discount, price) VALUES
-('db-pg-starter', 'Starter', 'Entry-level PostgreSQL database', 'database', 'pg', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null, 15.00),
-('db-pg-basic', 'Basic', 'Basic PostgreSQL database', 'database', 'pg', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null, 35.00),
-('db-pg-professional', 'Professional', 'Professional PostgreSQL database', 'database', 'pg', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null, 75.00),
-('db-pg-business', 'Business', 'Business PostgreSQL database', 'database', 'pg', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null, 150.00)
-ON CONFLICT (id) DO NOTHING;
-
--- MongoDB plans
-INSERT INTO products (id, name, description, type, sub, resources, discount, price) VALUES
-('db-mongodb-starter', 'Starter', 'Entry-level MongoDB database', 'database', 'mongodb', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null, 15.00),
-('db-mongodb-basic', 'Basic', 'Basic MongoDB database', 'database', 'mongodb', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null, 35.00),
-('db-mongodb-professional', 'Professional', 'Professional MongoDB database', 'database', 'mongodb', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null, 75.00),
-('db-mongodb-business', 'Business', 'Business MongoDB database', 'database', 'mongodb', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null, 150.00)
-ON CONFLICT (id) DO NOTHING;
-
--- Kafka plans
-INSERT INTO products (id, name, description, type, sub, resources, discount, price) VALUES
-('db-kafka-starter', 'Starter', 'Entry-level Kafka cluster', 'database', 'kafka', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null, 15.00),
-('db-kafka-basic', 'Basic', 'Basic Kafka cluster', 'database', 'kafka', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null, 35.00),
-('db-kafka-professional', 'Professional', 'Professional Kafka cluster', 'database', 'kafka', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null, 75.00),
-('db-kafka-business', 'Business', 'Business Kafka cluster', 'database', 'kafka', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null, 150.00)
-ON CONFLICT (id) DO NOTHING;
+-- Insert sample database plans into products table (if they don't exist).
+-- products.id is UUID in baseline schema, so do not provide text IDs.
+WITH plans(name, description, type, sub, resources, discount, price) AS (
+    VALUES
+    ('Starter', 'Entry-level MySQL database', 'database'::product_type, 'mysql', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null::numeric, 15.00::numeric),
+    ('Basic', 'Basic MySQL database', 'database'::product_type, 'mysql', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null::numeric, 35.00::numeric),
+    ('Professional', 'Professional MySQL database', 'database'::product_type, 'mysql', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null::numeric, 75.00::numeric),
+    ('Business', 'Business MySQL database', 'database'::product_type, 'mysql', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null::numeric, 150.00::numeric),
+    ('Starter', 'Entry-level PostgreSQL database', 'database'::product_type, 'pg', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null::numeric, 15.00::numeric),
+    ('Basic', 'Basic PostgreSQL database', 'database'::product_type, 'pg', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null::numeric, 35.00::numeric),
+    ('Professional', 'Professional PostgreSQL database', 'database'::product_type, 'pg', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null::numeric, 75.00::numeric),
+    ('Business', 'Business PostgreSQL database', 'database'::product_type, 'pg', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null::numeric, 150.00::numeric),
+    ('Starter', 'Entry-level MongoDB database', 'database'::product_type, 'mongodb', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null::numeric, 15.00::numeric),
+    ('Basic', 'Basic MongoDB database', 'database'::product_type, 'mongodb', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null::numeric, 35.00::numeric),
+    ('Professional', 'Professional MongoDB database', 'database'::product_type, 'mongodb', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null::numeric, 75.00::numeric),
+    ('Business', 'Business MongoDB database', 'database'::product_type, 'mongodb', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null::numeric, 150.00::numeric),
+    ('Starter', 'Entry-level Kafka cluster', 'database'::product_type, 'kafka', '{"cpu": 1, "ram": 1, "storage": 15}'::jsonb, null::numeric, 15.00::numeric),
+    ('Basic', 'Basic Kafka cluster', 'database'::product_type, 'kafka', '{"cpu": 1, "ram": 2, "storage": 34}'::jsonb, null::numeric, 35.00::numeric),
+    ('Professional', 'Professional Kafka cluster', 'database'::product_type, 'kafka', '{"cpu": 2, "ram": 4, "storage": 56}'::jsonb, null::numeric, 75.00::numeric),
+    ('Business', 'Business Kafka cluster', 'database'::product_type, 'kafka', '{"cpu": 4, "ram": 8, "storage": 120}'::jsonb, null::numeric, 150.00::numeric)
+)
+INSERT INTO products (name, description, type, sub, resources, discount, price)
+SELECT p.name, p.description, p.type, p.sub, p.resources, p.discount, p.price
+FROM plans p
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM products existing
+    WHERE existing.type = p.type
+      AND existing.sub = p.sub
+      AND existing.name = p.name
+);

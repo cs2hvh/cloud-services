@@ -6,43 +6,33 @@
 --          and git_webhook service type for audit logging
 -- ============================================
 
--- Step 1: Drop existing CHECK constraints
-ALTER TABLE public.audit_logs 
-  DROP CONSTRAINT IF EXISTS audit_logs_action_check;
+DO $$
+DECLARE
+  target_table regclass;
+BEGIN
+  target_table := COALESCE(
+    to_regclass('public.audit_logs'),
+    to_regclass('audits.audit_logs')
+  );
 
-ALTER TABLE public.audit_logs 
-  DROP CONSTRAINT IF EXISTS audit_logs_service_type_check;
+  IF target_table IS NULL THEN
+    RAISE NOTICE 'No audit_logs table found in public/audits schema; skipping migration.';
+    RETURN;
+  END IF;
 
--- Step 2: Add new CHECK constraint for actions (includes new token, webhook, and auth actions)
-ALTER TABLE public.audit_logs 
-  ADD CONSTRAINT audit_logs_action_check 
-  CHECK (action IN (
-    'create', 
-    'update', 
-    'delete', 
-    'login', 
-    'logout',
-    'token_expired',
-    'token_refreshed',
-    'webhook_received',
-    'provider_connect',
-    'provider_disconnect',
-    'password_change'
-  ));
+  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS audit_logs_action_check', target_table);
+  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS audit_logs_service_type_check', target_table);
 
--- Step 3: Add new CHECK constraint for service_type (includes git_webhook)
-ALTER TABLE public.audit_logs 
-  ADD CONSTRAINT audit_logs_service_type_check 
-  CHECK (service_type IN (
-    'kubernetes', 
-    'database', 
-    'network_ddos', 
-    'platform_apps', 
-    'object_storage',
-    'auth',
-    'git_webhook'
-  ));
+  EXECUTE format(
+    'ALTER TABLE %s ADD CONSTRAINT audit_logs_action_check CHECK (action IN (''create'', ''update'', ''delete'', ''login'', ''logout'', ''token_expired'', ''token_refreshed'', ''webhook_received'', ''provider_connect'', ''provider_disconnect'', ''password_change''))',
+    target_table
+  );
 
+  EXECUTE format(
+    'ALTER TABLE %s ADD CONSTRAINT audit_logs_service_type_check CHECK (service_type IN (''kubernetes'', ''database'', ''network_ddos'', ''platform_apps'', ''object_storage'', ''auth'', ''git_webhook''))',
+    target_table
+  );
+END $$;
 -- ============================================
 -- VERIFICATION
 -- ============================================

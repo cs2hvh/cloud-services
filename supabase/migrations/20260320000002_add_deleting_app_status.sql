@@ -4,7 +4,6 @@
 
 ALTER TABLE platform_apps
   DROP CONSTRAINT IF EXISTS platform_apps_status_check;
-
 ALTER TABLE platform_apps
   ADD CONSTRAINT platform_apps_status_check
     CHECK (status IN ('pending', 'building', 'running', 'failed', 'stopped', 'deleting'));

@@ -62,6 +62,10 @@ CREATE TABLE IF NOT EXISTS object_spaces (
   )
 );
 
+-- Table may already exist from an earlier shape; backfill expected column for replay safety.
+ALTER TABLE object_spaces
+  ADD COLUMN IF NOT EXISTS parent_access_key_id UUID REFERENCES object_spaces(id) ON DELETE CASCADE;
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_object_spaces_type ON object_spaces(type);
 CREATE INDEX IF NOT EXISTS idx_object_spaces_owner_id ON object_spaces(owner_id);
@@ -69,27 +73,13 @@ CREATE INDEX IF NOT EXISTS idx_object_spaces_parent_key ON object_spaces(parent_
 CREATE INDEX IF NOT EXISTS idx_object_spaces_project_id ON object_spaces(project_id);
 CREATE INDEX IF NOT EXISTS idx_object_spaces_status ON object_spaces(status);
 CREATE INDEX IF NOT EXISTS idx_object_spaces_type_owner ON object_spaces(type, owner_id);
-
 -- Enable Row Level Security
 ALTER TABLE object_spaces ENABLE ROW LEVEL SECURITY;
-
 -- RLS Policies
-CREATE POLICY "Users can view their own object spaces"
-  ON object_spaces FOR SELECT
-  USING (auth.uid() = owner_id);
-
-CREATE POLICY "Users can create their own object spaces"
-  ON object_spaces FOR INSERT
-  WITH CHECK (auth.uid() = owner_id);
-
-CREATE POLICY "Users can update their own object spaces"
-  ON object_spaces FOR UPDATE
-  USING (auth.uid() = owner_id);
-
-CREATE POLICY "Users can delete their own object spaces"
-  ON object_spaces FOR DELETE
-  USING (auth.uid() = owner_id);
-
+DO $$ BEGIN CREATE POLICY "Users can view their own object spaces" ON object_spaces FOR SELECT USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can create their own object spaces" ON object_spaces FOR INSERT WITH CHECK (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can update their own object spaces" ON object_spaces FOR UPDATE USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can delete their own object spaces" ON object_spaces FOR DELETE USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- Create trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_object_spaces_updated_at()
 RETURNS TRIGGER AS $$
@@ -98,12 +88,11 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
+DROP TRIGGER IF EXISTS trigger_update_object_spaces_updated_at ON object_spaces;
 CREATE TRIGGER trigger_update_object_spaces_updated_at
   BEFORE UPDATE ON object_spaces
   FOR EACH ROW
   EXECUTE FUNCTION update_object_spaces_updated_at();
-
 -- Add comment to table
 COMMENT ON TABLE object_spaces IS 'Unified table for DigitalOcean Spaces access keys and buckets';
 COMMENT ON COLUMN object_spaces.type IS 'Type of object space: access_key or bucket';

@@ -17,34 +17,33 @@ CREATE TABLE IF NOT EXISTS spectrum_apps (
   CONSTRAINT spectrum_apps_zone_name_unique UNIQUE(zone_id, name)
 );
 
+-- Existing table may predate this shape; add expected columns for replay safety.
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS zone_id TEXT;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS dns_type TEXT;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS protocol TEXT;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS owner_id UUID;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS project_id UUID;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE spectrum_apps ADD COLUMN IF NOT EXISTS cf_app JSONB;
+
 -- Indexes for common query patterns
 CREATE INDEX IF NOT EXISTS idx_spectrum_apps_owner ON spectrum_apps(owner_id);
 CREATE INDEX IF NOT EXISTS idx_spectrum_apps_project ON spectrum_apps(project_id);
 CREATE INDEX IF NOT EXISTS idx_spectrum_apps_zone ON spectrum_apps(zone_id);
 CREATE INDEX IF NOT EXISTS idx_spectrum_apps_status ON spectrum_apps(status);
-
 -- Enable Row Level Security
 ALTER TABLE spectrum_apps ENABLE ROW LEVEL SECURITY;
-
 -- RLS Policies (owner-scoped similar to apps/object_spaces)
-CREATE POLICY "Users can view their spectrum apps" ON spectrum_apps
-  FOR SELECT USING (auth.uid() = owner_id);
-
-CREATE POLICY "Users can insert their spectrum apps" ON spectrum_apps
-  FOR INSERT WITH CHECK (auth.uid() = owner_id);
-
-CREATE POLICY "Users can update their spectrum apps" ON spectrum_apps
-  FOR UPDATE USING (auth.uid() = owner_id);
-
-CREATE POLICY "Users can delete their spectrum apps" ON spectrum_apps
-  FOR DELETE USING (auth.uid() = owner_id);
-
--- Trigger to keep updated_at current (uses existing shared function)
+DO $$ BEGIN CREATE POLICY "Users can view their spectrum apps" ON spectrum_apps FOR SELECT USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can insert their spectrum apps" ON spectrum_apps FOR INSERT WITH CHECK (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can update their spectrum apps" ON spectrum_apps FOR UPDATE USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "Users can delete their spectrum apps" ON spectrum_apps FOR DELETE USING (auth.uid() = owner_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DROP TRIGGER IF EXISTS update_spectrum_apps_updated_at ON spectrum_apps;
 CREATE TRIGGER update_spectrum_apps_updated_at
   BEFORE UPDATE ON spectrum_apps
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
 -- Optional comments
 COMMENT ON TABLE spectrum_apps IS 'Cloudflare Spectrum application metadata and cached configuration';
 COMMENT ON COLUMN spectrum_apps.cf_app IS 'Raw Cloudflare API result (configuration snapshot)';

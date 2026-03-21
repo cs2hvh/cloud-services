@@ -10,16 +10,13 @@ CREATE TABLE IF NOT EXISTS github_tokens (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(user_id)
 );
-
 -- Enable RLS
 ALTER TABLE github_tokens ENABLE ROW LEVEL SECURITY;
-
 -- Create policy so users can only access their own tokens
 DO $$ BEGIN
     CREATE POLICY "Users can only access their own GitHub tokens" ON github_tokens
         FOR ALL USING (auth.uid() = user_id);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
 -- Create index for faster lookups
 CREATE INDEX IF NOT EXISTS idx_github_tokens_user_id ON github_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_github_tokens_github_user_id ON github_tokens(github_user_id);

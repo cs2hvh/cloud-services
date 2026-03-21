@@ -18,17 +18,13 @@ create table if not exists public.domain_operations (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create index if not exists idx_domain_operations_user_created
   on public.domain_operations (user_id, created_at desc);
-
 create index if not exists idx_domain_operations_status
   on public.domain_operations (status);
-
 create unique index if not exists uq_domain_operations_idempotency
   on public.domain_operations (user_id, action, idempotency_key)
   where idempotency_key is not null;
-
 create table if not exists public.domain_purchase_requests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null,
@@ -46,16 +42,12 @@ create table if not exists public.domain_purchase_requests (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create index if not exists idx_domain_purchase_requests_user_created
   on public.domain_purchase_requests (user_id, created_at desc);
-
 create index if not exists idx_domain_purchase_requests_app_created
   on public.domain_purchase_requests (app_id, created_at desc);
-
 create index if not exists idx_domain_purchase_requests_status
   on public.domain_purchase_requests (status);
-
 create unique index if not exists uq_domain_purchase_requests_user_idempotency
   on public.domain_purchase_requests (user_id, idempotency_key)
   where idempotency_key is not null;

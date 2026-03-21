@@ -3,7 +3,6 @@
 
 -- Drop existing INSERT policy for project_logs
 DROP POLICY IF EXISTS "Users can insert logs for their projects" ON project_logs;
-
 -- Create new INSERT policy that includes admin access
 CREATE POLICY "Users and admins can insert logs for their projects" ON project_logs
     FOR INSERT WITH CHECK (
@@ -18,6 +17,5 @@ CREATE POLICY "Users and admins can insert logs for their projects" ON project_l
         )
         OR is_admin(auth.uid())
     );
-
 COMMENT ON POLICY "Users and admins can insert logs for their projects" ON project_logs IS 
     'Allows project members and admins to create logs';

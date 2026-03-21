@@ -5,11 +5,9 @@
 -- Drop old constraint and add new one with 'resize'
 ALTER TABLE platform_app_deployments
     DROP CONSTRAINT IF EXISTS platform_app_deployments_trigger_check;
-
 ALTER TABLE platform_app_deployments
     ADD CONSTRAINT platform_app_deployments_trigger_check
     CHECK (trigger IN ('manual', 'webhook', 'rollback', 'resize'));
-
 -- 2) Extend platform_apps.last_deploy_trigger if it has a check constraint
 DO $$
 BEGIN
@@ -26,7 +24,6 @@ BEGIN
             CHECK (last_deploy_trigger IN ('manual', 'webhook', 'scheduled', 'rollback', 'resize'));
     END IF;
 END $$;
-
 -- 3) Add comment for documentation
 COMMENT ON CONSTRAINT platform_app_deployments_trigger_check ON platform_app_deployments IS 
     'Valid deployment triggers: manual (user-initiated), webhook (git push), rollback (restore previous), resize (instance size change)';

@@ -30,7 +30,6 @@ CREATE TABLE platform_apps (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-
 -- App Environment Variables table
 CREATE TABLE platform_app_env_vars (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -41,36 +40,28 @@ CREATE TABLE platform_app_env_vars (
     
     UNIQUE(app_id, key)
 );
-
 -- Enable RLS
 ALTER TABLE platform_apps ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_app_env_vars ENABLE ROW LEVEL SECURITY;
-
 -- RLS Policies for platform_apps
 CREATE POLICY "Users can view their own platform apps" ON platform_apps
     FOR SELECT USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create platform apps" ON platform_apps
     FOR INSERT WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update their own platform apps" ON platform_apps
     FOR UPDATE USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete their own platform apps" ON platform_apps
     FOR DELETE USING (auth.uid() = user_id);
-
 -- RLS Policies for platform_app_env_vars
 CREATE POLICY "Users can manage env vars for their platform apps" ON platform_app_env_vars
     FOR ALL USING (
         EXISTS (SELECT 1 FROM platform_apps WHERE id = app_id AND user_id = auth.uid())
     );
-
 -- Triggers for updated_at
 CREATE TRIGGER update_platform_apps_updated_at
     BEFORE UPDATE ON platform_apps
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
 -- Indexes for performance
 CREATE INDEX idx_platform_apps_user ON platform_apps(user_id);
 CREATE INDEX idx_platform_apps_project ON platform_apps(project_id);

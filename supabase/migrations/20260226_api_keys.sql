@@ -11,12 +11,10 @@ CREATE TABLE IF NOT EXISTS public.api_keys (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_api_keys_user_id ON public.api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON public.api_keys(key_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_last_used ON public.api_keys(last_used_at) WHERE last_used_at IS NOT NULL;
-
 -- Function to automatically update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_api_keys_updated_at()
 RETURNS TRIGGER AS $$
@@ -25,40 +23,32 @@ BEGIN
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 -- Trigger to update updated_at on row modification
 CREATE TRIGGER api_keys_updated_at_trigger
   BEFORE UPDATE ON public.api_keys
   FOR EACH ROW
   EXECUTE FUNCTION public.update_api_keys_updated_at();
-
 -- RLS Policies
 ALTER TABLE public.api_keys ENABLE ROW LEVEL SECURITY;
-
 -- Users can only see their own keys
 CREATE POLICY "Users can view own API keys"
   ON public.api_keys FOR SELECT
   USING (auth.uid() = user_id);
-
 -- Users can create their own keys
 CREATE POLICY "Users can create own API keys"
   ON public.api_keys FOR INSERT
   WITH CHECK (auth.uid() = user_id);
-
 -- Users can delete their own keys
 CREATE POLICY "Users can delete own API keys"
   ON public.api_keys FOR DELETE
   USING (auth.uid() = user_id);
-
 -- Users can update their own keys (last_used_at)
 CREATE POLICY "Users can update own API keys"
   ON public.api_keys FOR UPDATE
   USING (auth.uid() = user_id);
-
 -- Grant permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.api_keys TO authenticated;
 GRANT SELECT, UPDATE ON public.api_keys TO service_role;
-
 COMMENT ON TABLE public.api_keys IS 'Personal Access Tokens (PATs) for API authentication. Max 10 keys per user (enforced in application layer).';
 COMMENT ON COLUMN public.api_keys.name IS 'User-defined name for the key (3-100 chars): "Production CI", "Dev Server"';
 COMMENT ON COLUMN public.api_keys.key_prefix IS 'Display prefix (15 chars + "..."): "sk_live_xyz1234..."';
