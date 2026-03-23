@@ -3,10 +3,10 @@
  * Jenkins Container Usage Report
  * Shows which containers are used by security stages and recommendations
  * 
- * Usage: npx tsx scripts/show-jenkins-containers.ts
+ * Usage: npx tsx infra/jenkins/show-jenkins-containers.ts
  */
 
-import { getContainerUsageReport } from '../lib/jenkins/security';
+import { getContainerUsageReport } from '../../lib/jenkins/security';
 
 const report = getContainerUsageReport();
 

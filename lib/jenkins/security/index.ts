@@ -38,8 +38,8 @@ const JENKINS_CONTAINERS = {
     image: 'gcr.io/kaniko-project/executor:v1.24.0-debug',
     inJenkins: true,
     resources: {
-      requests: { memory: '3Gi', cpu: '500m' },
-      limits: { memory: '5Gi', cpu: '1' },
+      requests: { memory: '4Gi', cpu: '500m' },
+      limits: { memory: '6Gi', cpu: '1' },
     },
     purpose: 'Docker image building (rootless)',
     usedBySecurityStages: [],
@@ -60,7 +60,7 @@ const JENKINS_CONTAINERS = {
     image: 'aquasec/trivy:0.48.0',
     inJenkins: true,
     resources: {
-      requests: { memory: '512Mi', cpu: '250m' },
+      requests: { memory: '256Mi', cpu: '100m' },
       limits: { memory: '1Gi', cpu: '500m' },
     },
     purpose: 'Container image vulnerability scanning',
@@ -1379,6 +1379,5 @@ export function getContainerUsageReport() {
     recommendations,
   };
 }
-
 
 

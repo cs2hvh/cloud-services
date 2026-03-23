@@ -8,13 +8,13 @@ This directory contains configuration and tooling for managing Jenkins pod templ
 
 | Container | Image | Memory | CPU | Used By Security |
 |-----------|-------|--------|-----|------------------|
-| **git** | alpine/git:latest | 256Mi | 500m | ✅ 5 stages |
-| **kaniko** | gcr.io/kaniko-project/executor:v1.24.0-debug | 3Gi | 1 core | ❌ Build only |
+| **git** | alpine/git:latest | 1Gi | 500m | ✅ 5 stages |
+| **kaniko** | gcr.io/kaniko-project/executor:v1.24.0-debug | 6Gi | 1 core | ❌ Build only |
 | **kubectl** | alpine/k8s:1.28.0 | 256Mi | 500m | ❌ Deploy only |
 | **trivy** | aquasec/trivy:0.48.0 | 1Gi | 500m | ✅ IMAGE-SCAN |
 | **jnlp** | jenkins/inbound-agent | 512Mi | 500m | ❌ Jenkins agent |
 
-**Total Resources:** 5.0 Gi memory, 3.0 CPU cores
+**Total Resources:** 8.75 Gi memory, 3.0 CPU cores
 
 ### Recommended to Add
 
@@ -41,25 +41,25 @@ This directory contains configuration and tooling for managing Jenkins pod templ
 ### View Container Report
 
 ```bash
-npx tsx scripts/show-jenkins-containers.ts
+npx tsx infra/jenkins/show-jenkins-containers.ts
 ```
 
 ### Export as JSON
 
 ```bash
-npx tsx scripts/export-jenkins-containers.ts > containers.json
+npx tsx infra/jenkins/export-jenkins-containers.ts > containers.json
 ```
 
 ### Export as Markdown
 
 ```bash
-npx tsx scripts/export-jenkins-containers.ts --format=markdown > CONTAINERS.md
+npx tsx infra/jenkins/export-jenkins-containers.ts --format=markdown > CONTAINERS.md
 ```
 
 ### Export as YAML (for Jenkins)
 
 ```bash
-npx tsx scripts/export-jenkins-containers.ts --format=yaml > containers.yaml
+npx tsx infra/jenkins/export-jenkins-containers.ts --format=yaml > containers.yaml
 ```
 
 ### Programmatic Access
@@ -185,13 +185,13 @@ Then update the stage generators to use the dedicated containers instead of down
 
 ### Current Pod Resource Usage
 ```
-git:     256Mi  / 500m CPU  (multi-purpose)
-kaniko:  3Gi    / 1 CPU     (image builds)
+git:     1Gi    / 500m CPU  (multi-purpose)
+kaniko:  6Gi    / 1 CPU     (image builds)
 kubectl: 256Mi  / 500m CPU  (K8s deploys)
 trivy:   1Gi    / 500m CPU  (image scanning)
 jnlp:    512Mi  / 500m CPU  (Jenkins agent)
 -------------------------------------------
-TOTAL:   5.0Gi  / 3.0 CPU
+TOTAL:   8.75Gi / 3.0 CPU
 ```
 
 ### If Hadolint + Gitleaks Added
@@ -199,7 +199,7 @@ TOTAL:   5.0Gi  / 3.0 CPU
 + hadolint: 128Mi / 200m CPU
 + gitleaks: 256Mi / 300m CPU
 -------------------------------------------
-NEW TOTAL:  5.38Gi / 3.5 CPU (+7.6% memory, +16.7% CPU)
+NEW TOTAL:  9.12Gi / 3.5 CPU (+4.3% memory, +16.7% CPU)
 ```
 
 **Verdict:** Minimal resource impact for significant build time improvement.
@@ -232,10 +232,10 @@ NEW TOTAL:  5.38Gi / 3.5 CPU (+7.6% memory, +16.7% CPU)
 
 ```bash
 # See which containers are actually being used
-npx tsx scripts/show-jenkins-containers.ts
+npx tsx infra/jenkins/show-jenkins-containers.ts
 
 # Export for analysis
-npx tsx scripts/export-jenkins-containers.ts > audit.json
+npx tsx infra/jenkins/export-jenkins-containers.ts > audit.json
 ```
 
 ## 🔗 Related Documentation

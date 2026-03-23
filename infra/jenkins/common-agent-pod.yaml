@@ -1,0 +1,59 @@
+# Jenkins Kubernetes Cloud Pod template for "common-agent"
+# Source: production Jenkins snapshot (2026-03-23)
+# Exact current state from Jenkins UI/config.xml
+
+spec:
+  dnsPolicy: ClusterFirst
+  dnsConfig:
+    nameservers:
+      - 8.8.8.8
+      - 8.8.4.4
+
+  containers:
+    - name: git
+      image: alpine/git:latest
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:v1.24.0-debug
+      command: ["/busybox/cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "500m"
+        limits:
+          memory: "6Gi"
+          cpu: "1"
+
+    - name: kubectl
+      image: alpine/k8s:1.28.0
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "256Mi"
+          cpu: "500m"
+
+    - name: trivy
+      image: aquasec/trivy:0.48.0
+      command: ["cat"]
+      tty: true
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "100m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
