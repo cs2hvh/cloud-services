@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServerSupabase } from "@/lib/supabase/server";
+import { createClient, createServerSupabase, createWorkerClient } from "@/lib/supabase/server";
 import { v4 as uuidv4 } from "uuid";
 
 export const dynamic = "force-dynamic";
@@ -20,9 +20,14 @@ interface HostInput {
   dns_primary?: string;
   dns_secondary?: string;
   template_vmid?: number;
+  region?: string;
+  display_region?: string;
+  total_cpu_cores?: number;
+  total_memory_mb?: number;
+  total_disk_gb?: number;
   is_active?: boolean;
   pools?: Array<{ mac: string; ips: string[] }>;
-  templates?: Array<{ name: string; vmid: number; os_type?: string }>;
+  templates?: Array<{ name: string; vmid: number; os_type?: string; os_display_name?: string }>;
 }
 
 // Check if user is admin
@@ -75,13 +80,32 @@ async function requireAdmin(): Promise<{ ok: boolean; email?: string; userId?: s
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const auth = await requireAdmin();
   if (!auth.ok) {
     return NextResponse.json(
       { ok: false, error: "Not authorized" },
       { status: 403 }
     );
+  }
+
+  const { searchParams } = new URL(req.url);
+  const action = searchParams.get('action');
+
+  // Return used IPs (IPs currently assigned to servers)
+  if (action === 'used-ips') {
+    try {
+      const supabase = createServerSupabase();
+      const { data: servers } = await supabase
+        .from('servers')
+        .select('ip')
+        .not('ip', 'is', null);
+      const usedIps = (servers || []).map(s => s.ip).filter(Boolean);
+      return NextResponse.json({ ok: true, usedIps });
+    } catch (error) {
+      console.error('Failed to fetch used IPs:', error);
+      return NextResponse.json({ ok: true, usedIps: [] });
+    }
   }
 
   try {
@@ -93,10 +117,11 @@ export async function GET() {
       .select(
         `
         id, name, host_url, allow_insecure_tls, token_id, node, storage, 
-        bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, 
+        bridge, template_vmid, gateway_ip, dns_primary, dns_secondary,
+        region, display_region, total_cpu_cores, total_memory_mb, total_disk_gb,
         is_active, created_at, updated_at,
         public_ip_pools ( id, mac, public_ip_pool_ips ( id, ip ) ),
-        proxmox_templates ( id, vmid, name, os_type, is_active )
+        proxmox_templates ( id, vmid, name, os_type, os_display_name, is_active )
       `
       )
       .order("created_at", { ascending: false });
@@ -155,7 +180,7 @@ export async function POST(req: NextRequest) {
 
     // Prepare host payload
     const hostPayload: Record<string, unknown> = {
-      id: body.id || uuidv4(), // Generate UUID if creating new host
+      id: body.id || uuidv4(),
       name: body.name,
       host_url: body.host_url,
       allow_insecure_tls: body.allow_insecure_tls ?? false,
@@ -170,6 +195,11 @@ export async function POST(req: NextRequest) {
       dns_primary: body.dns_primary || null,
       dns_secondary: body.dns_secondary || null,
       template_vmid: body.template_vmid || null,
+      region: body.region || "default",
+      display_region: body.display_region || "Default",
+      total_cpu_cores: body.total_cpu_cores || 0,
+      total_memory_mb: body.total_memory_mb || 0,
+      total_disk_gb: body.total_disk_gb || 0,
       is_active: body.is_active ?? true,
     };
 
@@ -189,48 +219,55 @@ export async function POST(req: NextRequest) {
 
     const hostId = (upserted as Record<string, unknown>)?.id as string;
 
-    // Handle IP pools - sync by MAC (each pool has multiple IPs)
+    // Handle IP addresses - each IP gets its own pool (1 MAC = 1 IP)
     if (body.pools && Array.isArray(body.pools)) {
-      const pools = body.pools
+      const ipEntries = body.pools
         .filter((p) => p?.mac && Array.isArray(p?.ips) && p.ips.length > 0)
         .map((p) => ({
           mac: String(p.mac),
-          ips: (p.ips || []).filter(Boolean).map((ip) => String(ip)),
+          ip: String(p.ips[0]),
         }));
 
-      // Get existing pools for this host
+      // Get existing pools and their IPs for this host
       const { data: existingPools } = await supabase
         .from("public_ip_pools")
-        .select("id, mac")
+        .select("id, mac, public_ip_pool_ips ( id, ip )")
         .eq("host_id", hostId);
 
-      const existingMap = new Map<string, string>();
-      for (const p of existingPools || []) {
-        const pool = p as unknown as { mac: string; id: string };
-        existingMap.set(String(pool.mac), String(pool.id));
-      }
-
-      const incomingMacs = new Set(pools.map((p) => p.mac));
-
-      // Delete pools that are no longer present
-      for (const [mac, id] of existingMap.entries()) {
-        if (!incomingMacs.has(mac)) {
-          await supabase.from("public_ip_pools").delete().eq("id", id);
+      // Build a map of existing entries: ip -> { poolId, mac }
+      const existingByIp = new Map<string, { poolId: string; mac: string }>();
+      for (const p of (existingPools || []) as Array<{ id: string; mac: string; public_ip_pool_ips: Array<{ id: string; ip: string }> }>) {
+        for (const ipRow of (p.public_ip_pool_ips || [])) {
+          existingByIp.set(String(ipRow.ip), { poolId: String(p.id), mac: String(p.mac) });
         }
       }
 
-      // Upsert each pool and its IPs
-      for (const pool of pools) {
-        let poolId = existingMap.get(pool.mac);
-        
-        if (!poolId) {
-          // Insert new pool
+      const incomingIps = new Set(ipEntries.map((e) => e.ip));
+
+      // Delete pools for IPs that are no longer present
+      for (const [ip, { poolId }] of existingByIp.entries()) {
+        if (!incomingIps.has(ip)) {
+          await supabase.from("public_ip_pools").delete().eq("id", poolId);
+        }
+      }
+
+      // Upsert each IP entry
+      for (const entry of ipEntries) {
+        const existing = existingByIp.get(entry.ip);
+
+        if (existing) {
+          // Update MAC if changed
+          if (existing.mac !== entry.mac) {
+            await supabase
+              .from("public_ip_pools")
+              .update({ mac: entry.mac })
+              .eq("id", existing.poolId);
+          }
+        } else {
+          // Create new pool + IP
           const { data: inserted, error: poolErr } = await supabase
             .from("public_ip_pools")
-            .insert({
-              host_id: hostId,
-              mac: pool.mac,
-            })
+            .insert({ host_id: hostId, mac: entry.mac })
             .select("id")
             .single();
 
@@ -238,39 +275,10 @@ export async function POST(req: NextRequest) {
             console.error("Pool insert error:", poolErr);
             continue;
           }
-          poolId = String((inserted as Record<string, unknown>)?.id);
-        }
-
-        // Sync IPs for this pool
-        const { data: existingIps } = await supabase
-          .from("public_ip_pool_ips")
-          .select("id, ip")
-          .eq("pool_id", poolId);
-
-        const existingIpSet = new Set(
-          (existingIps || []).map((r: unknown) => {
-            const row = r as { ip: string };
-            return String(row.ip);
-          })
-        );
-        const incomingIpSet = new Set(pool.ips.map((s) => String(s)));
-
-        // Insert missing IPs
-        const toInsert = pool.ips
-          .filter((ip) => !existingIpSet.has(String(ip)))
-          .map((ip) => ({ pool_id: poolId!, ip: String(ip) }));
-        if (toInsert.length > 0) {
-          await supabase.from("public_ip_pool_ips").insert(toInsert);
-        }
-
-        // Delete removed IPs
-        const toDelete = [...existingIpSet].filter((ip) => !incomingIpSet.has(String(ip)));
-        if (toDelete.length > 0) {
+          const poolId = String((inserted as Record<string, unknown>)?.id);
           await supabase
             .from("public_ip_pool_ips")
-            .delete()
-            .eq("pool_id", poolId)
-            .in("ip", toDelete as string[]);
+            .insert({ pool_id: poolId, ip: entry.ip });
         }
       }
     }
@@ -291,6 +299,7 @@ export async function POST(req: NextRequest) {
             vmid: template.vmid,
             name: template.name,
             os_type: template.os_type || null,
+            os_display_name: template.os_display_name || template.name,
             is_active: true,
           });
 
@@ -335,8 +344,8 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    // Use server Supabase client
-    const supabase = createServerSupabase();
+    // Use service role client to bypass RLS for cascade deletes
+    const supabase = await createWorkerClient();
 
     // Check if host exists
     const { data: host } = await supabase
@@ -385,7 +394,34 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    // Delete host (cascade will delete IP pools, templates, etc.)
+    // Manually delete child records to avoid FK constraint issues with RLS
+    // 1. Delete IPs from pools belonging to this host
+    const { data: pools } = await supabase
+      .from("public_ip_pools")
+      .select("id")
+      .eq("host_id", hostId);
+
+    if (pools && pools.length > 0) {
+      const poolIds = pools.map((p) => Number(p.id));
+      await supabase
+        .from("public_ip_pool_ips")
+        .delete()
+        .in("pool_id", poolIds);
+    }
+
+    // 2. Delete IP pools
+    await supabase
+      .from("public_ip_pools")
+      .delete()
+      .eq("host_id", hostId);
+
+    // 3. Delete templates
+    await supabase
+      .from("proxmox_templates")
+      .delete()
+      .eq("host_id", hostId);
+
+    // 4. Delete host
     const { error: deleteErr } = await supabase
       .from("proxmox_hosts")
       .delete()

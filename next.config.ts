@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Keep native Node.js modules out of the webpack bundle
+  serverExternalPackages: ["ssh2"],
+
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,
 

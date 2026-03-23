@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Check, ChevronLeft, ChevronRight, MapPin, Cpu, HardDrive, Zap, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
-import { Tables } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/client";
+import DeploymentProgress from "./deployment-progress";
 
-// Password validation constants - moved outside component to prevent recompilation
+// Password validation constants
 const PASSWORD_PATTERNS = {
   hasUpperCase: /[A-Z]/,
   hasLowerCase: /[a-z]/,
@@ -21,24 +21,43 @@ const PASSWORD_PATTERNS = {
 
 const PASSWORD_MIN_LENGTH = 12;
 
+interface Region {
+  id: string;
+  name: string;
+  available: boolean;
+}
+
+interface OSOption {
+  id: string;
+  name: string;
+  regions: string[];
+}
+
 interface ComputeOptions {
-  locations?: Array<{ id: string; name: string; node: string }>;
-  osTemplates?: Array<{ id: string; name: string; type: string }>;
+  regions: Region[];
+  osOptions: OSOption[];
+  specs?: {
+    minCpuCores: number;
+    maxCpuCores: number;
+    minMemoryMB: number;
+    maxMemoryMB: number;
+    minDiskGB: number;
+    maxDiskGB: number;
+  };
 }
 
 interface PageProps {
-  locations: Tables<"locations">[];
-  computeOptions?: ComputeOptions;
+  computeOptions: ComputeOptions;
 }
 
-const VPSSelect = ({ locations, computeOptions }: PageProps) => {
+const VPSSelect = ({ computeOptions }: PageProps) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   // Form state
   const [hostname, setHostname] = useState("");
-  const [selectedLocation, setSelectedLocation] = useState<string>("");
-  const [selectedOS, setSelectedOS] = useState<string>("Ubuntu 24.04 LTS");
+  const [selectedRegion, setSelectedRegion] = useState<string>("");
+  const [selectedOS, setSelectedOS] = useState<string>("");
   const [cpuCores, setCpuCores] = useState(2);
   const [memoryGB, setMemoryGB] = useState(2);
   const [diskGB, setDiskGB] = useState(50);
@@ -46,50 +65,58 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
   const [sshPasswordConfirm, setSshPasswordConfirm] = useState("");
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deploymentServerId, setDeploymentServerId] = useState<number | null>(null);
 
-  // Use Proxmox hosts as locations
-  const effectiveLocations = useMemo(() => {
-    if (computeOptions?.locations && computeOptions.locations.length > 0) {
-      return computeOptions.locations.map(h => ({
-        id: h.id,
-        short: h.id,
-        city: h.name,
-        country: "Host",
-        country_code: "US",
-        node: h.node,
-      }));
-    }
-    return locations || [];
-  }, [computeOptions, locations]);
+  const regions = computeOptions.regions;
 
-  // Use templates as OS options
-  const effectiveOS = useMemo(() => {
-    if (computeOptions?.osTemplates && computeOptions.osTemplates.length > 0) {
-      return computeOptions.osTemplates.map(t => ({
-        id: t.id,
-        name: t.name,
-      }));
-    }
-    return [];
-  }, [computeOptions]);
+  // Filter OS options to only those available in the selected region
+  const availableOS = useMemo(() => {
+    if (!selectedRegion) return computeOptions.osOptions;
+    return computeOptions.osOptions.filter(os => os.regions.includes(selectedRegion));
+  }, [computeOptions.osOptions, selectedRegion]);
+
+  // Derive whether selected OS is Windows or Desktop (both use RDP)
+  const isWindows = useMemo(() => {
+    const osName = (availableOS.find(o => o.id === selectedOS)?.name || selectedOS).toLowerCase();
+    return osName.includes("windows");
+  }, [selectedOS, availableOS]);
+
+  const isDesktop = useMemo(() => {
+    const osName = (availableOS.find(o => o.id === selectedOS)?.name || selectedOS).toLowerCase();
+    return osName.includes("desktop");
+  }, [selectedOS, availableOS]);
+
+  const usesRDP = isWindows || isDesktop;
 
   useEffect(() => {
-    if (effectiveLocations.length > 0 && !selectedLocation) {
-      setSelectedLocation(String(effectiveLocations[0].id));
+    if (regions.length > 0 && !selectedRegion) {
+      const firstAvailable = regions.find(r => r.available);
+      setSelectedRegion(firstAvailable?.id || regions[0].id);
     }
-  }, [effectiveLocations, selectedLocation]);
+  }, [regions, selectedRegion]);
 
   useEffect(() => {
-    if (effectiveOS.length > 0 && !selectedOS) {
-      setSelectedOS(effectiveOS[0].id);
+    if (availableOS.length > 0 && !availableOS.find(o => o.id === selectedOS)) {
+      setSelectedOS(availableOS[0].id);
     }
-  }, [effectiveOS, selectedOS]);
+  }, [availableOS, selectedOS]);
+
+  // Auto-enforce minimum specs when switching to Windows/Desktop
+  useEffect(() => {
+    if (isWindows) {
+      if (memoryGB < 2) setMemoryGB(2);
+      if (diskGB < 40) setDiskGB(40);
+    } else if (isDesktop) {
+      if (memoryGB < 2) setMemoryGB(2);
+      if (diskGB < 25) setDiskGB(25);
+    }
+  }, [isWindows, isDesktop, memoryGB, diskGB]);
 
   const stepsValid = [
     hostname.trim().length > 0,
-    !!selectedLocation,
+    !!selectedRegion,
     !!selectedOS,
-    cpuCores >= 1 && memoryGB >= 1 && diskGB >= 10,
+    cpuCores >= 1 && memoryGB >= (usesRDP ? 2 : 1) && diskGB >= (isWindows ? 40 : isDesktop ? 25 : 10),
     sshPassword.length >= 12 && sshPassword === sshPasswordConfirm,
   ];
 
@@ -98,8 +125,8 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       toast.error("Please enter a hostname");
       return;
     }
-    if (currentStep === 1 && !selectedLocation) {
-      toast.error("Please select a location");
+    if (currentStep === 1 && !selectedRegion) {
+      toast.error("Please select a region");
       return;
     }
     if (currentStep === 2 && !selectedOS) {
@@ -114,7 +141,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
     }
       if (currentStep === 4) {
         if (sshPassword.length < PASSWORD_MIN_LENGTH) {
-          toast.error(`SSH password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+          toast.error(`${usesRDP ? "RDP" : "SSH"} password must be at least ${PASSWORD_MIN_LENGTH} characters`);
           return;
         }
         if (sshPassword !== sshPasswordConfirm) {
@@ -162,12 +189,12 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       const { data: userData } = await supabase.auth.getUser();
       const accessToken = sessionData?.session?.access_token;
 
-      // Find the selected OS template name (backend expects name, not ID)
-      const selectedOSName = effectiveOS.find(t => t.id === selectedOS)?.name || selectedOS;
+      // Find the selected OS template name
+      const selectedOSName = availableOS.find(t => t.id === selectedOS)?.name || selectedOS;
 
       const payload = {
-        location: selectedLocation,
-        os: selectedOSName,  // Send template name instead of ID
+        region: selectedRegion,
+        os: selectedOSName,
         hostname: hostname,
         cpuCores: cpuCores,
         memoryMB: memoryGB * 1024,
@@ -177,7 +204,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
         ownerEmail: userData?.user?.email,
       };
 
-      console.log("VPS Creation Payload:", payload);
+
 
       const res = await fetch("/api/services/compute/vms/create", {
         method: "POST",
@@ -191,13 +218,19 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       const json = await res.json();
 
       if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Failed to create VM");
+        throw new Error(json.error || "Something went wrong while creating your server.");
       }
 
+      // API returns immediately with serverId — server is now provisioning in background
+      setDeploymentServerId(json.serverId);
       setResult(json);
-      toast.success(`VPS "${hostname}" created successfully!`);
+      toast.success(`Deploying "${hostname}"...`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to create VM";
+      console.error("VPS creation error:", err);
+      const raw = err instanceof Error ? err.message : "";
+      // Only show the message if it looks user-friendly (from our API), otherwise show a generic message
+      const isFriendly = raw && !raw.includes("fetch") && !raw.includes("500") && !raw.includes("ECONNREFUSED") && !raw.includes("TypeError") && !raw.includes("SyntaxError") && raw.length < 200;
+      const message = isFriendly ? raw : "Something went wrong while creating your server. Please try again or contact support.";
       setError(message);
       toast.error(message);
     } finally {
@@ -205,7 +238,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
     }
   };
 
-  const selectedLocationData = effectiveLocations.find((l) => l.id === selectedLocation);
+  const selectedRegionData = regions.find((r) => r.id === selectedRegion);
 
   return (
     <div className="space-y-6">
@@ -217,7 +250,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
             {(() => {
               const steps = [
                 { label: "Name", valid: stepsValid[0] },
-                { label: "Location", valid: stepsValid[1] },
+                { label: "Region", valid: stepsValid[1] },
                 { label: "OS", valid: stepsValid[2] },
                 { label: "Configuration", valid: stepsValid[3] },
                 { label: "Password", valid: stepsValid[4] },
@@ -277,7 +310,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
             <Card className="bg-black/50 border-white/10">
               <CardHeader>
                 <CardTitle className="text-white text-base">
-                  {["Hostname", "Location", "Operating System", "Configuration", "SSH Password"][
+                  {["Hostname", "Region", "Operating System", "Configuration", usesRDP ? "RDP Password" : "SSH Password"][
                     currentStep
                   ]}
                 </CardTitle>
@@ -299,26 +332,30 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                   </div>
                 )}
 
-                {/* Step 1: Location */}
+                {/* Step 1: Region */}
                 {currentStep === 1 && (
                   <div className="space-y-3">
-                    <Label className="text-white">Location</Label>
+                    <Label className="text-white">Region</Label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                      {effectiveLocations.map((l) => (
+                      {regions.map((r) => (
                           <button
-                            key={l.id}
+                            key={r.id}
                             type="button"
-                            onClick={() => setSelectedLocation(String(l.id))}
+                            onClick={() => r.available && setSelectedRegion(r.id)}
+                            disabled={!r.available}
                             className={`w-full text-left rounded-xl border px-3 py-3 transition ${
-                              selectedLocation === String(l.id)
+                              selectedRegion === r.id
                                 ? "bg-blue-500/10 border-blue-400 text-white"
-                                : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                                : r.available
+                                ? "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
+                                : "bg-white/5 border-white/10 text-white/40 cursor-not-allowed opacity-50"
                             }`}
                           >
                             <div className="flex items-center gap-3">
                               <MapPin className="text-white/60 h-4 w-4" />
                               <div className="min-w-0">
-                                <div className="truncate text-sm text-white">{l.city}</div>
+                                <div className="truncate text-sm text-white">{r.name}</div>
+                                {!r.available && <div className="text-xs text-red-400">Sold out</div>}
                               </div>
                             </div>
                           </button>
@@ -336,7 +373,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                         <SelectValue placeholder="Select OS" />
                       </SelectTrigger>
                       <SelectContent className="bg-black text-white border-white/10 max-h-64 overflow-auto">
-                        {effectiveOS.map((os) => (
+                        {availableOS.map((os) => (
                           <SelectItem key={os.id} value={os.id}>
                             {os.name}
                           </SelectItem>
@@ -364,23 +401,25 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                       <Label className="text-white">Memory (GB)</Label>
                       <Input
                         type="number"
-                        min={1}
+                        min={isWindows ? 2 : 1}
                         max={128}
                         value={memoryGB}
-                        onChange={(e) => setMemoryGB(parseInt(e.target.value || "1", 10))}
+                        onChange={(e) => setMemoryGB(parseInt(e.target.value || (isWindows ? "2" : "1"), 10))}
                         className="mt-2 bg-black text-white border-white/10"
                       />
+                      {isWindows && <p className="text-xs text-yellow-400 mt-1">Windows requires minimum 2 GB RAM</p>}
                     </div>
                     <div>
                       <Label className="text-white">Storage (GB)</Label>
                       <Input
                         type="number"
-                        min={10}
+                        min={isWindows ? 40 : 10}
                         max={2000}
                         value={diskGB}
-                        onChange={(e) => setDiskGB(parseInt(e.target.value || "10", 10))}
+                        onChange={(e) => setDiskGB(parseInt(e.target.value || (isWindows ? "40" : "10"), 10))}
                         className="mt-2 bg-black text-white border-white/10"
                       />
+                      {isWindows && <p className="text-xs text-yellow-400 mt-1">Windows requires minimum 40 GB storage</p>}
                     </div>
                   </div>
                 )}
@@ -389,7 +428,7 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                 {currentStep === 4 && (
                   <div className="grid grid-cols-1 gap-3">
                     <div>
-                      <Label className="text-white">SSH Password</Label>
+                      <Label className="text-white">{usesRDP ? "RDP Password" : "SSH Password"}</Label>
                       <Input
                         type="password"
                         value={sshPassword}
@@ -465,16 +504,16 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-white/10">
                   <div className="text-white/60 flex items-center gap-2">
-                    <MapPin className="h-4 w-4" /> Location
+                    <MapPin className="h-4 w-4" /> Region
                   </div>
                   <div className="text-white ml-4 max-w-[60%] text-right">
-                    {selectedLocationData?.city || "—"}
+                    {selectedRegionData?.name || "—"}
                   </div>
                 </div>
                 <div className="flex items-center justify-between py-2 border-b border-white/10">
                   <div className="text-white/60">Operating System</div>
                   <div className="text-white ml-4 max-w-[60%] text-right">
-                    {effectiveOS.find((o) => o.id === selectedOS)?.name || "—"}
+                    {availableOS.find((o) => o.id === selectedOS)?.name || "—"}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -493,30 +532,55 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
           </div>
         </div>
       ) : (
-        /* Success message */
-        <Card className="bg-black/50 border-white/10">
-          <CardHeader className="text-center">
-            <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
-              <CheckCircle className="h-6 w-6 text-emerald-400" />
-            </div>
-            <CardTitle className="text-white mt-3">VPS Created Successfully</CardTitle>
-            <CardDescription className="text-white/70">
-              Your VPS is being provisioned. You can manage it from your dashboard.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex items-center justify-center gap-3">
-            <Button
-              onClick={() => {
-                setResult(null);
-                setHostname("");
-                setCurrentStep(0);
-              }}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/10"
-            >
-              Create Another VPS
-            </Button>
-          </CardContent>
-        </Card>
+        /* Deployment Progress — live tracking via Supabase realtime */
+        deploymentServerId ? (
+          <DeploymentProgress
+            serverId={deploymentServerId}
+            serverName={result?.name as string || hostname}
+            serverIp={result?.ip as string || ""}
+            serverOs={result?.os as string || availableOS.find(o => o.id === selectedOS)?.name || selectedOS}
+            connectionType={usesRDP ? "rdp" : "ssh"}
+            username={
+              (result?.ssh as Record<string, unknown>)?.username as string ||
+              (result?.rdp as Record<string, unknown>)?.username as string ||
+              (isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : "ubuntu")
+            }
+            onCreateAnother={() => {
+              setResult(null);
+              setDeploymentServerId(null);
+              setHostname("");
+              setSshPassword("");
+              setSshPasswordConfirm("");
+              setError(null);
+              setCurrentStep(0);
+            }}
+          />
+        ) : (
+          /* Fallback success message */
+          <Card className="bg-black/50 border-white/10">
+            <CardHeader className="text-center">
+              <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+                <CheckCircle className="h-6 w-6 text-emerald-400" />
+              </div>
+              <CardTitle className="text-white mt-3">VPS Created Successfully</CardTitle>
+              <CardDescription className="text-white/70">
+                Your VPS is being provisioned. You can manage it from your dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-center justify-center gap-3">
+              <Button
+                onClick={() => {
+                  setResult(null);
+                  setHostname("");
+                  setCurrentStep(0);
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white border border-white/10"
+              >
+                Create Another VPS
+              </Button>
+            </CardContent>
+          </Card>
+        )
       )}
     </div>
   );
