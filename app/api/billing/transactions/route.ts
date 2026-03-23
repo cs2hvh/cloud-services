@@ -42,7 +42,7 @@ export async function GET(request: Request) {
   } catch (error: unknown) {
     console.error("[Transactions] Error:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch transactions" },
+      { error: "Failed to fetch transactions" },
       { status: 500 }
     );
   }

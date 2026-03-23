@@ -17,7 +17,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import {
   getDigitalOceanHeaders,
   parseAxiosError,
-  redactClusterSecrets,
+  // redactClusterSecrets,
 } from "../helpers";
 import type {
   CreateKubernetesClusterRequest,

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = await createServiceClient();
+   // const supabase = await createServiceClient();
 
     // const { data: adminProfiles, error: adminsError } = await supabase
     //   .from("user_profiles")

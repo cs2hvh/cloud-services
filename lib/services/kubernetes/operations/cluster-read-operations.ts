@@ -6,7 +6,6 @@ import { Clusters } from "@/lib/supabase/queries/clusters";
 import type {
   GetKubernetesClusterRequest,
   GetKubernetesClusterResult,
-  ListKubernetesClustersByOwnerRequest,
   ListKubernetesClustersByOwnerResult,
 } from "../types";
 import { redactClusterSecrets } from "../helpers";

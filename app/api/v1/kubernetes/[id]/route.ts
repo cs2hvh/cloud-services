@@ -5,7 +5,7 @@ import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
 import { updateKubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { redactClusterSecrets } from "@/lib/services/kubernetes/helpers";
+// import { redactClusterSecrets } from "@/lib/services/kubernetes/helpers";
 
 export const GET = withV1Auth("kubernetes:read", async (req, auth, { params }) => {
   const { id: clusterId } = await params;

@@ -2,7 +2,7 @@
  * Kubernetes Service Types
  */
 
-import { NextRequest } from "next/server";
+// import { NextRequest } from "next/server";
 
 // Base result type
 export interface ServiceResult<T = unknown> {
