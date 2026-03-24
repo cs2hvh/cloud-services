@@ -50,6 +50,16 @@ const TEMPLATES = [
     cloudImageFile: "debian-13-generic-amd64.qcow2",
     defaultUser: "ubuntu",
   },
+  {
+    vmid: 110,
+    name: "centos-stream-9-template",
+    dbName: "CentOS Stream 9",
+    osType: "centos-stream-9",
+    osDisplayName: "CentOS Stream 9",
+    cloudImageUrl: "https://cloud.centos.org/centos/9-stream/x86_64/images/CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2",
+    cloudImageFile: "CentOS-Stream-GenericCloud-9-latest.x86_64.qcow2",
+    defaultUser: "centos",
+  },
 ];
 
 // ── NAT Setup for Internet During Template Build ──────────────────────
@@ -201,12 +211,13 @@ runcmd:
   }
 
   if (!agentOk) {
-    // Fallback: try SSH install
+    // Fallback: try SSH install (supports both apt and dnf based distros)
     console.log("    Agent not responding, trying SSH fallback...");
-    await ssh("apt-get install -y sshpass 2>/dev/null || true", 30000);
+    await ssh("which sshpass >/dev/null 2>&1 || apt-get install -y sshpass 2>/dev/null || dnf install -y sshpass 2>/dev/null || true", 30000);
+    const installCmd = "sudo sh -c 'if command -v apt-get >/dev/null 2>&1; then apt-get update -qq && apt-get install -yqq qemu-guest-agent; elif command -v dnf >/dev/null 2>&1; then dnf install -y qemu-guest-agent; elif command -v yum >/dev/null 2>&1; then yum install -y qemu-guest-agent; fi && systemctl enable qemu-guest-agent && systemctl start qemu-guest-agent && echo INSTALL_OK'";
     const sshResult = await ssh(
       "sshpass -p TempSetup2024! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " + tpl.defaultUser + "@" + NAT_VM_IP +
-      " 'sudo apt-get update -qq && sudo apt-get install -yqq qemu-guest-agent && sudo systemctl enable qemu-guest-agent && sudo systemctl start qemu-guest-agent && echo INSTALL_OK' 2>&1",
+      " '" + installCmd + "' 2>&1",
       180000
     );
     if (sshResult.out.includes("INSTALL_OK")) {
@@ -274,7 +285,8 @@ async function testTemplate(ssh, tpl, host) {
   // Configure
   await ssh("ip addr add " + NAT_HOST_IP + "/24 dev " + bridge + " 2>/dev/null || true");
   await ssh("iptables -t nat -C POSTROUTING -s " + NAT_CIDR + " ! -d " + NAT_CIDR + " -j MASQUERADE 2>/dev/null || iptables -t nat -A POSTROUTING -s " + NAT_CIDR + " ! -d " + NAT_CIDR + " -j MASQUERADE");
-  await ssh("qm set " + TEST_VMID + " --ciuser ubuntu --cipassword TestPass2024! --ipconfig0 ip=" + NAT_VM_IP + "/24,gw=" + NAT_HOST_IP + " --nameserver 8.8.8.8");
+  const testUser = tpl.defaultUser || "ubuntu";
+  await ssh("qm set " + TEST_VMID + " --ciuser " + testUser + " --cipassword TestPass2024! --ipconfig0 ip=" + NAT_VM_IP + "/24,gw=" + NAT_HOST_IP + " --nameserver 8.8.8.8");
 
   // Start
   console.log("    Booting...");
@@ -322,7 +334,7 @@ async function testTemplate(ssh, tpl, host) {
   await ssh("apt-get install -y sshpass 2>/dev/null || true", 30000);
   try {
     const sshResult = await ssh(
-      "sshpass -p TestPass2024! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 ubuntu@" + NAT_VM_IP +
+      "sshpass -p TestPass2024! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 " + testUser + "@" + NAT_VM_IP +
       " 'echo SSH_OK; id; uname -a; cat /etc/os-release | head -3' 2>&1", 20000
     );
     if (sshResult.out.includes("SSH_OK")) {
@@ -344,6 +356,8 @@ async function testTemplate(ssh, tpl, host) {
   try {
     const rootTest = await ssh(
       "sshpass -p TestPass2024! ssh -o StrictHostKeyChecking=no -o ConnectTimeout=5 root@" + NAT_VM_IP +
+      // Note: root test always uses 'root' regardless of template user
+     
       " 'echo ROOT_OK' 2>&1", 10000
     );
     if (rootTest.out.includes("ROOT_OK")) {
@@ -418,6 +432,8 @@ async function main() {
 
   // Parse --host-id argument (optional)
   const hostIdArg = process.argv.find((a, i) => process.argv[i-1] === "--host-id");
+  // Parse --vmid argument to create only specific template(s)
+  const vmidArg = process.argv.find((a, i) => process.argv[i-1] === "--vmid");
 
   let host;
   if (hostIdArg) {
@@ -437,6 +453,16 @@ async function main() {
     host = data;
   }
 
+  // Filter templates if --vmid is specified
+  const templatesToCreate = vmidArg
+    ? TEMPLATES.filter(t => t.vmid === Number(vmidArg))
+    : TEMPLATES;
+
+  if (templatesToCreate.length === 0) {
+    console.error("No template found for VMID:", vmidArg);
+    process.exit(1);
+  }
+
   const sshHost = new URL(host.host_url).hostname;
   console.log("╔" + "═".repeat(58) + "╗");
   console.log("║  Linux Cloud Template Creator                            ║");
@@ -444,7 +470,7 @@ async function main() {
   console.log("║  Host: " + sshHost.padEnd(50) + "║");
   console.log("║  Node: " + (host.node || "").padEnd(50) + "║");
   console.log("║  Storage: " + (host.storage || "local").padEnd(47) + "║");
-  console.log("║  Templates: " + TEMPLATES.map(t => t.vmid).join(", ").padEnd(45) + "║");
+  console.log("║  Templates: " + templatesToCreate.map(t => t.vmid).join(", ").padEnd(45) + "║");
   console.log("╚" + "═".repeat(58) + "╝");
 
   const ssh = createSSH(host);
@@ -454,9 +480,9 @@ async function main() {
   const r = await ssh("hostname && uptime");
   console.log("  " + r.out);
 
-  // Create all templates
+  // Create templates
   const created = [];
-  for (const tpl of TEMPLATES) {
+  for (const tpl of templatesToCreate) {
     try {
       const ok = await createTemplate(ssh, tpl, host);
       if (ok) created.push(tpl);

@@ -433,10 +433,11 @@ export async function POST(req: NextRequest) {
       } catch {}
 
       const isDebian = osLower.includes("debian");
+      const isCentos = osLower.includes("centos");
       if (isWindows) {
         configPayload.ciuser = "admin";
       } else {
-        configPayload.ciuser = isDebian ? "debian" : "ubuntu";
+        configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
       }
 
       await postForm(

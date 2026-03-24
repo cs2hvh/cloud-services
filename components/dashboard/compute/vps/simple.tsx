@@ -543,7 +543,7 @@ const VPSSelect = ({ computeOptions }: PageProps) => {
             username={
               (result?.ssh as Record<string, unknown>)?.username as string ||
               (result?.rdp as Record<string, unknown>)?.username as string ||
-              (isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : "ubuntu")
+              (isWindows ? "admin" : selectedOS.toLowerCase().includes("debian") ? "debian" : selectedOS.toLowerCase().includes("centos") ? "centos" : "ubuntu")
             }
             onCreateAnother={() => {
               setResult(null);

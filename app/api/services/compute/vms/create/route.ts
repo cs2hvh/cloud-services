@@ -461,7 +461,8 @@ export async function POST(req: NextRequest) {
 
   // Determine connection type for immediate response
   const isDebian = osLower.includes("debian");
-  const ciuser = isWindows ? "admin" : isDebian ? "debian" : "ubuntu";
+  const isCentos = osLower.includes("centos");
+  const ciuser = isWindows ? "admin" : isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
   const provisioningStarted = new Date().toISOString();
 
   // Helper to update provisioning stage (triggers Supabase realtime events)
@@ -539,7 +540,7 @@ export async function POST(req: NextRequest) {
     if (isWindows) {
       configPayload.ciuser = "admin";
     } else {
-      configPayload.ciuser = isDebian ? "debian" : "ubuntu";
+      configPayload.ciuser = isDebian ? "debian" : isCentos ? "centos" : "ubuntu";
       // Apply vendor cloud-init snippet to enable SSH password auth on Linux VMs
       configPayload.cicustom = "vendor=local:snippets/linux-cloud-init.yml";
     }

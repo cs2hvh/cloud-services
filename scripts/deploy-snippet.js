@@ -40,7 +40,7 @@ runcmd:
       ip route replace $GW/32 dev $DEV 2>/dev/null
       ip route replace default via $GW dev $DEV onlink 2>/dev/null
     fi
-    # Write persistent netplan override for reboots
+    # Write persistent netplan override for reboots (Ubuntu/Debian)
     if [ -n "$GW" ] && [ -n "$DEV" ] && [ -d /etc/netplan ]; then
       MYIP=$(ip -4 addr show $DEV | grep -oP 'inet \\K[0-9./]+' | head -1)
       MAC=$(ip link show $DEV | grep -oP 'link/ether \\K[0-9a-f:]+')
@@ -64,6 +64,15 @@ runcmd:
                 set-name: $DEV
     NETEOF
       sed -i 's/^    //' /etc/netplan/50-cloud-init.yaml
+    fi
+    # Write persistent NetworkManager route for reboots (CentOS/RHEL)
+    if [ -n "$GW" ] && [ -n "$DEV" ] && command -v nmcli >/dev/null 2>&1 && ! [ -d /etc/netplan ]; then
+      CONN=$(nmcli -t -f NAME,DEVICE con show --active | grep ":$DEV$" | head -1 | cut -d: -f1)
+      if [ -n "$CONN" ]; then
+        nmcli con mod "$CONN" ipv4.routes "0.0.0.0/0 $GW" ipv4.route-metric 100 2>/dev/null
+        nmcli con mod "$CONN" ipv4.gateway "$GW" 2>/dev/null
+        nmcli con up "$CONN" 2>/dev/null || true
+      fi
     fi`;
 
     await new Promise((resolve, reject) => {
