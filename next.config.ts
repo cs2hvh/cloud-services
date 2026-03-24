@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Produces a self-contained build under .next/standalone for Docker
+  output: 'standalone',
+
   // Disable compression to prevent SSE buffering in dev mode
   compress: false,
 
