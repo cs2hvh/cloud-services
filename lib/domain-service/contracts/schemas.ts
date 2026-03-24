@@ -62,7 +62,7 @@ export const DomainListQuerySchema = z
 export const DomainMarketplaceSearchRequestSchema = z
   .object({
     query: z.string().min(1).max(253).openapi({ example: "mybrand" }),
-    tlds: z.array(z.string().min(2).max(20)).max(15).optional().openapi({ example: ["com", "io", "app"] }),
+    tlds: z.array(z.string().min(2).max(20)).max(20).optional().openapi({ example: ["com", "ai", "io", "app", "dev", "net", "co", "shop", "store", "tech", "cloud", "me"] }),
   })
   .openapi("DomainMarketplaceSearchRequest");
 

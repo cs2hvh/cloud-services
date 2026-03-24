@@ -2185,11 +2185,20 @@
               "minLength": 2,
               "maxLength": 20
             },
-            "maxItems": 15,
+            "maxItems": 20,
             "example": [
               "com",
+              "ai",
               "io",
-              "app"
+              "app",
+              "dev",
+              "net",
+              "co",
+              "shop",
+              "store",
+              "tech",
+              "cloud",
+              "me"
             ]
           }
         },
