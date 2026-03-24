@@ -3,6 +3,7 @@ import { handleQueryError } from "@/lib/utils/error-handler";
 import { Tables, Admin_KubernetesCluster } from "../types";
 
 type ClustersGet = Tables<"clusters_get">;
+type ClusterRow = Tables<"clusters">;
 
 export const Clusters = {
   // Get a project by ID
@@ -312,7 +313,7 @@ export const Clusters = {
     connect_status?: boolean;
     verify_status?: boolean;
     node_config?: Record<string, unknown>;
-  }): Promise<{ success: boolean; data?: any; error?: string }> => {
+  }): Promise<{ success: boolean; data?: ClusterRow; error?: string }> => {
     try {
       const supabase = await createServiceClient();
       
@@ -362,7 +363,7 @@ export const Clusters = {
       verify_status?: boolean;
       node_config?: Record<string, unknown>;
     }
-  ): Promise<{ success: boolean; data?: any; error?: string }> => {
+  ): Promise<{ success: boolean; data?: ClusterRow; error?: string }> => {
     try {
       const supabase = await createServiceClient();
       

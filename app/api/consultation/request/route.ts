@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { emailService } from "@/lib/email";
-import { createServiceClient } from "@/lib/supabase/server";
+// import { createServiceClient } from "@/lib/supabase/server";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -489,9 +489,10 @@ export const clusterLifecycleOperations = {
       await Clusters.update(request.clusterId, { status: "deleted" });
 
       // Stop billing - use service_id which should be the database record ID
-      const dbId = typeof cluster === 'object' && cluster !== null && 'id' in cluster 
-        ? (cluster as any).id 
-        : cluster.cluster_id;
+      const dbId =
+        "id" in cluster && typeof cluster.id === "string"
+          ? cluster.id
+          : cluster.cluster_id;
       try {
         await Billing.remove_active_kubernetes(dbId);
       } catch (billingErr) {
