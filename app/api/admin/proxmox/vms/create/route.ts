@@ -406,13 +406,17 @@ export async function POST(req: NextRequest) {
       const ipConfig0 = `ip=${assignedIp}/32,gw=${gateway}`;
       const nameservers = `${dns1}${dns2 ? ` ${dns2}` : ""}`;
 
+      // Bandwidth rate limit (MBps) based on vCPU count
+      const rateMBps = body.cpuCores <= 2 ? 4 : body.cpuCores <= 4 ? 8 : body.cpuCores <= 6 ? 15 : 30;
+
       const configPayload: Record<string, string | number | boolean> = {
+        cpu: 'host',
         sockets: 1,
         cores: body.cpuCores,
         memory: body.memoryMB,
         onboot: 1,
         nameserver: nameservers,
-        net0: `virtio=${macAddress},bridge=${bridge}`,
+        net0: `virtio=${macAddress},bridge=${bridge},rate=${rateMBps}`,
         ipconfig0: ipConfig0,
         cipassword: body.sshPassword,
       };
