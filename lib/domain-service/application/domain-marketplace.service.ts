@@ -40,7 +40,16 @@ export interface DomainSearchResponse {
   results: DomainMarketplaceResult[];
 }
 
-const DEFAULT_TLDS = ["com", "net", "io", "app", "dev", "org"];
+const DEFAULT_TLDS = [
+  // Classic
+  "com", "net", "org",
+  // Tech / Startup
+  "io", "app", "dev", "ai", "tech", "cloud",
+  // Business / Brand
+  "co", "me", "pro",
+  // New popular
+  "xyz", "site", "online",
+];
 
 export class DomainMarketplaceService {
   private readonly deps: {
