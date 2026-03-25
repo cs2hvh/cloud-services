@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import url("https://fonts.cdnfonts.com/css/sansation");
 
 @custom-variant dark (&:is(.dark *));
 
@@ -9,6 +10,32 @@ html {
 
 body {
   font-family: var(--font-open-sans), sans-serif;
+}
+
+.font-salsa {
+  font-family: var(--font-salsa), cursive;
+}
+
+.font-sansation {
+  font-family: Sansation;
+font-weight: 400;
+font-style: Regular;
+font-size: 14px;
+line-height: 22px;
+letter-spacing: 0%;
+text-align: center;
+vertical-align: middle;
+
+}
+.font-instrument{
+  font-family: Instrument Sans;
+font-weight: 500;
+font-style: Medium;
+font-size: 196.43px;
+line-height: 230.8px;
+letter-spacing: 0%;
+text-align: center;
+
 }
 
 /* Custom scrollbar for dark theme */

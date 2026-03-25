@@ -5,7 +5,6 @@ import Link from "next/link";
 import { motion } from "motion/react";
 
 import { Container } from "@/components/ui/container";
-import { LooperBackground } from "@/components/ui/looper-background";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -22,50 +21,41 @@ const fadeUp = {
 
 export function Hero() {
   return (
-    <section className="relative w-full overflow-x-hidden bg-[#0E0F0F] min-h-screen flex flex-col border-b border-[#737373]">
+    <section className="relative w-full min-h-screen overflow-x-hidden border-b border-[#737373] bg-[#0E0F0F] flex flex-col">
       <div className="absolute inset-0">
-        <LooperBackground className="z-0" />
-        <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_30%,#0a0a0a_75%)] pointer-events-none" />
+        <div
+          className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-40"
+          style={{ backgroundImage: 'url("/images/main-page/hero-bg.svg")' }}
+          aria-hidden="true"
+        />
+        <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_25%,#080a0c_75%)] pointer-events-none" />
       </div>
 
-      <div className="relative z-10 flex-1 flex items-center w-full pt-20 pb-12 sm:pt-24 sm:pb-16 md:pt-28 md:pb-20">
+      <div className="relative z-10 flex flex-1 items-center w-full pt-20 pb-12 sm:pt-24 sm:pb-16 md:pt-28 md:pb-20">
         <Container>
           <div className="flex w-full flex-col items-center gap-8 sm:gap-10 md:gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
             <div className="w-full flex-shrink-0 lg:w-1/2 lg:max-w-xl">
               <div className="flex flex-col gap-4 sm:gap-5 md:gap-6">
-                <motion.div
-                  className="inline-flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] backdrop-blur-sm px-3 py-1.5 mx-auto lg:mx-0 w-fit"
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  custom={0}
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#0095FF] animate-pulse" />
-                  <span className="text-[11px] text-white/50 font-medium tracking-wide whitespace-nowrap">
-                    Cloud Infrastructure for Modern Teams
-                  </span>
-                </motion.div>
-
                 <motion.h1
-                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight leading-tight sm:leading-tight text-white text-center lg:text-left"
+                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight leading-tight sm:leading-tight text-white text-center md:text-left"
                   variants={fadeUp}
                   initial="hidden"
                   animate="visible"
                   custom={1}
                 >
-                  <span className="text-[#ECECFB] block">Deploy at the</span>
-                  <span className="text-[#0095FF] block">Speed of Light</span>
+                  <span className="block text-[#0095FF]">Deploy at the</span>
+                  <span className="block text-[#ECECFB] md:pl-16 lg:pl-20">Speed of Light</span>
                 </motion.h1>
 
                 <motion.p
-                  className="text-sm sm:text-base md:text-lg leading-relaxed text-white/50 max-w-xl text-center lg:text-left mx-auto lg:mx-0"
+                  className="mx-auto max-w-xl text-sm sm:text-base md:text-lg leading-relaxed text-[#ECECFB] text-center md:text-left md:mx-0"
                   variants={fadeUp}
                   initial="hidden"
                   animate="visible"
                   custom={2}
                 >
-                  GPU instances, Kubernetes, databases, app deployment, and AI agents
-                  - everything you need to build and scale, in one platform.
+                  Deploy, scale, and manage your applications with enterprise-grade security.
+                  From GPU instances to AI agents, we provide the tools modern businesses need.
                 </motion.p>
 
                 <motion.div
@@ -140,6 +130,33 @@ export function Hero() {
               </div>
             </motion.div>
           </div>
+        </Container>
+      </div>
+
+      <div className="relative z-10 w-full pb-6 sm:pb-8 md:pb-10">
+        <Container>
+          <motion.div
+            className="w-full max-w-[460px] overflow-hidden rounded-[28px] border border-white/15 shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
+            variants={fadeUp}
+            initial="hidden"
+            animate="visible"
+            custom={5}
+          >
+            <div className="flex min-h-[120px] sm:min-h-[132px]">
+              <div className="flex w-[42%] items-center justify-center gap-3 bg-[#11161f] px-3 sm:px-4">
+                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
+                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
+              </div>
+              <div className="flex flex-1 flex-col justify-center bg-[#F2CF5A] px-4 py-4 sm:px-6">
+                <h3 className="text-base sm:text-lg font-semibold tracking-tight text-[#111111]">
+                  What&apos;s New
+                </h3>
+                <p className="mt-1 text-xs sm:text-sm text-[#2A2A2A]">
+                  Latest launches, updates, and product improvements.
+                </p>
+              </div>
+            </div>
+          </motion.div>
         </Container>
       </div>
     </section>

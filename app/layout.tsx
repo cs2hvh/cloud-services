@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Open_Sans, Nunito } from "next/font/google";
+import { Open_Sans, Nunito, Salsa } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
@@ -14,6 +14,13 @@ const nunito = Nunito({
   subsets: ["latin"],
 });
 
+const salsa = Salsa({
+  variable: "--font-salsa",
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: siteConfig.title,
   description: siteConfig.description,
@@ -26,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable}`}>
         {children}
         <Toaster 
           position="top-right" 
