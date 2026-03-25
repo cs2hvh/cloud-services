@@ -63,16 +63,21 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
     const answer = isApex && kubeIp ? kubeIp : params.target;
 
     if (isApex && !kubeIp) {
-      // KUBE_IP not configured — fall back to ANAME so traffic still reaches the cluster,
-      // but log a warning because cert-manager may not be able to resolve it.
-      console.warn(
-        "[DnsProvider] KUBE_IP env var is not set — writing ANAME for apex domain. " +
-          "cert-manager HTTP-01 challenges may fail. Set KUBE_IP=<cluster-ip> to fix this."
+      // KUBE_IP is required for apex domains: cert-manager's HTTP-01 solver
+      // resolves the domain inside the cluster via CoreDNS, which cannot follow
+      // ANAME/ALIAS records. Without a real A record pointing to the ingress IP,
+      // certificate issuance will fail silently. Treat this as a hard error so
+      // the misconfiguration surfaces immediately rather than appearing to work
+      // until the SSL stage.
+      throw new Error(
+        "[DnsProvider] KUBE_IP env var is not set. " +
+          "An A record is required for apex domains so cert-manager can issue certificates. " +
+          "Set KUBE_IP=<cluster-ingress-ip> and redeploy."
       );
     }
 
-    const effectiveType = isApex && !kubeIp ? "ANAME" : recordType;
-    const effectiveAnswer = isApex && !kubeIp ? params.target : answer;
+    const effectiveType = recordType;
+    const effectiveAnswer = answer;
     const providerHost = toProviderHost(host);
 
     const list = await this.nameCom.listRecords(zone);
