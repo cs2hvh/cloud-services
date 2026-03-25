@@ -660,60 +660,65 @@ export default function DomainDetailPage() {
   }, [connections, purchaseRequest]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <div className="mb-6">
-        <Link href="/dashboard/domains" className="inline-flex items-center text-sm text-white/70 hover:text-white">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Domains
-        </Link>
-      </div>
+    <div className="flex-1 min-h-screen px-4 py-5 text-white sm:px-6 sm:py-6 lg:px-8 lg:py-8 xl:px-10">
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-5">
+          <Link href="/dashboard/domains" className="inline-flex items-center text-sm text-white/60 hover:text-white transition-colors">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Domains
+          </Link>
+        </div>
 
-      <Card className="mb-6 border-white/10 bg-white/[0.03]">
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-2xl">{domainName}</CardTitle>
-            <CardDescription className="text-white/60 mt-1">Domain control and routing details</CardDescription>
-          </div>
-          <Button
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/10"
-            onClick={() => void refreshAll()}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </Button>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Badge className="border-cyan-500/30 bg-cyan-500/20 text-cyan-100">Status: {overallStatus}</Badge>
-          <Badge className="border-white/20 bg-white/10 text-white/90">Connected apps: {connectedAppNames.length}</Badge>
-          <Badge className="border-white/20 bg-white/10 text-white/90">Connections: {connections.length}</Badge>
-          {expiresAt && (
-            <Badge className="border-white/20 bg-white/10 text-white/90">
-              Expires: {new Date(expiresAt).toLocaleDateString()}
-            </Badge>
-          )}
-          {autoRenew !== null && (
-            <Badge className="border-white/20 bg-white/10 text-white/90">Auto-renew: {autoRenew ? 'On' : 'Off'}</Badge>
-          )}
-        </CardContent>
-      </Card>
-
-      {error && (
-        <Card className="mb-4 border-red-500/30 bg-red-500/10">
-          <CardContent className="py-4 text-sm text-red-100 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            {looksInternal(error) ? 'Unable to load this domain. Refresh the page to try again.' : error}
+        <Card className="mb-5 border-white/10 bg-white/[0.03]">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <CardTitle className="text-xl sm:text-2xl font-semibold truncate">{domainName}</CardTitle>
+              <CardDescription className="text-white/50 mt-1">Domain management and routing</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-white/15 text-white/70 hover:bg-white/10 hover:text-white self-start"
+              onClick={() => void refreshAll()}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-1.5 hidden sm:inline">Refresh</span>
+            </Button>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-2 pt-0">
+            <Badge className="border-cyan-500/30 bg-cyan-500/15 text-cyan-100">{overallStatus}</Badge>
+            <Badge className="border-white/15 bg-white/5 text-white/70">{connections.length} connection{connections.length !== 1 ? 's' : ''}</Badge>
+            <Badge className="border-white/15 bg-white/5 text-white/70">{connectedAppNames.length} app{connectedAppNames.length !== 1 ? 's' : ''}</Badge>
+            {expiresAt && (
+              <Badge className="border-white/15 bg-white/5 text-white/70">
+                Expires {new Date(expiresAt).toLocaleDateString()}
+              </Badge>
+            )}
+            {autoRenew !== null && (
+              <Badge className={autoRenew ? 'border-green-500/20 bg-green-500/10 text-green-300' : 'border-white/15 bg-white/5 text-white/50'}>
+                Auto-renew {autoRenew ? 'on' : 'off'}
+              </Badge>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">Overview</TabsTrigger>
-          <TabsTrigger value="connections" className="data-[state=active]:bg-white/10">Connections</TabsTrigger>
-          <TabsTrigger value="dns" className="data-[state=active]:bg-white/10">DNS</TabsTrigger>
-          <TabsTrigger value="settings" className="data-[state=active]:bg-white/10">Settings</TabsTrigger>
-        </TabsList>
+        {error && (
+          <Card className="mb-4 border-red-500/30 bg-red-500/10">
+            <CardContent className="py-3 text-sm text-red-100 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              {looksInternal(error) ? 'Unable to load this domain. Refresh the page to try again.' : error}
+            </CardContent>
+          </Card>
+        )}
+
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList className="bg-white/5 border border-white/10 flex-wrap h-auto gap-1 p-1">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="connections" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">Connections</TabsTrigger>
+            <TabsTrigger value="dns" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">DNS</TabsTrigger>
+            <TabsTrigger value="settings" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">Settings</TabsTrigger>
+          </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
           <DomainOverviewTab
@@ -786,6 +791,7 @@ export default function DomainDetailPage() {
           />
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }
