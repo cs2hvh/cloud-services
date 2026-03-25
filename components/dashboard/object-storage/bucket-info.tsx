@@ -2,18 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { Copy, Check, Eye, EyeOff, Key, Trash2, Loader2, HardDrive, Package, Globe2 } from "lucide-react";
+import { Copy, Check, Eye, EyeOff, Key, Trash2, Loader2 } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,7 +30,6 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
   const [copiedItem, setCopiedItem] = useState<string | null>(null);
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [showKeyId, setShowKeyId] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [bucketData, setBucketData] = useState<ObjectSpaceBucket>(bucket);

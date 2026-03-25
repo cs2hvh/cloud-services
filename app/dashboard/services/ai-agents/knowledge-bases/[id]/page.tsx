@@ -23,7 +23,6 @@ import {
   ArrowLeft,
   Loader2,
   Upload,
-  FileText,
   Trash2,
   Save,
   File,

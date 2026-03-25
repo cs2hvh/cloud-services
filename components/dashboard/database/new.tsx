@@ -8,14 +8,12 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowUpRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Cpu,
   HardDrive,
   Loader2,
-  MapPin,
   Server,
 } from "lucide-react";
 

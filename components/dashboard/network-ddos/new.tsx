@@ -333,8 +333,6 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
 
   const selectedProject = filteredProjects.find((proj) => proj.id === formData.project_id);
   const panelClassName = "glass-panel overflow-hidden";
-  const summaryPanelClassName =
-    "overflow-hidden rounded-none border border-white/[0.1] bg-[linear-gradient(180deg,rgba(18,24,37,0.98),rgba(10,14,22,0.96))] shadow-[0_24px_56px_rgba(2,6,20,0.38)] backdrop-blur-2xl";
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
