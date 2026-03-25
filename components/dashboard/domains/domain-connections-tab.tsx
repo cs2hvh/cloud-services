@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Star,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -63,11 +64,14 @@ function CopyBtn({ value, label }: { value: string; label: string }) {
   );
 }
 
-type StepPhase = 'done' | 'current' | 'upcoming';
+type StepPhase = 'done' | 'current' | 'upcoming' | 'error';
 
 function stepPhaseForConnection(conn: DomainConnectionItem): { verify: StepPhase; activate: StepPhase; ssl: StepPhase } {
   if (conn.status === 'active' && conn.sslStatus === 'active') {
     return { verify: 'done', activate: 'done', ssl: 'done' };
+  }
+  if (conn.status === 'active' && conn.sslStatus === 'failed') {
+    return { verify: 'done', activate: 'done', ssl: 'error' };
   }
   if (conn.status === 'active') {
     return { verify: 'done', activate: 'done', ssl: 'current' };
@@ -82,6 +86,8 @@ function StepIndicator({ phase, num, label }: { phase: StepPhase; num: number; l
   const icon =
     phase === 'done' ? (
       <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+    ) : phase === 'error' ? (
+      <XCircle className="h-5 w-5 text-red-400" />
     ) : phase === 'current' ? (
       <div className="flex h-5 w-5 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-bold text-white">
         {num}
@@ -97,9 +103,11 @@ function StepIndicator({ phase, num, label }: { phase: StepPhase; num: number; l
         className={
           phase === 'done'
             ? 'text-xs text-emerald-300'
-            : phase === 'current'
-              ? 'text-xs font-medium text-cyan-200'
-              : 'text-xs text-white/30'
+            : phase === 'error'
+              ? 'text-xs font-medium text-red-300'
+              : phase === 'current'
+                ? 'text-xs font-medium text-cyan-200'
+                : 'text-xs text-white/30'
         }
       >
         {label}
