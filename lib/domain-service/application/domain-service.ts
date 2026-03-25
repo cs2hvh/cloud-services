@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { APP_DOMAIN } from "@/config/domain";
 import {
   DOMAIN_ERROR_CODES,
+  type DomainErrorCode,
   DomainServiceError,
   toDomainServiceError,
 } from "@/lib/domain-service/core/errors";
@@ -18,6 +19,7 @@ import type {
   DomainRegistrarPort,
   DomainRepositoryPort,
   IngressPort,
+  SslProbePort,
 } from "@/lib/domain-service/core/ports";
 import type {
   ActorContext,
@@ -30,6 +32,7 @@ import type {
 // server likely restarted mid-Jenkins-job. Auto-fail it so the frontend stops
 // polling and the user can retry. Must exceed Jenkins max build duration (120s).
 const STALE_OPERATION_MS = 3 * 60 * 1000; // 3 minutes
+const SSL_ISSUING_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
 
 interface DomainServiceDeps {
   appRead: AppReadPort;
@@ -40,6 +43,8 @@ interface DomainServiceDeps {
   dns: DnsProviderPort;
   dnsRouting?: DnsRoutingPort;
   ingress: IngressPort;
+  /** Probes the live TLS certificate of a custom domain. Optional — if omitted, ssl_status stays "issuing" until manually checked. */
+  sslProbe?: SslProbePort;
   purchaseRequests?: DomainPurchaseRequestRepositoryPort;
   audit?: DomainAuditLogPort;
   notifications?: DomainNotificationPort;
@@ -411,11 +416,20 @@ export class DomainService {
 
     const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
     const app = await this.deps.appRead.getOwnedApp(domain.app_id, input.actor.userId);
+    const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
 
     if (domain.status === "active") {
-      await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
+      try {
+        await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
+      } catch (error: unknown) {
+        const integrationError = toDomainServiceError(error);
+        throw new DomainServiceError({
+          code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+          message: "Failed to remove domain mapping. Please retry.",
+          retryable: integrationError.retryable ?? true,
+        });
+      }
 
-      const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
       try {
         await this.deps.dns.removeRoutingRecord({
           fqdn: domain.domain,
@@ -485,6 +499,99 @@ export class DomainService {
     return response;
   }
 
+  async checkSslStatus(input: {
+    actor: ActorContext;
+    domainId: string;
+  }): Promise<{ ssl_status: DomainRecord["ssl_status"]; dns_ready?: boolean; dns_message?: string }> {
+    const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
+
+    // Only probe if the domain is active and SSL has not yet been confirmed.
+    if (domain.status !== "active" || domain.ssl_status === "active") {
+      return { ssl_status: domain.ssl_status };
+    }
+
+    // Step 1: validate DNS before probing TLS.
+    // If DNS is not pointing to the cluster, cert-manager's HTTP-01 self-check
+    // will also fail — no point hammering TLS until routing is correct.
+    if (this.deps.dnsRouting) {
+      const dns = await this.deps.dnsRouting
+        .getRoutingStatus(domain.domain)
+        .catch(() => null);
+
+      if (dns && !dns.ready) {
+        await this.deps.domains
+          .updateLastError(domain.id, `DNS not ready: ${dns.message}`)
+          .catch(() => {});
+        return {
+          ssl_status: domain.ssl_status,
+          dns_ready: false,
+          dns_message: dns.message,
+        };
+      }
+    }
+
+    if (!this.deps.sslProbe) {
+      // No probe adapter wired — return current DB state unchanged.
+      return { ssl_status: domain.ssl_status };
+    }
+
+    // Step 2: DNS is confirmed pointing to the cluster — now probe TLS.
+    const cert = await this.deps.sslProbe.probe(domain.domain);
+    if (!cert) {
+      // Could not reach the host or TLS failed entirely — don't change status.
+      return { ssl_status: domain.ssl_status, dns_ready: true };
+    }
+
+    const { issuer: issuerStr } = cert;
+    const isFakeCert =
+      issuerStr.includes("kubernetes ingress") ||
+      issuerStr.includes("fake") ||
+      issuerStr.includes("ingress-nginx") ||
+      issuerStr.includes("self-signed");
+    const isLetsEncrypt =
+      issuerStr.includes("let") && (issuerStr.includes("encrypt") || issuerStr.includes("lencr"));
+    const hostnameMatches = certCoversHostname(cert, domain.domain);
+
+    if (isLetsEncrypt && hostnameMatches) {
+      await this.deps.domains.updateSslStatus(domain.id, "active");
+      await this.deps.domains.updateLastError(domain.id, null).catch(() => {});
+      return { ssl_status: "active", dns_ready: true };
+    }
+
+    if (isLetsEncrypt && !hostnameMatches) {
+      return {
+        ssl_status: domain.ssl_status,
+        dns_ready: true,
+        dns_message: "A valid secure endpoint was found, but for a different hostname. Waiting for this exact domain to become ready.",
+      };
+    }
+
+    if (isFakeCert && domain.ssl_status !== "failed") {
+      const activatedAtMs = domain.activated_at ? new Date(domain.activated_at).getTime() : null;
+      const issuingTooLong =
+        typeof activatedAtMs === "number"
+        && !Number.isNaN(activatedAtMs)
+        && Date.now() - activatedAtMs > SSL_ISSUING_TIMEOUT_MS;
+
+      if (issuingTooLong) {
+        const message =
+          "Secure connection setup timed out. The domain is reachable but not fully trusted yet. Re-activate the domain to retry.";
+        await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
+        await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
+        return {
+          ssl_status: "failed",
+          dns_ready: true,
+          dns_message: message,
+        };
+      }
+
+      // Keep as "issuing" — cert-manager has not finished yet.
+      return { ssl_status: "issuing", dns_ready: true };
+    }
+
+    return { ssl_status: domain.ssl_status, dns_ready: true };
+  }
+
   async getOperation(input: { actor: ActorContext; operationId: string }): Promise<DomainOperation> {
     const operation = await this.deps.operations.findByIdForUser(input.operationId, input.actor.userId);
 
@@ -528,43 +635,86 @@ export class DomainService {
   async runActivationOperation(operationId: string, actor: ActorContext): Promise<void> {
     const userId = actor.userId;
     try {
+      console.log("[DomainService] Activation run started", {
+        operationId,
+        userId,
+      });
       const operation = await this.deps.operations.findByIdForUser(operationId, userId);
       if (!operation || !operation.domain_id) {
+        console.warn("[DomainService] Activation operation missing or not owned", {
+          operationId,
+          userId,
+        });
         return;
       }
 
       await this.deps.operations.markRunning(operation.id);
+      console.log("[DomainService] Activation operation marked running", {
+        operationId: operation.id,
+        domainId: operation.domain_id,
+      });
 
       const domain = await this.getOwnedDomain(operation.domain_id, userId);
       const app = await this.deps.appRead.getOwnedApp(domain.app_id, userId);
+      const trace = {
+        operationId: operation.id,
+        domainId: domain.id,
+        domain: domain.domain,
+        appId: app.id,
+        appName: app.name,
+      };
+      console.log("[DomainService] Activation context resolved", trace);
 
       // Mark TLS as issuing now that we're committing to the activation path.
       await this.deps.domains.updateSslStatus(domain.id, "issuing").catch(() => {});
+      console.log("[DomainService] SSL status set to issuing", trace);
 
       const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
       let dnsAutoConfigured = true;
       let dnsAutomationMessage: string | null = null;
 
       try {
+        console.log("[DomainService] Ensuring DNS routing record", {
+          ...trace,
+          cnameTarget,
+        });
         await this.deps.dns.ensureRoutingRecord({
           fqdn: domain.domain,
           target: cnameTarget,
           ttl: 300,
         });
+        console.log("[DomainService] DNS routing ensured", trace);
       } catch (error: unknown) {
         const dnsError = toDomainServiceError(error);
         if (!shouldSkipManagedDnsAutomation(dnsError)) {
+          console.error("[DomainService] DNS automation failed (fatal)", {
+            ...trace,
+            errorCode: dnsError.code,
+            errorMessage: dnsError.message,
+          });
           throw dnsError;
         }
         dnsAutoConfigured = false;
         dnsAutomationMessage = dnsError.message;
+        console.warn("[DomainService] DNS automation skipped (managed-zone fallback)", {
+          ...trace,
+          errorCode: dnsError.code,
+          errorMessage: dnsError.message,
+        });
       }
 
+      console.log("[DomainService] Applying ingress domain mapping", trace);
       await this.deps.ingress.addDomainToAppIngress(app.name, domain.domain);
+      console.log("[DomainService] Ingress domain mapping applied", trace);
       const updated = await this.deps.domains.markActive(domain.id);
-
-      // Ingress is live — mark TLS as active (cert-manager will issue the cert in the background).
-      await this.deps.domains.updateSslStatus(updated.id, "active").catch(() => {});
+      console.log("[DomainService] Domain marked active", {
+        ...trace,
+        activatedAt: updated.activated_at,
+        dnsAutoConfigured,
+        dnsAutomationMessage,
+      });
+      // ssl_status stays "issuing" (set by markActive) until cert-manager issues the certificate.
+      // A background check via /api/domains/[id]/check-ssl will transition it to "active".
 
       // Update app-level has_custom_domains flag.
       if (this.deps.appWrite) {
@@ -585,9 +735,14 @@ export class DomainService {
             record_name: updated.domain,
             record_value: cnameTarget,
             ttl: 300,
-            note: "Point your domain to this CNAME target. For apex domains (no www), use an ANAME or ALIAS record if your DNS provider supports it.",
+            note: "Point your domain to this CNAME target if you are using a subdomain. For apex domains (for example, example.com), use an A record to your public routing IP.",
           },
         }),
+      });
+      console.log("[DomainService] Activation operation marked succeeded", {
+        ...trace,
+        dnsAutoConfigured,
+        dnsAutomationMessage,
       });
 
       await this.emitNonBlocking(async () => {
@@ -631,11 +786,20 @@ export class DomainService {
       });
     } catch (error: unknown) {
       const serviceError = toDomainServiceError(error);
+      const classified = classifyActivationFailure(serviceError);
+      const operationMessage = toOperationErrorMessage(classified.message);
+      console.error("[DomainService] Activation run failed", {
+        operationId,
+        userId,
+        errorCode: classified.code,
+        errorMessage: operationMessage,
+        retryable: classified.retryable,
+      });
 
       try {
         const operation = await this.deps.operations.findByIdForUser(operationId, userId);
         if (operation?.domain_id) {
-          await this.deps.domains.updateLastError(operation.domain_id, serviceError.message);
+          await this.deps.domains.updateLastError(operation.domain_id, operationMessage);
         }
         const failedDomain = operation?.domain_id
           ? await this.deps.domains.findByIdForUser(operation.domain_id, userId).catch(() => null)
@@ -647,9 +811,9 @@ export class DomainService {
 
         await this.deps.operations.markFailed({
           operationId,
-          code: serviceError.code,
-          message: serviceError.message,
-          retryable: serviceError.retryable,
+          code: classified.code,
+          message: operationMessage,
+          retryable: classified.retryable,
         });
 
         await this.emitNonBlocking(async () => {
@@ -661,8 +825,8 @@ export class DomainService {
             metadata: {
               event: "domain_activation_failed",
               operation_id: operationId,
-              error_code: serviceError.code,
-              error_message: serviceError.message,
+              error_code: classified.code,
+              error_message: operationMessage,
             },
           });
           await this.emitNotification({
@@ -671,10 +835,10 @@ export class DomainService {
             serviceName: failedDomain?.domain || "domain",
             serviceId: operation?.domain_id || undefined,
             type: "error",
-            error: serviceError.message,
+            error: operationMessage,
             metadata: {
               operation_id: operationId,
-              error_code: serviceError.code,
+              error_code: classified.code,
             },
           });
           await this.emitEmail({
@@ -682,10 +846,10 @@ export class DomainService {
             severity: "critical",
             alertTitle: "Domain activation failed",
             serviceName: failedDomain?.domain || "domain",
-            summary: `Domain activation failed: ${serviceError.message}`,
+            summary: `Domain activation failed: ${operationMessage}`,
             metadata: {
               operation_id: operationId,
-              error_code: serviceError.code,
+              error_code: classified.code,
             },
           });
         });
@@ -907,6 +1071,142 @@ function shouldSkipManagedDnsAutomation(error: DomainServiceError): boolean {
     error.code === DOMAIN_ERROR_CODES.DOMAIN_INVALID
     && /No (platform-managed DNS|managed) zone found/i.test(error.message)
   );
+}
+
+function normalizeHostname(value: string): string {
+  return value.trim().toLowerCase().replace(/\.$/, "");
+}
+
+function certNameMatchesHost(certName: string, host: string): boolean {
+  const normalizedName = normalizeHostname(certName);
+  if (!normalizedName) return false;
+  if (normalizedName === host) return true;
+
+  if (normalizedName.startsWith("*.")) {
+    const suffix = normalizedName.slice(1); // ".example.com"
+    if (!host.endsWith(suffix)) return false;
+    const hostLabelCount = host.split(".").length;
+    const suffixLabelCount = suffix.slice(1).split(".").length;
+    return hostLabelCount === suffixLabelCount + 1;
+  }
+
+  return false;
+}
+
+function certCoversHostname(
+  cert: { common_name?: string; sans?: string[] },
+  hostname: string
+): boolean {
+  const normalizedHost = normalizeHostname(hostname);
+  const sans = cert.sans ?? [];
+  if (sans.length > 0) {
+    return sans.some((name) => certNameMatchesHost(name, normalizedHost));
+  }
+  if (cert.common_name) {
+    return certNameMatchesHost(cert.common_name, normalizedHost);
+  }
+  return false;
+}
+
+type ActivationFailure = {
+  code: DomainErrorCode;
+  message: string;
+  retryable: boolean;
+};
+
+function classifyActivationFailure(error: DomainServiceError): ActivationFailure {
+  const raw = error.message || "Domain activation failed.";
+  const lower = raw.toLowerCase();
+
+  // Let's Encrypt hard limit: 5 certs per exact domain in 7 days.
+  if (
+    lower.includes("acme:error:ratelimited")
+    || (lower.includes("too many certificates") && lower.includes("last 168h"))
+  ) {
+    const retryAfter = extractRetryAfterUtc(raw);
+    return {
+      code: DOMAIN_ERROR_CODES.PROVIDER_RATE_LIMITED,
+      retryable: true,
+      message: retryAfter
+        ? `Provider rate limit reached for this domain. Retry after ${retryAfter}.`
+        : "Provider rate limit reached for this domain. Please wait before retrying activation.",
+    };
+  }
+
+  if (
+    lower.includes("jenkins: job.create: internal server error")
+    || lower.includes("jenkins: job.config: internal server error")
+    || (lower.includes("jenkins") && lower.includes("internal server error"))
+  ) {
+    return {
+      code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+      retryable: true,
+      message: "A platform dependency is temporarily unavailable. Please retry in 1-2 minutes.",
+    };
+  }
+
+  if (lower.includes("econnrefused") || lower.includes("enotfound")) {
+    if (lower.includes("jenkins")) {
+      return {
+        code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+        retryable: true,
+        message: "A platform dependency could not be reached. Please retry in a moment.",
+      };
+    }
+  }
+
+  if (lower.includes("ingress") && lower.includes("not found")) {
+    return {
+      code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+      retryable: true,
+      message: "Domain routing for this app is not ready yet. Redeploy or restart the app once, then activate the domain again.",
+    };
+  }
+
+  if (
+    (lower.includes("clusterissuer") && lower.includes("not found"))
+    || (lower.includes("cert-manager") && lower.includes("not installed"))
+  ) {
+    return {
+      code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+      retryable: false,
+      message: "Secure-connection provisioning is not configured in this environment. Contact support.",
+    };
+  }
+
+  if (lower.includes("timeout waiting for jenkins build")) {
+    return {
+      code: DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED,
+      retryable: true,
+      message: "Domain setup timed out. Please retry activation.",
+    };
+  }
+
+  if (lower.includes("jenkins build failed with result: failure") || lower.includes("jenkins build failed with result: aborted")) {
+    return {
+      code: DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED,
+      retryable: true,
+      message: "Domain setup failed. Please retry activation.",
+    };
+  }
+
+  return {
+    code: error.code,
+    message: "Domain setup could not be completed. Please retry.",
+    retryable: error.retryable,
+  };
+}
+
+function extractRetryAfterUtc(message: string): string | null {
+  const match = message.match(/retry after\s+([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9:]{8}\s+utc)/i);
+  return match?.[1]?.toUpperCase() || null;
+}
+
+function toOperationErrorMessage(message: string): string {
+  const stripped = message.split("\n--- Jenkins log tail")[0]?.trim() || "Activation failed";
+  const MAX = 700;
+  if (stripped.length <= MAX) return stripped;
+  return `${stripped.slice(0, MAX - 3)}...`;
 }
 
 function normalizeDomain(domain: string): string {

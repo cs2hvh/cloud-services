@@ -4,6 +4,7 @@ import { NameComDnsProviderAdapter } from "@/lib/domain-service/integrations/dns
 import { DnsRoutingAdapter } from "@/lib/domain-service/integrations/dns-routing.adapter";
 import { createDomainEmailAdapter } from "@/lib/domain-service/integrations/email.adapter";
 import { KubernetesIngressAdapter } from "@/lib/domain-service/integrations/k8s-ingress.adapter";
+import { TlsSocketSslProbeAdapter } from "@/lib/domain-service/integrations/tls-ssl-probe.adapter";
 import { NameComRegistrarAdapter } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
 import { createDomainNotificationAdapter } from "@/lib/domain-service/integrations/notification.adapter";
 import { SupabaseAppReadAdapter } from "@/lib/domain-service/persistence/supabase-app-read.adapter";
@@ -36,6 +37,7 @@ export function getDomainService(): DomainService {
     dns: new NameComDnsProviderAdapter(registrar),
     dnsRouting: new DnsRoutingAdapter(),
     ingress: new KubernetesIngressAdapter(),
+    sslProbe: new TlsSocketSslProbeAdapter(),
     audit: createDomainAuditLogAdapter(),
     notifications: createDomainNotificationAdapter(),
     email: createDomainEmailAdapter(),

@@ -29,6 +29,7 @@ import {
   normalizeDomain,
   sanitizeOperationError,
 } from '@/components/dashboard/domains/domain-detail-types';
+import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
 
 const DEFAULT_DNS_FORM: DnsFormState = {
   recordId: null,
@@ -56,6 +57,7 @@ export default function DomainDetailPage() {
   const [settingPrimaryConnectionId, setSettingPrimaryConnectionId] = useState<string | null>(null);
   const [removingConnectionId, setRemovingConnectionId] = useState<string | null>(null);
   const [removeConfirmConnectionId, setRemoveConfirmConnectionId] = useState<string | null>(null);
+  const [checkingSslId, setCheckingSslId] = useState<string | null>(null);
   const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<number | null>(null);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [dnsError, setDnsError] = useState<string | null>(null);
@@ -214,6 +216,13 @@ export default function DomainDetailPage() {
     void refreshAll();
   }, [refreshAll]);
 
+  // Auto-refresh while any connection is still issuing an SSL cert.
+  const issuingConnectionIds = useMemo(
+    () => connections.filter((c) => c.sslStatus === 'issuing').map((c) => c.id),
+    [connections],
+  );
+  useAutoSslRefresh(issuingConnectionIds, loadDomainContext);
+
   const resetDnsForm = useCallback(() => setDnsForm(DEFAULT_DNS_FORM), []);
 
   const pollOperation = async (operationId: string) => {
@@ -241,6 +250,51 @@ export default function DomainDetailPage() {
     }
 
     throw new Error('Setup is taking longer than expected. Refresh to check the current status.');
+  };
+
+  const handleCheckSslConnection = async (domainId: string) => {
+    setCheckingSslId(domainId);
+    try {
+      const res = await fetch(`/api/domains/${domainId}/check-ssl`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(friendlyError(data, 'Could not check SSL status.'));
+        return;
+      }
+
+      // Optimistically update the connection state so the badge reflects dns info immediately.
+      if (data.dns_ready !== undefined || data.ssl_status) {
+        setConnections((prev) =>
+          prev.map((c) =>
+            c.id === domainId
+              ? {
+                  ...c,
+                  sslStatus: data.ssl_status ?? c.sslStatus,
+                  dnsReady: data.dns_ready,
+                  dnsMessage: data.dns_message ?? undefined,
+                }
+              : c,
+          ),
+        );
+      }
+
+      if (data.ssl_status === 'active') {
+        toast.success('Secure connection is now active — connection is fully encrypted.');
+      } else if (data.ssl_status === 'issuing') {
+        if (data.dns_ready === false && data.dns_message) {
+          toast.warning(`DNS not ready: ${data.dns_message}`);
+        } else {
+          toast.info('Certificate is still being issued. Check again in a minute.');
+        }
+      } else if (data.ssl_status === 'failed') {
+        toast.error('Secure connection failed. Check DNS and re-activate the domain.');
+      }
+      await loadDomainContext();
+    } catch {
+      toast.error('SSL check failed. Please try again.');
+    } finally {
+      setCheckingSslId(null);
+    }
   };
 
   const handleVerifyConnection = async (domainId: string) => {
@@ -290,7 +344,7 @@ export default function DomainDetailPage() {
         await pollOperation(String(data.operation_id));
       }
 
-      toast.success(`${connectionDomain || 'Domain'} is now live\u2014your SSL certificate will be ready shortly.`);
+      toast.success(`${connectionDomain || 'Domain'} is now live\u2014secure connection setup will be ready shortly.`);
       await refreshAll();
     } catch (err) {
       console.error('Failed to activate domain:', err);
@@ -610,6 +664,7 @@ export default function DomainDetailPage() {
             activatingConnectionId={activatingConnectionId}
             settingPrimaryConnectionId={settingPrimaryConnectionId}
             removingConnectionId={removingConnectionId}
+            checkingSslId={checkingSslId}
             onSubdomainChange={setSubdomainInput}
             onAttached={() => { setSubdomainInput(''); void refreshAll(); }}
             onVerify={(id) => void handleVerifyConnection(id)}
@@ -618,6 +673,7 @@ export default function DomainDetailPage() {
             onRemoveRequest={setRemoveConfirmConnectionId}
             onRemoveConfirm={(id) => void handleRemoveConnection(id)}
             onRemoveCancel={() => setRemoveConfirmConnectionId(null)}
+            onCheckSsl={(id) => void handleCheckSslConnection(id)}
           />
         </TabsContent>
 

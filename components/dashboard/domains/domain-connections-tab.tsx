@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, ExternalLink, Loader2, Star, Trash2 } from 'lucide-react';
+import { Check, ExternalLink, Loader2, RefreshCw, Star, Trash2 } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { DomainAttachAction, type DomainAppOption } from './domain-attach-action';
 import type { DomainConnection, DomainConnectionItem } from './domain-detail-types';
 import { sanitizeLastError } from './domain-detail-types';
+import { SslStatusBadge } from '@/components/ui/ssl-status-badge';
 
 function statusBadge(status: DomainConnection['status']) {
   switch (status) {
@@ -49,6 +50,7 @@ interface DomainConnectionsTabProps {
   activatingConnectionId: string | null;
   settingPrimaryConnectionId: string | null;
   removingConnectionId: string | null;
+  checkingSslId: string | null;
   onSubdomainChange: (value: string) => void;
   onAttached: () => void;
   onVerify: (id: string) => void;
@@ -57,6 +59,7 @@ interface DomainConnectionsTabProps {
   onRemoveRequest: (id: string) => void;
   onRemoveConfirm: (id: string) => void;
   onRemoveCancel: () => void;
+  onCheckSsl: (id: string) => void;
 }
 
 export function DomainConnectionsTab({
@@ -71,6 +74,7 @@ export function DomainConnectionsTab({
   activatingConnectionId,
   settingPrimaryConnectionId,
   removingConnectionId,
+  checkingSslId,
   onSubdomainChange,
   onAttached,
   onVerify,
@@ -79,6 +83,7 @@ export function DomainConnectionsTab({
   onRemoveRequest,
   onRemoveConfirm,
   onRemoveCancel,
+  onCheckSsl,
 }: DomainConnectionsTabProps) {
   const confirmConn = removeConfirmConnectionId
     ? connections.find((c) => c.id === removeConfirmConnectionId)
@@ -147,15 +152,27 @@ export function DomainConnectionsTab({
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         {statusBadge(connection.status)}
-                        <Badge className="border-white/20 bg-white/10 text-white/80">
-                          SSL: {connection.sslStatus}
-                        </Badge>
+                        {connection.status !== 'active' && (!connection.sslStatus || connection.sslStatus === 'pending') && (
+                          <Badge className="border-white/20 bg-white/10 text-white/80">
+                            SSL: {connection.sslStatus ?? 'pending'}
+                          </Badge>
+                        )}
                         {connection.isPrimary && (
                           <Badge className="border-blue-500/30 bg-blue-500/20 text-blue-200">
                             Primary
                           </Badge>
                         )}
                       </div>
+                      <SslStatusBadge
+                        sslStatus={connection.sslStatus}
+                        id={connection.id}
+                        onCheck={connection.status === 'active' ? onCheckSsl : undefined}
+                        checkingId={checkingSslId}
+                        variant="row"
+                        dnsMessage={
+                          connection.dnsReady === false ? connection.dnsMessage : undefined
+                        }
+                      />
                       {connection.lastError && (
                         <p className="text-xs text-red-300 mt-2">
                           {sanitizeLastError(connection.lastError)}
@@ -204,7 +221,7 @@ export function DomainConnectionsTab({
                           )}
                         </Button>
                       )}
-                      {connection.status === 'active' && !connection.isPrimary && (
+                      {connection.status === 'active' && !connection.isPrimary && connection.sslStatus !== 'failed' && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -218,6 +235,31 @@ export function DomainConnectionsTab({
                             <>
                               <Star className="h-3.5 w-3.5 mr-1" />
                               Set Primary
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      {connection.status === 'active' && connection.sslStatus === 'failed' && (
+                        <Button
+                          size="sm"
+                          className="bg-orange-600 hover:bg-orange-700 text-white"
+                          disabled={
+                            activatingConnectionId === connection.id ||
+                            connection.appStatus !== 'running'
+                          }
+                          onClick={() => onActivate(connection.id)}
+                          title={
+                            connection.appStatus !== 'running'
+                              ? 'App must be running to re-activate.'
+                              : 'Re-activate to retry secure-connection setup'
+                          }
+                        >
+                          {activatingConnectionId === connection.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                              Re-Activate
                             </>
                           )}
                         </Button>

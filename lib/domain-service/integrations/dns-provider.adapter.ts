@@ -15,7 +15,7 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
 
   constructor(private readonly nameCom: NameComRegistrarAdapter) {
     this.resolver = new Resolver();
-    this.resolver.setServers(["8.8.8.8", "1.1.1.1"]);
+    this.resolver.setServers(parsePublicDnsServers(process.env.DOMAINS_PUBLIC_DNS));
   }
 
   async listTxtRecords(recordName: string): Promise<string[]> {
@@ -36,7 +36,7 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
 
       return records.flat();
     } catch (error: unknown) {
-      const code = (error as { code?: string }).code;
+      const code = getErrorCode(error);
       if (code === "ENODATA" || code === "ENOTFOUND") {
         return [];
       }
@@ -52,35 +52,56 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
   async ensureRoutingRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void> {
     const { zone, host } = await this.resolveManagedZone(params.fqdn);
     const ttl = Math.max(params.ttl, 300);
-    const recordType = host === "@" ? "ANAME" : "CNAME";
+
+    // For apex domains (@) use a direct A record pointing to KUBE_IP so that
+    // cert-manager's cluster-internal CoreDNS can resolve the domain during
+    // the HTTP-01 ACME challenge (CoreDNS cannot follow ANAME/ALIAS).
+    // For subdomains use a standard CNAME.
+    const kubeIp = process.env.KUBE_IP;
+    const isApex = host === "@";
+    const recordType = isApex ? "A" : "CNAME";
+    const answer = isApex && kubeIp ? kubeIp : params.target;
+
+    if (isApex && !kubeIp) {
+      // KUBE_IP not configured — fall back to ANAME so traffic still reaches the cluster,
+      // but log a warning because cert-manager may not be able to resolve it.
+      console.warn(
+        "[DnsProvider] KUBE_IP env var is not set — writing ANAME for apex domain. " +
+          "cert-manager HTTP-01 challenges may fail. Set KUBE_IP=<cluster-ip> to fix this."
+      );
+    }
+
+    const effectiveType = isApex && !kubeIp ? "ANAME" : recordType;
+    const effectiveAnswer = isApex && !kubeIp ? params.target : answer;
     const providerHost = toProviderHost(host);
 
     const list = await this.nameCom.listRecords(zone);
     const existing = list.records.find(
-      (record) => record.type === recordType && normalizeHost(record.host) === normalizeHost(host)
+      (record) => record.type === effectiveType && normalizeHost(record.host) === normalizeHost(host)
     );
 
-    if (existing?.answer === params.target && Number(existing.ttl || 300) === ttl) {
+    if (existing?.answer === effectiveAnswer && Number(existing.ttl || 300) === ttl) {
       return;
     }
 
-    // Cleanup conflicting host-alias records before writing desired routing type.
+    // Remove all conflicting host-alias / address records before writing the desired type.
+    const conflictTypes = new Set(["CNAME", "ANAME", "A"]);
     const conflicts = list.records.filter((record) => {
       if (normalizeHost(record.host) !== normalizeHost(host)) return false;
-      return record.type === "CNAME" || record.type === "ANAME";
+      return conflictTypes.has(record.type ?? "") && record.type !== effectiveType;
     });
 
     await Promise.all(
       conflicts
-        .filter((record) => typeof record.id === "number" && record.type !== recordType)
+        .filter((record) => typeof record.id === "number")
         .map((record) => this.nameCom.deleteRecord(zone, Number(record.id)))
     );
 
-    if (existing?.id) {
+    if (existing?.id != null) {
       await this.nameCom.updateRecord(zone, existing.id, {
         host: providerHost,
-        type: recordType,
-        answer: params.target,
+        type: effectiveType,
+        answer: effectiveAnswer,
         ttl,
       });
       return;
@@ -88,8 +109,8 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
 
     await this.nameCom.createRecord(zone, {
       host: providerHost,
-      type: recordType,
-      answer: params.target,
+      type: effectiveType,
+      answer: effectiveAnswer,
       ttl,
     });
   }
@@ -97,12 +118,20 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
   async removeRoutingRecord(params: { fqdn: string; target?: string }): Promise<void> {
     const { zone, host } = await this.resolveManagedZone(params.fqdn);
     const list = await this.nameCom.listRecords(zone);
-    const allowedTypes = host === "@" ? new Set(["ANAME", "CNAME"]) : new Set(["CNAME"]);
+    // For apex domains we may have written an A record (with IP) or an ANAME.
+    const allowedTypes = host === "@" ? new Set(["A", "ANAME", "CNAME"]) : new Set(["CNAME"]);
+    const apexIpTarget = host === "@" ? process.env.KUBE_IP : undefined;
 
     const matches = list.records.filter((record) => {
       if (!record.type || !allowedTypes.has(record.type)) return false;
       if (normalizeHost(record.host) !== normalizeHost(host)) return false;
-      if (params.target && record.answer !== params.target) return false;
+      if (params.target) {
+        const matchesConfiguredTarget = record.answer === params.target;
+        const matchesApexIpTarget = Boolean(
+          apexIpTarget && record.type === "A" && record.answer === apexIpTarget
+        );
+        if (!matchesConfiguredTarget && !matchesApexIpTarget) return false;
+      }
       return true;
     });
 
@@ -111,14 +140,6 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
         .filter((record) => typeof record.id === "number")
         .map((record) => this.nameCom.deleteRecord(zone, Number(record.id)))
     );
-  }
-
-  async ensureCnameRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void> {
-    await this.ensureRoutingRecord(params);
-  }
-
-  async removeCnameRecord(params: { fqdn: string; target?: string }): Promise<void> {
-    await this.removeRoutingRecord(params);
   }
 
   private async resolveManagedZone(fqdn: string): Promise<{ zone: string; host: string }> {
@@ -190,4 +211,22 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
         reject(error);
       });
   });
+}
+
+function parsePublicDnsServers(raw?: string): string[] {
+  const configured = raw
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (configured && configured.length > 0) {
+    return configured;
+  }
+  return ["8.8.8.8", "1.1.1.1"];
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  if (!("code" in error)) return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
 }

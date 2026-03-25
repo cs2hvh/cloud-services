@@ -34,6 +34,7 @@ import type {
   DomainInventoryItem,
   VerificationInstructions,
 } from './types';
+import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
 
 export function CustomDomainsManager({ appId, appStatus, platformDomain }: CustomDomainsManagerProps) {
   // ── Data ─────────────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [checkingSslId, setCheckingSslId] = useState<string | null>(null);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const existingDomainOptions = useMemo(() => {
@@ -156,6 +158,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
     void refreshAll();
   }, [refreshAll]);
 
+  // Auto-refresh while any domain is still issuing an SSL cert.
+  const issuingDomainIds = useMemo(
+    () => domains.filter((d) => d.ssl_status === 'issuing').map((d) => d.id),
+    [domains],
+  );
+  useAutoSslRefresh(issuingDomainIds, fetchDomains);
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -235,7 +244,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   };
 
   const pollOperation = async (operationId: string) => {
-    const maxAttempts = 75; // 75 × 2s = 150s — covers Jenkins 120s pipeline timeout
+    const maxAttempts = 75; // 75 × 2s = 150s — covers the async activation window
     const delayMs = 2000;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const res = await fetch(`/api/domains/operations/${operationId}`);
@@ -275,13 +284,41 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         await pollOperation(data.operation_id);
       }
       toast.success(
-        `${domainName || 'Domain'} is now live\u2014your SSL certificate will be ready shortly.`,
+        `${domainName || 'Domain'} is now live\u2014secure connection setup will finish shortly.`,
       );
       await fetchDomains();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Activation failed. Please try again.');
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const handleCheckSsl = async (domainId: string) => {
+    setCheckingSslId(domainId);
+    try {
+      const res = await fetch(`/api/domains/${domainId}/check-ssl`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(friendlyError(data, 'Could not check SSL status. Try refreshing.'));
+        return;
+      }
+      if (data.ssl_status === 'active') {
+        toast.success('Secure connection is now active — your traffic is encrypted.');
+      } else if (data.ssl_status === 'issuing') {
+        if (data.dns_ready === false && data.dns_message) {
+          toast.warning(`DNS not ready: ${data.dns_message}`);
+        } else {
+          toast.info('Certificate is still being issued. Check again in a minute.');
+        }
+      } else if (data.ssl_status === 'failed') {
+        toast.error('Secure connection failed. Verify DNS settings and re-activate the domain.');
+      }
+      await fetchDomains();
+    } catch {
+      toast.error('SSL check failed. Please try again.');
+    } finally {
+      setCheckingSslId(null);
     }
   };
 
@@ -451,11 +488,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
               activatingId={activatingId}
               removingId={removingId}
               copiedField={copiedField}
+              checkingSslId={checkingSslId}
               onVerify={(id) => void handleVerifyDomain(id)}
               onActivate={(id) => void handleActivateDomain(id)}
               onSetPrimary={(id) => void handleSetPrimary(id)}
               onRemoveConfirm={setRemoveConfirmId}
               onCopy={copyToClipboard}
+              onCheckSsl={(id) => void handleCheckSsl(id)}
             />
           ))
         )}
