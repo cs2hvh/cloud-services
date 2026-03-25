@@ -24,6 +24,7 @@ import { DomainCard } from './domain-card';
 import {
   friendlyError,
   normalizeDomainInput,
+  operationFailureFallback,
   sanitizeOperationError,
   sanitizeSubdomainLabel,
 } from './utils';
@@ -243,7 +244,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
     }
   };
 
-  const pollOperation = async (operationId: string) => {
+  const pollOperation = async (operationId: string): Promise<Record<string, unknown> | null> => {
     const maxAttempts = 75; // 75 × 2s = 150s — covers the async activation window
     const delayMs = 2000;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -251,11 +252,14 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
       const data = await res.json();
       if (!res.ok) throw new Error('Unable to check setup status. Please refresh and try again.');
       const status = data?.operation?.status;
-      if (status === 'succeeded') return;
+      if (status === 'succeeded') {
+        return (data?.operation?.response_data || null) as Record<string, unknown> | null;
+      }
       if (status === 'failed') {
+        const errorCode = data?.operation?.error_code;
         const rawMsg = data?.operation?.error_message;
         throw new Error(
-          sanitizeOperationError(rawMsg, 'Domain setup failed. Please try again or contact support.'),
+          sanitizeOperationError(rawMsg, operationFailureFallback(errorCode)),
         );
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -279,13 +283,46 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         toast.error(friendlyError(data, 'Activation failed. Please try again.'));
         return;
       }
+      let responseData: Record<string, unknown> | null = null;
       if (data.operation_id) {
         toast.info(`Setting up ${domainName || 'domain'}\u2026 this may take up to 2 minutes.`);
-        await pollOperation(data.operation_id);
+        responseData = await pollOperation(data.operation_id);
       }
-      toast.success(
-        `${domainName || 'Domain'} is now live\u2014secure connection setup will finish shortly.`,
-      );
+      const dnsAutoConfigured =
+        responseData && typeof responseData.dns_auto_configured === 'boolean'
+          ? responseData.dns_auto_configured
+          : true;
+      const routingInstructions =
+        responseData && typeof responseData.routing_instructions === 'object'
+          ? (responseData.routing_instructions as Record<string, unknown>)
+          : null;
+
+      if (!dnsAutoConfigured && routingInstructions) {
+        const recordType =
+          typeof routingInstructions.record_type === 'string'
+            ? routingInstructions.record_type
+            : 'DNS';
+        const recordName =
+          typeof routingInstructions.record_name === 'string'
+            ? routingInstructions.record_name
+            : domainName || 'domain';
+        const recordValue =
+          typeof routingInstructions.record_value === 'string'
+            ? routingInstructions.record_value
+            : '';
+
+        toast.warning(
+          `${domainName || 'Domain'} activated. Add ${recordType} ${recordName}${recordValue ? ` -> ${recordValue}` : ''} at your DNS provider.`,
+        );
+      } else if (!dnsAutoConfigured) {
+        toast.warning(
+          `${domainName || 'Domain'} activated. Update DNS at your provider, then secure connection will finish.`,
+        );
+      } else {
+        toast.success(
+          `${domainName || 'Domain'} is now live\u2014secure connection setup will finish shortly.`,
+        );
+      }
       await fetchDomains();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Activation failed. Please try again.');

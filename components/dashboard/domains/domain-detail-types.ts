@@ -1,5 +1,7 @@
 // ─── Shared types & helpers for the domain detail page ───────────────────────
 
+export { operationFailureFallback } from '@/components/dashboard/apps/custom-domains/utils';
+
 export interface AppListItem {
   id: string;
   name: string;
@@ -18,11 +20,15 @@ export interface DomainConnection {
   id: string;
   app_id: string;
   app_name: string;
+  app_slug: string;
   app_status: string;
   domain: string;
   status: 'pending' | 'verified' | 'active' | 'failed' | 'removed';
   ssl_status: 'pending' | 'issuing' | 'active' | 'failed';
   is_primary: boolean;
+  verification_token: string;
+  routing_target: string;
+  routing_ips: string[];
   last_error: string | null;
   created_at: string;
 }
@@ -40,12 +46,16 @@ export interface DomainConnectionItem {
   id: string;
   appId: string;
   appName: string;
+  appSlug: string;
   appStatus: string;
   domain: string;
   hostLabel: string;
   status: DomainConnection['status'];
   sslStatus: DomainConnection['ssl_status'];
   isPrimary: boolean;
+  verificationToken: string;
+  routingTarget: string;
+  routingIps: string[];
   lastError: string | null;
   /** Populated after a manual check-ssl call. undefined = not yet checked. */
   dnsReady?: boolean;

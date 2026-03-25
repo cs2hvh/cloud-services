@@ -4,6 +4,7 @@
  */
 import jenkins from "@/lib/jenkins";
 import { APP_DOMAIN } from "@/config/domain";
+import { createHash } from "crypto";
 
 class JenkinsBuildTerminalError extends Error {
   constructor(message: string) {
@@ -51,6 +52,71 @@ export class KubernetesCustomDomainService {
     return (process.env.DOMAINS_CERT_ISSUER ?? "letsencrypt-prod").trim();
   }
 
+  private static normalizeNameSegment(value: string): string {
+    const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    return normalized || "x";
+  }
+
+  private static composeNameWithTail(stem: string, tail: string, maxLength: number): string {
+    const safeStem = this.normalizeNameSegment(stem);
+    const safeTail = this.normalizeNameSegment(tail);
+    const candidate = `${safeStem}-${safeTail}`;
+    if (candidate.length <= maxLength) {
+      return candidate;
+    }
+
+    const stemBudget = Math.max(1, maxLength - safeTail.length - 1);
+    const trimmedStem = safeStem.slice(0, stemBudget).replace(/-+$/g, "") || "x";
+    return `${trimmedStem}-${safeTail}`;
+  }
+
+  private static buildDomainIdentity(customDomain: string): { slug: string; hash: string } {
+    return {
+      slug: this.normalizeNameSegment(customDomain.replace(/\./g, "-")),
+      hash: createHash("sha256").update(customDomain).digest("hex").slice(0, 10),
+    };
+  }
+
+  private static buildDomainResourceNames(
+    appName: string,
+    customDomain: string
+  ): { certSecretName: string; certName: string } {
+    const app = this.normalizeNameSegment(appName);
+    const { slug, hash } = this.buildDomainIdentity(customDomain);
+
+    const certSecretName = this.composeNameWithTail(
+      `${app}-custom-${slug}`,
+      `${hash}-tls`,
+      63
+    );
+    const certName = this.composeNameWithTail(
+      `${app}-custom-cert-${slug}`,
+      hash,
+      63
+    );
+
+    return { certSecretName, certName };
+  }
+
+  private static buildDomainJobName(
+    appName: string,
+    action: "add-domain" | "remove-domain",
+    customDomain: string
+  ): string {
+    const app = this.normalizeNameSegment(appName);
+    const { slug, hash } = this.buildDomainIdentity(customDomain);
+    return this.composeNameWithTail(
+      `${app}-${action}-${slug}`,
+      `${hash}-job`,
+      96
+    );
+  }
+
   private static validateInputs(appName: string, customDomain: string): void {
     if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(appName)) {
       throw new Error(`Invalid appName "${appName}": must be lowercase alphanumeric with hyphens`);
@@ -62,7 +128,7 @@ export class KubernetesCustomDomainService {
 
   static async addCustomDomainToIngress(appName: string, customDomain: string): Promise<void> {
     this.validateInputs(appName, customDomain);
-    const jobName = `${appName}-add-domain-job`;
+    const jobName = this.buildDomainJobName(appName, "add-domain", customDomain);
     const context = { action: "add-domain", appName, customDomain, jobName } as const;
     console.log("[K8sCustomDomain] Start add domain", context);
     
@@ -122,7 +188,7 @@ export class KubernetesCustomDomainService {
    */
   static async removeCustomDomainFromIngress(appName: string, customDomain: string): Promise<void> {
     this.validateInputs(appName, customDomain);
-    const jobName = `${appName}-remove-domain-job`;
+    const jobName = this.buildDomainJobName(appName, "remove-domain", customDomain);
     const context = { action: "remove-domain", appName, customDomain, jobName } as const;
     console.log("[K8sCustomDomain] Start remove domain", context);
     
@@ -321,14 +387,15 @@ pipeline {
               exit 1
             fi
 
-            if echo "$CURRENT_COREFILE" | grep -Eq 'forward[[:space:]]+\\.[[:space:]]+8\\.8\\.8\\.8[[:space:]]+8\\.8\\.4\\.4[[:space:]]+1\\.1\\.1\\.1'; then
-              echo "CoreDNS already configured with public DNS resolvers — no change needed"
+            # Check for the desired resolver order (Cloudflare first).
+            if echo "$CURRENT_COREFILE" | grep -Fq 'forward . 1.1.1.1 9.9.9.9 8.8.8.8'; then
+              echo "CoreDNS already configured with Cloudflare-first DNS resolvers — no change needed"
               exit 0
             fi
 
             UPDATED_COREFILE=$(printf "%s\\n" "$CURRENT_COREFILE" | awk '
               BEGIN { inRoot=0; depth=0; replaced=0 }
-              /^\\.:53[[:space:]]*\\{/ {
+              /^[.]:53[[:space:]]*[{]/ {
                 inRoot=1
                 depth=1
                 print
@@ -336,15 +403,15 @@ pipeline {
               }
               {
                 line = $0
-                if (inRoot && line ~ /^[[:space:]]*forward[[:space:]]+\\./ && replaced==0) {
-                  hasBrace = (line ~ /\\{/) ? " {" : ""
-                  line = "    forward . 8.8.8.8 8.8.4.4 1.1.1.1" hasBrace
+                if (inRoot && line ~ /^[[:space:]]*forward[[:space:]]+[.]/ && replaced==0) {
+                  hasBrace = (line ~ /[{]/) ? " {" : ""
+                  line = "    forward . 1.1.1.1 9.9.9.9 8.8.8.8" hasBrace
                   replaced=1
                 }
                 print line
                 if (inRoot) {
-                  opens = gsub(/\\{/, "{", line)
-                  closes = gsub(/\\}/, "}", line)
+                  opens = gsub(/[{]/, "{", line)
+                  closes = gsub(/[}]/, "}", line)
                   depth += opens - closes
                   if (depth <= 0) {
                     inRoot=0
@@ -534,7 +601,7 @@ pipeline {
    */
   private static createAddDomainPipeline(appName: string, customDomain: string): string {
     const serviceName = `${appName}-service`;
-    const certSecretName = `${appName}-custom-${customDomain.replace(/\./g, '-')}-tls`;
+    const { certSecretName, certName } = this.buildDomainResourceNames(appName, customDomain);
     const platformDomain = `${appName}.${APP_DOMAIN}`;
     const certIssuer = this.getCertIssuer();
     
@@ -565,7 +632,7 @@ pipeline {
     CUSTOM_DOMAIN = '${customDomain}'
     SERVICE_NAME = '${serviceName}'
     CERT_SECRET = '${certSecretName}'
-    CERT_NAME = '${appName}-custom-cert-${customDomain.replace(/\./g, '-')}'
+    CERT_NAME = '${certName}'
     CERT_ISSUER = '${certIssuer}'
     PLATFORM_DOMAIN = '${platformDomain}'
   }
@@ -692,15 +759,44 @@ PATCH_EOF
               kubectl get ingress \${INGRESS_NAME} -o jsonpath='{.spec.rules[*].host}' | tr ' ' '\\n'
             '''
 
-            // Step 2: Apply secure-domain resource AFTER routing is ready.
-            // Do NOT force-delete request/order resources here: aggressive retries can
-            // hit provider rate limits and make recovery slower.
+            // Step 2: Reuse existing cert if valid, otherwise apply and let cert-manager issue.
+            // Never force-delete CertificateRequests/Orders — that triggers immediate re-issuance
+            // and burns rate-limit quota. cert-manager will retry on its own schedule.
             sh '''
+              # If the TLS secret already exists and holds a valid cert for this domain, reuse it.
+              SECRET_EXISTS=$(kubectl get secret \${CERT_SECRET} -n default --ignore-not-found=true -o name 2>/dev/null || true)
+              if [ -n "$SECRET_EXISTS" ]; then
+                CERT_DATA=$(kubectl get secret \${CERT_SECRET} -n default -o jsonpath='{.data.tls\.crt}' 2>/dev/null | base64 -d 2>/dev/null || true)
+                if [ -z "$CERT_DATA" ]; then
+                  echo "⚠️ TLS secret exists but contains no cert data — reissuing"
+                else
+                  # Strictly validate cert hostname coverage (SAN/CN + wildcard support).
+                  # A secret left over from another domain must never be reused.
+                  CERT_SUBJECT=$(echo "$CERT_DATA" | openssl x509 -noout -subject 2>/dev/null || true)
+                  if ! echo "$CERT_DATA" | openssl x509 -noout -checkhost "\${CUSTOM_DOMAIN}" >/dev/null 2>&1; then
+                    echo "⚠️ Cert hostname mismatch (\${CERT_SUBJECT:-subject unavailable}) — reissuing for \${CUSTOM_DOMAIN}"
+                  else
+                    EXPIRY=$(echo "$CERT_DATA" | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)
+                    if [ -n "$EXPIRY" ]; then
+                      EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s 2>/dev/null || date -jf "%b %e %H:%M:%S %Y %Z" "$EXPIRY" +%s 2>/dev/null || echo 0)
+                      NOW_EPOCH=$(date +%s)
+                      DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
+                      if [ $DAYS_LEFT -gt 30 ]; then
+                        echo "✅ Valid TLS secret already exists (expires in \${DAYS_LEFT} days) — skipping certificate issuance"
+                        exit 0
+                      else
+                        echo "⚠️ Existing cert expires in \${DAYS_LEFT} days — applying renewal"
+                      fi
+                    fi
+                  fi
+                fi
+              fi
+
               cat > custom-cert.yaml << CERT_EOF
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: ${appName}-custom-cert-${customDomain.replace(/\./g, '-')}
+  name: \${CERT_NAME}
   namespace: default
 spec:
   secretName: \${CERT_SECRET}
@@ -721,7 +817,7 @@ CERT_EOF
 
               if [ "$CERT_READY" = "True" ]; then
                 echo "✅ Secure connection material is ready"
-              elif echo "$CERT_MSG" | grep -qi "ratelimited\\|too many certificates\\|last 168h"; then
+              elif echo "$CERT_MSG" | grep -Eqi "ratelimited|too many certificates|last 168h"; then
                 echo "⚠️ Provider rate limit reached for this domain. Wait for the retry-after time before re-activating."
               elif [ "$CERT_READY" = "False" ]; then
                 echo "⚠️ Secure connection setup is in a failed state (\${CERT_REASON})."
@@ -784,7 +880,7 @@ CERT_EOF
    */
   private static createRemoveDomainPipeline(appName: string, customDomain: string): string {
     const platformDomain = `${appName}.${APP_DOMAIN}`;
-    const certSecretName = `${appName}-custom-${customDomain.replace(/\./g, '-')}-tls`;
+    const { certSecretName, certName } = this.buildDomainResourceNames(appName, customDomain);
     
     return `<?xml version='1.0' encoding='UTF-8'?>
 <flow-definition plugin="workflow-job@2.44">
@@ -814,6 +910,7 @@ pipeline {
     SERVICE_NAME = '${appName}-service'
     PLATFORM_DOMAIN = '${platformDomain}'
     CERT_SECRET = '${certSecretName}'
+    CERT_NAME = '${certName}'
   }
 
   stages {
@@ -845,12 +942,12 @@ pipeline {
               kubectl get ingress \${INGRESS_NAME} -o jsonpath='{.spec.rules[*].host}' | tr ' ' '\\n'
             '''
             
-            // Delete the custom domain certificate and secret
+            // Delete the certificate CRD so cert-manager stops renewing it.
+            // Intentionally preserve the TLS secret — if the domain is re-added later
+            // the existing cert will be reused without issuing a new one from Let's Encrypt.
             sh '''
-              CERT_NAME="${appName}-custom-cert-${customDomain.replace(/\./g, '-')}"
               kubectl delete certificate \${CERT_NAME} --ignore-not-found=true
-              kubectl delete secret \${CERT_SECRET} --ignore-not-found=true
-              echo "Cleaned up certificate and secret for custom domain"
+              echo "Certificate CRD removed (TLS secret preserved for reuse)"
             '''
           }
         }

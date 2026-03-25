@@ -416,17 +416,29 @@ export class DomainService {
 
     const domain = await this.getOwnedDomain(input.domainId, input.actor.userId);
     const app = await this.deps.appRead.getOwnedApp(domain.app_id, input.actor.userId);
-    const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
+    // Use app.name (not app.slug): the platform DNS A record is <name>.APP_DOMAIN,
+    // not <slug>.APP_DOMAIN. The slug includes a hash suffix that has no specific A record.
+    const cnameTarget = `${app.name}.${APP_DOMAIN}`;
 
-    if (domain.status === "active") {
+    if (shouldAttemptRoutingCleanup(domain.status)) {
       try {
         await this.deps.ingress.removeDomainFromAppIngress(app.name, domain.domain);
       } catch (error: unknown) {
         const integrationError = toDomainServiceError(error);
-        throw new DomainServiceError({
-          code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
-          message: "Failed to remove domain mapping. Please retry.",
-          retryable: integrationError.retryable ?? true,
+        if (domain.status === "active") {
+          throw new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.INTEGRATION_CONFIG_ERROR,
+            message: "Failed to remove domain mapping. Please retry.",
+            retryable: integrationError.retryable ?? true,
+          });
+        }
+
+        console.warn("[DomainService] Ingress cleanup skipped during non-active removal", {
+          domainId: domain.id,
+          domain: domain.domain,
+          status: domain.status,
+          errorCode: integrationError.code,
+          errorMessage: integrationError.message,
         });
       }
 
@@ -510,35 +522,60 @@ export class DomainService {
       return { ssl_status: domain.ssl_status };
     }
 
-    // Step 1: validate DNS before probing TLS.
-    // If DNS is not pointing to the cluster, cert-manager's HTTP-01 self-check
-    // will also fail — no point hammering TLS until routing is correct.
-    if (this.deps.dnsRouting) {
-      const dns = await this.deps.dnsRouting
-        .getRoutingStatus(domain.domain)
-        .catch(() => null);
+    const activatedAtMs = domain.activated_at ? new Date(domain.activated_at).getTime() : null;
+    const issuingTooLong =
+      typeof activatedAtMs === "number" &&
+      !Number.isNaN(activatedAtMs) &&
+      Date.now() - activatedAtMs > SSL_ISSUING_TIMEOUT_MS;
 
-      if (dns && !dns.ready) {
-        await this.deps.domains
-          .updateLastError(domain.id, `DNS not ready: ${dns.message}`)
-          .catch(() => {});
-        return {
-          ssl_status: domain.ssl_status,
-          dns_ready: false,
-          dns_message: dns.message,
-        };
-      }
-    }
+    // DNS routing check is ADVISORY only — cert-manager uses the cluster's
+    // internal CoreDNS which may resolve the domain correctly even when our
+    // application-level public DNS check hasn't caught up yet (e.g. Google DNS
+    // negative-cache NXDOMAIN, propagation lag, different resolver behaviour).
+    // We always proceed to the TLS probe so a cert-manager success is detected
+    // immediately rather than being blocked until DNS appears "ready" here.
+    const dnsStatus = this.deps.dnsRouting
+      ? await this.deps.dnsRouting.getRoutingStatus(domain.domain).catch(() => null)
+      : null;
+
+    // True only when KUBE_IP is configured AND we can confirm DNS is wrong.
+    const dnsKnownNotReady =
+      dnsStatus !== null && !dnsStatus.ready && dnsStatus.expected_ips.length > 0;
 
     if (!this.deps.sslProbe) {
-      // No probe adapter wired — return current DB state unchanged.
-      return { ssl_status: domain.ssl_status };
+      // No TLS probe adapter wired — use DNS check for timeout enforcement only.
+      if (dnsKnownNotReady && issuingTooLong) {
+        const message =
+          "SSL setup timed out: DNS is not pointing to the platform. Verify your DNS records point to the correct IP, then re-activate.";
+        await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
+        await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
+        return { ssl_status: "failed", dns_ready: false, dns_message: message };
+      }
+      return {
+        ssl_status: domain.ssl_status,
+        ...(dnsKnownNotReady && { dns_ready: false, dns_message: dnsStatus!.message }),
+      };
     }
 
-    // Step 2: DNS is confirmed pointing to the cluster — now probe TLS.
+    // Always probe TLS — cert-manager may have obtained the cert already.
     const cert = await this.deps.sslProbe.probe(domain.domain);
+
     if (!cert) {
-      // Could not reach the host or TLS failed entirely — don't change status.
+      // Could not reach the host or TLS handshake failed entirely.
+      if (issuingTooLong) {
+        const message = dnsKnownNotReady
+          ? "SSL setup timed out: DNS is not pointing to the platform. Verify your DNS records point to the correct IP, then re-activate."
+          : "SSL setup timed out. The domain is unreachable. Re-activate the domain to retry.";
+        await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
+        await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
+        return { ssl_status: "failed", dns_ready: !dnsKnownNotReady, dns_message: message };
+      }
+      if (dnsKnownNotReady) {
+        await this.deps.domains
+          .updateLastError(domain.id, `DNS not ready: ${dnsStatus!.message}`)
+          .catch(() => {});
+        return { ssl_status: domain.ssl_status, dns_ready: false, dns_message: dnsStatus!.message };
+      }
       return { ssl_status: domain.ssl_status, dns_ready: true };
     }
 
@@ -567,24 +604,13 @@ export class DomainService {
     }
 
     if (isFakeCert && domain.ssl_status !== "failed") {
-      const activatedAtMs = domain.activated_at ? new Date(domain.activated_at).getTime() : null;
-      const issuingTooLong =
-        typeof activatedAtMs === "number"
-        && !Number.isNaN(activatedAtMs)
-        && Date.now() - activatedAtMs > SSL_ISSUING_TIMEOUT_MS;
-
       if (issuingTooLong) {
         const message =
           "Secure connection setup timed out. The domain is reachable but not fully trusted yet. Re-activate the domain to retry.";
         await this.deps.domains.updateSslStatus(domain.id, "failed").catch(() => {});
         await this.deps.domains.updateLastError(domain.id, message).catch(() => {});
-        return {
-          ssl_status: "failed",
-          dns_ready: true,
-          dns_message: message,
-        };
+        return { ssl_status: "failed", dns_ready: true, dns_message: message };
       }
-
       // Keep as "issuing" — cert-manager has not finished yet.
       return { ssl_status: "issuing", dns_ready: true };
     }
@@ -669,7 +695,9 @@ export class DomainService {
       await this.deps.domains.updateSslStatus(domain.id, "issuing").catch(() => {});
       console.log("[DomainService] SSL status set to issuing", trace);
 
-      const cnameTarget = `${app.slug}.${APP_DOMAIN}`;
+      // Use app.name (not app.slug): the platform DNS A record is <name>.APP_DOMAIN,
+      // not <slug>.APP_DOMAIN. The slug includes a hash suffix that has no specific A record.
+      const cnameTarget = `${app.name}.${APP_DOMAIN}`;
       let dnsAutoConfigured = true;
       let dnsAutomationMessage: string | null = null;
 
@@ -1073,6 +1101,10 @@ function shouldSkipManagedDnsAutomation(error: DomainServiceError): boolean {
   );
 }
 
+function shouldAttemptRoutingCleanup(status: DomainRecord["status"]): boolean {
+  return status === "active" || status === "verified" || status === "failed";
+}
+
 function normalizeHostname(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
 }
@@ -1121,7 +1153,16 @@ function classifyActivationFailure(error: DomainServiceError): ActivationFailure
   // Let's Encrypt hard limit: 5 certs per exact domain in 7 days.
   if (
     lower.includes("acme:error:ratelimited")
-    || (lower.includes("too many certificates") && lower.includes("last 168h"))
+    || lower.includes("urn:ietf:params:acme:error:ratelimited")
+    || (
+      lower.includes("too many certificates")
+      && (
+        lower.includes("last 168h")
+        || lower.includes("last 7 days")
+        || lower.includes("in the last 7 days")
+      )
+    )
+    || (lower.includes("already issued") && lower.includes("last 7 days"))
   ) {
     const retryAfter = extractRetryAfterUtc(raw);
     return {

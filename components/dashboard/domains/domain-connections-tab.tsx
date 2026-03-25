@@ -173,6 +173,16 @@ export function DomainConnectionsTab({
                           connection.dnsReady === false ? connection.dnsMessage : undefined
                         }
                       />
+                      {(connection.status === 'pending' || connection.status === 'failed') &&
+                        connection.verificationToken && (
+                          <div className="mt-2 rounded border border-yellow-500/25 bg-yellow-500/10 p-2 text-xs text-yellow-100">
+                            <p className="font-medium text-yellow-100">Verification record needed</p>
+                            <p className="mt-1">
+                              Add TXT <span className="font-mono text-yellow-50">{`galaxyhvh-verify.${connection.domain}`}</span>{' '}
+                              with value <span className="font-mono text-yellow-50">{connection.verificationToken}</span>, then click Verify.
+                            </p>
+                          </div>
+                        )}
                       {connection.lastError && (
                         <p className="text-xs text-red-300 mt-2">
                           {sanitizeLastError(connection.lastError)}

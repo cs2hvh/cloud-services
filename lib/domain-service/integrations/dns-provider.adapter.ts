@@ -98,20 +98,26 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
     );
 
     if (existing?.id != null) {
-      await this.nameCom.updateRecord(zone, existing.id, {
+      const updated = await this.nameCom.updateRecord(zone, existing.id, {
         host: providerHost,
         type: effectiveType,
         answer: effectiveAnswer,
         ttl,
       });
+      console.log("[DnsProvider] DNS record updated", {
+        zone, host, type: effectiveType, answer: effectiveAnswer, id: updated.id,
+      });
       return;
     }
 
-    await this.nameCom.createRecord(zone, {
+    const created = await this.nameCom.createRecord(zone, {
       host: providerHost,
       type: effectiveType,
       answer: effectiveAnswer,
       ttl,
+    });
+    console.log("[DnsProvider] DNS record created", {
+      zone, host, type: effectiveType, answer: effectiveAnswer, id: created.id,
     });
   }
 
@@ -159,7 +165,14 @@ export class NameComDnsProviderAdapter implements DnsProviderPort {
 
       try {
         const summary = await this.nameCom.getDomainSummary(candidateZone);
-        if (summary?.domainName) {
+        // Name.com Core v1 returns HTTP 200 with the PARENT domain's data when
+        // queried for a subdomain path (e.g. GET /domains/api.example.com returns
+        // { domainName: "example.com" }). Guard against this: only treat the
+        // candidate as a managed zone when the API confirms the exact name.
+        if (
+          summary?.domainName &&
+          summary.domainName.toLowerCase() === candidateZone.toLowerCase()
+        ) {
           const host = i === 0 ? "@" : parts.slice(0, i).join(".");
           return { zone: candidateZone, host };
         }
@@ -221,7 +234,11 @@ function parsePublicDnsServers(raw?: string): string[] {
   if (configured && configured.length > 0) {
     return configured;
   }
-  return ["8.8.8.8", "1.1.1.1"];
+  // Cloudflare (1.1.1.1) first: it has far shorter negative-cache TTLs than
+  // Google (8.8.8.8). When a record is newly created, 8.8.8.8 can cache
+  // NXDOMAIN for up to 3600 s (SOA minimum TTL), blocking cert-manager's
+  // HTTP-01 self-check even after the DNS record exists.
+  return ["1.1.1.1", "8.8.8.8"];
 }
 
 function getErrorCode(error: unknown): string | undefined {

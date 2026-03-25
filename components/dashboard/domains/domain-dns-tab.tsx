@@ -63,6 +63,7 @@ export function DomainDnsTab({
   onDeleteCancel,
 }: DomainDnsTabProps) {
   const needsPriority = dnsForm.type === 'MX' || dnsForm.type === 'SRV';
+  const uniq = (values: string[]) => Array.from(new Set(values.filter(Boolean)));
 
   return (
     <>
@@ -266,24 +267,47 @@ export function DomainDnsTab({
                     </tr>
                   </thead>
                   <tbody>
-                    {connections.map((connection) => (
-                      <tr
-                        key={`${connection.id}-dns`}
-                        className="border-t border-white/10 text-white/80"
-                      >
-                        <td className="px-3 py-2">
-                          {connection.hostLabel === '@' ? 'A' : 'CNAME'}
-                        </td>
-                        <td className="px-3 py-2">
-                          {connection.hostLabel === '@' ? '@' : connection.hostLabel}
-                        </td>
-                        <td className="px-3 py-2">
-                          {connection.hostLabel === '@'
-                            ? 'Your app (auto-configured)'
-                            : 'Your app subdomain (auto-configured)'}
-                        </td>
-                      </tr>
-                    ))}
+                    {connections.map((connection) => {
+                      const rootIps = uniq(connection.routingIps);
+                      const isRoot = connection.hostLabel === '@';
+                      const hostCell = isRoot ? '@' : connection.hostLabel;
+
+                      // Apex with multiple IPs → one A record row per IP
+                      if (isRoot && rootIps.length > 1) {
+                        return rootIps.map((ip, idx) => (
+                          <tr
+                            key={`${connection.id}-dns-${idx}`}
+                            className="border-t border-white/10 text-white/80"
+                          >
+                            <td className="px-3 py-2">A</td>
+                            <td className="px-3 py-2">{hostCell}</td>
+                            <td className="px-3 py-2 break-all">{ip}</td>
+                          </tr>
+                        ));
+                      }
+
+                      const recordType = isRoot
+                        ? rootIps.length > 0
+                          ? 'A'
+                          : 'ANAME/CNAME'
+                        : 'CNAME';
+                      const recordValue = isRoot
+                        ? rootIps.length > 0
+                          ? rootIps[0]
+                          : connection.routingTarget || 'Contact support for routing target'
+                        : connection.routingTarget || 'Contact support for routing target';
+
+                      return (
+                        <tr
+                          key={`${connection.id}-dns`}
+                          className="border-t border-white/10 text-white/80"
+                        >
+                          <td className="px-3 py-2">{recordType}</td>
+                          <td className="px-3 py-2">{hostCell}</td>
+                          <td className="px-3 py-2 break-all">{recordValue}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

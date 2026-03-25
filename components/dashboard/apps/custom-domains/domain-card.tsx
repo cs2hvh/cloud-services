@@ -104,8 +104,6 @@ function DnsStatusPanel({ domain }: { domain: CustomDomain }) {
 
 
 function getNextAction(domain: CustomDomain) {
-  const dnsReady = domain.dns_ready !== false;
-
   if (domain.status === 'pending') {
     return {
       title: 'Verify ownership',
@@ -114,19 +112,13 @@ function getNextAction(domain: CustomDomain) {
     };
   }
 
-  if (domain.status === 'verified' && !dnsReady) {
-    return {
-      title: 'Update your DNS',
-      description:
-        'Point this domain to our servers (A or CNAME record), then activate to go live.',
-      action: null,
-    };
-  }
-
-  if (domain.status === 'verified' && dnsReady) {
+  if (domain.status === 'verified') {
     return {
       title: 'Activate domain',
-      description: 'Secure connection setup will start automatically once activated.',
+      description:
+        domain.dns_ready === false
+          ? 'You can activate now. If DNS is still propagating, secure connection will finish once DNS is ready.'
+          : 'Secure connection setup will start automatically once activated.',
       action: 'activate' as const,
     };
   }
@@ -269,8 +261,7 @@ export function DomainCard({
                 onClick={() => onActivate(domain.id)}
                 disabled={
                   activatingId === domain.id ||
-                  appStatus !== 'running' ||
-                  domain.dns_ready === false
+                  appStatus !== 'running'
                 }
                 className="bg-green-600 text-white hover:bg-green-700 rounded-md px-4 py-1.5"
               >

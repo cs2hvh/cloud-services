@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,6 +27,7 @@ import {
   hostLabelFor,
   looksInternal,
   normalizeDomain,
+  operationFailureFallback,
   sanitizeOperationError,
 } from '@/components/dashboard/domains/domain-detail-types';
 import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
@@ -42,6 +43,7 @@ const DEFAULT_DNS_FORM: DnsFormState = {
 
 export default function DomainDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const domainName = useMemo(() => normalizeDomain(decodeURIComponent(String(params.domain || ''))), [params.domain]);
 
   const [apps, setApps] = useState<AppListItem[]>([]);
@@ -115,12 +117,18 @@ export default function DomainDetailPage() {
             id: connection.id,
             appId: connection.app_id,
             appName: connection.app_name,
+            appSlug: connection.app_slug || '',
             appStatus: connection.app_status,
             domain: connection.domain,
             hostLabel: hostLabelFor(connection.domain, domainName),
             status: connection.status,
             sslStatus: connection.ssl_status,
             isPrimary: connection.is_primary,
+            verificationToken: connection.verification_token || '',
+            routingTarget: connection.routing_target || '',
+            routingIps: Array.isArray(connection.routing_ips)
+              ? connection.routing_ips.filter((value) => typeof value === 'string')
+              : [],
             lastError: connection.last_error,
           });
         });
@@ -156,6 +164,14 @@ export default function DomainDetailPage() {
       const res = await fetch(`/api/domains/dns?domain=${encodeURIComponent(domainName)}`);
       const data = await res.json();
 
+      // Domain was removed — clear DNS state silently instead of surfacing an error.
+      if (res.status === 404 && data?.error === 'NOT_FOUND') {
+        setDnsManaged(null);
+        setDnsZone(null);
+        setDnsRecords([]);
+        return;
+      }
+
       if (!res.ok) {
         throw new Error(friendlyError(data, 'Unable to load DNS records. Refresh to try again.'));
       }
@@ -183,6 +199,13 @@ export default function DomainDetailPage() {
     try {
       const res = await fetch(`/api/domains/registrar?domain=${encodeURIComponent(domainName)}`);
       const data = await res.json();
+
+      // Domain was removed — clear settings state silently instead of surfacing an error.
+      if (res.status === 404 && data?.error === 'NOT_FOUND') {
+        setRegistrarSettings(null);
+        setNameserversDraft('');
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(friendlyError(data, 'Unable to load domain settings. Refresh to try again.'));
@@ -225,7 +248,7 @@ export default function DomainDetailPage() {
 
   const resetDnsForm = useCallback(() => setDnsForm(DEFAULT_DNS_FORM), []);
 
-  const pollOperation = async (operationId: string) => {
+  const pollOperation = async (operationId: string): Promise<Record<string, unknown> | null> => {
     const maxAttempts = 75; // 75 × 2s = 150s — covers the full activation window
     const delayMs = 2000;
 
@@ -239,11 +262,12 @@ export default function DomainDetailPage() {
 
       const status = data?.operation?.status;
       if (status === 'succeeded') {
-        return;
+        return (data?.operation?.response_data || null) as Record<string, unknown> | null;
       }
       if (status === 'failed') {
+        const errorCode = data?.operation?.error_code;
         const rawMsg = data?.operation?.error_message;
-        throw new Error(sanitizeOperationError(rawMsg, 'Domain setup failed. Please try again or contact support.'));
+        throw new Error(sanitizeOperationError(rawMsg, operationFailureFallback(errorCode)));
       }
 
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -339,12 +363,46 @@ export default function DomainDetailPage() {
         return;
       }
 
+      let responseData: Record<string, unknown> | null = null;
       if (data?.operation_id) {
         toast.info(`Setting up ${connectionDomain || 'domain'}\u2026 this may take up to 2 minutes.`);
-        await pollOperation(String(data.operation_id));
+        responseData = await pollOperation(String(data.operation_id));
       }
 
-      toast.success(`${connectionDomain || 'Domain'} is now live\u2014secure connection setup will be ready shortly.`);
+      const dnsAutoConfigured =
+        responseData && typeof responseData.dns_auto_configured === 'boolean'
+          ? responseData.dns_auto_configured
+          : true;
+      const routingInstructions =
+        responseData && typeof responseData.routing_instructions === 'object'
+          ? (responseData.routing_instructions as Record<string, unknown>)
+          : null;
+
+      if (!dnsAutoConfigured && routingInstructions) {
+        const recordType =
+          typeof routingInstructions.record_type === 'string'
+            ? routingInstructions.record_type
+            : 'DNS';
+        const recordName =
+          typeof routingInstructions.record_name === 'string'
+            ? routingInstructions.record_name
+            : connectionDomain || domainName;
+        const recordValue =
+          typeof routingInstructions.record_value === 'string'
+            ? routingInstructions.record_value
+            : '';
+        toast.warning(
+          `${connectionDomain || 'Domain'} activated. Add ${recordType} ${recordName}${recordValue ? ` -> ${recordValue}` : ''} at your DNS provider.`,
+        );
+      } else if (!dnsAutoConfigured) {
+        toast.warning(
+          `${connectionDomain || 'Domain'} activated. Update DNS at your provider, then secure connection will finish.`,
+        );
+      } else {
+        toast.success(
+          `${connectionDomain || 'Domain'} is now live\u2014secure connection setup will be ready shortly.`,
+        );
+      }
       await refreshAll();
     } catch (err) {
       console.error('Failed to activate domain:', err);
@@ -389,6 +447,20 @@ export default function DomainDetailPage() {
         return;
       }
       toast.success(`${connectionDomain ? `${connectionDomain} disconnected` : 'Connection removed'} from this app.`);
+      // If the removed domain IS the current page's domain, check whether any
+      // other connections (subdomains or the same root) still grant ownership.
+      // If none remain the DNS/registrar APIs would 404, so redirect to the list.
+      if (connectionDomain && normalizeDomain(connectionDomain) === domainName) {
+        const remainingConnections = connections.filter((c) => c.id !== domainId);
+        const stillOwned = remainingConnections.some((c) => {
+          const d = normalizeDomain(c.domain);
+          return d === domainName || d.endsWith(`.${domainName}`);
+        });
+        if (!stillOwned) {
+          router.push('/dashboard/domains');
+          return;
+        }
+      }
       await refreshAll();
     } catch (err) {
       console.error('Failed to remove domain connection:', err);
@@ -397,7 +469,7 @@ export default function DomainDetailPage() {
       setRemovingConnectionId(null);
       setRemoveConfirmConnectionId(null);
     }
-  }, [connections, refreshAll]);
+  }, [connections, domainName, refreshAll, router]);
 
   const handleToggleAutorenew = useCallback(async () => {
     if (!registrarSettings?.managed || typeof registrarSettings.autorenew_enabled !== 'boolean') {
