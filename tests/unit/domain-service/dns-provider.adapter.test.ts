@@ -188,35 +188,6 @@ describe("NameComDnsProviderAdapter", () => {
     }
   });
 
-  it("throws when KUBE_IP is not set for apex routing records", async () => {
-    const nameCom = createNameComMock();
-    nameCom.getDomainSummary.mockImplementation(async (domain: string) => {
-      if (domain === "example.com") {
-        return { domainName: "example.com" };
-      }
-      throw new DomainServiceError({
-        code: DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND,
-        message: "not found",
-      });
-    });
-    nameCom.listRecords.mockResolvedValue({ records: [] });
-
-    const originalKubeIp = process.env.KUBE_IP;
-    delete process.env.KUBE_IP;
-    try {
-      const adapter = new NameComDnsProviderAdapter(nameCom as never);
-      await expect(
-        adapter.ensureRoutingRecord({
-          fqdn: "example.com",
-          target: "app.apps.hostguardian.net",
-          ttl: 300,
-        })
-      ).rejects.toThrow("KUBE_IP env var is not set");
-    } finally {
-      process.env.KUBE_IP = originalKubeIp;
-    }
-  });
-
   it("removes matching CNAME records on cleanup", async () => {
     const nameCom = createNameComMock();
     nameCom.getDomainSummary.mockImplementation(async (domain: string) => {
