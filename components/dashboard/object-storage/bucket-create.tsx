@@ -8,9 +8,6 @@ import {
   ChevronRight, 
   CheckCircle2, 
   AlertCircle,
-  MapPin,
-  Settings,
-  FolderTree,
   Lock,
   Unlock,
   Globe,
@@ -69,6 +66,15 @@ interface BucketCreateProps {
   }>;
 }
 
+function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <span className="text-sm text-white/42">{label}</span>
+      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    </div>
+  );
+}
+
 const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [] }: BucketCreateProps) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
@@ -122,17 +128,17 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
   // Steps array with conditional user selection for admin
   const steps = role === "admin"
     ? [
-        { id: 0, name: "User", icon: User },
-        { id: 1, name: "Name", icon: HardDrive },
-        { id: 2, name: "Location", icon: MapPin },
-        { id: 3, name: "Settings", icon: Settings },
-        { id: 4, name: "Project", icon: FolderTree },
+        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
       ]
     : [
-        { id: 1, name: "Name", icon: HardDrive },
-        { id: 2, name: "Location", icon: MapPin },
-        { id: 3, name: "Settings", icon: Settings },
-        { id: 4, name: "Project", icon: FolderTree },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Settings", iconSrc: "/dashboard icons/settings _1.png" },
+        { id: 4, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
       ];
 
   const maxStep = role === "admin" ? 4 : 4;
@@ -427,7 +433,6 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
             {steps.map((step) => {
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
-              const StepIcon = step.icon;
 
               return (
                 <div
@@ -436,27 +441,22 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
                     isActive
                       ? "border-blue-400/30 bg-blue-500/10"
                       : isCompleted
-                        ? "border-emerald-500/20 bg-emerald-500/10"
-                        : "border-white/[0.08] bg-white/[0.03]"
+                        ? "border-white/[0.08] bg-white/[0.04]"
+                        : "border-white/[0.06] bg-transparent"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center border ${
-                        isActive
-                          ? "border-blue-400/30 bg-blue-500/15 text-blue-200"
-                          : isCompleted
-                            ? "border-emerald-500/20 bg-emerald-500/15 text-emerald-300"
-                            : "border-white/[0.08] bg-white/[0.04] text-white/55"
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/35">
-                        Step {step.id - wizardStartStep + 1}
+                  <div className="flex flex-col h-full">
+                    <span className="text-xs font-semibold text-white/32">0{step.id - wizardStartStep + 1}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="truncate text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
                       </div>
-                      <div className="truncate text-sm font-medium text-white">{step.name}</div>
                     </div>
                   </div>
                 </div>
@@ -980,103 +980,68 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
         </div>
 
         {/* Right Side: Summary Card */}
-        <div className="xl:min-w-0">
-          <Card className={`${panelClassName} xl:sticky xl:top-8`}>
-            <CardHeader>
-              <CardTitle className="text-white">Deployment Summary</CardTitle>
-              <div className="mt-4 flex justify-center border border-white/[0.08] bg-white/[0.04] px-4 py-5">
-                <HardDrive className="h-14 w-14 text-blue-300/70" />
+        <div className={`${panelClassName} xl:sticky xl:top-8`}>
+          <div className="border-b border-white/[0.06] px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
+              Summary
+            </p>
+            <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
+          </div>
+          <div className="px-6 py-5">
+            {((role === "admin" && selectedUser) || formData.name || selectedLocation || formData.cors_enabled || formData.versioning_enabled || selectedProject) ? (
+              <div className="divide-y divide-white/[0.05]">
+                {role === "admin" && selectedUser && (
+                  <SummaryRow label="Assigned To" value={selectedUser.email} />
+                )}
+                {formData.name && (
+                  <SummaryRow label="Name" value={formData.name} />
+                )}
+                {selectedLocation && (
+                  <SummaryRow
+                    label="Region"
+                    value={
+                      <span className="flex items-center justify-end gap-2">
+                        <Image
+                          src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`}
+                          alt={selectedLocation.city}
+                          width={16}
+                          height={12}
+                          className="rounded-sm"
+                        />
+                        {selectedLocation.city}
+                      </span>
+                    }
+                  />
+                )}
+                <SummaryRow label="Access" value={formData.acl === "public-read" ? "Public Read" : "Private"} />
+                {formData.cors_enabled && (
+                  <SummaryRow label="CORS" value="Enabled" />
+                )}
+                {formData.versioning_enabled && (
+                  <SummaryRow label="Versioning" value="Enabled" />
+                )}
+                {selectedProject && (
+                  <SummaryRow label="Project" value={selectedProject.name} />
+                )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {role === "admin" && selectedUser && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Assigned To:</span>
-                  <div className="text-right">
-                    <div className="font-medium text-white text-sm">
-                      {selectedUser.email}
-                    </div>
-                    {selectedUser.username && (
-                      <div className="text-white/60 text-xs">
-                        @{selectedUser.username}
-                      </div>
-                    )}
-                  </div>
+            ) : null}
+            <Separator className="my-4 bg-white/[0.08]" />
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Estimated monthly cost
                 </div>
-              )}
-              {formData.name && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Name:</span>
-                  <span className="font-medium text-white">{formData.name}</span>
-                </div>
-              )}
-              {selectedLocation && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Location:</span>
-                  <div className="flex items-center gap-2">
-                    <Image
-                      src={`https://flagsapi.com/${selectedLocation.country_code}/flat/64.png`}
-                      alt={selectedLocation.city}
-                      width={16}
-                      height={12}
-                      className="rounded-sm"
-                    />
-                    <span className="font-medium text-white">
-                      {selectedLocation.city}
-                    </span>
-                  </div>
-                </div>
-              )}
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-white/60">Access:</span>
-                <div className="flex items-center gap-2">
-                  {formData.acl === "private" ? (
-                    <Lock className="h-4 w-4 text-green-400" />
-                  ) : (
-                    <Unlock className="h-4 w-4 text-blue-400" />
-                  )}
-                  <span className="font-medium text-white capitalize">
-                    {formData.acl === "public-read" ? "Public Read" : "Private"}
-                  </span>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {loadingPrice ? "—" : storagePrice > 0 ? `$${storagePrice.toFixed(2)}` : "Free"}
                 </div>
               </div>
-              {formData.cors_enabled && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">CORS:</span>
-                  <Badge variant="secondary" className="bg-blue-500/20 text-blue-400">
-                    Enabled
-                  </Badge>
-                </div>
+              {!loadingPrice && storagePrice > 0 && (
+                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">
+                  per month
+                </Badge>
               )}
-              {formData.versioning_enabled && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Versioning:</span>
-                  <Badge variant="secondary" className="bg-purple-500/20 text-purple-400">
-                    Enabled
-                  </Badge>
-                </div>
-              )}
-              {selectedProject && (
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-white/60">Project:</span>
-                  <span className="font-medium text-white">{selectedProject.name}</span>
-                </div>
-              )}
-              <Separator className="bg-white/10" />
-              <div className="flex justify-between items-center font-bold text-lg text-white">
-                <span>Total</span>
-                <span>
-                  {loadingPrice ? (
-                    <Loader2 className="h-4 w-4 animate-spin inline" />
-                  ) : storagePrice > 0 ? (
-                    `$${storagePrice.toFixed(2)}`
-                  ) : (
-                    "Free"
-                  )}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

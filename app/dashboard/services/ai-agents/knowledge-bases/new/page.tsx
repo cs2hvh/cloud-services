@@ -2,20 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
   ArrowLeft,
-  Bot,
-  CheckCircle2,
-  Database,
-  FileText,
   Loader2,
   Lock,
 } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { fetchAuthenticatedApi } from '@/lib/ai/client-api';
 import { toast } from 'sonner';
@@ -146,7 +142,7 @@ export default function NewKnowledgeBasePage() {
                           : 'border-white/[0.10] text-white/78')
                       }
                     >
-                      {isCurrent ? <CheckCircle2 className="h-4 w-4" /> : stage.id}
+                      {isCurrent ? <span className="h-2 w-2 rounded-full bg-emerald-400" /> : stage.id}
                     </div>
                     <span className="text-xs font-semibold text-white/32">{stage.id}</span>
                   </div>
@@ -160,22 +156,22 @@ export default function NewKnowledgeBasePage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
-        <Card className="glass-panel overflow-hidden">
-          <CardHeader className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
+        <div className="glass-panel overflow-hidden">
+          <div className="border-b border-white/[0.06] px-5 py-5 sm:px-6">
             <div className="space-y-2">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300/70">
                 Base Details
               </p>
-              <CardTitle className="text-xl font-semibold tracking-tight text-white">
+              <h3 className="text-xl font-semibold tracking-tight text-white">
                 Knowledge Base Details
-              </CardTitle>
+              </h3>
               <p className="max-w-2xl text-sm leading-6 text-white/55">
                 Define the retrieval source your agents will search when they need grounded context from documents and reference material.
               </p>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="px-5 py-5 sm:px-6 sm:py-6">
+          <div className="px-5 py-5 sm:px-6 sm:py-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div className="space-y-6">
                 <div className="space-y-2.5">
@@ -229,8 +225,8 @@ export default function NewKnowledgeBasePage() {
                 </p>
                 <div className="mt-4 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
-                      <FileText className="h-4 w-4" />
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04]">
+                      <Image src="/dashboard icons/documents .png" alt="" width={16} height={16} className="opacity-75" />
                     </div>
                     <div>
                       <div className="text-sm font-medium text-white">Upload documents after creation</div>
@@ -240,8 +236,8 @@ export default function NewKnowledgeBasePage() {
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04] text-blue-300">
-                      <Bot className="h-4 w-4" />
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center border border-white/[0.08] bg-white/[0.04]">
+                      <Image src="/dashboard icons/agents .png" alt="" width={16} height={16} className="opacity-75" />
                     </div>
                     <div>
                       <div className="text-sm font-medium text-white">Attach to one or more agents</div>
@@ -264,7 +260,7 @@ export default function NewKnowledgeBasePage() {
                 </div>
               </div>
             </div>
-          </CardContent>
+          </div>
 
           <div className="flex justify-between border-t border-white/[0.06] px-5 py-4 sm:px-6">
             <Button
@@ -286,21 +282,21 @@ export default function NewKnowledgeBasePage() {
                 </>
               ) : (
                 <>
-                  <Database className="mr-2 h-4 w-4" />
+                  <Image src="/dashboard icons/knowledge base .png" alt="" width={16} height={16} className="opacity-80 mr-2" />
                   Create Knowledge Base
                 </>
               )}
             </Button>
           </div>
-        </Card>
+        </div>
 
-        <Card className="overflow-hidden rounded-none border border-white/[0.1] bg-[linear-gradient(180deg,rgba(18,24,37,0.98),rgba(8,11,18,0.98))] shadow-[0_24px_56px_rgba(2,6,20,0.38)] backdrop-blur-2xl xl:sticky xl:top-8">
-          <CardHeader className="rounded-none border-b border-white/[0.08] bg-white/[0.02] px-4 py-3.5">
+        <div className="overflow-hidden rounded-none border border-white/[0.1] bg-[linear-gradient(180deg,rgba(18,24,37,0.98),rgba(8,11,18,0.98))] shadow-[0_24px_56px_rgba(2,6,20,0.38)] backdrop-blur-2xl xl:sticky xl:top-8">
+          <div className="rounded-none border-b border-white/[0.08] bg-white/[0.02] px-4 py-3.5">
             <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
               Creation Summary
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3 overflow-y-auto px-4 py-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0))]">
+          </div>
+          <div className="space-y-3 overflow-y-auto px-4 py-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0))]">
             {trimmedName && (
               <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
                 <div className="text-sm font-medium text-white/50">Name</div>
@@ -329,8 +325,8 @@ export default function NewKnowledgeBasePage() {
               <div className="text-sm font-medium text-white/50">Access scope</div>
               <div className="text-right text-sm font-semibold text-white">Workspace private</div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -1,8 +1,7 @@
 'use client';
 
-import { Code, Globe, GitBranch } from 'lucide-react';
+import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 
 interface StatsCardsProps {
   totalApps: number;
@@ -21,7 +20,9 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-sm font-medium text-white/60">Total Apps</p>
               <p className="text-2xl font-bold text-white">{totalApps}</p>
             </div>
-            <Code className="h-8 w-8 text-blue-400" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+              <Image src="/dashboard icons/total apps.png" alt="Total Apps" width={44} height={44} className="h-11 w-11 object-contain" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -33,7 +34,9 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-sm font-medium text-white/60">Active Deployments</p>
               <p className="text-2xl font-bold text-white">{activeDeployments}</p>
             </div>
-            <Globe className="h-8 w-8 text-green-400" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+              <Image src="/dashboard icons/healthy.png" alt="Active Deployments" width={44} height={44} className="h-11 w-11 object-contain" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -45,7 +48,9 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-sm font-medium text-white/60">Total Builds</p>
               <p className="text-2xl font-bold text-white">{totalBuilds}</p>
             </div>
-            <GitBranch className="h-8 w-8 text-purple-400" />
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+              <Image src="/dashboard icons/active builds.png" alt="Total Builds" width={44} height={44} className="h-11 w-11 object-contain" />
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -57,7 +62,9 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-sm font-medium text-white/60">Success Rate</p>
               <p className="text-2xl font-bold text-white">{successRate}</p>
             </div>
-            <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Healthy</Badge>
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+              <Image src="/dashboard icons/sucess rate .png" alt="Success Rate" width={44} height={44} className="h-11 w-11 object-contain" />
+            </div>
           </div>
         </CardContent>
       </Card>

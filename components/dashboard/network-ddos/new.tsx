@@ -1,6 +1,7 @@
 ﻿'use client';
 import { useState, useEffect } from "react";
-import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, DollarSign, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 import {
   Card,
@@ -31,7 +32,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {  Tables } from "@/lib/supabase/types";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import axios from "axios";
+
+function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-2.5">
+      <span className="text-sm text-white/42">{label}</span>
+      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    </div>
+  );
+}
 
 interface SpectrumAppCreateProps {
   projects: Tables<"projects">[];
@@ -277,35 +289,35 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
   const steps = role === "admin"
     ? (isSSHorRDP
         ? [
-            { id: 0, name: "User", displayId: 1 },
-            { id: 1, name: "App Type", displayId: 2 },
-            { id: 2, name: "Domain", displayId: 3 },
-            { id: 4, name: "Origin", displayId: 4 },
-            { id: 6, name: "Project", displayId: 5 }
+            { id: 0, name: "User",     displayId: 1, iconSrc: "/dashboard icons/users & DBs .png" },
+            { id: 1, name: "App Type", displayId: 2, iconSrc: "/dashboard icons/apptype .png" },
+            { id: 2, name: "Domain",   displayId: 3, iconSrc: "/dashboard icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 4, iconSrc: "/dashboard icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 5, iconSrc: "/dashboard icons/project _1.png" }
           ]
         : [
-            { id: 0, name: "User" },
-            { id: 1, name: "App Type" },
-            { id: 2, name: "Domain" },
-            { id: 3, name: "Edge Port" },
-            { id: 4, name: "Origin" },
-            { id: 5, name: "Settings" },
-            { id: 6, name: "Project" }
+            { id: 0, name: "User",      iconSrc: "/dashboard icons/users & DBs .png" },
+            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
           ])
     : (isSSHorRDP
         ? [
-            { id: 1, name: "App Type", displayId: 1 },
-            { id: 2, name: "Domain", displayId: 2 },
-            { id: 4, name: "Origin", displayId: 3 },
-            { id: 6, name: "Project", displayId: 4 }
+            { id: 1, name: "App Type", displayId: 1, iconSrc: "/dashboard icons/apptype .png" },
+            { id: 2, name: "Domain",   displayId: 2, iconSrc: "/dashboard icons/domain.png" },
+            { id: 4, name: "Origin",   displayId: 3, iconSrc: "/dashboard icons/origin.png" },
+            { id: 6, name: "Project",  displayId: 4, iconSrc: "/dashboard icons/project _1.png" }
           ]
         : [
-            { id: 1, name: "App Type" },
-            { id: 2, name: "Domain" },
-            { id: 3, name: "Edge Port" },
-            { id: 4, name: "Origin" },
-            { id: 5, name: "Settings" },
-            { id: 6, name: "Project" }
+            { id: 1, name: "App Type",  iconSrc: "/dashboard icons/apptype .png" },
+            { id: 2, name: "Domain",    iconSrc: "/dashboard icons/domain.png" },
+            { id: 3, name: "Edge Port", iconSrc: "/dashboard icons/edge port .png" },
+            { id: 4, name: "Origin",    iconSrc: "/dashboard icons/origin.png" },
+            { id: 5, name: "Settings",  iconSrc: "/dashboard icons/advanced settings .png" },
+            { id: 6, name: "Project",   iconSrc: "/dashboard icons/project _1.png" }
           ]);
 
   // Filter projects based on selected user (admin mode) or current user
@@ -378,7 +390,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
             />
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
+          <div className="grid gap-2.5 sm:grid-cols-2" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}>
             {steps.map((step) => {
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
@@ -403,22 +415,22 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                     "px-3 py-3 text-left transition-colors"
                   }
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={
-                        "flex h-8 w-8 items-center justify-center border bg-white/[0.05] " +
-                        (isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78")
-                      }
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : stepNumber}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">
                       {String(stepNumber).padStart(2, "0")}
                     </span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
                 </button>
               );
             })}
@@ -646,94 +658,56 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
         </div>
 
         {/* Summary Sidebar */}
-        <div className="xl:min-w-0">
-          <Card className={`${summaryPanelClassName} rounded-none xl:sticky xl:top-8 xl:flex xl:max-h-[calc(100dvh-2rem)] xl:flex-col`}>
-            <CardHeader className="rounded-none border-b border-white/[0.08] bg-white/[0.02] px-4 py-3.5">
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-                  Deployment Summary
-                </div>
-                {!loadingPrice && spectrumPrice > 0 && (
-                  <div className="text-2xl font-semibold tracking-tight text-white">
-                    ${spectrumPrice.toFixed(2)}
-                    <span className="ml-1 text-sm font-medium text-white/45">/mo</span>
-                  </div>
+        <div className={`${panelClassName} xl:sticky xl:top-8`}>
+          <div className="border-b border-white/[0.06] px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
+              Summary
+            </p>
+            <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
+          </div>
+          <div className="px-6 py-5">
+            {(formData.appType || formData.domain || formData.edgePort > 0 || formData.originIP || formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off') || selectedProject) ? (
+              <div className="divide-y divide-white/[0.05]">
+                {formData.appType && (
+                  <SummaryRow label="Application" value={<span className="uppercase">{formData.appType}</span>} />
+                )}
+                {formData.domain && (
+                  <SummaryRow label="Domain" value={formData.domain} />
+                )}
+                {formData.edgePort > 0 && (
+                  <SummaryRow label="Edge Port" value={formData.edgePort} />
+                )}
+                {formData.originIP && (
+                  <SummaryRow label="Origin" value={`${formData.originIP}${formData.originPort > 0 ? `:${formData.originPort}` : ""}`} />
+                )}
+                {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
+                  <SummaryRow
+                    label="Protection"
+                    value={[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null].filter(Boolean).join(' / ')}
+                  />
+                )}
+                {selectedProject && (
+                  <SummaryRow label="Project" value={selectedProject.name} />
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3 overflow-y-auto px-4 py-4 bg-[linear-gradient(180deg,rgba(255,255,255,0.01),rgba(255,255,255,0))]">
-              {formData.appType && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Application</div>
-                  <div className="max-w-[62%] text-right text-sm font-semibold uppercase tracking-[0.12em] text-white">
-                    {formData.appType}
-                  </div>
+            ) : null}
+            <Separator className="my-4 bg-white/[0.08]" />
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                  Estimated monthly cost
                 </div>
-              )}
-
-              {formData.domain && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Domain</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {formData.domain}
-                  </div>
+                <div className="mt-2 text-2xl font-semibold text-white">
+                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "—"}
                 </div>
-              )}
-
-              {formData.edgePort > 0 && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Edge Port</div>
-                  <div className="text-right text-sm font-semibold text-white">{formData.edgePort}</div>
-                </div>
-              )}
-
-              {formData.originIP && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Origin</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {formData.originIP}{formData.originPort > 0 ? `:${formData.originPort}` : ""}
-                  </div>
-                </div>
-              )}
-
-              {(formData.ipAccessRule || (formData.proxyProtocol && formData.proxyProtocol !== 'off')) && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Protection</div>
-                  <div className="max-w-[62%] text-right text-sm font-semibold text-white">
-                    {[formData.ipAccessRule ? 'IP Rules' : null, formData.proxyProtocol && formData.proxyProtocol !== 'off' ? `Proxy ${formData.proxyProtocol.toUpperCase()}` : null]
-                      .filter(Boolean)
-                      .join(' / ')}
-                  </div>
-                </div>
-              )}
-
-              {currentStep === 6 && selectedProject && (
-                <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] pb-2.5">
-                  <div className="text-sm font-medium text-white/50">Project</div>
-                  <div className="max-w-[62%] break-words text-right text-sm font-semibold text-white">
-                    {selectedProject.name}
-                  </div>
-                </div>
-              )}
-
+              </div>
               {!loadingPrice && spectrumPrice > 0 && (
-                <div className="flex items-end justify-between gap-4 pt-1">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium text-white/50">
-                      <DollarSign className="h-4 w-4" />
-                      Monthly Price
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-semibold tracking-tight text-white">
-                      ${spectrumPrice.toFixed(2)}
-                    </div>
-                    <div className="text-xs font-medium text-white/45">per month</div>
-                  </div>
-                </div>
+                <Badge variant="outline" className="border-white/[0.10] bg-white/[0.04] text-white/60">
+                  per month
+                </Badge>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>

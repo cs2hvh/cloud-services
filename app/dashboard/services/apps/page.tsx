@@ -4,13 +4,10 @@ import { motion } from "motion/react";
 import {
   Activity,
   Clock3,
-  GitBranch,
-  Globe2,
   Loader2,
   Plus,
-  Rocket,
-  type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
@@ -24,18 +21,16 @@ function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: LucideIcon;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
             {label}
@@ -43,10 +38,8 @@ function MetricCard({
           <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div
-          className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${accentClassName}`}
-        >
-          <Icon className="h-4 w-4" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
         </div>
       </div>
     </div>
@@ -205,29 +198,25 @@ export default function ApplicationDeploymentPage() {
           label="Total Apps"
           value={deployedApps.length}
           meta="Managed deployment targets"
-          icon={Rocket}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard icons/total apps.png"
         />
         <MetricCard
           label="Healthy"
           value={runningApps}
           meta="Applications serving live traffic"
-          icon={Globe2}
-          accentClassName="text-emerald-300"
+          iconSrc="/dashboard icons/healthy.png"
         />
         <MetricCard
           label="Active Builds"
           value={buildingApps}
           meta="Builds or rollouts currently in progress"
-          icon={GitBranch}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard icons/active builds.png"
         />
         <MetricCard
           label="Success Rate"
           value={successRate}
           meta="Running apps relative to total inventory"
-          icon={Activity}
-          accentClassName="text-white/75"
+          iconSrc="/dashboard icons/sucess rate .png"
         />
       </motion.div>
 
