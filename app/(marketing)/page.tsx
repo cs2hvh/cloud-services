@@ -15,14 +15,12 @@ export default function Home() {
       <div className="fixed inset-0 w-full h-full [--color-neutral-300:#1f1f23] [--color-neutral-100:#0a0a0a] [--color-neutral-500:#27272a] [--color-neutral-700:#18181b] [--color-neutral-900:#000000] [--color-neutral-800:#09090b]">
         <BackgroundRippleEffect rows={12} cols={30} cellSize={48} />
       </div>
-      
+
       {/* Hero Section */}
       <Hero />
 
-
       {/* Feature section */}
-      <FeatureSection/>
-
+      <FeatureSection />
 
       {/* Figma Services Section */}
       <ServicesSection />

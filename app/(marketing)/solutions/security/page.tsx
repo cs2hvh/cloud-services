@@ -77,6 +77,7 @@ const SolutionsSecurityPage = () => {
       { name: "workload", placeholder: "Tell us about your security needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Secure Enterprise Cloud",
   };
 
   return (

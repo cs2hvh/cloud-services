@@ -20,7 +20,7 @@ export async function GET() {
   } catch (error: unknown) {
     console.error("[User Coupons] Error fetching available coupons:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch coupons" },
+      { error: "Failed to fetch coupons" },
       { status: 500 }
     );
   }

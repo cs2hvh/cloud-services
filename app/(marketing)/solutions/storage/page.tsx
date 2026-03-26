@@ -77,6 +77,7 @@ const SolutionsStoragePage = () => {
       { name: "workload", placeholder: "Tell us about your storage needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Storage & Backup",
   };
 
   return (

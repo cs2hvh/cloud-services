@@ -78,6 +78,7 @@ const WebHostingPage = () => {
       { name: "workload", placeholder: "Tell us about your AI workload...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Web Hosting & SaaS Deployment",
   };
   return (
     <main className="bg-[#0E0F0F]">

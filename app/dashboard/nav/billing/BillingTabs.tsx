@@ -175,7 +175,7 @@ export default function BillingTabs({
               <div className="flex gap-2">
                 <input
                   type="number"
-                  step="1"
+                  step="0.01"
                   min="1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}

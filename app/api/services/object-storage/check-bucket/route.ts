@@ -1,38 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
 import { HeadBucketCommand } from "@aws-sdk/client-s3";
-import { createS3ClientFromAccessKey} from "@/lib/aws/s3-client";
+
+import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
+
+const DEFAULT_REGION = "nyc3";
+const GLOBAL_SPACES_REGIONS = ["nyc3", "sfo3", "ams3", "sgp1", "fra1", "tor1", "blr1"];
+
+function extractStatus(err: unknown): number | null {
+  const e = err as {
+    $metadata?: { httpStatusCode?: number };
+    statusCode?: number;
+  };
+  return e.$metadata?.httpStatusCode ?? e.statusCode ?? null;
+}
+
+function shouldTreatAsExisting(err: unknown, status: number | null): boolean {
+  const e = err as { name?: string; Code?: string; code?: string };
+  const code = e.Code || e.code || e.name || "";
+
+  if (
+    code === "BucketAlreadyExists" ||
+    code === "BucketAlreadyOwnedByYou" ||
+    code === "AccessDenied" ||
+    code === "PermanentRedirect" ||
+    code === "MovedPermanently"
+  ) {
+    return true;
+  }
+
+  // Common bucket-exists statuses for inaccessible / other-region buckets.
+  return status === 200 || status === 301 || status === 302 || status === 307 || status === 308 || status === 403;
+}
 
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const name = (url.searchParams.get("name") || "").trim();
-    const region = (url.searchParams.get("region") || "nyc3").trim();
+    const requestedRegion = (url.searchParams.get("region") || DEFAULT_REGION).trim();
+
     if (!name) {
       return NextResponse.json({ error: "Bucket name is required" }, { status: 400 });
     }
 
-    // Create S3 client from centralized factory (no direct key exposure here)
-    const client = createS3ClientFromAccessKey(region);
+    // Probe requested region first, then all other known Spaces regions.
+    const regionsToCheck = [
+      requestedRegion,
+      ...GLOBAL_SPACES_REGIONS.filter((region) => region !== requestedRegion),
+    ];
 
-    try {
-      await client.send(new HeadBucketCommand({ Bucket: name }));
-      // If it succeeds (200), bucket exists
-      return NextResponse.json({ exists: true, statusCode: 200 });
-    } catch (err: unknown) {
-      const status = (err as { $metadata?: { httpStatusCode?: number }; statusCode?: number }).$metadata?.httpStatusCode ?? (err as { statusCode?: number }).statusCode ?? null;
-      if (status === 404) {
-        // Bucket does not exist
-        return NextResponse.json({ exists: false, statusCode: 404 });
-      }
-      // Treat 403/301/etc as the bucket existing but inaccessible/private
-      if (status === 403 || status === 301 || status === 301) {
-        return NextResponse.json({ exists: true, statusCode: status });
-      }
+    for (const region of regionsToCheck) {
+      const client = createS3ClientFromAccessKey(region);
 
-      // Unknown error: log and fail conservatively (treat as existing)
-      console.error("check-bucket error:", err);
-      return NextResponse.json({ exists: true, statusCode: status, error: String(err instanceof Error ? err.message : err) });
+      try {
+        await client.send(new HeadBucketCommand({ Bucket: name }));
+        return NextResponse.json({
+          exists: true,
+          available: false,
+          statusCode: 200,
+          checkedRegion: region,
+        });
+      } catch (err: unknown) {
+        const status = extractStatus(err);
+
+        // 404 in one region is inconclusive for global uniqueness; keep probing.
+        if (status === 404) {
+          continue;
+        }
+
+        if (shouldTreatAsExisting(err, status)) {
+          return NextResponse.json({
+            exists: true,
+            available: false,
+            statusCode: status,
+            checkedRegion: region,
+          });
+        }
+
+        // Unknown issue: fail conservative (unavailable) so we don't allow collisions.
+        console.error("check-bucket error:", err);
+        return NextResponse.json({
+          exists: true,
+          available: false,
+          statusCode: status,
+          checkedRegion: region,
+          error: String(err instanceof Error ? err.message : err),
+        });
+      }
     }
+
+    // If all checks returned 404, treat as globally available.
+    return NextResponse.json({
+      exists: false,
+      available: true,
+      statusCode: 404,
+      checkedRegions: regionsToCheck,
+    });
   } catch (error: unknown) {
     console.error("check-bucket handler error:", error);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

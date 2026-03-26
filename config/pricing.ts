@@ -24,6 +24,12 @@ export async function getRatesForDatabase(planId:string): Promise<Rates> {
   return ratesFromProduct(products);
 }
 
+export async function getRatesForKubernetes(plan_id:string): Promise<Rates> {
+    console.log("Fetching rates for Kubernetes plan ID:", plan_id);
+  const products = await Products.get_by_id(plan_id);
+  return ratesFromProduct(products);
+}
+
 export async function getRatesForKubernetesExisting(plan_id:string): Promise<Rates> {
     console.log("Fetching rates for Kubernetes plan ID:", plan_id);
   const products = await Products.get_by_id(plan_id);
