@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { Container } from "@/components/ui/container";
+import { WideContainer } from "@/components/ui/container";
 
 const mobileCards = [
   {
@@ -48,38 +48,44 @@ const mobileCards = [
 
 export default function DomainChoiceSection() {
   return (
-    <section className="relative overflow-hidden font-sansation bg-[#171717] py-12 sm:py-14 lg:py-16">
-      <Container>
+    <section className="relative overflow-hidden font-sansation bg-[#171717] py-10 sm:py-14 lg:py-16">
+      <WideContainer>
         <div className="mx-auto w-full max-w-[1080px]">
-          <div className="space-y-3 lg:hidden">
-            {mobileCards.map((card) => (
-              <article
-                key={card.number}
-                className={`relative overflow-hidden rounded-md border border-white/10 p-4 ${card.cardColor}`}
-              >
-                <span className={`absolute left-3 top-0 text-6xl font-semibold font-instrument leading-none ${card.numberColor}`}>
-                  {card.number}
-                </span>
-                <div className="ml-14">
-                  <h3 className="text-xl font-medium text-white">{card.title}</h3>
-                  <p className="mt-1 text-sm leading-relaxed text-white/85">{card.description}</p>
-                </div>
-              </article>
-            ))}
+          <div className="lg:hidden">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {mobileCards.map((card) => (
+                <article
+                  key={card.number}
+                  className={`relative overflow-hidden rounded-md border border-white/10 p-3.5 sm:p-4 ${
+                    card.number === "5" ? "sm:col-span-2" : ""
+                  } ${card.cardColor}`}
+                >
+                  <span className={`absolute left-3 top-0 text-5xl sm:text-6xl font-semibold leading-none ${card.numberColor}`}>
+                    {card.number}
+                  </span>
+                  <div className="ml-12 sm:ml-14">
+                    <h3 className="text-lg sm:text-xl font-medium leading-tight text-white">{card.title}</h3>
+                    <p className="mt-1 text-xs sm:text-sm leading-relaxed text-white/85">{card.description}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
 
-            <h2 className="text-3xl font-medium leading-tight tracking-tight text-white sm:text-4xl">
+            <h2 className="mt-7 max-w-[560px] text-[30px] font-medium leading-[0.96] tracking-tight text-white sm:mt-8 sm:text-4xl">
               Choose a Domain That Works for You
             </h2>
             <Link
               href="/signup"
-              className="mt-4 inline-flex items-center gap-2 text-lg font-medium text-white/90 transition-opacity hover:opacity-80"
+              className="mt-4 inline-flex items-center gap-2 text-base sm:text-lg font-medium text-white/90 transition-opacity hover:opacity-80"
             >
               Get Started
               <ArrowRight className="h-5 w-5" />
             </Link>
           </div>
 
-          <div className="relative hidden h-[620px] lg:block">
+          <div className="hidden lg:flex justify-center">
+            <div className="relative h-[560px] w-[972px] xl:h-[620px] xl:w-[1080px]">
+              <div className="absolute left-0 top-0 h-[620px] w-[1080px] origin-top-left scale-[0.9] xl:scale-100">
             <div className="absolute left-0 top-6 flex">
               <div className="flex h-[188px] w-[110px] items-start justify-center bg-[#9FBDD0] pt-2">
                 <span className="text-[100px] font-semibold leading-none text-[#DDE6CA]">1</span>
@@ -172,9 +178,11 @@ export default function DomainChoiceSection() {
                 <ArrowRight className="h-9 w-9" />
               </Link>
             </div>
+              </div>
+            </div>
           </div>
         </div>
-      </Container>
+      </WideContainer>
     </section>
   );
 }

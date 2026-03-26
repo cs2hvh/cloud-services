@@ -36,12 +36,12 @@ export default function DomainTransferSection() {
             className="object-cover"
           />
           <div className="relative bg-[#C6D5E3]">
-            <h2 className="font-sansation mt-2 text-center text-3xl font-semibold leading-tight text-[#111] sm:text-4xl lg:text-[52px]">
+            <h2 className="font-salsa mt-2 text-center text-3xl font-semibold leading-tight text-[#111] sm:text-4xl lg:text-[52px]">
               Search and Secure Your
               <span className="block text-[#0A9FFF]">Perfect Domain</span>
             </h2>
 
-            <p className="mx-auto mt-4 max-w-[700px] text-center text-sm font-semibold leading-relaxed text-black sm:text-base">
+            <p className="font-salsa mx-auto mt-4 max-w-[700px] text-center text-sm font-semibold leading-relaxed text-black sm:text-base">
               Discover, register, and manage your domain with speed, security,
               and full control all from one modern platform.
             </p>
