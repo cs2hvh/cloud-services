@@ -182,7 +182,8 @@ export const Billing = {
       p_user_id: userId,
       p_amount: amount,
     });
-    console.log(data, "deduct result", error?.message, "deduct error")
+    if (error) console.warn("[Billing] deduct RPC error:", error.message);
+    else console.log("[Billing] deduct result:", data);
 
     if (error) {
       // Fallback to non-atomic if RPC not available yet
@@ -395,7 +396,7 @@ export const Billing = {
       .from(table)
       .select("user_id, service_id, hourly_rate, last_billed_at")
       .eq("service_id", params.serviceId)
-      //.eq("user_id", params.userId)
+      .eq("user_id", params.userId)
       .maybeSingle();
 
     if (getErr) {
@@ -417,8 +418,8 @@ export const Billing = {
         .schema("billing")
         .from(table)
         .delete()
-        .eq("service_id", params.serviceId);
-      //.eq("user_id", row?.user_id);
+        .eq("service_id", params.serviceId)
+        .eq("user_id", params.userId);
       return { charged: 0, newBalance: null };
     }
 
@@ -460,8 +461,8 @@ export const Billing = {
       .schema("billing")
       .from(table)
       .delete()
-      .eq("service_id", params.serviceId);
-    //.eq("user_id", params.userId);
+      .eq("service_id", params.serviceId)
+      .eq("user_id", params.userId);
     if (delErr) {
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,

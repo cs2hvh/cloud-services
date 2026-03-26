@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "motion/react";
 import {
   Shield,
   Globe,
@@ -13,7 +12,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { ObjectSpaceBucket } from "@/lib/supabase/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -36,7 +34,6 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
   const [isLoading, setIsLoading] = useState<{ [key: string]: boolean }>({});
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({});
 
-  // Local state for settings
   const [settings, setSettings] = useState({
     acl: bucket.acl || "private",
     corsEnabled: bucket.cors_enabled || false,
@@ -57,18 +54,15 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
           payload.acl = settings.acl;
           break;
         case "cors":
-          endpoint =
-            "/api/services/object-storage/buckets/settings/update-cors";
+          endpoint = "/api/services/object-storage/buckets/settings/update-cors";
           payload.enabled = settings.corsEnabled;
           break;
         case "versioning":
-          endpoint =
-            "/api/services/object-storage/buckets/settings/update-versioning";
+          endpoint = "/api/services/object-storage/buckets/settings/update-versioning";
           payload.enabled = settings.versioningEnabled;
           break;
         case "project":
-          endpoint =
-            "/api/services/object-storage/buckets/settings/update-project";
+          endpoint = "/api/services/object-storage/buckets/settings/update-project";
           payload.project_id = settings.projectId;
           break;
         default:
@@ -86,13 +80,8 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
         throw new Error(response.data.error || "Update failed");
       }
     } catch (error: unknown) {
-  console.error('Error emptying bucket:', error);
-
-  let message = 'Unknown error';
-
-  if (error instanceof Error) {
-    message = error.message;
-  }
+      console.error("Error updating setting:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
       toast.error(message || `Failed to update ${setting}`);
     } finally {
       setIsLoading((prev) => ({ ...prev, [setting]: false }));
@@ -101,123 +90,24 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
 
   const handleCancel = (setting: string) => {
     setEditMode((prev) => ({ ...prev, [setting]: false }));
-    // Reset to original values
     switch (setting) {
       case "acl":
         setSettings((prev) => ({ ...prev, acl: bucket.acl || "private" }));
         break;
       case "cors":
-        setSettings((prev) => ({
-          ...prev,
-          corsEnabled: bucket.cors_enabled || false,
-        }));
+        setSettings((prev) => ({ ...prev, corsEnabled: bucket.cors_enabled || false }));
         break;
       case "versioning":
-        setSettings((prev) => ({
-          ...prev,
-          versioningEnabled: bucket.versioning_enabled || false,
-        }));
+        setSettings((prev) => ({ ...prev, versioningEnabled: bucket.versioning_enabled || false }));
         break;
       case "project":
-        setSettings((prev) => ({
-          ...prev,
-          projectId: bucket.project_id || null,
-        }));
+        setSettings((prev) => ({ ...prev, projectId: bucket.project_id || null }));
         break;
     }
   };
 
-  const SettingsCard = ({
-    title,
-    description,
-    icon: Icon,
-    setting,
-    children,
-    gradientFrom = "blue-500/10",
-    gradientTo = "blue-600/5",
-    borderColor = "blue-500/20",
-    iconColor = "blue-400",
-  }: {
-    title: string;
-    description: string;
-    icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-    setting: string;
-    children: React.ReactNode;
-    gradientFrom?: string;
-    gradientTo?: string;
-    borderColor?: string;
-    iconColor?: string;
-  }) => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-    >
-      <Card
-        className={`bg-gradient-to-br from-${gradientFrom} to-${gradientTo} border-${borderColor} h-fit`}
-      >
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-            <div className="flex items-start gap-3 min-w-0 flex-1">
-              <div
-                className={`h-8 w-8 sm:h-10 sm:w-10 bg-${iconColor.replace("400", "500/20")} rounded-lg flex items-center justify-center flex-shrink-0`}
-              >
-                <Icon className={`h-4 w-4 sm:h-5 sm:w-5 text-${iconColor}`} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <CardTitle className="text-white text-base sm:text-lg leading-tight">
-                  {title}
-                </CardTitle>
-                <p className="text-white/60 text-xs sm:text-sm mt-1 leading-tight">
-                  {description}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-              {editMode[setting] ? (
-                <>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleCancel(setting)}
-                    disabled={isLoading[setting]}
-                    className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
-                  >
-                    <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/70" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => handleSave(setting)}
-                    disabled={isLoading[setting]}
-                    className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
-                  >
-                    {isLoading[setting] ? (
-                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin text-white/70" />
-                    ) : (
-                      <Save className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-400" />
-                    )}
-                  </Button>
-                </>
-              ) : (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() =>
-                    setEditMode((prev) => ({ ...prev, [setting]: true }))
-                  }
-                  className="cursor-pointer h-7 w-7 sm:h-8 sm:w-8 hover:bg-white/10"
-                >
-                  <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/70" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">{children}</CardContent>
-      </Card>
-    </motion.div>
-  );
+  const startEdit = (setting: string) =>
+    setEditMode((prev) => ({ ...prev, [setting]: true }));
 
   const getProjectName = (projectId: string | null) => {
     if (!projectId) return "No project assigned";
@@ -225,167 +115,221 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
     return project?.name || "Unknown project";
   };
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-      {/* ACL Settings */}
-      <SettingsCard
-        title="Access Control (ACL)"
-        description="Control who can access your bucket"
-        icon={Shield}
-        setting="acl"
-        gradientFrom="red-500/10"
-        gradientTo="red-600/5"
-        borderColor="red-500/20"
-        iconColor="red-400"
-      >
-        {editMode.acl ? (
-          <Select
-            value={settings.acl}
-            onValueChange={(value: "private" | "public-read") =>
-              setSettings((prev) => ({ ...prev, acl: value }))
-            }
+  const EditControls = ({ setting }: { setting: string }) => (
+    <div className="flex items-center gap-1">
+      {editMode[setting] ? (
+        <>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => handleCancel(setting)}
+            disabled={isLoading[setting]}
+            className="h-8 w-8 cursor-pointer hover:bg-white/10"
           >
-            <SelectTrigger className="bg-white/5 border-white/10 text-white cursor-pointer">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-black border-white/10 cursor-pointer">
-              <SelectItem className="cursor-pointer" value="private">Private</SelectItem>
-              <SelectItem className="cursor-pointer" value="public-read">Public Read</SelectItem>
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="flex items-center gap-2">
+            <X className="h-4 w-4 text-white/60" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => handleSave(setting)}
+            disabled={isLoading[setting]}
+            className="h-8 w-8 cursor-pointer hover:bg-white/10"
+          >
+            {isLoading[setting] ? (
+              <Loader2 className="h-4 w-4 animate-spin text-white/60" />
+            ) : (
+              <Save className="h-4 w-4 text-emerald-400" />
+            )}
+          </Button>
+        </>
+      ) : (
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => startEdit(setting)}
+          className="h-8 w-8 cursor-pointer hover:bg-white/10"
+        >
+          <Edit2 className="h-4 w-4 text-white/50" />
+        </Button>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Access Control */}
+      <div className="glass-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
+          <div className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-white/50" />
+            <div>
+              <p className="text-sm font-semibold text-white">Access Control (ACL)</p>
+              <p className="mt-0.5 text-xs text-white/45">Control who can access your bucket</p>
+            </div>
+          </div>
+          <EditControls setting="acl" />
+        </div>
+        <div className="px-6 py-4">
+          {editMode.acl ? (
+            <Select
+              value={settings.acl}
+              onValueChange={(value: "private" | "public-read") =>
+                setSettings((prev) => ({ ...prev, acl: value }))
+              }
+            >
+              <SelectTrigger className="w-52 border-white/[0.12] bg-white/[0.04] text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="border-white/[0.12] bg-[#0a0e16] text-white">
+                <SelectItem value="private">Private</SelectItem>
+                <SelectItem value="public-read">Public Read</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 text-sm font-medium ${
+                  settings.acl === "private" ? "text-white/70" : "text-emerald-300"
+                }`}
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    settings.acl === "private" ? "bg-white/30" : "bg-emerald-400"
+                  }`}
+                />
+                {settings.acl === "private" ? "Private" : "Public Read"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CORS */}
+      <div className="glass-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
+          <div className="flex items-center gap-3">
+            <Globe className="h-5 w-5 text-white/50" />
+            <div>
+              <p className="text-sm font-semibold text-white">CORS (Cross-Origin Resource Sharing)</p>
+              <p className="mt-0.5 text-xs text-white/45">Allow web browsers to access your bucket from other origins</p>
+            </div>
+          </div>
+          <EditControls setting="cors" />
+        </div>
+        <div className="px-6 py-4">
+          {editMode.cors ? (
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.corsEnabled}
+                onCheckedChange={(checked) =>
+                  setSettings((prev) => ({ ...prev, corsEnabled: checked }))
+                }
+              />
+              <span className="text-sm text-white/70">
+                {settings.corsEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+          ) : (
             <span
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                settings.acl === "private"
-                  ? "bg-red-500/20 text-red-300 border border-red-500/30"
-                  : "bg-green-500/20 text-green-300 border border-green-500/30"
+              className={`inline-flex items-center gap-1.5 text-sm font-medium ${
+                settings.corsEnabled ? "text-emerald-300" : "text-white/50"
               }`}
             >
-              {settings.acl === "private" ? "Private" : "Public Read"}
-            </span>
-          </div>
-        )}
-      </SettingsCard>
-
-      {/* CORS Settings */}
-      <SettingsCard
-        title="CORS (Cross-Origin Resource Sharing)"
-        description="Allow web browsers to access your bucket"
-        icon={Globe}
-        setting="cors"
-        gradientFrom="green-500/10"
-        gradientTo="green-600/5"
-        borderColor="green-500/20"
-        iconColor="green-400"
-      >
-        {editMode.cors ? (
-          <div className="flex items-center gap-3">
-            <Switch
-              className="cursor-pointer"
-              checked={settings.corsEnabled}
-              onCheckedChange={(checked) =>
-                setSettings((prev) => ({ ...prev, corsEnabled: checked }))
-              }
-            />
-            <span className="text-white/80 text-sm">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  settings.corsEnabled ? "bg-emerald-400" : "bg-white/25"
+                }`}
+              />
               {settings.corsEnabled ? "Enabled" : "Disabled"}
             </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div
-              className={`h-3 w-3 rounded-full ${
-                settings.corsEnabled ? "bg-green-400" : "bg-gray-400"
-              }`}
-            />
-            <span className="text-white/80 text-sm">
-              {settings.corsEnabled ? "Enabled" : "Disabled"}
-            </span>
-          </div>
-        )}
-      </SettingsCard>
+          )}
+        </div>
+      </div>
 
-      {/* Versioning Settings */}
-      <SettingsCard
-        title="Versioning"
-        description="Keep multiple versions of objects in your bucket"
-        icon={GitBranch}
-        setting="versioning"
-        gradientFrom="purple-500/10"
-        gradientTo="purple-600/5"
-        borderColor="purple-500/20"
-        iconColor="purple-400"
-      >
-        {editMode.versioning ? (
+      {/* Versioning */}
+      <div className="glass-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
           <div className="flex items-center gap-3">
-            <Switch
-              className="cursor-pointer"
-              checked={settings.versioningEnabled}
-              onCheckedChange={(checked) =>
-                setSettings((prev) => ({ ...prev, versioningEnabled: checked }))
-              }
-            />
-            <span className="text-white/80 text-sm">
-              {settings.versioningEnabled ? "Enabled" : "Disabled"}
-            </span>
+            <GitBranch className="h-5 w-5 text-white/50" />
+            <div>
+              <p className="text-sm font-semibold text-white">Versioning</p>
+              <p className="mt-0.5 text-xs text-white/45">Keep multiple versions of objects in your bucket</p>
+            </div>
           </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div
-              className={`h-3 w-3 rounded-full ${
-                settings.versioningEnabled ? "bg-green-400" : "bg-gray-400"
+          <EditControls setting="versioning" />
+        </div>
+        <div className="px-6 py-4">
+          {editMode.versioning ? (
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={settings.versioningEnabled}
+                onCheckedChange={(checked) =>
+                  setSettings((prev) => ({ ...prev, versioningEnabled: checked }))
+                }
+              />
+              <span className="text-sm text-white/70">
+                {settings.versioningEnabled ? "Enabled" : "Disabled"}
+              </span>
+            </div>
+          ) : (
+            <span
+              className={`inline-flex items-center gap-1.5 text-sm font-medium ${
+                settings.versioningEnabled ? "text-violet-300" : "text-white/50"
               }`}
-            />
-            <span className="text-white/80 text-sm">
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  settings.versioningEnabled ? "bg-violet-400" : "bg-white/25"
+                }`}
+              />
               {settings.versioningEnabled ? "Enabled" : "Disabled"}
             </span>
-          </div>
-        )}
-      </SettingsCard>
+          )}
+        </div>
+      </div>
 
       {/* Project Assignment */}
-      <SettingsCard
-        title="Project Assignment"
-        description="Assign this bucket to a project for organization"
-        icon={FolderOpen}
-        setting="project"
-        gradientFrom="yellow-500/10"
-        gradientTo="yellow-600/5"
-        borderColor="yellow-500/20"
-        iconColor="yellow-400"
-      >
-        {editMode.project ? (
-          <Select
-            value={settings.projectId || "none"}
-            onValueChange={(value) =>
-              setSettings((prev) => ({
-                ...prev,
-                projectId: value === "none" ? null : value,
-              }))
-            }
-          >
-            <SelectTrigger className="bg-white/5 border-white/10 text-white cursor-pointer">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-black border-white/10">
-              <SelectItem value="none">No project</SelectItem>
-              {projects.map((project) => (
-                <SelectItem className="cursor-pointer" key={project.id} value={project.id}>
-                  {project.name}
-                  
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-sm font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
+      <div className="glass-panel overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-5">
+          <div className="flex items-center gap-3">
+            <FolderOpen className="h-5 w-5 text-white/50" />
+            <div>
+              <p className="text-sm font-semibold text-white">Project Assignment</p>
+              <p className="mt-0.5 text-xs text-white/45">Assign this bucket to a project for organisation</p>
+            </div>
+          </div>
+          <EditControls setting="project" />
+        </div>
+        <div className="px-6 py-4">
+          {editMode.project ? (
+            <Select
+              value={settings.projectId || "none"}
+              onValueChange={(value) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  projectId: value === "none" ? null : value,
+                }))
+              }
+            >
+              <SelectTrigger className="w-64 border-white/[0.12] bg-white/[0.04] text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="border-white/[0.12] bg-[#0a0e16] text-white">
+                <SelectItem value="none">No project</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-sm font-medium text-white/75">
               {getProjectName(settings.projectId)}
             </span>
-          </div>
-        )}
-      </SettingsCard>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

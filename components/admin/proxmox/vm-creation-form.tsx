@@ -8,6 +8,12 @@ import { Label } from '@/components/ui/label';
 import { HostRow } from '../types';
 import { toast } from 'sonner';
 
+// Supported OS options
+const OS_OPTIONS = [
+  { value: 'Ubuntu 24.04 LTS', label: 'Ubuntu 24.04 LTS', type: 'linux' as const, icon: '🐧' },
+  { value: 'Windows Server 2025', label: 'Windows Server 2025', type: 'windows' as const, icon: '🪟' },
+] as const;
+
 type VMCreationProps = {
   isAdmin: boolean;
   getAccessToken: () => Promise<string | null>;
@@ -22,16 +28,39 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
   // Provisioning form state
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [vmName, setVmName] = useState('');
+  const [selectedOs, setSelectedOs] = useState<string>(OS_OPTIONS[0].value);
   const [cpuCores, setCpuCores] = useState(2);
   const [memoryGB, setMemoryGB] = useState(2);
   const [diskGB, setDiskGB] = useState(20);
-  const [sshPassword, setSshPassword] = useState('');
+  const [password, setPassword] = useState('');
   const [templateVmid, setTemplateVmid] = useState<number | null>(null);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<Record<string, unknown> | null>(null);
+
+  // Derived state — is this a Windows or Desktop VM?
+  const isWindows = useMemo(() => {
+    return selectedOs.toLowerCase().includes('windows');
+  }, [selectedOs]);
+
+  const isDesktop = useMemo(() => {
+    return selectedOs.toLowerCase().includes('desktop');
+  }, [selectedOs]);
+
+  const usesRDP = isWindows || isDesktop;
+
+  // When OS changes, enforce minimum specs for Windows/Desktop
+  useEffect(() => {
+    if (isWindows) {
+      if (memoryGB < 2) setMemoryGB(2);
+      if (diskGB < 40) setDiskGB(40);
+    } else if (isDesktop) {
+      if (memoryGB < 2) setMemoryGB(2);
+      if (diskGB < 25) setDiskGB(25);
+    }
+  }, [isWindows, isDesktop, memoryGB, diskGB]);
 
   // Load available hosts
   const loadHosts = useCallback(async () => {
@@ -77,17 +106,49 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
     return hosts.find((h) => h.id === selectedHostId);
   }, [hosts, selectedHostId]);
 
-  // Get available templates for selected host
+  // Get available templates for selected host — filtered by OS type
   const availableTemplates = useMemo(() => {
-    return selectedHost?.proxmox_templates || [];
-  }, [selectedHost]);
+    const all = selectedHost?.proxmox_templates || [];
+    if (!isWindows) {
+      // Show Linux templates (exclude windows ones)
+      return all.filter((t) => {
+        const name = (t.name || '').toLowerCase();
+        const osType = ((t as Record<string, unknown>).os_type as string || '').toLowerCase();
+        return !name.includes('windows') && !osType.includes('windows');
+      });
+    }
+    // Show Windows templates
+    return all.filter((t) => {
+      const name = (t.name || '').toLowerCase();
+      const osType = ((t as Record<string, unknown>).os_type as string || '').toLowerCase();
+      return name.includes('windows') || osType.includes('windows');
+    });
+  }, [selectedHost, isWindows]);
+
+  // Password validation
+  const passwordErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (!password) return errors;
+    if (password.length < 12) errors.push('Must be at least 12 characters');
+    if (isWindows) {
+      const hasUpper = /[A-Z]/.test(password);
+      const hasLower = /[a-z]/.test(password);
+      const hasDigit = /[0-9]/.test(password);
+      const hasSpecial = /[^A-Za-z0-9]/.test(password);
+      const count = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length;
+      if (count < 3) errors.push('Needs 3 of: uppercase, lowercase, digit, special character');
+    }
+    return errors;
+  }, [password, isWindows]);
 
   // Validation
   const canSubmit = useMemo(() => {
-    if (!vmName || !selectedHostId || !sshPassword) return false;
+    if (!vmName || !selectedHostId || !password) return false;
     if (!cpuCores || !memoryGB || !diskGB) return false;
+    if (passwordErrors.length > 0) return false;
+    if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(vmName)) return false;
     return true;
-  }, [vmName, selectedHostId, sshPassword, cpuCores, memoryGB, diskGB]);
+  }, [vmName, selectedHostId, password, cpuCores, memoryGB, diskGB, passwordErrors]);
 
   // Handle form submission
   const handleSubmit = useCallback(
@@ -108,7 +169,8 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
           cpuCores,
           memoryMB: memoryGB * 1024,
           diskGB,
-          sshPassword,
+          sshPassword: password,
+          os: selectedOs,
           templateVmid: templateVmid || selectedHost.template_vmid || undefined,
           storage: selectedHost.storage || 'local',
           bridge: selectedHost.bridge || 'vmbr0',
@@ -134,9 +196,9 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
         // Reset form
         setVmName('');
         setCpuCores(2);
-        setMemoryGB(2);
-        setDiskGB(20);
-        setSshPassword('');
+        setMemoryGB(isWindows ? 2 : 2);
+        setDiskGB(isWindows ? 40 : 20);
+        setPassword('');
         setTemplateVmid(null);
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'VM creation failed';
@@ -146,7 +208,7 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
         setIsSubmitting(false);
       }
     },
-    [canSubmit, selectedHost, selectedHostId, vmName, cpuCores, memoryGB, diskGB, sshPassword, templateVmid, getAccessToken]
+    [canSubmit, selectedHost, selectedHostId, vmName, cpuCores, memoryGB, diskGB, password, templateVmid, selectedOs, isWindows, getAccessToken]
   );
 
   if (!isAdmin) {
@@ -219,6 +281,25 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
             )}
           </div>
 
+          {/* Operating System Selection */}
+          <div className="space-y-2">
+            <Label className="text-white">Operating System</Label>
+            <select
+              className="bg-black text-white border border-white/10 h-10 w-full rounded-md px-3 focus:outline-none focus:ring-2 focus:ring-white/20"
+              value={selectedOs}
+              onChange={(e) => setSelectedOs(e.target.value)}
+            >
+              {OS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.icon} {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-white/40 text-sm mt-1">
+              {usesRDP ? '🖥️ Remote Desktop (RDP) access on port 3389' : '🐧 Linux — SSH access on port 22'}
+            </p>
+          </div>
+
           {/* VM Name */}
           <div className="space-y-2">
             <Label className="text-white">VM Name</Label>
@@ -226,9 +307,12 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
               type="text"
               value={vmName}
               onChange={(e) => setVmName(e.target.value)}
-              placeholder="e.g., ubuntu-web-server-01"
+              placeholder={isWindows ? 'e.g., win-dc-01' : 'e.g., ubuntu-web-server-01'}
               className="bg-black text-white border-white/10"
             />
+            {vmName && !/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(vmName) && (
+              <p className="text-red-400 text-sm">Alphanumeric and hyphens only, 1-63 characters</p>
+            )}
           </div>
 
           {/* CPU Cores */}
@@ -249,12 +333,15 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
             <Label className="text-white">Memory (GB)</Label>
             <Input
               type="number"
-              min={1}
+              min={isWindows ? 2 : 1}
               max={256}
               value={memoryGB}
-              onChange={(e) => setMemoryGB(Math.max(1, parseInt(e.target.value || '1', 10)))}
+              onChange={(e) => setMemoryGB(Math.max(isWindows ? 2 : 1, parseInt(e.target.value || '1', 10)))}
               className="bg-black text-white border-white/10"
             />
+            {isWindows && memoryGB < 2 && (
+              <p className="text-amber-400 text-sm">Windows requires minimum 2 GB</p>
+            )}
           </div>
 
           {/* Disk Size */}
@@ -262,25 +349,42 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
             <Label className="text-white">Disk (GB)</Label>
             <Input
               type="number"
-              min={10}
+              min={isWindows ? 40 : 10}
               max={2000}
               value={diskGB}
-              onChange={(e) => setDiskGB(Math.max(10, parseInt(e.target.value || '20', 10)))}
+              onChange={(e) => setDiskGB(Math.max(isWindows ? 40 : 10, parseInt(e.target.value || '20', 10)))}
               className="bg-black text-white border-white/10"
             />
+            {isWindows && diskGB < 40 && (
+              <p className="text-amber-400 text-sm">Windows requires minimum 40 GB</p>
+            )}
           </div>
 
-          {/* SSH Password */}
+          {/* Password — label changes based on OS */}
           <div className="space-y-2 md:col-span-2">
-            <Label className="text-white">SSH Root Password</Label>
+            <Label className="text-white">
+              {usesRDP ? 'RDP Password' : 'SSH Root Password'}
+            </Label>
             <Input
               type="password"
-              value={sshPassword}
-              onChange={(e) => setSshPassword(e.target.value)}
-              placeholder="Enter a strong password for root access"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={usesRDP ? 'Enter a strong password for RDP access' : 'Enter a strong password for root access'}
               className="bg-black text-white border-white/10"
+              autoComplete="new-password"
             />
-            <p className="text-white/40 text-sm">This will be used for initial SSH access</p>
+            {passwordErrors.length > 0 && password && (
+              <div className="space-y-1">
+                {passwordErrors.map((err, i) => (
+                  <p key={i} className="text-red-400 text-sm">• {err}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-white/40 text-sm">
+              {usesRDP
+                ? `Used for Remote Desktop (RDP) access as ${isWindows ? 'admin' : 'ubuntu'}. Must meet complexity requirements.`
+                : 'Used for initial SSH access. Minimum 12 characters.'}
+            </p>
           </div>
 
           {/* Template Selection */}
@@ -302,6 +406,27 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
             </div>
           )}
 
+          {/* Access Info Banner */}
+          <div className="md:col-span-2 p-3 bg-blue-900/15 border border-blue-500/20 rounded text-blue-300 text-sm">
+            <p className="font-medium mb-1">
+              {isWindows ? '🪟 Windows Access Details' : '🐧 Linux Access Details'}
+            </p>
+            {isWindows ? (
+              <ul className="list-disc ml-4 space-y-0.5 text-blue-300/80 text-xs">
+                <li>Connect via Remote Desktop (RDP) on port <strong>3389</strong></li>
+                <li>Username: <code className="bg-blue-900/30 px-1 rounded">admin</code></li>
+                <li>IP will be assigned automatically from the pool</li>
+                <li>QEMU Guest Agent will be enabled for monitoring</li>
+              </ul>
+            ) : (
+              <ul className="list-disc ml-4 space-y-0.5 text-blue-300/80 text-xs">
+                <li>Connect via SSH on port <strong>22</strong></li>
+                <li>Username: <code className="bg-blue-900/30 px-1 rounded">ubuntu</code></li>
+                <li>IP will be assigned automatically from the pool</li>
+              </ul>
+            )}
+          </div>
+
           {/* Error Message */}
           {submitError && (
             <div className="md:col-span-2 p-3 bg-red-900/20 border border-red-500/30 rounded text-red-300 text-sm">
@@ -319,6 +444,12 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
               {typeof submitSuccess?.ip === 'string' && (
                 <p className="text-sm">IP Address: {submitSuccess.ip}</p>
               )}
+              {submitSuccess?.accessType === 'rdp' && (
+                <p className="text-sm">Access: RDP (port 3389) as admin</p>
+              )}
+              {submitSuccess?.accessType === 'ssh' && (
+                <p className="text-sm">Access: SSH (port 22) as ubuntu</p>
+              )}
             </div>
           )}
 
@@ -329,7 +460,9 @@ export function VMCreationForm({ isAdmin, getAccessToken }: VMCreationProps) {
               disabled={!canSubmit || isSubmitting}
               className="w-full bg-white text-black hover:bg-white/90 disabled:opacity-50"
             >
-              {isSubmitting ? 'Creating VM...' : 'Create VM'}
+              {isSubmitting
+                ? `Provisioning ${isWindows ? 'Windows' : 'Linux'} VM...`
+                : `Create ${isWindows ? 'Windows' : 'Linux'} VM`}
             </Button>
           </div>
         </form>

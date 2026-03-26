@@ -22,7 +22,7 @@ export async function resolveManagedZone(
     const candidateZone = parts.slice(i).join(".");
     try {
       const summary = await adapter.getDomainSummary(candidateZone);
-      if (summary?.domainName) {
+      if (summary?.domainName && summary.domainName.toLowerCase() === candidateZone.toLowerCase()) {
         const host = i === 0 ? "@" : parts.slice(0, i).join(".");
         return { zone: candidateZone, host };
       }
