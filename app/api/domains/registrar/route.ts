@@ -11,18 +11,6 @@ import {
 } from "@/lib/domain-service/http/domain-access";
 import { createServiceClient } from "@/lib/supabase/server";
 
-function sanitizeNameservers(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
-    .filter(Boolean)
-    .filter((value, index, array) => array.indexOf(value) === index);
-}
-
-function isValidNameserver(value: string): boolean {
-  return /^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(value);
-}
-
 export async function GET(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
@@ -98,7 +86,6 @@ export async function GET(req: NextRequest) {
           locked: null,
           privacy_enabled: null,
           expires_at: null,
-          nameservers: [] as string[],
         },
       });
     }
@@ -116,7 +103,6 @@ export async function GET(req: NextRequest) {
         locked: typeof domainInfo.locked === "boolean" ? domainInfo.locked : null,
         privacy_enabled: typeof domainInfo.privacyEnabled === "boolean" ? domainInfo.privacyEnabled : null,
         expires_at: domainInfo.expireDate || null,
-        nameservers: Array.isArray(domainInfo.nameservers) ? domainInfo.nameservers : [],
       },
     });
   } catch (error: unknown) {
@@ -154,7 +140,6 @@ export async function PATCH(req: NextRequest) {
     const body = await req.json();
     const domain = normalizeDomain(typeof body?.domain === "string" ? body.domain : "");
     const autorenewEnabled = body?.autorenew_enabled;
-    const nameservers = sanitizeNameservers(body?.nameservers);
 
     if (!domain || !isValidDomain(domain)) {
       return NextResponse.json(
@@ -166,39 +151,14 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const hasAutorenewUpdate = typeof autorenewEnabled === "boolean";
-    const hasNameserverUpdate = nameservers.length > 0;
-
-    if (!hasAutorenewUpdate && !hasNameserverUpdate) {
+    if (typeof autorenewEnabled !== "boolean") {
       return NextResponse.json(
         {
           error: "VALIDATION_ERROR",
-          message: "Provide autorenew_enabled or nameservers to update.",
+          message: "Provide autorenew_enabled (boolean) to update.",
         },
         { status: 400 }
       );
-    }
-
-    if (hasNameserverUpdate) {
-      const invalid = nameservers.find((ns) => !isValidNameserver(ns));
-      if (invalid) {
-        return NextResponse.json(
-          {
-            error: "VALIDATION_ERROR",
-            message: `Invalid nameserver: ${invalid}`,
-          },
-          { status: 400 }
-        );
-      }
-      if (nameservers.length < 2 || nameservers.length > 13) {
-        return NextResponse.json(
-          {
-            error: "VALIDATION_ERROR",
-            message: "Nameservers must contain between 2 and 13 entries.",
-          },
-          { status: 400 }
-        );
-      }
     }
 
     const supabase = await createServiceClient();
@@ -242,15 +202,7 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    if (hasAutorenewUpdate) {
-      await adapter.updateDomain(managed.zone, {
-        autorenewEnabled,
-      });
-    }
-
-    if (hasNameserverUpdate) {
-      await adapter.setNameservers(managed.zone, nameservers);
-    }
+    await adapter.updateDomain(managed.zone, { autorenewEnabled });
 
     const updated = await adapter.getDomain(managed.zone);
 
@@ -265,7 +217,6 @@ export async function PATCH(req: NextRequest) {
         locked: typeof updated.locked === "boolean" ? updated.locked : null,
         privacy_enabled: typeof updated.privacyEnabled === "boolean" ? updated.privacyEnabled : null,
         expires_at: updated.expireDate || null,
-        nameservers: Array.isArray(updated.nameservers) ? updated.nameservers : [],
       },
     });
   } catch (error: unknown) {
