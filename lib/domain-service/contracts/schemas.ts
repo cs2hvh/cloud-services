@@ -25,6 +25,11 @@ export const DomainSchema = z
     last_check_at: z.string().datetime().nullable().openapi({ example: null }),
     created_at: z.string().datetime().openapi({ example: "2026-03-16T09:00:00Z" }),
     updated_at: z.string().datetime().openapi({ example: "2026-03-16T09:00:00Z" }),
+    // DNS routing status — present on list responses, absent on single-domain responses
+    dns_ready: z.boolean().optional().openapi({ example: true, description: "Whether DNS has propagated to the platform load-balancer IPs." }),
+    dns_message: z.string().optional().openapi({ example: "DNS is routing correctly.", description: "Human-readable DNS routing status message." }),
+    dns_resolved_ips: z.array(z.string()).optional().openapi({ example: ["1.2.3.4"], description: "IPs the domain currently resolves to." }),
+    dns_expected_ips: z.array(z.string()).optional().openapi({ example: ["1.2.3.4"], description: "IPs the domain should resolve to for routing to work." }),
   })
   .openapi("Domain");
 
@@ -168,6 +173,29 @@ export const DomainMarketplacePurchaseRequestRecordSchema = z
   })
   .openapi("DomainMarketplacePurchaseRequestRecord");
 
+export const DomainMarketplacePurchaseRequestPublicSchema = z
+  .object({
+    id: z.string().uuid().openapi({ example: "656bb6a3-9905-46d0-9704-b127cc296957" }),
+    app_id: z.string().uuid().nullable().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
+    domain: z.string().openapi({ example: "mybrand.com" }),
+    status: DomainPurchaseRequestStatusSchema,
+    purchase_price: z.number().nullable().openapi({ example: 12.99 }),
+    renewal_price: z.number().nullable().openapi({ example: 14.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+    provider: z.string().openapi({ example: "ahuracloud" }),
+    last_error: z.string().nullable().openapi({ example: null }),
+    metadata: z.record(z.unknown()).openapi({
+      example: {
+        purchase_type: "registration",
+        premium: false,
+        source: "dashboard-marketplace",
+      },
+    }),
+    created_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:20.000Z" }),
+    updated_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:21.000Z" }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestPublic");
+
 export const AddDomainRequestSchema = z
   .object({
     app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
@@ -260,13 +288,13 @@ export const DomainMarketplaceSearchResponseSchema = z
 
 export const DomainMarketplacePurchaseRequestResponseSchema = z
   .object({
-    data: DomainMarketplacePurchaseRequestRecordSchema,
+    data: DomainMarketplacePurchaseRequestPublicSchema,
   })
   .openapi("DomainMarketplacePurchaseRequestResponse");
 
 export const DomainMarketplacePurchaseRequestListResponseSchema = z
   .object({
-    data: z.array(DomainMarketplacePurchaseRequestRecordSchema),
+    data: z.array(DomainMarketplacePurchaseRequestPublicSchema),
     meta: z.object({
       total: z.number().openapi({ example: 1 }),
     }),

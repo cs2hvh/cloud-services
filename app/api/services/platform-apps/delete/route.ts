@@ -77,6 +77,13 @@ export async function POST(req: NextRequest) {
         appId: app_id,
         userId: auth.user!.id,
         isAdmin: isAdminUser,
+        audit_context: {
+          ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+          user_agent: req.headers.get("user-agent") || "unknown",
+          request_id: crypto.randomUUID(),
+          user_email: auth.user!.email,
+          user_role: isAdminUser ? "admin" : "user",
+        },
       });
 
       return NextResponse.json({ message: "App deleted successfully" });
