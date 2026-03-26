@@ -3,9 +3,9 @@
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
-import { Projects } from "@/lib/supabase/queries/projects";
+import { ProjectService } from "@/lib/services/project-service";
 import { createKubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { redactClusterSecrets } from "@/lib/services/kubernetes/helpers";
+import { serializeClusterForV1 } from "@/lib/services/kubernetes/helpers";
 
 export const GET = withV1Auth("kubernetes:list", async (_req, auth) => {
   const result = await KubernetesService.readAllOwner(auth.userId);
@@ -15,11 +15,12 @@ export const GET = withV1Auth("kubernetes:list", async (_req, auth) => {
   }
 
   const clusters = Array.isArray(result.data) ? result.data : [];
+  const serialized = clusters.map((c) => serializeClusterForV1(c as Record<string, unknown>));
 
   return v1Ok({
-    data: clusters,
+    data: serialized,
     meta: {
-      total: clusters.length,
+      total: serialized.length,
     },
   });
 });
@@ -42,12 +43,16 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
     return v1TransformValidationError(validation.error);
   }
 
-  const project = await Projects.get_by_id(validation.data.project_id);
-  if (!project) {
+  const ownership = await ProjectService.ensureProjectOwnedByUser({
+    projectId: validation.data.project_id,
+    userId: auth.userId,
+  });
+
+  if (!ownership.success && ownership.errorCode === "NOT_FOUND") {
     return v1Error("NOT_FOUND", 404, "Project not found");
   }
 
-  if (project.owner !== auth.userId) {
+  if (!ownership.success && ownership.errorCode === "FORBIDDEN") {
     return v1Error(
       "FORBIDDEN",
       403,
@@ -55,12 +60,15 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
     );
   }
 
-  console.log("Creating Kubernetes cluster with data:", validation.data);
+  if (!ownership.success) {
+    return v1Error("INTERNAL_ERROR", 500, ownership.error || "Failed to validate project ownership");
+  }
 
   const result = await KubernetesService.createCluster(
     {
       ...validation.data,
       owner_id: auth.userId,
+      // NOTE: user_email is undefined for API key auth — audit log will record the auth type via request context
       user_email: auth.kind === "session" ? auth.email : undefined,
     },
     req
@@ -79,14 +87,12 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
     result.data && typeof result.data === "object"
       ? (result.data as Record<string, unknown>)
       : ({} as Record<string, unknown>);
-  const redactedClusterData = redactClusterSecrets(clusterData);
+  clusterData.cluster_id = result.clusterId ?? clusterData.cluster_id;
+  const serialized = serializeClusterForV1(clusterData);
 
   return v1Ok(
     {
-      data: {
-        ...redactedClusterData,
-        cluster_id: result.clusterId ?? redactedClusterData.cluster_id,
-      },
+      data: serialized,
     },
     201
   );
