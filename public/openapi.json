@@ -2595,30 +2595,6 @@
           "data"
         ]
       },
-      "DomainMarketplaceProvidersResponse": {
-        "type": "object",
-        "properties": {
-          "data": {
-            "$ref": "#/components/schemas/DomainMarketplaceSummary"
-          },
-          "deprecated": {
-            "type": "boolean",
-            "enum": [
-              true
-            ],
-            "example": true
-          },
-          "message": {
-            "type": "string",
-            "example": "Use /api/v1/domains/market/summary for reseller metadata."
-          }
-        },
-        "required": [
-          "data",
-          "deprecated",
-          "message"
-        ]
-      },
       "DomainMarketplaceResult": {
         "type": "object",
         "properties": {
@@ -8640,70 +8616,6 @@
           },
           "502": {
             "description": "Registrar upstream error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/domains/market/providers": {
-      "get": {
-        "tags": [
-          "Domain Marketplace"
-        ],
-        "summary": "Get domain marketplace provider metadata",
-        "description": "Legacy compatibility endpoint that mirrors marketplace summary data.",
-        "deprecated": true,
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Provider metadata",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DomainMarketplaceProvidersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too many requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                },
-                "example": {
-                  "error": "RATE_LIMIT_EXCEEDED",
-                  "message": "Too many requests. Please try again later.",
-                  "details": {
-                    "retry_after": 58
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal error",
             "content": {
               "application/json": {
                 "schema": {

@@ -270,16 +270,6 @@ export const DomainMarketplaceSummaryResponseSchema = z
   })
   .openapi("DomainMarketplaceSummaryResponse");
 
-export const DomainMarketplaceProvidersResponseSchema = z
-  .object({
-    data: DomainMarketplaceSummarySchema,
-    deprecated: z.literal(true).openapi({ example: true }),
-    message: z.string().openapi({
-      example: "Use /api/v1/domains/market/summary for reseller metadata.",
-    }),
-  })
-  .openapi("DomainMarketplaceProvidersResponse");
-
 export const DomainMarketplaceSearchResponseSchema = z
   .object({
     data: DomainMarketplaceSearchDataSchema,
