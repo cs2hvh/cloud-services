@@ -53,11 +53,16 @@ export class PlatformAppEnvService {
   }
 
   static async getEnvVars(appId: string): Promise<AppEnvVar[]> {
-    const envVars = await Platform_Apps.get_env_vars(appId);
-    return envVars.map((env: { key: string; value: string }) => ({
-      key: env.key,
-      value: env.value,
-    }));
+    try {
+      const envVars = await Platform_Apps.get_env_vars(appId);
+      return envVars.map((env: { key: string; value: string }) => ({
+        key: env.key,
+        value: env.value,
+      }));
+    } catch (error) {
+      console.error(`[PlatformAppEnvService.getEnvVars] Failed to fetch env vars for app ${appId}:`, error);
+      throw error;
+    }
   }
 
   static async setEnvVars(appId: string, envVars: AppEnvVar[]): Promise<EnvServiceResult<null>> {

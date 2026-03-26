@@ -64,12 +64,11 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
     return v1Error("INTERNAL_ERROR", 500, ownership.error || "Failed to validate project ownership");
   }
 
-  console.log("Creating Kubernetes cluster with data:", validation.data);
-
   const result = await KubernetesService.createCluster(
     {
       ...validation.data,
       owner_id: auth.userId,
+      // NOTE: user_email is undefined for API key auth — audit log will record the auth type via request context
       user_email: auth.kind === "session" ? auth.email : undefined,
     },
     req
