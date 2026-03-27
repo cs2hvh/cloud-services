@@ -54,15 +54,16 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
+    console.error("[api/services/database/maintenance] Unexpected error:", err);
     if (err instanceof Error) {
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        { error: "Unable to process maintenance window request." },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Unknown error occurred" },
+      { error: "Unable to process maintenance window request." },
       { status: 500 }
     );
   }

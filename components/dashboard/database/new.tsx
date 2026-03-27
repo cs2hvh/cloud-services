@@ -438,6 +438,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
     }
 
     try {
+      //debugger
       setIsLoading(true);
 
       if (

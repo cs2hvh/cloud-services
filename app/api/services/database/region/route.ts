@@ -42,9 +42,23 @@ export async function PUT(req: NextRequest) {
     );
 
     if (!result.success) {
+      if (result.errorCode === "NOT_FOUND") {
+        return NextResponse.json(
+          { error: "Database cluster not found" },
+          { status: 404 }
+        );
+      }
+
+      if (result.errorCode === "UNSUPPORTED_OPERATION") {
+        return NextResponse.json(
+          { error: "Region migration is not available for this database engine." },
+          { status: 422 }
+        );
+      }
+
       return NextResponse.json(
-        { error: result.error || "Failed to migrate database cluster" },
-        { status: 400 }
+        { error: "Unable to start migration right now. Please try again." },
+        { status: result.statusCode || 400 }
       );
     }
 
@@ -56,15 +70,16 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
+    console.error("[api/services/database/region] Unexpected error:", err);
     if (err instanceof Error) {
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        { error: "Unable to process migration request." },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Unknown error occurred" },
+      { error: "Unable to process migration request." },
       { status: 500 }
     );
   }

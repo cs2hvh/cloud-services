@@ -307,6 +307,7 @@ export const Clusters = {
     status: string;
     owner_id: string;
     project_id?: string;
+    create_droplet?: boolean;
     kubeconfig?: string | null;
     k8s_version?: string;
     create_status?: boolean;
@@ -325,6 +326,7 @@ export const Clusters = {
           status: clusterData.status || "pending",
           owner_id: clusterData.owner_id,
           project_id: clusterData.project_id || null,
+          create_droplet: clusterData.create_droplet ?? false,
           kubeconfig: clusterData.kubeconfig || null,
           k8s_version: clusterData.k8s_version || null,
           create_status: clusterData.create_status ?? false,

@@ -225,8 +225,27 @@ export const scalingResourceOperations = {
     region: string,
     status: string = "migrating",
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; errorCode?: string; statusCode?: number }> {
     try {
+      const clusterData = await Database_Clusters.read(clusterId);
+      if (!clusterData.success || !clusterData.data) {
+        return {
+          success: false,
+          error: "Database cluster not found",
+          errorCode: "NOT_FOUND",
+          statusCode: 404,
+        };
+      }
+
+      if (clusterData.data.engine === "mongodb") {
+        return {
+          success: false,
+          error: "Region migration is not supported for MongoDB clusters",
+          errorCode: "UNSUPPORTED_OPERATION",
+          statusCode: 422,
+        };
+      }
+
       const response = await axios.put(
         `https://api.digitalocean.com/v2/databases/${clusterId}/migrate`,
         { region },
@@ -234,7 +253,12 @@ export const scalingResourceOperations = {
       );
 
       if (response.status !== 202) {
-        return { success: false, error: "Failed to migrate database cluster" };
+        return {
+          success: false,
+          error: "Failed to migrate database cluster",
+          errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: response.status,
+        };
       }
 
       const supabaseUpdate = await Database_Clusters.update_region(clusterId, region, status);
@@ -242,7 +266,6 @@ export const scalingResourceOperations = {
         console.error("[updateRegion] Failed to update Supabase:", supabaseUpdate.error);
       }
 
-      const clusterData = await Database_Clusters.read(clusterId);
       if (clusterData.success && clusterData.data.project_id) {
         await Projects.add_log({
           project_id: clusterData.data.project_id,
@@ -275,17 +298,16 @@ export const scalingResourceOperations = {
 
       if (clusterData.success) {
         try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "migrated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: clusterId,
-              metadata: { updateType: "region", newRegion: region },
-            })
-          );
+          await NotificationService.create({
+            user_id: clusterData.data.owner_id,
+            type: "info",
+            title: "Database Migration",
+            message: `Database migration started...`,
+            service_type: "database",
+            service_id: clusterId,
+            action: "migrated",
+            metadata: { updateType: "region", newRegion: region },
+          });
         } catch (notifErr) {
           console.error("[updateRegion] Failed to create notification:", notifErr);
         }
@@ -300,12 +322,16 @@ export const scalingResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          errorCode: "DIGITALOCEAN_API_ERROR",
+          statusCode: axiosError?.response?.status || 500,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        errorCode: "UNKNOWN_ERROR",
+        statusCode: 500,
       };
     }
   },
@@ -366,6 +392,15 @@ export const scalingResourceOperations = {
       const currentSize = clusterData.data.size;
       const currentStorageMib = clusterData.data.storage_size_mib || 0;
       const engine = clusterData.data.engine || "pg";
+
+      if (engine === "mongodb") {
+        return {
+          success: false,
+          error: "Storage upsize is not supported for MongoDB clusters",
+          errorCode: "UNSUPPORTED_OPERATION",
+          statusCode: 422,
+        };
+      }
 
       if (request.storageSizeMib <= currentStorageMib) {
         return {
