@@ -1,13 +1,11 @@
-import { ServiceHeroSection } from "@/components/services/service-hero-section";
+import DatabaseHeroSection from "@/components/services/database-hero-section";
+import DatabaseControlPlaneSection from "@/components/services/database-control-plane-section";
 import DatabaseEnginesSection from "@/components/services/database-engines-section";
-import DatabaseShowcaseSection from "@/components/services/database-showcase-section";
-import DatabaseComparisonSection from "@/components/services/database-comparison-section";
-import DatabaseMetricsSection from "@/components/services/database-metrics-section";
 import DatabasePricingSection from "@/components/services/database-pricing-section";
 import DatabaseCtaSection from "@/components/services/database-cta-section";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
 import ServicesHomeSectionSix from "@/components/serviceshome/section-6";
-import { getDatabasePlans} from "@/lib/helpers/database-plans";
+import { getDatabasePlans } from "@/lib/helpers/database-plans";
 
 const cases = [
   {
@@ -38,21 +36,13 @@ const DatabaseHome = async () => {
 
   return (
     <main className="bg-[#0E0F0F]">
-      <ServiceHeroSection
-        badge="Managed Databases"
-        title="Database"
-        description="Fully managed database services with automatic backups, scaling, and high availability. Focus on your application, not database administration."
-        primaryAction={{ label: "Launch a Database", href: "/signup" }}
-        secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/main-page/service-home-db-section-1.png", alt: "Database infrastructure" }}
+      <DatabaseHeroSection
+        primaryAction={{ label: "Create a Cluster", href: "/signup" }}
+        secondaryAction={{ label: "Compare Engines", href: "#engines" }}
       />
+      <DatabaseControlPlaneSection />
       <DatabaseEnginesSection />
-      <DatabaseShowcaseSection />
-      <DatabaseComparisonSection />
-      <DatabaseMetricsSection />
       <DatabasePricingSection plans={plans} />
-      <DatabaseCtaSection />
       <ServicesHomeSectionFive
         title="Frequently Asked Questions"
         faqs={[
@@ -94,6 +84,7 @@ const DatabaseHome = async () => {
         ]}
       />
       <ServicesHomeSectionSix cases={cases} />
+      <DatabaseCtaSection />
     </main>
   );
 };

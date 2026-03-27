@@ -1,164 +1,138 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { Fragment } from "react";
 import { motion } from "motion/react";
+import Image from "next/image";
+import { LooperBackground } from "@/components/ui/looper-background";
 
-import { Container } from "@/components/ui/container";
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 24 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: {
-      duration: 0.6,
-      delay: 0.15 + i * 0.12,
-      ease: [0.25, 0.4, 0.25, 1] as const,
-    },
-  }),
-};
+const TRUST_ITEMS = [
+  "99.99% Uptime SLA",
+  "12 Global Regions",
+  "SOC 2 Type II",
+  "ISO 27001",
+];
 
 export function Hero() {
   return (
-    <section className="relative w-full min-h-screen overflow-x-hidden border-b border-[#737373] bg-[#0E0F0F] flex flex-col">
-      <div className="absolute inset-0">
-        <div
-          className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-40"
-          style={{ backgroundImage: 'url("/images/main-page/hero-bg.svg")' }}
-          aria-hidden="true"
-        />
-        <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_center,transparent_25%,#080a0c_75%)] pointer-events-none" />
-      </div>
+    <section
+      className="relative w-full h-screen overflow-hidden bg-[#0a0a0a]"
+      aria-label="AhuraSense Cloud — Deploy cloud infrastructure at the speed of light"
+    >
 
-      <div className="relative z-10 flex flex-1 items-center w-full pt-20 pb-12 sm:pt-24 sm:pb-16 md:pt-28 md:pb-20">
-        <Container>
-          <div className="flex w-full flex-col items-center gap-8 sm:gap-10 md:gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
-            <div className="w-full flex-shrink-0 lg:w-1/2 lg:max-w-xl">
-              <div className="flex flex-col gap-4 sm:gap-5 md:gap-6">
-                <motion.h1
-                  className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight leading-tight sm:leading-tight text-white text-center md:text-left"
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  custom={1}
-                >
-                  <span className="block text-[#0095FF]">Deploy at the</span>
-                  <span className="block text-[#ECECFB] md:pl-16 lg:pl-20">Speed of Light</span>
-                </motion.h1>
+      {/* Looper oval-line background */}
+      <LooperBackground className="z-0" />
 
-                <motion.p
-                  className="mx-auto max-w-xl text-sm sm:text-base md:text-lg leading-relaxed text-[#ECECFB] text-center md:text-left md:mx-0"
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  custom={2}
-                >
-                  Deploy, scale, and manage your applications with enterprise-grade security.
-                  From GPU instances to AI agents, we provide the tools modern businesses need.
-                </motion.p>
 
-                <motion.div
-                  className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2"
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  custom={3}
+      {/* Top fade */}
+      <div className="absolute top-0 left-0 right-0 h-40 pointer-events-none z-[1] bg-gradient-to-b from-[#0a0a0a] to-transparent" aria-hidden="true" />
+
+      {/* Bottom fade */}
+      <div className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-[1] bg-gradient-to-t from-[#0a0a0a] to-transparent" aria-hidden="true" />
+
+      {/* Bottom separator */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+
+      {/* ── Main content ── */}
+      <div className="relative z-10 h-full flex items-center pt-16">
+        <div className="w-full mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] px-4 sm:px-6">
+          <div className="grid lg:grid-cols-2 items-center gap-10 lg:gap-6">
+
+            {/* Left — copy */}
+            <div className="text-center lg:text-left">
+
+              <motion.h1
+                className="text-[clamp(38px,5.2vw,68px)] font-semibold tracking-[-0.04em] leading-[1.07] text-white"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.08 }}
+              >
+                Deploy at the
+                <br />
+                <span
+                  className="text-transparent bg-clip-text"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(115deg, rgba(255,255,255,0.40) 0%, rgba(0,149,255,0.75) 100%)",
+                  }}
                 >
-                  <Link
-                    href="/signup"
-                    className="inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
-                  >
-                    Get Started Free
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                      <path
-                        d="M6 3l5 5-5 5"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
+                  speed of light
+                </span>
+              </motion.h1>
+
+              <motion.p
+                className="mt-5 text-[16px] sm:text-[18px] leading-[1.7] text-white/55 max-w-[440px] mx-auto lg:mx-0"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+              >
+                One platform for compute, databases, Kubernetes, and AI.
+                Provision your entire infrastructure in seconds, not hours.
+              </motion.p>
+
+              {/* CTAs — sharp corners */}
+              <motion.div
+                className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.32 }}
+              >
+                <Link
+                  href="/signup"
+                  className="inline-flex items-center justify-center bg-white text-black w-full sm:w-auto px-8 h-11 text-[14px] font-medium hover:bg-white/90 transition-colors"
+                >
+                  Get started free
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="inline-flex items-center justify-center border border-white/[0.10] text-white/50 w-full sm:w-auto px-8 h-11 text-[14px] font-medium hover:text-white hover:border-white/20 transition-all"
+                >
+                  View pricing
+                </Link>
+              </motion.div>
+
+              {/* Trust indicators */}
+              <motion.div
+                className="mt-9 flex flex-wrap items-center justify-center lg:justify-start text-[12px] text-white/20"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 1, delay: 0.55 }}
+              >
+                {TRUST_ITEMS.map((item, i) => (
+                  <Fragment key={item}>
+                    <span className="pr-3 py-1">{item}</span>
+                    {i < TRUST_ITEMS.length - 1 && (
+                      <span
+                        className="hidden sm:block w-px h-3 bg-white/[0.08] mr-3"
+                        aria-hidden="true"
                       />
-                    </svg>
-                  </Link>
-                  <Link
-                    href="/signin"
-                    className="inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
-                  >
-                    View Console
-                  </Link>
-                </motion.div>
-
-                <motion.div
-                  className="flex flex-wrap items-center justify-center lg:justify-start gap-2 pt-2"
-                  variants={fadeUp}
-                  initial="hidden"
-                  animate="visible"
-                  custom={4}
-                >
-                  {[
-                    "99.99% Uptime SLA",
-                    "12 Global Regions",
-                    "<50ms Deploy Time",
-                    "SOC 2 Compliant",
-                  ].map((item) => (
-                    <div key={item} className="flex items-center">
-                      <span className="text-xs sm:text-sm text-white/80 px-3 py-1.5 border border-white/[0.08] bg-white/[0.03]">
-                        {item}
-                      </span>
-                    </div>
-                  ))}
-                </motion.div>
-              </div>
+                    )}
+                  </Fragment>
+                ))}
+              </motion.div>
             </div>
 
+            {/* Right — Hero image */}
             <motion.div
-              className="w-full flex-shrink-0 lg:w-1/2"
-              variants={fadeUp}
-              initial="hidden"
-              animate="visible"
-              custom={3}
+              className="hidden lg:flex items-center justify-center"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 1.2, delay: 0.25, ease: [0.25, 0.4, 0.25, 1] }}
             >
-              <div className="relative mx-auto aspect-square w-full max-w-[280px] sm:max-w-[360px] md:max-w-[440px] lg:max-w-[520px]">
-                <Image
-                  src="/images/main-page/home-section-1.png"
-                  alt="Cloud infrastructure illustration"
-                  width={100}
-                  height={100}
-                  className="h-full w-full object-contain"
-                  loading="eager"
-                />
-              </div>
+              <Image
+                src="/images/main-page/home-section-1.png"
+                alt="Cloud infrastructure visualization"
+                width={800}
+                height={800}
+                className="w-full max-w-[680px] xl:max-w-[780px] h-auto object-contain"
+                priority
+              />
             </motion.div>
+
           </div>
-        </Container>
+        </div>
       </div>
 
-      <div className="relative z-10 w-full pb-6 sm:pb-8 md:pb-10">
-        <Container>
-          <motion.div
-            className="w-full max-w-[460px] overflow-hidden rounded-[28px] border border-white/15 shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
-            variants={fadeUp}
-            initial="hidden"
-            animate="visible"
-            custom={5}
-          >
-            <div className="flex min-h-[120px] sm:min-h-[132px]">
-              <div className="flex w-[42%] items-center justify-center gap-3 bg-[#11161f] px-3 sm:px-4">
-                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
-                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
-              </div>
-              <div className="flex flex-1 flex-col justify-center bg-[#F2CF5A] px-4 py-4 sm:px-6">
-                <h3 className="text-base sm:text-lg font-semibold tracking-tight text-[#111111]">
-                  What&apos;s New
-                </h3>
-                <p className="mt-1 text-xs sm:text-sm text-[#2A2A2A]">
-                  Latest launches, updates, and product improvements.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-        </Container>
-      </div>
     </section>
   );
 }

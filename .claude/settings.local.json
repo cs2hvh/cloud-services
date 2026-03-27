@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep -E \"\\\\.\\(ts|tsx|js|prisma\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|prisma\\)$\")",
+      "Bash(find /c/Users/Administrator/cloud-services -maxdepth 2 -type f -name package.json -o -name *.json -o -name *.yml -o -name *.yaml)",
+      "Bash(ls -la /c/Users/Administrator/cloud-services/app/\\\\\\(marketing\\\\\\)/)",
+      "WebFetch(domain:neon.tech)",
+      "WebFetch(domain:supabase.com)"
     ]
   }
 }
