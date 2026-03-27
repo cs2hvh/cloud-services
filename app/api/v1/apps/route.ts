@@ -2,6 +2,7 @@
 import { withV1Auth, v1Ok, v1Error } from "@/lib/api/v1-middleware";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import type { PlatformApp } from "@/lib/supabase/types";
+import { getAppUrl } from "@/config/domain";
 
 export const GET = withV1Auth("apps:list", async (_req, auth) => {
   try {
@@ -20,7 +21,7 @@ export const GET = withV1Auth("apps:list", async (_req, auth) => {
         repository_url:    app.repository_url,
         branch:            app.branch,
         status:            app.status,
-        deployment_url:    `https://${app.slug}.apps.hostguardian.net`, // Computed from slug
+        deployment_url:    app.deployment_url || getAppUrl(app.slug),
         port:              app.port,
         ip:                app.ip,
         size:              app.size,

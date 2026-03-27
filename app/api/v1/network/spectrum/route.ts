@@ -71,6 +71,13 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
     const app = await SpectrumService.createApp({
       userId: auth.userId,
       payload: validation.data,
+      audit_context: {
+        ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+        user_agent: req.headers.get("user-agent") || "unknown",
+        request_id: crypto.randomUUID(),
+        user_email: auth.kind === 'session' ? auth.email : undefined,
+        user_role: "user",
+      },
     });
 
     return v1Ok(

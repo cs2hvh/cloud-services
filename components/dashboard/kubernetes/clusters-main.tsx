@@ -3,13 +3,10 @@
 import { motion } from "motion/react";
 import {
   Activity,
-  CheckCircle2,
-  Clock3,
   Download,
-  FolderTree,
   Plus,
-  Server,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -25,18 +22,16 @@ function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: React.ElementType;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
             {label}
@@ -44,10 +39,8 @@ function MetricCard({
           <p className="mt-3 text-2xl font-semibold tracking-tight text-white">{value}</p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div
-          className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${accentClassName}`}
-        >
-          <Icon className="h-4 w-4" />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Image src={iconSrc} alt={label} width={44} height={44} className="h-11 w-11 object-contain" />
         </div>
       </div>
     </div>
@@ -152,29 +145,25 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
           label="Total Clusters"
           value={clusters.length}
           meta="Provisioned Kubernetes environments"
-          icon={FolderTree}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard icons/total clusters .png"
         />
         <MetricCard
           label="Healthy"
           value={readyClusters}
           meta="Clusters ready to accept workloads"
-          icon={CheckCircle2}
-          accentClassName="text-emerald-300"
+          iconSrc="/dashboard icons/healthy.png"
         />
         <MetricCard
           label="Active Nodes"
           value={activeNodes}
           meta="Control plane and worker nodes combined"
-          icon={Server}
-          accentClassName="text-white/75"
+          iconSrc="/dashboard icons/active nodes .png"
         />
         <MetricCard
           label="Pending"
           value={pendingClusters}
           meta={`${versions || 0} Kubernetes version${versions === 1 ? "" : "s"} in use`}
-          icon={Clock3}
-          accentClassName="text-amber-300"
+          iconSrc="/dashboard icons/pending .png"
         />
       </motion.div>
 
@@ -275,7 +264,7 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center border border-dashed border-white/[0.12] px-6 py-16 text-center">
-              <FolderTree className="mb-4 h-10 w-10 text-white/20" />
+              <Image src="/dashboard icons/total clusters .png" alt="No clusters" width={40} height={40} className="mb-4 h-10 w-10 object-contain opacity-20" />
               <h3 className="text-base font-semibold text-white">No Kubernetes clusters found</h3>
               <p className="mt-2 max-w-md text-sm text-white/45">
                 Provision your first cluster to start managing control plane and worker capacity here.

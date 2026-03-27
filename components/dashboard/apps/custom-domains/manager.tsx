@@ -24,6 +24,7 @@ import { DomainCard } from './domain-card';
 import {
   friendlyError,
   normalizeDomainInput,
+  operationFailureFallback,
   sanitizeOperationError,
   sanitizeSubdomainLabel,
 } from './utils';
@@ -34,6 +35,7 @@ import type {
   DomainInventoryItem,
   VerificationInstructions,
 } from './types';
+import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
 
 export function CustomDomainsManager({ appId, appStatus, platformDomain }: CustomDomainsManagerProps) {
   // ── Data ─────────────────────────────────────────────────────────────────
@@ -58,6 +60,7 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [checkingSslId, setCheckingSslId] = useState<string | null>(null);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const existingDomainOptions = useMemo(() => {
@@ -156,6 +159,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
     void refreshAll();
   }, [refreshAll]);
 
+  // Auto-refresh while any domain is still issuing an SSL cert.
+  const issuingDomainIds = useMemo(
+    () => domains.filter((d) => d.ssl_status === 'issuing').map((d) => d.id),
+    [domains],
+  );
+  useAutoSslRefresh(issuingDomainIds, fetchDomains);
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -234,19 +244,22 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
     }
   };
 
-  const pollOperation = async (operationId: string) => {
-    const maxAttempts = 75; // 75 × 2s = 150s — covers Jenkins 120s pipeline timeout
+  const pollOperation = async (operationId: string): Promise<Record<string, unknown> | null> => {
+    const maxAttempts = 75; // 75 × 2s = 150s — covers the async activation window
     const delayMs = 2000;
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const res = await fetch(`/api/domains/operations/${operationId}`);
       const data = await res.json();
       if (!res.ok) throw new Error('Unable to check setup status. Please refresh and try again.');
       const status = data?.operation?.status;
-      if (status === 'succeeded') return;
+      if (status === 'succeeded') {
+        return (data?.operation?.response_data || null) as Record<string, unknown> | null;
+      }
       if (status === 'failed') {
+        const errorCode = data?.operation?.error_code;
         const rawMsg = data?.operation?.error_message;
         throw new Error(
-          sanitizeOperationError(rawMsg, 'Domain setup failed. Please try again or contact support.'),
+          sanitizeOperationError(rawMsg, operationFailureFallback(errorCode)),
         );
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -270,18 +283,79 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
         toast.error(friendlyError(data, 'Activation failed. Please try again.'));
         return;
       }
+      let responseData: Record<string, unknown> | null = null;
       if (data.operation_id) {
         toast.info(`Setting up ${domainName || 'domain'}\u2026 this may take up to 2 minutes.`);
-        await pollOperation(data.operation_id);
+        responseData = await pollOperation(data.operation_id);
       }
-      toast.success(
-        `${domainName || 'Domain'} is now live\u2014your SSL certificate will be ready shortly.`,
-      );
+      const dnsAutoConfigured =
+        responseData && typeof responseData.dns_auto_configured === 'boolean'
+          ? responseData.dns_auto_configured
+          : true;
+      const routingInstructions =
+        responseData && typeof responseData.routing_instructions === 'object'
+          ? (responseData.routing_instructions as Record<string, unknown>)
+          : null;
+
+      if (!dnsAutoConfigured && routingInstructions) {
+        const recordType =
+          typeof routingInstructions.record_type === 'string'
+            ? routingInstructions.record_type
+            : 'DNS';
+        const recordName =
+          typeof routingInstructions.record_name === 'string'
+            ? routingInstructions.record_name
+            : domainName || 'domain';
+        const recordValue =
+          typeof routingInstructions.record_value === 'string'
+            ? routingInstructions.record_value
+            : '';
+
+        toast.warning(
+          `${domainName || 'Domain'} activated. Add ${recordType} ${recordName}${recordValue ? ` -> ${recordValue}` : ''} at your DNS provider.`,
+        );
+      } else if (!dnsAutoConfigured) {
+        toast.warning(
+          `${domainName || 'Domain'} activated. Update DNS at your provider, then secure connection will finish.`,
+        );
+      } else {
+        toast.success(
+          `${domainName || 'Domain'} is now live\u2014secure connection setup will finish shortly.`,
+        );
+      }
       await fetchDomains();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Activation failed. Please try again.');
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const handleCheckSsl = async (domainId: string) => {
+    setCheckingSslId(domainId);
+    try {
+      const res = await fetch(`/api/domains/${domainId}/check-ssl`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(friendlyError(data, 'Could not check SSL status. Try refreshing.'));
+        return;
+      }
+      if (data.ssl_status === 'active') {
+        toast.success('Secure connection is now active — your traffic is encrypted.');
+      } else if (data.ssl_status === 'issuing') {
+        if (data.dns_ready === false && data.dns_message) {
+          toast.warning(`DNS not ready: ${data.dns_message}`);
+        } else {
+          toast.info('Certificate is still being issued. Check again in a minute.');
+        }
+      } else if (data.ssl_status === 'failed') {
+        toast.error('Secure connection failed. Verify DNS settings and re-activate the domain.');
+      }
+      await fetchDomains();
+    } catch {
+      toast.error('SSL check failed. Please try again.');
+    } finally {
+      setCheckingSslId(null);
     }
   };
 
@@ -451,11 +525,13 @@ export function CustomDomainsManager({ appId, appStatus, platformDomain }: Custo
               activatingId={activatingId}
               removingId={removingId}
               copiedField={copiedField}
+              checkingSslId={checkingSslId}
               onVerify={(id) => void handleVerifyDomain(id)}
               onActivate={(id) => void handleActivateDomain(id)}
               onSetPrimary={(id) => void handleSetPrimary(id)}
               onRemoveConfirm={setRemoveConfirmId}
               onCopy={copyToClipboard}
+              onCheckSsl={(id) => void handleCheckSsl(id)}
             />
           ))
         )}

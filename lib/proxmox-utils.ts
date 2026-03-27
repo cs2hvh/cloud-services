@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Agent as UndiciAgent } from "undici";
+// @ts-expect-error ssh2 has no type declarations
+import { Client as SSHClient } from "ssh2";
 
 const DEBUG = process.env.NODE_ENV === 'development';
 
@@ -86,12 +88,9 @@ export async function proxmoxAuth(
     throw new Error('Proxmox username and password required');
   }
 
-  console.log('[Proxmox Auth] Using password authentication');
-  console.log('[Proxmox Auth] Username:', host.username);
-  console.log('[Proxmox Auth] URL:', `${apiBase}/api2/json/access/ticket`);
-
+  const pveUsername = host.username.includes('@') ? host.username : `${host.username}@pam`;
   const formData = new URLSearchParams();
-  formData.append('username', host.username);
+  formData.append('username', pveUsername);
   formData.append('password', host.password);
 
   const res = await withTimeout(
@@ -106,8 +105,7 @@ export async function proxmoxAuth(
   );
 
   if (!res.ok) {
-    const errorText = await res.text().catch(() => res.statusText);
-    throw new Error(`Proxmox auth failed: ${res.status} ${errorText}`);
+    throw new Error(`Proxmox auth failed: ${res.status}`);
   }
 
   const json = (await res.json()) as any;
@@ -116,8 +114,6 @@ export async function proxmoxAuth(
   if (!data.ticket || !data.CSRFPreventionToken) {
     throw new Error('Missing ticket or CSRF token in auth response');
   }
-
-  console.log('[Proxmox Auth] Password authentication successful');
 
   return {
     headers: {
@@ -139,9 +135,6 @@ export async function fetchJson(
   const apiBase = host.host_url.replace(/\/$/, '');
   const url = `${apiBase}${endpoint}`;
 
-  console.log(`[fetchJson] Calling: ${url}`);
-  console.log(`[fetchJson] Auth headers:`, auth.headers);
-
   const res = await withTimeout(
     fetch(url, {
       method: 'GET',
@@ -152,15 +145,8 @@ export async function fetchJson(
     } as any)
   );
 
-  console.log(`[fetchJson] Response status: ${res.status}`);
-  console.log(`[fetchJson] Response URL: ${res.url}`);
-
   if (!res.ok) {
-    const errorText = await res.text().catch(() => res.statusText);
-    console.error(`[fetchJson] Error response:`, errorText);
-    throw new Error(
-      `Proxmox API error: ${res.status} ${errorText}`
-    );
+    throw new Error(`Proxmox API error: ${res.status}`);
   }
 
   const json = (await res.json()) as any;
@@ -295,6 +281,120 @@ export async function getNextVMID(
     throw new Error('Invalid VMID response: ' + String(nextId));
   }
   return vmid;
+}
+
+/**
+ * Execute a command on the Proxmox host via SSH.
+ * Uses the same credentials as the Proxmox API (root user).
+ */
+function sshExec(sshHost: string, username: string, password: string, command: string, timeoutMs = 15000): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const conn = new SSHClient();
+    const timer = setTimeout(() => {
+      conn.end();
+      reject(new Error("SSH command timed out"));
+    }, timeoutMs);
+
+    conn.on("ready", () => {
+      conn.exec(command, (err: any, stream: any) => {
+        if (err) { clearTimeout(timer); conn.end(); reject(err); return; }
+        let out = "";
+        stream.on("data", (d: Buffer) => out += d.toString());
+        stream.stderr.on("data", (d: Buffer) => out += d.toString());
+        stream.on("close", () => { clearTimeout(timer); conn.end(); resolve(out.trim()); });
+      });
+    });
+    conn.on("error", (err: any) => { clearTimeout(timer); reject(err); });
+    conn.connect({ host: sshHost, port: 22, username, password });
+  });
+}
+
+/**
+ * Extract the SSH hostname from a Proxmox host_url.
+ * e.g. "https://ns5028607.ip-148-113-49.net:8006/" -> "ns5028607.ip-148-113-49.net"
+ */
+function sshHostFromUrl(hostUrl: string): string {
+  try {
+    const u = new URL(hostUrl);
+    return u.hostname;
+  } catch {
+    return hostUrl.replace(/^https?:\/\//, "").replace(/:\d+.*$/, "").replace(/\/+$/, "");
+  }
+}
+
+/** Validate an IPv4 address strictly (no injection possible) */
+function isValidIPv4(ip: string): boolean {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return false;
+  return parts.every(p => /^\d{1,3}$/.test(p) && Number(p) >= 0 && Number(p) <= 255);
+}
+
+/** Validate bridge name (alphanumeric + limited chars only) */
+function isValidBridgeName(name: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9_-]{0,15}$/.test(name);
+}
+
+/**
+ * Add a host route for a VM's IP on the Proxmox host.
+ * Required for OVH routed IP model: the host must know to send
+ * traffic for a failover IP into the bridge where the VM lives.
+ *
+ * Also ensures ip_forward and proxy_arp are enabled (idempotent).
+ */
+export async function addHostRoute(host: ProxmoxHost, vmIp: string, bridge = "vmbr0"): Promise<void> {
+  if (!host.username || !host.password) {
+    console.warn("[Host Route] No SSH credentials — skipping route injection");
+    return;
+  }
+  if (!isValidIPv4(vmIp)) {
+    console.error(`[Host Route] Invalid IP address rejected: ${vmIp}`);
+    return;
+  }
+  if (!isValidBridgeName(bridge)) {
+    console.error(`[Host Route] Invalid bridge name rejected: ${bridge}`);
+    return;
+  }
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+
+  const commands = [
+    `echo 1 > /proc/sys/net/ipv4/ip_forward`,
+    `echo 1 > /proc/sys/net/ipv4/conf/${bridge}/proxy_arp`,
+    `ip route add ${vmIp}/32 dev ${bridge} 2>/dev/null || true`,
+  ].join(" && ");
+
+  try {
+    await sshExec(sshHost, username, host.password, commands);
+  } catch (e) {
+    console.error(`[Host Route] Failed to add route for ${vmIp}:`, e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * Remove a host route for a VM's IP on the Proxmox host.
+ * Called when a VM is deleted so the route table stays clean.
+ */
+export async function removeHostRoute(host: ProxmoxHost, vmIp: string, bridge = "vmbr0"): Promise<void> {
+  if (!host.username || !host.password) {
+    console.warn("[Host Route] No SSH credentials — skipping route removal");
+    return;
+  }
+  if (!isValidIPv4(vmIp)) {
+    console.error(`[Host Route] Invalid IP address rejected: ${vmIp}`);
+    return;
+  }
+  if (!isValidBridgeName(bridge)) {
+    console.error(`[Host Route] Invalid bridge name rejected: ${bridge}`);
+    return;
+  }
+  const sshHost = sshHostFromUrl(host.host_url);
+  const username = host.username.includes("@") ? host.username.split("@")[0] : host.username;
+
+  try {
+    await sshExec(sshHost, username, host.password, `ip route del ${vmIp}/32 dev ${bridge} 2>/dev/null || true`);
+  } catch (e) {
+    console.error(`[Host Route] Failed to remove route for ${vmIp}:`, e instanceof Error ? e.message : e);
+  }
 }
 
 /**

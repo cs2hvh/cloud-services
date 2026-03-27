@@ -7,7 +7,6 @@ export const ProjectSchema = z
     id: z.string().uuid().openapi({ example: "77ef5894-cc88-468d-98f4-6e861c24be86" }),
     name: z.string().openapi({ example: "Production Services" }),
     description: z.string().nullable().openapi({ example: "Core production workloads" }),
-    owner_id: z.string().uuid().nullable().openapi({ example: "ccf391ef-271b-45e7-9799-3b1be3422363" }),
     users: z.array(z.string().uuid()).openapi({ example: ["ccf391ef-271b-45e7-9799-3b1be3422363"] }),
     created_at: z.string().datetime().nullable().openapi({ example: "2026-03-09T05:30:00Z" }),
     default_project: z.boolean().nullable().openapi({ example: false }),

@@ -6,7 +6,6 @@ import {
   AddDomainRequestSchema,
   AddDomainResponseSchema,
   DomainListQuerySchema,
-  DomainMarketplaceProvidersResponseSchema,
   DomainMarketplacePurchaseRequestListResponseSchema,
   DomainMarketplacePurchaseRequestResponseSchema,
   DomainMarketplacePurchaseRequestSchema,
@@ -304,39 +303,6 @@ export function registerDomainPaths(registry: OpenAPIRegistry) {
       },
       502: {
         description: "Registrar upstream error",
-        content: { "application/json": { schema: ErrorResponseSchema } },
-      },
-    },
-  });
-
-  registry.registerPath({
-    method: "get",
-    path: "/api/v1/domains/market/providers",
-    tags: ["Domain Marketplace"],
-    summary: "Get domain marketplace provider metadata",
-    description: "Legacy compatibility endpoint that mirrors marketplace summary data.",
-    deprecated: true,
-    security: [{ bearerAuth: [] }],
-    responses: {
-      200: {
-        description: "Provider metadata",
-        content: { "application/json": { schema: DomainMarketplaceProvidersResponseSchema } },
-      },
-      401: {
-        description: "Unauthorized",
-        content: { "application/json": { schema: ErrorResponseSchema } },
-      },
-      429: {
-        description: "Too many requests",
-        content: {
-          "application/json": {
-            schema: ErrorResponseSchema,
-            example: V1RateLimitErrorExample,
-          },
-        },
-      },
-      500: {
-        description: "Internal error",
         content: { "application/json": { schema: ErrorResponseSchema } },
       },
     },

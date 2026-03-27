@@ -49,8 +49,25 @@ export interface DnsProviderPort {
   listTxtRecords(recordName: string): Promise<string[]>;
   ensureRoutingRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
   removeRoutingRecord(params: { fqdn: string; target?: string }): Promise<void>;
-  ensureCnameRecord(params: { fqdn: string; target: string; ttl: number }): Promise<void>;
-  removeCnameRecord(params: { fqdn: string; target?: string }): Promise<void>;
+}
+
+/**
+ * Probes the live TLS certificate of a publicly reachable hostname.
+ * Decoupled from ingress management — can be backed by a Node.js TLS socket,
+ * an HTTP-based checker, or any other implementation.
+ */
+export interface TlsCertInfo {
+  /** Lowercased JSON of the certificate issuer object. */
+  issuer: string;
+  /** Lowercased certificate CN when present. */
+  common_name?: string;
+  /** Lowercased DNS SAN entries (without the `DNS:` prefix). */
+  sans?: string[];
+}
+
+export interface SslProbePort {
+  /** Returns null if the host is unreachable or presents no certificate. */
+  probe(hostname: string): Promise<TlsCertInfo | null>;
 }
 
 export interface IngressPort {

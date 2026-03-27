@@ -534,23 +534,23 @@ const NewClusterPage = ({
 
   const steps = role === "admin" 
     ? [
-        { id: 0, name: "User" },
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
       ]
     : [
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
       ];
 
   function makeNodeKeys(workers: number, clusterName: string) {
@@ -654,19 +654,20 @@ const NewClusterPage = ({
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
-                        isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78"
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : step.id}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
                 </button>
               );
             })}
@@ -676,7 +677,7 @@ const NewClusterPage = ({
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           {currentStep === 0 && (
             <Card className={panelClassName}>
               <CardHeader>

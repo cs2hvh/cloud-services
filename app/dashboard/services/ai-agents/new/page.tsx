@@ -4,7 +4,6 @@ import Link from 'next/link';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
+import Image from 'next/image';
 import {
   Select,
   SelectContent,
@@ -20,14 +20,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  Bot,
   ChevronRight,
   ChevronLeft,
   Loader2,
   Sparkles,
-  Brain,
-  Database,
-  CheckCircle2,
   AlertCircle,
   Key,
   CreditCard,
@@ -72,11 +68,11 @@ interface ModelKey {
 }
 
 const STEPS = [
-  { id: 1, name: 'Basic Info', description: 'Name and description' },
-  { id: 2, name: 'Model', description: 'Choose AI model' },
-  { id: 3, name: 'System Prompt', description: 'Define behavior' },
-  { id: 4, name: 'Knowledge Base', description: 'Attach documents' },
-  { id: 5, name: 'Review', description: 'Review and create' },
+  { id: 1, name: 'Basic Info', description: 'Name and description', icon: '/dashboard icons/basic info .png' },
+  { id: 2, name: 'Model', description: 'Choose AI model', icon: '/dashboard icons/model.png' },
+  { id: 3, name: 'System Prompt', description: 'Define behavior', icon: '/dashboard icons/system prompt .png' },
+  { id: 4, name: 'Knowledge Base', description: 'Attach documents', icon: '/dashboard icons/knowledge base .png' },
+  { id: 5, name: 'Review', description: 'Review and create', icon: '/dashboard icons/review .png' },
 ];
 
 export default function NewAgentPage() {
@@ -276,17 +272,8 @@ export default function NewAgentPage() {
                   )}
                 >
                   <div className="flex items-center gap-3">
-                    <div
-                      className={cn(
-                        'flex h-9 w-9 items-center justify-center border',
-                        isActive
-                          ? 'border-blue-400/30 bg-blue-500/15 text-blue-200'
-                          : isCompleted
-                            ? 'border-emerald-500/20 bg-emerald-500/15 text-emerald-300'
-                            : 'border-white/[0.08] bg-white/[0.04] text-white/55'
-                      )}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <span className="text-sm font-semibold">{step.id}</span>}
+                    <div className="flex h-9 w-9 items-center justify-center">
+                      {isCompleted ? <span className="h-2 w-2 rounded-full bg-emerald-400" /> : <Image src={step.icon} alt={step.name} width={24} height={24} className="opacity-80" />}
                     </div>
                     <div className="min-w-0">
                       <div className="truncate text-sm font-medium text-white">{step.name}</div>
@@ -303,18 +290,15 @@ export default function NewAgentPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
         <div className="space-y-6 xl:min-w-0">
       {/* Step Content */}
-      <Card className="glass-panel overflow-hidden">
-        <CardContent className="p-6">
+      <div className="glass-panel overflow-hidden p-6">
           {/* Step 1: Basic Info */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <Bot className="h-6 w-6 text-blue-400" />
-                </div>
+                <Image src="/dashboard icons/basic info .png" alt="Basic Info" width={36} height={36} className="opacity-80" />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Basic Information</h2>
-                  <p className="text-sm text-slate-400">Give your agent a name and description</p>
+                  <p className="text-sm text-white/50">Give your agent a name and description</p>
                 </div>
               </div>
 
@@ -326,7 +310,7 @@ export default function NewAgentPage() {
                     placeholder="e.g., Customer Support Bot"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="bg-slate-800 border-slate-700"
+                    className="bg-white/[0.04] border-white/[0.1] text-white"
                   />
                 </div>
 
@@ -337,7 +321,7 @@ export default function NewAgentPage() {
                     placeholder="What does this agent do?"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="bg-slate-800 border-slate-700 min-h-[100px]"
+                    className="bg-white/[0.04] border-white/[0.1] text-white min-h-[100px]"
                   />
                 </div>
               </div>
@@ -348,22 +332,18 @@ export default function NewAgentPage() {
           {currentStep === 2 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <Brain className="h-6 w-6 text-purple-400" />
-                </div>
+                <Image src="/dashboard icons/model.png" alt="Model" width={36} height={36} className="opacity-80" />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Select Model</h2>
-                  <p className="text-sm text-slate-400">Choose the AI model for your agent</p>
+                  <p className="text-sm text-white/50">Choose the AI model for your agent</p>
                 </div>
               </div>
 
               {/* Billing Mode Selection */}
-              <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div className="border border-white/[0.08] bg-white/[0.04] p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-green-500/10">
-                      <CreditCard className="h-5 w-5 text-green-400" />
-                    </div>
+                    <CreditCard className="h-5 w-5 text-green-400" />
                     <div>
                       <p className="font-medium text-white">Use Platform Models</p>
                       <p className="text-sm text-slate-400">
@@ -392,12 +372,12 @@ export default function NewAgentPage() {
               {/* Platform Models */}
               {usePlatformBilling && (
                 <>
-                  <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                  <div className="border border-blue-500/20 bg-blue-500/10 p-4">
                     <div className="flex items-start gap-3">
                       <Sparkles className="h-5 w-5 text-blue-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-blue-400 font-medium">Platform Billing</p>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <p className="text-sm text-white/50 mt-1">
                           Token usage will be billed to your account. Prices shown are per million tokens.
                         </p>
                       </div>
@@ -410,14 +390,14 @@ export default function NewAgentPage() {
                       <span className="ml-2 text-slate-400">Loading models...</span>
                     </div>
                   ) : platformModels.length === 0 ? (
-                    <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-center">
+                    <div className="border border-yellow-500/20 bg-yellow-500/10 p-4 text-center">
                       <p className="text-yellow-400">No platform models available. Please try again later.</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
                       <Label>Select a Model *</Label>
                       <Select value={model} onValueChange={setModel}>
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                        <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                           <SelectValue placeholder="Choose a model" />
                         </SelectTrigger>
                         <SelectContent>
@@ -437,7 +417,7 @@ export default function NewAgentPage() {
 
                       {/* Selected model details */}
                       {model && platformModels.find((m) => m.id === model) && (
-                        <div className="p-4 rounded-lg bg-slate-800/50 border border-slate-700 mt-4">
+                        <div className="border border-white/[0.08] bg-white/[0.04] mt-4 p-4">
                           {(() => {
                             const selectedModel = platformModels.find((m) => m.id === model)!;
                             return (
@@ -475,7 +455,7 @@ export default function NewAgentPage() {
                                     </span>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4 pt-2 border-t border-slate-700">
+                                <div className="flex items-center gap-4 pt-2 border-t border-white/[0.08]">
                                   <div>
                                     <span className="text-slate-500 text-sm">Input:</span>
                                     <span className="text-green-400 ml-2 font-medium">{selectedModel.pricing.inputFormatted}</span>
@@ -498,12 +478,12 @@ export default function NewAgentPage() {
               {/* Custom API Key Mode */}
               {!usePlatformBilling && (
                 <>
-                  <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+                  <div className="border border-yellow-500/20 bg-yellow-500/10 p-4">
                     <div className="flex items-start gap-3">
                       <Key className="h-5 w-5 text-yellow-400 mt-0.5" />
                       <div>
                         <p className="text-sm text-yellow-400 font-medium">Bring Your Own Key</p>
-                        <p className="text-sm text-slate-400 mt-1">
+                        <p className="text-sm text-white/50 mt-1">
                           Use your own API keys. You&apos;ll be billed directly by the provider.
                         </p>
                       </div>
@@ -517,7 +497,7 @@ export default function NewAgentPage() {
                       Choose an API key to use. Models will be shown based on the provider.
                     </p>
                     {modelKeys.length === 0 ? (
-                      <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-start gap-3">
+                      <div className="border border-yellow-500/20 bg-yellow-500/10 p-4 flex items-start gap-3">
                         <AlertCircle className="h-5 w-5 text-yellow-400 flex-shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm text-yellow-400 font-medium">No API Keys Found</p>
@@ -538,7 +518,7 @@ export default function NewAgentPage() {
                           setModel('');
                         }}
                       >
-                        <SelectTrigger className="bg-slate-800 border-slate-700">
+                        <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                           <SelectValue placeholder="Select an API key" />
                         </SelectTrigger>
                         <SelectContent>
@@ -600,7 +580,7 @@ export default function NewAgentPage() {
                       <div className="space-y-2">
                         <Label>Select Model *</Label>
                         <Select value={model} onValueChange={setModel}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                             <SelectValue placeholder="Choose a model" />
                           </SelectTrigger>
                           <SelectContent>
@@ -626,12 +606,10 @@ export default function NewAgentPage() {
           {currentStep === 3 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-green-500/10">
-                  <Sparkles className="h-6 w-6 text-green-400" />
-                </div>
+                <Image src="/dashboard icons/system prompt .png" alt="System Prompt" width={36} height={36} className="opacity-80" />
                 <div>
                   <h2 className="text-xl font-semibold text-white">System Prompt</h2>
-                  <p className="text-sm text-slate-400">Define how your agent should behave</p>
+                  <p className="text-sm text-white/50">Define how your agent should behave</p>
                 </div>
               </div>
 
@@ -643,7 +621,7 @@ export default function NewAgentPage() {
                     placeholder="You are a helpful customer support assistant for..."
                     value={systemPrompt}
                     onChange={(e) => setSystemPrompt(e.target.value)}
-                    className="bg-slate-800 border-slate-700 min-h-[200px] font-mono text-sm"
+                    className="bg-white/[0.04] border-white/[0.1] text-white min-h-[200px] font-mono text-sm"
                   />
                   <p className="text-xs text-slate-500">
                     This prompt defines your agent&apos;s personality, knowledge constraints, and
@@ -662,7 +640,7 @@ export default function NewAgentPage() {
                       step="0.1"
                       value={temperature}
                       onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                      className="bg-slate-800"
+                      className="bg-white/[0.04]"
                     />
                     <p className="text-xs text-slate-500">
                       Lower = more focused, Higher = more creative
@@ -675,7 +653,7 @@ export default function NewAgentPage() {
                       value={maxTokens.toString()}
                       onValueChange={(v) => setMaxTokens(parseInt(v))}
                     >
-                      <SelectTrigger className="bg-slate-800 border-slate-700">
+                      <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -697,12 +675,10 @@ export default function NewAgentPage() {
           {currentStep === 4 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-orange-500/10">
-                  <Database className="h-6 w-6 text-orange-400" />
-                </div>
+                <Image src="/dashboard icons/knowledge base .png" alt="Knowledge Base" width={36} height={36} className="opacity-80" />
                 <div>
                   <h2 className="text-xl font-semibold text-white">Knowledge Base (Optional)</h2>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-white/50">
                     Attach a knowledge base for RAG capabilities
                   </p>
                 </div>
@@ -756,8 +732,8 @@ export default function NewAgentPage() {
                 </RadioGroup>
               ) : (
                 <div className="text-center py-8">
-                  <Database className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400 mb-4">No knowledge bases found</p>
+                  <Image src="/dashboard icons/knowledge base .png" alt="No KBs" width={48} height={48} className="opacity-25 mx-auto mb-4" />
+                  <p className="text-white/50 mb-4">No knowledge bases found</p>
                   <Button variant="outline" asChild>
                     <Link href="/dashboard/services/ai-agents/knowledge-bases/new">
                       Create Knowledge Base
@@ -772,29 +748,27 @@ export default function NewAgentPage() {
           {currentStep === 5 && (
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="p-2 rounded-lg bg-blue-500/10">
-                  <CheckCircle2 className="h-6 w-6 text-blue-400" />
-                </div>
+                <Image src="/dashboard icons/review .png" alt="Review" width={36} height={36} className="opacity-80" />
                 <div>
-                  <h2 className="text-xl font-semibold text-white">Review & Create</h2>
-                  <p className="text-sm text-slate-400">Review your agent configuration</p>
+                  <h2 className="text-xl font-semibold text-white">Review &amp; Create</h2>
+                  <p className="text-sm text-white/50">Review your agent configuration</p>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="p-4 rounded-lg bg-slate-800/50 space-y-3">
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4 space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Name</span>
+                    <span className="text-white/50">Name</span>
                     <span className="text-white font-medium">{name}</span>
                   </div>
                   {description && (
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Description</span>
+                      <span className="text-white/50">Description</span>
                       <span className="text-white">{description}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Model</span>
+                    <span className="text-white/50">Model</span>
                     <span className="text-white">
                       {usePlatformBilling && selectedPlatformModel 
                         ? `${selectedPlatformModel.name} (${selectedPlatformModel.provider})`
@@ -803,7 +777,7 @@ export default function NewAgentPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Billing Mode</span>
+                    <span className="text-white/50">Billing Mode</span>
                     <span className="text-white">
                       {usePlatformBilling ? (
                         <span className="flex items-center gap-2">
@@ -820,7 +794,7 @@ export default function NewAgentPage() {
                   </div>
                   {usePlatformBilling && selectedPlatformModel && (
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Pricing</span>
+                      <span className="text-white/50">Pricing</span>
                       <span className="text-white text-sm">
                         <span className="text-green-400">{selectedPlatformModel.pricing.inputFormatted}</span>
                         {' / '}
@@ -829,28 +803,27 @@ export default function NewAgentPage() {
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Temperature</span>
+                    <span className="text-white/50">Temperature</span>
                     <span className="text-white">{temperature}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Max Tokens</span>
+                    <span className="text-white/50">Max Tokens</span>
                     <span className="text-white">{maxTokens.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-400">Knowledge Base</span>
+                    <span className="text-white/50">Knowledge Base</span>
                     <span className="text-white">{selectedKb?.name || 'None'}</span>
                   </div>
                 </div>
 
-                <div className="p-4 rounded-lg bg-slate-800/50">
-                  <p className="text-sm text-slate-400 mb-2">System Prompt</p>
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <p className="text-sm text-white/50 mb-2">System Prompt</p>
                   <p className="text-sm text-white whitespace-pre-wrap font-mono">{systemPrompt}</p>
                 </div>
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Navigation Buttons */}
       <div className="flex items-center justify-between gap-3">
@@ -878,7 +851,7 @@ export default function NewAgentPage() {
               </>
             ) : (
               <>
-                <Bot className="mr-2 h-4 w-4" />
+                <Image src="/dashboard icons/agents .png" alt="" width={16} height={16} className="mr-2" />
                 Create Agent
               </>
             )}
@@ -888,12 +861,11 @@ export default function NewAgentPage() {
     </div>
 
     <div className="xl:min-w-0">
-      <Card className="glass-panel overflow-hidden xl:sticky xl:top-8">
-        <CardContent className="space-y-5 p-5">
+      <div className="glass-panel overflow-hidden xl:sticky xl:top-8 p-5 space-y-5">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Deployment Summary</p>
             <div className="mt-4 flex justify-center border border-white/[0.08] bg-white/[0.04] px-4 py-5">
-              <Bot className="h-14 w-14 text-blue-300/70" />
+              <Image src="/dashboard icons/agents .png" alt="Agent" width={56} height={56} className="opacity-70" />
             </div>
           </div>
 
@@ -933,8 +905,7 @@ export default function NewAgentPage() {
           <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/55">
             Endpoint access and API keys are configured after the agent is created.
           </div>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   </div>
 </div>

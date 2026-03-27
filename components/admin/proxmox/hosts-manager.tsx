@@ -22,11 +22,16 @@ interface HostData {
   gateway_ip: string | null;
   dns_primary: string | null;
   dns_secondary: string | null;
+  region: string;
+  display_region: string;
+  total_cpu_cores: number;
+  total_memory_mb: number;
+  total_disk_gb: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
   public_ip_pools?: Array<{ id: string; mac: string; public_ip_pool_ips?: Array<{ id: string; ip: string }> }>;
-  proxmox_templates?: Array<{ id: string; vmid: number; name: string; os_type: string | null }>;
+  proxmox_templates?: Array<{ id: string; vmid: number; name: string; os_type: string | null; os_display_name: string | null }>;
 }
 
 interface FormState {
@@ -45,9 +50,14 @@ interface FormState {
   dns_primary: string;
   dns_secondary: string;
   template_vmid: string;
+  region: string;
+  display_region: string;
+  total_cpu_cores: string;
+  total_memory_mb: string;
+  total_disk_gb: string;
   is_active: boolean;
-  pools: Array<{ mac: string; ips: Array<string> }>;
-  templates: Array<{ name: string; vmid: string; os_type: string }>;
+  ipAddresses: Array<{ ip: string; mac: string }>;
+  templates: Array<{ name: string; vmid: string; os_type: string; os_display_name: string }>;
 }
 
 const emptyForm: FormState = {
@@ -65,8 +75,13 @@ const emptyForm: FormState = {
   dns_primary: '',
   dns_secondary: '',
   template_vmid: '',
+  region: '',
+  display_region: '',
+  total_cpu_cores: '',
+  total_memory_mb: '',
+  total_disk_gb: '',
   is_active: true,
-  pools: [],
+  ipAddresses: [],
   templates: [],
 };
 
@@ -77,18 +92,27 @@ export function ProxmoxHostsManager() {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [expandedHostId, setExpandedHostId] = useState<string | null>(null);
+  const [usedIps, setUsedIps] = useState<Set<string>>(new Set());
 
-  // Load hosts
+  // Load hosts + used IPs
   const loadHosts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/admin/proxmox/hosts');
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
+      const [hostsRes, serversRes] = await Promise.all([
+        fetch('/api/admin/proxmox/hosts'),
+        fetch('/api/admin/proxmox/hosts?action=used-ips'),
+      ]);
+      const data = await hostsRes.json();
+      if (!hostsRes.ok || !data.ok) {
         throw new Error(data.error || 'Failed to load hosts');
       }
       setHosts(data.hosts || []);
+      
+      if (serversRes.ok) {
+        const ipsData = await serversRes.json();
+        setUsedIps(new Set(ipsData.usedIps || []));
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load hosts';
       setError(msg);
@@ -125,29 +149,38 @@ export function ProxmoxHostsManager() {
       dns_primary: host.dns_primary || '',
       dns_secondary: host.dns_secondary || '',
       template_vmid: host.template_vmid?.toString() || '',
+      region: host.region || '',
+      display_region: host.display_region || '',
+      total_cpu_cores: host.total_cpu_cores?.toString() || '',
+      total_memory_mb: host.total_memory_mb?.toString() || '',
+      total_disk_gb: host.total_disk_gb?.toString() || '',
       is_active: host.is_active,
-      pools: host.public_ip_pools?.map(p => ({
-        mac: p.mac,
-        ips: p.public_ip_pool_ips?.map(ip => ip.ip) || []
+      ipAddresses: host.public_ip_pools?.flatMap(p =>
+        (p.public_ip_pool_ips || []).map(ip => ({ ip: ip.ip, mac: p.mac }))
+      ) || [],
+      templates: host.proxmox_templates?.map(t => ({
+        name: t.name,
+        vmid: t.vmid.toString(),
+        os_type: t.os_type || '',
+        os_display_name: t.os_display_name || '',
       })) || [],
-      templates: host.proxmox_templates?.map(t => ({ name: t.name, vmid: t.vmid.toString(), os_type: t.os_type || '' })) || [],
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Add pool
-  const addPool = useCallback(() => {
+  // Add IP address
+  const addIpAddress = useCallback(() => {
     setForm(prev => ({
       ...prev,
-      pools: [...prev.pools, { mac: '', ips: [''] }]
+      ipAddresses: [...prev.ipAddresses, { ip: '', mac: '' }]
     }));
   }, []);
 
-  // Remove pool
-  const removePool = useCallback((idx: number) => {
+  // Remove IP address
+  const removeIpAddress = useCallback((idx: number) => {
     setForm(prev => ({
       ...prev,
-      pools: prev.pools.filter((_, i) => i !== idx)
+      ipAddresses: prev.ipAddresses.filter((_, i) => i !== idx)
     }));
   }, []);
 
@@ -155,7 +188,7 @@ export function ProxmoxHostsManager() {
   const addTemplate = useCallback(() => {
     setForm(prev => ({
       ...prev,
-      templates: [...prev.templates, { name: '', vmid: '', os_type: '' }]
+      templates: [...prev.templates, { name: '', vmid: '', os_type: '', os_display_name: '' }]
     }));
   }, []);
 
@@ -239,8 +272,15 @@ export function ProxmoxHostsManager() {
         dns_primary: form.dns_primary || undefined,
         dns_secondary: form.dns_secondary || undefined,
         template_vmid: form.template_vmid ? Number(form.template_vmid) : undefined,
+        region: form.region || undefined,
+        display_region: form.display_region || undefined,
+        total_cpu_cores: form.total_cpu_cores ? Number(form.total_cpu_cores) : undefined,
+        total_memory_mb: form.total_memory_mb ? Number(form.total_memory_mb) : undefined,
+        total_disk_gb: form.total_disk_gb ? Number(form.total_disk_gb) : undefined,
         is_active: form.is_active,
-        pools: form.pools.filter(p => p.mac && p.ips.length > 0),
+        pools: form.ipAddresses
+          .filter(a => a.ip && a.mac)
+          .map(a => ({ mac: a.mac, ips: [a.ip] })),
         templates: form.templates.filter(t => t.name && t.vmid),
       };
 
@@ -337,6 +377,67 @@ export function ProxmoxHostsManager() {
               </div>
             </div>
 
+            {/* Region & Capacity */}
+            <div className="border-t border-white/10 pt-4">
+              <h3 className="text-white font-semibold mb-3">Region & Capacity</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <Label className="text-white">Region Slug *</Label>
+                  <Input
+                    value={form.region}
+                    onChange={(e) => setForm(prev => ({ ...prev, region: e.target.value }))}
+                    placeholder="e.g., france, india, us-east"
+                    className="bg-black/50 text-white border-white/10 mt-1"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Hosts with the same slug are grouped into one region for customers</p>
+                </div>
+                <div>
+                  <Label className="text-white">Display Region Name *</Label>
+                  <Input
+                    value={form.display_region}
+                    onChange={(e) => setForm(prev => ({ ...prev, display_region: e.target.value }))}
+                    placeholder="e.g., France, India, US East"
+                    className="bg-black/50 text-white border-white/10 mt-1"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-white">Total CPU Cores</Label>
+                  <Input
+                    type="number"
+                    value={form.total_cpu_cores}
+                    onChange={(e) => setForm(prev => ({ ...prev, total_cpu_cores: e.target.value }))}
+                    placeholder="e.g., 64"
+                    className="bg-black/50 text-white border-white/10 mt-1"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Max vCPU cores to allocate on this host</p>
+                </div>
+                <div>
+                  <Label className="text-white">Total Memory (MB)</Label>
+                  <Input
+                    type="number"
+                    value={form.total_memory_mb}
+                    onChange={(e) => setForm(prev => ({ ...prev, total_memory_mb: e.target.value }))}
+                    placeholder="e.g., 131072 (128 GB)"
+                    className="bg-black/50 text-white border-white/10 mt-1"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Max memory in MB to allocate on this host</p>
+                </div>
+                <div>
+                  <Label className="text-white">Total Disk (GB)</Label>
+                  <Input
+                    type="number"
+                    value={form.total_disk_gb}
+                    onChange={(e) => setForm(prev => ({ ...prev, total_disk_gb: e.target.value }))}
+                    placeholder="e.g., 2000"
+                    className="bg-black/50 text-white border-white/10 mt-1"
+                  />
+                  <p className="text-xs text-white/50 mt-1">Max disk in GB to allocate on this host</p>
+                </div>
+              </div>
+            </div>
+
             {/* Authentication */}
             <div className="border-t border-white/10 pt-4">
               <h3 className="text-white font-semibold mb-3">Authentication</h3>
@@ -426,103 +527,60 @@ export function ProxmoxHostsManager() {
               </div>
             </div>
 
-            {/* IP Pools */}
+            {/* IP Addresses */}
             <div className="border-t border-white/10 pt-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-white font-semibold">IP Pools</h3>
+                <h3 className="text-white font-semibold">IP Addresses</h3>
                 <Button
                   type="button"
-                  onClick={addPool}
+                  onClick={addIpAddress}
                   size="sm"
                   className="bg-blue-600/20 text-blue-400 border border-blue-400/30 hover:bg-blue-600/30"
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Add Pool
+                  <Plus className="w-4 h-4 mr-1" /> Add IP
                 </Button>
               </div>
-              <div className="space-y-3">
-                {form.pools.map((pool, idx) => (
-                  <div key={idx} className="space-y-3 p-4 bg-white/5 rounded-lg border border-white/10">
-                    <div className="flex gap-2 items-start">
-                      <div className="flex-1">
-                        <Label className="text-white/80 text-sm">Pool MAC Address</Label>
-                        <Input
-                          value={pool.mac}
-                          onChange={(e) => setForm(prev => ({
-                            ...prev,
-                            pools: prev.pools.map((p, i) => i === idx ? { ...p, mac: e.target.value } : p)
-                          }))}
-                          placeholder="02:00:00:17:73:3d"
-                          className="bg-black/50 text-white border-white/10 mt-1"
-                        />
-                        <p className="text-xs text-white/50 mt-1">MAC address for this pool</p>
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={() => removePool(idx)}
-                        variant="destructive"
-                        size="sm"
-                        className="mt-6"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+              <p className="text-xs text-white/50 mb-3">Each IP requires its own unique vMAC from OVH.</p>
+              {form.ipAddresses.length > 0 && (
+                <div className="flex gap-2 text-xs text-white/40 px-1 mb-1">
+                  <span className="flex-1">IP Address</span>
+                  <span className="flex-1">vMAC Address</span>
+                  <span className="w-9" />
+                </div>
+              )}
+              <div className="space-y-2">
+                {form.ipAddresses.map((entry, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <div className="flex-1">
+                      <Input
+                        value={entry.ip}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, ip: e.target.value } : a)
+                        }))}
+                        placeholder="203.0.113.10"
+                        className="bg-black/50 text-white border-white/10"
+                      />
                     </div>
-
-                    {/* IP Addresses */}
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <Label className="text-white/80 text-sm">IP Addresses</Label>
-                        <Button
-                          type="button"
-                          onClick={() => setForm(prev => ({
-                            ...prev,
-                            pools: prev.pools.map((p, i) => i === idx ? { ...p, ips: [...p.ips, ''] } : p)
-                          }))}
-                          variant="outline"
-                          size="sm"
-                          className="text-xs"
-                        >
-                          <Plus className="w-3 h-3 mr-1" />
-                          Add IP
-                        </Button>
-                      </div>
-                      <div className="space-y-2">
-                        {pool.ips.map((ip, ipIdx) => (
-                          <div key={ipIdx} className="flex gap-2">
-                            <Input
-                              value={ip}
-                              onChange={(e) => setForm(prev => ({
-                                ...prev,
-                                pools: prev.pools.map((p, i) => i === idx
-                                  ? {
-                                      ...p,
-                                      ips: p.ips.map((ip, ii) => ii === ipIdx ? e.target.value : ip)
-                                    }
-                                  : p
-                                )
-                              }))}
-                              placeholder="203.0.113.10"
-                              className="bg-black/50 text-white border-white/10 flex-1"
-                            />
-                            {pool.ips.length > 1 && (
-                              <Button
-                                type="button"
-                                onClick={() => setForm(prev => ({
-                                  ...prev,
-                                  pools: prev.pools.map((p, i) => i === idx
-                                    ? { ...p, ips: p.ips.filter((_, ii) => ii !== ipIdx) }
-                                    : p
-                                  )
-                                }))}
-                                variant="destructive"
-                                size="sm"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                    <div className="flex-1">
+                      <Input
+                        value={entry.mac}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          ipAddresses: prev.ipAddresses.map((a, i) => i === idx ? { ...a, mac: e.target.value } : a)
+                        }))}
+                        placeholder="02:00:00:17:73:3d"
+                        className="bg-black/50 text-white border-white/10"
+                      />
                     </div>
+                    <Button
+                      type="button"
+                      onClick={() => removeIpAddress(idx)}
+                      variant="destructive"
+                      size="sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
@@ -556,7 +614,7 @@ export function ProxmoxHostsManager() {
                         className="bg-black/50 text-white border-white/10 mt-1"
                       />
                     </div>
-                    <div className="flex-1">
+                    <div className="w-24">
                       <Label className="text-white/80 text-sm">VMID</Label>
                       <Input
                         type="number"
@@ -580,6 +638,19 @@ export function ProxmoxHostsManager() {
                         placeholder="ubuntu"
                         className="bg-black/50 text-white border-white/10 mt-1"
                       />
+                    </div>
+                    <div className="flex-1">
+                      <Label className="text-white/80 text-sm">Display Name</Label>
+                      <Input
+                        value={tpl.os_display_name}
+                        onChange={(e) => setForm(prev => ({
+                          ...prev,
+                          templates: prev.templates.map((t, i) => i === idx ? { ...t, os_display_name: e.target.value } : t)
+                        }))}
+                        placeholder="Ubuntu 24.04 LTS"
+                        className="bg-black/50 text-white border-white/10 mt-1"
+                      />
+                      <p className="text-xs text-white/50 mt-0.5">Same display name = same OS across hosts</p>
                     </div>
                     <Button
                       type="button"
@@ -713,6 +784,10 @@ export function ProxmoxHostsManager() {
                           <p className="text-white">{host.node}</p>
                         </div>
                         <div>
+                          <p className="text-white/60">Region</p>
+                          <p className="text-white">{host.display_region || host.region || '-'}</p>
+                        </div>
+                        <div>
                           <p className="text-white/60">Storage</p>
                           <p className="text-white">{host.storage}</p>
                         </div>
@@ -720,32 +795,59 @@ export function ProxmoxHostsManager() {
                           <p className="text-white/60">Bridge</p>
                           <p className="text-white">{host.bridge}</p>
                         </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 text-sm">
                         <div>
-                          <p className="text-white/60">Template VMID</p>
-                          <p className="text-white">{host.template_vmid || '-'}</p>
+                          <p className="text-white/60">Total CPU</p>
+                          <p className="text-white">{host.total_cpu_cores || 0} cores</p>
+                        </div>
+                        <div>
+                          <p className="text-white/60">Total Memory</p>
+                          <p className="text-white">{host.total_memory_mb ? `${Math.round(host.total_memory_mb / 1024)} GB` : '0 GB'}</p>
+                        </div>
+                        <div>
+                          <p className="text-white/60">Total Disk</p>
+                          <p className="text-white">{host.total_disk_gb || 0} GB</p>
                         </div>
                       </div>
 
                       {host.public_ip_pools && host.public_ip_pools.length > 0 && (
                         <div>
-                          <p className="text-white/80 font-semibold text-sm mb-2">IP Pools:</p>
-                          <div className="space-y-2">
-                            {host.public_ip_pools.map((pool) => (
-                              <div key={pool.id} className="ml-2">
-                                <p className="text-white/70 text-xs font-medium">MAC: {pool.mac || '-'}</p>
-                                <div className="ml-2 space-y-0.5">
-                                  {pool.public_ip_pool_ips && pool.public_ip_pool_ips.length > 0 ? (
-                                    pool.public_ip_pool_ips.map((ip) => (
-                                      <p key={ip.id} className="text-white/60 text-xs">
-                                        • {ip.ip}
-                                      </p>
-                                    ))
-                                  ) : (
-                                    <p className="text-white/50 text-xs italic">No IPs assigned</p>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
+                          <p className="text-white/80 font-semibold text-sm mb-2">
+                            IP Addresses:
+                            <span className="ml-2 font-normal text-xs">
+                              <span className="text-green-400">
+                                {host.public_ip_pools.reduce((count, pool) => 
+                                  count + (pool.public_ip_pool_ips?.filter(ip => !usedIps.has(ip.ip)).length || 0), 0
+                                )} available
+                              </span>
+                              {' / '}
+                              <span className="text-red-400">
+                                {host.public_ip_pools.reduce((count, pool) => 
+                                  count + (pool.public_ip_pool_ips?.filter(ip => usedIps.has(ip.ip)).length || 0), 0
+                                )} used
+                              </span>
+                            </span>
+                          </p>
+                          <div className="space-y-1">
+                            {host.public_ip_pools.map((pool) =>
+                              pool.public_ip_pool_ips?.map((ip) => {
+                                const inUse = usedIps.has(ip.ip);
+                                return (
+                                  <div key={ip.id} className="flex items-center gap-2 ml-2 text-xs">
+                                    <span className={`w-2 h-2 rounded-full ${inUse ? 'bg-red-500' : 'bg-green-500'}`} />
+                                    <span className="text-white/70 font-mono">{ip.ip}</span>
+                                    <span className="text-white/40">MAC: {pool.mac || '-'}</span>
+                                    {inUse && (
+                                      <span className="text-red-400/80 text-[10px] px-1.5 py-0.5 bg-red-500/10 rounded">
+                                        in use
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })
+                            )}
                           </div>
                         </div>
                       )}

@@ -23,7 +23,7 @@ const supabase = createClient(
 // -----------------------------
 // 2. SECURITY CONSTANTS
 // -----------------------------
-const SECURITY_LIMITS = {
+export const SECURITY_LIMITS = {
   MAX_HOURLY_RATE: 1000, // Maximum $1000/hour to prevent malicious rates
   MAX_HOURS_PER_BILLING: 24, // Maximum 24 hours between billings
   MIN_HOURLY_RATE: 0.0001, // Minimum rate (effectively free tier)
@@ -32,18 +32,18 @@ const SECURITY_LIMITS = {
 };
 
 // UUID validation regex (RFC 4122)
-const UUID_REGEX =
+export const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Whitelist of valid table names to prevent SQL injection
-const VALID_TABLE_NAMES = [
+export const VALID_TABLE_NAMES = [
   "active_kubernetes",
   "active_database",
   "active_objectspace",
   "active_spectrum",
 ];
 
-async function billSingleService(tableName, svc) {
+export async function billSingleService(tableName, svc) {
   // Validate table name to prevent SQL injection
   if (!VALID_TABLE_NAMES.includes(tableName)) {
     console.error(`❌ SECURITY: Invalid table name attempted: ${tableName}`);
@@ -255,7 +255,7 @@ async function billSingleService(tableName, svc) {
   );
 }
 
-async function processServiceTable(tableName) {
+export async function processServiceTable(tableName) {
   try {
     console.log(
       `💾 Fetching active services from billing schema table ${tableName}...`

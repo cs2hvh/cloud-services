@@ -5,7 +5,7 @@ import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { v1DatabaseServiceError } from "@/lib/api/v1-database-helpers";
 import { DatabaseService } from "@/lib/services/database-service";
 import { redactClusterSecrets } from "@/lib/services/database/helpers";
-import { Projects } from "@/lib/supabase/queries/projects";
+import { ProjectService } from "@/lib/services/project-service";
 import { createDatabaseSchema, validateEngineVersion } from "@/lib/validation/database";
 
 export const GET = withV1Auth("databases:list", async (_req, auth) => {
@@ -52,17 +52,25 @@ export const POST = withV1Auth("databases:create", async (req, auth) => {
     );
   }
 
-  const project = await Projects.get_by_id(validation.data.project_id);
-  if (!project) {
+  const ownership = await ProjectService.ensureProjectOwnedByUser({
+    projectId: validation.data.project_id,
+    userId: auth.userId,
+  });
+
+  if (!ownership.success && ownership.errorCode === "NOT_FOUND") {
     return v1Error("NOT_FOUND", 404, "Project not found");
   }
 
-  if (project.owner !== auth.userId) {
+  if (!ownership.success && ownership.errorCode === "FORBIDDEN") {
     return v1Error(
       "FORBIDDEN",
       403,
       "You do not have permission to create a database cluster in this project"
     );
+  }
+
+  if (!ownership.success) {
+    return v1Error("INTERNAL_ERROR", 500, ownership.error || "Failed to validate project ownership");
   }
 
   const result = await DatabaseService.createCluster(

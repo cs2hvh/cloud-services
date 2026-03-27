@@ -61,9 +61,9 @@ const FALLBACK_CATEGORIES: KubernetesCategory[] = [
       "Free cluster monitoring",
     ],
     plans: [
-      { nodes: 1, vcpu: 2, ram: "4 GB", storage: "50 GB", price: 20 },
-      { nodes: 2, vcpu: 2, ram: "4 GB", storage: "50 GB", price: 38 },
-      { nodes: 3, vcpu: 2, ram: "8 GB", storage: "80 GB", price: 72 },
+      { nodes: 1, vcpu: 2, ram: "4 GB", storage: "80 GB", price: 20 },
+      { nodes: 2, vcpu: 2, ram: "4 GB", storage: "80 GB", price: 40 },
+      { nodes: 3, vcpu: 2, ram: "2 GB", storage: "60 GB", price: 15 },
       { nodes: 3, vcpu: 4, ram: "16 GB", storage: "160 GB", price: 144 },
     ],
   },
@@ -123,11 +123,46 @@ const FALLBACK_CATEGORIES: KubernetesCategory[] = [
       "Spot GPU nodes for training",
     ],
     plans: [
-      { nodes: 1, vcpu: 8, ram: "32 GB", storage: "200 GB", gpu: "1× A100 40GB", price: 350 },
-      { nodes: 2, vcpu: 8, ram: "32 GB", storage: "200 GB", gpu: "1× A100 40GB", price: 680 },
-      { nodes: 3, vcpu: 16, ram: "64 GB", storage: "400 GB", gpu: "1× A100 80GB", price: 1500 },
-      { nodes: 4, vcpu: 16, ram: "64 GB", storage: "400 GB", gpu: "1× H100 80GB", price: 2800 },
-      { nodes: 8, vcpu: 32, ram: "128 GB", storage: "800 GB", gpu: "2× H100 80GB", price: 8400 },
+      {
+        nodes: 1,
+        vcpu: 8,
+        ram: "32 GB",
+        storage: "200 GB",
+        gpu: "1× A100 40GB",
+        price: 350,
+      },
+      {
+        nodes: 2,
+        vcpu: 8,
+        ram: "32 GB",
+        storage: "200 GB",
+        gpu: "1× A100 40GB",
+        price: 680,
+      },
+      {
+        nodes: 3,
+        vcpu: 16,
+        ram: "64 GB",
+        storage: "400 GB",
+        gpu: "1× A100 80GB",
+        price: 1500,
+      },
+      {
+        nodes: 4,
+        vcpu: 16,
+        ram: "64 GB",
+        storage: "400 GB",
+        gpu: "1× H100 80GB",
+        price: 2800,
+      },
+      {
+        nodes: 8,
+        vcpu: 32,
+        ram: "128 GB",
+        storage: "800 GB",
+        gpu: "2× H100 80GB",
+        price: 8400,
+      },
     ],
   },
 ];
@@ -136,7 +171,9 @@ interface KubernetesPricingSectionProps {
   categories?: KubernetesCategory[];
 }
 
-export default function KubernetesPricingSection({ categories = FALLBACK_CATEGORIES }: KubernetesPricingSectionProps) {
+export default function KubernetesPricingSection({
+  categories = FALLBACK_CATEGORIES,
+}: KubernetesPricingSectionProps) {
   const [activeKey, setActiveKey] = useState("dev");
   const active = categories.find((c) => c.key === activeKey)!;
   const isGPU = active.key === "gpu";
@@ -171,7 +208,9 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
             <span className="text-[#0095FF]">Simple Pricing</span>
           </h2>
           <p className="mt-4 mx-auto max-w-2xl text-sm lg:text-base leading-relaxed text-white/40">
-            Fully managed clusters with a dedicated control plane, auto-scaling node pools, and built-in security — pay only for the worker nodes you use.
+            Fully managed clusters with a dedicated control plane, auto-scaling
+            node pools, and built-in security — pay only for the worker nodes
+            you use.
           </p>
         </div>
 
@@ -183,7 +222,9 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
                 <span className="text-[28px] lg:text-[36px] font-[600] text-[#0095FF] tabular-nums tracking-tight leading-none">
                   {s.value}
                 </span>
-                <span className="text-[13px] text-white/40 font-medium">{s.label}</span>
+                <span className="text-[13px] text-white/40 font-medium">
+                  {s.label}
+                </span>
               </div>
               {i < STATS.length - 1 && (
                 <div className="hidden sm:block h-8 w-px bg-white/[0.08]" />
@@ -195,11 +236,11 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
         {/* ═══════════ SECTION 2: CLUSTER PICKER ═══════════ */}
         <div className="mb-8 lg:mb-10">
           <h3 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight text-white">
-            Choose Your{" "}
-            <span className="text-[#0095FF]">Cluster</span>
+            Choose Your <span className="text-[#0095FF]">Cluster</span>
           </h3>
           <p className="mt-2 text-sm text-white/40 max-w-lg">
-            4 cluster tiers optimized for different workloads — from lightweight dev clusters to GPU-accelerated AI infrastructure.
+            4 cluster tiers optimized for different workloads — from lightweight
+            dev clusters to GPU-accelerated AI infrastructure.
           </p>
         </div>
 
@@ -222,11 +263,17 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
                 {isActive && (
                   <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#0095FF]" />
                 )}
-                <Icon className={`w-5 h-5 ${isActive ? "text-[#0095FF]" : "text-white/30"}`} />
-                <span className={`text-[13px] font-medium leading-tight ${isActive ? "text-white" : "text-white/60"}`}>
+                <Icon
+                  className={`w-5 h-5 ${isActive ? "text-[#0095FF]" : "text-white/30"}`}
+                />
+                <span
+                  className={`text-[13px] font-medium leading-tight ${isActive ? "text-white" : "text-white/60"}`}
+                >
                   {cat.label}
                 </span>
-                <span className={`text-[11px] ${isActive ? "text-[#0095FF]" : "text-white/25"}`}>
+                <span
+                  className={`text-[11px] ${isActive ? "text-[#0095FF]" : "text-white/25"}`}
+                >
                   {cat.tagline}
                 </span>
               </button>
@@ -262,10 +309,28 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
             <thead>
               <tr className="bg-white/[0.02]">
                 {(isGPU
-                  ? ["Nodes", "vCPU / Node", "RAM / Node", "Storage / Node", "GPU / Node", "Price", ""]
-                  : ["Nodes", "vCPU / Node", "RAM / Node", "Storage / Node", "Price", ""]
+                  ? [
+                      "Nodes",
+                      "vCPU / Node",
+                      "RAM / Node",
+                      "Storage / Node",
+                      "GPU / Node",
+                      "Price",
+                      "",
+                    ]
+                  : [
+                      "Nodes",
+                      "vCPU / Node",
+                      "RAM / Node",
+                      "Storage / Node",
+                      "Price",
+                      "",
+                    ]
                 ).map((h) => (
-                  <th key={h} className="px-6 py-4 text-left text-[11px] font-medium text-white/25 uppercase tracking-[0.12em] border-b border-white/[0.06]">
+                  <th
+                    key={h}
+                    className="px-6 py-4 text-left text-[11px] font-medium text-white/25 uppercase tracking-[0.12em] border-b border-white/[0.06]"
+                  >
                     {h}
                   </th>
                 ))}
@@ -280,18 +345,34 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
                   } ${i < active.plans.length - 1 ? "border-b border-white/[0.04]" : ""}`}
                 >
                   <td className="px-6 py-5">
-                    <span className="text-[15px] font-[500] text-white tabular-nums">{plan.nodes}</span>
-                    <span className="text-[12px] text-white/25 ml-1.5">{plan.nodes === 1 ? "node" : "nodes"}</span>
+                    <span className="text-[15px] font-[500] text-white tabular-nums">
+                      {plan.nodes}
+                    </span>
+                    <span className="text-[12px] text-white/25 ml-1.5">
+                      {plan.nodes === 1 ? "node" : "nodes"}
+                    </span>
                   </td>
-                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.vcpu} vCPU</td>
-                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.ram}</td>
-                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.storage}</td>
+                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">
+                    {plan.vcpu} vCPU
+                  </td>
+                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">
+                    {plan.ram}
+                  </td>
+                  <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">
+                    {plan.storage}
+                  </td>
                   {isGPU && (
-                    <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">{plan.gpu}</td>
+                    <td className="px-6 py-5 text-[15px] text-white/55 tabular-nums">
+                      {plan.gpu}
+                    </td>
                   )}
                   <td className="px-6 py-5">
-                    <span className="text-[20px] font-[600] text-white tabular-nums">${plan.price}</span>
-                    <span className="text-[12px] text-white/25 ml-0.5">/mo</span>
+                    <span className="text-[20px] font-[600] text-white tabular-nums">
+                      ${plan.price}
+                    </span>
+                    <span className="text-[12px] text-white/25 ml-0.5">
+                      /mo
+                    </span>
                   </td>
                   <td className="px-6 py-5 text-right">
                     <a
@@ -324,7 +405,9 @@ export default function KubernetesPricingSection({ categories = FALLBACK_CATEGOR
               className="flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.015] px-4 py-3"
             >
               <item.icon className="w-3.5 h-3.5 text-[#0095FF]/70 shrink-0" />
-              <span className="text-[12px] font-medium text-white/45">{item.label}</span>
+              <span className="text-[12px] font-medium text-white/45">
+                {item.label}
+              </span>
             </div>
           ))}
         </div>

@@ -16,6 +16,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SslStatusBadge, type SslStatus } from '@/components/ui/ssl-status-badge';
 
 import type { CustomDomain } from './types';
 import { looksInternal } from './utils';
@@ -27,11 +28,13 @@ interface DomainCardProps {
   activatingId: string | null;
   removingId: string | null;
   copiedField: string | null;
+  checkingSslId: string | null;
   onVerify: (id: string) => void;
   onActivate: (id: string) => void;
   onSetPrimary: (id: string) => void;
   onRemoveConfirm: (id: string) => void;
   onCopy: (text: string, field: string) => void;
+  onCheckSsl: (id: string) => void;
 }
 
 function getStatusBadge(domain: CustomDomain) {
@@ -98,9 +101,9 @@ function DnsStatusPanel({ domain }: { domain: CustomDomain }) {
   );
 }
 
-function getNextAction(domain: CustomDomain) {
-  const dnsReady = domain.dns_ready !== false;
 
+
+function getNextAction(domain: CustomDomain) {
   if (domain.status === 'pending') {
     return {
       title: 'Verify ownership',
@@ -109,20 +112,32 @@ function getNextAction(domain: CustomDomain) {
     };
   }
 
-  if (domain.status === 'verified' && !dnsReady) {
+  if (domain.status === 'verified') {
     return {
-      title: 'Update your DNS',
+      title: 'Activate domain',
       description:
-        'Point this domain to our servers (A or CNAME record), then activate to go live.',
-      action: null,
+        domain.dns_ready === false
+          ? 'You can activate now. If DNS is still propagating, secure connection will finish once DNS is ready.'
+          : 'Secure connection setup will start automatically once activated.',
+      action: 'activate' as const,
     };
   }
 
-  if (domain.status === 'verified' && dnsReady) {
+  if (domain.status === 'active' && domain.ssl_status === 'issuing') {
     return {
-      title: 'Activate domain',
-      description: 'Your SSL certificate will be provisioned automatically once activated.',
-      action: 'activate' as const,
+      title: 'Secure connection in progress…',
+      description:
+        'Secure connection setup is in progress. If this takes longer than a few minutes, use Re-Activate to retry.',
+      action: 're-activate' as const,
+    };
+  }
+
+  if (domain.status === 'active' && domain.ssl_status === 'failed') {
+    return {
+      title: 'Secure connection failed',
+      description:
+        'Secure setup could not be completed. Re-activate the domain after checking DNS, or contact support.',
+      action: 're-activate' as const,
     };
   }
 
@@ -153,11 +168,13 @@ export function DomainCard({
   activatingId,
   removingId,
   copiedField,
+  checkingSslId,
   onVerify,
   onActivate,
   onSetPrimary,
   onRemoveConfirm,
   onCopy,
+  onCheckSsl,
 }: DomainCardProps) {
   const nextAction = getNextAction(domain);
 
@@ -203,6 +220,16 @@ export function DomainCard({
       </div>
 
       <DnsStatusPanel domain={domain} />
+      {domain.status === 'active' && (
+        <SslStatusBadge
+          sslStatus={domain.ssl_status as SslStatus}
+          id={domain.id}
+          onCheck={onCheckSsl}
+          checkingId={checkingSslId}
+          variant="card"
+          dnsMessage={domain.dns_ready === false ? domain.dns_message : undefined}
+        />
+      )}
 
       {/* Next action */}
       {nextAction && (
@@ -234,8 +261,7 @@ export function DomainCard({
                 onClick={() => onActivate(domain.id)}
                 disabled={
                   activatingId === domain.id ||
-                  appStatus !== 'running' ||
-                  domain.dns_ready === false
+                  appStatus !== 'running'
                 }
                 className="bg-green-600 text-white hover:bg-green-700 rounded-md px-4 py-1.5"
               >
@@ -257,6 +283,22 @@ export function DomainCard({
               >
                 <Star className="mr-1 h-3.5 w-3.5" />
                 Set Primary
+              </Button>
+            )}
+
+            {nextAction.action === 're-activate' && (
+              <Button
+                size="sm"
+                onClick={() => onActivate(domain.id)}
+                disabled={activatingId === domain.id || appStatus !== 'running'}
+                className="bg-orange-600 text-white hover:bg-orange-700 rounded-md px-4 py-1.5"
+              >
+                {activatingId === domain.id ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                )}
+                Re-Activate
               </Button>
             )}
           </div>

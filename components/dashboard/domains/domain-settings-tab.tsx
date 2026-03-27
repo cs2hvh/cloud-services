@@ -6,8 +6,7 @@ import { Loader2, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+
 import type { RegistrarSettings } from './domain-detail-types';
 import { looksInternal } from './domain-detail-types';
 
@@ -15,24 +14,16 @@ interface DomainSettingsTabProps {
   registrarLoading: boolean;
   registrarError: string | null;
   registrarSettings: RegistrarSettings | null;
-  nameserversDraft: string;
   savingAutorenew: boolean;
-  savingNameservers: boolean;
-  onNameserversDraftChange: (value: string) => void;
   onToggleAutorenew: () => void;
-  onSaveNameservers: () => void;
 }
 
 export function DomainSettingsTab({
   registrarLoading,
   registrarError,
   registrarSettings,
-  nameserversDraft,
   savingAutorenew,
-  savingNameservers,
-  onNameserversDraftChange,
   onToggleAutorenew,
-  onSaveNameservers,
 }: DomainSettingsTabProps) {
   return (
     <Card className="border-white/10 bg-white/[0.03]">
@@ -90,31 +81,7 @@ export function DomainSettingsTab({
               </Button>
             </div>
 
-            {/* Nameservers */}
-            <div className="space-y-2 rounded-md border border-white/10 p-3">
-              <Label className="text-xs text-white/70">Nameservers (one per line)</Label>
-              <Textarea
-                value={nameserversDraft}
-                onChange={(e) => onNameserversDraftChange(e.target.value)}
-                rows={4}
-                className="bg-black/30 border-white/10 text-white"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs text-white/50 max-w-sm">
-                  Changing nameservers will redirect all DNS traffic for this domain. This affects
-                  every app and subdomain using it.
-                </p>
-                <Button
-                  size="sm"
-                  className="bg-white text-black hover:bg-white/90"
-                  disabled={savingNameservers}
-                  onClick={onSaveNameservers}
-                >
-                  {savingNameservers && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
-                  Save Nameservers
-                </Button>
-              </div>
-            </div>
+
           </div>
         ) : (
           <div className="rounded-lg border border-white/10 bg-black/20 p-4">

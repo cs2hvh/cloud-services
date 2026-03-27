@@ -30,6 +30,12 @@ const getPromocodeRedemptions = (
   return value.filter(isPromocodeRedemptionEntry);
 };
 
+const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction") => {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`${operation} amount must be a positive number`);
+  }
+};
+
 export const Billing = {
   get_balance: async (userId: string): Promise<number> => {
     const supabase = await createServiceClient();
@@ -101,6 +107,7 @@ export const Billing = {
     promo_credits?: number;
     topup_credits?: number;
   }> => {
+    ensurePositiveAmount(amount, "Top-up");
     const supabase = await createServiceClient();
     const { data: existing } = await supabase
       .schema("billing")
@@ -167,6 +174,7 @@ export const Billing = {
   },
 
   deduct: async (userId: string, amount: number): Promise<number> => {
+    ensurePositiveAmount(amount, "Deduction");
     const supabase = await createServiceClient();
 
     // Atomic deduction — prevents race conditions and overdraft
@@ -174,7 +182,8 @@ export const Billing = {
       p_user_id: userId,
       p_amount: amount,
     });
-    console.log(data, "deduct result", error?.message, "deduct error")
+    if (error) console.warn("[Billing] deduct RPC error:", error.message);
+    else console.log("[Billing] deduct result:", data);
 
     if (error) {
       // Fallback to non-atomic if RPC not available yet
@@ -387,7 +396,7 @@ export const Billing = {
       .from(table)
       .select("user_id, service_id, hourly_rate, last_billed_at")
       .eq("service_id", params.serviceId)
-      //.eq("user_id", params.userId)
+      .eq("user_id", params.userId)
       .maybeSingle();
 
     if (getErr) {
@@ -409,8 +418,8 @@ export const Billing = {
         .schema("billing")
         .from(table)
         .delete()
-        .eq("service_id", params.serviceId);
-      //.eq("user_id", row?.user_id);
+        .eq("service_id", params.serviceId)
+        .eq("user_id", params.userId);
       return { charged: 0, newBalance: null };
     }
 
@@ -452,8 +461,8 @@ export const Billing = {
       .schema("billing")
       .from(table)
       .delete()
-      .eq("service_id", params.serviceId);
-    //.eq("user_id", params.userId);
+      .eq("service_id", params.serviceId)
+      .eq("user_id", params.userId);
     if (delErr) {
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,
@@ -605,5 +614,30 @@ export const Billing = {
       .range(offset, offset + limit - 1);
 
     return { transactions: data ?? [], total: count ?? 0 };
+  },
+
+  /**
+   * Stop billing for a Kubernetes cluster and charge for remaining time
+   */
+  remove_active_kubernetes: async (serviceId: string): Promise<void> => {
+    // We need userId to properly close the service, but we can look it up from the active record
+    const supabase = await createServiceClient();
+    const { data: active } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .select("user_id")
+      .eq("service_id", serviceId)
+      .maybeSingle();
+
+    if (!active) {
+      console.warn(`[Billing.remove_active_kubernetes] No active record found for ${serviceId}`);
+      return;
+    }
+
+    await Billing.close_active_service("kubernetes", {
+      userId: active.user_id,
+      serviceId,
+      failOnInsufficient: false,
+    });
   },
 };
