@@ -121,39 +121,40 @@ function CategoryRow({
 
   return (
     <div className="rounded-lg border border-white/10 overflow-hidden">
-      <button
-        type="button"
-        onClick={onToggleOpen}
-        className="w-full flex items-center justify-between px-3 py-2 bg-black/20 hover:bg-black/30 transition-colors"
-      >
-        <div className="flex items-center gap-2">
-          <Icon className="w-3.5 h-3.5 text-white/50" />
+      {/* Header row: two sibling buttons — avoids nested <button> hydration error */}
+      <div className="flex items-center bg-black/20 hover:bg-black/30 transition-colors">
+        {/* Left: toggle open/close */}
+        <button
+          type="button"
+          onClick={onToggleOpen}
+          className="flex flex-1 items-center gap-2 px-3 py-2 text-left"
+        >
+          <Icon className="w-3.5 h-3.5 text-white/50 shrink-0" />
           <span className="text-xs font-medium text-white/80">{category.label}</span>
           {selectedCount > 0 && (
             <Badge className="bg-cyan-500/20 text-cyan-200 border-cyan-500/30 text-[9px] px-1 py-0">
               {selectedCount}
             </Badge>
           )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleAll(category); }}
-            className={`text-[10px] flex items-center gap-0.5 transition-colors ${
-              allSelected ? 'text-cyan-300 hover:text-white' : 'text-white/40 hover:text-cyan-200'
-            }`}
-          >
-            <CheckCheck className="w-3 h-3" />
-            {allSelected ? 'Deselect all' : 'Select all'}
-          </button>
           {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-white/40" />
+            <ChevronUp className="w-3.5 h-3.5 text-white/40 ml-auto" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-white/40" />
+            <ChevronDown className="w-3.5 h-3.5 text-white/40 ml-auto" />
           )}
-        </div>
-      </button>
+        </button>
+
+        {/* Right: select/deselect all */}
+        <button
+          type="button"
+          onClick={() => onToggleAll(category)}
+          className={`shrink-0 flex items-center gap-0.5 pr-3 text-[10px] transition-colors ${
+            allSelected ? 'text-cyan-300 hover:text-white' : 'text-white/40 hover:text-cyan-200'
+          }`}
+        >
+          <CheckCheck className="w-3 h-3" />
+          {allSelected ? 'Deselect all' : 'Select all'}
+        </button>
+      </div>
 
       {open && (
         <div className="flex flex-wrap gap-1.5 p-2.5 bg-black/10">
