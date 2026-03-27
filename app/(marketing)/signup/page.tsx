@@ -1,22 +1,12 @@
 import SignUpMultiStep from "@/components/auth/signup";
 import { getUser } from "@/lib/supabase/auth";
 import { redirect } from "next/navigation";
+import { getSafeRedirectPath } from "@/lib/utils/safe-redirect";
 
 type SearchParams = {
   next?: string | string[];
   redirectTo?: string | string[];
 };
-
-function getSafeRedirectPath(searchParams: SearchParams): string {
-  const next = Array.isArray(searchParams.next)
-    ? searchParams.next[0]
-    : searchParams.next;
-  const redirectTo = Array.isArray(searchParams.redirectTo)
-    ? searchParams.redirectTo[0]
-    : searchParams.redirectTo;
-  const raw = next || redirectTo || "/";
-  return raw.startsWith("/") && !raw.startsWith("//") ? raw : "/";
-}
 
 export default async function SignUpPage({
   searchParams,

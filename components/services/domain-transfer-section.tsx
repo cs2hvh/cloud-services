@@ -101,11 +101,18 @@ export default function DomainTransferSection() {
       });
 
       const marketplaceUrl = `/dashboard/domains/marketplace?domain=${encodeURIComponent(result.domainName)}`;
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!data.session) {
+          router.push(`/signin?next=${encodeURIComponent(marketplaceUrl)}`);
+        } else {
+          router.push(marketplaceUrl);
+        }
+      } catch {
+        // Fall back to sign-in so the user can still reach the marketplace after auth
+        toast.error("Could not verify your session. Please sign in.");
         router.push(`/signin?next=${encodeURIComponent(marketplaceUrl)}`);
-      } else {
-        router.push(marketplaceUrl);
       }
     },
     [router, supabase]
@@ -153,7 +160,7 @@ export default function DomainTransferSection() {
                     if (v.trim() === "") {
                       setHasSearched(false);
                       setResults([]);
-                      try { saveSearchQuery(""); } catch { /* noop */ }
+                      saveSearchQuery("");
                     }
                   }}
                   onKeyDown={(e) => {
@@ -176,7 +183,7 @@ export default function DomainTransferSection() {
                         setQuery("");
                         setHasSearched(false);
                         setResults([]);
-                        try { saveSearchQuery(""); } catch { /* noop */ }
+                        saveSearchQuery("");
                       }}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-white/10 text-white/80 hover:bg-white/20"
                     >

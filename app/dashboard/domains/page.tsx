@@ -60,7 +60,8 @@ function needsAttention(item: DomainInventoryItem): boolean {
     return true;
   }
 
-  return item.connections.some((c) => c.status === 'failed');
+  // Include 'pending' so stuck/hung connections still surface in the Needs Attention tab
+  return item.connections.some((c) => c.status === 'failed' || c.status === 'pending');
 }
 
 function isExpiringSoon(expiresAt: string | null, days: number): boolean {
