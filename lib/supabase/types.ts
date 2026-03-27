@@ -131,6 +131,7 @@ export type PlatformApp = {
   id: string;
   name: string;
   slug: string;
+  deployment_url?: string | null;
   repository_url: string;
   repository_name: string;
   repository_id: string;

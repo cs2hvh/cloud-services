@@ -1,12 +1,23 @@
 import { SignInForm } from "@/components/auth/signin";
 import { getUser } from "@/lib/supabase/auth";
 import { redirect } from "next/navigation";
+import { getSafeRedirectPath } from "@/lib/utils/safe-redirect";
 
-export default async function SignInPage() {
+type SearchParams = {
+  next?: string | string[];
+  redirectTo?: string | string[];
+};
+
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const user = await getUser();
 
   if (user) {
-    redirect("/");
+    redirect(getSafeRedirectPath(params));
   }
 
   return (

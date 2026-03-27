@@ -8,6 +8,12 @@ import {
   AppUpdateResponseSchema,
   UpdateAppRequestSchema,
 } from '@/lib/openapi/schemas/apps';
+import {
+  EnvVarDeleteResponseSchema,
+  EnvVarsListResponseSchema,
+  EnvVarsReplaceRequestSchema,
+  EnvVarsReplaceResponseSchema,
+} from '@/lib/openapi/schemas/env-vars';
 import { ErrorResponseSchema, ValidationErrorResponseSchema } from '@/lib/openapi/schemas/common';
 
 export function registerAppPaths(registry: OpenAPIRegistry) {
@@ -388,6 +394,144 @@ registry.registerPath({
           }
         },
       },
+    },
+  },
+});
+
+// ── Environment Variables ────────────────────────────────────
+
+// GET /api/v1/apps/{id}/env-vars - List env vars
+registry.registerPath({
+  method: 'get',
+  path: '/api/v1/apps/{id}/env-vars',
+  tags: ['Platform Apps'],
+  summary: 'List environment variables',
+  description: 'Returns all environment variables for the specified app.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83', description: 'App UUID' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Environment variables list',
+      content: { 'application/json': { schema: EnvVarsListResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } },
+    },
+    403: {
+      description: 'Forbidden - not the app owner',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this app' } } },
+    },
+    404: {
+      description: 'App not found',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'App not found' } } },
+    },
+    429: {
+      description: 'Too many requests',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } },
+    },
+    500: {
+      description: 'Internal server error',
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+    },
+  },
+});
+
+// PUT /api/v1/apps/{id}/env-vars - Replace all env vars
+registry.registerPath({
+  method: 'put',
+  path: '/api/v1/apps/{id}/env-vars',
+  tags: ['Platform Apps'],
+  summary: 'Replace environment variables',
+  description: 'Replaces all environment variables for the app. If the app is running, changes are applied live via Kubernetes secret update and optional pod restart.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83', description: 'App UUID' }),
+    }),
+    body: {
+      description: 'Full set of environment variables',
+      content: { 'application/json': { schema: EnvVarsReplaceRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: 'Environment variables replaced',
+      content: { 'application/json': { schema: EnvVarsReplaceResponseSchema } },
+    },
+    400: {
+      description: 'Validation error',
+      content: { 'application/json': { schema: ValidationErrorResponseSchema } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } },
+    },
+    403: {
+      description: 'Forbidden',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this app' } } },
+    },
+    404: {
+      description: 'App not found',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'App not found' } } },
+    },
+    429: {
+      description: 'Too many requests',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } },
+    },
+    500: {
+      description: 'Failed to update environment variables',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UPDATE_FAILED', message: 'Failed to update environment variables' } } },
+    },
+  },
+});
+
+// DELETE /api/v1/apps/{id}/env-vars/{key} - Delete single env var
+registry.registerPath({
+  method: 'delete',
+  path: '/api/v1/apps/{id}/env-vars/{key}',
+  tags: ['Platform Apps'],
+  summary: 'Delete environment variable',
+  description: 'Deletes a single environment variable by key. If the app is running, changes are applied live.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ example: '8bdf284c-d3df-40f0-9565-b6e26f588c83', description: 'App UUID' }),
+      key: z.string().openapi({ example: 'OLD_SECRET', description: 'Environment variable key to delete' }),
+    }),
+  },
+  responses: {
+    200: {
+      description: 'Environment variable deleted',
+      content: { 'application/json': { schema: EnvVarDeleteResponseSchema } },
+    },
+    400: {
+      description: 'Invalid key format',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'INVALID_KEY', message: 'Invalid environment variable key format', details: { field: 'key' } } } },
+    },
+    401: {
+      description: 'Unauthorized',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'UNAUTHORIZED', message: 'Missing or invalid API key' } } },
+    },
+    403: {
+      description: 'Forbidden',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this app' } } },
+    },
+    404: {
+      description: 'App or env var key not found',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'NOT_FOUND', message: 'Environment variable key not found' } } },
+    },
+    429: {
+      description: 'Too many requests',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'RATE_LIMIT_EXCEEDED', message: 'Too many requests. Please try again later.', details: { retry_after: 58 } } } },
+    },
+    500: {
+      description: 'Failed to delete environment variable',
+      content: { 'application/json': { schema: ErrorResponseSchema, example: { error: 'DELETE_FAILED', message: 'Failed to delete environment variable' } } },
     },
   },
 });

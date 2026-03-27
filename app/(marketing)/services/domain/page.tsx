@@ -9,15 +9,6 @@ import DomainArcCtaSection from "@/components/services/domain-arc-cta-section";
 const DomainHome = () => {
   return (
     <main className="bg-[#0E0F0F]">
-      {/* <ServiceHeroSection
-        badge="Domains & DNS"
-        title="Domain Services"
-        description="Search, register, and transfer domains with instant setup, secure DNS controls, and unified management for teams and businesses."
-        primaryAction={{ label: "Search a Domain", href: "/signup" }}
-        secondaryAction={{ label: "View Documentation", href: "/docs" }}
-        backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
-        illustration={{ src: "/images/hero/server-stack.png", alt: "Domain services illustration" }}
-      /> */}
       <DomainTransferSection />
       <DomainChoiceSection />
       <DomainPricingSection />

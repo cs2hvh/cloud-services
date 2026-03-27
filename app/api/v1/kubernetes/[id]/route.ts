@@ -5,7 +5,7 @@ import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
 import { updateKubernetesClusterSchema } from "@/lib/validation/kubernetes";
-// import { redactClusterSecrets } from "@/lib/services/kubernetes/helpers";
+import { serializeClusterForV1 } from "@/lib/services/kubernetes/helpers";
 
 export const GET = withV1Auth("kubernetes:read", async (req, auth, { params }) => {
   const { id: clusterId } = await params;
@@ -34,7 +34,7 @@ export const GET = withV1Auth("kubernetes:read", async (req, auth, { params }) =
   }
 
   return v1Ok({
-    data: result.data,
+    data: serializeClusterForV1(result.data as Record<string, unknown>),
   });
 });
 
@@ -80,7 +80,7 @@ export const PATCH = withV1Auth("kubernetes:update", async (req, auth, { params 
   }
 
   return v1Ok({
-    data: result.data,
+    data: serializeClusterForV1(result.data as Record<string, unknown>),
   });
 });
 
@@ -116,7 +116,6 @@ export const DELETE = withV1Auth("kubernetes:delete", async (req, auth, { params
   return v1Ok({
     data: {
       id: clusterId,
-      cluster_id: result.clusterId,
       deleted: true,
     },
   });

@@ -16,7 +16,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { otp_schema, signup_schema } from "@/types/zod/auth";
 import {
@@ -49,6 +49,13 @@ export default function SignUpMultiStep({
   const [isLoading, setIsLoading] = React.useState(false);
   const [pendingEmail, setPendingEmail] = React.useState<string>("");
   const router = useRouter();
+  const search = useSearchParams();
+
+  const nextPath = React.useMemo(() => {
+    const raw = search.get("next") || "";
+    // Reject protocol-relative URLs (//evil.com) to prevent open redirect
+    return raw.startsWith("/") && !raw.startsWith("//") ? raw : "";
+  }, [search]);
 
   const entryForm = useForm<EntryFormData>({
     resolver: zodResolver(entry_schema),
@@ -93,7 +100,7 @@ export default function SignUpMultiStep({
 
       if (response.status === 200) {
         toast.success(response.data.message);
-        router.push("/signin");
+        router.push(nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin");
       }
     } finally {
       setIsLoading(false);
@@ -109,7 +116,7 @@ export default function SignUpMultiStep({
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
     try {
-      const response = await api.post("/auth/signin/github", { type });
+      const response = await api.post("/auth/signin/github", { type, next: nextPath || undefined });
       if (response.data?.url) {
         window.location.href = response.data.url;
       }
@@ -370,7 +377,7 @@ export default function SignUpMultiStep({
 
       <p className="mt-4 text-center text-sm text-white">
         {step === 0 ? "Do you already have an account?" : "Already have an account?"}{" "}
-        <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff]">
+        <Link href={nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin"} className="text-[#00a2ff] hover:text-[#53beff]">
           Log In
         </Link>
       </p>

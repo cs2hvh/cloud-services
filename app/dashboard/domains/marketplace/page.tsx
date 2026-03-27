@@ -1,13 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { ArrowRight, CheckCircle2, Search, ShoppingCart } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Info, Search, ShoppingCart } from 'lucide-react';
 
 import { DomainMarketplaceTab } from '@/components/dashboard/apps/domain-marketplace';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { consumePendingDomain, type PendingDomainIntent } from '@/lib/domain-intent';
 
 const steps = [
   {
@@ -28,6 +31,26 @@ const steps = [
 ] as const;
 
 export default function DomainMarketplacePage() {
+  const searchParams = useSearchParams();
+  const [initialQuery, setInitialQuery] = useState('');
+  const [pendingIntent, setPendingIntent] = useState<PendingDomainIntent | null>(null);
+
+  // Consume localStorage intent exactly once on mount (not on every searchParams change)
+  useEffect(() => {
+    const pending = consumePendingDomain();
+    if (pending) setPendingIntent(pending);
+  }, []);
+
+  // Sync initialQuery from ?domain= URL param whenever it changes
+  useEffect(() => {
+    const domainParam = searchParams.get('domain');
+    if (domainParam) {
+      setInitialQuery(domainParam);
+    } else if (pendingIntent) {
+      setInitialQuery(pendingIntent.domain);
+    }
+  }, [searchParams, pendingIntent]);
+
   return (
     <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
       <motion.div
@@ -67,6 +90,30 @@ export default function DomainMarketplacePage() {
         </div>
       </motion.div>
 
+      {pendingIntent && (
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.06, duration: 0.25 }}
+          className="mb-4"
+        >
+          <div className="flex items-start gap-3 rounded-lg border border-blue-500/25 bg-blue-500/10 p-4">
+            <Info className="h-4 w-4 mt-0.5 text-blue-300 shrink-0" />
+            <div className="text-sm text-blue-100">
+              <p className="font-medium">
+                You were looking to purchase <span className="text-white font-semibold">{pendingIntent.domain}</span>
+              </p>
+              <p className="mt-1 text-blue-200/70 text-xs">
+                Search results are shown below. Domain availability may have changed — please verify before purchasing.
+                {pendingIntent.price !== null && (
+                  <span> Last seen price: <span className="text-white/80">{pendingIntent.currency === 'USD' ? '$' : pendingIntent.currency + ' '}{pendingIntent.price}</span></span>
+                )}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -97,6 +144,7 @@ export default function DomainMarketplacePage() {
         <DomainMarketplaceTab
           modeLabel="Search, purchase, and track domain requests across your account."
           showAttachActions={false}
+          initialQuery={initialQuery}
         />
       </motion.div>
     </div>

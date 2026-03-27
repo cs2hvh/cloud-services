@@ -1,21 +1,22 @@
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
-import { v1ExtractId, v1TransformValidationError, v1VerifyOwnership } from "@/lib/api/v1-helpers";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { v1ExtractId, v1TransformValidationError } from "@/lib/api/v1-helpers";
 import { analyzeEnvLifecycle, ReplaceEnvVarsRequestSchema, type EnvVar } from "@/lib/env/lifecycle";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
+import { PlatformAppEnvService } from "@/lib/services/platform-app-env-service";
 
 async function getOwnedApp(appId: string, userId: string) {
-  const existing = await Platform_Apps.get(appId);
-  if (!existing.success || !existing.data) {
-    return { app: null, error: v1Error("NOT_FOUND", 404, "App not found") };
+  const result = await PlatformAppEnvService.getOwnedApp(appId, userId);
+  if (!result.success) {
+    if (result.errorCode === "NOT_FOUND") {
+      return { app: null, error: v1Error("NOT_FOUND", 404, "App not found") };
+    }
+    if (result.errorCode === "FORBIDDEN") {
+      return { app: null, error: v1Error("FORBIDDEN", 403, "Access denied") };
+    }
+    return { app: null, error: v1Error("INTERNAL_ERROR", 500, result.error || "Failed to fetch app") };
   }
 
-  const ownershipError = v1VerifyOwnership(existing.data.user_id, userId, "app", "modify");
-  if (ownershipError) {
-    return { app: null, error: ownershipError };
-  }
-
-  return { app: existing.data, error: null };
+  return { app: result.data, error: null };
 }
 
 export const GET = withV1Auth("apps:env:list", async (_req, auth, context) => {
@@ -29,16 +30,13 @@ export const GET = withV1Auth("apps:env:list", async (_req, auth, context) => {
     return ownership.error;
   }
 
-  const envVars = await Platform_Apps.get_env_vars(id);
+  const envVars = await PlatformAppEnvService.getEnvVars(id);
 
   return v1Ok({
     data: {
       app_id: id,
       framework: ownership.app!.framework ?? null,
-      env_vars: envVars.map((env: { key: string; value: string }) => ({
-        key: env.key,
-        value: env.value,
-      })),
+      env_vars: envVars,
     },
     meta: {
       total: envVars.length,
@@ -70,9 +68,9 @@ export const PUT = withV1Auth("apps:env:replace", async (req, auth, context) => 
   }
 
   const envVars = validation.data.env_vars as EnvVar[];
-  const setResult = await Platform_Apps.set_env_vars(id, envVars);
+  const setResult = await PlatformAppEnvService.setEnvVars(id, envVars);
   if (!setResult.success) {
-    return v1Error("UPDATE_FAILED", 500, "Failed to update environment variables");
+    return v1Error("UPDATE_FAILED", 500, setResult.error || "Failed to update environment variables");
   }
 
   const app = ownership.app!;

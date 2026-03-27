@@ -311,12 +311,8 @@ export default function DomainDetailPage() {
                 registrarLoading={registrarData.registrarLoading}
                 registrarError={registrarData.registrarError}
                 registrarSettings={registrarData.registrarSettings}
-                nameserversDraft={registrarData.nameserversDraft}
                 savingAutorenew={registrarData.savingAutorenew}
-                savingNameservers={registrarData.savingNameservers}
-                onNameserversDraftChange={registrarData.onNameserversDraftChange}
                 onToggleAutorenew={registrarData.onToggleAutorenew}
-                onSaveNameservers={registrarData.onSaveNameservers}
               />
             </TabsContent>
           </Tabs>

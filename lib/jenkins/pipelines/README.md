@@ -10,12 +10,12 @@ This directory contains modular Jenkins pipeline templates for different project
 Use this to test Jenkins connectivity and repository access without any deployment.
 
 **Features:**
-- ✅ Clones repository
-- ✅ Lists files
-- ✅ Detects project type (Node.js, Python, etc.)
-- ✅ Shows basic validation
-- ❌ No Docker build
-- ❌ No Kubernetes deployment
+- [x] Clones repository
+- [x] Lists files
+- [x] Detects project type (Node.js, Python, etc.)
+- [x] Shows basic validation
+- [ ] No Docker build
+- [ ] No Kubernetes deployment
 
 **When to Use:**
 - Testing Jenkins setup
@@ -44,13 +44,13 @@ const xml = createSimpleTestPipeline(
 Full production pipeline with Docker build and Kubernetes deployment.
 
 **Features:**
-- ✅ Clones repository
-- ✅ Validates Dockerfile exists (fails if missing)
-- ✅ Builds Docker image
-- ✅ Pushes to Docker Hub
-- ✅ Deploys to Kubernetes with health checks
-- ✅ Creates Ingress with SSL (cert-manager)
-- ✅ 2 replicas for high availability
+- [x] Clones repository
+- [x] Validates Dockerfile exists (fails if missing)
+- [x] Builds Docker image
+- [x] Pushes to Docker Hub
+- [x] Deploys to Kubernetes with health checks
+- [x] Creates Ingress with SSL (cert-manager)
+- [x] 2 replicas for high availability
 
 **When to Use:**
 - Production Next.js apps
@@ -84,13 +84,13 @@ const xml = createNodeJsPipeline(
 Simplified pipeline that auto-generates Dockerfile for Express apps.
 
 **Features:**
-- ✅ Clones repository
-- ✅ Auto-creates Dockerfile if missing
-- ✅ Builds Docker image
-- ✅ Pushes to Docker Hub
-- ✅ Deploys to Kubernetes with health checks
-- ✅ Creates Ingress with SSL
-- ✅ 1 replica (can scale later)
+- [x] Clones repository
+- [x] Auto-creates Dockerfile if missing
+- [x] Builds Docker image
+- [x] Pushes to Docker Hub
+- [x] Deploys to Kubernetes with health checks
+- [x] Creates Ingress with SSL
+- [x] 1 replica (can scale later)
 
 **When to Use:**
 - Simple Express.js APIs
@@ -135,13 +135,13 @@ const xml = createExpressPipeline(
 Pipeline for Python web applications with auto-Dockerfile.
 
 **Features:**
-- ✅ Clones repository
-- ✅ Auto-creates Dockerfile if missing
-- ✅ Builds Docker image
-- ✅ Pushes to Docker Hub
-- ✅ Deploys to Kubernetes with health checks
-- ✅ Creates Ingress with SSL
-- ✅ 1 replica
+- [x] Clones repository
+- [x] Auto-creates Dockerfile if missing
+- [x] Builds Docker image
+- [x] Pushes to Docker Hub
+- [x] Deploys to Kubernetes with health checks
+- [x] Creates Ingress with SSL
+- [x] 1 replica
 
 **When to Use:**
 - Django applications
@@ -209,11 +209,11 @@ All apps are exposed via NGINX Ingress Controller on ports 80/443 using ClusterI
 | Framework Input | Pipeline Used | Auto-Dockerfile? |
 |----------------|---------------|------------------|
 | `simple-test`, `test` | Simple Test | N/A |
-| `express`, `express.js` | Express | ✅ Yes |
-| `python`, `django`, `flask`, `fastapi` | Python | ✅ Yes |
-| `java`, `maven`, `spring`, `spring-boot` | Java/Maven | ✅ Yes |
-| `nodejs`, `nextjs`, `react`, `vue` | Node.js | ❌ No (must exist) |
-| Default (any other) | Node.js | ❌ No (must exist) |
+| `express`, `express.js` | Express | Yes Yes |
+| `python`, `django`, `flask`, `fastapi` | Python | Yes Yes |
+| `java`, `maven`, `spring`, `spring-boot` | Java/Maven | Yes Yes |
+| `nodejs`, `nextjs`, `react`, `vue` | Node.js | No No (must exist) |
+| Default (any other) | Node.js | No No (must exist) |
 
 ## Common Requirements
 
@@ -276,14 +276,14 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 
 | Stage | Simple Test | Express | Node.js | Python |
 |-------|------------|---------|---------|--------|
-| Clone Repository | ✅ | ✅ | ✅ | ✅ |
-| Check Files | ✅ | - | - | - |
-| Detect Project | ✅ | - | - | - |
-| Prepare Dockerfile | - | ✅ Auto | ❌ Validate | ✅ Auto |
-| Build Docker | - | ✅ | ✅ | ✅ |
-| Push to Docker Hub | - | ✅ | ✅ | ✅ |
-| Deploy to K8s | - | ✅ | ✅ | ✅ |
-| Verify Deployment | - | ✅ | ✅ | ✅ |
+| Clone Repository | Yes | Yes | Yes | Yes |
+| Check Files | Yes | - | - | - |
+| Detect Project | Yes | - | - | - |
+| Prepare Dockerfile | - | Yes Auto | No Validate | Yes Auto |
+| Build Docker | - | Yes | Yes | Yes |
+| Push to Docker Hub | - | Yes | Yes | Yes |
+| Deploy to K8s | - | Yes | Yes | Yes |
+| Verify Deployment | - | Yes | Yes | Yes |
 
 ## Testing Strategy
 

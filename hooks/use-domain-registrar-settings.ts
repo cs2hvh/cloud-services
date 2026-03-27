@@ -9,16 +9,12 @@ interface DomainSettingsState {
   registrarLoading: boolean;
   registrarError: string | null;
   registrarSettings: RegistrarSettings | null;
-  nameserversDraft: string;
   savingAutorenew: boolean;
-  savingNameservers: boolean;
 }
 
 interface SettingsHandlers {
   loadRegistrarSettings: () => Promise<void>;
-  onNameserversDraftChange: (value: string) => void;
   onToggleAutorenew: () => Promise<void>;
-  onSaveNameservers: () => Promise<void>;
 }
 
 export function useDomainRegistrarSettings(
@@ -29,9 +25,7 @@ export function useDomainRegistrarSettings(
   const [registrarLoading, setRegistrarLoading] = useState(false);
   const [registrarError, setRegistrarError] = useState<string | null>(null);
   const [registrarSettings, setRegistrarSettings] = useState<RegistrarSettings | null>(null);
-  const [nameserversDraft, setNameserversDraft] = useState('');
   const [savingAutorenew, setSavingAutorenew] = useState(false);
-  const [savingNameservers, setSavingNameservers] = useState(false);
   const requestIdRef = useRef(0);
 
   const loadRegistrarSettings = useCallback(async () => {
@@ -43,7 +37,6 @@ export function useDomainRegistrarSettings(
       setRegistrarLoading(false);
       setRegistrarError(null);
       setRegistrarSettings(null);
-      setNameserversDraft('');
       return;
     }
 
@@ -57,7 +50,6 @@ export function useDomainRegistrarSettings(
 
       if (res.status === 404 && data?.error === 'NOT_FOUND') {
         setRegistrarSettings(null);
-        setNameserversDraft('');
         return;
       }
 
@@ -67,7 +59,6 @@ export function useDomainRegistrarSettings(
 
       const settings = (data?.data || null) as RegistrarSettings | null;
       setRegistrarSettings(settings);
-      setNameserversDraft((settings?.nameservers || []).join('\n'));
 
       const normalizedExpiresAt =
         typeof settings?.expires_at === 'string' && settings.expires_at.trim()
@@ -84,7 +75,6 @@ export function useDomainRegistrarSettings(
       console.error('Failed to load registrar settings:', err);
       setRegistrarError(err instanceof Error ? err.message : 'Unable to load domain settings. Refresh to try again.');
       setRegistrarSettings(null);
-      setNameserversDraft('');
     } finally {
       if (!isStale()) {
         setRegistrarLoading(false);
@@ -123,57 +113,12 @@ export function useDomainRegistrarSettings(
     }
   }, [domainName, registrarSettings, onRefresh]);
 
-  const onSaveNameservers = useCallback(async () => {
-    if (!registrarSettings?.managed) {
-      return;
-    }
-
-    const nameservers = nameserversDraft
-      .split('\n')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (nameservers.length < 2) {
-      toast.error('Please add at least two nameservers.');
-      return;
-    }
-
-    setSavingNameservers(true);
-    try {
-      const res = await fetch('/api/domains/registrar', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          nameservers,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
-        return;
-      }
-
-      toast.success('Nameservers updated. Changes may take up to 48 hours to fully propagate.');
-      await onRefresh();
-    } catch (err) {
-      console.error('Failed to update nameservers:', err);
-      toast.error('Failed to update nameservers. Please try again.');
-    } finally {
-      setSavingNameservers(false);
-    }
-  }, [domainName, nameserversDraft, registrarSettings, onRefresh]);
-
   return {
     registrarLoading,
     registrarError,
     registrarSettings,
-    nameserversDraft,
     savingAutorenew,
-    savingNameservers,
     loadRegistrarSettings,
-    onNameserversDraftChange: setNameserversDraft,
     onToggleAutorenew,
-    onSaveNameservers,
   };
 }

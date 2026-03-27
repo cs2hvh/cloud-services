@@ -113,9 +113,9 @@ const PRODUCTS: SolutionItem[] = [
   },
   {
     label: "Domains",
-    desc: "discover , register, manage your domain",
+    desc: "Register, transfer, and manage domains",
     href: "/services/domain",
-    tags: ["Smart search engine","Always monitoring","real-time-support","Instant Setup"],
+    tags: ["Registrar", "Marketplace", "Transfer", "DNS"],
   },
 ];
 
