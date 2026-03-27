@@ -111,6 +111,12 @@ const PRODUCTS: SolutionItem[] = [
     href: "/services/app-deployment",
     tags: ["Docker", "CI/CD", "Auto Deploy", "GitHub", "GitLab"],
   },
+  {
+    label: "Domains",
+    desc: "discover , register, manage your domain",
+    href: "/services/domain",
+    tags: ["Smart search engine","Always monitoring","real-time-support","Instant Setup"],
+  },
 ];
 
 export function NavbarClient({ initialUser }: NavbarClientProps) {

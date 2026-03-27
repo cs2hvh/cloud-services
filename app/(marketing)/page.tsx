@@ -20,7 +20,7 @@ export default function Home() {
       <Hero />
 
       {/* Feature section */}
-      <FeatureSection />
+      {/* <FeatureSection /> */}
 
       {/* Figma Services Section */}
       <ServicesSection />

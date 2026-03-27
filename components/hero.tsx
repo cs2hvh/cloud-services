@@ -134,26 +134,41 @@ export function Hero() {
       </div>
 
       <div className="relative z-10 w-full pb-6 sm:pb-8 md:pb-10">
+        {/* Whats New */}
         <Container>
           <motion.div
-            className="w-full max-w-[460px] overflow-hidden rounded-[28px] border border-white/15 shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
+            className="w-full max-w-[620px] overflow-hidden rounded-[30px] border border-white/15 shadow-[0_16px_30px_rgba(0,0,0,0.35)]"
             variants={fadeUp}
             initial="hidden"
             animate="visible"
             custom={5}
           >
-            <div className="flex min-h-[120px] sm:min-h-[132px]">
-              <div className="flex w-[42%] items-center justify-center gap-3 bg-[#11161f] px-3 sm:px-4">
-                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
-                <div className="h-16 w-8 rounded-md border border-white/20 bg-gradient-to-b from-[#3d4657] to-[#151a22]" />
+            <div className="flex min-h-[138px] sm:min-h-[152px]">
+              <div className="flex w-[44%] items-center justify-center bg-[#1B1B1B] px-3 py-3 sm:px-4">
+                <Image
+                  src="/images/main-page/hero-sec-1-whats-new.svg"
+                  alt="New GPU infrastructure"
+                  width={320}
+                  height={170}
+                  className="h-auto w-full max-w-[250px] object-contain"
+                />
               </div>
-              <div className="flex flex-1 flex-col justify-center bg-[#F2CF5A] px-4 py-4 sm:px-6">
-                <h3 className="text-base sm:text-lg font-semibold tracking-tight text-[#111111]">
-                  What&apos;s New
-                </h3>
-                <p className="mt-1 text-xs sm:text-sm text-[#2A2A2A]">
-                  Latest launches, updates, and product improvements.
+              <div className="flex flex-1 flex-col justify-center bg-[#FBD55A] px-4 py-4 sm:px-5">
+                <p className="text-[22px] leading-none font-semibold tracking-tight text-[#0095FF]">
+                  📣 What&apos;s New
                 </p>
+                <h3 className="mt-1 text-xl sm:text-[30px] font-bold leading-[1.05] text-[#000000]">
+                  Next-Gen GPU Instances are Here
+                </h3>
+                <p className="mt-1 text-sm sm:text-base leading-snug text-[#000000]">
+                  Experience a massive leap in compute density. Our new
+                  instances are engineered for:
+                </p>
+                <ul className="mt-1 list-disc pl-5 text-[13px] sm:text-sm leading-snug text-[#000000]">
+                  <li>LLM Training &amp; Inference</li>
+                  <li>Real-time 8K Rendering</li>
+                  <li>Complex Scientific Simulations</li>
+                </ul>
               </div>
             </div>
           </motion.div>
