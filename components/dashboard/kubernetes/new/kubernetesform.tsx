@@ -67,42 +67,6 @@ interface PageProps {
   }>;
 }
 
-interface EncryptedData {
-  encrypted: string;
-  iv: string;
-  tag: string;
-  salt: string;
-}
-
-type NodeInfo = {
-  host: string;
-  role: "control-plane" | "worker"; // Add more roles if needed
-  hostname: string;
-  cpu: number;
-  memory_mb: number;
-  storage: number;
-  private_ip?: string;
-  droplet_id?: number;
-};
-
-type SendPayload = {
-  provider: string;
-  cluster: {
-    name: string;
-    location: string;
-    pod_cidr: string;
-    k8s_minor: string;
-  };
-  auth: {
-    method: string;
-    user: string;
-    password: EncryptedData;
-  };
-  nodes: NodeInfo[];
-  ips: string[];
-  planId?: string;
-};
-
 type K8sCpuType = "shared" | "dedicated" | "gpu";
 
 const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
@@ -354,148 +318,37 @@ const NewClusterPage = ({
         return;
       }
 
-      const nodeNames = makeNodeKeys(state.selectedNode, state.selectedName);
-      console.log(nodeNames, ".....nodeNames.....262");
-
       const selectedProduct = products.find(
         (product) => product.name === state.selectedPlan
       );
-
-      //generate vms from digitalOcean apis
-      const payload = {
-        names: nodeNames,
-        region: state.selectedLocation, //form-dependent
-        size: selectedProduct?.slug, //form-dependent
-        image: "ubuntu-25-04-x64",
-        backups: false,
-        ipv6: true,
-        monitoring: true,
-        tags: ["env:prod", "web", "ssh-allowed"],
-        // Pass ownerId to allow server-side credit checks
-        ownerId: targetUserId,
-        // Optional: allow overriding initial upfront cost; default handled server-side
-        initial_cost: 5.0,
-      };
-
-      console.log(payload, "...............298");
-
-      const createDroplet = await api.post(
-        "/services/kubernetes/manageip/createdroplet",
-        payload
-      );
-      //console.log(createDroplet.data, "...........createDroplet.............");
-
-      const sendPayload: SendPayload = {
-        provider: "existing",
-        cluster: {
-          name: state.selectedName,
-          location: state.selectedLocation,
-          pod_cidr: "10.244.0.0/16",
-          k8s_minor: "1.31.1",
-        },
-        auth: {
-          method: "password",
-          user: "root",
-          password: createDroplet.data.vmPassword,
-        },
-        planId:selectedProduct?.id,
-        nodes: [],
-        // "cp-1": { "host": "172.104.206.68", "role": "control-plane", "hostname": "cp-1", "cpu": 2, "memory_mb": 512 }
-
-        ips: [],
-      };
-
-      //one more idea clicked my mind , instead check status , call get droplet and see status =active or not.
-
-      if (createDroplet.status === 202) {
-        let counter = 0;
-        while (counter != state.selectedNode + 1) {
-          const checkStatus = await api.post(
-            "/services/kubernetes/manageip/dropletstatus",
-            {
-              id: createDroplet.data.data.links.actions[counter].id,
-            }
-          );
-          if (checkStatus.status === 200) {
-            if (checkStatus.data.data.action.status === "completed") {
-              // https://api.digitalocean.com/v2/actions/2831633833
-              const vmData = await api.post(
-                `/services/kubernetes/manageip/readdroplet`,
-                { id: checkStatus.data.data.action.resource_id }
-              );
-              if (vmData.status === 200) {
-                const vmDetails: {
-                  public_ip: string;
-                  memory_mb: number;
-                  name: string;
-                  cpu: number;
-                  storage: number;
-                  private_ip?: string;
-                  droplet_id?: number;
-                } = {
-                  public_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "public"
-                  ).ip_address,
-                  private_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "private"
-                  ).ip_address,
-                  memory_mb: vmData.data.data.droplet.memory,
-                  name: vmData.data.data.droplet.name,
-                  cpu: vmData.data.data.droplet.vcpus,
-                  storage: vmData.data.data.droplet.disk,
-                  droplet_id: vmData.data.data.droplet.id,
-                };
-                sendPayload.ips.push(vmDetails.public_ip);
-                sendPayload.nodes.push({
-                  host: vmDetails.public_ip,
-                  role: counter === 0 ? "control-plane" : "worker",
-                  hostname: vmDetails.name,
-                  cpu: vmDetails.cpu,
-                  memory_mb: vmDetails.memory_mb,
-                  storage: vmDetails.storage,
-                  private_ip: vmDetails.private_ip,
-                  droplet_id: vmDetails.droplet_id,
-                });
-                counter++;
-              }
-            }
-          } else {
-            continue;
-          }
-        }
-      }
-      else if(createDroplet.status===402){
-        toast.error('Insufficient balance. Please top up your account to create a Kubernetes cluster.');
-        router.push('dashboard/nav/billing');
+      if (!selectedProduct || !selectedProduct.slug) {
+        toast.error("Please select a valid plan");
         return;
       }
 
-      console.log(sendPayload, "...........sendPayload.............");
-
-      await sleep(120000);
-
-      //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
-      const response4 = await api.post("/services/kubernetes/clusters", {
-        ...sendPayload,
+      const response = await api.post("/services/kubernetes/clusters/init", {
+        name: state.selectedName,
+        region: state.selectedLocation,
+        version: state.selectedVersion,
+        nodeCount: state.selectedNode,
+        size: selectedProduct.slug,
         ownerId: targetUserId,
         projectId: state.selectedProject,
-         role:role
+        planId: selectedProduct.id,
+        resources: {
+          cpu: selectedProduct.resources.cpu,
+          ram: selectedProduct.resources.ram,
+          storage: selectedProduct.resources.storage,
+        },
       });
-      if (response4.status == 200) {
-        // alert(
-        //   "your cluster is being created. please wait for some time......."
-        // );
-        //debugger
-        toast.success("Cluster request captured");
-        //navigate to status page.
-        // window.location.href=`/dashboard/${response.data.clusterId}/status`;
+
+      if (response.status === 200) {
+        toast.success("Cluster initialized.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
           router.push(
-            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
+            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response.data.clusterId)}`
           );
         }
       }
@@ -505,9 +358,6 @@ const NewClusterPage = ({
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
-       // toast.error(err.message)
-      } else {
-       // toast.error("Unknown error occurred");
       }
     } finally {
       setIsLoading(false);
@@ -552,23 +402,6 @@ const NewClusterPage = ({
         { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
         { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
       ];
-
-  function makeNodeKeys(workers: number, clusterName: string) {
-    const nodeNames = [];
-    for (let i = 0; i <= workers; i++) {
-      const uuid = crypto.randomUUID();
-      if (i === 0) {
-        nodeNames.push(`${clusterName}-${uuid}-cp-1`);
-      } else {
-        nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
-      }
-    }
-    return nodeNames;
-  }
-
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 
   const panelClassName = "glass-panel overflow-hidden";
   const wizardStartStep = role === "admin" ? 0 : 1;

@@ -16,9 +16,9 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
-import { AxiosError } from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getDatabaseErrorMessage } from "../error-messages";
 
 interface DatabaseUser {
   name: string;
@@ -70,16 +70,6 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     newPassword: string;
   }>({ show: false, username: "", newPassword: "" });
 
-  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-    if (error instanceof AxiosError) {
-      return error.response?.data?.error || defaultMessage;
-    }
-    if (error instanceof Error) {
-      return error.message;
-    }
-    return defaultMessage;
-  };
-
   const fetchUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
@@ -92,7 +82,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[fetchUsers] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to fetch users"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to fetch users."));
     } finally {
       setLoadingUsers(false);
     }
@@ -110,7 +100,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[fetchDatabases] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to fetch databases"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to fetch databases."));
     } finally {
       setLoadingDatabases(false);
     }
@@ -141,7 +131,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[handleCreateUser] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to create user"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to create user."));
     } finally {
       setCreatingUser(false);
     }
@@ -167,7 +157,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[handleDeleteUser] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to delete user"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to delete user."));
     } finally {
       setDeletingUser(false);
     }
@@ -191,7 +181,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[handleResetPassword] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to reset password"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to reset password."));
     }
   };
 
@@ -215,7 +205,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[handleCreateDatabase] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to create database"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to create database."));
     } finally {
       setCreatingDb(false);
     }
@@ -246,7 +236,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       }
     } catch (error) {
       console.error("[handleDeleteDatabase] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to delete database"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to delete database."));
     } finally {
       setDeletingDb(false);
     }

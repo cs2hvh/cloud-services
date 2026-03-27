@@ -76,6 +76,26 @@ function mapSupabaseError(error: { code?: string; message: string }): ServiceFai
 }
 
 export class ProjectService {
+  static async ensureProjectOwnedByUser(input: {
+    projectId: string;
+    userId: string;
+  }): Promise<ServiceResult<{ id: string }>> {
+    const project = await Projects.get_by_id(input.projectId);
+    if (!project) {
+      return { success: false, error: "Project not found", errorCode: "NOT_FOUND" };
+    }
+
+    if (project.owner !== input.userId) {
+      return {
+        success: false,
+        error: "You do not have permission to create resources in this project",
+        errorCode: "FORBIDDEN",
+      };
+    }
+
+    return { success: true, data: { id: project.id } };
+  }
+
   static async listProjects(userId: string): Promise<ServiceResult<ProjectApiModel[]>> {
     const supabase = await createServiceClient();
     const { data, error } = await supabase

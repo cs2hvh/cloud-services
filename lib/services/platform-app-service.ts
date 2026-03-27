@@ -8,12 +8,20 @@ import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries"
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
+import { AuditLogService } from "@/lib/audit";
 import { AppStatusService } from "./app-status";
 
 export interface DeleteAppOptions {
   appId: string;
   userId: string;
   isAdmin?: boolean;
+  audit_context?: {
+    ip_address?: string;
+    user_agent?: string;
+    request_id?: string;
+    user_email?: string;
+    user_role?: 'user' | 'admin';
+  };
 }
 
 export interface DeleteAppResult {
@@ -192,7 +200,7 @@ export class PlatformAppService {
    * @throws Error if deletion fails
    */
   static async deleteApp(options: DeleteAppOptions): Promise<DeleteAppResult> {
-    const { appId, userId, isAdmin = false } = options;
+    const { appId, userId, isAdmin = false, audit_context } = options;
 
     // Get app details before deletion for logging
     const appDetails = await Platform_Apps.get(appId);
@@ -234,7 +242,28 @@ export class PlatformAppService {
         }
       }
 
-      // 4. Create success notification
+      // 4. Audit log
+      if (audit_context) {
+        try {
+          await AuditLogService.create({
+            user_id: userId,
+            user_role: audit_context.user_role || (isAdmin ? 'admin' : 'user'),
+            user_email: audit_context.user_email,
+            action: 'delete',
+            service_type: 'platform_apps',
+            service_id: appId,
+            service_name: appName,
+            before_state: appDetails.success ? (appDetails.data as unknown as Record<string, unknown>) : undefined,
+            ip_address: audit_context.ip_address,
+            user_agent: audit_context.user_agent,
+            request_id: audit_context.request_id,
+          });
+        } catch (auditErr) {
+          console.warn('[PlatformAppService.deleteApp] Audit log failed:', auditErr);
+        }
+      }
+
+      // 5. Create success notification
       try {
         await NotificationService.create(
           createServiceNotification({

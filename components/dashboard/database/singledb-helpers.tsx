@@ -2,7 +2,7 @@ import React from "react";
 import { Copy, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { UUID } from "crypto";
-import { EncryptedData } from "@/lib/supabase/types";
+import { EncryptedData, Tables } from "@/lib/supabase/types";
 import { dbLocations } from "@/config/locations";
 
 // Helper Components
@@ -128,6 +128,38 @@ export const extractDisk = (size: string): string => {
     "db-s-8vcpu-32gb": "580 GB",
   };
   return diskMap[size] || "N/A";
+};
+
+const parseStorageFromSizeSlug = (size: string | null | undefined): number | null => {
+  if (!size) return null;
+
+  const matches = [...size.matchAll(/(\d+)gb/gi)];
+  if (matches.length >= 2) {
+    const value = Number(matches[matches.length - 1][1]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+
+  return null;
+};
+
+export const getStorageGiB = (params: {
+  storageSizeMib?: number | null;
+  size?: string | null;
+  products?: Tables<"products">[];
+}): number | null => {
+  const { storageSizeMib, size, products = [] } = params;
+
+  if (typeof storageSizeMib === "number" && storageSizeMib > 0) {
+    return Math.round(storageSizeMib / 1024);
+  }
+
+  const fromProduct = products.find((product) => product.slug === size || product.id === size);
+  const productStorage = Number(fromProduct?.resources?.storage);
+  if (Number.isFinite(productStorage) && productStorage > 0) {
+    return productStorage;
+  }
+
+  return parseStorageFromSizeSlug(size);
 };
 
 export const extractRegion = (region: string | undefined): string => {

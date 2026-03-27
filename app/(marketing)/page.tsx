@@ -124,8 +124,8 @@ export default function Home() {
         {/* Hero Section */}
         <Hero />
 
-        {/* Feature section */}
-        <FeatureSection />
+      {/* Feature section */}
+      {/* <FeatureSection /> */}
 
         {/* Figma Services Section */}
         <ServicesSection />

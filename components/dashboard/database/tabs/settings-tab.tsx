@@ -18,9 +18,11 @@ import {
 } from "lucide-react";
 import { Tables } from "@/lib/supabase/types";
 import { toast } from "sonner";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 import { useProjects } from "@/app/dashboard/provider";
 import { useRouter } from "next/navigation";
+import { getDatabaseErrorMessage } from "../error-messages";
+import { getStorageGiB } from "../singledb-helpers";
 
 interface SettingsTabProps {
   database: Tables<"database_clusters">;
@@ -47,13 +49,14 @@ const TIME_SLOTS = Array.from({ length: 24 }, (_, i) => {
 
 // Available regions for database migration
 const REGIONS = [
+  { slug: "ams2", name: "Amsterdam 2" },
   { slug: "ams3", name: "Amsterdam 3" },
   { slug: "blr1", name: "Bangalore 1" },
   { slug: "fra1", name: "Frankfurt 1" },
   { slug: "lon1", name: "London 1" },
   { slug: "nyc1", name: "New York 1" },
-  { slug: "nyc2", name: "New York 2" },
   { slug: "nyc3", name: "New York 3" },
+  { slug: "sfo1", name: "San Francisco 1" },
   { slug: "sfo2", name: "San Francisco 2" },
   { slug: "sfo3", name: "San Francisco 3" },
   { slug: "sgp1", name: "Singapore 1" },
@@ -66,7 +69,7 @@ const REGIONS = [
 export const SettingsTab = ({
   database,
   onDatabaseUpdate,
-  // products,
+  products,
 }: SettingsTabProps) => {
   const { projects } = useProjects();
   const [loading, setLoading] = useState<string | null>(null);
@@ -96,6 +99,40 @@ export const SettingsTab = ({
 
   // Storage Upsize State
   const [selectedStorageGiB, setSelectedStorageGiB] = useState<number>(0);
+  const isMongoDbCluster = database.engine === "mongodb";
+
+  const normalizeMaintenanceDay = (value: string | undefined | null): string => {
+    const normalized = (value || "").toLowerCase();
+    return DAYS.includes(normalized) ? normalized : "monday";
+  };
+
+  const normalizeMaintenanceHour = (value: string | undefined | null): string => {
+    const match = (value || "").match(/^(\d{1,2}):(\d{2})/);
+    if (!match) return "00:00";
+    return `${match[1].padStart(2, "0")}:${match[2]}`;
+  };
+
+  const normalizedCurrentMaintenance = currentMaintenanceWindow
+    ? {
+        day: normalizeMaintenanceDay(currentMaintenanceWindow.day),
+        hour: normalizeMaintenanceHour(currentMaintenanceWindow.hour),
+      }
+    : null;
+
+  const hasMaintenanceChanges =
+    maintenanceDay !== "" &&
+    maintenanceHour !== "" &&
+    (!!normalizedCurrentMaintenance
+      ? maintenanceDay !== normalizedCurrentMaintenance.day ||
+        maintenanceHour !== normalizedCurrentMaintenance.hour
+      : true);
+
+  const currentStorageGiB =
+    getStorageGiB({
+      storageSizeMib: database.storage_size_mib,
+      size: database.size,
+      products,
+    }) || 0;
 
   // Storage limits based on engine and RAM
   const STORAGE_LIMITS = {
@@ -130,7 +167,6 @@ export const SettingsTab = ({
   const getStorageOptions = (): number[] => {
     const engine = database.engine || "pg";
     const ram = extractRAM(database.size || "");
-    const currentStorageGiB = Math.floor((database.storage_size_mib || 0) / 1024);
 
     // Get limits for the engine and RAM combination
     type StorageLimitKey = keyof typeof STORAGE_LIMITS;
@@ -186,16 +222,6 @@ export const SettingsTab = ({
   //   return storageTiers.filter((t) => t.diskGB > current.diskGB);
   // };
 
-  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-  if (error instanceof AxiosError) {
-    return error.response?.data?.error || defaultMessage;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return defaultMessage;
-};
-
   // Fetch current maintenance window on mount
   useEffect(() => {
     const fetchMaintenanceWindow = async () => {
@@ -205,17 +231,23 @@ export const SettingsTab = ({
         );
         if (response.data.maintenance_window) {
           const window = response.data.maintenance_window;
-          setCurrentMaintenanceWindow(window);
-          setMaintenanceDay(window.day);
-          setMaintenanceHour(window.hour);
+          const normalizedWindow = {
+            day: normalizeMaintenanceDay(window.day),
+            hour: normalizeMaintenanceHour(window.hour),
+          };
+          setCurrentMaintenanceWindow(normalizedWindow);
+          setMaintenanceDay(normalizedWindow.day);
+          setMaintenanceHour(normalizedWindow.hour);
         } else {
           // Set defaults if no maintenance window exists
+          setCurrentMaintenanceWindow({ day: "monday", hour: "00:00" });
           setMaintenanceDay("monday");
           setMaintenanceHour("00:00");
         }
       } catch (error) {
         console.error("Error fetching maintenance window:", error);
         // Set defaults on error
+        setCurrentMaintenanceWindow({ day: "monday", hour: "00:00" });
         setMaintenanceDay("monday");
         setMaintenanceHour("00:00");
       }
@@ -294,7 +326,7 @@ export const SettingsTab = ({
       }
     } catch (error) {
       console.error("Error updating project:", error);
-      toast.error(getErrorMessage(error, "Failed to update project"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to update project."));
     } finally {
       setLoading(null);
     }
@@ -302,6 +334,16 @@ export const SettingsTab = ({
 
   // Configure Maintenance Window
   const handleUpdateMaintenanceWindow = async () => {
+    if (!maintenanceDay || !maintenanceHour) {
+      toast.error("Please select both maintenance day and time.");
+      return;
+    }
+
+    if (!hasMaintenanceChanges) {
+      toast.info("No maintenance changes to save.");
+      return;
+    }
+
     setLoading("maintenance");
     try {
       const response = await axios.put("/api/services/database/maintenance", {
@@ -312,11 +354,17 @@ export const SettingsTab = ({
 
       if (response.status === 200) {
         toast.success("Maintenance window configured successfully");
+        setCurrentMaintenanceWindow({ day: maintenanceDay, hour: maintenanceHour });
         onDatabaseUpdate?.();
       }
     } catch (error) {
       console.error("Error updating maintenance window:", error);
-      toast.error(getErrorMessage(error, "Failed to update maintenance window"));
+      toast.error(
+        getDatabaseErrorMessage(
+          error,
+          "Failed to update maintenance window."
+        )
+      );
     } finally {
       setLoading(null);
     }
@@ -324,6 +372,11 @@ export const SettingsTab = ({
 
   // Update Database Region
   const handleUpdateRegion = async () => {
+    if (isMongoDbCluster) {
+      toast.info("Region migration is currently unavailable for MongoDB clusters.");
+      return;
+    }
+
     if (!selectedRegion) {
       toast.error("Please select a region");
       return;
@@ -353,7 +406,7 @@ export const SettingsTab = ({
     } catch (error) {
       console.error("Error migrating database:", error);
       toast.error(
-       getErrorMessage(error, "Failed to migrate database region")
+       getDatabaseErrorMessage(error, "Failed to migrate database region.")
       );
     } finally {
       setLoading(null);
@@ -362,12 +415,16 @@ export const SettingsTab = ({
 
   // Upsize Storage (Disk Only)
   const handleUpsizeStorage = async () => {
+    if (isMongoDbCluster) {
+      toast.info("Storage upsize is currently unavailable for MongoDB clusters.");
+      return;
+    }
+
     if (!selectedStorageGiB || selectedStorageGiB === 0) {
       toast.error("Please select a storage size");
       return;
     }
 
-    const currentStorageGiB = Math.floor((database.storage_size_mib || 0) / 1024);
     if (selectedStorageGiB <= currentStorageGiB) {
       toast.error("New storage must be greater than current storage");
       return;
@@ -387,7 +444,7 @@ export const SettingsTab = ({
       }
     } catch (error) {
       console.error("Error upsizing storage:", error);
-      toast.error(getErrorMessage(error, "Failed to upsize storage"));
+      toast.error(getDatabaseErrorMessage(error, "Failed to upsize storage."));
     } finally {
       setLoading(null);
     }
@@ -440,7 +497,9 @@ export const SettingsTab = ({
       }
     } catch (error) {
       console.error("Error deleting database:", error);
-      toast.error(getErrorMessage(error, "Failed to delete database cluster"));
+      toast.error(
+        getDatabaseErrorMessage(error, "Failed to delete database cluster.")
+      );
     } finally {
       setLoading(null);
       setShowDeleteConfirm(false);
@@ -615,7 +674,12 @@ export const SettingsTab = ({
               <div className="flex gap-3">
                 <button
                   onClick={handleUpdateMaintenanceWindow}
-                  disabled={loading === "maintenance"}
+                  disabled={
+                    loading === "maintenance" ||
+                    !maintenanceDay ||
+                    !maintenanceHour ||
+                    !hasMaintenanceChanges
+                  }
                   className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
                 >
                   {loading === "maintenance" ? (
@@ -644,6 +708,11 @@ export const SettingsTab = ({
                   Cancel
                 </button>
               </div>
+              {!hasMaintenanceChanges && maintenanceDay && maintenanceHour && (
+                <p className="text-xs text-slate-400">
+                  No maintenance changes detected.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -693,7 +762,7 @@ export const SettingsTab = ({
                   value={selectedRegion}
                   onChange={(e) => setSelectedRegion(e.target.value)}
                   className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500 max-h-48 overflow-y-auto"
-                  disabled={loading === "region" || isMigrating}
+                  disabled={loading === "region" || isMigrating || isMongoDbCluster}
                 >
                   <option value="" className="bg-slate-900">
                     Select a region
@@ -710,6 +779,14 @@ export const SettingsTab = ({
                   ))}
                 </select>
               </div>
+
+              {isMongoDbCluster && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                  <p className="text-xs text-slate-300">
+                    Region migration is currently unavailable for MongoDB clusters.
+                  </p>
+                </div>
+              )}
 
               {selectedRegion && selectedRegion !== database.region && !isMigrating && (
                 <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
@@ -734,7 +811,8 @@ export const SettingsTab = ({
                     loading === "region" ||
                     !selectedRegion ||
                     selectedRegion === database.region ||
-                    isMigrating
+                    isMigrating ||
+                    isMongoDbCluster
                   }
                   className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
                 >
@@ -752,7 +830,7 @@ export const SettingsTab = ({
                 </button>
                 <button
                   onClick={() => setSelectedRegion(database.region || "")}
-                  disabled={loading === "region" || isMigrating}
+                  disabled={loading === "region" || isMigrating || isMongoDbCluster}
                   className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
                 >
                   <X className="h-4 w-4" />
@@ -791,10 +869,10 @@ export const SettingsTab = ({
                   Current Storage
                 </p>
                 <p className="text-white font-medium text-lg">
-                  {Math.floor((database.storage_size_mib || 0) / 1024)} GiB
+                  {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}
                 </p>
                 <p className="text-slate-400 text-xs mt-1">
-                  {database.storage_size_mib || 0} MiB
+                  {database.storage_size_mib ? `${database.storage_size_mib} MiB` : "N/A"}
                 </p>
               </div>
             </div>
@@ -810,7 +888,7 @@ export const SettingsTab = ({
                 value={selectedStorageGiB}
                 onChange={(e) => setSelectedStorageGiB(Number(e.target.value))}
                 className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                disabled={loading === "upsize"}
+                disabled={loading === "upsize" || isMongoDbCluster}
               >
                 <option value={0} className="bg-slate-900">
                   Select storage size
@@ -823,6 +901,14 @@ export const SettingsTab = ({
               </select>
             </div>
 
+            {isMongoDbCluster && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+                <p className="text-xs text-slate-300">
+                  Storage upsize is currently unavailable for MongoDB clusters.
+                </p>
+              </div>
+            )}
+
             {/* Warning Notice */}
             {selectedStorageGiB > 0 && (
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
@@ -834,7 +920,7 @@ export const SettingsTab = ({
                     </p>
                     <p>
                       Storage can only be increased, not decreased. Increase of{" "}
-                      {selectedStorageGiB - Math.floor((database.storage_size_mib || 0) / 1024)} GiB will be applied.
+                      {selectedStorageGiB - currentStorageGiB} GiB will be applied.
                     </p>
                   </div>
                 </div>
@@ -847,9 +933,10 @@ export const SettingsTab = ({
                 onClick={handleUpsizeStorage}
                 disabled={
                   loading === "upsize" ||
+                  isMongoDbCluster ||
                   !selectedStorageGiB ||
                   selectedStorageGiB === 0 ||
-                  selectedStorageGiB <= Math.floor((database.storage_size_mib || 0) / 1024)
+                  selectedStorageGiB <= currentStorageGiB
                 }
                 className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
               >

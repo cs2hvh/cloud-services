@@ -50,8 +50,9 @@ export function SignInForm() {
   const supabase = React.useMemo(() => createClient(), []);
 
   const nextPath = React.useMemo(() => {
-    const raw = search.get("next") || "/dashboard";
-    return raw.startsWith("/") ? raw : "/dashboard";
+    const raw = search.get("next") || search.get("redirectTo") || "/dashboard";
+    // Reject protocol-relative URLs (//evil.com) to prevent open redirect
+    return raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
   }, [search]);
 
   const form = useForm<InputType>({
@@ -80,7 +81,7 @@ export function SignInForm() {
           await supabase.auth.setSession(data.session);
         }
         router.refresh();
-        router.push("/");
+        router.push(nextPath);
       }
     } finally {
       setIsLoading(false);
@@ -92,9 +93,9 @@ export function SignInForm() {
     try {
       let response;
       if (type === "github" || type === "google" || type === "bitbucket") {
-        response = await api.post("/auth/signin/github", { type });
+        response = await api.post("/auth/signin/github", { type, next: nextPath });
       } else if (type === "gitlab") {
-        response = await api.post("/auth/signin/gitlab", { type });
+        response = await api.post("/auth/signin/gitlab", { next: nextPath });
       }
 
       if (response?.data?.url) {
@@ -357,7 +358,7 @@ export function SignInForm() {
 
       <p className="mt-3 text-center text-sm text-white">
         New here! Create an account{" "}
-        <Link href="/signup" className="text-[#00a2ff] hover:text-[#53beff]">
+        <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff]">
           Sign Up
         </Link>
       </p>

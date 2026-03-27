@@ -16,8 +16,8 @@ const FOOTER_LINKS = [
     heading: "Resources",
     links: [
       { label: "Documentation", href: "/docs" },
-      { label: "Papers", href: "#" },
-      { label: "Press", href: "#" },
+     
+      
       { label: "Changelog", href: "#" },
     ],
   },
@@ -71,7 +71,7 @@ export function Footer() {
             </p>
 
             {/* Compliance badges */}
-            <div className="mt-6 flex flex-col gap-3">
+            {/* <div className="mt-6 flex flex-col gap-3">
               {COMPLIANCE_BADGES.map((badge) => (
                 <div
                   key={badge.abbr}
@@ -85,7 +85,7 @@ export function Footer() {
                   </span>
                 </div>
               ))}
-            </div>
+            </div> */}
           </div>
 
           {/* Right: link columns */}

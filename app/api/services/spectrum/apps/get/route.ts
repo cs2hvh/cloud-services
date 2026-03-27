@@ -14,8 +14,8 @@ export async function POST(req: NextRequest) {
 
   try {
      const rl = await limitByUser(auth.user!.id, {
-       prefix: "rl:bucket-create",
-       limit: 3,
+       prefix: "rl:spectrum-get",
+       limit: 30,
        windowMs: 60_000,
      });
      if (!rl.allowed) {

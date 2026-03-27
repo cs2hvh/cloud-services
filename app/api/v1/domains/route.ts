@@ -6,6 +6,7 @@ import {
 } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { serializeDomain, serializeDomainWithRouting } from "@/lib/domain-service/http/serializers";
 
 export const GET = withV1Auth("domains:list", async (req, auth) => {
   try {
@@ -35,7 +36,7 @@ export const GET = withV1Auth("domains:list", async (req, auth) => {
     });
 
     return v1Ok({
-      data: domains,
+      data: domains.map(serializeDomainWithRouting),
       meta: { total: domains.length },
     });
   } catch (error) {
@@ -70,7 +71,15 @@ export const POST = withV1Auth("domains:add", async (req, auth) => {
       idempotencyKey,
     });
 
-    return v1Ok({ data: result }, 201);
+    return v1Ok({
+      data: {
+        domain: serializeDomain(result.domain),
+        verification_required: result.verification_required,
+        managed_zone_detected: result.managed_zone_detected,
+        ownership_source: result.ownership_source,
+        verification_instructions: result.verification_instructions,
+      },
+    }, 201);
   } catch (error) {
     return toV1DomainErrorResponse(error);
   }

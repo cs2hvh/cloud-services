@@ -7,6 +7,7 @@ import {
 } from "@/lib/domain-service/contracts/schemas";
 import { toV1DomainErrorResponse } from "@/lib/domain-service/http/error-mapper";
 import { createDomainActor, resolveIdempotencyKey } from "@/lib/domain-service/http/request-context";
+import { serializeDomainPurchaseRequest } from "@/lib/domain-service/http/serializers";
 
 export const GET = withV1Auth("domains:market:purchase-requests:list", async (req, auth) => {
   try {
@@ -37,7 +38,7 @@ export const GET = withV1Auth("domains:market:purchase-requests:list", async (re
     });
 
     return v1Ok({
-      data: requests,
+      data: requests.map(serializeDomainPurchaseRequest),
       meta: { total: requests.length },
     });
   } catch (error) {
@@ -72,7 +73,7 @@ export const POST = withV1Auth("domains:market:purchase-requests:create", async 
       },
     });
 
-    return v1Ok({ data: request }, 201);
+    return v1Ok({ data: serializeDomainPurchaseRequest(request) }, 201);
   } catch (error) {
     return toV1DomainErrorResponse(error);
   }

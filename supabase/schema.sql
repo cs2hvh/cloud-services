@@ -137,6 +137,7 @@ create table clusters (
 
   control_plane text,
   workers jsonb default '[]'::jsonb,
+  create_droplet boolean default false,
 
   create_status boolean default false,
   connect_status boolean default false,
