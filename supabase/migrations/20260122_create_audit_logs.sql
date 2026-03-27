@@ -6,11 +6,9 @@
 
 -- Create audits schema
 CREATE SCHEMA IF NOT EXISTS audits;
-
 -- Grant usage on schema to authenticated users and service role
 GRANT USAGE ON SCHEMA audits TO authenticated, service_role;
 GRANT ALL ON SCHEMA audits TO postgres;
-
 -- Main audit log table (partitioned by date)
 CREATE TABLE audits.audit_logs (
   -- Primary Key
@@ -61,47 +59,34 @@ CREATE TABLE audits.audit_logs (
   PRIMARY KEY (id, created_date)
   
 ) PARTITION BY RANGE (created_date);
-
 -- ============================================
 -- MONTHLY PARTITIONS (2026)
 -- ============================================
 
 CREATE TABLE audits.audit_logs_2026_01 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-
 CREATE TABLE audits.audit_logs_2026_02 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-
 CREATE TABLE audits.audit_logs_2026_03 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
-
 CREATE TABLE audits.audit_logs_2026_04 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-04-01') TO ('2026-05-01');
-
 CREATE TABLE audits.audit_logs_2026_05 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-05-01') TO ('2026-06-01');
-
 CREATE TABLE audits.audit_logs_2026_06 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-06-01') TO ('2026-07-01');
-
 CREATE TABLE audits.audit_logs_2026_07 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-07-01') TO ('2026-08-01');
-
 CREATE TABLE audits.audit_logs_2026_08 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
-
 CREATE TABLE audits.audit_logs_2026_09 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
-
 CREATE TABLE audits.audit_logs_2026_10 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-10-01') TO ('2026-11-01');
-
 CREATE TABLE audits.audit_logs_2026_11 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-11-01') TO ('2026-12-01');
-
 CREATE TABLE audits.audit_logs_2026_12 PARTITION OF audits.audit_logs
   FOR VALUES FROM ('2026-12-01') TO ('2027-01-01');
-
 -- ============================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================
@@ -112,24 +97,19 @@ CREATE INDEX idx_audit_service_type ON audits.audit_logs(service_type);
 CREATE INDEX idx_audit_action ON audits.audit_logs(action);
 CREATE INDEX idx_audit_created_at ON audits.audit_logs(created_at DESC);
 CREATE INDEX idx_audit_service_id ON audits.audit_logs(service_id);
-
 -- Composite indexes for common admin queries
 CREATE INDEX idx_audit_admin_query 
   ON audits.audit_logs(service_type, action, created_at DESC);
-
 CREATE INDEX idx_audit_user_timeline 
   ON audits.audit_logs(user_id, created_at DESC);
-
 -- Full-text search on changes (optional but recommended)
 CREATE INDEX idx_audit_changes_gin ON audits.audit_logs USING GIN(changes);
 CREATE INDEX idx_audit_metadata_gin ON audits.audit_logs USING GIN(metadata);
-
 -- ============================================
 -- ROW LEVEL SECURITY
 -- ============================================
 
 ALTER TABLE audits.audit_logs ENABLE ROW LEVEL SECURITY;
-
 -- Admins can read all audit logs
 CREATE POLICY "Admins can read audit logs" ON audits.audit_logs
   FOR SELECT
@@ -140,13 +120,11 @@ CREATE POLICY "Admins can read audit logs" ON audits.audit_logs
       WHERE id = auth.uid() AND 'admin' = ANY(roles)
     )
   );
-
 -- Service role can insert (server-side only)
 CREATE POLICY "Service role can insert audit logs" ON audits.audit_logs
   FOR INSERT
   TO service_role
   WITH CHECK (true);
-
 -- NO UPDATE POLICY - prevents any updates
 -- NO DELETE POLICY - prevents any deletes
 
@@ -161,12 +139,10 @@ BEGIN
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
-
 CREATE TRIGGER audit_logs_immutable
   BEFORE UPDATE OR DELETE ON audits.audit_logs
   FOR EACH ROW
   EXECUTE FUNCTION audits.prevent_audit_modification();
-
 -- ============================================
 -- HELPER FUNCTION: Auto-create future partitions
 -- ============================================
@@ -191,7 +167,6 @@ BEGIN
   RETURN partition_name;
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================
 -- GRANT PERMISSIONS ON TABLES
 -- ============================================
@@ -200,18 +175,15 @@ $$ LANGUAGE plpgsql;
 GRANT SELECT ON audits.audit_logs TO authenticated;
 GRANT INSERT ON audits.audit_logs TO service_role;
 GRANT ALL ON audits.audit_logs TO postgres;
-
 -- Grant permissions on all tables in audits schema
 GRANT SELECT ON ALL TABLES IN SCHEMA audits TO authenticated;
 GRANT INSERT ON ALL TABLES IN SCHEMA audits TO service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA audits TO postgres;
-
 -- Grant default privileges for future tables
 ALTER DEFAULT PRIVILEGES IN SCHEMA audits
   GRANT SELECT ON TABLES TO authenticated;
 ALTER DEFAULT PRIVILEGES IN SCHEMA audits
   GRANT INSERT ON TABLES TO service_role;
-
 -- ============================================
 -- VERIFICATION
 -- ============================================

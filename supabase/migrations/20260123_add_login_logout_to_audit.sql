@@ -4,37 +4,36 @@
 -- Purpose: Add authentication tracking (login/logout) to existing audit_logs
 -- ============================================
 
--- Step 1: Drop existing CHECK constraints
-ALTER TABLE public.audit_logs 
-  DROP CONSTRAINT IF EXISTS audit_logs_action_check;
+DO $$
+DECLARE
+  target_table regclass;
+BEGIN
+  target_table := COALESCE(
+    to_regclass('public.audit_logs'),
+    to_regclass('audits.audit_logs')
+  );
 
-ALTER TABLE public.audit_logs 
-  DROP CONSTRAINT IF EXISTS audit_logs_service_type_check;
+  IF target_table IS NULL THEN
+    RAISE NOTICE 'No audit_logs table found in public/audits schema; skipping migration.';
+    RETURN;
+  END IF;
 
--- Step 2: Add new CHECK constraints with login/logout and auth
-ALTER TABLE public.audit_logs 
-  ADD CONSTRAINT audit_logs_action_check 
-  CHECK (action IN ('create', 'update', 'delete', 'login', 'logout'));
+  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS audit_logs_action_check', target_table);
+  EXECUTE format('ALTER TABLE %s DROP CONSTRAINT IF EXISTS audit_logs_service_type_check', target_table);
 
-ALTER TABLE public.audit_logs 
-  ADD CONSTRAINT audit_logs_service_type_check 
-  CHECK (service_type IN (
-    'kubernetes', 
-    'database', 
-    'network_ddos', 
-    'platform_apps', 
-    'object_storage',
-    'auth'
-  ));
+  EXECUTE format(
+    'ALTER TABLE %s ADD CONSTRAINT audit_logs_action_check CHECK (action IN (''create'', ''update'', ''delete'', ''login'', ''logout''))',
+    target_table
+  );
 
--- Step 3: Make service_type nullable for auth actions (if it's NOT NULL)
-ALTER TABLE public.audit_logs 
-  ALTER COLUMN service_type DROP NOT NULL;
+  EXECUTE format(
+    'ALTER TABLE %s ADD CONSTRAINT audit_logs_service_type_check CHECK (service_type IN (''kubernetes'', ''database'', ''network_ddos'', ''platform_apps'', ''object_storage'', ''auth''))',
+    target_table
+  );
 
--- Step 4: Make service_id nullable for auth actions (if it's NOT NULL)
-ALTER TABLE public.audit_logs 
-  ALTER COLUMN service_id DROP NOT NULL;
-
+  EXECUTE format('ALTER TABLE %s ALTER COLUMN service_type DROP NOT NULL', target_table);
+  EXECUTE format('ALTER TABLE %s ALTER COLUMN service_id DROP NOT NULL', target_table);
+END $$;
 -- ============================================
 -- VERIFICATION
 -- ============================================
