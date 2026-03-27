@@ -4,14 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { type } = await request.json();
+    const { type, next } = await request.json();
     const origin = request.headers.get("origin") || "http://localhost:3000";
-    console.log(origin, "..................9");
+    // Validate next to prevent open redirect
+    const safeNext = typeof next === "string" && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: type,
       options: {
-        redirectTo: `${origin}/api/auth/callback`,
+        redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(safeNext)}`,
         scopes: "repo user:email",
         queryParams: {
           access_type: "offline",

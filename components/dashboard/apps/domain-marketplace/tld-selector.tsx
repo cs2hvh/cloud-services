@@ -121,10 +121,12 @@ function CategoryRow({
 
   return (
     <div className="rounded-lg border border-white/10 overflow-hidden">
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={onToggleOpen}
-        className="w-full flex items-center justify-between px-3 py-2 bg-black/20 hover:bg-black/30 transition-colors"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggleOpen(); } }}
+        className="w-full flex items-center justify-between px-3 py-2 bg-black/20 hover:bg-black/30 transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <Icon className="w-3.5 h-3.5 text-white/50" />
@@ -153,7 +155,7 @@ function CategoryRow({
             <ChevronDown className="w-3.5 h-3.5 text-white/40" />
           )}
         </div>
-      </button>
+      </div>
 
       {open && (
         <div className="flex flex-wrap gap-1.5 p-2.5 bg-black/10">

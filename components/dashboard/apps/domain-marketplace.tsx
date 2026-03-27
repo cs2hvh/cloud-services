@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,8 @@ export interface DomainMarketplaceTabProps {
   showAttachActions?: boolean;
   modeLabel?: string;
   purchaseRequestAppIdFilter?: string;
+  /** Pre-fill the search input (e.g. from ?domain= query param or pending intent). */
+  initialQuery?: string;
 }
 
 export function DomainMarketplaceTab({
@@ -32,10 +35,14 @@ export function DomainMarketplaceTab({
   showAttachActions = true,
   modeLabel = 'Search and purchase domains',
   purchaseRequestAppIdFilter,
+  initialQuery,
 }: DomainMarketplaceTabProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [summary, setSummary] = useState<MarketplaceSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery || '');
   const [selectedTlds, setSelectedTlds] = useState<string[]>(['com', 'ai', 'io', 'app', 'dev', 'net', 'co']);
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
@@ -43,6 +50,11 @@ export function DomainMarketplaceTab({
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [tldSelectorOpen, setTldSelectorOpen] = useState(true);
+
+  // Sync query state when initialQuery prop changes (e.g. from parent useEffect)
+  useEffect(() => {
+    if (initialQuery) setQuery(initialQuery);
+  }, [initialQuery]);
 
   const attachOptions = useMemo(
     () =>
@@ -100,9 +112,26 @@ export function DomainMarketplaceTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseRequestAppIdFilter]);
 
+  // Auto-search when an initialQuery is provided and marketplace is ready.
+  // Track last auto-searched query to support URL query changes.
+  const lastAutoSearched = useRef<string | null>(null);
+  useEffect(() => {
+    const autoQuery = initialQuery?.trim();
+    if (
+      autoQuery &&
+      summary?.configured &&
+      query.trim() === autoQuery &&
+      lastAutoSearched.current !== autoQuery
+    ) {
+      lastAutoSearched.current = autoQuery;
+      void handleSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, summary, query]);
+
   // ── Handlers ───────────────────────────────────────────────────────────
 
-  const handleSearch = async () => {
+  const handleSearch = async ({ syncUrl = false }: { syncUrl?: boolean } = {}) => {
     const cleanQuery = query.trim();
     if (!cleanQuery) {
       toast.error('Enter a domain keyword or full domain');
@@ -116,6 +145,9 @@ export function DomainMarketplaceTab({
     setSearching(true);
     setResults([]);
     try {
+      // Keep auto-search and manual-search deduped for the same query.
+      lastAutoSearched.current = cleanQuery;
+
       const res = await fetch('/api/domains/market/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -128,6 +160,12 @@ export function DomainMarketplaceTab({
       }
       const items = (data?.data?.results || []) as SearchResultItem[];
       setResults(items);
+      if (syncUrl) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('domain', cleanQuery);
+        const nextUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+        router.replace(nextUrl, { scroll: false });
+      }
       if (items.length === 0) toast.info('No domain suggestions returned for this query');
     } catch {
       toast.error('Domain search failed');
@@ -190,13 +228,13 @@ export function DomainMarketplaceTab({
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearch(); } }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleSearch({ syncUrl: true }); } }}
               placeholder="Brand keyword or full domain (e.g. mybrand or mybrand.com)"
               className="bg-black/30 border-white/10"
             />
           </div>
           <Button
-            onClick={handleSearch}
+            onClick={() => void handleSearch({ syncUrl: true })}
             disabled={searching || summaryLoading || !summary?.configured || selectedTlds.length === 0}
           >
             {searching ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}

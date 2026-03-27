@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Loader2, Search, ShoppingCart } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Loader2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -55,11 +55,12 @@ function getDomainBadge(item: DomainInventoryItem) {
 
 function needsAttention(item: DomainInventoryItem): boolean {
   const purchaseStatus = item.purchase?.status;
-  if (purchaseStatus === 'failed' || purchaseStatus === 'requested' || purchaseStatus === 'processing') {
+  // 'requested' and 'processing' are normal in-progress states — only 'failed' needs attention
+  if (purchaseStatus === 'failed') {
     return true;
   }
 
-  return item.connections.some((c) => c.status === 'failed' || c.status === 'pending' || c.status === 'verified');
+  return item.connections.some((c) => c.status === 'failed');
 }
 
 function isExpiringSoon(expiresAt: string | null, days: number): boolean {
@@ -152,19 +153,12 @@ export default function DomainsDashboardPage() {
     <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">Domains Dashboard</p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Manage your domains</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">Domains</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">My Domains</h1>
           <p className="mt-2 max-w-3xl text-sm text-white/65">
-            Global control center for purchased and external domains, connection status, and routing actions.
+            Manage purchased and connected domains, view status, and control routing.
           </p>
         </div>
-
-        <Link href="/dashboard/domains/marketplace">
-          <Button className="bg-blue-500 hover:bg-blue-400 text-white">
-            <Search className="h-4 w-4 mr-2" />
-            Open Marketplace
-          </Button>
-        </Link>
       </div>
 
       {error && (
@@ -179,9 +173,9 @@ export default function DomainsDashboardPage() {
       <Card className="glass-panel border-white/10">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-lg">Domain Control Center</CardTitle>
+            <CardTitle className="text-lg">Domain Inventory</CardTitle>
             <CardDescription className="text-white/55">
-              Separate management from buying. Purchase happens in Marketplace; control happens here.
+              All your purchased and externally connected domains.
             </CardDescription>
           </div>
           <Button
@@ -203,13 +197,13 @@ export default function DomainsDashboardPage() {
           ) : (
             <Tabs defaultValue="all" className="space-y-4">
               <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-                <TabsTrigger value="all" className="data-[state=active]:bg-white/10">All Domains ({items.length})</TabsTrigger>
+                <TabsTrigger value="all" className="data-[state=active]:bg-white/10">All ({items.length})</TabsTrigger>
                 <TabsTrigger value="attention" className="data-[state=active]:bg-white/10">Needs Attention ({attentionItems.length})</TabsTrigger>
                 <TabsTrigger value="expiring" className="data-[state=active]:bg-white/10">Expiring Soon ({expiringSoonItems.length})</TabsTrigger>
               </TabsList>
 
               <TabsContent value="all">
-                {renderDomainTable(items, 'No domains yet. Buy one from Marketplace or connect an external domain.')}
+                {renderDomainTable(items, 'No domains yet. Buy one from Buy Domains in the sidebar.')}
               </TabsContent>
 
               <TabsContent value="attention">
@@ -223,30 +217,6 @@ export default function DomainsDashboardPage() {
           )}
         </CardContent>
       </Card>
-
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardContent className="p-5">
-            <p className="text-sm font-semibold text-white flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" /> Marketplace (Buying)
-            </p>
-            <p className="mt-2 text-xs text-white/60">
-              Search, purchase, and track purchase requests only.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-white/10 bg-white/[0.03]">
-          <CardContent className="p-5">
-            <p className="text-sm font-semibold text-white flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" /> Domains (Management)
-            </p>
-            <p className="mt-2 text-xs text-white/60">
-              Manage status, connections, and domain lifecycle after purchase.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
