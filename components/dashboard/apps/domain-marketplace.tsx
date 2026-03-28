@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { Loader2, Search, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Search, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { SearchResults } from './domain-marketplace/search-results';
 import { TldSelector } from './domain-marketplace/tld-selector';
@@ -19,6 +19,33 @@ export interface DomainMarketplaceTabProps {
   modeLabel?: string;
   purchaseRequestAppIdFilter?: string;
   initialQuery?: string;
+}
+
+function normalizeDomainQuery(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\s+/g, '');
+}
+
+function buildQuerySuggestions(value: string) {
+  const normalized = normalizeDomainQuery(value);
+  const seed = normalized.split('.')[0].replace(/[^a-z0-9-]/g, '');
+
+  if (!seed || seed.length < 2) return [];
+
+  return Array.from(
+    new Set([
+      seed,
+      `${seed}app`,
+      `${seed}cloud`,
+      `${seed}hq`,
+      `get${seed}`,
+      `use${seed}`,
+    ]),
+  ).slice(0, 5);
 }
 
 export function DomainMarketplaceTab({
@@ -40,6 +67,9 @@ export function DomainMarketplaceTab({
   useEffect(() => {
     if (initialQuery) setQuery(initialQuery);
   }, [initialQuery]);
+
+  const normalizedQuery = useMemo(() => normalizeDomainQuery(query), [query]);
+  const querySuggestions = useMemo(() => buildQuerySuggestions(query), [query]);
 
   const loadSummary = async () => {
     setSummaryLoading(true);
@@ -73,8 +103,14 @@ export function DomainMarketplaceTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialQuery, summary, query]);
 
-  const handleSearch = async ({ syncUrl = false }: { syncUrl?: boolean } = {}) => {
-    const cleanQuery = query.trim();
+  const handleSearch = async ({
+    syncUrl = false,
+    searchValue,
+  }: {
+    syncUrl?: boolean;
+    searchValue?: string;
+  } = {}) => {
+    const cleanQuery = normalizeDomainQuery(searchValue ?? query);
     if (!cleanQuery) {
       toast.error('Enter a domain keyword or full domain');
       return;
@@ -152,7 +188,7 @@ export function DomainMarketplaceTab({
               Domain Search
             </p>
             <h2 className="mt-2 text-lg font-semibold text-white">
-              Check availability across the extensions you want.
+              Search once, then compare the strongest domain options side by side.
             </h2>
 
             <div className="mt-4 flex gap-2.5">
@@ -177,6 +213,32 @@ export function DomainMarketplaceTab({
                 {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
               </Button>
             </div>
+
+            {querySuggestions.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
+                  <Sparkles className="h-3 w-3 text-cyan-300/80" />
+                  Related Searches
+                </span>
+                {querySuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => {
+                      setQuery(suggestion);
+                      void handleSearch({ syncUrl: true, searchValue: suggestion });
+                    }}
+                    className={`border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      suggestion === normalizedQuery
+                        ? 'border-cyan-400/25 bg-cyan-500/12 text-cyan-200'
+                        : 'border-white/[0.07] bg-white/[0.04] text-white/55 hover:border-white/[0.14] hover:text-white/78'
+                    }`}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="mt-4 flex items-center gap-3 pt-0.5">
               <div className="flex min-w-0 flex-1 flex-wrap gap-1">
@@ -258,9 +320,10 @@ export function DomainMarketplaceTab({
 
       {/* Results */}
       <SearchResults
+        query={normalizedQuery}
         results={results}
         searching={searching}
-        selectedTldCount={selectedTlds.length}
+        selectedTlds={selectedTlds}
         requestingDomain={requestingDomain}
         onRequestPurchase={handleRequestPurchase}
       />
