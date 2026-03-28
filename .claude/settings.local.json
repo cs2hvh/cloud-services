@@ -5,7 +5,29 @@
       "Bash(find /c/Users/Administrator/cloud-services -maxdepth 2 -type f -name package.json -o -name *.json -o -name *.yml -o -name *.yaml)",
       "Bash(ls -la /c/Users/Administrator/cloud-services/app/\\\\\\(marketing\\\\\\)/)",
       "WebFetch(domain:neon.tech)",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "WebSearch",
+      "WebFetch(domain:medium.com)",
+      "WebFetch(domain:blakecrosley.com)",
+      "WebFetch(domain:aws.amazon.com)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:cloudscape.design)",
+      "WebFetch(domain:docs.railway.com)",
+      "WebFetch(domain:vercel.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.pencilandpaper.io)",
+      "WebFetch(domain:neon.com)",
+      "WebFetch(domain:www.wearetenet.com)",
+      "Bash(git checkout:*)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:dohost.us)",
+      "Bash(xargs -I {} head -100 {})",
+      "WebFetch(domain:blog.cloudflare.com)",
+      "WebFetch(domain:blog.railway.com)",
+      "WebFetch(domain:railway.com)",
+      "WebFetch(domain:www.saasui.design)",
+      "Bash(npx next:*)",
+      "Bash(find /c/Users/Administrator/cloud-services -path */app/dashboard/apps/*page.tsx -type f)"
     ]
   }
 }

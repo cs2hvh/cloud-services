@@ -6,6 +6,19 @@ import { motion } from "motion/react";
 import Image from "next/image";
 import { LooperBackground } from "@/components/ui/looper-background";
 
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: (custom: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: custom * 0.1 },
+  }),
+};
+
+function Container({ children }: { children: React.ReactNode }) {
+  return <div className="w-full mx-auto max-w-[92%] sm:max-w-[85%] lg:max-w-[75%] px-4 sm:px-6">{children}</div>;
+}
+
 const TRUST_ITEMS = [
   "99.99% Uptime SLA",
   "12 Global Regions",

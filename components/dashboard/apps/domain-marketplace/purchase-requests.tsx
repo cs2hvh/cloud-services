@@ -1,6 +1,6 @@
-import { Clock3, Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Ban, CheckCircle2, Clock3, Loader2, RefreshCw, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { DomainAttachAction, type DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
 import type { PurchaseRequest } from './types';
 
@@ -15,72 +15,54 @@ interface PurchaseRequestsProps {
   onDomainAttached?: (appId: string) => void;
 }
 
+function formatRelativeTime(dateString: string) {
+  const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)}d ago`;
+  return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 function StatusBadge({ status }: { status: PurchaseRequest['status'] }) {
   switch (status) {
     case 'completed':
-      return <Badge className="bg-green-500/20 text-green-300 border-green-500/30">Completed</Badge>;
+      return (
+        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0 gap-1">
+          <CheckCircle2 className="w-2.5 h-2.5" />
+          Completed
+        </Badge>
+      );
     case 'processing':
-      return <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">Processing</Badge>;
+      return (
+        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 gap-1">
+          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+          Processing
+        </Badge>
+      );
     case 'failed':
-      return <Badge className="bg-red-500/20 text-red-300 border-red-500/30">Failed</Badge>;
+      return (
+        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0 gap-1">
+          <XCircle className="w-2.5 h-2.5" />
+          Failed
+        </Badge>
+      );
     case 'cancelled':
-      return <Badge className="bg-zinc-500/20 text-zinc-300 border-zinc-500/30">Cancelled</Badge>;
+      return (
+        <Badge className="bg-white/5 text-white/35 border-white/10 text-[10px] px-1.5 py-0 gap-1">
+          <Ban className="w-2.5 h-2.5" />
+          Cancelled
+        </Badge>
+      );
+    case 'requested':
     default:
-      return <Badge className="bg-yellow-500/20 text-yellow-300 border-yellow-500/30">Requested</Badge>;
+      return (
+        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0 gap-1">
+          <Clock3 className="w-2.5 h-2.5" />
+          Requested
+        </Badge>
+      );
   }
-}
-
-function RequestRow({
-  request,
-  showAttachActions,
-  attachOptions,
-  defaultAttachAppId,
-  onDomainAttached,
-}: {
-  request: PurchaseRequest;
-  showAttachActions: boolean;
-  attachOptions: DomainAppOption[];
-  defaultAttachAppId?: string;
-  onDomainAttached?: (appId: string) => void;
-}) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-black/30 p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <p className="text-sm text-white font-semibold">{request.domain}</p>
-        <StatusBadge status={request.status} />
-      </div>
-
-      <div className="text-xs text-white/45 flex flex-wrap gap-3">
-        <span>
-          Register: {request.purchase_price !== null ? `$${request.purchase_price}` : 'N/A'}
-        </span>
-        <span>
-          Renew: {request.renewal_price !== null ? `$${request.renewal_price}/yr` : 'N/A'}
-        </span>
-        <span>{new Date(request.created_at).toLocaleString()}</span>
-      </div>
-
-      {request.last_error && (
-        <p className="text-xs text-red-300 bg-red-500/10 rounded px-2 py-1">
-          {request.last_error}
-        </p>
-      )}
-
-      {showAttachActions && request.status === 'completed' && attachOptions.length > 0 && (
-        <DomainAttachAction
-          domain={request.domain}
-          appOptions={attachOptions}
-          defaultAppId={defaultAttachAppId}
-          buttonLabel="Attach to App"
-          onAttached={(attachedAppId) => onDomainAttached?.(attachedAppId)}
-        />
-      )}
-
-      {showAttachActions && request.status === 'completed' && attachOptions.length === 0 && (
-        <p className="text-xs text-white/40">Deploy an app first to attach this domain.</p>
-      )}
-    </div>
-  );
 }
 
 export function PurchaseRequests({
@@ -94,51 +76,114 @@ export function PurchaseRequests({
   onDomainAttached,
 }: PurchaseRequestsProps) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-medium text-white flex items-center gap-2">
-          <Clock3 className="w-4 h-4 text-white/60" />
-          Purchase Requests
+    <div className="rounded border border-white/[0.06] overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-white/[0.06] bg-white/[0.01] flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <p className="text-sm font-medium text-white">Purchase Requests</p>
           {requests.length > 0 && (
-            <Badge className="bg-white/10 text-white/60 border-white/10 text-[10px] px-1.5 py-0">
+            <span className="text-[10px] text-white/30 tabular-nums bg-white/[0.05] border border-white/[0.08] rounded px-1.5 py-px">
               {requests.length}
-            </Badge>
+            </span>
           )}
-        </p>
+        </div>
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="border-white/20 h-7 text-xs"
+          className="h-7 w-7 p-0 text-white/30 hover:text-white/70 hover:bg-white/[0.06] rounded"
           onClick={onRefresh}
           disabled={loading}
         >
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Refresh'}
+          {loading
+            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            : <RefreshCw className="h-3.5 w-3.5" />}
         </Button>
       </div>
 
+      {/* Content */}
       {loading ? (
-        <div className="flex items-center gap-2 text-xs text-white/50">
-          <Loader2 className="w-3 h-3 animate-spin" />
-          Loading
+        <div className="space-y-0">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-3 border-t border-white/[0.03] first:border-0">
+              <div className="h-4 w-36 animate-pulse rounded bg-white/[0.06]" style={{ animationDelay: `${i * 60}ms` }} />
+              <div className="h-5 w-20 animate-pulse rounded bg-white/[0.06]" />
+              <div className="flex-1" />
+              <div className="h-3.5 w-10 animate-pulse rounded bg-white/[0.06]" />
+              <div className="hidden sm:block h-3.5 w-10 animate-pulse rounded bg-white/[0.06]" />
+              <div className="hidden md:block h-3.5 w-14 animate-pulse rounded bg-white/[0.06]" />
+            </div>
+          ))}
         </div>
       ) : requests.length === 0 ? (
-        <p className="text-xs text-white/40">
-          {purchaseRequestAppIdFilter
-            ? 'No purchase requests for this app yet.'
-            : 'No purchase requests yet. Search a domain and submit one above.'}
-        </p>
+        <div className="px-4 py-8 text-center">
+          <p className="text-xs text-white/30">
+            {purchaseRequestAppIdFilter
+              ? 'No purchase requests for this app yet.'
+              : 'No purchase requests yet. Search for a domain above to get started.'}
+          </p>
+        </div>
       ) : (
-        <div className="space-y-2">
-          {requests.map((request) => (
-            <RequestRow
-              key={request.id}
-              request={request}
-              showAttachActions={showAttachActions}
-              attachOptions={attachOptions}
-              defaultAttachAppId={defaultAttachAppId}
-              onDomainAttached={onDomainAttached}
-            />
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/25 border-b border-white/[0.04] bg-white/[0.01]">
+                <th className="px-4 py-2.5 text-left">Domain</th>
+                <th className="px-4 py-2.5 text-left w-32">Status</th>
+                <th className="px-4 py-2.5 text-right w-24 hidden sm:table-cell">Register</th>
+                <th className="px-4 py-2.5 text-right w-24 hidden sm:table-cell">Renew/yr</th>
+                <th className="px-4 py-2.5 text-left w-24 hidden md:table-cell">When</th>
+                {showAttachActions && <th className="px-4 py-2.5 text-right w-40" />}
+              </tr>
+            </thead>
+            <tbody>
+              {requests.map((request) => (
+                <tr
+                  key={request.id}
+                  className="border-t border-white/[0.03] hover:bg-white/[0.02] transition-colors"
+                >
+                  <td className="px-4 py-3">
+                    <span className="text-sm font-medium font-mono text-white">{request.domain}</span>
+                    {request.last_error && (
+                      <p className="text-[10px] text-red-400/70 mt-0.5">{request.last_error}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={request.status} />
+                  </td>
+                  <td className="px-4 py-3 text-right hidden sm:table-cell">
+                    <span className="text-xs tabular-nums text-white/45">
+                      {request.purchase_price !== null ? `$${request.purchase_price}` : '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-right hidden sm:table-cell">
+                    <span className="text-xs tabular-nums text-white/45">
+                      {request.renewal_price !== null ? `$${request.renewal_price}` : '—'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <span className="text-xs text-white/30" title={new Date(request.created_at).toLocaleString()}>
+                      {formatRelativeTime(request.created_at)}
+                    </span>
+                  </td>
+                  {showAttachActions && (
+                    <td className="px-4 py-3 text-right">
+                      {request.status === 'completed' && attachOptions.length > 0 ? (
+                        <DomainAttachAction
+                          domain={request.domain}
+                          appOptions={attachOptions}
+                          defaultAppId={defaultAttachAppId}
+                          buttonLabel="Attach to App"
+                          onAttached={(attachedAppId) => onDomainAttached?.(attachedAppId)}
+                        />
+                      ) : request.status === 'completed' && attachOptions.length === 0 ? (
+                        <span className="text-xs text-white/25">Deploy an app first</span>
+                      ) : null}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

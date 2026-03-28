@@ -3,11 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DomainOverviewTab } from '@/components/dashboard/domains/domain-overview-tab';
 import { DomainConnectionsTab } from '@/components/dashboard/domains/domain-connections-tab';
@@ -24,6 +22,46 @@ import { useDomainConnections } from '@/hooks/use-domain-connections';
 import { useDomainDns } from '@/hooks/use-domain-dns';
 import { useDomainRegistrarSettings } from '@/hooks/use-domain-registrar-settings';
 
+type OverallStatus = 'Active' | 'Purchase Pending' | 'Setup Pending' | 'Needs Attention' | 'Purchased' | 'Unknown';
+
+function StatusPill({ status }: { status: OverallStatus }) {
+  const cfg: Record<OverallStatus, { dot: string; text: string }> = {
+    Active:            { dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    'Purchase Pending':{ dot: 'bg-amber-400',   text: 'text-amber-300' },
+    'Setup Pending':   { dot: 'bg-amber-400',   text: 'text-amber-300' },
+    'Needs Attention': { dot: 'bg-red-400',      text: 'text-red-300' },
+    Purchased:         { dot: 'bg-cyan-400',     text: 'text-cyan-300' },
+    Unknown:           { dot: 'bg-white/30',     text: 'text-white/50' },
+  };
+  const { dot, text } = cfg[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {status}
+    </span>
+  );
+}
+
+/* ── Page skeleton while initializing ── */
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-8 w-56 animate-pulse rounded bg-white/[0.05]" />
+      <div className="flex gap-2">
+        {[80, 60, 100, 72].map((w, i) => (
+          <div key={i} className={`h-5 w-${w} animate-pulse rounded-full bg-white/[0.05]`} />
+        ))}
+      </div>
+      <div className="h-px w-full bg-white/[0.05]" />
+      <div className="grid grid-cols-4 gap-4 pt-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-lg bg-white/[0.04]" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function DomainDetailPage() {
   const params = useParams();
   const domainName = useMemo(
@@ -31,21 +69,15 @@ export default function DomainDetailPage() {
     [params.domain]
   );
 
-  // Local state for subdomain input
   const [subdomainInput, setSubdomainInput] = useState('');
   const [initializing, setInitializing] = useState(true);
-
-  // Stable ref so hooks that run operations can always call the latest full-refresh
-  // without capturing a stale closure.
   const refreshAllRef = useRef<() => Promise<void>>(async () => {});
 
-  // Initialize hooks without circular dependencies
   const domainData = useDomainData(domainName);
   const dnsData = useDomainDns(domainName);
   const { setConnections, setExpiresAt, setAutoRenew, loadDomainContext } = domainData;
   const { loadDnsRecords } = dnsData;
 
-  // Callback to sync expiry/auto-renew badges from registrar settings load.
   const syncDomainMeta = useCallback(
     (expiresAt: string | null, autoRenew: boolean | null) => {
       if (expiresAt !== null) setExpiresAt(expiresAt);
@@ -60,7 +92,7 @@ export default function DomainDetailPage() {
     syncDomainMeta
   );
   const { loadRegistrarSettings } = registrarData;
-  // Connections get the full refresh (all three loaders) via stable ref wrapper.
+
   const connectionsData = useDomainConnections(
     domainName,
     domainData.connections,
@@ -68,14 +100,12 @@ export default function DomainDetailPage() {
     useCallback(() => refreshAllRef.current(), [])
   );
 
-  // Compute attach domain with subdomain prefix if provided
   const attachDomain = useMemo(() => {
     const clean = subdomainInput.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     if (!clean) return domainName;
     return `${clean}.${domainName}`;
   }, [domainName, subdomainInput]);
 
-  // Load all domain panels together so first paint does not show mixed stale/empty values.
   useEffect(() => {
     let isActive = true;
     setInitializing(true);
@@ -83,238 +113,207 @@ export default function DomainDetailPage() {
       .finally(() => {
         if (isActive) setInitializing(false);
       });
-    return () => {
-      isActive = false;
-    };
+    return () => { isActive = false; };
   }, [domainName, loadDnsRecords, loadDomainContext, loadRegistrarSettings]);
 
   const isPageLoading = domainData.loading || dnsData.dnsLoading || registrarData.registrarLoading;
 
-  // Create app options from loaded apps
   const appOptions: DomainAppOption[] = useMemo(
-    () =>
-      domainData.apps.map((app) => ({
-        id: app.id,
-        name: app.name,
-        status: app.status,
-      })),
+    () => domainData.apps.map((app) => ({ id: app.id, name: app.name, status: app.status })),
     [domainData.apps]
   );
 
-  // Extract unique app names from connections
   const connectedAppNames = useMemo(() => {
     const unique = new Set(domainData.connections.map((item) => item.appName));
     return Array.from(unique);
   }, [domainData.connections]);
 
-  // Calculate overall domain status
-  const overallStatus = useMemo(() => {
+  const overallStatus = useMemo((): OverallStatus => {
     if (domainData.connections.some((c) => c.status === 'failed')) return 'Needs Attention';
     if (
       domainData.purchaseRequest?.status === 'requested' ||
       domainData.purchaseRequest?.status === 'processing'
-    )
-      return 'Purchase Pending';
-    if (domainData.connections.some((c) => c.status === 'pending' || c.status === 'verified'))
-      return 'Setup Pending';
+    ) return 'Purchase Pending';
+    if (domainData.connections.some((c) => c.status === 'pending' || c.status === 'verified')) return 'Setup Pending';
     if (domainData.connections.some((c) => c.status === 'active')) return 'Active';
     if (domainData.purchaseRequest?.status === 'completed') return 'Purchased';
     return 'Unknown';
   }, [domainData.connections, domainData.purchaseRequest]);
 
-  // Auto-refresh while SSL certificates are being issued
   const issuingConnectionIds = useMemo(
     () => domainData.connections.filter((c) => c.sslStatus === 'issuing').map((c) => c.id),
     [domainData.connections]
   );
   useAutoSslRefresh(issuingConnectionIds, domainData.loadDomainContext);
 
-  // Callback for refresh button — destructure stable function refs so handleRefresh
-  // only recreates when domainName changes, not on every render.
   const handleRefresh = useCallback(async () => {
-    await Promise.all([
-      loadDomainContext(),
-      loadDnsRecords(),
-      loadRegistrarSettings(),
-    ]);
+    await Promise.all([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings()]);
   }, [loadDomainContext, loadDnsRecords, loadRegistrarSettings]);
 
-  // Keep the ref in sync so connections hook always calls the latest version.
   useEffect(() => {
     refreshAllRef.current = handleRefresh;
   }, [handleRefresh]);
 
   return (
-    <div className="flex-1 min-h-screen px-4 py-5 text-white sm:px-6 sm:py-6 lg:px-8 lg:py-8 xl:px-10">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-5">
-          <Link
-            href="/dashboard/domains"
-            className="inline-flex items-center text-sm text-white/60 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Domains
+    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      <div className="max-w-5xl mx-auto space-y-6">
+
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1.5 text-sm text-white/40">
+          <Link href="/dashboard/domains" className="hover:text-white/70 transition-colors">
+            Domains
           </Link>
+          <ChevronRight className="h-3.5 w-3.5 text-white/20" />
+          <span className="font-mono text-white/70">{domainName}</span>
+        </nav>
+
+        {/* Domain header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2 min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight font-mono text-white truncate">
+              {domainName}
+            </h1>
+            {/* Meta row */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/45">
+              <StatusPill status={overallStatus} />
+              <span>{domainData.connections.length} connection{domainData.connections.length !== 1 ? 's' : ''}</span>
+              {connectedAppNames.length > 0 && (
+                <span>{connectedAppNames.join(', ')}</span>
+              )}
+              {domainData.expiresAt && (
+                <span>
+                  Expires{' '}
+                  <span className="text-white/60">
+                    {new Date(domainData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </span>
+              )}
+              {domainData.autoRenew !== null && (
+                <span className={domainData.autoRenew ? 'text-emerald-400/80' : 'text-white/35'}>
+                  Auto-renew {domainData.autoRenew ? 'on' : 'off'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="self-start text-white/40 hover:text-white hover:bg-white/[0.06] shrink-0"
+            onClick={handleRefresh}
+            disabled={isPageLoading}
+          >
+            {isPageLoading ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+          </Button>
         </div>
 
-        <Card className="mb-5 border-white/10 bg-white/[0.03]">
-          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <CardTitle className="text-xl sm:text-2xl font-semibold truncate">
-                {domainName}
-              </CardTitle>
-              <CardDescription className="text-white/50 mt-1">
-                Domain management and routing
-              </CardDescription>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-white/15 text-white/70 hover:bg-white/10 hover:text-white self-start"
-              onClick={handleRefresh}
-              disabled={isPageLoading}
-            >
-              {isPageLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="ml-1.5 hidden sm:inline">Refresh</span>
-            </Button>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2 pt-0">
-            <Badge className="border-cyan-500/30 bg-cyan-500/15 text-cyan-100">
-              {overallStatus}
-            </Badge>
-            <Badge className="border-white/15 bg-white/5 text-white/70">
-              {domainData.connections.length} connection
-              {domainData.connections.length !== 1 ? 's' : ''}
-            </Badge>
-            <Badge className="border-white/15 bg-white/5 text-white/70">
-              {connectedAppNames.length} app{connectedAppNames.length !== 1 ? 's' : ''}
-            </Badge>
-            {domainData.expiresAt && (
-              <Badge className="border-white/15 bg-white/5 text-white/70">
-                Expires {new Date(domainData.expiresAt).toLocaleDateString()}
-              </Badge>
-            )}
-            {domainData.autoRenew !== null && (
-              <Badge
-                className={
-                  domainData.autoRenew
-                    ? 'border-green-500/20 bg-green-500/10 text-green-300'
-                    : 'border-white/15 bg-white/5 text-white/50'
-                }
-              >
-                Auto-renew {domainData.autoRenew ? 'on' : 'off'}
-              </Badge>
-            )}
-          </CardContent>
-        </Card>
-
+        {/* Error */}
         {domainData.error && (
-          <Card className="mb-4 border-red-500/30 bg-red-500/10">
-            <CardContent className="py-3 text-sm text-red-100 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              {looksInternal(domainData.error)
-                ? 'Unable to load this domain. Refresh the page to try again.'
-                : domainData.error}
-            </CardContent>
-          </Card>
+          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {looksInternal(domainData.error)
+              ? 'Unable to load this domain. Refresh the page to try again.'
+              : domainData.error}
+          </div>
         )}
 
+        {/* Tabs */}
         {initializing ? (
-          <Card className="border-white/10 bg-white/[0.03]">
-            <CardContent className="py-12">
-              <div className="flex items-center justify-center gap-2 text-sm text-white/65">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading domain details...
-              </div>
-            </CardContent>
-          </Card>
+          <PageSkeleton />
         ) : (
-          <Tabs defaultValue="overview" className="space-y-4">
-            <TabsList className="bg-white/5 border border-white/10 flex-wrap h-auto gap-1 p-1">
-              <TabsTrigger value="overview" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">
-                Overview
-              </TabsTrigger>
-              <TabsTrigger value="connections" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">
-                Connections
-              </TabsTrigger>
-              <TabsTrigger value="dns" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">
-                DNS
-              </TabsTrigger>
-              <TabsTrigger value="settings" className="data-[state=active]:bg-white/10 text-xs sm:text-sm">
-                Settings
-              </TabsTrigger>
-            </TabsList>
+          <Tabs defaultValue="overview">
+            {/* Underline tab bar */}
+            <div className="border-b border-white/[0.06]">
+              <TabsList className="bg-transparent border-0 h-auto p-0 gap-0 rounded-none -mb-px">
+                {[
+                  { value: 'overview',     label: 'Overview' },
+                  { value: 'connections',  label: 'Connections' },
+                  { value: 'dns',          label: 'DNS' },
+                  { value: 'settings',     label: 'Settings' },
+                ].map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-white/45 data-[state=active]:border-white data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
+                  >
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
-            <TabsContent value="overview" className="space-y-4">
-              <DomainOverviewTab
-                purchaseRequest={domainData.purchaseRequest}
-                connections={domainData.connections}
-                connectedAppNames={connectedAppNames}
-              />
-            </TabsContent>
+            <div className="pt-5">
+              <TabsContent value="overview" className="mt-0">
+                <DomainOverviewTab
+                  purchaseRequest={domainData.purchaseRequest}
+                  connections={domainData.connections}
+                  connectedAppNames={connectedAppNames}
+                />
+              </TabsContent>
 
-            <TabsContent value="connections" className="space-y-4">
-              <DomainConnectionsTab
-                domainName={domainName}
-                connections={domainData.connections}
-                loading={domainData.loading}
-                appOptions={appOptions}
-                subdomainInput={subdomainInput}
-                attachDomain={attachDomain}
-                removeConfirmConnectionId={connectionsData.removeConfirmConnectionId}
-                verifyingConnectionId={connectionsData.verifyingConnectionId}
-                activatingConnectionId={connectionsData.activatingConnectionId}
-                settingPrimaryConnectionId={connectionsData.settingPrimaryConnectionId}
-                removingConnectionId={connectionsData.removingConnectionId}
-                checkingSslId={connectionsData.checkingSslId}
-                onSubdomainChange={setSubdomainInput}
-                onAttached={() => { setSubdomainInput(''); void handleRefresh(); }}
-                onVerify={connectionsData.onVerify}
-                onActivate={connectionsData.onActivate}
-                onSetPrimary={connectionsData.onSetPrimary}
-                onRemoveRequest={connectionsData.onRemoveRequest}
-                onRemoveConfirm={connectionsData.onRemoveConfirm}
-                onRemoveCancel={connectionsData.onRemoveCancel}
-                onCheckSsl={connectionsData.onCheckSsl}
-              />
-            </TabsContent>
+              <TabsContent value="connections" className="mt-0">
+                <DomainConnectionsTab
+                  domainName={domainName}
+                  connections={domainData.connections}
+                  loading={domainData.loading}
+                  appOptions={appOptions}
+                  subdomainInput={subdomainInput}
+                  attachDomain={attachDomain}
+                  removeConfirmConnectionId={connectionsData.removeConfirmConnectionId}
+                  verifyingConnectionId={connectionsData.verifyingConnectionId}
+                  activatingConnectionId={connectionsData.activatingConnectionId}
+                  settingPrimaryConnectionId={connectionsData.settingPrimaryConnectionId}
+                  removingConnectionId={connectionsData.removingConnectionId}
+                  checkingSslId={connectionsData.checkingSslId}
+                  onSubdomainChange={setSubdomainInput}
+                  onAttached={() => { setSubdomainInput(''); void handleRefresh(); }}
+                  onVerify={connectionsData.onVerify}
+                  onActivate={connectionsData.onActivate}
+                  onSetPrimary={connectionsData.onSetPrimary}
+                  onRemoveRequest={connectionsData.onRemoveRequest}
+                  onRemoveConfirm={connectionsData.onRemoveConfirm}
+                  onRemoveCancel={connectionsData.onRemoveCancel}
+                  onCheckSsl={connectionsData.onCheckSsl}
+                />
+              </TabsContent>
 
-            <TabsContent value="dns" className="space-y-4">
-              <DomainDnsTab
-                connections={domainData.connections}
-                dnsLoading={dnsData.dnsLoading}
-                dnsError={dnsData.dnsError}
-                dnsManaged={dnsData.dnsManaged}
-                dnsZone={dnsData.dnsZone}
-                dnsRecords={dnsData.dnsRecords}
-                dnsForm={dnsData.dnsForm}
-                dnsSaving={dnsData.dnsSaving}
-                dnsDeletingRecordId={dnsData.dnsDeletingRecordId}
-                deleteConfirmRecordId={dnsData.deleteConfirmRecordId}
-                domainName={domainName}
-                onFormChange={dnsData.onFormChange}
-                onEditRecord={dnsData.onEditRecord}
-                onSaveRecord={dnsData.onSaveRecord}
-                onCancelEdit={dnsData.onCancelEdit}
-                onDeleteRequest={dnsData.onDeleteRequest}
-                onDeleteConfirm={dnsData.onDeleteConfirm}
-                onDeleteCancel={dnsData.onDeleteCancel}
-              />
-            </TabsContent>
+              <TabsContent value="dns" className="mt-0">
+                <DomainDnsTab
+                  connections={domainData.connections}
+                  dnsLoading={dnsData.dnsLoading}
+                  dnsError={dnsData.dnsError}
+                  dnsManaged={dnsData.dnsManaged}
+                  dnsZone={dnsData.dnsZone}
+                  dnsRecords={dnsData.dnsRecords}
+                  dnsForm={dnsData.dnsForm}
+                  dnsSaving={dnsData.dnsSaving}
+                  dnsDeletingRecordId={dnsData.dnsDeletingRecordId}
+                  deleteConfirmRecordId={dnsData.deleteConfirmRecordId}
+                  domainName={domainName}
+                  onFormChange={dnsData.onFormChange}
+                  onEditRecord={dnsData.onEditRecord}
+                  onSaveRecord={dnsData.onSaveRecord}
+                  onCancelEdit={dnsData.onCancelEdit}
+                  onDeleteRequest={dnsData.onDeleteRequest}
+                  onDeleteConfirm={dnsData.onDeleteConfirm}
+                  onDeleteCancel={dnsData.onDeleteCancel}
+                />
+              </TabsContent>
 
-            <TabsContent value="settings" className="space-y-4">
-              <DomainSettingsTab
-                registrarLoading={registrarData.registrarLoading}
-                registrarError={registrarData.registrarError}
-                registrarSettings={registrarData.registrarSettings}
-                savingAutorenew={registrarData.savingAutorenew}
-                onToggleAutorenew={registrarData.onToggleAutorenew}
-              />
-            </TabsContent>
+              <TabsContent value="settings" className="mt-0">
+                <DomainSettingsTab
+                  registrarLoading={registrarData.registrarLoading}
+                  registrarError={registrarData.registrarError}
+                  registrarSettings={registrarData.registrarSettings}
+                  savingAutorenew={registrarData.savingAutorenew}
+                  onToggleAutorenew={registrarData.onToggleAutorenew}
+                />
+              </TabsContent>
+            </div>
           </Tabs>
         )}
       </div>

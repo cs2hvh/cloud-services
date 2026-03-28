@@ -9,24 +9,24 @@ import { getDatabasePlans } from "@/lib/helpers/database-plans";
 
 const cases = [
   {
-    title: "SaaS & Multi-Tenant Apps",
+    title: "PostgreSQL for SaaS Platforms",
     description:
-      "Power multi-tenant SaaS platforms with connection pooling, row-level security, and automatic scaling as your customer base grows.",
+      "Run account systems, APIs, billing data, and tenant-aware product tables on a managed PostgreSQL cluster with replicas, backups, and private networking built in.",
   },
   {
-    title: "E-Commerce & Transactions",
+    title: "MySQL for Transactional Commerce",
     description:
-      "Handle high-throughput transactional workloads with ACID-compliant databases, read replicas for product catalogs, and sub-millisecond caching.",
+      "Support storefront traffic, checkout flows, catalog reads, and customer portals with familiar MySQL operations, managed failover, and production-ready backup paths.",
   },
   {
-    title: "Real-Time Analytics",
+    title: "MongoDB for Flexible Product Data",
     description:
-      "Ingest and query billions of events with ClickHouse or time-series extensions. Build dashboards and alerts on live data streams.",
+      "Ship faster when schemas evolve often. Use MongoDB for catalogs, content models, user profiles, and internal tools that need flexibility without database babysitting.",
   },
   {
-    title: "Mobile & IoT Backends",
+    title: "Redis for Cache and Session Layers",
     description:
-      "Store user profiles, device telemetry, and session data with low-latency reads. Sync across regions for globally distributed apps.",
+      "Keep hot data close to the app for sessions, queues, counters, rate limits, and response caching with low-latency Redis clusters that stay operational under load.",
   },
 ];
 

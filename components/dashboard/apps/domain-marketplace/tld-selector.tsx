@@ -17,11 +17,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { MAX_TLDS, TLD_CATEGORIES, TLD_PRESETS, type TldCategory } from './tld-data';
 
-// Map iconKey strings to Lucide components (avoids dynamic imports / eval).
 const ICON_MAP: Record<string, LucideIcon> = {
   Briefcase,
   Cpu,
@@ -33,7 +30,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Users,
 };
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function PresetButton({
   label,
@@ -49,7 +46,7 @@ function PresetButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-2.5 py-0.5 text-[11px] text-white/60 hover:border-cyan-400/50 hover:text-cyan-200 hover:bg-cyan-500/10 transition-colors"
+      className="flex items-center gap-1.5 rounded border border-white/[0.1] bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/55 hover:border-white/[0.2] hover:text-white/80 hover:bg-white/[0.06] transition-colors"
     >
       <Icon className="w-3 h-3" />
       {label}
@@ -68,7 +65,7 @@ function SelectedTldChip({
     <button
       type="button"
       onClick={onRemove}
-      className="flex items-center gap-1 rounded-full border border-cyan-400/50 bg-cyan-500/20 px-2 py-0.5 text-[11px] text-cyan-200 hover:bg-red-500/20 hover:border-red-400/50 hover:text-red-300 transition-colors"
+      className="flex items-center gap-1 rounded border border-white/[0.12] bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white/65 hover:bg-red-500/10 hover:border-red-500/25 hover:text-red-300/80 transition-colors"
     >
       .{tld}
       <X className="w-2.5 h-2.5" />
@@ -89,10 +86,10 @@ function TldChip({
     <button
       type="button"
       onClick={onToggle}
-      className={`rounded-full border px-2.5 py-0.5 text-[11px] transition-colors ${
+      className={`rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${
         active
-          ? 'border-cyan-400/60 bg-cyan-500/25 text-cyan-200'
-          : 'border-white/15 bg-black/20 text-white/55 hover:border-white/30 hover:text-white'
+          ? 'border-white/[0.2] bg-white/[0.08] text-white/80'
+          : 'border-white/[0.08] bg-transparent text-white/40 hover:border-white/[0.15] hover:text-white/65'
       }`}
     >
       .{tld}
@@ -120,35 +117,32 @@ function CategoryRow({
   const selectedCount = category.tlds.filter((t) => selected.includes(t)).length;
 
   return (
-    <div className="rounded-lg border border-white/10 overflow-hidden">
-      {/* Header row: two sibling buttons — avoids nested <button> hydration error */}
-      <div className="flex items-center bg-black/20 hover:bg-black/30 transition-colors">
-        {/* Left: toggle open/close */}
+    <div className="rounded border border-white/[0.07] overflow-hidden">
+      <div className="flex items-center bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
         <button
           type="button"
           onClick={onToggleOpen}
           className="flex flex-1 items-center gap-2 px-3 py-2 text-left"
         >
-          <Icon className="w-3.5 h-3.5 text-white/50 shrink-0" />
-          <span className="text-xs font-medium text-white/80">{category.label}</span>
+          <Icon className="w-3.5 h-3.5 text-white/40 shrink-0" />
+          <span className="text-xs font-medium text-white/70">{category.label}</span>
           {selectedCount > 0 && (
-            <Badge className="bg-cyan-500/20 text-cyan-200 border-cyan-500/30 text-[9px] px-1 py-0">
+            <span className="inline-flex items-center justify-center h-4 min-w-[18px] rounded-full bg-white/[0.1] text-white/60 border border-white/[0.1] text-[9px] px-1 tabular-nums">
               {selectedCount}
-            </Badge>
+            </span>
           )}
           {open ? (
-            <ChevronUp className="w-3.5 h-3.5 text-white/40 ml-auto" />
+            <ChevronUp className="w-3.5 h-3.5 text-white/30 ml-auto" />
           ) : (
-            <ChevronDown className="w-3.5 h-3.5 text-white/40 ml-auto" />
+            <ChevronDown className="w-3.5 h-3.5 text-white/30 ml-auto" />
           )}
         </button>
 
-        {/* Right: select/deselect all */}
         <button
           type="button"
           onClick={() => onToggleAll(category)}
-          className={`shrink-0 flex items-center gap-0.5 pr-3 text-[10px] transition-colors ${
-            allSelected ? 'text-cyan-300 hover:text-white' : 'text-white/40 hover:text-cyan-200'
+          className={`shrink-0 flex items-center gap-1 pr-3 text-[10px] transition-colors ${
+            allSelected ? 'text-white/50 hover:text-white/30' : 'text-white/30 hover:text-white/60'
           }`}
         >
           <CheckCheck className="w-3 h-3" />
@@ -157,7 +151,7 @@ function CategoryRow({
       </div>
 
       {open && (
-        <div className="flex flex-wrap gap-1.5 p-2.5 bg-black/10">
+        <div className="flex flex-wrap gap-1.5 p-2.5 border-t border-white/[0.05] bg-white/[0.01]">
           {category.tlds.map((tld) => (
             <TldChip
               key={tld}
@@ -172,7 +166,7 @@ function CategoryRow({
   );
 }
 
-// ─── TldSelector ──────────────────────────────────────────────────────────────
+// ─── TldSelector ───────────────────────────────────────────────────────────────
 
 interface TldSelectorProps {
   selected: string[];
@@ -238,19 +232,17 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
   return (
     <div className="space-y-3">
 
-      {/* Header: count + clear */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-white/70">TLD Selection</span>
-          <Badge className="bg-cyan-500/20 text-cyan-200 border-cyan-500/30 text-[10px] px-1.5 py-0">
-            {selected.length} / {MAX_TLDS}
-          </Badge>
+          <span className="text-xs font-medium text-white/60">Extensions</span>
+          <span className="text-[10px] text-white/35 tabular-nums">{selected.length}/{MAX_TLDS} selected</span>
         </div>
         {selected.length > 0 && (
           <button
             type="button"
             onClick={() => onChange([])}
-            className="flex items-center gap-1 text-[11px] text-white/40 hover:text-white transition-colors"
+            className="flex items-center gap-1 text-[11px] text-white/35 hover:text-white/65 transition-colors"
           >
             <X className="w-3 h-3" />
             Clear all
@@ -258,9 +250,9 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
         )}
       </div>
 
-      {/* Preset packs */}
+      {/* Quick presets */}
       <div className="space-y-1.5">
-        <p className="text-[10px] uppercase tracking-wide text-white/40">Quick presets</p>
+        <p className="text-[10px] uppercase tracking-wider text-white/30">Quick presets</p>
         <div className="flex flex-wrap gap-1.5">
           {TLD_PRESETS.map((preset) => (
             <PresetButton
@@ -275,8 +267,8 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
 
       {/* Active chip strip */}
       {selected.length > 0 && (
-        <div className="rounded-lg border border-white/10 bg-black/20 p-2.5">
-          <p className="text-[10px] uppercase tracking-wide text-white/40 mb-1.5">Selected</p>
+        <div className="rounded border border-white/[0.07] bg-white/[0.02] p-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1.5">Selected</p>
           <div className="flex flex-wrap gap-1.5">
             {selected.map((tld) => (
               <SelectedTldChip
@@ -289,12 +281,12 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
         </div>
       )}
 
-      {/* Filter input */}
-      <Input
+      {/* Filter */}
+      <input
         value={filterQuery}
         onChange={(e) => setFilterQuery(e.target.value)}
         placeholder="Filter extensions (e.g. shop, ai, cloud)"
-        className="bg-black/30 border-white/10 h-8 text-xs"
+        className="h-8 w-full rounded border border-white/[0.08] bg-white/[0.02] px-3 text-xs text-white placeholder:text-white/30 focus:border-white/[0.18] focus:bg-white/[0.04] focus:outline-none transition-colors"
       />
 
       {/* Category accordion */}
