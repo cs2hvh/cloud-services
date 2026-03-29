@@ -57,8 +57,7 @@ export default function DomainWhyChooseSection() {
       <div
         className="pointer-events-none absolute inset-0 opacity-60"
         style={{
-          backgroundImage:
-            "radial-gradient(circle at 15% 25%, rgba(25,130,255,0.22), transparent 40%), radial-gradient(circle at 85% 15%, rgba(255,255,255,0.14), transparent 35%), linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.75))",
+          backgroundImage: "url('/images/main-page/domain-sec-5-bg.svg')",
         }}
         aria-hidden="true"
       />
@@ -70,7 +69,8 @@ export default function DomainWhyChooseSection() {
               Explore Domain&apos;s Beyond Limits
             </p>
             <h2 className="mt-4 text-3xl font-semibold leading-tight text-white">
-              Why Choose <span className="text-[#10A3FF]">AhuraCloud</span> for Domains
+              Why Choose <span className="text-[#10A3FF]">AhuraCloud</span> for
+              Domains
             </h2>
             <div className="mt-5 space-y-3">
               {featureNodes.map((item) => {
@@ -84,7 +84,9 @@ export default function DomainWhyChooseSection() {
                       <Icon className="h-4 w-4 text-white/85" />
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-white">{item.title}</p>
+                      <p className="text-sm font-medium text-white">
+                        {item.title}
+                      </p>
                       <p className="text-xs text-white/65">{item.subtitle}</p>
                     </div>
                   </div>
@@ -109,11 +111,16 @@ export default function DomainWhyChooseSection() {
           {featureNodes.map((item) => {
             const Icon = item.icon;
             return (
-              <div key={item.title} className={`absolute ${item.desktopPosition}`}>
+              <div
+                key={item.title}
+                className={`absolute ${item.desktopPosition}`}
+              >
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-2 backdrop-blur-sm">
                   <Icon className="h-4 w-4 text-white/80" />
                   <div>
-                    <p className="text-[11px] font-medium text-white">{item.title}</p>
+                    <p className="text-[11px] font-medium text-white">
+                      {item.title}
+                    </p>
                     <p className="text-[10px] text-white/65">{item.subtitle}</p>
                   </div>
                 </div>
@@ -131,7 +138,8 @@ export default function DomainWhyChooseSection() {
               Explore Domain&apos;s Beyond Limits
             </p>
             <h2 className="mt-3 text-[44px] font-semibold leading-[0.94] tracking-tight text-white">
-              Why Choose <span className="text-[#10A3FF]">AhuraCloud</span> for Domains
+              Why Choose <span className="text-[#10A3FF]">AhuraCloud</span> for
+              Domains
             </h2>
             <Link
               href="/signup"
