@@ -64,12 +64,13 @@ export default function VMDetailPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const text = await res.text();
-      if (!text) throw new Error('Empty response from server');
+      if (!text) throw new Error(`Empty response (HTTP ${res.status} ${res.statusText})`);
       let json: Record<string, unknown>;
       try {
         json = JSON.parse(text);
       } catch {
-        throw new Error('Invalid response from server');
+        console.error('[fetchServer] Non-JSON response:', text.slice(0, 500));
+        throw new Error(`Server returned non-JSON (HTTP ${res.status})`);
       }
       if (!res.ok || !json.ok) throw new Error((json.error as string) || 'Failed to load');
       setServer(json.server as ServerData);
