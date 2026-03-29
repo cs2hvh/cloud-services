@@ -63,12 +63,19 @@ export default function VMDetailPage() {
       const res = await fetch(`/api/services/compute/vms/${serverId}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load');
-      setServer(json.server);
+      const text = await res.text();
+      if (!text) throw new Error('Empty response from server');
+      let json: Record<string, unknown>;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        throw new Error('Invalid response from server');
+      }
+      if (!res.ok || !json.ok) throw new Error((json.error as string) || 'Failed to load');
+      setServer(json.server as ServerData);
     } catch (err) {
       console.error(err);
-      toast.error('Failed to load server');
+      toast.error(err instanceof Error ? err.message : 'Failed to load server');
     } finally {
       setLoading(false);
     }
