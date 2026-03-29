@@ -64,19 +64,20 @@ export default function VMDetailPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const text = await res.text();
-      if (!text) throw new Error(`Empty response (HTTP ${res.status} ${res.statusText})`);
       let json: Record<string, unknown>;
       try {
-        json = JSON.parse(text);
+        json = text ? JSON.parse(text) : {};
       } catch {
-        console.error('[fetchServer] Non-JSON response:', text.slice(0, 500));
-        throw new Error(`Server returned non-JSON (HTTP ${res.status})`);
+        json = {};
       }
-      if (!res.ok || !json.ok) throw new Error((json.error as string) || 'Failed to load');
+      if (!text || !res.ok || !json.ok) {
+        console.error('[fetchServer] HTTP', res.status, text?.slice(0, 200));
+        throw new Error('Unable to load server details. Please refresh the page.');
+      }
       setServer(json.server as ServerData);
     } catch (err) {
       console.error(err);
-      toast.error(err instanceof Error ? err.message : 'Failed to load server');
+      toast.error('Unable to load server details. Please refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -130,12 +131,12 @@ export default function VMDetailPage() {
         headers,
         body: JSON.stringify({ serverId, action }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Action failed');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error('failed');
       toast.success(`Server ${action} successful`);
       await fetchServer();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${action} server`);
+    } catch {
+      toast.error(`Could not ${action} server. Please try again.`);
     } finally {
       setActingPower(false);
     }
@@ -151,13 +152,13 @@ export default function VMDetailPage() {
         headers,
         body: JSON.stringify({ name: editName.trim() }),
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Rename failed');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error('failed');
       toast.success('Server renamed');
       setShowRenameInput(false);
       await fetchServer();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename');
+    } catch {
+      toast.error('Could not rename server. Please try again.');
     } finally {
       setRenaming(false);
     }
@@ -175,12 +176,12 @@ export default function VMDetailPage() {
         method: 'DELETE',
         headers,
       });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Destroy failed');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error('failed');
       toast.success('Server destroyed');
       router.push('/dashboard/services/compute/vps');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to destroy server');
+    } catch {
+      toast.error('Could not destroy server. Please try again.');
       setDestroying(false);
     }
   };
@@ -204,13 +205,13 @@ export default function VMDetailPage() {
         method: 'POST',
         headers,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to start console');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error('failed');
       setConsoleWsPath(data.console.wsPath);
       setConsoleVncPassword(data.console.ticket);
       setConsoleState('ready');
-    } catch (err: unknown) {
-      setConsoleError(err instanceof Error ? err.message : 'Failed to start console');
+    } catch {
+      setConsoleError('Could not open console. Make sure the server is running.');
       setConsoleState('error');
     }
   };

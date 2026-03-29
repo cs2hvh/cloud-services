@@ -302,8 +302,8 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || error.message || 'Something went wrong while creating your server.');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Something went wrong while creating your server.');
       }
 
       const result = await response.json();
@@ -314,10 +314,9 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       // You could redirect to the new VPS details page here
       // router.push(`/dashboard/compute/vms/${result.data.id}`);
     } catch (error) {
-      console.error('VPS creation error:', error);
-      const raw = error instanceof Error ? error.message : "";
-      const isFriendly = raw && !raw.includes("fetch") && !raw.includes("500") && !raw.includes("ECONNREFUSED") && !raw.includes("TypeError") && !raw.includes("SyntaxError") && raw.length < 200;
-      toast.error(isFriendly ? raw : 'Something went wrong while deploying your server. Please try again.');
+      console.error('[VPS Create]', error);
+      const msg = error instanceof Error ? error.message : '';
+      toast.error(msg || 'Something went wrong while deploying your server. Please try again.');
     } finally {
       setIsLoading(false);
     }

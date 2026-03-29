@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch server.ts",
+    "dev": "node --max-http-header-size=65536 ./node_modules/.bin/tsx watch server.ts",
     "dev:next": "next dev",
     "build": "npm run generate:openapi && next build",
-    "start": "tsx server.ts",
+    "start": "node --max-http-header-size=65536 ./node_modules/.bin/tsx server.ts",
     "start:next": "next start",
     "lint": "next lint",
     "generate:openapi": "tsx scripts/generate-openapi.ts",

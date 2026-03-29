@@ -127,13 +127,9 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Supabase query error:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-      });
+      console.error("[Admin Hosts] Query error:", error.message, error.code);
       return NextResponse.json(
-        { ok: false, error: error.message },
+        { ok: false, error: "Unable to load hosts. Please try again." },
         { status: 500 }
       );
     }
@@ -143,10 +139,9 @@ export async function GET(req: NextRequest) {
       hosts: hosts || [],
     });
   } catch (error) {
-    console.error("GET /api/admin/proxmox/hosts error:", error);
-    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[Admin Hosts] GET error:", error);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Something went wrong. Please try again." },
       { status: 500 }
     );
   }
@@ -211,8 +206,9 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (upsertErr) {
+      console.error("[Admin Hosts] Upsert error:", upsertErr.message);
       return NextResponse.json(
-        { ok: false, error: upsertErr.message },
+        { ok: false, error: "Failed to save host. Please try again." },
         { status: 500 }
       );
     }
@@ -315,9 +311,9 @@ export async function POST(req: NextRequest) {
       hostId,
     });
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[Admin Hosts] POST error:", error);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Something went wrong. Please try again." },
       { status: 500 }
     );
   }
@@ -387,8 +383,9 @@ export async function DELETE(req: NextRequest) {
         .eq("location", hostId);
 
       if (serversDeleteErr) {
+        console.error("[Admin Hosts] Server cleanup error:", serversDeleteErr.message);
         return NextResponse.json(
-          { ok: false, error: `Failed to delete servers: ${serversDeleteErr.message}` },
+          { ok: false, error: "Failed to clean up associated servers. Please try again." },
           { status: 500 }
         );
       }
@@ -428,8 +425,9 @@ export async function DELETE(req: NextRequest) {
       .eq("id", hostId);
 
     if (deleteErr) {
+      console.error("[Admin Hosts] Delete error:", deleteErr.message);
       return NextResponse.json(
-        { ok: false, error: deleteErr.message },
+        { ok: false, error: "Failed to delete host. Please try again." },
         { status: 500 }
       );
     }
@@ -439,9 +437,9 @@ export async function DELETE(req: NextRequest) {
       message: `Host "${host.name}" deleted successfully`,
     });
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    console.error("[Admin Hosts] DELETE error:", error);
     return NextResponse.json(
-      { ok: false, error: err.message },
+      { ok: false, error: "Something went wrong. Please try again." },
       { status: 500 }
     );
   }

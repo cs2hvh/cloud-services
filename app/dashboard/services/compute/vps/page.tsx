@@ -88,8 +88,8 @@ export default function VPSPage() {
       if (error) throw error;
       setServers(data || []);
     } catch (err) {
-      console.error('Failed to load servers:', err);
-      toast.error('Failed to load servers');
+      console.error('[loadServers]', err);
+      toast.error('Unable to load your servers. Please refresh the page.');
     } finally {
       setLoading(false);
     }

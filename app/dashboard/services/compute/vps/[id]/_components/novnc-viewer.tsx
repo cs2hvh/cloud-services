@@ -97,25 +97,24 @@ export function NoVncViewer({ wsUrl, vncPassword, serverName, onDisconnect }: No
       });
 
       rfb.addEventListener('disconnect', (e: CustomEvent) => {
-        const reason = e.detail?.reason || 'Connection closed';
         const clean = e.detail?.clean ?? false;
-        console.warn(`[noVNC] Disconnected: clean=${clean}, reason=${reason}`);
+        console.warn('[noVNC] Disconnected:', e.detail?.reason);
         setStatus('disconnected');
         rfbRef.current = null;
-        onDisconnectRef.current?.(clean, reason);
+        onDisconnectRef.current?.(clean, clean ? undefined : 'Console session ended. You can reconnect anytime.');
       });
 
-      rfb.addEventListener('securityfailure', (e: CustomEvent) => {
+      rfb.addEventListener('securityfailure', () => {
         setStatus('disconnected');
         rfbRef.current = null;
-        onDisconnectRef.current?.(false, `Security failure: ${e.detail?.reason || 'Unknown'}`);
+        onDisconnectRef.current?.(false, 'Console authentication failed. Please try again.');
       });
 
       rfbRef.current = rfb;
     } catch (err) {
       console.error('[noVNC] Failed to initialize:', err);
       setStatus('disconnected');
-      onDisconnectRef.current?.(false, err instanceof Error ? err.message : 'Failed to load VNC client');
+      onDisconnectRef.current?.(false, 'Could not connect to console. Please try again.');
     }
   }, [wsUrl, vncPassword]);
 

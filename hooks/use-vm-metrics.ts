@@ -98,8 +98,8 @@ export function useVMMetrics({
       consecutiveErrors.current = 0;
     } catch (err) {
       consecutiveErrors.current++;
-      const msg = err instanceof Error ? err.message : 'Metrics unavailable';
-      setError(msg);
+      console.error('[useVMMetrics]', err);
+      setError('Metrics temporarily unavailable');
 
       // Stop polling after 3 consecutive failures
       if (consecutiveErrors.current >= 3 && intervalRef.current) {
