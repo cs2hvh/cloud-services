@@ -1,10 +1,17 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+// Load environment variables from .env.local (Next.js convention)
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env.local") });
+
 const { createClient } = require("@supabase/supabase-js");
 const { Client } = require("ssh2");
 
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local");
+  process.exit(1);
+}
+
 const sb = createClient(
-  "https://xafjjpgazdxhktpfeuri.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhZmpqcGdhemR4aGt0cGZldXJpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjA1ODU3MiwiZXhwIjoyMDY3NjM0NTcyfQ.lWrNK4jO0xM0j9Hcb-0i8rhojswcCuh_-Qbg80RoKqE"
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 async function main() {
@@ -34,36 +41,51 @@ runcmd:
     # Fix /32 gateway routing for OVH-style routed IPs
     # Detect gateway and interface
     GW=$(grep -oP 'gateway4: \\K[0-9.]+' /etc/netplan/50-cloud-init.yaml 2>/dev/null)
+    [ -z "$GW" ] && GW=$(grep -oP 'via \\K[0-9.]+' /etc/netplan/50-cloud-init.yaml 2>/dev/null | head -1)
     [ -z "$GW" ] && GW=$(grep -oP 'Gateway=\\K[0-9.]+' /run/systemd/network/*.network 2>/dev/null | head -1)
     DEV=$(ip -o link show | awk -F': ' '/ether/{print $2; exit}')
-    if [ -n "$GW" ] && [ -n "$DEV" ] && ! ip route show default 2>/dev/null | grep -q via; then
+    if [ -n "$GW" ] && [ -n "$DEV" ]; then
+      # Immediate fix for current boot
       ip route replace $GW/32 dev $DEV 2>/dev/null
       ip route replace default via $GW dev $DEV onlink 2>/dev/null
     fi
     # Write persistent netplan override for reboots (Ubuntu/Debian)
+    # Uses 99-static.yaml so cloud-init's 50-cloud-init.yaml can't overwrite it
     if [ -n "$GW" ] && [ -n "$DEV" ] && [ -d /etc/netplan ]; then
       MYIP=$(ip -4 addr show $DEV | grep -oP 'inet \\K[0-9./]+' | head -1)
       MAC=$(ip link show $DEV | grep -oP 'link/ether \\K[0-9a-f:]+')
-      DNS=$(grep -oP 'nameserver \\K[0-9.]+' /etc/resolv.conf 2>/dev/null | head -2 | tr '\\n' ',' | sed 's/,$//')
-      cat > /etc/netplan/50-cloud-init.yaml << NETEOF
+      DNS1=$(grep -oP 'nameserver \\K[0-9.]+' /etc/resolv.conf 2>/dev/null | sed -n '1p')
+      DNS2=$(grep -oP 'nameserver \\K[0-9.]+' /etc/resolv.conf 2>/dev/null | sed -n '2p')
+      [ -z "$DNS1" ] && DNS1="1.1.1.1"
+      [ -z "$DNS2" ] && DNS2="8.8.8.8"
+      cat > /etc/netplan/99-static.yaml <<NETEOF
     network:
-        version: 2
-        ethernets:
-            $DEV:
-                addresses:
-                - $MYIP
-                match:
-                    macaddress: $MAC
-                nameservers:
-                    addresses:
-                    - $DNS
-                routes:
-                - to: 0.0.0.0/0
-                  via: $GW
-                  on-link: true
-                set-name: $DEV
+      version: 2
+      ethernets:
+        $DEV:
+          addresses:
+          - $MYIP
+          match:
+            macaddress: $MAC
+          nameservers:
+            addresses:
+            - $DNS1
+            - $DNS2
+          routes:
+          - to: $GW/32
+            scope: link
+          - to: 0.0.0.0/0
+            via: $GW
+            on-link: true
+          set-name: $DEV
     NETEOF
-      sed -i 's/^    //' /etc/netplan/50-cloud-init.yaml
+      chmod 600 /etc/netplan/99-static.yaml
+      # Remove cloud-init's netplan so it doesn't conflict
+      rm -f /etc/netplan/50-cloud-init.yaml
+      # Disable cloud-init network management on future boots
+      mkdir -p /etc/cloud/cloud.cfg.d
+      echo "network: {config: disabled}" > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+      netplan apply 2>/dev/null || true
     fi
     # Write persistent NetworkManager route for reboots (CentOS/RHEL)
     if [ -n "$GW" ] && [ -n "$DEV" ] && command -v nmcli >/dev/null 2>&1 && ! [ -d /etc/netplan ]; then
@@ -73,6 +95,9 @@ runcmd:
         nmcli con mod "$CONN" ipv4.gateway "$GW" 2>/dev/null
         nmcli con up "$CONN" 2>/dev/null || true
       fi
+      # Disable cloud-init network management on future boots
+      mkdir -p /etc/cloud/cloud.cfg.d
+      echo "network: {config: disabled}" > /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
     fi`;
 
     await new Promise((resolve, reject) => {

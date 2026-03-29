@@ -560,3 +560,46 @@ export async function getVMConfig(
   );
   return json?.data || json;
 }
+
+/**
+ * Get VM RRD (time-series) metrics data.
+ * Proxmox stores RRD data at various timeframes.
+ * @param timeframe - "hour" | "day" | "week" | "month" | "year"
+ * @param cf - consolidation function: "AVERAGE" | "MAX"
+ */
+export async function getVMRRDData(
+  host: ProxmoxHost,
+  vmid: number,
+  auth: ProxmoxAuth,
+  timeframe: 'hour' | 'day' | 'week' | 'month' | 'year' = 'hour',
+  cf: 'AVERAGE' | 'MAX' = 'AVERAGE',
+  dispatcher?: any
+): Promise<any[]> {
+  const json = await fetchJson(
+    host,
+    `/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/rrddata?timeframe=${encodeURIComponent(timeframe)}&cf=${encodeURIComponent(cf)}`,
+    auth,
+    dispatcher
+  );
+  return Array.isArray(json) ? json : json?.data || [];
+}
+
+/**
+ * Create a VNC proxy connection for web console access.
+ * Returns a ticket and port for noVNC WebSocket connection.
+ */
+export async function createVNCProxy(
+  host: ProxmoxHost,
+  vmid: number,
+  auth: ProxmoxAuth,
+  dispatcher?: any
+): Promise<{ ticket: string; port: number; upid: string; cert: string }> {
+  const result = await postForm(
+    host,
+    `/api2/json/nodes/${encodeURIComponent(host.node)}/qemu/${vmid}/vncproxy`,
+    { websocket: 1 },
+    auth,
+    dispatcher
+  );
+  return result;
+}

@@ -3,8 +3,13 @@ import { Agent as UndiciAgent } from "undici";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 import { addHostRoute } from "@/lib/proxmox-utils";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { redis } from "@/lib/redis";
+import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
 
 export const dynamic = "force-dynamic";
+
+const MAX_VMS_PER_USER = 25;
 
 // Type definitions
 interface ProxmoxResponse<T = unknown> {
@@ -166,12 +171,64 @@ export async function POST(req: NextRequest) {
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
   }
 
+  // Rate limit: max 5 VM creations per hour per user
+  const rl = await limitByUser(user.id, {
+    prefix: "rl:vm-create",
+    limit: 5,
+    windowMs: 3600_000,
+  });
+  if (!rl.allowed) {
+    return Response.json(
+      { ok: false, error: "Too many servers created recently. Please try again later.", retryAfterSec: rl.retryAfterSec },
+      { status: 429 }
+    );
+  }
+
+  // Idempotency check — prevent duplicate VM creates from double-clicks or retries
+  const idempKey = getIdempotencyKey(req.headers);
+  let idempComplete: ((data: unknown) => Promise<void>) | null = null;
+  if (idempKey) {
+    const idemp = await checkIdempotency(`vm-create:${user.id}:${idempKey}`);
+    if (idemp.status === "completed") {
+      return Response.json(idemp.data, { status: 200 });
+    }
+    if (idemp.status === "in-progress") {
+      return Response.json(
+        { ok: false, error: "This request is already being processed. Please wait." },
+        { status: 409, headers: { "Retry-After": String(idemp.retryAfter) } }
+      );
+    }
+    // Reserve the key
+    const reserved = await idemp.reserve();
+    if (!reserved) {
+      return Response.json(
+        { ok: false, error: "Duplicate request detected. Please wait." },
+        { status: 409 }
+      );
+    }
+    idempComplete = idemp.complete;
+  }
+
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   const region = String(body.region || "");
   if (!region) return Response.json({ ok: false, error: "region is required" }, { status: 400 });
 
   const supabase = await createWorkerClient();
+
+  // Per-user VM limit — prevent a single user from exhausting infrastructure
+  const { count: existingVMs } = await supabase
+    .from("servers")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .in("status", ["provisioning", "running", "stopped", "suspended"]);
+
+  if ((existingVMs || 0) >= MAX_VMS_PER_USER) {
+    return Response.json(
+      { ok: false, error: `You have reached the maximum of ${MAX_VMS_PER_USER} active servers. Please delete unused servers first.` },
+      { status: 429 }
+    );
+  }
 
   // --- Smart host selection ---
   // 1. Find all active hosts in the requested region
@@ -313,7 +370,6 @@ export async function POST(req: NextRequest) {
   type HostCandidate = {
     host: typeof regionHosts[0];
     template: { vmid: number; name: string };
-    ip: PoolItem;
     freeCpu: number;
     freeMem: number;
     freeDisk: number;
@@ -341,7 +397,7 @@ export async function POST(req: NextRequest) {
     if (freeMem < memoryMB) continue;
     if (freeDisk < requestedDisk) continue;
 
-    candidates.push({ host: h, template: tpl, ip: ips[0], freeCpu, freeMem, freeDisk });
+    candidates.push({ host: h, template: tpl, freeCpu, freeMem, freeDisk });
   }
 
   if (candidates.length === 0) {
@@ -358,11 +414,40 @@ export async function POST(req: NextRequest) {
     return scoreB - scoreA;
   });
 
-  const selected = candidates[0];
+  // Atomically allocate an IP using Redis locks to prevent race conditions.
+  // Two concurrent requests will never get the same IP because only one can
+  // acquire the NX lock on a given IP key.
+  let selected: typeof candidates[0] | null = null;
+  let allocatedIp: PoolItem | null = null;
+  let ipLockKey: string | null = null;
+
+  for (const candidate of candidates) {
+    const ips = ipCandidatesByHost.get(candidate.host.id) || [];
+    for (const ipItem of ips) {
+      const lockKey = `ip-alloc:${ipItem.ip}`;
+      // NX = set only if not exists, EX = auto-expire after 5 min (covers provisioning time)
+      const locked = await redis.set(lockKey, `vm:${user.id}:${Date.now()}`, { nx: true, ex: 300 });
+      if (locked) {
+        selected = candidate;
+        allocatedIp = ipItem;
+        ipLockKey = lockKey;
+        break;
+      }
+    }
+    if (selected) break;
+  }
+
+  if (!selected || !allocatedIp) {
+    return Response.json({
+      ok: false,
+      error: "This region is currently at capacity. Please try a different region or a smaller configuration."
+    }, { status: 409 });
+  }
+
   const cfg = selected.host as unknown as HostConfig;
   const selectedTemplate = selected.template;
-  const ipPrimary = selected.ip.ip;
-  const macAddress = selected.ip.mac;
+  const ipPrimary = allocatedIp.ip;
+  const macAddress = allocatedIp.mac;
   const hostId = cfg.id;
 
   if (!macAddress) {
@@ -379,7 +464,7 @@ export async function POST(req: NextRequest) {
     cpuCores,
     memoryGB: memoryMB / 1024,
     diskGB: diskGB || 20,
-    location: hostId
+    location: region,
   };
 
   const hourlyCost = calculateHourlyCost(serverSpecs);
@@ -409,7 +494,11 @@ export async function POST(req: NextRequest) {
       .eq("ip", ipPrimary)
       .limit(1)
       .maybeSingle();
-    if (existing) return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
+    if (existing) {
+      // Release IP lock since we can't use this IP
+      if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+      return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
+    }
 
     const billingStart = new Date();
 
@@ -443,6 +532,8 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (insertErr) {
+      // Release IP lock on failure
+      if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
       db.error = insertErr.message;
       if (insertErr.message?.toLowerCase().includes("duplicate") || (insertErr as unknown as Record<string, unknown>).code === "23505") {
         return Response.json({ ok: false, error: "Resources temporarily unavailable. Please try again." }, { status: 409 });
@@ -452,7 +543,11 @@ export async function POST(req: NextRequest) {
     reservationId = (inserted as Record<string, unknown>)?.id as number ?? null;
     db.saved = true;
     db.id = reservationId;
+    // IP is now tracked in the servers table — release the Redis lock
+    if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
   } catch (e) {
+    // Release IP lock on error
+    if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
     const error = e instanceof Error ? e : new Error(String(e));
     db.error = error?.message || String(e);
     console.error("[VM Create] DB reservation failed:", db.error);
@@ -558,7 +653,9 @@ export async function POST(req: NextRequest) {
     try {
       const vmConfig = await fetchJson(apiBase, `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${newid}/config`, auth, dispatcher);
       cfgData = (vmConfig as { data?: Record<string, unknown> })?.data ?? (vmConfig as Record<string, unknown>);
-    } catch {}
+    } catch (e) {
+      console.error(`[VM Create] Failed to fetch VM config for ${newid}:`, e instanceof Error ? e.message : e);
+    }
 
     // Remove any CD-ROM / ISO drives inherited from the template (e.g. VirtIO drivers, Windows installer)
     if (cfgData && typeof cfgData === "object") {
@@ -609,7 +706,9 @@ export async function POST(req: NextRequest) {
             dispatcher,
           })
         );
-      } catch {}
+      } catch (e) {
+        console.error(`[VM Create] Disk resize failed for VM ${newid} (${primaryDisk} +${diskGB}G):`, e instanceof Error ? e.message : e);
+      }
     }
 
     // Regenerate cloud-init ISO so new ciuser/cipassword/ipconfig take effect
@@ -696,7 +795,7 @@ export async function POST(req: NextRequest) {
   }); // end after()
 
   // Return immediately — client tracks progress via Supabase realtime
-  return Response.json({
+  const successResponse = {
     ok: true,
     serverId: reservationId,
     name: hostname,
@@ -710,5 +809,12 @@ export async function POST(req: NextRequest) {
       ? { rdp: { username: ciuser, port: 3389 } }
       : { ssh: { username: ciuser, port: 22 } }
     ),
-  });
+  };
+
+  // Record idempotency result so retries get the same response
+  if (idempComplete) {
+    await idempComplete(successResponse).catch(() => {});
+  }
+
+  return Response.json(successResponse);
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createWorkerClient } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
+import { checkAdminAuth } from "@/lib/auth/check-admin";
 import { Agent as UndiciAgent } from "undici";
 import { calculateHourlyCost, type ServerSpecs } from "@/lib/pricing";
 import { addHostRoute } from "@/lib/proxmox-utils";
@@ -139,37 +140,9 @@ async function waitTask(apiBase: string, node: string, upid: string, auth: Proxm
   throw new Error("task timeout");
 }
 
-// Check if user is admin
-async function requireAdmin(): Promise<{ ok: boolean; email?: string }> {
-  try {
-    const supabase = await createClient();
-    const { data: userData } = await supabase.auth.getUser();
-    const email = userData?.user?.email || "";
-
-    if (!email) {
-      return { ok: false };
-    }
-
-    // Check ADMIN_EMAILS environment variable
-    const adminEmails = (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (adminEmails.length > 0 && !adminEmails.includes(email.toLowerCase())) {
-      return { ok: false };
-    }
-
-    return { ok: true, email };
-  } catch (error) {
-    console.error("Admin check error:", error);
-    return { ok: false };
-  }
-}
-
 export async function POST(req: NextRequest) {
-  const adminAuth = await requireAdmin();
-  if (!adminAuth.ok) {
+  const { authorized, user } = await checkAdminAuth();
+  if (!authorized || !user) {
     return NextResponse.json(
       { ok: false, error: "Not authorized" },
       { status: 403 }
@@ -342,7 +315,7 @@ export async function POST(req: NextRequest) {
         memory_mb: body.memoryMB,
         disk_gb: body.diskGB,
         status: "provisioning",
-        owner_email: adminAuth.email,
+        owner_email: user.email,
         hourly_cost: hourlyCost,
         billing_start: new Date().toISOString(),
       })

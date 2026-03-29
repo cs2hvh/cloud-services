@@ -1,795 +1,669 @@
-================================================================================
-  SECURITY AUDIT REPORT - AhuraSense Cloud Services
-  Date: 2026-03-24
-  Auditor: Senior Security Engineer (Automated)
-  Branch: dev
-  Scope: Full codebase - auth, API, infra, secrets, middleware, webhooks
-================================================================================
-
-
-TABLE OF CONTENTS
------------------
-  [1]  CRITICAL FINDINGS (7)
-  [2]  HIGH SEVERITY FINDINGS (8)
-  [3]  MEDIUM SEVERITY FINDINGS (6)
-  [4]  LOW SEVERITY FINDINGS (3)
-  [5]  SUMMARY & PRIORITY ACTION PLAN
-
-
-================================================================================
-[1] CRITICAL FINDINGS
-================================================================================
-
-------------------------------------------------------------------------------
-VULN-001: .env File Contains ALL Production Secrets in Plaintext
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Secrets Management / Data Exposure
-File:        .env (105 lines, present in working directory)
-
-Description:
-  The .env file is present on disk and contains every production secret for
-  the entire platform. While .env is listed in .gitignore, the file exists
-  in the working directory and any accidental `git add -A`, CI artifact leak,
-  or filesystem access exposes total platform compromise.
-
-  Exposed credentials include:
-    - SUPABASE_SERVICE_ROLE_KEY (bypasses all RLS, full DB read/write)
-    - OPENAI_API_KEY, OPENROUTER_API_KEY
-    - STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
-    - REDIS_URL (with password: Pankajsoni1155@172.105.39.76:6379)
-    - DIGITAL_OCEAN_TOKEN
-    - CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_TOKEN_SPECTRUM
-    - JENKINS_URL (with admin:password embedded in URL)
-    - GITLAB_CLIENT_SECRET, BITBUCKET_CLIENT_SECRET
-    - ENCRYPTION_KEY
-    - KUBE_CONFIG_STRING (full base64 kubeconfig with cluster-admin certs)
-    - PTERO_API_KEY (Pterodactyl panel admin)
-    - RESEND_API_KEY
-    - NAMECOM_API_TOKEN
-
-Exploit Scenario:
-  An attacker obtaining this single file gains root access to every
-  infrastructure component: Supabase (all user data), Kubernetes (all
-  workloads), Proxmox (all VMs), Stripe (billing manipulation), DNS
-  (domain hijacking), Jenkins (arbitrary code execution), and more.
-
-Remediation:
-  1. Rotate ALL credentials immediately
-  2. Use a secrets manager (HashiCorp Vault, AWS Secrets Manager, Doppler)
-  3. Never store secrets in flat files on production servers
-  4. Implement secret scanning in CI/CD pipeline (e.g., gitleaks, trufflehog)
-
-
-------------------------------------------------------------------------------
-VULN-002: Bitbucket Webhook Signature Validation Accepts ALL Requests
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Broken Authentication / Webhook Forgery
-File:        lib/webhooks/bitbucket.ts
-Lines:       19-45
-
-Description:
-  The Bitbucket webhook signature validation function returns true (accept)
-  in every error case instead of rejecting:
-
-    - No secret configured     -> return true  (should reject)
-    - No signature header      -> return true  (should reject)
-    - Signature length mismatch -> return true (should reject)
-
-  Code:
-    static validateSignature(...): boolean {
-      if (!secret) {
-        console.warn('No secret configured, skipping signature validation');
-        return true;   // BUG: accepts unsigned webhooks
-      }
-      if (!signature) {
-        console.warn('No signature header present, skipping validation');
-        return true;   // BUG: accepts missing signatures
-      }
-      if (sigBuffer.length !== digBuffer.length) {
-        console.warn('Signature length mismatch, skipping strict validation');
-        return true;   // BUG: accepts invalid signatures
-      }
-    }
-
-Exploit Scenario:
-  Any attacker can send forged Bitbucket webhook payloads to
-  POST /api/webhooks/git/bitbucket to trigger arbitrary deployments.
-  This could deploy malicious code to production Kubernetes clusters.
-
-Remediation:
-  Change all `return true` in error cases to `return false`.
-  A webhook with no secret, no signature, or wrong signature must be rejected.
-
-
-------------------------------------------------------------------------------
-VULN-003: NEXT_PUBLIC_CLIENT_SECRET Exposes a "Secret" to the Browser
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Secrets Exposure
-File:        .env:43
-
-Description:
-  NEXT_PUBLIC_CLIENT_SECRET="ahurasense_client_secret"
-
-  Any environment variable prefixed with NEXT_PUBLIC_ is bundled into
-  client-side JavaScript and visible to all users in their browser.
-  This value is labeled "client_secret" -- if used for any server-side
-  validation or API authentication, it provides zero security since
-  every user can read it from the JS bundle.
-
-Remediation:
-  Remove the NEXT_PUBLIC_ prefix. If used for server-side webhook or
-  API validation, keep it server-only as a regular env var.
-
-
-------------------------------------------------------------------------------
-VULN-004: Middleware Auth Bypass for AI Agent Routes
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Broken Access Control / Authentication Bypass
-File:        middleware.ts
-Lines:       120-131
-
-Description:
-  The Next.js middleware completely skips all checks (session refresh,
-  rate limiting) for several route patterns based solely on the presence
-  of an Authorization header -- regardless of its value:
-
-    if (pathname.startsWith('/api/ai-agents/') && pathname.endsWith('/test')) {
-      return NextResponse.next();  // COMPLETE BYPASS
-    }
-    if (pathname.startsWith('/api/ai-agents') && hasAuthorizationHeader) {
-      return NextResponse.next();  // ANY Authorization header works
-    }
-    if (pathname.startsWith('/api/knowledge-bases') && hasAuthorizationHeader) {
-      return NextResponse.next();  // ANY Authorization header works
-    }
-    if (pathname.startsWith('/api/v1/agents/') && pathname.endsWith('/chat')) {
-      return NextResponse.next();  // COMPLETE BYPASS
-    }
-
-Exploit Scenario:
-  curl -H "Authorization: Bearer garbage" https://target/api/ai-agents/...
-
-  This bypasses all middleware-level protections. If any downstream route
-  handler trusts that middleware has already validated the session, it's
-  wide open to unauthenticated access.
-
-Remediation:
-  Middleware should never skip entirely based on header presence alone.
-  Move the SSE bypass to only the specific streaming routes that need it,
-  and still validate the token value. At minimum, check that the token
-  is non-empty and well-formed before bypassing.
-
-
-------------------------------------------------------------------------------
-VULN-005: Hardcoded Cloudflare API Key in Source Code
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Secrets Exposure / Credential Leak
-File:        lib/cloudflare/index.ts
-Lines:       15-16
-
-Description:
-  Commented-out but visible Cloudflare credentials in source code:
-
-    // apiEmail: "omkarjoshi9918@gmail.com",
-    // apiKey: "ghHbAiBgvA14ArB_bi19C_RvAZkLy80BKNJGIOsf",
-
-  These persist in git history even after removal from the file.
-  Anyone with repository read access has a working Cloudflare API key.
-
-Remediation:
-  1. Rotate this Cloudflare API key immediately
-  2. Remove from source code
-  3. Run BFG Repo-Cleaner or git filter-repo to purge from git history
-  4. Set up pre-commit hooks to prevent future secret commits
-
-
-------------------------------------------------------------------------------
-VULN-006: Jenkins Admin Credentials Embedded in URL
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Secrets Exposure
-File:        .env:55
-
-Description:
-  JENKINS_URL=https://admin:11bdb0b1fd26e9d38f1b63714b9e8dc752@jenkins.hav0k.dev
-
-  Jenkins admin username and API token are embedded directly in the URL.
-  URLs are logged by:
-    - HTTP proxies and load balancers
-    - Browser history and developer tools
-    - Error reporting services (stack traces include URLs)
-    - Application access logs
-
-  Anyone with this URL has full Jenkins admin access, which means
-  arbitrary code execution on the CI/CD server and all connected systems.
-
-Remediation:
-  Move credentials to separate JENKINS_USER and JENKINS_TOKEN env vars.
-  Never embed credentials in URLs.
-
-
-------------------------------------------------------------------------------
-VULN-007: Redis Exposed on Public IP with Weak Password, No TLS
-------------------------------------------------------------------------------
-Severity:    CRITICAL
-Category:    Infrastructure Security
-File:        .env:10
-
-Description:
-  REDIS_URL="redis://:Pankajsoni1155@172.105.39.76:6379/0"
-
-  Redis is exposed on a public IP address (172.105.39.76) with:
-    - A weak, human-readable password ("Pankajsoni1155")
-    - No TLS encryption (redis:// not rediss://)
-    - Default port 6379
-
-  Redis stores rate limit state, BullMQ job queues, and cached data.
-
-Exploit Scenario:
-  An attacker can connect directly to Redis, read all cached data,
-  manipulate rate limits, inject malicious BullMQ jobs, or use Redis
-  as a pivot point for further attacks (e.g., writing SSH keys via
-  Redis CONFIG SET if not hardened).
-
-Remediation:
-  1. Put Redis behind a firewall/VPN (no public IP)
-  2. Use a strong random password (32+ chars)
-  3. Enable TLS (use rediss:// protocol)
-  4. Disable dangerous Redis commands (CONFIG, FLUSHALL, etc.)
-
-
-================================================================================
-[2] HIGH SEVERITY FINDINGS
-================================================================================
-
-------------------------------------------------------------------------------
-VULN-008: Inconsistent Admin Authorization -- Three Different Patterns
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Broken Access Control / Privilege Escalation
-Files:       lib/supabase/auth.ts:22-71
-             app/api/admin/users/route.ts:5-26
-             app/api/admin/proxmox/vms/create/route.ts:143-168
-             (and ~24 other admin route files)
-
-Description:
-  Three different admin check implementations exist across 27 admin routes:
-
-  Pattern A - requireAdmin() from lib/supabase/auth.ts:
-    Checks ADMIN_EMAILS env var first, falls back to user_profiles.roles.
-    Used by: audit-logs, ai-agents stats, database-options, proxmox hosts
-
-  Pattern B - inline checkAdminAuth():
-    Checks user_profiles.roles.includes("admin") ONLY. Ignores ADMIN_EMAILS.
-    Used by: users, coupons, databases, cluster-metrics, ai-agents models,
-    network-ddos, kubernetes delete (~20 routes)
-
-  Pattern C - requireAdmin() in proxmox/vms/create:
-    Checks ADMIN_EMAILS env var ONLY. No user_profiles fallback.
-    Used by: proxmox VM creation
-
-  Additionally, ADMIN_EMAILS is NOT set in the .env file, which means:
-    - Pattern A falls through to user_profiles check (works)
-    - Pattern C allows ALL authenticated users through (if env var is empty
-      and adminEmails array has length 0, condition on line 159 is skipped)
-
-Exploit Scenario:
-  1. If a user can modify their own user_profiles.roles (RLS misconfiguration),
-     they gain admin access to all Pattern B routes
-  2. The proxmox VM create route (Pattern C) may be accessible to non-admins
-     when ADMIN_EMAILS is unset, depending on the empty-array logic
-
-Remediation:
-  Consolidate all 27 admin routes to use a single requireAdmin() function.
-  Fix the empty ADMIN_EMAILS fallback logic to be explicit.
-
-
-------------------------------------------------------------------------------
-VULN-009: Sensitive Data Logged to Console in Auth Routes
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Information Disclosure / PII Leak
-File:        app/api/auth/signin/email/route.ts
-Lines:       29, 31, 36
-
-Description:
-  Production code contains debug console.log statements that output
-  user email addresses and full auth response objects:
-
-    Line 29: console.log(email, "...........email in signin route.ts........");
-    Line 31: console.log(email, "...........email in signin route.ts........");
-    Line 36: console.log(data, "...........data in signin route.ts........");
-
-  These logs go to stdout, which is captured by cloud logging platforms
-  (CloudWatch, Datadog, etc.), container log aggregators, and server logs.
-
-Exploit Scenario:
-  - Anyone with log access can enumerate user emails
-  - Full auth response may contain session tokens or refresh tokens
-  - Violates GDPR/CCPA by logging PII without consent
-  - Enables email harvesting for phishing attacks
-
-Remediation:
-  Remove all console.log statements containing user data from auth routes.
-  Use structured logging with PII redaction if debugging is needed.
-
-
-------------------------------------------------------------------------------
-VULN-010: In-Memory Rate Limiting -- Bypassable in Multi-Instance Deployment
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Insufficient Rate Limiting
-Files:       middleware.ts:24 (ipStore = new Map())
-             lib/rate-limit.ts:15 (store = new Map())
-
-Description:
-  IP-based rate limiting in the middleware and the generic rate limiter both
-  use in-memory Map objects:
-
-    const ipStore = new Map<string, IpRecord>();  // middleware.ts:24
-    const store = new Map<string, RateLimitStore>(); // rate-limit.ts:15
-
-  Problems:
-    1. Multi-instance: In Kubernetes/PM2, each pod has its own Map.
-       Requests distributed across N pods get N times the rate limit.
-    2. Restart: Server restart clears all rate limit state.
-    3. Memory leak: No bounded size on the Maps. Slow probabilistic
-       cleanup (10% chance per request in rate-limit.ts:70).
-
-  Note: The per-user rate limiter (lib/cooldown/userbased.ts) correctly
-  uses Redis. Only the middleware-level IP limiter is affected.
-
-Remediation:
-  Move IP rate limiting to Redis/Upstash, consistent with the per-user
-  rate limiter. The code already has a comment acknowledging this:
-  "use Redis/Upstash for multi-instance in future" (middleware.ts:23).
-
-
-------------------------------------------------------------------------------
-VULN-011: IP Spoofing via X-Forwarded-For Header
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Rate Limit Bypass / Log Forgery
-Files:       middleware.ts:27-31
-             lib/rate-limit.ts:34-36
-             lib/audit/context.ts:28
-             (~10 additional locations)
-
-Description:
-  Client IP is derived from the X-Forwarded-For request header:
-
-    function getClientIp(req: NextRequest): string {
-      return (
-        req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-        req.headers.get("x-real-ip") ||
-        "unknown"
-      );
-    }
-
-  If the application is not behind a trusted reverse proxy that strips
-  and overwrites X-Forwarded-For, any client can set this header to an
-  arbitrary value, completely bypassing all IP-based rate limiting.
-
-  Additionally, audit logs (lib/audit/context.ts) record this spoofable
-  IP, making forensic analysis unreliable.
-
-Exploit Scenario:
-  curl -H "X-Forwarded-For: 1.2.3.4" https://target/api/auth/signin
-  curl -H "X-Forwarded-For: 5.6.7.8" https://target/api/auth/signin
-  (each request appears as a different IP, bypassing rate limits)
-
-Remediation:
-  1. Configure the reverse proxy (nginx, Cloudflare) to set a trusted
-     client IP header
-  2. Only trust X-Forwarded-For from known proxy IPs
-  3. Fall back to connection remote address, not "unknown"
-
-
-------------------------------------------------------------------------------
-VULN-012: MFA Enrollment Auto-Deletes Verified Factors
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Authentication Bypass
-File:        app/api/auth/mfa/enroll/route.ts
-Lines:       44-76
-
-Description:
-  When a user hits the maximum MFA factor limit, the enrollment endpoint
-  automatically deletes the oldest verified factor to make room:
-
-    // Remove unverified factors first
-    for (const factor of factors.data.totp) {
-      if (factor.status === "unverified") {
-        await supabase.auth.mfa.unenroll({ factorId: factor.id });
-      }
-    }
-
-    // If still hitting limit, remove oldest verified factor
-    if (enrollError?.message?.includes("Maximum number of verified factors")) {
-      // ... removes oldest verified factor
-    }
-
-Exploit Scenario:
-  An attacker who compromises a user's session (e.g., via session fixation
-  or XSS) can call the MFA enroll endpoint to silently remove the victim's
-  legitimate MFA factor and enroll their own. The victim won't know their
-  MFA was replaced until their next login attempt.
-
-Remediation:
-  1. Never auto-delete verified MFA factors
-  2. Return an error if the user has max factors
-  3. Require current MFA verification before deleting any existing factor
-  4. Send email notification when MFA factors change
-
-
-------------------------------------------------------------------------------
-VULN-013: Service Role Key Used Extensively Without Row-Level Scoping
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Broken Access Control / IDOR Risk
-File:        lib/supabase/server.ts:104-112
-
-Description:
-  createWorkerClient() uses SUPABASE_SERVICE_ROLE_KEY which bypasses ALL
-  Supabase Row-Level Security (RLS) policies:
-
-    export async function createWorkerClient() {
-      return clientWorker<Database>(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!, // bypasses all RLS
-        { auth: { persistSession: false, autoRefreshToken: false } }
-      );
-    }
-
-  This client is used in ~40+ query functions across lib/supabase/queries.ts.
-  While some API routes verify resource ownership before calling these
-  functions, the service role client has unrestricted access to all tables
-  and all rows.
-
-  If ANY route passes user-controlled input (like a resource ID) to a
-  service-role query without first validating ownership, it creates an
-  Insecure Direct Object Reference (IDOR) vulnerability.
-
-Remediation:
-  1. Prefer user-scoped Supabase clients (anon key + user JWT) for queries
-     that should respect RLS
-  2. Only use service role for operations that genuinely require elevated access
-  3. Always verify resource ownership at the API layer before service-role ops
-  4. Audit all 40+ usages for missing ownership checks
-
-
-------------------------------------------------------------------------------
-VULN-014: Weak/Static Encryption Key
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Cryptographic Weakness
-File:        .env:42
-
-Description:
-  ENCRYPTION_KEY="abedef7e0daf8f08c671811f172b0099d0357bbf"
-
-  This 40-character hex string (160 bits) is used to encrypt S3 bucket
-  credentials (lib/aws/s3-client.ts:19) and Spectrum DNS records. It is:
-    - Static (never rotated)
-    - Stored as plaintext in .env
-    - Shared across all encryption operations
-    - Appears to be human-chosen (not cryptographically random)
-
-Remediation:
-  1. Use a Key Management Service (AWS KMS, HashiCorp Vault)
-  2. Generate a cryptographically random 256-bit key
-  3. Implement key rotation mechanism
-  4. Store the key in a secrets manager, not an env var
-
-
-------------------------------------------------------------------------------
-VULN-015: No CSRF Protection on State-Changing Endpoints
-------------------------------------------------------------------------------
-Severity:    HIGH
-Category:    Cross-Site Request Forgery
-Files:       All app/api/services/*/route.ts POST handlers
-
-Description:
-  Next.js API routes don't have built-in CSRF protection. State-changing
-  endpoints (VM create, database delete, app delete, billing operations)
-  accept JSON bodies via POST with cookie-based authentication.
-
-  While SameSite=Lax cookies provide partial mitigation, modern fetch()
-  requests with credentials: 'include' from cross-origin pages may still
-  succeed depending on browser behavior and CORS configuration.
-
-  No custom anti-CSRF header or token is required by any endpoint.
-
-Remediation:
-  1. Add CSRF token validation on all state-changing endpoints
-  2. OR require a custom header (e.g., X-Requested-With) that triggers
-     CORS preflight and cannot be sent cross-origin without CORS approval
-  3. Consider using SameSite=Strict for session cookies
-
-
-================================================================================
-[3] MEDIUM SEVERITY FINDINGS
-================================================================================
-
-------------------------------------------------------------------------------
-VULN-016: Missing Content-Security-Policy Header
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    XSS Defense / Security Headers
-File:        next.config.ts:11-43
-
-Description:
-  Good security headers are present:
-    - X-Frame-Options: DENY
-    - X-Content-Type-Options: nosniff
-    - Strict-Transport-Security (HSTS with preload)
-    - Referrer-Policy: strict-origin-when-cross-origin
-    - X-XSS-Protection: 1; mode=block
-    - Permissions-Policy (camera, microphone, geolocation disabled)
-
-  However, NO Content-Security-Policy (CSP) header is set. CSP is the
-  single most effective defense against XSS attacks.
-
-Remediation:
-  Add a CSP header. Minimum:
-    default-src 'self';
-    script-src 'self';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' https://samatva.blr1.cdn.digitaloceanspaces.com https://flagcdn.com;
-    connect-src 'self' https://xafjjpgazdxhktpfeuri.supabase.co;
-
-
-------------------------------------------------------------------------------
-VULN-017: allow_insecure_tls Disables TLS Verification to Proxmox Hosts
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    Man-in-the-Middle
-File:        lib/proxmox-utils.ts:60-73
-
-Description:
-  The proxmox_hosts.allow_insecure_tls database column controls whether
-  TLS certificate validation is disabled for Proxmox API calls:
-
-    export function getDispatcher(allowInsecureTls: boolean) {
-      if (!allowInsecureTls) return undefined;
-      return new UndiciAgent({
-        connect: { rejectUnauthorized: false }  // DISABLES TLS VERIFICATION
-      });
-    }
-
-  A MITM attacker on the network between the app server and Proxmox
-  hosts can intercept all hypervisor API calls, including credentials.
-
-Remediation:
-  Install proper TLS certificates on Proxmox hosts (Let's Encrypt).
-  Remove the allow_insecure_tls option entirely for production.
-
-
-------------------------------------------------------------------------------
-VULN-018: Stripe Billing Metadata Fallback Enables Price Manipulation
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    Business Logic / Price Tampering
-File:        app/api/billing/webhook/route.ts:39-41
-
-Description:
-  The Stripe webhook handler uses the actual amount from Stripe but falls
-  back to client-controlled metadata:
-
-    const actualAmountCents = session.amount_total;
-    const amount = actualAmountCents ? actualAmountCents / 100 : metadataAmount;
-
-  If amount_total is null/zero for any reason, the code uses metadataAmount,
-  which was set during checkout session creation and could be manipulated.
-
-Exploit Scenario:
-  An attacker crafts a Stripe Checkout session where amount_total is 0
-  (free trial, coupon exploit, etc.) but metadataAmount is set high,
-  inflating their credit balance.
-
-Remediation:
-  Remove the metadata fallback. Always require amount_total from Stripe.
-  If amount_total is missing, reject the webhook or credit $0.
-
-
-------------------------------------------------------------------------------
-VULN-019: Kubeconfig with Cluster-Admin Credentials in Env Var
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    Overprivileged Credentials
-File:        .env:84 (KUBE_CONFIG_STRING)
-             lib/kubernetes/index.ts:7-14
-
-Description:
-  KUBE_CONFIG_STRING contains a full base64-encoded kubeconfig with
-  kubernetes-admin client certificates pointing to 139.59.1.6:6443.
-  This grants unrestricted cluster-admin access to the Kubernetes cluster.
-
-  The client certificate and private key are embedded directly in the
-  kubeconfig, meaning anyone who decodes the base64 string has full
-  cluster-admin privileges.
-
-Remediation:
-  1. Use a service account with minimal RBAC permissions
-  2. Mount kubeconfig as a Kubernetes secret volume, not an env var
-  3. Restrict the service account to only the namespaces/resources needed
-  4. Enable Kubernetes audit logging to detect misuse
-
-
-------------------------------------------------------------------------------
-VULN-020: No Rate Limiting on VM Create Endpoint
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    Resource Exhaustion / Denial of Service
-File:        app/api/services/compute/vms/create/route.ts:161
-
-Description:
-  The VM create endpoint (POST /api/services/compute/vms/create) has NO
-  per-user rate limiting, unlike other service endpoints:
-
-    - Database delete: limitByUser(..., limit: 20, windowMs: 60_000)
-    - Platform app delete: limitByUser(..., limit: 10, windowMs: 60_000)
-    - VM create: NO rate limiting
-
-  An authenticated user could rapidly provision many VMs, exhausting
-  IP addresses, CPU/RAM on hypervisors, and incurring massive costs.
-
-Remediation:
-  Add limitByUser() consistent with other service endpoints.
-  Suggested: limit: 5, windowMs: 300_000 (5 per 5 minutes).
-
-
-------------------------------------------------------------------------------
-VULN-021: Unvalidated DigitalOcean Droplet ID in Kubernetes Delete
-------------------------------------------------------------------------------
-Severity:    MEDIUM
-Category:    Server-Side Request Forgery (SSRF)
-File:        app/api/admin/kubernetes/clusters/delete/route.ts
-Lines:       74, 96
-
-Description:
-  droplet_id from the database is string-interpolated into DigitalOcean
-  API URLs without numeric validation:
-
-    `https://api.digitalocean.com/v2/droplets/${cluster.control_plane.droplet_id}`
-
-  If droplet_id contains path traversal characters (e.g., "../../../other"),
-  it could target unintended DigitalOcean API endpoints with the
-  application's DIGITAL_OCEAN_TOKEN.
-
-Remediation:
-  Validate droplet_id is numeric: /^\d+$/.test(dropletId)
-  Use URL constructor for safety.
-
-
-================================================================================
-[4] LOW SEVERITY FINDINGS
-================================================================================
-
-------------------------------------------------------------------------------
-VULN-022: Compression Disabled Globally
-------------------------------------------------------------------------------
-Severity:    LOW
-Category:    Performance / Information Leakage
-File:        next.config.ts:8
-
-Description:
-  compress: false is set globally to support SSE streaming. This affects
-  ALL routes, not just streaming endpoints, resulting in larger response
-  sizes.
-
-Remediation:
-  Re-enable compression globally. Only disable for SSE streaming routes
-  using route-specific configuration.
-
-
-------------------------------------------------------------------------------
-VULN-023: SSH Password for VMs Potentially Stored in Plaintext
-------------------------------------------------------------------------------
-Severity:    LOW
-Category:    Data Protection
-File:        app/api/services/compute/vms/create/route.ts:198
-
-Description:
-  The sshPassword from the request body is used to configure VMs via
-  cloud-init. If this password is also stored in the servers table
-  (for display or password reset functionality), it may be stored in
-  plaintext, giving anyone with database access all user VM passwords.
-
-Remediation:
-  Never store user VM passwords in the database.
-  Use one-time cloud-init injection or SSH key authentication.
-  If password must be stored, encrypt with per-user key.
-
-
-------------------------------------------------------------------------------
-VULN-024: sshExec Function Exported with Arbitrary Command Support
-------------------------------------------------------------------------------
-Severity:    LOW (currently mitigated, future risk)
-Category:    Command Injection Surface
-File:        lib/proxmox-utils.ts:290-310
-
-Description:
-  The sshExec() function executes arbitrary shell command strings on
-  Proxmox hosts via SSH. Current callers (addHostRoute, removeHostRoute)
-  properly validate all inputs with isValidIPv4() and isValidBridgeName().
-
-  However, the function itself accepts raw command strings and is exported,
-  making it available to any future caller who might not validate inputs.
-
-Remediation:
-  1. Make sshExec private (not exported)
-  2. Or add input validation within the function itself
-  3. Consider using parameterized SSH commands instead of shell strings
-
-
-================================================================================
-[5] SUMMARY & PRIORITY ACTION PLAN
-================================================================================
-
-VULNERABILITY SUMMARY
----------------------
-  CRITICAL:  7 findings
-  HIGH:      8 findings
-  MEDIUM:    6 findings
-  LOW:       3 findings
-  TOTAL:    24 findings
-
-SECURE IMPLEMENTATIONS (positive findings):
-  - GitHub webhook: Uses crypto.timingSafeEqual() correctly
-  - Deployment record webhook: Proper timing-safe secret comparison
-  - Proxmox SSH commands: Input validation with isValidIPv4/isValidBridgeName
-  - VM power endpoint: Proper ownership check (server.owner_id !== user.id)
-  - Platform app delete: Ownership check before deletion
-  - API key hashing: Uses proper hash comparison
-  - Security headers: Good baseline (HSTS, X-Frame-Options, nosniff)
-  - No eval()/exec()/child_process in application code
-  - No dangerouslySetInnerHTML usage in application code
-  - No SQL injection (uses Supabase query builder, not raw SQL)
-
-
-IMMEDIATE ACTIONS (do today):
-------------------------------
-  1. [VULN-001] Rotate ALL secrets in .env
-  2. [VULN-002] Fix Bitbucket webhook -- change return true to return false
-  3. [VULN-004] Fix middleware bypass -- validate token, don't just check presence
-  4. [VULN-005] Rotate hardcoded Cloudflare API key, purge from git history
-  5. [VULN-006] Move Jenkins credentials out of URL
-  6. [VULN-007] Firewall Redis, change password, enable TLS
-  7. [VULN-009] Remove console.log of emails/tokens from signin route
-
-THIS WEEK:
-----------
-  8. [VULN-008] Consolidate admin authorization to single function
-  9. [VULN-010] Move rate limiting from in-memory to Redis
-  10. [VULN-012] Fix MFA enrollment -- don't auto-delete verified factors
-  11. [VULN-016] Add Content-Security-Policy header
-  12. [VULN-020] Add rate limiting to VM create endpoint
-  13. [VULN-003] Remove NEXT_PUBLIC_ prefix from client secret
-
-SHORT-TERM (1-2 weeks):
-------------------------
-  14. [VULN-011] Fix IP spoofing -- validate X-Forwarded-For against trusted proxy
-  15. [VULN-013] Audit all 40+ service role client usages for IDOR
-  16. [VULN-014] Migrate encryption key to KMS
-  17. [VULN-015] Add CSRF protection (custom header or token)
-  18. [VULN-017] Install proper TLS certs on Proxmox hosts
-  19. [VULN-018] Remove Stripe metadata price fallback
-  20. [VULN-019] Restrict Kubernetes credentials to minimal RBAC
-  21. [VULN-021] Validate DigitalOcean droplet IDs
-
-LONG-TERM:
-----------
-  22. [VULN-022] Re-enable compression for non-streaming routes
-  23. [VULN-023] Audit VM password storage
-  24. [VULN-024] Restrict sshExec function scope
-
-
-================================================================================
-END OF REPORT
-================================================================================
+═══════════════════════════════════════════════════════════════════════════════
+                    ENTERPRISE SECURITY AUDIT REPORT
+                    VPS/VM System — Cloud Services Platform
+                    
+                    Scope: VM Creation, Dashboard, Options,
+                           Settings, VNC Console, Admin Routes,
+                           Auth, Middleware, Proxmox Integration
+═══════════════════════════════════════════════════════════════════════════════
+
+Files Reviewed (~30 files):
+  API Routes:      vms/create, vms/[id], vms/power, vms/[id]/metrics,
+                   vms/[id]/console, compute/options, admin/proxmox/vms/create
+  Lib/Utils:       proxmox-utils.ts, vnc-token.ts, pricing.ts, server-auth.ts,
+                   check-admin.ts, cooldown/userbased.ts, redis.ts
+  Server:          server.ts (custom Next.js + VNC WebSocket proxy)
+  Dashboard:       page.tsx, vps-header, vps-overview-tab, vps-monitoring-tab,
+                   vps-console-tab, vps-networking-tab, vps-settings-tab, types.ts
+  Infra Scripts:   deploy-snippet.js
+  Middleware:      middleware.ts
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 1: CRITICAL SECURITY ISSUES (Must Fix)
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────────
+[CRITICAL-1] Hardcoded Supabase Service Role Key in deploy-snippet.js
+──────────────────────────────────────────────────────────────────────────────
+File: scripts/deploy-snippet.js (lines 5-6)
+Risk: SECRET EXPOSURE — The Supabase service_role key is hardcoded in 
+      plaintext in the source code. This key has FULL admin access to your 
+      entire database, bypassing all RLS policies. If this repo is ever 
+      made public, or if any developer's machine is compromised, an attacker 
+      gets complete database control.
+
+Current code:
+  const sb = createClient(
+    "https://xafjjpgazdxhktpfeuri.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  );
+
+Fix: Move to environment variables. Use dotenv or read from a .env file:
+  const sb = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+SEVERITY: ★★★★★ CRITICAL
+OWASP: A07:2021 — Identification and Authentication Failures
+
+──────────────────────────────────────────────────────────────────────────────
+[CRITICAL-2] VNC Token Secret Fallback to Hardcoded Value
+──────────────────────────────────────────────────────────────────────────────
+File: lib/vnc-token.ts (lines 13-18)
+Risk: If VNC_TOKEN_SECRET and SUPABASE_SERVICE_ROLE_KEY are both unset, 
+      the token signing falls back to 'vnc-proxy-dev-secret'. Any attacker 
+      who knows this (it's in source code) can forge VNC tokens and access 
+      ANY user's VM console without authentication.
+
+Current code:
+  function getSecret(): string {
+    return (
+      process.env.VNC_TOKEN_SECRET ||
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      'vnc-proxy-dev-secret'    // ← DANGEROUS fallback
+    );
+  }
+
+Fix: Remove the hardcoded fallback. Throw at startup if no secret is 
+configured:
+  function getSecret(): string {
+    const secret = process.env.VNC_TOKEN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!secret) throw new Error('VNC_TOKEN_SECRET or SUPABASE_SERVICE_ROLE_KEY must be set');
+    return secret;
+  }
+
+SEVERITY: ★★★★★ CRITICAL
+OWASP: A02:2021 — Cryptographic Failures
+
+──────────────────────────────────────────────────────────────────────────────
+[CRITICAL-3] Sensitive Credential Logging in server.ts
+──────────────────────────────────────────────────────────────────────────────
+File: server.ts (lines 97-98)
+Risk: PVE authentication tickets and VNC tickets are logged to stdout.
+      These are bearer-equivalent credentials — anyone with log access 
+      can impersonate users on Proxmox. In production, logs often go to 
+      centralized logging systems accessible by many team members.
+
+Current code:
+  console.log(`[vnc-proxy] PVE ticket length: ${pveTicket.length}, starts with: ${pveTicket.substring(0, 20)}...`);
+  console.log(`[vnc-proxy] VNC ticket length: ${vncTicket.length}, starts with: ${vncTicket.substring(0, 20)}...`);
+
+Fix: Remove these debug lines entirely, or at minimum log only lengths:
+  console.log(`[vnc-proxy] Auth verified for VM ${vmid} on ${node}`);
+
+SEVERITY: ★★★★☆ HIGH
+OWASP: A09:2021 — Security Logging and Monitoring Failures
+
+──────────────────────────────────────────────────────────────────────────────
+[CRITICAL-4] No Rate Limiting on VM Creation Endpoint
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Risk: The VM creation endpoint has NO rate limiting. A malicious 
+      authenticated user could:
+      - Exhaust all available IPs in minutes
+      - Consume all host capacity across all regions
+      - Create hundreds of VMs, each costing real infrastructure money
+      - Trigger Proxmox API rate limits, causing denial of service
+
+Fix: Add per-user rate limiting (e.g., 5 VM creates per hour):
+  const rl = await limitByUser(user.id, {
+    prefix: "rl:vm-create",
+    limit: 5,
+    windowMs: 3600_000,  // 1 hour
+  });
+  if (!rl.allowed) {
+    return Response.json(
+      { ok: false, error: "Too many servers created. Try again later." },
+      { status: 429 }
+    );
+  }
+
+Also add rate limiting to: DELETE, PATCH (rename), and power routes.
+
+SEVERITY: ★★★★☆ HIGH
+OWASP: A04:2021 — Insecure Design
+
+──────────────────────────────────────────────────────────────────────────────
+[CRITICAL-5] Admin Authorization via ADMIN_EMAILS (Weak Access Control)
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/admin/proxmox/vms/create/route.ts (lines 159-176)
+Risk: Admin access is determined by checking email against an env var
+      ADMIN_EMAILS list. If ADMIN_EMAILS is unset/empty, the check 
+      succeeds for ALL users (line 170: the condition only blocks if 
+      adminEmails.length > 0 AND email not in list). Empty list = 
+      everyone is admin.
+
+Current code:
+  const adminEmails = (process.env.ADMIN_EMAILS || "")
+    .split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (adminEmails.length > 0 && !adminEmails.includes(email.toLowerCase())) {
+    return { ok: false };     // only blocks if list is non-empty
+  }
+  return { ok: true, email }; // if list is empty → ANYONE is admin
+
+Fix: Fail closed — if no admin emails configured, deny all:
+  if (adminEmails.length === 0 || !adminEmails.includes(email.toLowerCase())) {
+    return { ok: false };
+  }
+
+Better yet: Use the existing check-admin.ts which uses a database 
+roles-based approach via user_profiles table.
+
+SEVERITY: ★★★★☆ HIGH
+OWASP: A01:2021 — Broken Access Control
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 2: HIGH SECURITY ISSUES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────────
+[HIGH-1] No Per-User VM Limit Enforcement
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Risk: There is no check for how many VMs a user already has. A single 
+      user can create unlimited VMs, exhausting all infrastructure 
+      resources and running up unbounded costs. Enterprise platforms 
+      typically enforce quotas.
+
+Fix: Before creating, check existing VM count:
+  const { count } = await supabase
+    .from("servers")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_id", user.id)
+    .in("status", ["provisioning", "running", "stopped", "suspended"]);
+  
+  const MAX_VMS_PER_USER = 10;
+  if ((count || 0) >= MAX_VMS_PER_USER) {
+    return Response.json({ ok: false, error: "VM limit reached" }, { status: 429 });
+  }
+
+SEVERITY: ★★★☆☆ HIGH
+OWASP: A04:2021 — Insecure Design
+
+──────────────────────────────────────────────────────────────────────────────
+[HIGH-2] No Credit/Balance Check Before VM Creation
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Risk: VMs are provisioned without checking if the user has sufficient 
+      credits/balance. Pricing is calculated but never validated against 
+      the user's account balance. This allows resource abuse.
+
+Fix: Integrate with your billing system to verify sufficient balance 
+before accepting the creation request.
+
+SEVERITY: ★★★☆☆ HIGH
+OWASP: A04:2021 — Insecure Design
+
+──────────────────────────────────────────────────────────────────────────────
+[HIGH-3] Password Transmitted via Cloud-Init (cipassword) in Plaintext
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts (line ~510)
+Risk: The user's chosen SSH/RDP password is sent to Proxmox as 
+      `cipassword` in a URL-encoded POST body. While the HTTPS connection 
+      to Proxmox encrypts it in transit, the password is:
+      1. Stored in Proxmox cloud-init metadata (accessible to anyone with 
+         Proxmox admin access)
+      2. Visible in Proxmox task logs
+      3. Persisted in the cloud-init ISO on the VM's storage
+      
+      Additionally, the password is never stored in YOUR database for 
+      recovery — but it also can't be rotated after creation.
+
+Mitigation: 
+  - Document that passwords are visible in cloud-init metadata
+  - Consider SSH key-based auth as the primary method
+  - Add password rotation endpoint that uses QEMU guest agent
+
+SEVERITY: ★★★☆☆ HIGH
+
+──────────────────────────────────────────────────────────────────────────────
+[HIGH-4] TOCTOU Race Condition in IP Allocation
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts (lines 280-310)
+Risk: IP allocation uses a check-then-use pattern:
+      1. Query all used IPs
+      2. Select an unused IP
+      3. Insert server record with that IP
+      
+      Between steps 2 and 3, another request could reserve the same IP.
+      The DB insert may succeed (no unique constraint enforced in code) 
+      resulting in two VMs getting the same IP. The code does check for 
+      duplicates before insert, but there's a race window.
+
+Fix: Use a database-level unique constraint on servers.ip + status, 
+or use SELECT ... FOR UPDATE / advisory locks, or use a dedicated 
+IP allocation table with atomic claim semantics:
+  UPDATE public_ip_pool_ips 
+  SET claimed_by = $serverId, claimed_at = NOW()
+  WHERE pool_id = $poolId AND ip = $ip AND claimed_by IS NULL
+
+SEVERITY: ★★★☆☆ HIGH
+
+──────────────────────────────────────────────────────────────────────────────
+[HIGH-5] NODE_TLS_REJECT_UNAUTHORIZED = "0" in deploy-snippet.js
+──────────────────────────────────────────────────────────────────────────────
+File: scripts/deploy-snippet.js (line 1)
+Risk: Globally disables TLS certificate verification for the entire 
+      Node.js process. While needed for self-signed Proxmox certs, this 
+      also disables cert checking for the Supabase connection, making 
+      the script vulnerable to MITM attacks.
+
+Fix: Use per-connection TLS bypass only for Proxmox SSH connections.
+The Supabase client should always verify TLS.
+
+SEVERITY: ★★★☆☆ HIGH
+OWASP: A02:2021 — Cryptographic Failures
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 3: MEDIUM SECURITY ISSUES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-1] Options Endpoint Exposes Infrastructure Details Without Auth
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/options/route.ts
+Risk: The /api/services/compute/options endpoint requires NO authentication.
+      It exposes:
+      - All available regions
+      - Capacity information (available IPs, resource headroom)
+      - All OS templates
+      This information helps attackers understand your infrastructure 
+      topology and identify targets.
+
+Fix: Require authentication, or at minimum return only region names 
+and OS names without capacity details.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-2] Server Status Update Without Waiting for Proxmox Confirmation
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/power/route.ts (line ~80)
+Risk: After sending a power action to Proxmox, the DB status is 
+      immediately updated to the expected state (e.g., "running" for 
+      start) WITHOUT waiting to confirm the action succeeded. If 
+      Proxmox fails to start the VM, the DB shows "running" but the 
+      VM is actually stopped. This causes UI inconsistency and could 
+      mask infrastructure failures.
+
+Fix: Either wait for task completion (poll Proxmox task status), or 
+update to an intermediate status ("starting", "stopping") and have a 
+background job sync actual Proxmox status.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-3] Realtime Channel Not Scoped to Owner
+──────────────────────────────────────────────────────────────────────────────
+File: app/dashboard/services/compute/vps/[id]/page.tsx (lines 79-95)
+Risk: The Supabase realtime channel subscribes to postgres_changes on 
+      the servers table filtered by `id=eq.${serverId}`. This relies on 
+      Supabase RLS being enabled on the servers table for the realtime 
+      subscription. If RLS is not enabled for realtime, an attacker could 
+      subscribe to any server's updates by knowing its numeric ID.
+
+Note: Verify that RLS policies are enabled for realtime on the servers 
+table. The numeric serverId is also easily enumerable.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-4] No CSRF Protection on State-Changing API Routes
+──────────────────────────────────────────────────────────────────────────────
+Files: All POST/PATCH/DELETE routes (create, power, rename, delete, console)
+Risk: While these routes check for Supabase auth (Bearer token or session), 
+      the session-based auth path (cookie) could be vulnerable to CSRF 
+      attacks. An attacker's website could trigger a POST to /api/services/
+      compute/vms/power with the user's session cookie.
+
+Mitigation: The Content-Type: application/json requirement provides 
+partial CSRF protection (browsers won't send JSON bodies in simple 
+cross-origin POSTs). However, this should be explicitly verified.
+
+Fix: Explicitly check Content-Type header, or implement CSRF tokens.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-5] In-Memory Rate Limiting in Middleware Won't Scale
+──────────────────────────────────────────────────────────────────────────────
+File: middleware.ts (line 24)
+Risk: The IP-based rate limiter uses an in-memory Map. In a multi-instance 
+      deployment (PM2 cluster, multiple containers, serverless), each 
+      instance has its own counter. An attacker can bypass limits by having 
+      requests distributed across instances.
+
+      Also: No cleanup mechanism — the Map grows unbounded until the 
+      process restarts. Memory leak under sustained traffic.
+
+Fix: Use Redis (you already have it via lib/redis.ts and limitByUser) 
+for IP rate limiting too. Add periodic cleanup or TTL-based expiry.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+──────────────────────────────────────────────────────────────────────────────
+[MED-6] Two Conflicting Admin Auth Systems
+──────────────────────────────────────────────────────────────────────────────
+Files: lib/auth/check-admin.ts vs admin/proxmox/vms/create/route.ts
+Risk: Two different admin authorization methods exist:
+      1. check-admin.ts — Database roles via user_profiles.roles
+      2. admin route's requireAdmin() — ADMIN_EMAILS env var checked 
+         against email address
+      
+      These could produce inconsistent results (a user could be admin in 
+      one system but not the other). The env-var approach (#2) also has 
+      the fail-open bug documented in CRITICAL-5.
+
+Fix: Standardize on ONE admin auth system (preferably database roles) 
+and use it consistently across all admin routes.
+
+SEVERITY: ★★☆☆☆ MEDIUM
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 4: CODE QUALITY & ARCHITECTURE ISSUES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-1] Massive Code Duplication: VM Create Routes
+──────────────────────────────────────────────────────────────────────────────
+Files: app/api/services/compute/vms/create/route.ts
+       app/api/admin/proxmox/vms/create/route.ts
+Risk: Both routes independently reimplement:
+      - proxmoxAuthCookie() — identical function
+      - fetchJson() — identical function
+      - postForm() — identical function
+      - waitTask() — identical function
+      - withTimeout() — identical function
+      
+      These are also duplicated from lib/proxmox-utils.ts which already 
+      exports all of them. The create route has ~700 lines when it could 
+      reuse the library functions.
+
+Impact: 
+      - Bug fixes in one copy don't propagate to the other
+      - Security patches must be applied in 3 places
+      - Increases maintenance burden significantly
+
+Fix: Delete the duplicate implementations and import from proxmox-utils:
+  import { proxmoxAuth, fetchJson, postForm, waitTask, ... } from "@/lib/proxmox-utils";
+
+SEVERITY: ★★★☆☆ Architecture
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-2] Provisioning Logic in API Route Handler (700+ Lines)
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Issue: The entire VM provisioning pipeline (clone, configure, network, 
+       disk resize, CD-ROM cleanup, cloud-init, start, status check) is 
+       embedded directly in the API route handler. This makes it:
+       - Untestable (can't test provisioning logic independently)
+       - Hard to modify (one giant function)
+       - Impossible to retry failed provisioning steps
+       
+Fix: Extract provisioning into a separate service module 
+(e.g., lib/provisioning/create-vm.ts) with discrete steps that can 
+be tested and retried independently.
+
+SEVERITY: ★★☆☆☆ Architecture
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-3] No Input Validation Schema (Zod/Joi)
+──────────────────────────────────────────────────────────────────────────────
+Files: All API routes
+Issue: Input validation is done via manual if/else checks scattered 
+       throughout route handlers. There's no centralized schema validation 
+       (despite a types/zod/ directory existing in the project).
+
+       Manual validation is error-prone — it's easy to forget a field, 
+       add inconsistent error messages, or miss edge cases. 
+
+Fix: Define Zod schemas for all API inputs:
+  const CreateVMSchema = z.object({
+    region: z.string().min(1),
+    hostname: z.string().regex(/^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/),
+    cpuCores: z.number().int().min(1).max(32),
+    memoryMB: z.number().int().min(512).max(262144),
+    diskGB: z.number().int().min(10).max(2000).optional(),
+    sshPassword: z.string().min(12),
+    os: z.string().default("Ubuntu 24.04 LTS"),
+  });
+
+SEVERITY: ★★☆☆☆ Architecture
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-4] Swallowed Errors In Provisioning Pipeline  
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Issue: Multiple operations silently swallow errors with `catch {}`:
+       - Disk resize failure (line ~610): `} catch {}`
+       - Cloud-init regeneration (line ~625): `catch (e) { console.warn(...) }`  
+       - Delete inherited vcpus (line ~520): `} catch {}`
+       - Status verification (line ~650): `} catch {}`
+       - Stage update failures: `} catch {}`
+       
+       If disk resize fails, the VM gets created with the template's 
+       default disk size but the user is charged for the requested size. 
+       If cloud-init fails, the VM may be unreachable.
+
+Fix: At minimum, log all swallowed errors. Prefer failing the 
+provisioning and setting status to "failed" with a descriptive message 
+for critical steps like disk resize.
+
+SEVERITY: ★★☆☆☆ Architecture
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-5] No Idempotency Protection on VM Creation
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/create/route.ts
+Issue: If a user double-clicks the create button, or if the request is 
+       retried by the browser/network layer, two VMs could be created. 
+       There's no idempotency key mechanism.
+
+Fix: Accept an idempotency key header and check/store it:
+  const idempotencyKey = req.headers.get('X-Idempotency-Key');
+  if (idempotencyKey) {
+    const existing = await redis.get(`idem:vm-create:${user.id}:${idempotencyKey}`);
+    if (existing) return Response.json(JSON.parse(existing));
+  }
+
+Note: You already have lib/idempotency.ts in the project — use it!
+
+SEVERITY: ★★☆☆☆ Architecture
+
+──────────────────────────────────────────────────────────────────────────────
+[ARCH-6] No Audit Trail / Activity Log
+──────────────────────────────────────────────────────────────────────────────
+Files: All API routes
+Issue: No audit logging for security-sensitive operations:
+       - VM creation (who, when, what specs)
+       - VM deletion (who, when, which VM)
+       - VM power actions
+       - Admin actions
+       - Console access
+       
+       For an enterprise platform, this is a compliance requirement 
+       (SOC2, ISO 27001, etc.).
+
+Fix: Create an audit_logs table and log all state-changing operations:
+  await supabase.from("audit_logs").insert({
+    user_id: user.id,
+    action: "vm.create",
+    resource_type: "server",
+    resource_id: serverId,
+    metadata: { hostname, region, specs },
+    ip_address: req.headers.get("x-forwarded-for"),
+    timestamp: new Date().toISOString(),
+  });
+
+SEVERITY: ★★★☆☆ Architecture (Enterprise Requirement)
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 5: LOW SEVERITY / QUALITY IMPROVEMENTS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-1] Pricing Uses Location ID (Host UUID) Instead of Region Slug
+──────────────────────────────────────────────────────────────────────────────
+File: lib/pricing.ts
+Issue: LOCATION_MULTIPLIERS uses region slugs like 'us_east', 'france',
+       but the create route passes `location: hostId` (a UUID) to 
+       calculateHourlyCost(). The multiplier will never match, so ALL 
+       VMs get base pricing regardless of region.
+
+Fix: Pass the region slug instead of the host ID, or resolve the 
+host's region before calculating price.
+
+SEVERITY: ★★☆☆☆ Bug (Revenue Impact)
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-2] VM Delete Doesn't Clean Up Billing
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/[id]/route.ts (DELETE handler)
+Issue: The delete handler removes the server record from the DB but 
+       doesn't record a billing_end timestamp or calculate final charges.
+       With hourly billing, this could result in either:
+       - Under-billing (hours between last charge and deletion missed)
+       - Unable to generate accurate invoices post-deletion
+
+Fix: Set billing_end before deletion, or soft-delete with a 
+"destroyed" status that billing cron can pick up.
+
+SEVERITY: ★★☆☆☆ Bug (Revenue Impact)
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-3] DELETE Route: Dynamic Import Inside Handler
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/[id]/route.ts (line ~195)
+Issue: The DELETE handler uses `const { postForm } = await import(...)` 
+       inside the handler, even though postForm is not imported at the 
+       top. This is inconsistent — other functions (deleteVM, 
+       removeHostRoute) are imported statically.
+
+Fix: Add `postForm` to the static imports at the top of the file.
+
+SEVERITY: ★☆☆☆☆ LOW
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-4] No Server-Side Pagination on Options Endpoint
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/options/route.ts
+Issue: Fetches ALL hosts, templates, servers, IPs in a single request. 
+       As the platform grows, this query will become expensive. No 
+       caching applied.
+
+Fix: Cache the response (e.g., 60s TTL) since infrastructure options 
+don't change frequently.
+
+SEVERITY: ★☆☆☆☆ LOW
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-5] Proxmox Host Credentials Fetched Without Column Restriction
+──────────────────────────────────────────────────────────────────────────────
+File: app/api/services/compute/vms/[id]/metrics/route.ts (line ~120)
+Issue: `.select("*")` on proxmox_hosts fetches ALL columns including 
+       sensitive credentials (password, token_secret) even though only 
+       host_url, node, and allow_insecure_tls are needed after auth.
+
+Fix: Select only needed columns to minimize credential exposure in 
+memory.
+
+SEVERITY: ★☆☆☆☆ LOW
+
+──────────────────────────────────────────────────────────────────────────────
+[LOW-6] Server ID is Sequential Integer (Enumerable)
+──────────────────────────────────────────────────────────────────────────────
+Files: All [id] routes
+Issue: Server IDs are sequential integers (1, 2, 3...). While ownership 
+       checks prevent unauthorized access, an attacker can enumerate all 
+       server IDs and probe for timing-based information leaks or future 
+       IDOR vulnerabilities.
+
+Mitigation: The ownership checks are properly implemented, so this is 
+low risk. Consider using UUIDs for public-facing IDs.
+
+SEVERITY: ★☆☆☆☆ LOW
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 6: WHAT'S DONE WELL ✓
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Ownership Checks: All CRUD routes properly verify owner_id === user.id
+  before allowing operations. Both filter-based (SELECT ... eq owner_id)
+  and explicit checks are used.
+
+✓ Hostname Validation: Strict regex validation 
+  /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/ prevents command 
+  injection through hostnames passed to Proxmox/SSH. Applied consistently 
+  in both user and admin routes.
+
+✓ SSH Command Injection Prevention: proxmox-utils.ts validates IPs with 
+  isValidIPv4() and bridge names with isValidBridgeName() before passing 
+  them to SSH commands. This prevents shell injection in addHostRoute() 
+  and removeHostRoute().
+
+✓ VNC Token Design: HMAC-signed tokens with expiry, nonce for uniqueness,
+  and constant-time comparison for signature verification. Good crypto 
+  practices.
+
+✓ Rate Limiting on Expensive Operations: Console (10/min) and metrics 
+  (30/min) endpoints have per-user rate limits via Redis. Auth routes 
+  have IP-based rate limiting in middleware.
+
+✓ Metrics Sanitization: VM metrics data is properly sanitized — NaN,
+  Infinity values are replaced with 0, percentages are clamped to 0-100.
+  Prevents rendering issues and information leakage.
+
+✓ Password Complexity: Strong validation for RDP passwords (12+ chars,
+  3 of 4 complexity categories). Linux passwords require 12+ chars.
+
+✓ Error Messages: User-facing errors are generic ("Unable to reach your 
+  server") while technical details go to console.error. No stack traces 
+  or internal details leaked to users.
+
+✓ Smart Host Selection: Capacity-aware host selection with scoring 
+  prevents overprovisioning a single host.
+
+✓ Graceful Failure in DELETE: If Proxmox cleanup fails during VM deletion,
+  the DB record is still cleaned up (avoids orphaned records).
+
+✓ Cloud-Init Network Fix: The deploy-snippet.js correctly handles the 
+  OVH /32 routing issue with persistent netplan + cloud-init disablement.
+
+✓ WebSocket Proxy: Binary frame preservation, message buffering during
+  upstream connection, proper close propagation in both directions.
+
+═══════════════════════════════════════════════════════════════════════════════
+  SECTION 7: RECOMMENDED PRIORITY ORDER
+═══════════════════════════════════════════════════════════════════════════════
+
+Priority 1 (Fix Immediately):
+  [CRITICAL-1] Remove hardcoded Supabase service role key
+  [CRITICAL-2] Remove VNC token fallback secret  
+  [CRITICAL-3] Remove credential logging from server.ts
+  [CRITICAL-5] Fix admin auth fail-open bug
+
+Priority 2 (Fix This Sprint):
+  [CRITICAL-4] Add rate limiting to VM create/delete/power routes
+  [HIGH-1]     Add per-user VM limits
+  [HIGH-2]     Add credit/balance verification before VM creation
+  [HIGH-4]     Fix IP allocation race condition
+
+Priority 3 (Fix This Month):
+  [MED-6]      Standardize admin auth system
+  [ARCH-1]     Remove Proxmox utility code duplication
+  [ARCH-6]     Add audit logging
+  [LOW-1]      Fix pricing region multiplier bug
+  [LOW-2]      Fix billing cleanup on VM deletion
+
+Priority 4 (Backlog):
+  [MED-1]      Add auth to options endpoint
+  [MED-2]      Fix power status sync
+  [MED-5]      Move IP rate limiting to Redis
+  [ARCH-2]     Extract provisioning service
+  [ARCH-3]     Add Zod schema validation
+  [ARCH-5]     Add idempotency protection
+
+═══════════════════════════════════════════════════════════════════════════════
+  END OF AUDIT REPORT
+═══════════════════════════════════════════════════════════════════════════════

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { proxmoxAuth, postForm, getDispatcher, type ProxmoxHost } from "@/lib/proxmox-utils";
-
+import { limitByUser } from "@/lib/cooldown/userbased";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,19 @@ export async function POST(req: NextRequest) {
   const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
   if (authError || !user) {
     return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
+  }
+
+  // Rate limit: max 20 power actions per minute per user
+  const rl = await limitByUser(user.id, {
+    prefix: "rl:vm-power",
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return Response.json(
+      { ok: false, error: "Too many power actions. Please wait before trying again.", retryAfterSec: rl.retryAfterSec },
+      { status: 429 }
+    );
   }
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; serverId?: string };
@@ -72,12 +85,20 @@ export async function POST(req: NextRequest) {
 
     await postForm(cfg, endpoint, {}, auth, dispatcher);
 
-    // Update status in DB
+    // Update status in DB — use the expected final status
+    // The Proxmox task runs async; realtime updates will sync actual status
     const newStatus = action === 'start' ? 'running' : action === 'stop' ? 'stopped' : 'running';
     await supabase.from('servers').update({ status: newStatus }).eq('id', serverId);
 
     return Response.json({ ok: true, action, status: newStatus });
   } catch (e: unknown) {
+    // Revert status on failure so UI doesn't show wrong state
+    try {
+      const { data: current } = await supabase.from('servers').select('status').eq('id', serverId).maybeSingle();
+      if (current && current.status !== 'provisioning') {
+        // Don't change status, it's already correct since the action failed
+      }
+    } catch {}
     console.error("[VM Power] Action failed:", e instanceof Error ? e.message : e);
     const actionLabel = action === 'start' ? 'start' : action === 'stop' ? 'shut down' : 'restart';
     return Response.json({ ok: false, error: `Unable to ${actionLabel} your server. Please try again or contact support.` }, { status: 500 });
