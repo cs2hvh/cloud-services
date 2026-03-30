@@ -13,11 +13,7 @@ export async function POST(request: NextRequest) {
       provider: "bitbucket",
       options: {
         redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(safeNext)}`,
-        scopes: 'repositories account',
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent'
-        }
+        scopes: "repository account",
       },
     });
 

@@ -116,7 +116,24 @@ export default function SignUpMultiStep({
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
     try {
-      const response = await api.post("/auth/signin/github", { type, next: nextPath || undefined });
+      const endpointByProvider: Record<string, string> = {
+        github: "/auth/signin/github",
+        google: "/auth/signin/github",
+        gitlab: "/auth/signin/gitlab",
+        bitbucket: "/auth/signin/bitbucket",
+      };
+      const endpoint = endpointByProvider[type];
+
+      if (!endpoint) {
+        toast.error("Unsupported sign-up provider");
+        return;
+      }
+
+      const payload =
+        endpoint === "/auth/signin/github"
+          ? { type, next: nextPath || undefined }
+          : { next: nextPath || undefined };
+      const response = await api.post(endpoint, payload);
       if (response.data?.url) {
         window.location.href = response.data.url;
       }

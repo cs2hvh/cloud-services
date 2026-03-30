@@ -91,12 +91,24 @@ export function SignInForm() {
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
     try {
-      let response;
-      if (type === "github" || type === "google" || type === "bitbucket") {
-        response = await api.post("/auth/signin/github", { type, next: nextPath });
-      } else if (type === "gitlab") {
-        response = await api.post("/auth/signin/gitlab", { next: nextPath });
+      const endpointByProvider: Record<string, string> = {
+        github: "/auth/signin/github",
+        google: "/auth/signin/github",
+        gitlab: "/auth/signin/gitlab",
+        bitbucket: "/auth/signin/bitbucket",
+      };
+      const endpoint = endpointByProvider[type];
+
+      if (!endpoint) {
+        toast.error("Unsupported sign-in provider");
+        return;
       }
+
+      const payload =
+        endpoint === "/auth/signin/github"
+          ? { type, next: nextPath }
+          : { next: nextPath };
+      const response = await api.post(endpoint, payload);
 
       if (response?.data?.url) {
         window.location.href = response.data.url;
@@ -105,6 +117,21 @@ export function SignInForm() {
       setIsLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    const errorCode = search.get("error");
+    if (!errorCode) return;
+
+    if (errorCode === "provider_account_linked_to_another_user") {
+      const provider = search.get("provider");
+      const providerLabel = provider
+        ? provider.charAt(0).toUpperCase() + provider.slice(1)
+        : "This provider";
+      toast.error(
+        `${providerLabel} is already connected to another account. Sign in with email/password, then link it from Settings > Accounts.`,
+      );
+    }
+  }, [search]);
 
   React.useEffect(() => {
     if (!twofaRequired) return;
