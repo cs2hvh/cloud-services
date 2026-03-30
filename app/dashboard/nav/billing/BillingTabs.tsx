@@ -16,16 +16,37 @@ interface Coupon {
   coupon_type: string;
 }
 
+interface RecurringTopup {
+  id: string;
+  amount: number;
+  currency: string;
+  interval: "week" | "month" | "year";
+  status:
+    | "pending"
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "incomplete"
+    | "incomplete_expired"
+    | "unpaid"
+    | "trialing"
+    | "paused";
+  cancel_at_period_end: boolean;
+  stripe_subscription_id: string | null;
+}
+
 export default function BillingTabs({
   initialBalance = 0.0,
   availableCoupons = [],
   paymentStatus,
+  initialRecurring = null,
 }: {
   initialBalance?: number;
   promoCredits?: number;
   topupCredits?: number;
   availableCoupons?: Coupon[];
   paymentStatus?: string | null;
+  initialRecurring?: RecurringTopup | null;
 }) {
   const [tab, setTab] = useState<"balance" | "payment" | "coupons" | "transactions">("balance");
   const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
@@ -34,6 +55,11 @@ export default function BillingTabs({
   const [balance, setBalance] = useState<number>(initialBalance);
   const [manualCouponCode, setManualCouponCode] = useState("");
   const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
+  const [recurringTopup, setRecurringTopup] = useState<RecurringTopup | null>(initialRecurring);
+  const [recurringAmount, setRecurringAmount] = useState(initialRecurring ? String(initialRecurring.amount) : "");
+  const [recurringInterval, setRecurringInterval] = useState<"week" | "month" | "year">(initialRecurring?.interval ?? "month");
+  const [loadingRecurring, setLoadingRecurring] = useState(false);
+  const [loadingCancelRecurring, setLoadingCancelRecurring] = useState(false);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
   const pushToast = (type: Toast["type"], message: string) => {
@@ -48,10 +74,15 @@ export default function BillingTabs({
       pushToast("success", "Payment successful! Your balance will update shortly.");
     } else if (paymentStatus === "cancelled") {
       pushToast("error", "Payment was cancelled.");
+    } else if (paymentStatus === "recurring_success") {
+      pushToast("success", "Recurring auto top-up enabled successfully.");
+    } else if (paymentStatus === "recurring_cancelled") {
+      pushToast("error", "Recurring auto top-up setup was cancelled.");
     }
   }, [paymentStatus]);
 
   const remaining = balance;
+  const recurringConfigured = recurringTopup && recurringTopup.stripe_subscription_id;
 
   const onTopup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +111,68 @@ export default function BillingTabs({
       setLoadingTopup(false);
     }
   };
+
+  const refreshRecurringTopup = async () => {
+    const res = await api.get("/billing/recurring");
+    if (res?.data?.success) {
+      setRecurringTopup(res.data.data ?? null);
+      if (res.data.data?.amount) {
+        setRecurringAmount(String(res.data.data.amount));
+      }
+      if (res.data.data?.interval) {
+        setRecurringInterval(res.data.data.interval);
+      }
+    }
+  };
+
+  const onEnableRecurring = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = Number(recurringAmount);
+    if (Number.isNaN(parsed) || parsed <= 0) {
+      pushToast("error", "Enter a valid recurring amount > 0");
+      return;
+    }
+    if (parsed > 10000) {
+      pushToast("error", "Maximum recurring amount is $10,000");
+      return;
+    }
+
+    try {
+      setLoadingRecurring(true);
+      const res = await api.post("/billing/recurring/create-checkout-session", {
+        amount: parsed,
+        interval: recurringInterval,
+      });
+
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+        return;
+      }
+
+      pushToast("error", "Failed to start recurring checkout");
+    } finally {
+      setLoadingRecurring(false);
+    }
+  };
+
+  const onCancelRecurring = async () => {
+    try {
+      setLoadingCancelRecurring(true);
+      const res = await api.post("/billing/recurring", { action: "cancel" });
+      if (res?.data?.success) {
+        pushToast("success", "Recurring top-up will stop at period end.");
+        await refreshRecurringTopup();
+      }
+    } finally {
+      setLoadingCancelRecurring(false);
+    }
+  };
+
+  useEffect(() => {
+    if (paymentStatus === "recurring_success") {
+      refreshRecurringTopup();
+    }
+  }, [paymentStatus]);
 
   const handleRedeemCoupon = async (code: string) => {
     // try {
@@ -191,6 +284,76 @@ export default function BillingTabs({
                 </button>
               </div>
             </form>
+
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Auto Top-up</h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Enable scheduled recurring payments to keep your balance topped up automatically.
+                </p>
+              </div>
+
+              {recurringTopup ? (
+                <div className="rounded-lg border border-white/10 bg-white/5 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="text-neutral-300">
+                      ${Number(recurringTopup.amount).toFixed(2)} / {recurringTopup.interval}
+                    </span>
+                    <span className="px-2 py-1 rounded border border-white/10 bg-white/10 text-xs capitalize text-white">
+                      {recurringTopup.cancel_at_period_end ? "canceling" : recurringTopup.status}
+                    </span>
+                  </div>
+                  {!recurringTopup.cancel_at_period_end && recurringConfigured ? (
+                    <button
+                      type="button"
+                      onClick={onCancelRecurring}
+                      disabled={loadingCancelRecurring}
+                      className="cursor-pointer px-3 py-1.5 rounded-md bg-red-600/80 text-white text-xs font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {loadingCancelRecurring ? "Canceling..." : "Cancel at period end"}
+                    </button>
+                  ) : (
+                    <p className="text-xs text-neutral-400">
+                      {recurringTopup.cancel_at_period_end
+                        ? "Your recurring top-up is scheduled to stop at the end of the current billing period."
+                        : "Complete checkout to activate recurring top-up."}
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
+              {!recurringConfigured && (
+                <form onSubmit={onEnableRecurring} className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      value={recurringAmount}
+                      onChange={(e) => setRecurringAmount(e.target.value)}
+                      className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+                      placeholder="Recurring amount (USD)"
+                    />
+                    <select
+                      value={recurringInterval}
+                      onChange={(e) => setRecurringInterval(e.target.value as "week" | "month" | "year")}
+                      className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+                    >
+                      <option value="week">Weekly</option>
+                      <option value="month">Monthly</option>
+                      <option value="year">Yearly</option>
+                    </select>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loadingRecurring}
+                    className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {loadingRecurring ? "Redirecting to Stripe..." : "Enable auto top-up"}
+                  </button>
+                </form>
+              )}
+            </div>
           </motion.div>
         </TabsContent>
 
@@ -421,6 +584,7 @@ function PaymentMethod() {
 interface Transaction {
   id: string;
   stripe_session_id: string | null;
+  stripe_invoice_id: string | null;
   amount: number;
   currency: string;
   status: string;
@@ -432,7 +596,7 @@ interface Transaction {
 }
 
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon";
+type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring";
 
 function TransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -498,6 +662,7 @@ function TransactionsTab() {
         (t) =>
           t.id.toLowerCase().includes(searchId.toLowerCase()) ||
           (t.stripe_session_id?.toLowerCase().includes(searchId.toLowerCase()) ?? false) ||
+          (t.stripe_invoice_id?.toLowerCase().includes(searchId.toLowerCase()) ?? false) ||
           (t.description?.toLowerCase().includes(searchId.toLowerCase()) ?? false)
       )
     : transactions;
@@ -525,6 +690,7 @@ function TransactionsTab() {
       topup: "bg-blue-500/15 text-blue-300 border-blue-500/20",
       refund: "bg-purple-500/15 text-purple-300 border-purple-500/20",
       coupon: "bg-amber-500/15 text-amber-300 border-amber-500/20",
+      recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
     };
     return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
   };
@@ -568,6 +734,7 @@ function TransactionsTab() {
             <option value="topup">Top-up</option>
             <option value="refund">Refund</option>
             <option value="coupon">Coupon</option>
+            <option value="recurring">Recurring</option>
           </select>
 
           {/* Date From */}

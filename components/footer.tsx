@@ -43,11 +43,11 @@ const FOOTER_LINKS = [
   },
 ];
 
-const COMPLIANCE_BADGES = [
-  { icon: Shield, abbr: "PCI", label: "PCI Level 1" },
-  { icon: Lock, abbr: "SOC", label: "SOC 2 Type II" },
-  { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
-];
+// const COMPLIANCE_BADGES = [
+//   { icon: Shield, abbr: "PCI", label: "PCI Level 1" },
+//   { icon: Lock, abbr: "SOC", label: "SOC 2 Type II" },
+//   { icon: FileCheck, abbr: "ISO", label: "ISO 27001" },
+// ];
 
 
 export function Footer() {

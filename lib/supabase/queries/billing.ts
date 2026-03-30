@@ -36,6 +36,32 @@ const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction")
   }
 };
 
+type RecurringInterval = "week" | "month" | "year";
+type RecurringStatus =
+  | "pending"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "trialing"
+  | "paused";
+
+interface RecurringTopupRecord {
+  id: string;
+  user_id: string;
+  stripe_subscription_id: string | null;
+  amount: number;
+  currency: string;
+  interval: RecurringInterval;
+  status: RecurringStatus;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const Billing = {
   get_balance: async (userId: string): Promise<number> => {
     const supabase = await createServiceClient();
@@ -522,10 +548,11 @@ export const Billing = {
     userId: string;
     stripeSessionId?: string;
     stripePaymentIntent?: string;
+    stripeInvoiceId?: string;
     amount: number;
     currency?: string;
     status: "pending" | "completed" | "failed";
-    type?: "topup" | "refund" | "coupon";
+    type?: "topup" | "refund" | "coupon" | "recurring";
     balanceAfter?: number;
     description?: string;
     receiptUrl?: string;
@@ -538,6 +565,7 @@ export const Billing = {
         user_id: params.userId,
         stripe_session_id: params.stripeSessionId ?? null,
         stripe_payment_intent: params.stripePaymentIntent ?? null,
+        stripe_invoice_id: params.stripeInvoiceId ?? null,
         amount: params.amount,
         currency: params.currency ?? "usd",
         status: params.status,
@@ -561,6 +589,166 @@ export const Billing = {
     return data ?? null;
   },
 
+  get_transaction_by_invoice: async (stripeInvoiceId: string): Promise<{ id: string; status: string } | null> => {
+    const supabase = await createServiceClient();
+    const { data } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .select("id, status")
+      .eq("stripe_invoice_id", stripeInvoiceId)
+      .maybeSingle();
+    return data ?? null;
+  },
+
+  get_recurring_topup: async (userId: string): Promise<RecurringTopupRecord | null> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .select("id, user_id, stripe_subscription_id, amount, currency, interval, status, cancel_at_period_end, canceled_at, created_at, updated_at")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Billing] Failed to fetch recurring topup:", error.message);
+      return null;
+    }
+
+    return data as RecurringTopupRecord | null;
+  },
+
+  get_recurring_topup_by_subscription: async (
+    stripeSubscriptionId: string
+  ): Promise<RecurringTopupRecord | null> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .select("id, user_id, stripe_subscription_id, amount, currency, interval, status, cancel_at_period_end, canceled_at, created_at, updated_at")
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[Billing] Failed to fetch recurring topup by subscription:", error.message);
+      return null;
+    }
+
+    return data as RecurringTopupRecord | null;
+  },
+
+  upsert_recurring_topup: async (params: {
+    userId: string;
+    amount: number;
+    interval: RecurringInterval;
+    currency?: string;
+    status?: RecurringStatus;
+    stripeSubscriptionId?: string | null;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const now = new Date().toISOString();
+    const payload = {
+      user_id: params.userId,
+      stripe_subscription_id: params.stripeSubscriptionId ?? null,
+      amount: params.amount,
+      currency: params.currency ?? "usd",
+      interval: params.interval,
+      status: params.status ?? "pending",
+      cancel_at_period_end: params.cancelAtPeriodEnd ?? false,
+      canceled_at: params.canceledAt ?? null,
+      updated_at: now,
+    };
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .upsert(payload, { onConflict: "user_id" });
+
+    if (error) {
+      throw new Error(`Failed to upsert recurring topup: ${error.message}`);
+    }
+  },
+
+  update_recurring_topup_by_user: async (params: {
+    userId: string;
+    status?: RecurringStatus;
+    stripeSubscriptionId?: string | null;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const updatePayload: {
+      status?: RecurringStatus;
+      stripe_subscription_id?: string | null;
+      cancel_at_period_end?: boolean;
+      canceled_at?: string | null;
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (params.status !== undefined) {
+      updatePayload.status = params.status;
+    }
+    if (params.stripeSubscriptionId !== undefined) {
+      updatePayload.stripe_subscription_id = params.stripeSubscriptionId;
+    }
+    if (params.cancelAtPeriodEnd !== undefined) {
+      updatePayload.cancel_at_period_end = params.cancelAtPeriodEnd;
+    }
+    if (params.canceledAt !== undefined) {
+      updatePayload.canceled_at = params.canceledAt;
+    }
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .update(updatePayload)
+      .eq("user_id", params.userId);
+
+    if (error) {
+      throw new Error(`Failed to update recurring topup: ${error.message}`);
+    }
+  },
+
+  update_recurring_topup_status_by_subscription: async (params: {
+    stripeSubscriptionId: string;
+    status?: RecurringStatus;
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: string | null;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const updatePayload: {
+      status?: RecurringStatus;
+      cancel_at_period_end?: boolean;
+      canceled_at?: string | null;
+      updated_at: string;
+    } = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (params.status !== undefined) {
+      updatePayload.status = params.status;
+    }
+    if (params.cancelAtPeriodEnd !== undefined) {
+      updatePayload.cancel_at_period_end = params.cancelAtPeriodEnd;
+    }
+    if (params.canceledAt !== undefined) {
+      updatePayload.canceled_at = params.canceledAt;
+    }
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("recurring_topups")
+      .update(updatePayload)
+      .eq("stripe_subscription_id", params.stripeSubscriptionId);
+
+    if (error) {
+      throw new Error(`Failed to update recurring topup by subscription: ${error.message}`);
+    }
+  },
+
   get_transactions: async (
     userId: string,
     opts?: {
@@ -575,6 +763,7 @@ export const Billing = {
     transactions: Array<{
       id: string;
       stripe_session_id: string | null;
+      stripe_invoice_id: string | null;
       amount: number;
       currency: string;
       status: string;
@@ -593,13 +782,13 @@ export const Billing = {
     let query = supabase
       .schema("billing")
       .from("transactions")
-      .select("id, stripe_session_id, amount, currency, status, type, balance_after, description, receipt_url, created_at", { count: "exact" })
+      .select("id, stripe_session_id, stripe_invoice_id, amount, currency, status, type, balance_after, description, receipt_url, created_at", { count: "exact" })
       .eq("user_id", userId);
 
     if (opts?.status && ["pending", "completed", "failed"].includes(opts.status)) {
       query = query.eq("status", opts.status);
     }
-    if (opts?.type && ["topup", "refund", "coupon"].includes(opts.type)) {
+    if (opts?.type && ["topup", "refund", "coupon", "recurring"].includes(opts.type)) {
       query = query.eq("type", opts.type);
     }
     if (opts?.from) {

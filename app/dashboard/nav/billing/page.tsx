@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import BillingTabs from "./BillingTabs";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { createClient } from "@/lib/supabase/server";
-import { Billing,  } from "@/lib/supabase/queries/billing";
+import { Billing } from "@/lib/supabase/queries/billing";
 import {Promocodes} from "@/lib/supabase/queries/promocodes";
 import { redirect } from "next/navigation";
 
@@ -15,9 +15,10 @@ async function BillingSuspense({ paymentStatus }: { paymentStatus?: string | nul
   const userEmail = data.user?.email || "";
   if (!userId) redirect("/signin");
 
-  const [credits, availableCoupons] = await Promise.all([
+  const [credits, availableCoupons, recurringTopup] = await Promise.all([
     Billing.get_user_credits(userId),
     Promocodes.get_available_for_user(userId, userEmail),
+    Billing.get_recurring_topup(userId),
   ]);
 
   return (
@@ -32,6 +33,7 @@ async function BillingSuspense({ paymentStatus }: { paymentStatus?: string | nul
           initialBalance={credits.credit_balance}
           availableCoupons={availableCoupons}
           paymentStatus={paymentStatus}
+          initialRecurring={recurringTopup}
         />
       </div>
     </div>

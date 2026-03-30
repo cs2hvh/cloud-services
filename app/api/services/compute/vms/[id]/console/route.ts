@@ -65,7 +65,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
     .eq("owner_id", user.id)
     .maybeSingle();
 
-  if (!srv) {
+  if (!srv || dbErr) {
     return Response.json(
       { ok: false, error: "Server not found" },
       { status: 404 }

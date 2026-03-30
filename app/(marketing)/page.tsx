@@ -8,7 +8,7 @@ import { ComplianceCta } from "@/components/compliance-cta";
 import { WhyTrustUs } from "@/components/why-trust-us";
 import { EverythingSection } from "@/components/everything-section";
 import GlobalNetworkSection from "@/components/global-network-section";
-import FeatureSection from "@/components/feature-section";
+// import FeatureSection from "@/components/feature-section";
 
 export const metadata: Metadata = {
   title: `${siteConfig.name} — Cloud Infrastructure for Modern Teams`,
