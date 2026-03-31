@@ -452,6 +452,16 @@ export class DomainTransferService {
         type: "info",
         metadata: { event: "domain_transfer_cancelled" },
       });
+      if (input.actor.userEmail) {
+        await this.emitEmail({
+          actor: input.actor,
+          severity: "info",
+          alertTitle: "Domain transfer cancelled",
+          serviceName: request.domain,
+          summary: `Your domain transfer for ${request.domain} has been cancelled. If credits were charged, a refund has been issued to your account.`,
+          metadata: { event: "domain_transfer_cancelled" },
+        });
+      }
     });
 
     return toPublicTransferRequest({
@@ -578,6 +588,13 @@ export class DomainTransferService {
       });
     } else if (newStatus === "failed") {
       await this.safeAsync(async () => {
+        await this.emitAudit({
+          actor: systemActor,
+          action: "update",
+          serviceId: transfer.id,
+          serviceName: transfer.domain,
+          metadata: { event: "domain_transfer_failed" },
+        });
         await this.emitNotification({
           userId: transfer.user_id,
           action: "failed",
@@ -615,6 +632,24 @@ export class DomainTransferService {
           });
         });
       }
+    } else if (newStatus === "cancelled") {
+      await this.safeAsync(async () => {
+        await this.emitAudit({
+          actor: systemActor,
+          action: "update",
+          serviceId: transfer.id,
+          serviceName: transfer.domain,
+          metadata: { event: "domain_transfer_cancelled_by_registrar" },
+        });
+        await this.emitNotification({
+          userId: transfer.user_id,
+          action: "updated",
+          serviceName: transfer.domain,
+          serviceId: transfer.id,
+          type: "info",
+          metadata: { event: "domain_transfer_cancelled_by_registrar" },
+        });
+      });
     }
   }
 
@@ -850,6 +885,23 @@ function mapTransferProviderError(error: DomainServiceError, domain: string): Do
     return new DomainServiceError({
       code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
       message: `Domain ${domain} was not found at the registrar. Please verify the domain name is correct.`,
+      details: { domain },
+    });
+  }
+
+  if (/domain.?name|parameter.?value|invalid.?argument/i.test(msg)) {
+    return new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.TRANSFER_NOT_ELIGIBLE,
+      message: `The registrar rejected the domain name. Make sure you are transferring a root-level domain (e.g., sabpatahai.guru, not test.sabpatahai.guru), and that the domain is registered and not restricted.`,
+      details: { domain },
+    });
+  }
+
+  // Catch-all: any remaining provider validation failure gets a user-friendly message
+  if (error.code === DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED) {
+    return new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
+      message: `The registrar rejected the transfer request. Ensure the domain is unlocked, the authorization code is correct, and you are transferring a registered root-level domain.`,
       details: { domain },
     });
   }

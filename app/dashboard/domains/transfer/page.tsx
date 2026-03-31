@@ -458,6 +458,16 @@ export default function DomainTransferPage() {
       return;
     }
 
+    // Block clear subdomains (4+ labels). 3-label domains may be valid ccTLDs (e.g., brand.co.uk).
+    // Domain transfers work on registerable root-level domains only.
+    if (domainParts.length > 3) {
+      const suggestedRoot = domainParts.slice(-2).join(".");
+      const message = `This looks like a subdomain. Domain transfers only work on root-level registered domains. Did you mean ${suggestedRoot}?`;
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
     setChecking(true);
     setEligibilityFeedback(null);
     setSubmittedDomain(null);
@@ -537,6 +547,7 @@ export default function DomainTransferPage() {
           TRANSFER_NOT_ELIGIBLE: "The domain is not eligible for transfer right now.",
           TRANSFER_ALREADY_IN_PROGRESS: "A transfer is already in progress for this domain.",
           INSUFFICIENT_CREDITS: "Your account does not have enough credits for this transfer.",
+          PROVIDER_VALIDATION_FAILED: "The registrar rejected the request. Ensure the domain is unlocked, the auth code is correct, and you are transferring a root-level domain (e.g., sabpatahai.guru, not test.sabpatahai.guru).",
         };
 
         const message = errorMap[json.error] || json.message || "Failed to start transfer.";
