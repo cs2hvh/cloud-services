@@ -327,7 +327,17 @@ export default function DomainTransferPage() {
   useEffect(() => {
     const domainParam = searchParams.get("domain");
     if (domainParam) {
-      setDomain(decodeURIComponent(domainParam).trim().toLowerCase());
+      const cleanedParam = decodeURIComponent(domainParam).trim().toLowerCase();
+      // Ignore values that look like emails or invalid domains to avoid
+      // unintentionally pre-filling the domain input (browser autofill or bad links)
+      if (
+        !cleanedParam.includes("@") &&
+        cleanedParam.includes(".") &&
+        cleanedParam.length >= 3 &&
+        cleanedParam.length <= 253
+      ) {
+        setDomain(cleanedParam);
+      }
     }
   }, [searchParams]);
 
@@ -375,10 +385,74 @@ export default function DomainTransferPage() {
     [transfers]
   );
 
+  /**
+   * Normalize whatever the user typed/pasted into a bare domain name.
+   * Strips http(s):// protocol, www prefix, trailing slashes, paths, and
+   * query strings so that pasting a browser URL just works.
+   */
+  function normalizeDomainInput(value: string): string {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, "")   // strip protocol
+      .replace(/^www\./, "")          // strip leading www.
+      .replace(/\/.*$/, "")           // strip path and query string
+      .replace(/\?.*$/, "")           // strip any remaining query string
+      .replace(/\.+$/, "");           // strip trailing dots
+  }
+
   const handleCheckEligibility = useCallback(async () => {
-    const cleanDomain = domain.trim().toLowerCase();
-    if (!cleanDomain || !cleanDomain.includes(".")) {
+    // Normalize first — strip protocol, paths, etc. — and update the input field
+    const cleanDomain = normalizeDomainInput(domain);
+    if (cleanDomain !== domain) {
+      setDomain(cleanDomain);
+    }
+
+    // Empty check
+    if (!cleanDomain) {
+      const message = "Please enter a domain name.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    // Reject email addresses (after normalization, a bare email still has @)
+    if (cleanDomain.includes("@")) {
+      const message = "Please enter a domain name (e.g., example.com), not an email address.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    // Must have at least one dot (TLD present)
+    if (!cleanDomain.includes(".")) {
       const message = "Please enter a valid domain name such as mybrand.com.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    // Length check (DNS spec: 3-253)
+    if (cleanDomain.length < 3 || cleanDomain.length > 253) {
+      const message = "Domain must be between 3 and 253 characters.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    // Basic format check: only letters, digits, hyphens, and dots
+    if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(cleanDomain)) {
+      const message = "Domain contains invalid characters. Use only letters, numbers, hyphens, and dots.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    // TLD must be at least 2 characters (e.g. .co, .com, .guru)
+    const domainParts = cleanDomain.split(".");
+    const tld = domainParts[domainParts.length - 1];
+    if (tld.length < 2) {
+      const message = "Domain extension must be at least 2 characters (e.g., .com, .net, .guru).";
       setEligibilityFeedback(message);
       toast.error(message);
       return;
@@ -429,6 +503,13 @@ export default function DomainTransferPage() {
   const handleStartTransfer = useCallback(async () => {
     if (!eligibility?.eligible || !authCode.trim()) {
       const message = "Enter the authorization code from your current registrar before starting the transfer.";
+      setEligibilityFeedback(message);
+      toast.error(message);
+      return;
+    }
+
+    if (authCode.trim().length < 6) {
+      const message = "Authorization code must be at least 6 characters. Copy it directly from your registrar panel.";
       setEligibilityFeedback(message);
       toast.error(message);
       return;
@@ -645,7 +726,13 @@ export default function DomainTransferPage() {
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     id="domain"
+                    name="domainNoAuto"
                     placeholder="mybrand.com"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    inputMode="text"
                     value={domain}
                     onChange={(event) => setDomain(event.target.value)}
                     onKeyDown={(event) => {
@@ -719,7 +806,7 @@ export default function DomainTransferPage() {
                       className="border-white/10 bg-black/30 text-white placeholder:text-white/35"
                     />
                     <p className="text-xs leading-5 text-white/55">
-                      The auth code is sent only to the registrar adapter during transfer creation and is cleared from the request record after submission.
+                      The auth code (EPP code) is typically 6–16 characters. Copy it from your current registrar&apos;s domain management panel. It is sent directly to the registrar and cleared from the system after submission.
                     </p>
                   </div>
 
@@ -753,7 +840,7 @@ export default function DomainTransferPage() {
                     <Button
                       className="bg-cyan-500 text-black hover:bg-cyan-400 sm:flex-1"
                       onClick={() => void handleStartTransfer()}
-                      disabled={submitting || !authCode.trim()}
+                      disabled={submitting || !authCode.trim() || authCode.trim().length < 6}
                     >
                       {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
                       Start Transfer

@@ -111,7 +111,7 @@ export class DomainTransferService {
         domain,
         eligible: true,
         reason: null,
-        transferPrice: null, // Actual price determined during createTransfer
+        transferPrice: result.purchasePrice ?? null,
         currency: "USD",
       };
     } catch {
@@ -733,14 +733,87 @@ export class DomainTransferService {
 /* ─── Helpers ─── */
 
 function normalizeDomain(domain: string): string {
-  return domain.trim().toLowerCase().replace(/\.+$/, "");
+  return domain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")  // strip http:// or https://
+    .replace(/^www\./, "")         // strip leading www.
+    .replace(/\/.*$/, "")          // strip path and query string
+    .replace(/\?.*$/, "")          // strip remaining query string
+    .replace(/\.+$/, "");          // strip trailing dots
 }
 
 function ensureDomainFormat(domain: string): void {
-  if (!domain.includes(".") || domain.length < 3) {
+  // Reject email addresses (@ should never survive normalization for transfer)
+  if (domain.includes("@")) {
     throw new DomainServiceError({
       code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
-      message: `Invalid domain name: ${domain}`,
+      message: "Please enter a domain name (e.g., example.com), not an email address.",
+      details: { domain },
+    });
+  }
+
+  // Must contain at least one dot (TLD required)
+  if (!domain.includes(".")) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Please enter a valid domain name including a TLD, such as example.com.",
+      details: { domain },
+    });
+  }
+
+  // Length: 3-253 per DNS spec
+  if (domain.length < 3 || domain.length > 253) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Domain name must be between 3 and 253 characters.",
+      details: { domain },
+    });
+  }
+
+  // Each dot-separated label must be valid
+  const labels = domain.split(".");
+  if (labels.length < 2) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "Please enter a domain name with at least a name and a TLD (e.g., example.com).",
+      details: { domain },
+    });
+  }
+
+  for (const label of labels) {
+    if (label.length === 0 || label.length > 63) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+        message: "Each part of the domain name must be between 1 and 63 characters.",
+        details: { domain },
+      });
+    }
+
+    // RFC 1123: alphanumeric start/end, hyphens in the middle only
+    if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(label)) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+        message: "Domain name contains invalid characters. Only letters, numbers, and hyphens are allowed.",
+        details: { domain },
+      });
+    }
+  }
+
+  // TLD must be at least 2 alphabetic chars (not purely numeric)
+  const tld = labels[labels.length - 1];
+  if (tld.length < 2) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "The domain extension (TLD) must be at least 2 characters (e.g., .com, .net, .guru).",
+      details: { domain },
+    });
+  }
+
+  if (/^[0-9]+$/.test(tld)) {
+    throw new DomainServiceError({
+      code: DOMAIN_ERROR_CODES.DOMAIN_INVALID,
+      message: "The domain extension (TLD) cannot be all numeric.",
       details: { domain },
     });
   }
