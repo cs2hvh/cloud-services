@@ -1093,7 +1093,7 @@ function SingleCluster({
                         clusterData?.clusterInfo?.kubeconfig || ""
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                    className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
                   >
                     <Download className="h-4 w-4" />
                     Download kubeconfig
@@ -1181,7 +1181,7 @@ function SingleCluster({
                                 handleDeleteNodeClick(n.droplet_id, index)
                               }
                               disabled={loading}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Trash2 className="h-3.5 w-3.5" /> Delete
                             </button>

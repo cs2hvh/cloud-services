@@ -197,6 +197,10 @@ export const userResourceOperations = {
     request: DeleteDatabaseUserRequest,
     req?: NextRequest
   ): Promise<{ success: boolean; error?: string }> {
+    if (request.username.toLowerCase() === "doadmin") {
+      return { success: false, error: "cannot delete admin user" };
+    }
+
     try {
       const response = await axios.delete(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}`,
@@ -268,9 +272,24 @@ export const userResourceOperations = {
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
       if (axiosError?.response) {
+        const apiMessage = String(
+          axiosError?.response?.data?.message ?? "Invalid request"
+        );
+        const loweredMessage = apiMessage.toLowerCase();
+        if (
+          loweredMessage.includes("doadmin") ||
+          (loweredMessage.includes("admin") &&
+            (loweredMessage.includes("delete") || loweredMessage.includes("remove")))
+        ) {
+          return {
+            success: false,
+            error: "cannot delete admin user",
+          };
+        }
+
         return {
           success: false,
-          error: axiosError?.response?.data?.message ?? "Invalid request",
+          error: apiMessage,
         };
       }
 

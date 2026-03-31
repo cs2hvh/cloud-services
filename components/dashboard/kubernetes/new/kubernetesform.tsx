@@ -1,6 +1,6 @@
 "use client";
 import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -203,14 +203,46 @@ const NewClusterPage = ({
       user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
   );
 
+  // Filter projects based on selected user in admin mode
+  const filteredProjects = useMemo(() => {
+    if (role === "admin") {
+      if (!state.selectedUser) {
+        return [];
+      }
+      return projects.filter((project) => project.owner === state.selectedUser);
+    }
+    return projects;
+  }, [projects, role, state.selectedUser]);
+
+  // Keep selected project valid when user selection changes
+  useEffect(() => {
+    if (!state.selectedProject) {
+      return;
+    }
+
+    const isProjectAvailable = filteredProjects.some(
+      (project) => project.id === state.selectedProject
+    );
+
+    if (!isProjectAvailable) {
+      setState((prev) => ({ ...prev, selectedProject: "" }));
+    }
+  }, [filteredProjects, state.selectedProject]);
+
   // Handle user selection
   const handleUserSelect = (selectedUserId: string) => {
     setState((prev) => ({
       ...prev,
       selectedUser: selectedUserId,
+      selectedProject: projects.some(
+        (project) =>
+          project.id === prev.selectedProject && project.owner === selectedUserId
+      )
+        ? prev.selectedProject
+        : "",
     }));
-    if (validationErrors.user) {
-      setValidationErrors({ ...validationErrors, user: "" });
+    if (validationErrors.user || validationErrors.project) {
+      setValidationErrors({ ...validationErrors, user: "", project: undefined });
     }
   };
 
@@ -1231,13 +1263,20 @@ const NewClusterPage = ({
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent className="border-white/20 bg-black text-white">
-                        {projects.map((project) => (
+                        {filteredProjects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {filteredProjects.length === 0 && (
+                      <p className="mt-2 text-sm text-white/60">
+                        {role === "admin"
+                          ? "No projects found for selected user."
+                          : "No projects available."}
+                      </p>
+                    )}
                     {validationErrors.project && (
                       <p className="mt-2 text-sm text-red-500">{validationErrors.project}</p>
                     )}
@@ -1249,7 +1288,7 @@ const NewClusterPage = ({
                     </div>
                     <div className="mt-2 text-base font-semibold text-white">
                       {selectedProject
-                        ? projects.find((project) => project.id === selectedProject)?.name || "Unknown project"
+                        ? filteredProjects.find((project) => project.id === selectedProject)?.name || "Unknown project"
                         : "No project selected"}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-white/45">
