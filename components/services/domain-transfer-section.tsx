@@ -129,9 +129,8 @@ export default function DomainTransferSection() {
         ? `/dashboard/domains/transfer?domain=${encodeURIComponent(prefillDomain)}`
         : "/dashboard/domains/transfer";
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (!data.session) {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
           router.push(`/signin?next=${encodeURIComponent(transferUrl)}`);
         } else {
           router.push(transferUrl);
@@ -207,9 +206,8 @@ export default function DomainTransferSection() {
 
       const marketplaceUrl = `/dashboard/domains/marketplace?domain=${encodeURIComponent(result.domainName)}`;
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (!data.session) {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
           router.push(`/signin?next=${encodeURIComponent(marketplaceUrl)}`);
         } else {
           router.push(marketplaceUrl);

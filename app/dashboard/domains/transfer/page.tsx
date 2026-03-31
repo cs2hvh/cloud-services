@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Clock3,
   ExternalLink,
+  Eye,
+  EyeOff,
   Loader2,
   Mail,
   RefreshCw,
@@ -21,6 +23,17 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -291,15 +304,35 @@ function TransferActivityCard({
           )}
 
           {isActive && (
-            <Button
-              variant="outline"
-              className="border-red-500/25 text-red-100 hover:bg-red-500/10"
-              disabled={cancellingId === transfer.id}
-              onClick={() => onCancel(transfer.id)}
-            >
-              {cancellingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Cancel Transfer
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="border-red-500/25 text-red-100 hover:bg-red-500/10"
+                  disabled={cancellingId === transfer.id}
+                >
+                  {cancellingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Cancel Transfer
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent className="border-white/10 bg-zinc-900">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-white">Cancel transfer?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-white/60">
+                    Are you sure you want to cancel the transfer for <span className="font-medium text-white/80">{transfer.domain}</span>? This may not be reversible and could require restarting the process.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel className="border-white/10 text-white hover:bg-white/10">Keep Transfer</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 text-white hover:bg-red-700"
+                    onClick={() => onCancel(transfer.id)}
+                  >
+                    Cancel Transfer
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
       </div>
@@ -312,6 +345,7 @@ export default function DomainTransferPage() {
 
   const [domain, setDomain] = useState("");
   const [authCode, setAuthCode] = useState("");
+  const [showAuthCode, setShowAuthCode] = useState(false);
   const [stage, setStage] = useState<TransferStage>("lookup");
   const [eligibility, setEligibility] = useState<EligibilityResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -410,61 +444,49 @@ export default function DomainTransferPage() {
 
     // Empty check
     if (!cleanDomain) {
-      const message = "Please enter a domain name.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Please enter a domain name.");
       return;
     }
 
     // Reject email addresses (after normalization, a bare email still has @)
     if (cleanDomain.includes("@")) {
-      const message = "Please enter a domain name (e.g., example.com), not an email address.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Please enter a domain name (e.g., example.com), not an email address.");
       return;
     }
 
     // Must have at least one dot (TLD present)
     if (!cleanDomain.includes(".")) {
-      const message = "Please enter a valid domain name such as mybrand.com.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Please enter a valid domain name such as mybrand.com.");
       return;
     }
 
     // Length check (DNS spec: 3-253)
     if (cleanDomain.length < 3 || cleanDomain.length > 253) {
-      const message = "Domain must be between 3 and 253 characters.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Domain must be between 3 and 253 characters.");
       return;
     }
 
-    // Basic format check: only letters, digits, hyphens, and dots
-    if (!/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/.test(cleanDomain)) {
-      const message = "Domain contains invalid characters. Use only letters, numbers, hyphens, and dots.";
+    // Each label: alphanumeric, hyphens allowed in the middle, 1-63 chars
+    const domainParts = cleanDomain.split(".");
+    if (domainParts.some(label => !label || label.length > 63 || /^-|-$/.test(label) || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label))) {
+      const message = "Domain contains invalid characters. Each label must start and end with a letter or number.";
       setEligibilityFeedback(message);
-      toast.error(message);
       return;
     }
 
     // TLD must be at least 2 characters (e.g. .co, .com, .guru)
-    const domainParts = cleanDomain.split(".");
     const tld = domainParts[domainParts.length - 1];
     if (tld.length < 2) {
       const message = "Domain extension must be at least 2 characters (e.g., .com, .net, .guru).";
       setEligibilityFeedback(message);
-      toast.error(message);
       return;
     }
 
-    // Block clear subdomains (4+ labels). 3-label domains may be valid ccTLDs (e.g., brand.co.uk).
-    // Domain transfers work on registerable root-level domains only.
+    // Block obvious subdomains (4+ labels). 3-label ccTLDs (brand.co.uk) are allowed.
+    // The server-side validation will catch anything invalid.
     if (domainParts.length > 3) {
-      const suggestedRoot = domainParts.slice(-2).join(".");
-      const message = `This looks like a subdomain. Domain transfers only work on root-level registered domains. Did you mean ${suggestedRoot}?`;
+      const message = "This looks like a subdomain. Domain transfers only work on root-level registered domains.";
       setEligibilityFeedback(message);
-      toast.error(message);
       return;
     }
 
@@ -484,7 +506,6 @@ export default function DomainTransferPage() {
       if (!response.ok) {
         const message = json.message || "Failed to check transfer eligibility.";
         setEligibilityFeedback(message);
-        toast.error(message);
         return;
       }
 
@@ -499,12 +520,9 @@ export default function DomainTransferPage() {
         const message = result.reason || "This domain is not eligible for transfer.";
         setStage("lookup");
         setEligibilityFeedback(message);
-        toast.error(message);
       }
     } catch {
-      const message = "Failed to check domain eligibility. Please try again.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Failed to check domain eligibility. Please try again.");
     } finally {
       setChecking(false);
     }
@@ -512,20 +530,17 @@ export default function DomainTransferPage() {
 
   const handleStartTransfer = useCallback(async () => {
     if (!eligibility?.eligible || !authCode.trim()) {
-      const message = "Enter the authorization code from your current registrar before starting the transfer.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Enter the authorization code from your current registrar before starting the transfer.");
       return;
     }
 
-    if (authCode.trim().length < 6) {
-      const message = "Authorization code must be at least 6 characters. Copy it directly from your registrar panel.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+    if (authCode.trim().length < 4) {
+      setEligibilityFeedback("Authorization code must be at least 4 characters. Copy it directly from your registrar panel.");
       return;
     }
 
     setSubmitting(true);
+    const submittedAuthCode = authCode.trim();
 
     try {
       const response = await fetch("/api/domains/transfer", {
@@ -533,8 +548,8 @@ export default function DomainTransferPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           domain: eligibility.domain,
-          auth_code: authCode.trim(),
-          purchase_price: eligibility.transferPrice || undefined,
+          auth_code: submittedAuthCode,
+          purchase_price: eligibility.transferPrice ?? undefined,
         }),
       });
 
@@ -552,7 +567,6 @@ export default function DomainTransferPage() {
 
         const message = errorMap[json.error] || json.message || "Failed to start transfer.";
         setEligibilityFeedback(message);
-        toast.error(message);
         return;
       }
 
@@ -565,9 +579,7 @@ export default function DomainTransferPage() {
       toast.success("Transfer initiated. You will receive status updates as it progresses.");
       void fetchTransfers();
     } catch {
-      const message = "Failed to start transfer. Please try again.";
-      setEligibilityFeedback(message);
-      toast.error(message);
+      setEligibilityFeedback("Failed to start transfer. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -802,20 +814,30 @@ export default function DomainTransferPage() {
                 <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
                   <div className="space-y-2">
                     <Label htmlFor="auth-code" className="text-white/80">Authorization code</Label>
-                    <Input
-                      id="auth-code"
-                      type="password"
-                      placeholder="Paste the EPP or auth code"
-                      value={authCode}
-                      onChange={(event) => setAuthCode(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void handleStartTransfer();
-                        }
-                      }}
-                      className="border-white/10 bg-black/30 text-white placeholder:text-white/35"
-                    />
+                    <div className="relative">
+                      <Input
+                        id="auth-code"
+                        type={showAuthCode ? "text" : "password"}
+                        placeholder="Paste the EPP or auth code"
+                        value={authCode}
+                        onChange={(event) => setAuthCode(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            void handleStartTransfer();
+                          }
+                        }}
+                        className="border-white/10 bg-black/30 pr-10 text-white placeholder:text-white/35"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAuthCode((prev) => !prev)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                        tabIndex={-1}
+                      >
+                        {showAuthCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
                     <p className="text-xs leading-5 text-white/55">
                       The auth code (EPP code) is typically 6–16 characters. Copy it from your current registrar&apos;s domain management panel. It is sent directly to the registrar and cleared from the system after submission.
                     </p>
