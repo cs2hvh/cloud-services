@@ -49,6 +49,28 @@ export default function DomainTransferSection() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [transferDomain, setTransferDomain] = useState("");
+
+  const handleGoToTransfer = useCallback(
+    async (prefillDomain?: string) => {
+      const transferUrl = prefillDomain
+        ? `/dashboard/domains/transfer?domain=${encodeURIComponent(prefillDomain)}`
+        : "/dashboard/domains/transfer";
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!data.session) {
+          router.push(`/signin?next=${encodeURIComponent(transferUrl)}`);
+        } else {
+          router.push(transferUrl);
+        }
+      } catch {
+        toast.error("Could not verify your session. Please sign in.");
+        router.push(`/signin?next=${encodeURIComponent(transferUrl)}`);
+      }
+    },
+    [router, supabase]
+  );
 
   const handleSearch = useCallback(async () => {
     const cleanQuery = query.trim();
@@ -291,7 +313,11 @@ export default function DomainTransferSection() {
               )}
             </div>
 
-            <button className="mt-4 w-full text-center text-xs text-black/70 sm:text-sm">
+            <button
+              type="button"
+              onClick={() => void handleGoToTransfer()}
+              className="mt-4 w-full text-center text-xs text-black/70 hover:text-black transition-colors cursor-pointer sm:text-sm"
+            >
               Already own a domain? Transfer it here{" "}
               <ArrowRight className="inline h-3.5 w-3.5" />
             </button>
@@ -364,10 +390,19 @@ export default function DomainTransferSection() {
               <input
                 type="text"
                 placeholder="Enter Your Domain"
+                value={transferDomain}
+                onChange={(e) => setTransferDomain(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleGoToTransfer(transferDomain.trim() || undefined);
+                  }
+                }}
                 className="h-11 w-full rounded-md border border-black/10 bg-white/85 px-3 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-[#0095FF]/40"
               />
               <button
                 type="button"
+                onClick={() => void handleGoToTransfer(transferDomain.trim() || undefined)}
                 className="inline-flex h-11 items-center justify-center rounded-md bg-[#019EFF] px-5 text-sm font-medium font-salsa text-black transition-colors hover:bg-[#0086E5] cursor-pointer"
               >
                 Transfer Domain
