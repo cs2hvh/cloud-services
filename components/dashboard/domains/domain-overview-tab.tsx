@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import {
+  ArrowUpRight,
   CheckCircle2,
   Circle,
   Clock,
@@ -10,12 +12,13 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import type { DomainConnectionItem, DomainPurchase } from './domain-detail-types';
+import type { DomainConnectionItem, DomainPurchase, RelatedDomain } from './domain-detail-types';
 
 interface DomainOverviewTabProps {
   purchaseRequest: DomainPurchase | null;
   connections: DomainConnectionItem[];
   connectedAppNames: string[];
+  relatedDomains?: RelatedDomain[];
 }
 
 function Stat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -69,6 +72,7 @@ export function DomainOverviewTab({
   purchaseRequest,
   connections,
   connectedAppNames,
+  relatedDomains,
 }: DomainOverviewTabProps) {
   const activeCount = connections.filter((c) => c.status === 'active').length;
   const pendingCount = connections.filter((c) => c.status === 'pending' || c.status === 'verified').length;
@@ -240,6 +244,35 @@ export function DomainOverviewTab({
           <p className="text-xs text-white/30 max-w-sm mx-auto">
             Go to the Connections tab to point this domain to one of your apps.
           </p>
+        </div>
+      )}
+
+      {/* Related domains */}
+      {relatedDomains && relatedDomains.length > 0 && (
+        <div className="rounded-lg border border-white/[0.06] overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+            <p className="text-sm font-medium text-white">Related Domains</p>
+            <span className="text-xs text-white/35">{relatedDomains.length}</span>
+          </div>
+          <div className="divide-y divide-white/[0.03]">
+            {relatedDomains.map(({ domain, role }) => (
+              <Link
+                key={domain}
+                href={`/dashboard/domains/${encodeURIComponent(domain)}`}
+                className="flex items-center justify-between px-4 py-2.5 hover:bg-white/[0.02] transition-colors group"
+              >
+                <span className="text-sm font-mono text-white/70 group-hover:text-white transition-colors truncate">
+                  {domain}
+                </span>
+                <div className="flex items-center gap-3 shrink-0 ml-4">
+                  <span className="text-[11px] text-white/30">
+                    {role === 'parent' ? 'Parent zone' : role === 'sibling' ? 'Sibling' : 'Subdomain'}
+                  </span>
+                  <ArrowUpRight className="h-3.5 w-3.5 text-white/20 group-hover:text-white/50 transition-colors" />
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
     </div>

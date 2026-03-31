@@ -149,6 +149,13 @@ export function sanitizeLastError(msg: string | null): string | null {
   return msg;
 }
 
+export type RelatedDomainRole = 'parent' | 'subdomain' | 'sibling';
+
+export interface RelatedDomain {
+  domain: string;
+  role: RelatedDomainRole;
+}
+
 export function normalizeDomain(value: string): string {
   return value.trim().toLowerCase();
 }

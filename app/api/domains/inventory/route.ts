@@ -99,6 +99,24 @@ async function loadNameComDomainMeta(): Promise<Map<string, { expires_at: string
   return meta;
 }
 
+/**
+ * For a given FQDN, return the registrar metadata from nameComMeta.
+ * Checks the domain itself first, then walks up parent zones.
+ * This means blog.sabpatahai.guru inherits sabpatahai.guru's expiry/auto_renew.
+ */
+function resolveProviderMeta(
+  domain: string,
+  nameComMeta: Map<string, { expires_at: string | null; auto_renew: boolean | null }>
+): { expires_at: string | null; auto_renew: boolean | null } {
+  const parts = domain.split('.');
+  for (let i = 0; i < parts.length - 1; i++) {
+    const candidate = parts.slice(i).join('.');
+    const meta = nameComMeta.get(candidate);
+    if (meta) return meta;
+  }
+  return { expires_at: null, auto_renew: null };
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -207,7 +225,7 @@ export async function GET(req: NextRequest) {
     const inventoryByDomain = new Map<string, DomainInventoryItem>();
 
     for (const [domain, purchase] of purchaseByDomain.entries()) {
-      const providerMeta = nameComMeta.get(domain);
+      const providerMeta = resolveProviderMeta(domain, nameComMeta);
       inventoryByDomain.set(domain, {
         domain,
         purchase,
@@ -246,7 +264,7 @@ export async function GET(req: NextRequest) {
 
       const existing = inventoryByDomain.get(domain);
       if (!existing) {
-        const providerMeta = nameComMeta.get(domain);
+        const providerMeta = resolveProviderMeta(domain, nameComMeta);
         inventoryByDomain.set(domain, {
           domain,
           purchase: null,
