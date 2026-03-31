@@ -71,6 +71,14 @@ function mapKnownError(rawMessage: string): string | null {
     return "This action is currently unavailable for MongoDB clusters.";
   }
 
+  if (
+    normalized.includes("cannot delete admin user") ||
+    (normalized.includes("doadmin") &&
+      (normalized.includes("delete") || normalized.includes("remove")))
+  ) {
+    return "Cannot delete admin user.";
+  }
+
   return null;
 }
 

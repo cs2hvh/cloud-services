@@ -64,6 +64,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
   const [deletingUser, setDeletingUser] = useState(false);
   const [deletingDb, setDeletingDb] = useState(false);
+  const [resettingUser, setResettingUser] = useState<string | null>(null);
   const [resetPasswordModal, setResetPasswordModal] = useState<{
     show: boolean;
     username: string;
@@ -164,6 +165,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   };
 
   const handleResetPassword = async (username: string) => {
+    setResettingUser(username);
     try {
       const response = await api.post("/services/database/users/reset", {
         cluster_id: clusterId,
@@ -182,6 +184,8 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     } catch (error) {
       console.error("[handleResetPassword] Error:", error);
       toast.error(getDatabaseErrorMessage(error, "Failed to reset password."));
+    } finally {
+      setResettingUser(null);
     }
   };
 
@@ -398,10 +402,20 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleResetPassword(user.name)}
-                          className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08]"
+                          disabled={Boolean(resettingUser)}
+                          className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          <RefreshCw className="h-4 w-4" />
-                          Reset
+                          {resettingUser === user.name ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Resetting...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4" />
+                              Reset
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() =>

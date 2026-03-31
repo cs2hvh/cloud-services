@@ -1,6 +1,6 @@
 "use client";
 import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -131,10 +131,16 @@ const NewClusterPage = ({
     name?: string;
     nodes?: string;
     user?: string;
+    plan?: string;
+    version?: string;
+    project?: string;
   }>({
     name: undefined,
     nodes: undefined,
     user: undefined,
+    plan: undefined,
+    version: undefined,
+    project: undefined,
   });
   //we need to make plan dynamic
   // const [availablePlans] = useState([
@@ -197,14 +203,46 @@ const NewClusterPage = ({
       user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
   );
 
+  // Filter projects based on selected user in admin mode
+  const filteredProjects = useMemo(() => {
+    if (role === "admin") {
+      if (!state.selectedUser) {
+        return [];
+      }
+      return projects.filter((project) => project.owner === state.selectedUser);
+    }
+    return projects;
+  }, [projects, role, state.selectedUser]);
+
+  // Keep selected project valid when user selection changes
+  useEffect(() => {
+    if (!state.selectedProject) {
+      return;
+    }
+
+    const isProjectAvailable = filteredProjects.some(
+      (project) => project.id === state.selectedProject
+    );
+
+    if (!isProjectAvailable) {
+      setState((prev) => ({ ...prev, selectedProject: "" }));
+    }
+  }, [filteredProjects, state.selectedProject]);
+
   // Handle user selection
   const handleUserSelect = (selectedUserId: string) => {
     setState((prev) => ({
       ...prev,
       selectedUser: selectedUserId,
+      selectedProject: projects.some(
+        (project) =>
+          project.id === prev.selectedProject && project.owner === selectedUserId
+      )
+        ? prev.selectedProject
+        : "",
     }));
-    if (validationErrors.user) {
-      setValidationErrors({ ...validationErrors, user: "" });
+    if (validationErrors.user || validationErrors.project) {
+      setValidationErrors({ ...validationErrors, user: "", project: undefined });
     }
   };
 
@@ -277,6 +315,42 @@ const NewClusterPage = ({
           return;
         }
       }
+    }
+
+    if (currentStep === 4) {
+      if (!state.selectedPlan) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          plan: "Please select a plan",
+        }));
+        toast.error("Please select a plan");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+    }
+
+    if (currentStep === 5) {
+      if (!state.selectedVersion) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          version: "Please select a version",
+        }));
+        toast.error("Please select a version");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, version: undefined }));
+    }
+
+    if (currentStep === 6) {
+      if (!state.selectedProject) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          project: "Please select a project",
+        }));
+        toast.error("Please select a project");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, project: undefined }));
     }
 
     // Continue with existing step logic
@@ -956,9 +1030,12 @@ const NewClusterPage = ({
                   <div className="max-h-[360px] overflow-y-auto pr-1">
                     <RadioGroup
                       value={state.selectedPlan}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedPlan: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedPlan: value });
+                        if (validationErrors.plan) {
+                          setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+                        }
+                      }}
                       className="space-y-3"
                     >
                       {filteredProducts.map((plan) => (
@@ -1032,6 +1109,9 @@ const NewClusterPage = ({
                   </RadioGroup>
                 </div>
                 )}
+                {validationErrors.plan && (
+                  <p className="text-sm text-red-500">{validationErrors.plan}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1069,7 +1149,12 @@ const NewClusterPage = ({
                       <button
                         key={version}
                         type="button"
-                        onClick={() => setState({ ...state, selectedVersion: version })}
+                        onClick={() => {
+                          setState({ ...state, selectedVersion: version });
+                          if (validationErrors.version) {
+                            setValidationErrors((prev) => ({ ...prev, version: undefined }));
+                          }
+                        }}
                         className={
                           isSelected
                             ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
@@ -1123,6 +1208,9 @@ const NewClusterPage = ({
                     </div>
                   </div>
                 </div>
+                {validationErrors.version && (
+                  <p className="text-sm text-red-500">{validationErrors.version}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1158,24 +1246,40 @@ const NewClusterPage = ({
                     </Label>
                     <Select
                       value={selectedProject}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedProject: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedProject: value });
+                        if (validationErrors.project) {
+                          setValidationErrors((prev) => ({ ...prev, project: undefined }));
+                        }
+                      }}
                     >
                       <SelectTrigger
                         id="project"
-                        className="h-11 w-full border-white/[0.12] bg-white/[0.04] text-white"
+                        className={
+                          "h-11 w-full border-white/[0.12] bg-white/[0.04] text-white " +
+                          (validationErrors.project ? "border-red-500" : "")
+                        }
                       >
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent className="border-white/20 bg-black text-white">
-                        {projects.map((project) => (
+                        {filteredProjects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {filteredProjects.length === 0 && (
+                      <p className="mt-2 text-sm text-white/60">
+                        {role === "admin"
+                          ? "No projects found for selected user."
+                          : "No projects available."}
+                      </p>
+                    )}
+                    {validationErrors.project && (
+                      <p className="mt-2 text-sm text-red-500">{validationErrors.project}</p>
+                    )}
                   </div>
 
                   <div className="border border-white/[0.08] bg-white/[0.03] p-4">
@@ -1184,7 +1288,7 @@ const NewClusterPage = ({
                     </div>
                     <div className="mt-2 text-base font-semibold text-white">
                       {selectedProject
-                        ? projects.find((project) => project.id === selectedProject)?.name || "Unknown project"
+                        ? filteredProjects.find((project) => project.id === selectedProject)?.name || "Unknown project"
                         : "No project selected"}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-white/45">

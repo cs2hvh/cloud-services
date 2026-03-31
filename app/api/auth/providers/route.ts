@@ -58,24 +58,51 @@ export async function GET(request: Request) {
   // 2. For GitHub: Check both identity and token (backwards compatibility)
   // 3. For other providers (google, email): Only check Supabase identities
   const providers = allProviders.map((provider) => {
+    const identityLinked = linkedProviders.includes(provider);
+    const integrationConnected =
+      provider === "github"
+        ? hasGitHubToken
+        : provider === "gitlab"
+          ? hasGitLabToken
+          : provider === "bitbucket"
+            ? hasBitbucketToken
+            : false;
+
     // For GitLab and Bitbucket, ONLY check token tables (direct OAuth for API access)
     // We don't want to show them as "connected" if they were used for sign-in but no longer have API tokens
     if (provider === 'gitlab') {
-      return { provider, status: hasGitLabToken };
+      return {
+        provider,
+        status: hasGitLabToken, // backwards compatibility for integration-driven screens
+        identity_linked: identityLinked,
+        integration_connected: integrationConnected,
+      };
     }
     if (provider === 'bitbucket') {
-      return { provider, status: hasBitbucketToken };
+      return {
+        provider,
+        status: hasBitbucketToken, // backwards compatibility for integration-driven screens
+        identity_linked: identityLinked,
+        integration_connected: integrationConnected,
+      };
     }
     
     // For GitHub, check both identity and token (backwards compatibility)
     if (provider === 'github') {
-      return { provider, status: linkedProviders.includes(provider) || hasGitHubToken };
+      return {
+        provider,
+        status: identityLinked || hasGitHubToken,
+        identity_linked: identityLinked,
+        integration_connected: integrationConnected,
+      };
     }
     
     // For other providers (google, email), only check Supabase identities
     return {
       provider,
-      status: linkedProviders.includes(provider),
+      status: identityLinked,
+      identity_linked: identityLinked,
+      integration_connected: integrationConnected,
     };
   });
   
