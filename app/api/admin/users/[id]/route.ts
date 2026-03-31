@@ -98,8 +98,8 @@ export async function GET(
 
     // Get user's apps
     const { data: apps } = await supabase
-      .from("apps")
-      .select("id, name, github_url, status, created_at")
+      .from("platform_apps")
+      .select("id, name, github_url:repository_url, status, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 

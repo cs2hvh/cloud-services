@@ -31,33 +31,26 @@ CREATE TABLE IF NOT EXISTS object_storage_integrations (
     -- Error tracking
     error_message TEXT
 );
-
 -- Enable RLS
 ALTER TABLE object_storage_integrations ENABLE ROW LEVEL SECURITY;
-
 -- RLS Policies
 CREATE POLICY "Users can view their own object storage integrations" 
 ON object_storage_integrations FOR SELECT 
 USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create object storage integrations" 
 ON object_storage_integrations FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update their own object storage integrations" 
 ON object_storage_integrations FOR UPDATE 
 USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete their own object storage integrations" 
 ON object_storage_integrations FOR DELETE 
 USING (auth.uid() = user_id);
-
 -- Service role bypass for backend operations
 CREATE POLICY "Service role can manage all object storage integrations"
 ON object_storage_integrations FOR ALL
 USING (auth.role() = 'service_role')
 WITH CHECK (auth.role() = 'service_role');
-
 -- Indexes for performance
 CREATE INDEX idx_os_integrations_app ON object_storage_integrations(platform_app_id);
 CREATE INDEX idx_os_integrations_bucket ON object_storage_integrations(object_space_id);
@@ -65,13 +58,11 @@ CREATE INDEX idx_os_integrations_user ON object_storage_integrations(user_id);
 CREATE INDEX idx_os_integrations_status ON object_storage_integrations(status);
 CREATE INDEX idx_os_integrations_active ON object_storage_integrations(object_space_id, platform_app_id) 
     WHERE status IN ('pending', 'linked');
-
 -- Updated_at trigger
 CREATE TRIGGER update_object_storage_integrations_updated_at
     BEFORE UPDATE ON object_storage_integrations
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
 -- Comments
 COMMENT ON TABLE object_storage_integrations IS 'Tracks links between platform apps and object storage buckets';
 COMMENT ON COLUMN object_storage_integrations.object_space_id IS 'References object_spaces.id (UUID)';

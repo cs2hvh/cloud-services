@@ -6,16 +6,23 @@
 -- Add auth_source to gitlab_tokens
 ALTER TABLE IF EXISTS gitlab_tokens 
 ADD COLUMN IF NOT EXISTS auth_source TEXT DEFAULT 'direct';
-
 -- Add auth_source to bitbucket_tokens
 ALTER TABLE IF EXISTS bitbucket_tokens 
 ADD COLUMN IF NOT EXISTS auth_source TEXT DEFAULT 'direct';
-
 -- Update existing tokens - assume they're from the direct flow if we don't know
 -- (This is a safe assumption for existing deployments)
-UPDATE gitlab_tokens SET auth_source = 'direct' WHERE auth_source IS NULL;
-UPDATE bitbucket_tokens SET auth_source = 'direct' WHERE auth_source IS NULL;
+DO $$
+BEGIN
+  IF to_regclass('public.gitlab_tokens') IS NOT NULL THEN
+    UPDATE gitlab_tokens SET auth_source = 'direct' WHERE auth_source IS NULL;
+    COMMENT ON COLUMN gitlab_tokens.auth_source IS 'Source of OAuth token: direct (our OAuth app) or supabase (Supabase Auth). Only direct tokens can be refreshed with our credentials.';
+  END IF;
+END $$;
 
--- Add a comment explaining the column
-COMMENT ON COLUMN gitlab_tokens.auth_source IS 'Source of OAuth token: direct (our OAuth app) or supabase (Supabase Auth). Only direct tokens can be refreshed with our credentials.';
-COMMENT ON COLUMN bitbucket_tokens.auth_source IS 'Source of OAuth token: direct (our OAuth app) or supabase (Supabase Auth). Only direct tokens can be refreshed with our credentials.';
+DO $$
+BEGIN
+  IF to_regclass('public.bitbucket_tokens') IS NOT NULL THEN
+    UPDATE bitbucket_tokens SET auth_source = 'direct' WHERE auth_source IS NULL;
+    COMMENT ON COLUMN bitbucket_tokens.auth_source IS 'Source of OAuth token: direct (our OAuth app) or supabase (Supabase Auth). Only direct tokens can be refreshed with our credentials.';
+  END IF;
+END $$;

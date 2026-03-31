@@ -19,12 +19,10 @@ CREATE TABLE IF NOT EXISTS platform_app_deployments (
     status TEXT NOT NULL CHECK (status IN ('success', 'failed')),
     trigger TEXT NOT NULL CHECK (trigger IN ('manual', 'webhook', 'rollback'))
 );
-
 -- 2) Optional pointer to the currently-active deployment
 -- NOTE: this is optional but simplifies UI + rollback queries.
 ALTER TABLE platform_apps
     ADD COLUMN IF NOT EXISTS active_deployment_id UUID;
-
 -- Postgres does not support `ADD CONSTRAINT IF NOT EXISTS`, so we gate it manually.
 DO $$
 BEGIN
@@ -40,7 +38,6 @@ BEGIN
             ON DELETE SET NULL;
     END IF;
 END $$;
-
 -- 2b) Allow rollback to be recorded in platform_apps.last_deploy_trigger
 -- Existing migration limited this to ('manual', 'webhook', 'scheduled').
 -- We extend to include 'rollback'.
@@ -61,10 +58,8 @@ EXCEPTION
     WHEN duplicate_object THEN
         NULL;
 END $$;
-
 -- 3) RLS
 ALTER TABLE platform_app_deployments ENABLE ROW LEVEL SECURITY;
-
 -- Allow users to view deployment history for apps they own
 DROP POLICY IF EXISTS "Users can view deployments for their platform apps" ON platform_app_deployments;
 CREATE POLICY "Users can view deployments for their platform apps" ON platform_app_deployments
@@ -76,18 +71,14 @@ CREATE POLICY "Users can view deployments for their platform apps" ON platform_a
               AND platform_apps.user_id = auth.uid()
         )
     );
-
 -- 4) Indexes
 CREATE INDEX IF NOT EXISTS idx_platform_app_deployments_app_created_at
     ON platform_app_deployments(app_id, created_at DESC);
-
 CREATE INDEX IF NOT EXISTS idx_platform_app_deployments_app_success_created_at
     ON platform_app_deployments(app_id, created_at DESC)
     WHERE status = 'success';
-
 CREATE UNIQUE INDEX IF NOT EXISTS uq_platform_app_deployments_app_build_number
     ON platform_app_deployments(app_id, build_number)
     WHERE build_number IS NOT NULL;
-
 CREATE INDEX IF NOT EXISTS idx_platform_apps_active_deployment
     ON platform_apps(active_deployment_id);

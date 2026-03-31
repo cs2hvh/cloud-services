@@ -7,10 +7,8 @@
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
-
 -- Create agents schema
 CREATE SCHEMA IF NOT EXISTS agents;
-
 -- ============================================================
 -- ENUMS
 -- ============================================================
@@ -19,7 +17,6 @@ CREATE TYPE agents.agent_status AS ENUM ('active', 'paused', 'deleted');
 CREATE TYPE agents.kb_status AS ENUM ('pending', 'indexing', 'ready', 'error');
 CREATE TYPE agents.document_status AS ENUM ('pending', 'processing', 'indexed', 'error');
 CREATE TYPE agents.model_provider AS ENUM ('openrouter', 'openai', 'anthropic', 'custom');
-
 -- ============================================================
 -- MODEL KEYS TABLE
 -- Stores encrypted API keys for LLM providers
@@ -44,7 +41,6 @@ CREATE TABLE agents.model_keys (
     
     UNIQUE(user_id, name)
 );
-
 -- ============================================================
 -- KNOWLEDGE BASES TABLE
 -- Stores knowledge base configurations
@@ -78,7 +74,6 @@ CREATE TABLE agents.knowledge_bases (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- ============================================================
 -- KNOWLEDGE BASE DOCUMENTS TABLE
 -- Stores source documents (files, URLs, text)
@@ -107,7 +102,6 @@ CREATE TABLE agents.kb_documents (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- ============================================================
 -- KNOWLEDGE BASE CHUNKS TABLE
 -- Stores text chunks with vector embeddings
@@ -130,11 +124,9 @@ CREATE TABLE agents.kb_chunks (
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- Create vector similarity search index
 CREATE INDEX kb_chunks_embedding_idx ON agents.kb_chunks 
 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-
 -- ============================================================
 -- AI AGENTS TABLE
 -- Main table for AI agent configurations
@@ -187,10 +179,8 @@ CREATE TABLE agents.ai_agents (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- Index for endpoint lookups
 CREATE UNIQUE INDEX ai_agents_endpoint_idx ON agents.ai_agents(endpoint_id);
-
 -- ============================================================
 -- CONVERSATIONS TABLE
 -- Stores chat sessions
@@ -216,12 +206,10 @@ CREATE TABLE agents.conversations (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- Index for user lookups
 CREATE INDEX conversations_user_idx ON agents.conversations(user_id);
 CREATE INDEX conversations_agent_idx ON agents.conversations(agent_id);
 CREATE INDEX conversations_session_idx ON agents.conversations(session_id);
-
 -- ============================================================
 -- MESSAGES TABLE
 -- Stores individual chat messages
@@ -249,10 +237,8 @@ CREATE TABLE agents.messages (
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
 -- Index for conversation lookups
 CREATE INDEX messages_conversation_idx ON agents.messages(conversation_id);
-
 -- ============================================================
 -- USAGE TRACKING TABLE
 -- Tracks daily usage per agent
@@ -281,11 +267,9 @@ CREATE TABLE agents.usage (
     
     UNIQUE(agent_id, date)
 );
-
 -- Index for date-based queries
 CREATE INDEX usage_date_idx ON agents.usage(date);
 CREATE INDEX usage_user_idx ON agents.usage(user_id);
-
 -- ============================================================
 -- VECTOR SEARCH FUNCTION
 -- Performs semantic similarity search on knowledge base chunks
@@ -321,7 +305,6 @@ BEGIN
     LIMIT match_count;
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================================
 -- HELPER FUNCTIONS
 -- ============================================================
@@ -340,7 +323,6 @@ BEGIN
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
-
 -- Update usage statistics
 CREATE OR REPLACE FUNCTION agents.update_usage(
     p_agent_id UUID,
@@ -362,7 +344,6 @@ BEGIN
         updated_at = NOW();
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================================
 -- ROW LEVEL SECURITY POLICIES
 -- ============================================================
@@ -376,41 +357,32 @@ ALTER TABLE agents.ai_agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agents.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agents.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agents.usage ENABLE ROW LEVEL SECURITY;
-
 -- Model Keys policies
 CREATE POLICY "Users can view own model keys"
     ON agents.model_keys FOR SELECT
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create own model keys"
     ON agents.model_keys FOR INSERT
     WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update own model keys"
     ON agents.model_keys FOR UPDATE
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete own model keys"
     ON agents.model_keys FOR DELETE
     USING (auth.uid() = user_id);
-
 -- Knowledge Bases policies
 CREATE POLICY "Users can view own knowledge bases"
     ON agents.knowledge_bases FOR SELECT
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create own knowledge bases"
     ON agents.knowledge_bases FOR INSERT
     WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update own knowledge bases"
     ON agents.knowledge_bases FOR UPDATE
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete own knowledge bases"
     ON agents.knowledge_bases FOR DELETE
     USING (auth.uid() = user_id);
-
 -- KB Documents policies
 CREATE POLICY "Users can view own kb documents"
     ON agents.kb_documents FOR SELECT
@@ -420,7 +392,6 @@ CREATE POLICY "Users can view own kb documents"
             WHERE kb.id = knowledge_base_id AND kb.user_id = auth.uid()
         )
     );
-
 CREATE POLICY "Users can create own kb documents"
     ON agents.kb_documents FOR INSERT
     WITH CHECK (
@@ -429,7 +400,6 @@ CREATE POLICY "Users can create own kb documents"
             WHERE kb.id = knowledge_base_id AND kb.user_id = auth.uid()
         )
     );
-
 CREATE POLICY "Users can delete own kb documents"
     ON agents.kb_documents FOR DELETE
     USING (
@@ -438,7 +408,6 @@ CREATE POLICY "Users can delete own kb documents"
             WHERE kb.id = knowledge_base_id AND kb.user_id = auth.uid()
         )
     );
-
 -- KB Chunks policies (read-only for users, system manages chunks)
 CREATE POLICY "Users can view own kb chunks"
     ON agents.kb_chunks FOR SELECT
@@ -448,24 +417,19 @@ CREATE POLICY "Users can view own kb chunks"
             WHERE kb.id = knowledge_base_id AND kb.user_id = auth.uid()
         )
     );
-
 -- AI Agents policies
 CREATE POLICY "Users can view own agents"
     ON agents.ai_agents FOR SELECT
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can create own agents"
     ON agents.ai_agents FOR INSERT
     WITH CHECK (auth.uid() = user_id);
-
 CREATE POLICY "Users can update own agents"
     ON agents.ai_agents FOR UPDATE
     USING (auth.uid() = user_id);
-
 CREATE POLICY "Users can delete own agents"
     ON agents.ai_agents FOR DELETE
     USING (auth.uid() = user_id);
-
 -- Conversations policies
 CREATE POLICY "Users can view own conversations"
     ON agents.conversations FOR SELECT
@@ -476,10 +440,10 @@ CREATE POLICY "Users can view own conversations"
             WHERE a.id = agent_id AND a.user_id = auth.uid()
         )
     );
-
 CREATE POLICY "Users can create conversations"
     ON agents.conversations FOR INSERT
-    WITH CHECK (TRUE); -- Allow API access
+    WITH CHECK (TRUE);
+-- Allow API access
 
 CREATE POLICY "Users can update own conversations"
     ON agents.conversations FOR UPDATE
@@ -490,7 +454,6 @@ CREATE POLICY "Users can update own conversations"
             WHERE a.id = agent_id AND a.user_id = auth.uid()
         )
     );
-
 -- Messages policies
 CREATE POLICY "Users can view messages from own conversations"
     ON agents.messages FOR SELECT
@@ -504,16 +467,15 @@ CREATE POLICY "Users can view messages from own conversations"
             ))
         )
     );
-
 CREATE POLICY "Users can create messages in conversations"
     ON agents.messages FOR INSERT
-    WITH CHECK (TRUE); -- Allow API access
+    WITH CHECK (TRUE);
+-- Allow API access
 
 -- Usage policies
 CREATE POLICY "Users can view own usage"
     ON agents.usage FOR SELECT
     USING (auth.uid() = user_id);
-
 -- ============================================================
 -- SERVICE ROLE ACCESS (for API operations)
 -- ============================================================
@@ -523,13 +485,11 @@ GRANT USAGE ON SCHEMA agents TO service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA agents TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA agents TO service_role;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA agents TO service_role;
-
 -- Grant access to authenticated users
 GRANT USAGE ON SCHEMA agents TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA agents TO authenticated;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA agents TO authenticated;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA agents TO authenticated;
-
 -- ============================================================
 -- TRIGGERS
 -- ============================================================
@@ -542,31 +502,24 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
 CREATE TRIGGER update_model_keys_updated_at
     BEFORE UPDATE ON agents.model_keys
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 CREATE TRIGGER update_knowledge_bases_updated_at
     BEFORE UPDATE ON agents.knowledge_bases
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 CREATE TRIGGER update_kb_documents_updated_at
     BEFORE UPDATE ON agents.kb_documents
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 CREATE TRIGGER update_ai_agents_updated_at
     BEFORE UPDATE ON agents.ai_agents
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 CREATE TRIGGER update_conversations_updated_at
     BEFORE UPDATE ON agents.conversations
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 CREATE TRIGGER update_usage_updated_at
     BEFORE UPDATE ON agents.usage
     FOR EACH ROW EXECUTE FUNCTION agents.update_updated_at();
-
 -- ============================================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================================
@@ -574,36 +527,28 @@ CREATE TRIGGER update_usage_updated_at
 CREATE INDEX idx_ai_agents_user_id ON agents.ai_agents(user_id);
 CREATE INDEX idx_ai_agents_project_id ON agents.ai_agents(project_id);
 CREATE INDEX idx_ai_agents_status ON agents.ai_agents(status);
-
 CREATE INDEX idx_knowledge_bases_user_id ON agents.knowledge_bases(user_id);
 CREATE INDEX idx_knowledge_bases_status ON agents.knowledge_bases(status);
-
 CREATE INDEX idx_kb_documents_kb_id ON agents.kb_documents(knowledge_base_id);
 CREATE INDEX idx_kb_documents_status ON agents.kb_documents(status);
-
 CREATE INDEX idx_kb_chunks_kb_id ON agents.kb_chunks(knowledge_base_id);
 CREATE INDEX idx_kb_chunks_doc_id ON agents.kb_chunks(document_id);
-
 -- Full text search index on chunk content
 CREATE INDEX idx_kb_chunks_content_fts ON agents.kb_chunks 
 USING gin(to_tsvector('english', content));
-
 -- ============================================================
 -- PRODUCTS FOR BILLING
 -- ============================================================
 
--- Insert AI Agents products into main products table
-INSERT INTO public.products (name, description, type, sub, resources, price, fixed_price, slug)
-VALUES 
-    ('AI Agent - Basic', 'Basic AI agent with 100K tokens/month', 'ai-agent', 'basic', 
-     '{"tokens_per_month": 100000, "max_agents": 3, "max_knowledge_bases": 2, "max_documents_per_kb": 50}', 
-     5.00, 0, 'ai-agent-basic'),
-    ('AI Agent - Pro', 'Pro AI agent with 500K tokens/month', 'ai-agent', 'pro', 
-     '{"tokens_per_month": 500000, "max_agents": 10, "max_knowledge_bases": 10, "max_documents_per_kb": 200}', 
-     19.00, 0, 'ai-agent-pro'),
-    ('AI Agent - Enterprise', 'Enterprise AI agent with unlimited tokens', 'ai-agent', 'enterprise', 
-     '{"tokens_per_month": -1, "max_agents": -1, "max_knowledge_bases": -1, "max_documents_per_kb": -1}', 
-     99.00, 0, 'ai-agent-enterprise')
-ON CONFLICT DO NOTHING;
+DO $$
+BEGIN
+  IF to_regtype('public.product_type') IS NOT NULL THEN
+    ALTER TYPE public.product_type ADD VALUE IF NOT EXISTS 'ai-agent';
+  END IF;
+END $$;
 
+-- NOTE:
+-- Seeding products is intentionally deferred to the next migration.
+-- PostgreSQL can reject using a newly added enum value in the same transaction
+-- (`SQLSTATE 55P04`), which breaks shadow-db replay during `supabase db pull`.
 COMMENT ON SCHEMA agents IS 'AI Agents platform schema - stores agents, knowledge bases, conversations, and usage data';

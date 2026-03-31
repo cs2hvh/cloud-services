@@ -21,11 +21,18 @@ interface SearchResultItem {
   reason: string | null;
 }
 
-const tldSuggestions = [
-  { tld: ".com", price: "$2.95/month", highlighted: true },
-  { tld: ".in", price: "$5.25/month", highlighted: false },
-  { tld: ".org", price: "$3.25/month", highlighted: false },
-];
+// TLD quick-search shortcuts shown before the user performs a search.
+const STATIC_TLD_PILLS = [
+  { tld: "com", label: ".com", highlighted: true },
+  { tld: "io",  label: ".io",  highlighted: false },
+  { tld: "ai",  label: ".ai",  highlighted: false },
+] as const;
+
+function formatPrice(price: number | null, currency: string): string {
+  if (price === null) return "";
+  const symbol = currency === "USD" ? "$" : `${currency} `;
+  return `${symbol}${price % 1 === 0 ? price.toFixed(0) : price.toFixed(2)}/yr`;
+}
 
 const transferSteps = [
   {
@@ -42,6 +49,70 @@ const transferSteps = [
   },
 ];
 
+function DomainResultRow({
+  result,
+  onBuy,
+}: {
+  result: SearchResultItem;
+  onBuy: (r: SearchResultItem) => Promise<void>;
+}) {
+  const buyLabel = formatPrice(result.purchasePrice, result.currency);
+  const renewLabel = result.renewalPrice !== null
+    ? formatPrice(result.renewalPrice, result.currency)
+    : null;
+
+  return (
+    <div
+      className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
+        result.available ? "bg-[#2A2D33] text-white" : "bg-[#2A2D33]/60 text-white/40"
+      }`}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="truncate font-medium">{result.domainName}</span>
+        {result.available ? (
+          <span className="shrink-0 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-[#8DFF84]">
+            Available
+          </span>
+        ) : (
+          <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-medium text-red-300">
+            Taken
+          </span>
+        )}
+        {result.premium && (
+          <span className="shrink-0 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-medium text-yellow-300">
+            Premium
+          </span>
+        )}
+      </div>
+      <div className="ml-2 flex shrink-0 items-center gap-2">
+        {result.available && buyLabel && (
+          <div className="text-right text-[11px] leading-tight">
+            <div className="text-white/80 font-medium">{buyLabel}</div>
+            {renewLabel && (
+              <div className="text-white/40">renews {renewLabel}</div>
+            )}
+          </div>
+        )}
+        {result.available && (
+          <button
+            type="button"
+            onClick={() => void onBuy(result)}
+            className="inline-flex items-center rounded-md bg-[#019EFF] px-2.5 py-1 text-xs font-medium text-black transition-colors hover:bg-[#0086E5]"
+          >
+            Buy Now
+            <ArrowRight className="ml-1 h-3 w-3" />
+          </button>
+        )}
+        {!result.available && result.reason && (
+          <span className="text-[10px] text-white/30 italic truncate max-w-[100px]" title={result.reason}>
+            {result.reason}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DomainTransferSection() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -49,6 +120,71 @@ export default function DomainTransferSection() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
+  const [lastSearchedQuery, setLastSearchedQuery] = useState("");
+  const [transferDomain, setTransferDomain] = useState("");
+
+  const handleGoToTransfer = useCallback(
+    async (prefillDomain?: string) => {
+      const transferUrl = prefillDomain
+        ? `/dashboard/domains/transfer?domain=${encodeURIComponent(prefillDomain)}`
+        : "/dashboard/domains/transfer";
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
+          router.push(`/signin?next=${encodeURIComponent(transferUrl)}`);
+        } else {
+          router.push(transferUrl);
+        }
+      } catch {
+        toast.error("Could not verify your session. Please sign in.");
+        router.push(`/signin?next=${encodeURIComponent(transferUrl)}`);
+      }
+    },
+    [router, supabase]
+  );
+
+  // Core search function used by handleSearch and TLD pill clicks
+  const triggerSearch = useCallback(
+    async (searchQuery: string) => {
+      const cleanQuery = searchQuery.trim();
+      if (!cleanQuery) return;
+
+      setSearching(true);
+      setResults([]);
+      setHasSearched(true);
+      setLastSearchedQuery(cleanQuery);
+      saveSearchQuery(cleanQuery);
+
+      try {
+        const res = await fetch("/api/domains/public/search", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: cleanQuery, tlds: ["com", "net", "org", "io", "ai", "app", "dev", "co"] }),
+        });
+        const data = await res.json();
+
+        if (res.status === 429) {
+          toast.error("Too many searches. Please wait a moment and try again.");
+          return;
+        }
+        if (!res.ok) {
+          toast.error(data?.message || data?.error || "Domain search failed");
+          return;
+        }
+
+        const items = (data?.data?.results || []) as SearchResultItem[];
+        setResults(items);
+        if (items.length === 0) {
+          toast.info("No domain suggestions returned for this query");
+        }
+      } catch {
+        toast.error("Domain search failed. Please try again.");
+      } finally {
+        setSearching(false);
+      }
+    },
+    []
+  );
 
   const handleSearch = useCallback(async () => {
     const cleanQuery = query.trim();
@@ -56,40 +192,8 @@ export default function DomainTransferSection() {
       toast.error("Enter a domain name or keyword to search");
       return;
     }
-
-    setSearching(true);
-    setResults([]);
-    setHasSearched(true);
-    saveSearchQuery(cleanQuery);
-
-    try {
-      const res = await fetch("/api/domains/public/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: cleanQuery, tlds: ["com", "net", "org", "io", "ai", "app", "dev", "co"] }),
-      });
-      const data = await res.json();
-
-      if (res.status === 429) {
-        toast.error("Too many searches. Please wait a moment and try again.");
-        return;
-      }
-      if (!res.ok) {
-        toast.error(data?.message || data?.error || "Domain search failed");
-        return;
-      }
-
-      const items = (data?.data?.results || []) as SearchResultItem[];
-      setResults(items);
-      if (items.length === 0) {
-        toast.info("No domain suggestions returned for this query");
-      }
-    } catch {
-      toast.error("Domain search failed. Please try again.");
-    } finally {
-      setSearching(false);
-    }
-  }, [query]);
+    await triggerSearch(cleanQuery);
+  }, [query, triggerSearch]);
 
   const handleBuyNow = useCallback(
     async (result: SearchResultItem) => {
@@ -102,9 +206,8 @@ export default function DomainTransferSection() {
 
       const marketplaceUrl = `/dashboard/domains/marketplace?domain=${encodeURIComponent(result.domainName)}`;
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (!data.session) {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error || !user) {
           router.push(`/signin?next=${encodeURIComponent(marketplaceUrl)}`);
         } else {
           router.push(marketplaceUrl);
@@ -118,10 +221,39 @@ export default function DomainTransferSection() {
     [router, supabase]
   );
 
-  const orderedResults = [...results].sort((a, b) => {
-    if (a.available === b.available) return 0;
-    return a.available ? -1 : 1;
-  });
+  // Keep primary result (exact match) at top; sort remaining alternatives available-first
+  const orderedResults = useMemo(() => {
+    if (!lastSearchedQuery.includes(".")) {
+      // Keyword search: sort all by availability
+      return [...results].sort((a, b) =>
+        a.available === b.available ? 0 : a.available ? -1 : 1
+      );
+    }
+    // Exact domain search: first result is the primary match, rest are alternatives
+    const [primary, ...rest] = results;
+    const sortedRest = [...rest].sort((a, b) =>
+      a.available === b.available ? 0 : a.available ? -1 : 1
+    );
+    return primary ? [primary, ...sortedRest] : sortedRest;
+  }, [results, lastSearchedQuery]);
+
+  const isExactSearch = lastSearchedQuery.includes(".");
+  const primaryResult = isExactSearch ? orderedResults[0] : null;
+  const alternativeResults = isExactSearch ? orderedResults.slice(1) : orderedResults;
+
+  const handleTldPillClick = useCallback(
+    (tld: string) => {
+      const keyword = query.trim().split(".")[0];
+      if (!keyword) {
+        toast.info(`Type a domain name then click .${tld} to search`);
+        return;
+      }
+      const newQuery = `${keyword}.${tld}`;
+      setQuery(newQuery);
+      void triggerSearch(newQuery);
+    },
+    [query, triggerSearch]
+  );
 
   return (
     <section className="relative overflow-hidden bg-[#0D0D0F] pt-16 sm:pt-20 lg:pt-24">
@@ -207,21 +339,23 @@ export default function DomainTransferSection() {
                 </div>
               </div>
 
-              {/* TLD pricing pills — always shown when no search started (original layout) */}
+              {/* TLD pricing pills — interactive quick-search shortcuts with live prices */}
               {!hasSearched && (
                 <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {tldSuggestions.map((item) => (
-                    <div
+                  {STATIC_TLD_PILLS.map((item) => (
+                    <button
                       key={item.tld}
-                      className={`rounded-md px-3 py-2 text-center text-xs font-medium sm:text-sm ${
+                      type="button"
+                      onClick={() => handleTldPillClick(item.tld)}
+                      title={query.trim() ? `Search ${query.trim().split(".")[0]}.${item.tld}` : `Type a name then click to search with ${item.label}`}
+                      className={`rounded-md px-3 py-2 text-center text-xs font-medium transition-opacity hover:opacity-80 cursor-pointer sm:text-sm ${
                         item.highlighted
                           ? "bg-[#2A2D33] text-[#8DFF84]"
                           : "bg-[#2A2D33] text-[#87C9FF]"
                       }`}
                     >
-                      {item.tld}{" "}
-                      <span className="text-white/80">{item.price}</span>
-                    </div>
+                      {item.label}
+                    </button>
                   ))}
                 </div>
               )}
@@ -239,51 +373,21 @@ export default function DomainTransferSection() {
                       No results found. Try a different keyword.
                     </div>
                   ) : (
-                    <div className="max-h-[260px] space-y-1.5 overflow-y-auto rounded-lg">
-                      {orderedResults.map((result) => (
-                        <div
-                          key={result.domainName}
-                          className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-                            result.available
-                              ? "bg-[#2A2D33] text-white"
-                              : "bg-[#2A2D33]/60 text-white/40"
-                          }`}
-                        >
-                          <div className="flex min-w-0 items-center gap-2">
-                            <span className="truncate font-medium">{result.domainName}</span>
-                            {result.available ? (
-                              <span className="shrink-0 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-[#8DFF84]">
-                                Available
-                              </span>
-                            ) : (
-                              <span className="shrink-0 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-medium text-red-300">
-                                Taken
-                              </span>
-                            )}
-                            {result.premium && (
-                              <span className="shrink-0 rounded-full bg-yellow-500/20 px-2 py-0.5 text-[10px] font-medium text-yellow-300">
-                                Premium
-                              </span>
-                            )}
-                          </div>
-                          <div className="ml-2 flex shrink-0 items-center gap-2">
-                            {result.purchasePrice !== null && (
-                              <span className="text-xs text-white/60">
-                                {result.currency === 'USD' ? '$' : result.currency + ' '}{result.purchasePrice}
-                              </span>
-                            )}
-                            {result.available && (
-                              <button
-                                type="button"
-                                onClick={() => void handleBuyNow(result)}
-                                className="inline-flex items-center rounded-md bg-[#019EFF] px-2.5 py-1 text-xs font-medium text-black transition-colors hover:bg-[#0086E5]"
-                              >
-                                Buy Now
-                                <ArrowRight className="ml-1 h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                    <div className="max-h-[300px] space-y-1 overflow-y-auto rounded-lg">
+                      {/* Primary exact-match result */}
+                      {primaryResult && (
+                        <>
+                          <DomainResultRow result={primaryResult} onBuy={handleBuyNow} />
+                          {alternativeResults.length > 0 && (
+                            <div className="px-1 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                              Similar domains
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {/* Keyword search results or alternatives */}
+                      {alternativeResults.map((result) => (
+                        <DomainResultRow key={result.domainName} result={result} onBuy={handleBuyNow} />
                       ))}
                     </div>
                   )}
@@ -291,7 +395,11 @@ export default function DomainTransferSection() {
               )}
             </div>
 
-            <button className="mt-4 w-full text-center text-xs text-black/70 sm:text-sm">
+            <button
+              type="button"
+              onClick={() => void handleGoToTransfer()}
+              className="mt-4 w-full text-center text-xs text-black/70 hover:text-black transition-colors cursor-pointer sm:text-sm"
+            >
               Already own a domain? Transfer it here{" "}
               <ArrowRight className="inline h-3.5 w-3.5" />
             </button>
@@ -364,10 +472,19 @@ export default function DomainTransferSection() {
               <input
                 type="text"
                 placeholder="Enter Your Domain"
+                value={transferDomain}
+                onChange={(e) => setTransferDomain(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void handleGoToTransfer(transferDomain.trim() || undefined);
+                  }
+                }}
                 className="h-11 w-full rounded-md border border-black/10 bg-white/85 px-3 text-sm text-black placeholder:text-black/40 focus:outline-none focus:ring-2 focus:ring-[#0095FF]/40"
               />
               <button
                 type="button"
+                onClick={() => void handleGoToTransfer(transferDomain.trim() || undefined)}
                 className="inline-flex h-11 items-center justify-center rounded-md bg-[#019EFF] px-5 text-sm font-medium font-salsa text-black transition-colors hover:bg-[#0086E5] cursor-pointer"
               >
                 Transfer Domain
