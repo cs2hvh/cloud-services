@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDomainTransferService } from "@/lib/domain-service/transfer";
 
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   }
 
   const token = authHeader?.replace(/^Bearer\s+/i, "").trim();
-  if (!token || token !== cronSecret) {
+  if (!token || !safeCompare(token, cronSecret)) {
     return NextResponse.json(
       { error: "UNAUTHORIZED", message: "Invalid or missing authorization" },
       { status: 401 }
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       data: result,
-      message: `Polled ${result.polled} transfers: ${result.updated} updated, ${result.errors} errors`,
+      message: `Polled ${result.polled} transfers: ${result.processed} processed, ${result.errors} errors`,
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Polling failed";
@@ -49,5 +50,20 @@ export async function POST(req: Request) {
       { error: "INTERNAL_ERROR", message },
       { status: 500 }
     );
+  }
+}
+
+function safeCompare(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) {
+      // Compare against self to keep constant time, then return false
+      timingSafeEqual(bufA, bufA);
+      return false;
+    }
+    return timingSafeEqual(bufA, bufB);
+  } catch {
+    return false;
   }
 }

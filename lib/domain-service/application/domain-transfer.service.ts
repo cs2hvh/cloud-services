@@ -24,7 +24,14 @@ const PROVIDER_STATUS_MAP: Record<string, DomainTransferRequestStatus> = {
 
 function mapProviderStatus(providerStatus: string): DomainTransferRequestStatus {
   const normalized = providerStatus.trim().toLowerCase();
-  return PROVIDER_STATUS_MAP[normalized] || "pending";
+  const mapped = PROVIDER_STATUS_MAP[normalized];
+  if (!mapped) {
+    console.warn(
+      `[DomainTransferService] Unknown provider status "${providerStatus}" — defaulting to "pending"`
+    );
+    return "pending";
+  }
+  return mapped;
 }
 
 function hashAuthCode(authCode: string): string {
@@ -114,12 +121,15 @@ export class DomainTransferService {
         transferPrice: result.purchasePrice ?? null,
         currency: "USD",
       };
-    } catch {
-      // If availability check fails, still allow registration (error will be caught during createTransfer)
+    } catch (error: unknown) {
+      console.error(
+        `[DomainTransferService] Eligibility check failed for ${domain}:`,
+        error instanceof Error ? error.message : error
+      );
       return {
         domain,
-        eligible: true,
-        reason: null,
+        eligible: false,
+        reason: "Could not verify transfer eligibility. Please try again later.",
         transferPrice: null,
         currency: "USD",
       };
@@ -173,6 +183,7 @@ export class DomainTransferService {
       userId: actor.userId,
       domain,
       authCodeHash: authCodeHashed,
+      purchasePrice: input.purchasePrice ?? null,
       currency: "USD",
       provider: "namecom",
       idempotencyKey: input.idempotencyKey || null,
@@ -479,20 +490,24 @@ export class DomainTransferService {
   async pollPendingTransfers(params?: {
     limit?: number;
     staleBefore?: string;
-  }): Promise<{ polled: number; updated: number; errors: number }> {
+  }): Promise<{ polled: number; processed: number; errors: number }> {
     const pending = await this.transfers.listPendingForPolling({
       limit: params?.limit || 50,
       staleBefore: params?.staleBefore,
     });
 
-    let updated = 0;
+    let processed = 0;
     let errors = 0;
 
     for (const transfer of pending) {
       try {
         await this.pollSingleTransfer(transfer);
-        updated++;
-      } catch {
+        processed++;
+      } catch (error: unknown) {
+        console.error(
+          `[DomainTransferService] Poll failed for ${transfer.domain}:`,
+          error instanceof Error ? error.message : error
+        );
         errors++;
       }
 
@@ -500,7 +515,7 @@ export class DomainTransferService {
       await this.transfers.updatePolled(transfer.id).catch(() => {});
     }
 
-    return { polled: pending.length, updated, errors };
+    return { polled: pending.length, processed, errors };
   }
 
   private async pollSingleTransfer(transfer: DomainTransferRequest): Promise<void> {
@@ -550,9 +565,11 @@ export class DomainTransferService {
     _oldStatus: DomainTransferRequestStatus,
     newStatus: DomainTransferRequestStatus
   ): Promise<void> {
+    // NOTE: We don't have the user's email in the transfer record (provider_email is the WHOIS contact).
+    // Audit + notifications still work via userId. Emails are skipped during polling.
     const systemActor: ActorContext = {
       userId: transfer.user_id,
-      userEmail: transfer.provider_email || undefined,
+      userEmail: undefined,
       userRole: "system",
     };
 
