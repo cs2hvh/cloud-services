@@ -784,27 +784,27 @@ ${generateLoggingHelpers()}
                   SECRET_EXPOSURE=0
                   
                   # Detect printenv / env dump in RUN commands
-                  if grep -nEi "^RUN.*(printenv|\\benv\\b|\\bset\\b)\\s*($|>|\\||;)" Dockerfile > /dev/null 2>&1; then
+                  if grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile > /dev/null 2>&1; then
                     echo "[WARN] WARNING: Dockerfile may dump environment variables in build output"
-                    grep -nEi "^RUN.*(printenv|\\benv\\b|\\bset\\b)\\s*($|>|\\||;)" Dockerfile | while IFS= read -r line; do
+                    grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile | while IFS= read -r line; do
                       echo "  -> $line"
                     done
                     SECRET_EXPOSURE=1
                   fi
                   
                   # Detect echo $VAR patterns
-                  if grep -nE "^RUN.*echo.*\\$\\{?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+                  if grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
                     echo "[WARN] WARNING: Dockerfile echoes environment variables (may leak secrets)"
-                    grep -nE "^RUN.*echo.*\\$\\{?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+                    grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
                       echo "  -> $line"
                     done
                     SECRET_EXPOSURE=1
                   fi
                   
                   # Detect writing env to files
-                  if grep -nEi "^RUN.*(printenv|env|echo.*\\$).*>" Dockerfile > /dev/null 2>&1; then
+                  if grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
                     echo "[WARN] WARNING: Dockerfile may write env vars to files (persists in image layer)"
-                    grep -nEi "^RUN.*(printenv|env|echo.*\\$).*>" Dockerfile | while IFS= read -r line; do
+                    grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
                       echo "  -> $line"
                     done
                     SECRET_EXPOSURE=1
@@ -1417,6 +1417,4 @@ export function getContainerUsageReport() {
     recommendations,
   };
 }
-
-
 

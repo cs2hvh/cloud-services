@@ -79,7 +79,7 @@ registry.registerPath({
   },
   responses: {
     201: {
-      description: 'Kubernetes cluster created successfully',
+      description: 'Kubernetes cluster created with status `creating`. Poll GET /api/v1/kubernetes/{id} to track provisioning progress.',
       content: {
         'application/json': {
           schema: KubernetesClusterResponseSchema,
@@ -113,7 +113,7 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
-          example: { error: 'INSUFFICIENT_BALANCE', message: 'Insufficient credits', details: { balance: 5.0, required: 10.0 } },
+          example: { error: 'INSUFFICIENT_BALANCE', message: 'Insufficient credits' },
         },
       },
     },
@@ -122,7 +122,7 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
-          example: { error: 'FORBIDDEN', message: 'You do not have permission to create a Kubernetes cluster in this project' },
+          example: { error: 'FORBIDDEN', message: 'You do not have permission to access this project' },
         },
       },
     },
@@ -182,11 +182,11 @@ registry.registerPath({
       },
     },
     400: {
-      description: 'Bad request - invalid cluster ID',
+      description: 'Bad request - invalid cluster ID format',
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
-          example: { error: 'VALIDATION_ERROR', message: 'Invalid cluster ID' },
+          example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } },
         },
       },
     },
@@ -272,10 +272,24 @@ registry.registerPath({
       },
     },
     400: {
-      description: 'Bad request - validation error',
+      description: 'Bad request - validation error or invalid cluster ID',
       content: {
         'application/json': {
-          schema: ValidationErrorResponseSchema,
+          schema: z.union([ValidationErrorResponseSchema, ErrorResponseSchema]),
+          examples: {
+            validation: {
+              summary: 'Body validation error',
+              value: {
+                error: 'VALIDATION_ERROR',
+                message: 'Invalid request body',
+                validation_errors: [{ path: 'node_pool.count', message: 'Number must be greater than or equal to 1' }],
+              },
+            },
+            invalid_id: {
+              summary: 'Invalid cluster ID format',
+              value: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } },
+            },
+          },
         },
       },
     },
@@ -293,7 +307,7 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: ErrorResponseSchema,
-          example: { error: 'FORBIDDEN', message: 'You do not have permission to update this cluster' },
+          example: { error: 'FORBIDDEN', message: 'You do not have permission to modify this cluster' },
         },
       },
     },
@@ -349,6 +363,15 @@ registry.registerPath({
       content: {
         'application/json': {
           schema: KubernetesClusterDeleteResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: 'Bad request - invalid cluster ID format',
+      content: {
+        'application/json': {
+          schema: ErrorResponseSchema,
+          example: { error: 'INVALID_ID', message: 'Invalid id format', details: { field: 'id' } },
         },
       },
     },

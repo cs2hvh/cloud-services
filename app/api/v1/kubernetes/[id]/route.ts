@@ -2,35 +2,25 @@
 // PATCH /api/v1/kubernetes/{id} — update a kubernetes cluster
 // DELETE /api/v1/kubernetes/{id} — delete a kubernetes cluster
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
-import { v1TransformValidationError } from "@/lib/api/v1-helpers";
+import { v1TransformValidationError, v1ExtractId } from "@/lib/api/v1-helpers";
+import { v1NotFound, v1Forbidden } from "@/lib/api/v1-errors";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
 import { updateKubernetesClusterSchema } from "@/lib/validation/kubernetes";
 import { serializeClusterForV1 } from "@/lib/services/kubernetes/helpers";
 
-export const GET = withV1Auth("kubernetes:read", async (req, auth, { params }) => {
-  const { id: clusterId } = await params;
-
-  if (!clusterId || typeof clusterId !== "string") {
-    return v1Error("VALIDATION_ERROR", 400, "Invalid cluster ID");
-  }
+export const GET = withV1Auth("kubernetes:read", async (_req, auth, context) => {
+  const { id: clusterId, error: idError } = await v1ExtractId(context);
+  if (idError) return idError;
 
   const result = await KubernetesService.getCluster({
-    clusterId,
+    clusterId: clusterId!,
     userId: auth.userId,
   });
 
   if (!result.success) {
-    const status =
-      result.errorCode === "NOT_FOUND"
-        ? 404
-        : result.errorCode === "FORBIDDEN"
-          ? 403
-          : 500;
-    return v1Error(
-      result.errorCode || "INTERNAL_ERROR",
-      status,
-      result.error || "Failed to fetch Kubernetes cluster"
-    );
+    if (result.errorCode === "NOT_FOUND") return v1NotFound("cluster");
+    if (result.errorCode === "FORBIDDEN") return v1Forbidden("cluster", "access");
+    return v1Error("INTERNAL_ERROR", 500, result.error || "Failed to fetch Kubernetes cluster");
   }
 
   return v1Ok({
@@ -38,12 +28,9 @@ export const GET = withV1Auth("kubernetes:read", async (req, auth, { params }) =
   });
 });
 
-export const PATCH = withV1Auth("kubernetes:update", async (req, auth, { params }) => {
-  const { id: clusterId } = await params;
-
-  if (!clusterId || typeof clusterId !== "string") {
-    return v1Error("VALIDATION_ERROR", 400, "Invalid cluster ID");
-  }
+export const PATCH = withV1Auth("kubernetes:update", async (req, auth, context) => {
+  const { id: clusterId, error: idError } = await v1ExtractId(context);
+  if (idError) return idError;
 
   let parsedBody: unknown;
   try {
@@ -54,29 +41,20 @@ export const PATCH = withV1Auth("kubernetes:update", async (req, auth, { params 
   const body = parsedBody && typeof parsedBody === "object" ? parsedBody : {};
 
   const validation = updateKubernetesClusterSchema.safeParse(body);
-
   if (!validation.success) {
     return v1TransformValidationError(validation.error);
   }
 
   const result = await KubernetesService.updateCluster({
-    clusterId,
+    clusterId: clusterId!,
     userId: auth.userId,
     ...validation.data,
   });
 
   if (!result.success) {
-    const status =
-      result.errorCode === "NOT_FOUND"
-        ? 404
-        : result.errorCode === "FORBIDDEN"
-          ? 403
-          : 500;
-    return v1Error(
-      result.errorCode || "UPDATE_FAILED",
-      status,
-      result.error || "Failed to update Kubernetes cluster"
-    );
+    if (result.errorCode === "NOT_FOUND") return v1NotFound("cluster");
+    if (result.errorCode === "FORBIDDEN") return v1Forbidden("cluster", "modify");
+    return v1Error("UPDATE_FAILED", 500, result.error || "Failed to update Kubernetes cluster");
   }
 
   return v1Ok({
@@ -84,33 +62,22 @@ export const PATCH = withV1Auth("kubernetes:update", async (req, auth, { params 
   });
 });
 
-export const DELETE = withV1Auth("kubernetes:delete", async (req, auth, { params }) => {
-  const { id: clusterId } = await params;
-
-  if (!clusterId || typeof clusterId !== "string") {
-    return v1Error("VALIDATION_ERROR", 400, "Invalid cluster ID");
-  }
+export const DELETE = withV1Auth("kubernetes:delete", async (req, auth, context) => {
+  const { id: clusterId, error: idError } = await v1ExtractId(context);
+  if (idError) return idError;
 
   const result = await KubernetesService.deleteCluster(
     {
-      clusterId,
+      clusterId: clusterId!,
       userId: auth.userId,
     },
     req
   );
 
   if (!result.success) {
-    const status =
-      result.errorCode === "NOT_FOUND"
-        ? 404
-        : result.errorCode === "FORBIDDEN"
-          ? 403
-          : 500;
-    return v1Error(
-      result.errorCode || "DELETE_FAILED",
-      status,
-      result.error || "Failed to delete Kubernetes cluster"
-    );
+    if (result.errorCode === "NOT_FOUND") return v1NotFound("cluster");
+    if (result.errorCode === "FORBIDDEN") return v1Forbidden("cluster", "delete");
+    return v1Error("DELETE_FAILED", 500, result.error || "Failed to delete Kubernetes cluster");
   }
 
   return v1Ok({

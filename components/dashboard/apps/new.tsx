@@ -766,7 +766,18 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create application");
+        if (data.partial_success && data.app_id) {
+          toast.warning(
+            data.message ||
+              "Deployment started, but billing registration needs attention.",
+          );
+          router.push(`/dashboard/services/apps/${data.app_id}`);
+          return;
+        }
+
+        throw new Error(
+          data.message || data.error || "Failed to create application",
+        );
       }
 
       toast.success("Application deployment started successfully!");
@@ -2089,4 +2100,3 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 };
 
 export default AppDeploymentSelect;
-

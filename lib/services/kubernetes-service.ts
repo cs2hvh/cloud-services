@@ -15,6 +15,8 @@ export type {
   CreateKubernetesClusterResult,
   GetKubernetesClusterRequest,
   GetKubernetesClusterResult,
+  InitKubernetesClusterRequest,
+  InitKubernetesClusterResult,
   UpdateKubernetesClusterRequest,
   DeleteKubernetesClusterRequest,
   DeleteKubernetesClusterResult,
