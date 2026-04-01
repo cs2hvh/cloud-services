@@ -241,6 +241,23 @@ export class ProjectService {
     }
 
     const supabase = await createServiceClient();
+    const { count: ownedCount, error: countError } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", input.userId);
+
+    if (countError) {
+      return mapSupabaseError(countError);
+    }
+
+    if ((ownedCount ?? 0) <= 1) {
+      return {
+        success: false,
+        error: "You must keep at least one project. Create another project before deleting this one.",
+        errorCode: "LAST_PROJECT",
+      };
+    }
+
     const { error } = await supabase.from("projects").delete().eq("id", input.projectId);
 
     if (error) {
