@@ -220,30 +220,30 @@ ${generateSecurityStages({ language: 'docker' })}
             EXPOSURE_FOUND=0
 
             # Check for printenv / env dump commands
-            if grep -nEi "(^|&&|;|\\|)\\s*(printenv|env\\b|set\\b)" Dockerfile 2>/dev/null | grep -i "^[0-9]*:RUN" > /dev/null 2>&1; then
+            if grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile 2>/dev/null | grep -i "^[0-9]*:RUN" > /dev/null 2>&1; then
               echo ""
               echo "  [WARNING] Dockerfile contains env dump commands (printenv/env/set)"
-              grep -nEi "(^|&&|;|\\|)\\s*(printenv|env\\b|set\\b)" Dockerfile | grep -i "RUN" | while IFS= read -r line; do
+              grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile | grep -i "RUN" | while IFS= read -r line; do
                 echo "    $line"
               done
               EXPOSURE_FOUND=1
             fi
 
             # Check for echo $VAR patterns that could leak secrets
-            if grep -nE "RUN.*echo.*\\$\\{?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+            if grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
               echo ""
               echo "  [WARNING] Dockerfile echoes environment variables"
-              grep -nE "RUN.*echo.*\\$\\{?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+              grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
                 echo "    $line"
               done
               EXPOSURE_FOUND=1
             fi
 
             # Check for writing env vars to files
-            if grep -nEi "RUN.*(printenv|env|echo.*\\$).*>" Dockerfile > /dev/null 2>&1; then
+            if grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
               echo ""
               echo "  [WARNING] Dockerfile may write env vars to files"
-              grep -nEi "RUN.*(printenv|env|echo.*\\$).*>" Dockerfile | while IFS= read -r line; do
+              grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
                 echo "    $line"
               done
               EXPOSURE_FOUND=1

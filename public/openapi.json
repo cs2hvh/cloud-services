@@ -1875,10 +1875,11 @@
           },
           "workers": {
             "type": "array",
+            "nullable": true,
             "items": {
               "$ref": "#/components/schemas/WorkerNode"
             },
-            "description": "Worker nodes"
+            "description": "Worker nodes (null while cluster is being created)"
           },
           "create_status": {
             "type": "boolean",
@@ -1914,10 +1915,9 @@
             "type": "string",
             "enum": [
               "pending",
-              "provisioning",
+              "creating",
               "ready",
-              "error",
-              "deleting",
+              "failed",
               "deleted"
             ],
             "description": "Cluster status",
@@ -7354,7 +7354,7 @@
         },
         "responses": {
           "201": {
-            "description": "Kubernetes cluster created successfully",
+            "description": "Kubernetes cluster created with status `creating`. Poll GET /api/v1/kubernetes/{id} to track provisioning progress.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7406,11 +7406,7 @@
                 },
                 "example": {
                   "error": "INSUFFICIENT_BALANCE",
-                  "message": "Insufficient credits",
-                  "details": {
-                    "balance": 5,
-                    "required": 10
-                  }
+                  "message": "Insufficient credits"
                 }
               }
             }
@@ -7424,7 +7420,7 @@
                 },
                 "example": {
                   "error": "FORBIDDEN",
-                  "message": "You do not have permission to create a Kubernetes cluster in this project"
+                  "message": "You do not have permission to access this project"
                 }
               }
             }
@@ -7514,15 +7510,18 @@
             }
           },
           "400": {
-            "description": "Bad request - invalid cluster ID",
+            "description": "Bad request - invalid cluster ID format",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "VALIDATION_ERROR",
-                  "message": "Invalid cluster ID"
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
                 }
               }
             }
@@ -7648,11 +7647,43 @@
             }
           },
           "400": {
-            "description": "Bad request - validation error",
+            "description": "Bad request - validation error or invalid cluster ID",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ValidationErrorResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ValidationErrorResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ErrorResponse"
+                    }
+                  ]
+                },
+                "examples": {
+                  "validation": {
+                    "summary": "Body validation error",
+                    "value": {
+                      "error": "VALIDATION_ERROR",
+                      "message": "Invalid request body",
+                      "validation_errors": [
+                        {
+                          "path": "node_pool.count",
+                          "message": "Number must be greater than or equal to 1"
+                        }
+                      ]
+                    }
+                  },
+                  "invalid_id": {
+                    "summary": "Invalid cluster ID format",
+                    "value": {
+                      "error": "INVALID_ID",
+                      "message": "Invalid id format",
+                      "details": {
+                        "field": "id"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -7680,7 +7711,7 @@
                 },
                 "example": {
                   "error": "FORBIDDEN",
-                  "message": "You do not have permission to update this cluster"
+                  "message": "You do not have permission to modify this cluster"
                 }
               }
             }
@@ -7763,6 +7794,23 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/KubernetesClusterDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request - invalid cluster ID format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_ID",
+                  "message": "Invalid id format",
+                  "details": {
+                    "field": "id"
+                  }
                 }
               }
             }

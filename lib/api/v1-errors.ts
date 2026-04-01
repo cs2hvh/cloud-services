@@ -89,6 +89,13 @@ export const V1_ERROR_CODES = {
     message: "Failed to delete resource",
   },
 
+  // Billing Errors (402)
+  INSUFFICIENT_BALANCE: {
+    code: "INSUFFICIENT_BALANCE",
+    status: 402,
+    message: "Insufficient credits to complete this operation",
+  },
+
   SERVICE_UNAVAILABLE: {
     code: "SERVICE_UNAVAILABLE",
     status: 503,

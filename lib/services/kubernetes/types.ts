@@ -26,6 +26,7 @@ export interface CreateKubernetesClusterRequest {
   plan_id: string;
   owner_id: string;
   user_email?: string;
+  isAdmin?: boolean;
 }
 
 export interface CreateKubernetesClusterResult extends ServiceResult {
@@ -37,6 +38,30 @@ export interface CreateKubernetesClusterResult extends ServiceResult {
 export interface GetKubernetesClusterRequest {
   clusterId: string;
   userId: string;
+  isAdmin?: boolean;
+}
+
+export interface InitKubernetesClusterRequest {
+  name: string;
+  region: string;
+  version: string;
+  nodeCount: number;
+  size: string;
+  ownerId: string;
+  actorUserId?: string;
+  projectId: string;
+  planId: string;
+  resources: {
+    cpu: number;
+    ram: number;
+    storage: number;
+  };
+  userEmail?: string;
+  isAdmin?: boolean;
+}
+
+export interface InitKubernetesClusterResult extends ServiceResult {
+  clusterId?: string;
 }
 
 export interface GetKubernetesClusterResult extends ServiceResult {
@@ -46,6 +71,7 @@ export interface GetKubernetesClusterResult extends ServiceResult {
 export interface UpdateKubernetesClusterRequest {
   clusterId: string;
   userId: string;
+  isAdmin?: boolean;
   node_pool?: {
     size?: string;
     count?: number;
@@ -56,10 +82,12 @@ export interface UpdateKubernetesClusterRequest {
 export interface DeleteKubernetesClusterRequest {
   clusterId: string;
   userId: string;
+  isAdmin?: boolean;
 }
 
 export interface DeleteKubernetesClusterResult extends ServiceResult {
   clusterId?: string;
+  droplet_warnings?: string[];
 }
 
 export interface ListKubernetesClustersByOwnerRequest {
