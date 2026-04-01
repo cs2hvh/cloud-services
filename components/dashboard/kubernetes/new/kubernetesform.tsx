@@ -341,23 +341,42 @@ const NewClusterPage = ({
           storage: selectedProduct.resources.storage,
         },
       });
+      const settledResponse = response as typeof response & {
+        error?: unknown;
+        data?: { message?: string; clusterId?: string };
+      };
 
-      if (response.status === 200) {
+      if (settledResponse.error) {
+        return;
+      }
+
+      if (settledResponse.status === 200) {
         toast.success("Cluster initialized.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
-          router.push(
-            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response.data.clusterId)}`
-          );
+          const newClusterId = settledResponse.data?.clusterId;
+          if (!newClusterId) {
+            toast.error("Cluster created but ID missing — check dashboard.");
+            router.push('/dashboard/services/kubernetes');
+          } else {
+            router.push(
+              `/dashboard/services/kubernetes/clusters/${encodeURIComponent(newClusterId)}`
+            );
+          }
         }
+        return;
       }
 
-      // toast.success(response.data);
-      // Redirect to success page or dashboard
+      toast.error(
+        settledResponse.data?.message || "Failed to initialize cluster.",
+      );
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
+        toast.error(err.message || "Failed to initialize cluster.");
+      } else {
+        toast.error("Failed to initialize cluster.");
       }
     } finally {
       setIsLoading(false);

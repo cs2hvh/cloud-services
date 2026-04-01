@@ -277,11 +277,21 @@ function SingleCluster({
     dropletFailureHandledRef.current = true;
 
     try {
-      await fetch("/api/services/kubernetes/clusters/delete", {
+      const response = await fetch("/api/services/kubernetes/clusters/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cluster_id: clusterId }),
       });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        console.error(
+          "[handleDropletCreationFailure] Cluster cleanup failed:",
+          errorData?.message || errorData?.error || response.statusText,
+        );
+      }
     } catch (deleteError) {
       console.error("[handleDropletCreationFailure] Failed to delete cluster:", deleteError);
     }
@@ -524,6 +534,14 @@ function SingleCluster({
         const response=await api.post(`/services/kubernetes/clusters/delete`, {
           cluster_id: clusterId,
         })
+        const settledResponse = response as typeof response & {
+          error?: unknown;
+          data?: { message?: string };
+        };
+        if (settledResponse.error) {
+          toast.error(settledResponse.data?.message || "Failed to clean up cluster.");
+          return;
+        }
         if(response.status===200){
           router.push("/dashboard/services/kubernetes");
           toast.error(
@@ -657,11 +675,23 @@ function SingleCluster({
     const delCluster = await api.post(`/services/kubernetes/clusters/delete`, {
       cluster_id: clusterId,
     });
+    const settledDeleteCluster = delCluster as typeof delCluster & {
+      error?: unknown;
+      data?: { message?: string };
+    };
+
+    if (settledDeleteCluster.error) {
+      setLoading(false);
+      return;
+    }
 
     if (delCluster.status === 200) {
       toast.success("Cluster deleted successfully");
       router.push("/dashboard/services/kubernetes");
+      return;
     }
+
+    toast.error(settledDeleteCluster.data?.message || "Failed to delete cluster");
     setLoading(false);
   };
 

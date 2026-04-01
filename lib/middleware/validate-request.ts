@@ -101,7 +101,13 @@ export function serviceErrorResponse(
       : result.errorCode === "FORBIDDEN"
         ? 403
         : 500;
-  return NextResponse.json({ error: result.error }, { status });
+  return NextResponse.json(
+    {
+      error: result.error,
+      message: result.error,
+    },
+    { status }
+  );
 }
 
 /**
