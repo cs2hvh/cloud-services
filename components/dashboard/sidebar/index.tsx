@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Archive,
+  BadgeDollarSign,
   BookOpen,
   Bot,
   Box,
@@ -349,6 +350,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/docs",
       current: false,
       icon: FileText,
+    },
+     {
+      name: "Billing & Transaction",
+      href: "/dashboard/nav/billing",
+      current: false,
+      icon: BadgeDollarSign,
     },
     {
       name: "Help Center",

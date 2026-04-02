@@ -71,9 +71,11 @@ export const clusterLifecycleOperations = {
     req?: NextRequest
   ): Promise<CreateKubernetesClusterResult> {
     try {
+      const totalNodes = Math.max(request.node_pool.count, 1);
+
       // Check billing
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
-        await getRatesForKubernetes(request.plan_id);
+        await getRatesForKubernetes(request.plan_id, totalNodes);
 
       const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
       if (!balCheck.ok) {

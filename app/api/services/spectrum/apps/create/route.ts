@@ -3,12 +3,13 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { createSpectrumApp } from "@/config/spectrum-functions";
-import { ensureBalance } from "@/config/billing-flow";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getRatesForSpectrum } from "@/config/pricing";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { Billing } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
     console.log("reached here")
 
     // Billing: upfront and hourly (dynamic from admin pricing)
-    const { initialCost: INITIAL_COST } = await getRatesForSpectrum();
+    const { initialCost: INITIAL_COST,hourlyRate:HOURLY_RATE} = await getRatesForSpectrum();
 
     // Check balance BEFORE creating Spectrum app
     const ownerId = validation.data.owner_id;
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await createSpectrumApp(validation.data, body.role);
-     console.log("reached here")
+     //console.log("reached here")
 
     // Create audit log
     const auditContext = getAuditContext(req);
@@ -91,29 +92,29 @@ export async function POST(req: NextRequest) {
     );
 
     // Insert into billing.active_spectrum (use local row id as service_id)
-//     try {
-//       const serviceId = (result?.app?.id as string) || (result?.cloudflare?.id as string);
-//       if (serviceId) {
-//         await postProvisionBilling({
-//           userId: ownerId,
-//           initialCost: INITIAL_COST,
-//           hourlyRate: HOURLY_RATE,
-//           serviceId,
-//           addActive: Billing.add_active_spectrum,
-//         });
-//       }
-//     } catch (e) {
-//   const message =
-//     e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
+    try {
+      const serviceId = (result?.app?.id as string) || (result?.cloudflare?.id as string);
+      if (serviceId) {
+        await postProvisionBilling({
+          userId: ownerId,
+          initialCost: INITIAL_COST,
+          hourlyRate: HOURLY_RATE,
+          serviceId,
+          addActive: Billing.add_active_spectrum,
+        });
+      }
+    } catch (e) {
+  const message =
+    e instanceof Error ? e.message : typeof e === "string" ? e : JSON.stringify(e);
 
-//   return NextResponse.json(
-//     {
-//       error: "Post-provision billing failed",
-//       details: message,
-//     },
-//     { status: 500 }
-//   );
-// }
+  return NextResponse.json(
+    {
+      error: "Post-provision billing failed",
+      details: message,
+    },
+    { status: 500 }
+  );
+}
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
