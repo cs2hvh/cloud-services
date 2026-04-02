@@ -240,7 +240,7 @@ const FirewallRuleCreate = () => {
                     <Button asChild>
                       <Link href="/dashboard/services/compute/vps/new" className="bg-white text-black hover:bg-gray-200">
                         Deploy a VPS
-                      </a>
+                      </Link>
                     </Button>
                   </div>
                 )}
