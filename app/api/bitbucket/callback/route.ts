@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
     let returnTo = "/dashboard/settings";
     let usedLegacyState = false;
     const hasSignedFormat = state.includes(".");
-    const parsedState = hasSignedFormat ? parseSignedState(state) : { ok: false, reason: "format" as const };
+    const parsedState: ParsedStateResult = hasSignedFormat ? parseSignedState(state) : { ok: false, reason: "format" as const };
 
     if (parsedState.ok) {
       userId = parsedState.data.userId;
