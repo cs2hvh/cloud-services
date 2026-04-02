@@ -41,7 +41,12 @@ export const VALID_TABLE_NAMES = [
   "active_database",
   "active_objectspace",
   "active_spectrum",
+  "active_platform_apps"
 ];
+
+function roundToCurrency(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 export async function billSingleService(tableName, svc) {
   // Validate table name to prevent SQL injection
@@ -176,31 +181,32 @@ export async function billSingleService(tableName, svc) {
     rate = SECURITY_LIMITS.MAX_HOURLY_RATE;
   }
 
-  // Calculate cost with precision rounding to avoid floating-point errors
-  // Round to 6 decimal places for sub-cent precision, then to 4 for billing
+  // Calculate cost and round to 2 decimals for currency-safe deduction
   const rawCost = hoursUsed * rate;
-  const cost = Math.round(rawCost * 10000) / 10000; // Round to 4 decimal places
+  const cost = roundToCurrency(rawCost);
 
   // Security: Skip billing if cost is below minimum threshold (prevents dust transactions)
   if (cost < SECURITY_LIMITS.MIN_BILLABLE_COST) {
     console.log(
-      `ℹ️  Skipping billing for ${tableName} service_id=${service_id}: cost $${cost.toFixed(4)} below minimum $${SECURITY_LIMITS.MIN_BILLABLE_COST}`
+      `ℹ️  Skipping billing for ${tableName} service_id=${service_id}: cost $${cost.toFixed(2)} below minimum $${SECURITY_LIMITS.MIN_BILLABLE_COST}`
     );
     return;
   }
 
   // Security: Cap cost per billing cycle
-  const finalCost = Math.min(cost, SECURITY_LIMITS.MAX_COST_PER_CYCLE);
+  const finalCost = roundToCurrency(
+    Math.min(cost, SECURITY_LIMITS.MAX_COST_PER_CYCLE)
+  );
   if (cost > SECURITY_LIMITS.MAX_COST_PER_CYCLE) {
     console.warn(
-      `⚠️ SECURITY: Cost $${cost.toFixed(4)} exceeds maximum $${SECURITY_LIMITS.MAX_COST_PER_CYCLE} for service ${service_id}, capping`
+      `⚠️ SECURITY: Cost $${cost.toFixed(2)} exceeds maximum $${SECURITY_LIMITS.MAX_COST_PER_CYCLE} for service ${service_id}, capping`
     );
   }
 
   console.log(
     `💸 Billing ${tableName} → service_id=${service_id}, user_id=${user_id}, hours=${hoursUsed.toFixed(
       4
-    )}, rate=${rate}, cost=$${finalCost.toFixed(4)}`
+    )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 
   // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
@@ -250,7 +256,7 @@ export async function billSingleService(tableName, svc) {
 
   console.log(
     `✅ Successfully billed ${tableName} service_id=${service_id}, cost=$${finalCost.toFixed(
-      4
+      2
     )}`
   );
 }
@@ -308,7 +314,7 @@ export async function processServiceTable(tableName) {
 
 // Run every 60 minutes for testing (3600 seconds)
 
-cron.schedule('0 * * * *', async () => {
+cron.schedule('*/5 * * * *', async () => {
   try {
     console.log("⏳ Billing cycle started:", new Date().toISOString());
 
@@ -317,6 +323,7 @@ cron.schedule('0 * * * *', async () => {
       processServiceTable("active_database"),
       processServiceTable("active_objectspace"),
       processServiceTable("active_spectrum"),
+      processServiceTable("active_platform_apps"),
     ]);
 
     // Log any table processing failures
@@ -326,6 +333,7 @@ cron.schedule('0 * * * *', async () => {
         "active_database",
         "active_objectspace",
         "active_spectrum",
+        "active_platform_apps"
       ];
       if (result.status === "rejected") {
         console.error(

@@ -100,8 +100,13 @@ export async function POST(req: NextRequest) {
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
-  // Billing: dynamic from admin pricing (existing cluster import uses default plan)
-  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(parsed.data.planId);
+  const totalNodes = Math.max(parsed.data.nodes.length, 1);
+
+  // Billing: dynamic from admin pricing and scaled by total nodes (workers + control plane)
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(
+    parsed.data.planId,
+    totalNodes
+  );
 
   // Check balance BEFORE provisioning
   const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);
@@ -162,6 +167,7 @@ export async function POST(req: NextRequest) {
       job_id: job.id,
       initial_cost: INITIAL_COST,
       hourly_rate: HOURLY_RATE,
+      node_count: totalNodes,
     },
   });
 

@@ -5,6 +5,37 @@ import { Tables, TablesInsert, TablesUpdate } from "../types";
 type Project = Tables<"projects">;
 type ProjectLog = Tables<"project_logs">;
 
+const DEFAULT_PROJECT_NAME = "My First Project";
+const DEFAULT_PROJECT_DESCRIPTION = "Default project created automatically.";
+
+async function ensureDefaultProjectForUser(userId: string): Promise<void> {
+  try {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", userId);
+
+    if (error || (count ?? 0) > 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("projects").insert({
+      name: DEFAULT_PROJECT_NAME,
+      description: DEFAULT_PROJECT_DESCRIPTION,
+      default_project: true,
+      owner: userId,
+      users: [userId],
+    });
+
+    if (insertError) {
+      handleQueryError("creating default project", insertError, "Projects");
+    }
+  } catch (err) {
+    handleQueryError("ensuring default project", err, "Projects");
+  }
+}
+
 export const Projects = {
   // Get a project by ID
   get_by_id: async (id: string): Promise<Project | null> => {
@@ -45,7 +76,24 @@ export const Projects = {
         );
         return [];
       }
-      return data || [];
+
+      if (data && data.length > 0) {
+        return data;
+      }
+
+      await ensureDefaultProjectForUser(userId);
+
+      const { data: refreshedData, error: refreshError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("owner", userId);
+
+      if (refreshError) {
+        handleQueryError("refreshing projects by userId", refreshError, "Projects");
+        return [];
+      }
+
+      return refreshedData || [];
     } catch (err) {
       handleQueryError("getting projects by userId", err, "Projects");
       return [];

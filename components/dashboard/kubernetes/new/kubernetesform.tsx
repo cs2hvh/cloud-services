@@ -501,6 +501,10 @@ const NewClusterPage = ({
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
   const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
+  const totalNodes = Math.max(selectedNode + 1, 1);
+  const planMonthlyRate =
+    typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
+  const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
   const nodePresets = [1, 2, 3, 5];
   const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
 
@@ -1486,11 +1490,13 @@ const NewClusterPage = ({
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-semibold text-white">
-                       {selectedPlanDetails?.price !== null
-  ? "$" + selectedPlanDetails?.price.toFixed(2)
-  : "-"}
+                        {totalMonthlyRate !== null ? "$" + totalMonthlyRate.toFixed(2) : "-"}
                       </div>
-                      <div className="text-xs text-white/45">monthly rate</div>
+                      <div className="text-xs text-white/45">
+                        {planMonthlyRate !== null
+                          ? "$" + planMonthlyRate.toFixed(2) + " x " + totalNodes + " nodes"
+                          : "monthly rate"}
+                      </div>
                     </div>
                   </div>
 
@@ -1549,8 +1555,8 @@ const NewClusterPage = ({
               <div className="flex items-center justify-between gap-4 text-sm">
                 <span className="text-white/60">Monthly rate</span>
                 <span className="text-lg font-semibold text-white">
-                  {selectedPlanDetails?.price !== null
-                    ? "$" + selectedPlanDetails?.price.toFixed(2)
+                  {totalMonthlyRate !== null
+                    ? "$" + totalMonthlyRate.toFixed(2)
                     : "Select a plan"}
                 </span>
               </div>

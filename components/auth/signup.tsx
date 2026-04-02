@@ -86,7 +86,7 @@ export default function SignUpMultiStep({
       setPendingEmail(data.email);
       setStep(2);
     } else {
-      toast.error(response.data.message);
+      toast.error(response?.data?.message);
     }
   }
 
