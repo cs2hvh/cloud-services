@@ -13,8 +13,8 @@ interface LooperGroupConfig {
 }
 
 const GROUPS: LooperGroupConfig[] = [
-  { count: 60, outerW: 350, outerH: 167, innerW: 275, innerH: 85, rotation: 15.66, groupOpacity: 0.5 },
-  { count: 60, outerW: 155, outerH: 75, innerW: 122, innerH: 38, rotation: 35.65, groupOpacity: 0.08 },
+  { count: 60, outerW: 350, outerH: 167, innerW: 275, innerH: 85, rotation: 15.66, groupOpacity: 0.18 },
+  { count: 60, outerW: 155, outerH: 75, innerW: 122, innerH: 38, rotation: 35.65, groupOpacity: 0.03 },
 ];
 
 export function LooperBackground({ className = "" }: { className?: string }) {
@@ -58,7 +58,7 @@ export function LooperBackground({ className = "" }: { className?: string }) {
 
         ctx.beginPath();
         ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,255,255,${0.8 * t})`;
+        ctx.strokeStyle = `rgba(255,255,255,${0.45 * t})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }

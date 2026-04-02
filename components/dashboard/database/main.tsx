@@ -3,14 +3,11 @@
 import { motion } from "motion/react";
 import {
   ArrowUpRight,
-  Clock3,
-  Database,
-  Layers3,
   Loader2,
   MapPin,
   Plus,
-  Server,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -88,18 +85,16 @@ function MetricCard({
   label,
   value,
   meta,
-  icon: Icon,
-  accentClassName = "text-white/60",
+  iconSrc,
 }: {
   label: string;
   value: string | number;
   meta: string;
-  icon: React.ElementType;
-  accentClassName?: string;
+  iconSrc: string;
 }) {
   return (
     <div className="glass-panel p-5">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
             {label}
@@ -109,8 +104,8 @@ function MetricCard({
           </p>
           <p className="mt-1 text-sm text-white/45">{meta}</p>
         </div>
-        <div className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${accentClassName}`}>
-          <Icon className="h-4 w-4" />
+        <div className="flex-shrink-0">
+          <Image src={iconSrc} alt={label} width={56} height={56} className="object-contain" />
         </div>
       </div>
     </div>
@@ -253,20 +248,19 @@ const DatabasePage = () => {
           label="Total Clusters"
           value={clusters.length}
           meta="Managed database environments"
-          icon={Database}
-          accentClassName="text-blue-300"
+          iconSrc="/dashboard icons/total clusters .png"
         />
         <MetricCard
           label="Healthy"
           value={onlineClusters}
           meta="Currently online and serving"
-          icon={Layers3}
+          iconSrc="/dashboard icons/healthy.png"
         />
         <MetricCard
           label="Provisioning"
           value={provisioningClusters}
           meta="In progress or updating"
-          icon={Clock3}
+          iconSrc="/dashboard icons/provisioning.png"
         />
         <MetricCard
           label="Footprint"
@@ -276,7 +270,7 @@ const DatabasePage = () => {
               ? `${totalNodes} total node${totalNodes === 1 ? "" : "s"}`
               : "No deployed capacity yet"
           }
-          icon={Server}
+          iconSrc="/dashboard icons/foot print.png"
         />
       </motion.div>
 
@@ -392,8 +386,8 @@ const DatabasePage = () => {
           transition={{ delay: 0.1, duration: 0.28 }}
           className="glass-panel px-6 py-16 text-center sm:px-10"
         >
-          <div className="mx-auto flex h-16 w-16 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
-            <Database className="h-7 w-7" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center">
+            <Image src="/dashboard icons/total clusters .png" alt="Database" width={48} height={48} className="object-contain" />
           </div>
           <h2 className="mt-6 text-xl font-semibold text-white">No database clusters yet</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-white/45">

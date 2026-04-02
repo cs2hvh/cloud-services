@@ -16,8 +16,8 @@ api.interceptors.response.use(
    // debugger
    
     const status = error.response?.status;
-    const serverMessage = (error.response?.data as { message?: string })
-      ?.message;
+    const serverPayload = error.response?.data as { message?: string; error?: string } | undefined;
+    const serverMessage = serverPayload?.message || serverPayload?.error;
       // console.log(error.response?.data,".............axios error interceptors...........");
       // console.log(error.response,".............axios error interceptors...........");
       //  console.log(error,".............axios error interceptors...........");

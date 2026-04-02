@@ -6,17 +6,15 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const origin = request.headers.get("origin") || "http://localhost:3000";
 
+    const body = await request.json().catch(() => ({})) as { next?: string };
+    const safeNext = typeof body.next === "string" && body.next.startsWith("/") && !body.next.startsWith("//") ? body.next : "/dashboard";
+
     // GitLab OAuth scopes for repository access:
-    // - api: Complete read/write access to API (includes all repos, container registry, package registry)
-    // - read_api: Read-only access to API
-    // - read_user: Read-only access to user profile
-    // - read_repository: Read-only access to repositories via Git-over-HTTP
-    // Using 'api read_user' for full functionality including private repos
     console.log("Initiating GitLab OAuth signin with scopes: api read_user");
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "gitlab",
       options: {
-        redirectTo: `${origin}/api/auth/callback`,
+        redirectTo: `${origin}/api/auth/callback?next=${encodeURIComponent(safeNext)}`,
         scopes: "read_user read_repository write_repository api read_api",
         queryParams: {
           access_type: "offline",

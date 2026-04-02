@@ -16,8 +16,6 @@ export async function authenticateUser() {
     error: userError,
   } = await supabase.auth.getUser();
 
-
-
   if (userError || !user) {
     return {
       authenticated: false as const,
@@ -61,8 +59,6 @@ export async function authenticateUserFromHeader(req: NextRequest) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-   // const Buffer.from(base64String, "base64").toString("utf8")
-
     if (!supabaseUrl || !supabaseAnonKey) {
       return {
         authenticated: false as const,
@@ -75,7 +71,6 @@ export async function authenticateUserFromHeader(req: NextRequest) {
     }
 
     // Create a Supabase client with the provided token
-   // console.log("reached here with token:", token);
     const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: {
@@ -88,17 +83,14 @@ export async function authenticateUserFromHeader(req: NextRequest) {
       },
     });
 
-   // console.log("Supabase client created with header token", supabase.auth);
-
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      console.log("User error during header auth:", userError?.cause);
+      console.warn("Header token auth failed:", userError?.message || "Unknown auth error");
       return {
-        userError:userError?.message,
         authenticated: false as const,
         user: null,
         response: NextResponse.json(

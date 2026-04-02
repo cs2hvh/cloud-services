@@ -50,8 +50,9 @@ export function SignInForm() {
   const supabase = React.useMemo(() => createClient(), []);
 
   const nextPath = React.useMemo(() => {
-    const raw = search.get("next") || "/dashboard";
-    return raw.startsWith("/") ? raw : "/dashboard";
+    const raw = search.get("next") || search.get("redirectTo") || "/dashboard";
+    // Reject protocol-relative URLs (//evil.com) to prevent open redirect
+    return raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
   }, [search]);
 
   const form = useForm<InputType>({
@@ -80,7 +81,7 @@ export function SignInForm() {
           await supabase.auth.setSession(data.session);
         }
         router.refresh();
-        router.push("/");
+        router.push(nextPath);
       }
     } finally {
       setIsLoading(false);
@@ -90,12 +91,24 @@ export function SignInForm() {
   const handleSignIn = async (type: string) => {
     setIsLoading(true);
     try {
-      let response;
-      if (type === "github" || type === "google" || type === "bitbucket") {
-        response = await api.post("/auth/signin/github", { type });
-      } else if (type === "gitlab") {
-        response = await api.post("/auth/signin/gitlab", { type });
+      const endpointByProvider: Record<string, string> = {
+        github: "/auth/signin/github",
+        google: "/auth/signin/github",
+        gitlab: "/auth/signin/gitlab",
+        bitbucket: "/auth/signin/bitbucket",
+      };
+      const endpoint = endpointByProvider[type];
+
+      if (!endpoint) {
+        toast.error("Unsupported sign-in provider");
+        return;
       }
+
+      const payload =
+        endpoint === "/auth/signin/github"
+          ? { type, next: nextPath }
+          : { next: nextPath };
+      const response = await api.post(endpoint, payload);
 
       if (response?.data?.url) {
         window.location.href = response.data.url;
@@ -104,6 +117,21 @@ export function SignInForm() {
       setIsLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    const errorCode = search.get("error");
+    if (!errorCode) return;
+
+    if (errorCode === "provider_account_linked_to_another_user") {
+      const provider = search.get("provider");
+      const providerLabel = provider
+        ? provider.charAt(0).toUpperCase() + provider.slice(1)
+        : "This provider";
+      toast.error(
+        `${providerLabel} is already connected to another account. Sign in with email/password, then link it from Settings > Accounts.`,
+      );
+    }
+  }, [search]);
 
   React.useEffect(() => {
     if (!twofaRequired) return;
@@ -260,16 +288,16 @@ export function SignInForm() {
       </div>
 
       <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
-        <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
+        <button type="button" aria-label="Sign in with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
           <Icons.gitHub className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+        <button type="button" aria-label="Sign in with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
           <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+        <button type="button" aria-label="Sign in with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
           <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
         </button>
-        <button type="button" aria-label="Sign in with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
+        <button type="button" aria-label="Sign in with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
           <Icons.google className="h-8 w-8" />
         </button>
       </div>
@@ -357,7 +385,7 @@ export function SignInForm() {
 
       <p className="mt-3 text-center text-sm text-white">
         New here! Create an account{" "}
-        <Link href="/signup" className="text-[#00a2ff] hover:text-[#53beff]">
+        <Link href={nextPath !== "/dashboard" ? `/signup?next=${encodeURIComponent(nextPath)}` : "/signup"} className="text-[#00a2ff] hover:text-[#53beff]">
           Sign Up
         </Link>
       </p>

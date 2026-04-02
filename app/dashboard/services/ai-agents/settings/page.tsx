@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Image from 'next/image';
 import {
   Select,
   SelectContent,
@@ -43,7 +43,6 @@ import {
   Eye,
   EyeOff,
   Copy,
-  ShieldCheck,
   AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -319,9 +318,9 @@ export default function AIAgentsSettingsPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-blue-300"><Key className="h-4 w-4" /></div></div></CardContent></Card>
-        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-emerald-300"><CheckCircle className="h-4 w-4" /></div></div></CardContent></Card>
-        <Card className="glass-panel overflow-hidden"><CardContent className="p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><div className="flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.05] text-purple-300"><ShieldCheck className="h-4 w-4" /></div></div></CardContent></Card>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Model Keys</p><p className="mt-3 text-2xl font-semibold text-white">{keys.length}</p><p className="mt-1 text-sm text-white/45">Saved provider credentials</p></div><Image src="/dashboard icons/model keys .png" alt="Model Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Valid Keys</p><p className="mt-3 text-2xl font-semibold text-white">{validModelKeys}</p><p className="mt-1 text-sm text-white/45">Providers ready for agent deployment</p></div><Image src="/dashboard icons/valid keys .png" alt="Valid Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
+        <div className="glass-panel p-5"><div className="flex items-start justify-between gap-4"><div><p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Agent API Keys</p><p className="mt-3 text-2xl font-semibold text-white">{activeAgentKeys}</p><p className="mt-1 text-sm text-white/45">Active endpoint credentials - {totalAgentRequests} requests</p></div><Image src="/dashboard icons/agent api keys .png" alt="Agent API Keys" width={36} height={36} className="shrink-0 opacity-80" /></div></div>
       </div>
 
       {/* New Key Created Dialog */}
@@ -378,28 +377,25 @@ export default function AIAgentsSettingsPage() {
 
         {/* Model API Keys Tab */}
         <TabsContent value="model-keys" className="space-y-6">
-          <Card className="glass-panel overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Model API Keys</CardTitle>
-                  <CardDescription>
-                    Add API keys for different AI providers (OpenAI, Anthropic, etc.). Keys are encrypted at rest.
-                  </CardDescription>
-                </div>
-                {!showAddForm && (
-                  <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Key
-                  </Button>
-                )}
+          <div className="glass-panel overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <div>
+                <h3 className="text-base font-semibold text-white">Model API Keys</h3>
+                <p className="mt-1 text-sm text-white/45">
+                  Add API keys for different AI providers (OpenAI, Anthropic, etc.). Keys are encrypted at rest.
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              {!showAddForm && (
+                <Button onClick={() => setShowAddForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Key
+                </Button>
+              )}
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               {/* Add Key Form */}
               {showAddForm && (
-                <Card className="border border-white/[0.08] bg-white/[0.03]">
-                  <CardContent className="p-4 space-y-4">
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Provider</Label>
@@ -481,8 +477,7 @@ export default function AIAgentsSettingsPage() {
                         )}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
               )}
 
               {/* Keys List */}
@@ -562,7 +557,7 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Key className="h-12 w-12 text-white/22 mx-auto mb-4" />
+                  <Image src="/dashboard icons/model keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
                   <p className="text-white/55 mb-2">No API keys configured</p>
                   <p className="text-sm text-white/40 mb-4">
                     Add an API key to start using AI models
@@ -575,70 +570,60 @@ export default function AIAgentsSettingsPage() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Provider Info */}
-          <Card className="glass-panel overflow-hidden">
-            <CardHeader>
-              <CardTitle>Supported Providers</CardTitle>
-              <CardDescription>
-                Get API keys from these providers to use their models
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Supported Providers</h3>
+              <p className="mt-1 text-sm text-white/45">Get API keys from these providers to use their models</p>
+            </div>
+            <div className="p-5 sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 {PROVIDERS.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="p-4 rounded-lg border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors"
-                  >
+                  <div key={provider.id} className="p-4 border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.05] transition-colors">
                     <h3 className="font-medium text-white">{provider.name}</h3>
                     <p className="text-sm text-white/55 mt-1">{provider.description}</p>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
 
-        {/* Agent API Keys Tab */}
-        <TabsContent value="agent-api-keys" className="space-y-6">
-          <Card className="glass-panel overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <ShieldCheck className="h-5 w-5" />
-                    Agent API Keys
-                  </CardTitle>
-                  <CardDescription>
-                    Create API keys to authenticate requests to your agent endpoints. 
-                    Use these when your agents require authentication.
-                  </CardDescription>
-                </div>
-                {!showAddAgentKeyForm && (
-                  <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Key
-                  </Button>
-                )}
+        <TabsContent value="agent-api-keys" className="space-y-5">
+          <div className="glass-panel overflow-hidden">
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <div>
+                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Image src="/dashboard icons/agent api keys .png" alt="" width={20} height={20} className="opacity-80" />
+                  Agent API Keys
+                </h3>
+                <p className="mt-1 text-sm text-white/45">
+                  Create API keys to authenticate requests to your agent endpoints.
+                  Use these when your agents require authentication.
+                </p>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
+              {!showAddAgentKeyForm && (
+                <Button onClick={() => setShowAddAgentKeyForm(true)} className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Key
+                </Button>
+              )}
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               {/* Info Box */}
-              <div className="p-4 rounded-lg border border-blue-500/20 bg-blue-500/10">
+              <div className="border border-blue-500/20 bg-blue-500/10 p-4">
                 <p className="text-sm text-blue-400">
-                  Note: Agent API Keys are used in the <code className="bg-white/[0.08] px-1 rounded">x-api-key</code> header 
-                  when calling your agent&apos;s public endpoint. Enable &quot;Require API Key&quot; in your agent&apos;s 
+                  Note: Agent API Keys are used in the <code className="bg-white/[0.08] px-1 rounded">x-api-key</code> header
+                  when calling your agent&apos;s public endpoint. Enable &quot;Require API Key&quot; in your agent&apos;s
                   Access Control settings to require authentication.
                 </p>
               </div>
 
               {/* Add Key Form */}
               {showAddAgentKeyForm && (
-                <Card className="border border-white/[0.08] bg-white/[0.03]">
-                  <CardContent className="p-4 space-y-4">
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4 space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="agentKeyName">Key Name</Label>
                       <Input
@@ -677,8 +662,7 @@ export default function AIAgentsSettingsPage() {
                         )}
                       </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
               )}
 
               {/* Keys List */}
@@ -695,7 +679,7 @@ export default function AIAgentsSettingsPage() {
                     >
                       <div className="flex items-center gap-4">
                         <div className="p-2 rounded-lg bg-white/[0.06] border border-white/[0.08]">
-                          <ShieldCheck className="h-4 w-4 text-white/75" />
+                          <Image src="/dashboard icons/agent api keys .png" alt="" width={16} height={16} className="opacity-75" />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
@@ -760,7 +744,7 @@ export default function AIAgentsSettingsPage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <ShieldCheck className="h-12 w-12 text-white/22 mx-auto mb-4" />
+                  <Image src="/dashboard icons/agent api keys .png" alt="No keys" width={48} height={48} className="opacity-25 mx-auto mb-4" />
                   <p className="text-white/55 mb-2">No agent API keys</p>
                   <p className="text-sm text-white/40 mb-4">
                     Create an API key to authenticate requests to your agent endpoints
@@ -773,18 +757,16 @@ export default function AIAgentsSettingsPage() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* API Documentation */}
-          <Card className="glass-panel overflow-hidden">
-            <CardHeader>
-              <CardTitle>API Documentation</CardTitle>
-              <CardDescription>
-                Complete guide to using your agent&apos;s public API endpoint
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">API Documentation</h3>
+              <p className="mt-1 text-sm text-white/45">Complete guide to using your agent&apos;s public API endpoint</p>
+            </div>
+            <div className="space-y-6 p-5 sm:p-6">
               {/* Endpoint URL */}
               <div>
                 <h4 className="text-white font-medium mb-2">Endpoint URL</h4>
@@ -1099,8 +1081,8 @@ for line in response.iter_lines():
                   </table>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

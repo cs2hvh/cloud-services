@@ -78,10 +78,7 @@ export async function POST(request: Request) {
   } catch (error: unknown) {
     console.error("[User Coupons] Error redeeming coupon:", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to redeem coupon",
-      },
+      { error: "Failed to redeem coupon" },
       { status: 500 }
     );
   }

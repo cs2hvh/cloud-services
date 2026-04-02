@@ -8,19 +8,13 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowUpRight,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Cpu,
-  Database,
-  FolderKanban,
   HardDrive,
-  Layers3,
   Loader2,
-  MapPin,
   Server,
-  ShieldCheck,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -86,42 +80,42 @@ const STEP_META = [
     name: "Name",
     title: "Name the cluster",
     description: "Choose a clear production-safe name for this managed database cluster.",
-    icon: Database,
+    iconSrc: "/dashboard icons/name .png",
   },
   {
     id: 2,
     name: "Location",
     title: "Select deployment region",
     description: "Place the cluster near your applications, users, or compliance boundary.",
-    icon: MapPin,
+    iconSrc: "/dashboard icons/location.png",
   },
   {
     id: 3,
     name: "Type",
     title: "Choose database engine",
     description: "Select the engine that best matches workload requirements and tooling.",
-    icon: Layers3,
+    iconSrc: "/dashboard icons/type .png",
   },
   {
     id: 4,
     name: "Plan",
     title: "Right-size compute and storage",
     description: "Pick the performance tier, plan size, and engine version for deployment.",
-    icon: Server,
+    iconSrc: "/dashboard icons/plan _1.png",
   },
   {
     id: 5,
     name: "Project",
     title: "Attach to a project",
     description: "Associate the cluster with an existing project for organization and access.",
-    icon: FolderKanban,
+    iconSrc: "/dashboard icons/project _1.png",
   },
   {
     id: 6,
     name: "Review",
     title: "Review and confirm",
     description: "Verify configuration, monthly pricing, and policy acceptance before launch.",
-    icon: ShieldCheck,
+    iconSrc: "/dashboard icons/review _1.png",
   },
 ] as const;
 
@@ -444,6 +438,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
     }
 
     try {
+      //debugger
       setIsLoading(true);
 
       if (
@@ -559,7 +554,6 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
 
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-6">
             {STEP_META.map((step) => {
-              const Icon = step.icon;
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
 
@@ -580,14 +574,23 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${isActive ? "border-blue-400/30 text-blue-300" : "border-white/[0.10] text-white/78"}`}>
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">{step.name}</div>
+                        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
+                      </div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
-                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
                 </button>
               );
             })}
@@ -1042,7 +1045,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
+                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
               >
                 Continue
                 <ChevronRight className="ml-2 h-4 w-4" />
@@ -1074,53 +1077,56 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
           <div className={`${panelClassName} lg:sticky lg:top-8`}>
             <div className="border-b border-white/[0.06] px-6 py-5">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
-                Order Summary
+                Summary
               </p>
-              <h3 className="mt-2 text-lg font-semibold text-white">Configuration snapshot</h3>
+              <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
             </div>
 
             <div className="px-6 py-5">
-              {selectedDbTypeInfo ? (
-                <div className="mb-5 flex items-center gap-4 border border-white/[0.08] bg-white/[0.04] p-4">
-                  <div className="flex h-12 w-12 items-center justify-center border border-blue-400/20 bg-blue-500/10">
+              {selectedDbTypeInfo && (
+                <div className="mb-5 flex items-center gap-3 rounded border border-white/[0.08] bg-white/[0.04] p-3.5">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10">
                     <Image
                       src={selectedDbTypeInfo.icon_url}
                       alt={selectedDbTypeInfo.name}
-                      width={28}
-                      height={28}
+                      width={26}
+                      height={26}
                       className="object-contain"
                     />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-sm font-semibold text-white">{selectedDbTypeInfo.name}</div>
-                    <div className="mt-1 text-xs uppercase tracking-wide text-white/35">
-                      {state.selectedVersion ? `Version ${state.selectedVersion}` : "Version pending"}
-                    </div>
+                    {state.selectedVersion && (
+                      <div className="mt-0.5 text-xs uppercase tracking-wide text-white/35">
+                        Version {state.selectedVersion}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ) : (
-                <div className="mb-5 border border-white/[0.08] bg-white/[0.03] p-4 text-sm text-white/45">
-                  No engine selected yet.
                 </div>
               )}
 
-              <div className="space-y-1">
-                <SummaryRow label="Cluster name" value={state.selectedName || "Pending"} />
-                <SummaryRow
-                  label="Region"
-                  value={selectedLocationData ? selectedLocationData.city : "Pending"}
-                />
-                <SummaryRow
-                  label="Engine"
-                  value={selectedDbTypeInfo ? selectedDbTypeInfo.name : "Pending"}
-                />
-                <SummaryRow label="CPU profile" value={CPU_META[selectedCpuType].label} />
-                <SummaryRow label="Plan" value={selectedDatabase?.name || "Pending"} />
-                <SummaryRow
-                  label="Project"
-                  value={selectedProjectData?.name || "Pending"}
-                />
-              </div>
+              {(state.selectedName || selectedLocationData || selectedDbTypeInfo || selectedDatabase || selectedProjectData) ? (
+                <div className="divide-y divide-white/[0.05]">
+                  {state.selectedName && (
+                    <SummaryRow label="Cluster name" value={state.selectedName} />
+                  )}
+                  {selectedLocationData && (
+                    <SummaryRow label="Region" value={selectedLocationData.city} />
+                  )}
+                  {selectedDbTypeInfo && (
+                    <SummaryRow label="Engine" value={selectedDbTypeInfo.name} />
+                  )}
+                  {selectedDatabase && (
+                    <SummaryRow label="CPU profile" value={CPU_META[selectedCpuType].label} />
+                  )}
+                  {selectedDatabase && (
+                    <SummaryRow label="Plan" value={selectedDatabase.name} />
+                  )}
+                  {selectedProjectData && (
+                    <SummaryRow label="Project" value={selectedProjectData.name} />
+                  )}
+                </div>
+              ) : null}
 
               <Separator className="my-4 bg-white/[0.08]" />
 
@@ -1130,7 +1136,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                     Estimated monthly cost
                   </div>
                   <div className="mt-2 text-2xl font-semibold text-white">
-                    {selectedDatabase ? getPriceLabel(selectedDatabase) : "-"}
+                    {selectedDatabase ? getPriceLabel(selectedDatabase) : "—"}
                   </div>
                 </div>
                 {selectedMonthlyPrice !== null && selectedMonthlyPrice !== 0 && (

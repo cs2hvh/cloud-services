@@ -40,7 +40,16 @@ export interface DomainSearchResponse {
   results: DomainMarketplaceResult[];
 }
 
-const DEFAULT_TLDS = ["com", "net", "io", "app", "dev", "org"];
+const DEFAULT_TLDS = [
+  // Classic
+  "com", "net", "org",
+  // Tech / Startup
+  "io", "app", "dev", "ai", "tech", "cloud",
+  // Business / Brand
+  "co", "me", "pro",
+  // New popular
+  "xyz", "site", "online",
+];
 
 export class DomainMarketplaceService {
   private readonly deps: {
@@ -102,8 +111,28 @@ export class DomainMarketplaceService {
 
     if (hasDot) {
       const normalized = normalizeDomainCandidate(query);
-      const data = await this.registrar.checkAvailability([normalized]);
-      results = (data.results || []).map((item) => toMarketplaceResult(item));
+      // Extract keyword (before first dot) to also find alternatives across other TLDs
+      const keyword = normalized.split(".")[0];
+      const altTlds = keyword
+        ? tlds.filter((t) => !normalized.endsWith(`.${t}`)).slice(0, 9)
+        : [];
+
+      // Run exact availability check + alternative TLD checks in parallel
+      const [primaryData, altData] = await Promise.all([
+        this.registrar.checkAvailability([normalized]),
+        altTlds.length > 0
+          ? this.registrar.checkAvailability(buildCandidateDomains(keyword, altTlds))
+          : Promise.resolve({ results: [] }),
+      ]);
+
+      const primaryResults = (primaryData.results || []).map((item) => toMarketplaceResult(item));
+      const altResults = (altData.results || [])
+        .map((item) => toMarketplaceResult(item))
+        // Sort alternatives: available first, then taken
+        .sort((a, b) => (a.available === b.available ? 0 : a.available ? -1 : 1));
+
+      // Primary result always first so users immediately see their domain's status
+      results = [...primaryResults, ...altResults];
     } else {
       const data = await this.registrar.searchDomains({
         keyword: query,
@@ -114,9 +143,23 @@ export class DomainMarketplaceService {
       results = (data.results || []).slice(0, 20).map((item) => toMarketplaceResult(item));
 
       if (results.length === 0) {
+        // No suggestions at all — fall back to exact availability checks
         const generated = buildCandidateDomains(query, tlds);
         const fallback = await this.registrar.checkAvailability(generated);
         results = (fallback.results || []).map((item) => toMarketplaceResult(item));
+      } else {
+        // name.com search may not return results for every selected TLD.
+        // Fill gaps so the user sees at least `keyword.tld` for each selected TLD.
+        const coveredTlds = new Set(
+          results.map((r) => r.domainName.split(".").slice(1).join("."))
+        );
+        const missingTlds = tlds.filter((t) => !coveredTlds.has(t));
+        if (missingTlds.length > 0) {
+          const gapDomains = buildCandidateDomains(query, missingTlds);
+          const gapData = await this.registrar.checkAvailability(gapDomains);
+          const gapResults = (gapData.results || []).map((item) => toMarketplaceResult(item));
+          results = [...results, ...gapResults];
+        }
       }
     }
 

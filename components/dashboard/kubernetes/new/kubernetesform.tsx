@@ -1,6 +1,6 @@
 "use client";
 import { kubernetesClusterSchema } from "@/lib/validation/kubernetes";
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -67,42 +67,6 @@ interface PageProps {
   }>;
 }
 
-interface EncryptedData {
-  encrypted: string;
-  iv: string;
-  tag: string;
-  salt: string;
-}
-
-type NodeInfo = {
-  host: string;
-  role: "control-plane" | "worker"; // Add more roles if needed
-  hostname: string;
-  cpu: number;
-  memory_mb: number;
-  storage: number;
-  private_ip?: string;
-  droplet_id?: number;
-};
-
-type SendPayload = {
-  provider: string;
-  cluster: {
-    name: string;
-    location: string;
-    pod_cidr: string;
-    k8s_minor: string;
-  };
-  auth: {
-    method: string;
-    user: string;
-    password: EncryptedData;
-  };
-  nodes: NodeInfo[];
-  ips: string[];
-  planId?: string;
-};
-
 type K8sCpuType = "shared" | "dedicated" | "gpu";
 
 const K8S_CPU_META: Record<K8sCpuType, { label: string; description: string }> = {
@@ -167,10 +131,16 @@ const NewClusterPage = ({
     name?: string;
     nodes?: string;
     user?: string;
+    plan?: string;
+    version?: string;
+    project?: string;
   }>({
     name: undefined,
     nodes: undefined,
     user: undefined,
+    plan: undefined,
+    version: undefined,
+    project: undefined,
   });
   //we need to make plan dynamic
   // const [availablePlans] = useState([
@@ -233,14 +203,46 @@ const NewClusterPage = ({
       user.id.toLowerCase().includes(state.userSearchQuery.toLowerCase())
   );
 
+  // Filter projects based on selected user in admin mode
+  const filteredProjects = useMemo(() => {
+    if (role === "admin") {
+      if (!state.selectedUser) {
+        return [];
+      }
+      return projects.filter((project) => project.owner === state.selectedUser);
+    }
+    return projects;
+  }, [projects, role, state.selectedUser]);
+
+  // Keep selected project valid when user selection changes
+  useEffect(() => {
+    if (!state.selectedProject) {
+      return;
+    }
+
+    const isProjectAvailable = filteredProjects.some(
+      (project) => project.id === state.selectedProject
+    );
+
+    if (!isProjectAvailable) {
+      setState((prev) => ({ ...prev, selectedProject: "" }));
+    }
+  }, [filteredProjects, state.selectedProject]);
+
   // Handle user selection
   const handleUserSelect = (selectedUserId: string) => {
     setState((prev) => ({
       ...prev,
       selectedUser: selectedUserId,
+      selectedProject: projects.some(
+        (project) =>
+          project.id === prev.selectedProject && project.owner === selectedUserId
+      )
+        ? prev.selectedProject
+        : "",
     }));
-    if (validationErrors.user) {
-      setValidationErrors({ ...validationErrors, user: "" });
+    if (validationErrors.user || validationErrors.project) {
+      setValidationErrors({ ...validationErrors, user: "", project: undefined });
     }
   };
 
@@ -315,6 +317,42 @@ const NewClusterPage = ({
       }
     }
 
+    if (currentStep === 4) {
+      if (!state.selectedPlan) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          plan: "Please select a plan",
+        }));
+        toast.error("Please select a plan");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+    }
+
+    if (currentStep === 5) {
+      if (!state.selectedVersion) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          version: "Please select a version",
+        }));
+        toast.error("Please select a version");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, version: undefined }));
+    }
+
+    if (currentStep === 6) {
+      if (!state.selectedProject) {
+        setValidationErrors((prev) => ({
+          ...prev,
+          project: "Please select a project",
+        }));
+        toast.error("Please select a project");
+        return;
+      }
+      setValidationErrors((prev) => ({ ...prev, project: undefined }));
+    }
+
     // Continue with existing step logic
     if (currentStep < 7) {
       setCurrentStep(currentStep + 1);
@@ -354,160 +392,65 @@ const NewClusterPage = ({
         return;
       }
 
-      const nodeNames = makeNodeKeys(state.selectedNode, state.selectedName);
-      console.log(nodeNames, ".....nodeNames.....262");
-
       const selectedProduct = products.find(
         (product) => product.name === state.selectedPlan
       );
-
-      //generate vms from digitalOcean apis
-      const payload = {
-        names: nodeNames,
-        region: state.selectedLocation, //form-dependent
-        size: selectedProduct?.slug, //form-dependent
-        image: "ubuntu-25-04-x64",
-        backups: false,
-        ipv6: true,
-        monitoring: true,
-        tags: ["env:prod", "web", "ssh-allowed"],
-        // Pass ownerId to allow server-side credit checks
-        ownerId: targetUserId,
-        // Optional: allow overriding initial upfront cost; default handled server-side
-        initial_cost: 5.0,
-      };
-
-      console.log(payload, "...............298");
-
-      const createDroplet = await api.post(
-        "/services/kubernetes/manageip/createdroplet",
-        payload
-      );
-      //console.log(createDroplet.data, "...........createDroplet.............");
-
-      const sendPayload: SendPayload = {
-        provider: "existing",
-        cluster: {
-          name: state.selectedName,
-          location: state.selectedLocation,
-          pod_cidr: "10.244.0.0/16",
-          k8s_minor: "1.31.1",
-        },
-        auth: {
-          method: "password",
-          user: "root",
-          password: createDroplet.data.vmPassword,
-        },
-        planId:selectedProduct?.id,
-        nodes: [],
-        // "cp-1": { "host": "172.104.206.68", "role": "control-plane", "hostname": "cp-1", "cpu": 2, "memory_mb": 512 }
-
-        ips: [],
-      };
-
-      //one more idea clicked my mind , instead check status , call get droplet and see status =active or not.
-
-      if (createDroplet.status === 202) {
-        let counter = 0;
-        while (counter != state.selectedNode + 1) {
-          const checkStatus = await api.post(
-            "/services/kubernetes/manageip/dropletstatus",
-            {
-              id: createDroplet.data.data.links.actions[counter].id,
-            }
-          );
-          if (checkStatus.status === 200) {
-            if (checkStatus.data.data.action.status === "completed") {
-              // https://api.digitalocean.com/v2/actions/2831633833
-              const vmData = await api.post(
-                `/services/kubernetes/manageip/readdroplet`,
-                { id: checkStatus.data.data.action.resource_id }
-              );
-              if (vmData.status === 200) {
-                const vmDetails: {
-                  public_ip: string;
-                  memory_mb: number;
-                  name: string;
-                  cpu: number;
-                  storage: number;
-                  private_ip?: string;
-                  droplet_id?: number;
-                } = {
-                  public_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "public"
-                  ).ip_address,
-                  private_ip: vmData.data.data.droplet.networks.v4.find(
-                    (item: { type: string; ip_address: string }) =>
-                      item.type === "private"
-                  ).ip_address,
-                  memory_mb: vmData.data.data.droplet.memory,
-                  name: vmData.data.data.droplet.name,
-                  cpu: vmData.data.data.droplet.vcpus,
-                  storage: vmData.data.data.droplet.disk,
-                  droplet_id: vmData.data.data.droplet.id,
-                };
-                sendPayload.ips.push(vmDetails.public_ip);
-                sendPayload.nodes.push({
-                  host: vmDetails.public_ip,
-                  role: counter === 0 ? "control-plane" : "worker",
-                  hostname: vmDetails.name,
-                  cpu: vmDetails.cpu,
-                  memory_mb: vmDetails.memory_mb,
-                  storage: vmDetails.storage,
-                  private_ip: vmDetails.private_ip,
-                  droplet_id: vmDetails.droplet_id,
-                });
-                counter++;
-              }
-            }
-          } else {
-            continue;
-          }
-        }
-      }
-      else if(createDroplet.status===402){
-        toast.error('Insufficient balance. Please top up your account to create a Kubernetes cluster.');
-        router.push('dashboard/nav/billing');
+      if (!selectedProduct || !selectedProduct.slug) {
+        toast.error("Please select a valid plan");
         return;
       }
 
-      console.log(sendPayload, "...........sendPayload.............");
-
-      await sleep(120000);
-
-      //console.log({...response.data.payload,ownerId:userId,projectId:state.selectedProject},"{...response.data.payload,ownerId:userId,projectId:state.selectedProject}")
-      const response4 = await api.post("/services/kubernetes/clusters", {
-        ...sendPayload,
+      const response = await api.post("/services/kubernetes/clusters/init", {
+        name: state.selectedName,
+        region: state.selectedLocation,
+        version: state.selectedVersion,
+        nodeCount: state.selectedNode,
+        size: selectedProduct.slug,
         ownerId: targetUserId,
         projectId: state.selectedProject,
-         role:role
+        planId: selectedProduct.id,
+        resources: {
+          cpu: selectedProduct.resources.cpu,
+          ram: selectedProduct.resources.ram,
+          storage: selectedProduct.resources.storage,
+        },
       });
-      if (response4.status == 200) {
-        // alert(
-        //   "your cluster is being created. please wait for some time......."
-        // );
-        //debugger
-        toast.success("Cluster request captured");
-        //navigate to status page.
-        // window.location.href=`/dashboard/${response.data.clusterId}/status`;
+      const settledResponse = response as typeof response & {
+        error?: unknown;
+        data?: { message?: string; clusterId?: string };
+      };
+
+      if (settledResponse.error) {
+        return;
+      }
+
+      if (settledResponse.status === 200) {
+        toast.success("Cluster initialized.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
-          router.push(
-            `/dashboard/services/kubernetes/clusters/${encodeURIComponent(response4.data.clusterId)}`
-          );
+          const newClusterId = settledResponse.data?.clusterId;
+          if (!newClusterId) {
+            toast.error("Cluster created but ID missing — check dashboard.");
+            router.push('/dashboard/services/kubernetes');
+          } else {
+            router.push(
+              `/dashboard/services/kubernetes/clusters/${encodeURIComponent(newClusterId)}`
+            );
+          }
         }
+        return;
       }
 
-      // toast.success(response.data);
-      // Redirect to success page or dashboard
+      toast.error(
+        settledResponse.data?.message || "Failed to initialize cluster.",
+      );
     } catch (err: unknown) {
       if (err instanceof Error) {
         console.log(err.message, "...........................47");
-       // toast.error(err.message)
+        toast.error(err.message || "Failed to initialize cluster.");
       } else {
-       // toast.error("Unknown error occurred");
+        toast.error("Failed to initialize cluster.");
       }
     } finally {
       setIsLoading(false);
@@ -534,47 +477,34 @@ const NewClusterPage = ({
 
   const steps = role === "admin" 
     ? [
-        { id: 0, name: "User" },
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 0, name: "User",     iconSrc: "/dashboard icons/users & DBs .png" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
       ]
     : [
-        { id: 1, name: "Name" },
-        { id: 2, name: "Location" },
-        { id: 3, name: "Number" },
-        { id: 4, name: "Plan" },
-        { id: 5, name: "Version" },
-        { id: 6, name: "Project" },
-        { id: 7, name: "Payment" },
+        { id: 1, name: "Name",     iconSrc: "/dashboard icons/name .png" },
+        { id: 2, name: "Location", iconSrc: "/dashboard icons/location.png" },
+        { id: 3, name: "Number",   iconSrc: "/dashboard icons/number .png" },
+        { id: 4, name: "Plan",     iconSrc: "/dashboard icons/plan _1.png" },
+        { id: 5, name: "Version",  iconSrc: "/dashboard icons/versioning .png" },
+        { id: 6, name: "Project",  iconSrc: "/dashboard icons/project _1.png" },
+        { id: 7, name: "Payment",  iconSrc: "/dashboard icons/payment .png" },
       ];
-
-  function makeNodeKeys(workers: number, clusterName: string) {
-    const nodeNames = [];
-    for (let i = 0; i <= workers; i++) {
-      const uuid = crypto.randomUUID();
-      if (i === 0) {
-        nodeNames.push(`${clusterName}-${uuid}-cp-1`);
-      } else {
-        nodeNames.push(`${clusterName}-${uuid}-wp-${i}`);
-      }
-    }
-    return nodeNames;
-  }
-
-  const sleep = (ms: number) =>
-    new Promise<void>((resolve) => setTimeout(resolve, ms));
-
 
   const panelClassName = "glass-panel overflow-hidden";
   const wizardStartStep = role === "admin" ? 0 : 1;
   const progressStep = currentStep - wizardStartStep + 1;
   const progressPercentage = (progressStep / steps.length) * 100;
   const selectedPlanDetails = products.find((plan) => plan.name === selectedPlan);
+  const totalNodes = Math.max(selectedNode + 1, 1);
+  const planMonthlyRate =
+    typeof selectedPlanDetails?.price === "number" ? selectedPlanDetails.price : null;
+  const totalMonthlyRate = planMonthlyRate !== null ? planMonthlyRate * totalNodes : null;
   const nodePresets = [1, 2, 3, 5];
   const selectedLocationDetails = locations.find((loc) => loc.short === selectedLocation);
 
@@ -654,19 +584,20 @@ const NewClusterPage = ({
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
-                        isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78"
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : step.id}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="text-sm font-semibold text-white">{step.name}</div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
                 </button>
               );
             })}
@@ -676,7 +607,7 @@ const NewClusterPage = ({
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="space-y-6">
           {currentStep === 0 && (
             <Card className={panelClassName}>
               <CardHeader>
@@ -1122,9 +1053,12 @@ const NewClusterPage = ({
                   <div className="max-h-[360px] overflow-y-auto pr-1">
                     <RadioGroup
                       value={state.selectedPlan}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedPlan: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedPlan: value });
+                        if (validationErrors.plan) {
+                          setValidationErrors((prev) => ({ ...prev, plan: undefined }));
+                        }
+                      }}
                       className="space-y-3"
                     >
                       {filteredProducts.map((plan) => (
@@ -1198,6 +1132,9 @@ const NewClusterPage = ({
                   </RadioGroup>
                 </div>
                 )}
+                {validationErrors.plan && (
+                  <p className="text-sm text-red-500">{validationErrors.plan}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1235,7 +1172,12 @@ const NewClusterPage = ({
                       <button
                         key={version}
                         type="button"
-                        onClick={() => setState({ ...state, selectedVersion: version })}
+                        onClick={() => {
+                          setState({ ...state, selectedVersion: version });
+                          if (validationErrors.version) {
+                            setValidationErrors((prev) => ({ ...prev, version: undefined }));
+                          }
+                        }}
                         className={
                           isSelected
                             ? "border border-blue-400/30 bg-blue-500/10 p-4 text-left transition-colors"
@@ -1289,6 +1231,9 @@ const NewClusterPage = ({
                     </div>
                   </div>
                 </div>
+                {validationErrors.version && (
+                  <p className="text-sm text-red-500">{validationErrors.version}</p>
+                )}
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button
@@ -1324,24 +1269,40 @@ const NewClusterPage = ({
                     </Label>
                     <Select
                       value={selectedProject}
-                      onValueChange={(value) =>
-                        setState({ ...state, selectedProject: value })
-                      }
+                      onValueChange={(value) => {
+                        setState({ ...state, selectedProject: value });
+                        if (validationErrors.project) {
+                          setValidationErrors((prev) => ({ ...prev, project: undefined }));
+                        }
+                      }}
                     >
                       <SelectTrigger
                         id="project"
-                        className="h-11 w-full border-white/[0.12] bg-white/[0.04] text-white"
+                        className={
+                          "h-11 w-full border-white/[0.12] bg-white/[0.04] text-white " +
+                          (validationErrors.project ? "border-red-500" : "")
+                        }
                       >
                         <SelectValue placeholder="Select project" />
                       </SelectTrigger>
                       <SelectContent className="border-white/20 bg-black text-white">
-                        {projects.map((project) => (
+                        {filteredProjects.map((project) => (
                           <SelectItem key={project.id} value={project.id}>
                             {project.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    {filteredProjects.length === 0 && (
+                      <p className="mt-2 text-sm text-white/60">
+                        {role === "admin"
+                          ? "No projects found for selected user."
+                          : "No projects available."}
+                      </p>
+                    )}
+                    {validationErrors.project && (
+                      <p className="mt-2 text-sm text-red-500">{validationErrors.project}</p>
+                    )}
                   </div>
 
                   <div className="border border-white/[0.08] bg-white/[0.03] p-4">
@@ -1350,7 +1311,7 @@ const NewClusterPage = ({
                     </div>
                     <div className="mt-2 text-base font-semibold text-white">
                       {selectedProject
-                        ? projects.find((project) => project.id === selectedProject)?.name || "Unknown project"
+                        ? filteredProjects.find((project) => project.id === selectedProject)?.name || "Unknown project"
                         : "No project selected"}
                     </div>
                     <p className="mt-1 text-xs leading-5 text-white/45">
@@ -1529,11 +1490,13 @@ const NewClusterPage = ({
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-semibold text-white">
-                       {selectedPlanDetails?.price !== null
-  ? "$" + selectedPlanDetails?.price.toFixed(2)
-  : "-"}
+                        {totalMonthlyRate !== null ? "$" + totalMonthlyRate.toFixed(2) : "-"}
                       </div>
-                      <div className="text-xs text-white/45">monthly rate</div>
+                      <div className="text-xs text-white/45">
+                        {planMonthlyRate !== null
+                          ? "$" + planMonthlyRate.toFixed(2) + " x " + totalNodes + " nodes"
+                          : "monthly rate"}
+                      </div>
                     </div>
                   </div>
 
@@ -1592,8 +1555,8 @@ const NewClusterPage = ({
               <div className="flex items-center justify-between gap-4 text-sm">
                 <span className="text-white/60">Monthly rate</span>
                 <span className="text-lg font-semibold text-white">
-                  {selectedPlanDetails?.price !== null
-                    ? "$" + selectedPlanDetails?.price.toFixed(2)
+                  {totalMonthlyRate !== null
+                    ? "$" + totalMonthlyRate.toFixed(2)
                     : "Select a plan"}
                 </span>
               </div>

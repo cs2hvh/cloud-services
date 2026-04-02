@@ -22,7 +22,6 @@ BEGIN
   RETURN v_new_balance;
 END;
 $$;
-
 -- 2. Atomic deduct: decrements balance only if sufficient, returns new balance
 --    Returns -1 if insufficient balance (caller should throw error)
 CREATE OR REPLACE FUNCTION billing_deduct(p_user_id UUID, p_amount NUMERIC)
@@ -52,7 +51,6 @@ BEGIN
   RETURN v_new_balance;
 END;
 $$;
-
 -- Grant execute to authenticated and service_role
 GRANT EXECUTE ON FUNCTION billing_topup(UUID, NUMERIC) TO service_role;
 GRANT EXECUTE ON FUNCTION billing_deduct(UUID, NUMERIC) TO service_role;

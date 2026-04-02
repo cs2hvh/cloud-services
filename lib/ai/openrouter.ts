@@ -25,7 +25,7 @@ export class OpenRouterClient {
 
   constructor(config: OpenRouterConfig) {
     this.apiKey = config.apiKey;
-    this.siteUrl = config.siteUrl || process.env.NEXT_PUBLIC_SITE_URL || 'https://cloud.example.com';
+    this.siteUrl = config.siteUrl || 'https://cloud.example.com';
     this.siteName = config.siteName || 'Cloud Services AI';
   }
 

@@ -53,9 +53,9 @@ export const clusterLifecycleOperations = {
         region: request.region,
         size: request.size,
         num_nodes: request.num_nodes || 1,
-        project_id: request.project_id,
-        owner_id: request.owner_id,
-        plan_id: request.plan_id,
+       // project_id: request.project_id,
+        //owner_id: request.owner_id,
+        //plan_id: request.plan_id,
       };
       if (typeof request.storage_size_mib === "number") {
         doPayload.storage_size_mib = request.storage_size_mib;
@@ -177,16 +177,16 @@ export const clusterLifecycleOperations = {
         });
       }
 
-      await NotificationService.create(
-        createServiceNotification({
-          userId: request.owner_id,
-          type: "success",
-          action: "created",
-          serviceType: "database",
-          serviceName: request.name,
-          serviceId: providerClusterId,
-        })
-      );
+      await NotificationService.create({
+        user_id: request.owner_id,
+        type: "info",
+        title: "Database Creation",
+        message: `Database ${request.name} creation started...`,
+        service_type: "database",
+        service_id: providerClusterId,
+        action: "created",
+        metadata: { serviceName: request.name },
+      });
 
       return {
         success: true,

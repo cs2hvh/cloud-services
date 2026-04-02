@@ -1,477 +1,332 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { DomainAttachAction, type DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Globe, Loader2, Search, ShoppingCart, Clock3 } from 'lucide-react';
+import { Loader2, Search, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { SearchResults } from './domain-marketplace/search-results';
+import { TldSelector } from './domain-marketplace/tld-selector';
+import type { MarketplaceSummary, SearchResultItem } from './domain-marketplace/types';
 
-interface MarketplaceSummary {
-  channel: 'ahuracloud';
-  configured: boolean;
-  mode: 'managed_reseller';
-  capabilities: {
-    search: true;
-    purchase_requests: true;
-    auto_fulfillment: boolean;
-  };
-  notes: string;
-}
-
-interface SearchResultItem {
-  domainName: string;
-  available: boolean;
-  premium: boolean;
-  purchasePrice: number | null;
-  renewalPrice: number | null;
-  currency: string;
-  purchaseType: string | null;
-  reason: string | null;
-  fulfillment: 'ahuracloud';
-}
-
-interface PurchaseRequest {
-  id: string;
-  domain: string;
-  app_id: string | null;
-  status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
-  purchase_price: number | null;
-  renewal_price: number | null;
-  currency: string;
-  created_at: string;
-  last_error: string | null;
-}
-
-interface DomainMarketplaceTabProps {
+export interface DomainMarketplaceTabProps {
   sourceAppId?: string;
-  appOptions?: DomainAppOption[];
+  appOptions?: unknown[];
   defaultAttachAppId?: string;
   onDomainAttached?: (appId: string) => void;
   showAttachActions?: boolean;
   modeLabel?: string;
   purchaseRequestAppIdFilter?: string;
+  initialQuery?: string;
+}
+
+function normalizeDomainQuery(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/\s+/g, '');
+}
+
+function buildQuerySuggestions(value: string) {
+  const normalized = normalizeDomainQuery(value);
+  const seed = normalized.split('.')[0].replace(/[^a-z0-9-]/g, '');
+
+  if (!seed || seed.length < 2) return [];
+
+  return Array.from(
+    new Set([
+      seed,
+      `${seed}app`,
+      `${seed}cloud`,
+      `${seed}hq`,
+      `get${seed}`,
+      `use${seed}`,
+    ]),
+  ).slice(0, 5);
 }
 
 export function DomainMarketplaceTab({
   sourceAppId,
-  appOptions,
-  defaultAttachAppId,
-  onDomainAttached,
-  showAttachActions = true,
-  modeLabel = 'Search and purchase domains',
-  purchaseRequestAppIdFilter,
+  initialQuery,
 }: DomainMarketplaceTabProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [summary, setSummary] = useState<MarketplaceSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
-  const [query, setQuery] = useState('');
-  const [tldsInput, setTldsInput] = useState('com,io,app,dev,net');
+  const [query, setQuery] = useState(initialQuery || '');
+  const [selectedTlds, setSelectedTlds] = useState<string[]>(['com', 'ai', 'io', 'app', 'dev', 'net', 'co']);
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [searching, setSearching] = useState(false);
   const [requestingDomain, setRequestingDomain] = useState<string | null>(null);
-  const [requests, setRequests] = useState<PurchaseRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
-  const attachOptions = useMemo(
-    () => appOptions && appOptions.length > 0
-      ? appOptions
-      : sourceAppId
-        ? [{ id: sourceAppId, name: 'Selected App', status: 'selected' }]
-        : [],
-    [appOptions, sourceAppId]
-  );
+  const [showTldPanel, setShowTldPanel] = useState(false);
 
-  const parsedTlds = useMemo(
-    () =>
-      tldsInput
-        .split(',')
-        .map((item) => item.trim().replace(/^\./, '').toLowerCase())
-        .filter(Boolean)
-        .slice(0, 15),
-    [tldsInput]
-  );
+  useEffect(() => {
+    if (initialQuery) setQuery(initialQuery);
+  }, [initialQuery]);
 
-  const orderedResults = useMemo(
-    () =>
-      [...results].sort((a, b) => {
-        if (a.available === b.available) return 0;
-        return a.available ? -1 : 1;
-      }),
-    [results]
-  );
+  const normalizedQuery = useMemo(() => normalizeDomainQuery(query), [query]);
+  const querySuggestions = useMemo(() => buildQuerySuggestions(query), [query]);
 
   const loadSummary = async () => {
     setSummaryLoading(true);
     try {
       const res = await fetch('/api/domains/market/summary');
       const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to load marketplace summary');
-        return;
-      }
-
-      setSummary(data?.data || null);
-    } catch (error) {
-      console.error('Error loading marketplace summary:', error);
-      toast.error('Failed to load marketplace summary');
+      if (res.ok) setSummary(data?.data || null);
+    } catch {
+      // silently continue — button will stay disabled until configured
     } finally {
       setSummaryLoading(false);
     }
   };
 
-  const loadPurchaseRequests = async () => {
-    setRequestsLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: '15' });
-      if (purchaseRequestAppIdFilter) {
-        params.set('app_id', purchaseRequestAppIdFilter);
-      }
-
-      const res = await fetch(`/api/domains/market/purchase-requests?${params.toString()}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to load purchase requests');
-        setRequests([]);
-        return;
-      }
-
-      setRequests((data?.data || []) as PurchaseRequest[]);
-    } catch (error) {
-      console.error('Error loading purchase requests:', error);
-      toast.error('Failed to load purchase requests');
-      setRequests([]);
-    } finally {
-      setRequestsLoading(false);
-    }
-  };
-
   useEffect(() => {
     void loadSummary();
-    void loadPurchaseRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [purchaseRequestAppIdFilter]);
+  }, []);
 
-  const handleSearch = async () => {
-    const cleanQuery = query.trim();
+  const lastAutoSearched = useRef<string | null>(null);
+  useEffect(() => {
+    const autoQuery = initialQuery?.trim();
+    if (
+      autoQuery &&
+      summary?.configured &&
+      query.trim() === autoQuery &&
+      lastAutoSearched.current !== autoQuery
+    ) {
+      lastAutoSearched.current = autoQuery;
+      void handleSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery, summary, query]);
+
+  const handleSearch = async ({
+    syncUrl = false,
+    searchValue,
+  }: {
+    syncUrl?: boolean;
+    searchValue?: string;
+  } = {}) => {
+    const cleanQuery = normalizeDomainQuery(searchValue ?? query);
     if (!cleanQuery) {
       toast.error('Enter a domain keyword or full domain');
       return;
     }
+    if (selectedTlds.length === 0) {
+      toast.error('Select at least one TLD to search');
+      return;
+    }
 
     setSearching(true);
+    setResults([]);
     try {
+      lastAutoSearched.current = cleanQuery;
       const res = await fetch('/api/domains/market/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: cleanQuery,
-          tlds: parsedTlds,
-        }),
+        body: JSON.stringify({ query: cleanQuery, tlds: selectedTlds }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         toast.error(data?.message || data?.error || 'Domain search failed');
-        setResults([]);
         return;
       }
-
-      setResults((data?.data?.results || []) as SearchResultItem[]);
-      if ((data?.data?.results || []).length === 0) {
-        toast.info('No domain suggestions returned for this query');
+      const items = (data?.data?.results || []) as SearchResultItem[];
+      setResults(items);
+      if (syncUrl) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('domain', cleanQuery);
+        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
       }
-    } catch (error) {
-      console.error('Domain search failed:', error);
+      if (items.length === 0) toast.info('No results for this query');
+    } catch {
       toast.error('Domain search failed');
-      setResults([]);
     } finally {
       setSearching(false);
     }
   };
 
-  const applyTldPreset = (tld: string) => {
-    const next = new Set(parsedTlds);
-    if (next.has(tld)) {
-      next.delete(tld);
-    } else {
-      next.add(tld);
-    }
-    setTldsInput(Array.from(next).join(','));
-  };
-
   const handleRequestPurchase = async (domain: string) => {
     setRequestingDomain(domain);
     try {
-      const requestBody: { app_id?: string; domain: string; idempotency_key: string } = {
+      const body: { domain: string; idempotency_key: string; app_id?: string } = {
         domain,
         idempotency_key: `${sourceAppId || 'global'}:${domain}:${Date.now()}`,
       };
-      if (sourceAppId) {
-        requestBody.app_id = sourceAppId;
-      }
+      if (sourceAppId) body.app_id = sourceAppId;
 
       const res = await fetch('/api/domains/market/purchase-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(body),
       });
-
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data?.message || data?.error || 'Failed to create purchase request');
+        toast.error(data?.message || data?.error || 'Failed to submit request');
         return;
       }
-
-      toast.success(`Purchase request submitted for ${domain}.`);
-      await loadPurchaseRequests();
-    } catch (error) {
-      console.error('Failed to request purchase:', error);
-      toast.error('Failed to create purchase request');
+      toast.success(`Purchase request submitted for ${domain}`);
+    } catch {
+      toast.error('Failed to submit purchase request');
     } finally {
       setRequestingDomain(null);
     }
   };
 
-  const statusBadge = (status: PurchaseRequest['status']) => {
-    switch (status) {
-      case 'completed':
-        return <Badge className="bg-green-500/20 text-green-300 border-green-500/30">Completed</Badge>;
-      case 'processing':
-        return <Badge className="bg-blue-500/20 text-blue-300 border-blue-500/30">Processing</Badge>;
-      case 'failed':
-        return <Badge className="bg-red-500/20 text-red-300 border-red-500/30">Failed</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-zinc-500/20 text-zinc-300 border-zinc-500/30">Cancelled</Badge>;
-      default:
-        return <Badge className="bg-yellow-500/20 text-yellow-300 border-yellow-500/30">Requested</Badge>;
-    }
-  };
+  const isSearchDisabled = searching || summaryLoading || !summary?.configured || selectedTlds.length === 0;
 
   return (
-    <Card className="bg-white/5 border-white/10">
-      <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <ShoppingCart className="w-5 h-5" />
-          AhuraCloud Domain Marketplace
-        </CardTitle>
-        <CardDescription className="text-white/50">
-          {modeLabel}
-        </CardDescription>
-      </CardHeader>
+    <div className="space-y-4">
+      <div className="glass-panel overflow-hidden">
+        <div className="h-px w-full bg-gradient-to-r from-cyan-400/45 via-cyan-300/10 to-transparent" />
+        <div className="grid gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(260px,0.75fr)]">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/36">
+              Domain Search
+            </p>
+            <h2 className="mt-2 text-lg font-semibold text-white">
+              Search once, then compare the strongest domain options side by side.
+            </h2>
 
-      <CardContent className="space-y-5">
-        <div className="rounded-lg border border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-blue-500/5 p-3">
-          <p className="text-xs uppercase tracking-wide text-cyan-200/80">Fast Flow</p>
-          <p className="text-sm text-white mt-1">
-            {showAttachActions
-              ? 'Search domain, request purchase, then attach it in the Domains tab.'
-              : 'Search domain and submit purchase requests. App connection can be done later.'}
-          </p>
-        </div>
-
-        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-          {summaryLoading ? (
-            <div className="flex items-center gap-2 text-xs text-white/60">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading marketplace status...
-            </div>
-          ) : summary ? (
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Badge className="bg-cyan-500/20 text-cyan-200 border-cyan-500/30">Managed Reseller</Badge>
-                <Badge className={summary.configured ? 'bg-green-500/20 text-green-200 border-green-500/30' : 'bg-yellow-500/20 text-yellow-200 border-yellow-500/30'}>
-                  {summary.configured ? 'Active' : 'Configuration Pending'}
-                </Badge>
+            <div className="mt-4 flex gap-2.5">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-white/25 pointer-events-none" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); void handleSearch({ syncUrl: true }); }
+                  }}
+                  placeholder="Search domain (e.g. mybrand or mybrand.com)"
+                  className="h-12 w-full border border-white/[0.08] bg-black/20 pl-11 pr-4 text-sm text-white placeholder:text-white/25 transition-colors focus:border-white/[0.18] focus:bg-black/30 focus:outline-none"
+                />
               </div>
-              <p className="text-xs text-white/55">{summary.notes}</p>
+              <Button
+                onClick={() => void handleSearch({ syncUrl: true })}
+                disabled={isSearchDisabled}
+                className="h-12 shrink-0 border border-cyan-400/25 bg-cyan-500/90 px-7 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/25"
+              >
+                {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
+              </Button>
             </div>
-          ) : (
-            <p className="text-xs text-white/55">Marketplace status unavailable.</p>
-          )}
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_220px_auto] gap-3">
-          <div className="space-y-2">
-            <label className="text-xs text-white/60">Keyword or full domain</label>
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  void handleSearch();
-                }
-              }}
-              placeholder="mybrand or mybrand.com"
-              className="bg-black/30 border-white/10"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-white/60">TLD filters</label>
-            <Input
-              value={tldsInput}
-              onChange={(event) => setTldsInput(event.target.value)}
-              placeholder="com,io,app"
-              className="bg-black/30 border-white/10"
-            />
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {['com', 'io', 'app', 'dev', 'net'].map((tld) => {
-                const active = parsedTlds.includes(tld);
-                return (
+            {querySuggestions.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/34">
+                  <Sparkles className="h-3 w-3 text-cyan-300/80" />
+                  Related Searches
+                </span>
+                {querySuggestions.map((suggestion) => (
                   <button
-                    key={tld}
+                    key={suggestion}
                     type="button"
-                    onClick={() => applyTldPreset(tld)}
-                    className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${
-                      active
-                        ? 'border-cyan-400/50 bg-cyan-500/20 text-cyan-200'
-                        : 'border-white/15 bg-black/20 text-white/60 hover:text-white'
+                    onClick={() => {
+                      setQuery(suggestion);
+                      void handleSearch({ syncUrl: true, searchValue: suggestion });
+                    }}
+                    className={`border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      suggestion === normalizedQuery
+                        ? 'border-cyan-400/25 bg-cyan-500/12 text-cyan-200'
+                        : 'border-white/[0.07] bg-white/[0.04] text-white/55 hover:border-white/[0.14] hover:text-white/78'
                     }`}
                   >
-                    .{tld}
+                    {suggestion}
                   </button>
-                );
-              })}
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center gap-3 pt-0.5">
+              <div className="flex min-w-0 flex-1 flex-wrap gap-1">
+                {selectedTlds.map((tld) => (
+                  <span
+                    key={tld}
+                    className="inline-flex items-center border border-white/[0.07] bg-white/[0.04] px-1.5 py-px font-mono text-[11px] font-medium text-white/40"
+                  >
+                    .{tld}
+                  </span>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTldPanel((v) => !v)}
+                className={`flex shrink-0 items-center gap-1.5 text-[11px] transition-colors ${
+                  showTldPanel ? 'text-white/60 hover:text-white/80' : 'text-white/35 hover:text-white/60'
+                }`}
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                {showTldPanel ? 'Hide' : 'Customize'}
+              </button>
             </div>
           </div>
 
-          <div className="flex items-end">
-            <Button
-              onClick={handleSearch}
-              disabled={searching || summaryLoading || !summary?.configured}
-              className="w-full md:w-auto"
-            >
-              {searching ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Search className="w-4 h-4 mr-2" />}
-              Search
-            </Button>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                <ShieldCheck className="h-3.5 w-3.5 text-cyan-300" />
+                Marketplace
+              </div>
+              <div className="mt-2 text-sm font-medium text-white">
+                {summaryLoading ? 'Checking availability source' : summary?.configured ? 'Marketplace active' : 'Config pending'}
+              </div>
+              <div className="mt-1 text-sm text-white/45">
+                {summary?.notes || 'Search and registration requests run through the managed registrar connection.'}
+              </div>
+            </div>
+
+            <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                Extensions
+              </div>
+              <div className="mt-2 text-sm font-medium text-white">
+                {selectedTlds.length} extensions selected
+              </div>
+              <div className="mt-1 text-sm text-white/45">
+                Compare registration and renewal pricing before you request a domain.
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="space-y-3">
-          {orderedResults.length === 0 ? (
-            <div className="text-sm text-white/40 border border-dashed border-white/15 rounded-md p-4">
-              <Globe className="w-4 h-4 inline-block mr-2" />
-              Run a search to see domain suggestions and pricing.
+      {/* TLD customizer */}
+      <AnimatePresence>
+        {showTldPanel && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="glass-panel overflow-hidden">
+              <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+                <h3 className="text-sm font-semibold text-white/92">TLD Filters</h3>
+                <p className="mt-1 text-sm text-white/45">
+                  Choose which extensions to include in this search.
+                </p>
+              </div>
+              <div className="px-5 py-5 sm:px-6">
+              <TldSelector selected={selectedTlds} onChange={setSelectedTlds} />
+              </div>
             </div>
-          ) : (
-            <>
-              <p className="text-xs text-white/50">
-                {orderedResults.filter((item) => item.available).length} available of {orderedResults.length} results
-              </p>
-              {orderedResults.map((result) => {
-              const requestDisabled = !result.available || requestingDomain === result.domainName;
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              return (
-                <div
-                  key={result.domainName}
-                  className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-lg border border-white/10 bg-black/20 p-4"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center flex-wrap gap-2">
-                      <p className="text-sm font-medium text-white">{result.domainName}</p>
-                      {result.available ? (
-                        <Badge className="bg-green-500/20 text-green-300 border-green-500/30">Available</Badge>
-                      ) : (
-                        <Badge className="bg-red-500/20 text-red-300 border-red-500/30">Unavailable</Badge>
-                      )}
-                      {result.premium && (
-                        <Badge className="bg-yellow-500/20 text-yellow-300 border-yellow-500/30">Premium</Badge>
-                      )}
-                    </div>
-
-                    <div className="text-xs text-white/50 flex flex-wrap gap-3">
-                      <span>Purchase: {result.purchasePrice !== null ? `$${result.purchasePrice}` : 'N/A'}</span>
-                      <span>Renewal: {result.renewalPrice !== null ? `$${result.renewalPrice}` : 'N/A'}</span>
-                      <span>{result.currency}</span>
-                    </div>
-
-                    {result.reason && <p className="text-xs text-white/40">{result.reason}</p>}
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => handleRequestPurchase(result.domainName)}
-                      disabled={requestDisabled}
-                    >
-                      {requestingDomain === result.domainName ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                      )}
-                      Request Purchase
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-            </>
-          )}
-        </div>
-
-        <div className="rounded-lg border border-white/10 bg-black/20 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-medium text-white flex items-center gap-2">
-              <Clock3 className="w-4 h-4" /> Purchase Requests
-            </p>
-            <Button
-              variant="outline"
-              className="border-white/20"
-              size="sm"
-              onClick={() => void loadPurchaseRequests()}
-              disabled={requestsLoading}
-            >
-              {requestsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Refresh'}
-            </Button>
-          </div>
-
-          {requestsLoading ? (
-            <p className="text-xs text-white/55">Loading requests...</p>
-          ) : requests.length === 0 ? (
-            <p className="text-xs text-white/55">
-              {purchaseRequestAppIdFilter ? 'No purchase requests yet for this app.' : 'No purchase requests yet.'}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {requests.map((request) => (
-                <div key={request.id} className="rounded-md border border-white/10 bg-black/30 p-3">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <p className="text-sm text-white font-medium">{request.domain}</p>
-                    {statusBadge(request.status)}
-                  </div>
-                  <div className="mt-1 text-xs text-white/50 flex flex-wrap gap-3">
-                    <span>Price: {request.purchase_price !== null ? `$${request.purchase_price}` : 'N/A'}</span>
-                    <span>Renewal: {request.renewal_price !== null ? `$${request.renewal_price}` : 'N/A'}</span>
-                    <span>{new Date(request.created_at).toLocaleString()}</span>
-                  </div>
-                  {showAttachActions && request.status === 'completed' && attachOptions.length > 0 && (
-                    <div className="mt-2">
-                      <DomainAttachAction
-                        domain={request.domain}
-                        appOptions={attachOptions}
-                        defaultAppId={defaultAttachAppId}
-                        buttonLabel="Add To App Domains"
-                        onAttached={(attachedAppId) => {
-                          onDomainAttached?.(attachedAppId);
-                        }}
-                      />
-                    </div>
-                  )}
-                  {showAttachActions && request.status === 'completed' && attachOptions.length === 0 && (
-                    <p className="text-xs text-white/55 mt-2">
-                      Deploy an app first to connect this domain.
-                    </p>
-                  )}
-                  {request.last_error && <p className="text-xs text-red-300 mt-1">{request.last_error}</p>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+      {/* Results */}
+      <SearchResults
+        query={normalizedQuery}
+        results={results}
+        searching={searching}
+        selectedTlds={selectedTlds}
+        requestingDomain={requestingDomain}
+        onRequestPurchase={handleRequestPurchase}
+      />
+    </div>
   );
 }

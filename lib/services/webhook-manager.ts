@@ -27,10 +27,8 @@ export class WebhookManager {
    * Uses WEBHOOK_BASE_URL for ngrok/external access, falls back to DOMAIN
    */
   private static getWebhookUrl(provider: GitProvider): string {
-    // Priority: WEBHOOK_BASE_URL > DOMAIN > NEXT_PUBLIC_DOMAIN
-    const baseUrl = process.env.WEBHOOK_BASE_URL || "https://carita-hydroponic-groundedly.ngrok-free.dev"
-      || process.env.DOMAIN 
-      || process.env.NEXT_PUBLIC_DOMAIN;
+    // Use WEBHOOK_BASE_URL in dev (e.g. ngrok), falls back to DOMAIN in prod
+    const baseUrl =  process.env.DOMAIN || process.env.WEBHOOK_BASE_URL;
     
     if (!baseUrl) {
       throw new Error('WEBHOOK_BASE_URL or DOMAIN environment variable not configured');

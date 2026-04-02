@@ -25,10 +25,12 @@ import {
   extractRam,
   extractRegion,
   downloadCACertificate,
+  getStorageGiB,
 } from "../singledb-helpers";
 
 interface OverviewTabProps {
   database: Tables<"database_clusters">;
+  products: Tables<"products">[];
   showPassword: boolean;
   setShowPassword: (show: boolean) => void;
   activeTab: "public" | "private";
@@ -95,12 +97,19 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 export const OverviewTab = ({
   database,
+  products,
   showPassword,
   setShowPassword,
   activeTab,
   setActiveTab,
   copyToClipboard,
 }: OverviewTabProps) => {
+  const storageGiB = getStorageGiB({
+    storageSizeMib: database.storage_size_mib,
+    size: database.size,
+    products,
+  });
+
   if (database.status === "creating" || database.status === "migrating") {
     return (
       <motion.div
@@ -378,11 +387,7 @@ export const OverviewTab = ({
             <ConfigCard
               icon={HardDrive}
               label="Disk"
-              value={
-                database.storage_size_mib
-                  ? `${Math.round(database.storage_size_mib / 1024)} GB`
-                  : "N/A"
-              }
+              value={storageGiB ? `${storageGiB} GiB` : "Managed"}
               color="text-violet-300"
             />
             <ConfigCard

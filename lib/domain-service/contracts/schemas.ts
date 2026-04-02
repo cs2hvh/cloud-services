@@ -25,6 +25,11 @@ export const DomainSchema = z
     last_check_at: z.string().datetime().nullable().openapi({ example: null }),
     created_at: z.string().datetime().openapi({ example: "2026-03-16T09:00:00Z" }),
     updated_at: z.string().datetime().openapi({ example: "2026-03-16T09:00:00Z" }),
+    // DNS routing status — present on list responses, absent on single-domain responses
+    dns_ready: z.boolean().optional().openapi({ example: true, description: "Whether DNS has propagated to the platform load-balancer IPs." }),
+    dns_message: z.string().optional().openapi({ example: "DNS is routing correctly.", description: "Human-readable DNS routing status message." }),
+    dns_resolved_ips: z.array(z.string()).optional().openapi({ example: ["1.2.3.4"], description: "IPs the domain currently resolves to." }),
+    dns_expected_ips: z.array(z.string()).optional().openapi({ example: ["1.2.3.4"], description: "IPs the domain should resolve to for routing to work." }),
   })
   .openapi("Domain");
 
@@ -62,7 +67,7 @@ export const DomainListQuerySchema = z
 export const DomainMarketplaceSearchRequestSchema = z
   .object({
     query: z.string().min(1).max(253).openapi({ example: "mybrand" }),
-    tlds: z.array(z.string().min(2).max(20)).max(15).optional().openapi({ example: ["com", "io", "app"] }),
+    tlds: z.array(z.string().min(2).max(20)).max(20).optional().openapi({ example: ["com", "ai", "io", "app", "dev", "net", "co", "shop", "store", "tech", "cloud", "me"] }),
   })
   .openapi("DomainMarketplaceSearchRequest");
 
@@ -168,6 +173,29 @@ export const DomainMarketplacePurchaseRequestRecordSchema = z
   })
   .openapi("DomainMarketplacePurchaseRequestRecord");
 
+export const DomainMarketplacePurchaseRequestPublicSchema = z
+  .object({
+    id: z.string().uuid().openapi({ example: "656bb6a3-9905-46d0-9704-b127cc296957" }),
+    app_id: z.string().uuid().nullable().openapi({ example: "00aefffd-e676-4ebe-b02e-9f936b1d04b4" }),
+    domain: z.string().openapi({ example: "mybrand.com" }),
+    status: DomainPurchaseRequestStatusSchema,
+    purchase_price: z.number().nullable().openapi({ example: 12.99 }),
+    renewal_price: z.number().nullable().openapi({ example: 14.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+    provider: z.string().openapi({ example: "ahuracloud" }),
+    last_error: z.string().nullable().openapi({ example: null }),
+    metadata: z.record(z.unknown()).openapi({
+      example: {
+        purchase_type: "registration",
+        premium: false,
+        source: "dashboard-marketplace",
+      },
+    }),
+    created_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:20.000Z" }),
+    updated_at: z.string().datetime().openapi({ example: "2026-03-16T14:12:21.000Z" }),
+  })
+  .openapi("DomainMarketplacePurchaseRequestPublic");
+
 export const AddDomainRequestSchema = z
   .object({
     app_id: z.string().uuid().openapi({ example: "550e8400-e29b-41d4-a716-446655440000" }),
@@ -242,16 +270,6 @@ export const DomainMarketplaceSummaryResponseSchema = z
   })
   .openapi("DomainMarketplaceSummaryResponse");
 
-export const DomainMarketplaceProvidersResponseSchema = z
-  .object({
-    data: DomainMarketplaceSummarySchema,
-    deprecated: z.literal(true).openapi({ example: true }),
-    message: z.string().openapi({
-      example: "Use /api/v1/domains/market/summary for reseller metadata.",
-    }),
-  })
-  .openapi("DomainMarketplaceProvidersResponse");
-
 export const DomainMarketplaceSearchResponseSchema = z
   .object({
     data: DomainMarketplaceSearchDataSchema,
@@ -260,13 +278,13 @@ export const DomainMarketplaceSearchResponseSchema = z
 
 export const DomainMarketplacePurchaseRequestResponseSchema = z
   .object({
-    data: DomainMarketplacePurchaseRequestRecordSchema,
+    data: DomainMarketplacePurchaseRequestPublicSchema,
   })
   .openapi("DomainMarketplacePurchaseRequestResponse");
 
 export const DomainMarketplacePurchaseRequestListResponseSchema = z
   .object({
-    data: z.array(DomainMarketplacePurchaseRequestRecordSchema),
+    data: z.array(DomainMarketplacePurchaseRequestPublicSchema),
     meta: z.object({
       total: z.number().openapi({ example: 1 }),
     }),
@@ -277,3 +295,110 @@ export type AddDomainRequest = z.infer<typeof AddDomainRequestSchema>;
 export type VerifyDomainRequest = z.infer<typeof VerifyDomainRequestSchema>;
 export type SetPrimaryDomainRequest = z.infer<typeof SetPrimaryDomainRequestSchema>;
 export type DomainListQuery = z.infer<typeof DomainListQuerySchema>;
+
+/* ──────────────────────────────────────────────────────────
+ * Domain Transfer Schemas
+ * ──────────────────────────────────────────────────────────*/
+
+export const DomainTransferRequestStatusSchema = z
+  .enum(["initiated", "pending", "approved", "completed", "failed", "cancelled"])
+  .openapi("DomainTransferRequestStatus");
+
+export const DomainTransferCheckEligibilitySchema = z
+  .object({
+    domain: z
+      .string()
+      .min(3, "Domain name is too short")
+      .max(253, "Domain name is too long")
+      .openapi({ example: "mybrand.com" })
+      .refine((v) => !v.includes("@"), {
+        message: "Please enter a domain name (e.g., example.com), not an email address.",
+      })
+      .refine((v) => !/^https?:\/\//i.test(v), {
+        message: "Please enter just the domain name (e.g., example.com), not a full URL.",
+      })
+      .refine((v) => v.includes("."), {
+        message: "Please enter a valid domain name including a TLD (e.g., example.com).",
+      }),
+  })
+  .openapi("DomainTransferCheckEligibility");
+
+export const DomainTransferCreateSchema = z
+  .object({
+    domain: z
+      .string()
+      .min(3, "Domain name is too short")
+      .max(253, "Domain name is too long")
+      .openapi({ example: "mybrand.com" })
+      .refine((v) => !v.includes("@"), {
+        message: "Please enter a domain name (e.g., example.com), not an email address.",
+      })
+      .refine((v) => !/^https?:\/\//i.test(v), {
+        message: "Please enter just the domain name (e.g., example.com), not a full URL.",
+      })
+      .refine((v) => v.includes("."), {
+        message: "Please enter a valid domain name including a TLD (e.g., example.com).",
+      }),
+    auth_code: z
+      .string()
+      .min(1, "Authorization code is required")
+      .max(128, "Authorization code is too long")
+      .refine((v) => v.trim().length >= 6, {
+        message: "Authorization code must be at least 6 characters",
+      })
+      .openapi({ example: "Auth@c0de123" }),
+    purchase_price: z.number().positive().optional().openapi({ example: 12.99 }),
+    privacy_enabled: z.boolean().optional().openapi({ example: false }),
+    idempotency_key: z.string().min(8).max(128).optional().openapi({ example: "xfer-domain-001" }),
+  })
+  .openapi("DomainTransferCreate");
+
+export const DomainTransferListQuerySchema = z
+  .object({
+    limit: z.preprocess(
+      (value) => {
+        if (value === undefined || value === null || value === "") return undefined;
+        if (typeof value === "string") {
+          const trimmed = value.trim();
+          if (!trimmed) return undefined;
+          if (!/^\d+$/.test(trimmed)) return value;
+          return Number.parseInt(trimmed, 10);
+        }
+        return value;
+      },
+      z
+        .number({ invalid_type_error: "limit must be a number" })
+        .int("limit must be an integer")
+        .min(1, "limit must be between 1 and 100")
+        .max(100, "limit must be between 1 and 100")
+        .optional()
+    ),
+  })
+  .openapi("DomainTransferListQuery");
+
+export const DomainTransferRequestPublicSchema = z
+  .object({
+    id: z.string().uuid().openapi({ example: "a9c7e3f1-8b2d-4a5c-b6d1-1e2f3a4b5c6d" }),
+    domain: z.string().openapi({ example: "mybrand.com" }),
+    status: DomainTransferRequestStatusSchema,
+    purchase_price: z.number().nullable().openapi({ example: 12.99 }),
+    renewal_price: z.number().nullable().openapi({ example: 14.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+    provider_status: z.string().nullable().openapi({ example: "Pending Approval" }),
+    provider_email: z.string().nullable().openapi({ example: "admin@mybrand.com" }),
+    last_error: z.string().nullable().openapi({ example: null }),
+    failure_reason: z.string().nullable().openapi({ example: null }),
+    created_at: z.string().datetime().openapi({ example: "2026-03-27T10:00:00.000Z" }),
+    updated_at: z.string().datetime().openapi({ example: "2026-03-27T10:00:01.000Z" }),
+  })
+  .openapi("DomainTransferRequestPublic");
+
+export const DomainTransferEligibilitySchema = z
+  .object({
+    domain: z.string().openapi({ example: "mybrand.com" }),
+    eligible: z.boolean().openapi({ example: true }),
+    reason: z.string().nullable().openapi({ example: null }),
+    transferPrice: z.number().nullable().openapi({ example: 12.99 }),
+    currency: z.string().openapi({ example: "USD" }),
+  })
+  .openapi("DomainTransferEligibility");

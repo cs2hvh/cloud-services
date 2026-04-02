@@ -302,8 +302,8 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create VPS');
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Something went wrong while creating your server.');
       }
 
       const result = await response.json();
@@ -314,8 +314,9 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       // You could redirect to the new VPS details page here
       // router.push(`/dashboard/compute/vms/${result.data.id}`);
     } catch (error) {
-      console.error('VPS creation error:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to deploy VPS. Please try again.');
+      console.error('[VPS Create]', error);
+      const msg = error instanceof Error ? error.message : '';
+      toast.error(msg || 'Something went wrong while deploying your server. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -155,17 +155,21 @@ export class BuildPollingService {
         console.error(`[BuildPolling] ❌ Failed to update app status to failed: ${updateResult.error}`);
       }
       
-      // Record failed deployment
-      const deploymentResult = await Platform_App_Deployments.create({
-        app_id: appId,
-        build_number: buildNumber || null,
-        status: 'failed',
-        trigger,
-        failure_reason: failureReason,
-      });
-
-      if (!deploymentResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to create failed deployment record: ${deploymentResult.error}`);
+      // Update deployment row created at build start (or fall back to create for pre-migration builds)
+      if (buildNumber) {
+        const updateResult = await Platform_App_Deployments.update_status(appId, buildNumber, {
+          status: 'failed',
+          failure_reason: failureReason,
+        });
+        if (!updateResult.success) {
+          await Platform_App_Deployments.create({
+            app_id: appId,
+            build_number: buildNumber,
+            status: 'failed',
+            trigger,
+            failure_reason: failureReason,
+          });
+        }
       }
       
       console.log(`[BuildPolling] 📝 Recorded failed deployment: ${failureReason}`);
@@ -188,21 +192,26 @@ export class BuildPollingService {
         console.log(`[BuildPolling] ✅ App status updated to 'running' in DB`);
       }
       
-      // Record successful deployment
-      const deploymentResult = await Platform_App_Deployments.create({
-        app_id: appId,
-        build_number: buildNumber || null,
-        image_tag: `${appName}-app:build-${buildNumber || 'latest'}`,
-        status: 'success',
-        trigger,
-      });
-
-      if (!deploymentResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to create successful deployment record: ${deploymentResult.error}`);
+      // Update deployment row created at build start (or fall back to create for pre-migration builds)
+      let deploymentResult;
+      if (buildNumber) {
+        deploymentResult = await Platform_App_Deployments.update_status(appId, buildNumber, {
+          status: 'success',
+          image_tag: `${appName}-app:build-${buildNumber}`,
+        });
+      }
+      if (!deploymentResult?.success) {
+        deploymentResult = await Platform_App_Deployments.create({
+          app_id: appId,
+          build_number: buildNumber || null,
+          image_tag: `${appName}-app:build-${buildNumber || 'latest'}`,
+          status: 'success',
+          trigger,
+        });
       }
       
       // Set as active deployment
-      if (deploymentResult.success && deploymentResult.data) {
+      if (deploymentResult?.success && deploymentResult.data) {
         const activeResult = await Platform_App_Deployments.set_active_for_app(appId, deploymentResult.data.id);
         if (!activeResult.success) {
           console.error(`[BuildPolling] ❌ Failed to set active deployment: ${activeResult.error}`);
@@ -221,17 +230,21 @@ export class BuildPollingService {
         console.error(`[BuildPolling] ❌ Failed to update app status to failed (health check): ${updateResult.error}`);
       }
       
-      // Record failed deployment (build succeeded but health check failed)
-      const deploymentResult = await Platform_App_Deployments.create({
-        app_id: appId,
-        build_number: buildNumber || null,
-        status: 'failed',
-        trigger,
-        failure_reason: failureReason,
-      });
-
-      if (!deploymentResult.success) {
-        console.error(`[BuildPolling] ❌ Failed to create failed deployment record: ${deploymentResult.error}`);
+      // Update deployment row (or fall back to create for pre-migration builds)
+      if (buildNumber) {
+        const updateResult = await Platform_App_Deployments.update_status(appId, buildNumber, {
+          status: 'failed',
+          failure_reason: failureReason,
+        });
+        if (!updateResult.success) {
+          await Platform_App_Deployments.create({
+            app_id: appId,
+            build_number: buildNumber,
+            status: 'failed',
+            trigger,
+            failure_reason: failureReason,
+          });
+        }
       }
       
       console.log(`[BuildPolling] 📝 Recorded failed deployment: ${failureReason}`);
@@ -307,14 +320,22 @@ export class BuildPollingService {
         console.error(`[BuildPolling] ❌ Failed to update app status to timeout: ${updateResult.error}`);
     }
     
-    // Record failed deployment
-    await Platform_App_Deployments.create({
-      app_id: appId,
-      build_number: buildNumber || null,
-      status: 'failed',
-      trigger,
-      failure_reason: failureReason,
-    });
+    // Update deployment row (or fall back to create for pre-migration builds)
+    if (buildNumber) {
+      const updateResult = await Platform_App_Deployments.update_status(appId, buildNumber, {
+        status: 'failed',
+        failure_reason: failureReason,
+      });
+      if (!updateResult.success) {
+        await Platform_App_Deployments.create({
+          app_id: appId,
+          build_number: buildNumber,
+          status: 'failed',
+          trigger,
+          failure_reason: failureReason,
+        });
+      }
+    }
   }
 
   /**

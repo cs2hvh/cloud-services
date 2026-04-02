@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Archive,
+  ArrowRightLeft,
+  BadgeDollarSign,
   BookOpen,
   Bot,
   Box,
@@ -31,6 +33,7 @@ import {
   Settings,
   Shield,
   ShieldCheck,
+  ShoppingCart,
   Ticket,
   Users,
   X,
@@ -138,6 +141,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
   const [projectsExpanded, setProjectsExpanded] = useState(true);
   const [computeExpanded, setComputeExpanded] = useState(pathname.includes("/services/compute"));
   const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.includes("/services/ai-agents"));
+  const [domainsExpanded, setDomainsExpanded] = useState(pathname.includes("/dashboard/domains"));
   const [adminExpanded, setAdminExpanded] = useState(pathname.includes("/admin"));
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -153,6 +157,9 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     }
     if (pathname.includes("/services/ai-agents")) {
       setAiAgentsExpanded(true);
+    }
+    if (pathname.includes("/dashboard/domains")) {
+      setDomainsExpanded(true);
     }
     if (pathname.includes("/admin")) {
       setAdminExpanded(true);
@@ -230,12 +237,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       icon: Rocket,
     },
     {
-      name: "Domains",
-      href: "/dashboard/domains",
-      current: pathname.includes("/dashboard/domains"),
-      icon: Globe,
-    },
-    {
       name: "Kubernetes",
       href: "/dashboard/services/kubernetes",
       current: pathname.includes("/services/kubernetes"),
@@ -264,6 +265,27 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/object-storage",
       current: pathname.includes("/services/object-storage"),
       icon: Archive,
+    },
+  ];
+
+  const domainsSubItems: NavLinkItem[] = [
+    {
+      name: "Buy Domains",
+      href: "/dashboard/domains/marketplace",
+      current: pathname.includes("/dashboard/domains/marketplace"),
+      icon: ShoppingCart,
+    },
+    {
+      name: "Transfer Domain",
+      href: "/dashboard/domains/transfer",
+      current: pathname.includes("/dashboard/domains/transfer"),
+      icon: ArrowRightLeft,
+    },
+    {
+      name: "My Domains",
+      href: "/dashboard/domains",
+      current: pathname === "/dashboard/domains" || (pathname.includes("/dashboard/domains") && !pathname.includes("/marketplace") && !pathname.includes("/transfer")),
+      icon: Globe,
     },
   ];
 
@@ -335,6 +357,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/docs",
       current: false,
       icon: FileText,
+    },
+     {
+      name: "Billing & Transaction",
+      href: "/dashboard/nav/billing",
+      current: false,
+      icon: BadgeDollarSign,
     },
     {
       name: "Help Center",
@@ -445,6 +473,18 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
               onToggle={() => setComputeExpanded((prev) => !prev)}
             >
               {computeServices.map((item) => (
+                <SidebarLink key={item.name} item={item} compact />
+              ))}
+            </ExpandableGroup>
+
+            <ExpandableGroup
+              label="Domains"
+              icon={Globe}
+              expanded={domainsExpanded}
+              active={pathname.includes("/dashboard/domains")}
+              onToggle={() => setDomainsExpanded((prev) => !prev)}
+            >
+              {domainsSubItems.map((item) => (
                 <SidebarLink key={item.name} item={item} compact />
               ))}
             </ExpandableGroup>

@@ -166,11 +166,97 @@ ${generateSecurityStages({ language: 'docker' })}
               echo ""
               exit 1
             fi
-            echo "✓ Dockerfile found"
+            echo "[OK] Dockerfile found"
             echo ""
             echo "Dockerfile contents:"
             cat Dockerfile
             echo ""
+
+            # ── ARG Detection ──────────────────────────────────────────
+            # Detect ARG instructions that expect build-time values.
+            # Platform does NOT pass --build-arg to Kaniko, so any ARG
+            # without a default value will silently resolve to empty.
+            echo "Checking for build-time ARG instructions..."
+            ARG_LINES=$(grep -n "^ARG " Dockerfile 2>/dev/null || true)
+            if [ -n "$ARG_LINES" ]; then
+              echo ""
+              echo "========================================="
+              echo "[WARNING] Dockerfile uses ARG instructions"
+              echo "========================================="
+              echo ""
+              echo "  The following ARG instructions were found:"
+              echo "$ARG_LINES" | while IFS= read -r line; do
+                echo "    $line"
+              done
+              echo ""
+              # Check specifically for ARGs without defaults (e.g. "ARG MY_VAR")
+              ARGS_NO_DEFAULT=$(grep -E "^ARG [A-Za-z_][A-Za-z0-9_]*\\s*$" Dockerfile 2>/dev/null || true)
+              if [ -n "$ARGS_NO_DEFAULT" ]; then
+                echo "  [FAILED] These ARGs have NO default value and WILL be empty:"
+                echo "$ARGS_NO_DEFAULT" | while IFS= read -r line; do
+                  echo "    $line"
+                done
+                echo ""
+              fi
+              echo "  This platform injects environment variables at RUNTIME"
+              echo "  via Kubernetes secrets, NOT at build time."
+              echo ""
+              echo "  If your build depends on ARG values, consider:"
+              echo "    1. Set a default: ARG MY_VAR=default_value"
+              echo "    2. Move the logic to runtime (use ENV instead)"
+              echo "    3. Use a multi-stage build where ARGs have defaults"
+              echo ""
+              echo "  Platform-provided env vars will be available at RUNTIME"
+              echo "  via process.env / os.environ / System.getenv, not during build."
+              echo "========================================="
+              echo ""
+            else
+              echo "[OK] No build-time ARG instructions found"
+            fi
+
+            # ── Secret Exposure Detection ──────────────────────────────
+            # Scan for patterns that could leak runtime env vars in build logs
+            echo "Checking for potential secret exposure patterns..."
+            EXPOSURE_FOUND=0
+
+            # Check for printenv / env dump commands
+            if grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile 2>/dev/null | grep -i "^[0-9]*:RUN" > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile contains env dump commands (printenv/env/set)"
+              grep -nEi "(^|&&|;|[|])[[:space:]]*(printenv|env|set)($|[[:space:]>;|])" Dockerfile | grep -i "RUN" | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            # Check for echo $VAR patterns that could leak secrets
+            if grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile echoes environment variables"
+              grep -nE "RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            # Check for writing env vars to files
+            if grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
+              echo ""
+              echo "  [WARNING] Dockerfile may write env vars to files"
+              grep -nEi "RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
+                echo "    $line"
+              done
+              EXPOSURE_FOUND=1
+            fi
+
+            if [ "$EXPOSURE_FOUND" = "1" ]; then
+              echo ""
+              echo "  These patterns could expose secrets in build logs."
+              echo "  Consider removing debug commands before deploying."
+              echo ""
+            else
+              echo "[OK] No secret exposure patterns detected"
+            fi
           '''
         }
       }
@@ -229,6 +315,48 @@ ${secretYaml}
 SECRET_EOF
             kubectl apply -f env-secret.yaml
             echo "Environment secret created successfully"
+          '''
+        }
+      }
+    }
+
+    stage('Verify Environment Secret') {
+      when {
+        expression { return ${hasSecret} }
+      }
+      steps {
+        container('kubectl') {
+          sh '''
+            echo "STAGE: Verify Environment Secret"
+            echo "Checking that secret \${ENV_SECRET_NAME} exists before deployment..."
+            
+            MAX_RETRIES=5
+            RETRY_DELAY=3
+            ATTEMPT=0
+            
+            while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+              ATTEMPT=$((ATTEMPT + 1))
+              if kubectl get secret "\${ENV_SECRET_NAME}" -n default > /dev/null 2>&1; then
+                KEY_COUNT=$(kubectl get secret "\${ENV_SECRET_NAME}" -n default -o json | grep -c '"' | head -1 || echo "unknown")
+                echo "[SUCCESS] Secret \${ENV_SECRET_NAME} verified (attempt $ATTEMPT)"
+                break
+              fi
+              
+              if [ $ATTEMPT -eq $MAX_RETRIES ]; then
+                echo "========================================="
+                echo "ERROR: Environment secret not found!"
+                echo "========================================="
+                echo ""
+                echo "Secret \${ENV_SECRET_NAME} was not found after $MAX_RETRIES attempts."
+                echo "The backend should have created this secret before the build started."
+                echo "This may indicate a backend synchronization issue."
+                echo ""
+                exit 1
+              fi
+              
+              echo "Secret not found yet, retrying in $RETRY_DELAY seconds... (attempt $ATTEMPT/$MAX_RETRIES)"
+              sleep $RETRY_DELAY
+            done
           '''
         }
       }

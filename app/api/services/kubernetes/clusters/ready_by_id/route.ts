@@ -4,6 +4,7 @@ import { createSSRClient } from "@/lib/supabase/server"; // your server-side hel
 export const dynamic = "force-dynamic"; // avoid caching
 
 type Row = {
+  create_droplet: boolean | null;
   create_status: boolean | null;
   connect_status: boolean | null;
   verify_status: boolean | null;
@@ -17,7 +18,6 @@ export async function POST(
 
   //console.log(,"...............params")
   const body = await req.json().catch(() => null);
-  console.log(body,"...............params 22222")
   const { data, error } = await supabase
     .from("clusters")
     .select("*")
@@ -41,6 +41,7 @@ export async function POST(
   return NextResponse.json({
     success: true,
     clusterId: body.clusterId,
+    createDropletStatus: data.create_droplet ?? false,
     createStatus: data.create_status ?? false,
     connectStatus: data.connect_status ?? false,
     verifyStatus: data.verify_status ?? false,

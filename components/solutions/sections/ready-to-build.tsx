@@ -18,7 +18,8 @@ type ReadyToBuildProps = {
   buttonText: string;
   backgroundImage?: string;
   className?: string;
-  onSubmitAction?: (data: Record<string, string>) => void;
+  consultationService?: string;
+  onSubmitAction?: (data: Record<string, string>) => void | Promise<void>;
 };
 
 export function ReadyToBuild({
@@ -28,13 +29,104 @@ export function ReadyToBuild({
   buttonText,
   backgroundImage = "/images/main-page/ready-to-secure-bg.svg",
   className,
+  consultationService,
   onSubmitAction,
 }: ReadyToBuildProps) {
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<{
+    type: "success" | "error" | null;
+    message: string;
+  }>({ type: null, message: "" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmitAction?.(formData);
+
+    if (isSubmitting) return;
+
+    const sanitizedData = Object.fromEntries(
+      Object.entries(formData).map(([key, value]) => [key, value.trim()]),
+    );
+
+    setSubmitStatus({ type: null, message: "" });
+    setIsSubmitting(true);
+
+    try {
+      if (onSubmitAction) {
+        await onSubmitAction(sanitizedData);
+        setSubmitStatus({
+          type: "success",
+          message: "Request submitted successfully.",
+        });
+        setFormData({});
+        return;
+      }
+
+      if (!consultationService) {
+        setSubmitStatus({
+          type: "error",
+          message: "Consultation service is not configured.",
+        });
+        return;
+      }
+
+      const nameField = formFields.find((field) => field.type === "text")?.name;
+      const emailField = formFields.find((field) => field.type === "email")?.name;
+      const bodyField = formFields.find((field) => field.type === "textarea")?.name;
+
+      const name = (nameField && sanitizedData[nameField]) || "";
+      const email = (emailField && sanitizedData[emailField]) || "";
+      const body = (bodyField && sanitizedData[bodyField]) || "";
+
+      if (!name || !email || !body) {
+        setSubmitStatus({
+          type: "error",
+          message: "Please fill in all fields before submitting.",
+        });
+        return;
+      }
+
+      const response = await fetch("/api/consultation/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name,
+          email,
+          body,
+          service: consultationService,
+        }),
+      });
+
+      const responseBody = (await response.json().catch(() => null)) as
+        | { message?: string; error?: string }
+        | null;
+
+      if (!response.ok) {
+        setSubmitStatus({
+          type: "error",
+          message:
+            responseBody?.error || "Failed to submit consultation request.",
+        });
+        return;
+      }
+
+      setSubmitStatus({
+        type: "success",
+        message:
+          responseBody?.message || "Consultation request submitted successfully.",
+      });
+      setFormData({});
+    } catch (error) {
+      console.error("[ReadyToBuild] Consultation submit error:", error);
+      setSubmitStatus({
+        type: "error",
+        message: "Something went wrong while submitting your request.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleChange = (name: string, value: string) => {
@@ -90,6 +182,7 @@ export function ReadyToBuild({
                         placeholder={field.placeholder}
                         value={formData[field.name] || ""}
                         onChange={(e) => handleChange(field.name, e.target.value)}
+                        required
                         className="w-full px-4 py-3 bg-transparent border border-[#6b6b6b] text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-white/60 transition-colors"
                       />
                     ))}
@@ -105,6 +198,7 @@ export function ReadyToBuild({
                     value={formData[field.name] || ""}
                     onChange={(e) => handleChange(field.name, e.target.value)}
                     rows={4}
+                    required
                     className="w-full px-4 py-3 bg-transparent border border-[#6b6b6b] text-white text-sm placeholder:text-white/40 focus:outline-none focus:border-white/60 transition-colors resize-none"
                   />
                 ))}
@@ -112,10 +206,23 @@ export function ReadyToBuild({
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  className="w-full px-6 py-3 bg-[#D4D4D4] text-black text-sm font-medium hover:bg-white/90 transition-colors"
+                  disabled={isSubmitting}
+                  className="w-full px-6 py-3 bg-[#D4D4D4] text-black text-sm font-medium hover:bg-white/90 transition-colors cursor-pointer"
                 >
-                  {buttonText}
+                  {isSubmitting ? "Submitting..." : buttonText}
                 </button>
+                {submitStatus.type ? (
+                  <p
+                    className={cn(
+                      "text-xs",
+                      submitStatus.type === "success"
+                        ? "text-emerald-300"
+                        : "text-rose-300",
+                    )}
+                  >
+                    {submitStatus.message}
+                  </p>
+                ) : null}
               </form>
             </div>
           </div>

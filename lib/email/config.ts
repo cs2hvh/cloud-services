@@ -14,9 +14,7 @@ export interface EmailConfig {
 
 export function getEmailConfig(): EmailConfig {
   const appUrl = trimTrailingSlash(
-    process.env.DOMAIN ||
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      siteConfig.domain,
+    process.env.DOMAIN || siteConfig.domain,
   );
 
   const from =

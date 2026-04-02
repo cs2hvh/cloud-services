@@ -27,9 +27,14 @@ import { OverviewTab } from "./tabs/overview-tab";
 import { NetworkTab } from "./tabs/network-tab";
 import { UsersDbsTab } from "./tabs/users-dbs-tab";
 import { SettingsTab } from "./tabs/settings-tab";
-import { AxiosError } from "axios";
 import { DatabaseIcon } from "./database-icon";
-import { extractCpu, extractRam, extractRegion } from "./singledb-helpers";
+import {
+  extractCpu,
+  extractRam,
+  extractRegion,
+  getStorageGiB,
+} from "./singledb-helpers";
+import { getDatabaseErrorMessage } from "./error-messages";
 
 interface SingleDbProps {
   databaseId: string;
@@ -93,16 +98,6 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
   const previousStatus = useRef<string | null>(null);
   const isFetchingRef = useRef(false);
 
-  const getErrorMessage = (error: unknown, defaultMessage: string): string => {
-    if (error instanceof AxiosError) {
-      return error.response?.data?.error || defaultMessage;
-    }
-    if (error instanceof Error) {
-      return error.message;
-    }
-    return defaultMessage;
-  };
-
   const fetchDatabaseCluster = useCallback(async () => {
     if (isFetchingRef.current) {
       return;
@@ -141,7 +136,9 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       }
     } catch (error) {
       console.error("[fetchDatabaseCluster] Error:", error);
-      toast.error(getErrorMessage(error, "Failed to fetch database details"));
+      toast.error(
+        getDatabaseErrorMessage(error, "Failed to load database details.")
+      );
       setLoading(false);
     } finally {
       isFetchingRef.current = false;
@@ -237,9 +234,14 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       },
       {
         label: "Storage",
-        value: database.storage_size_mib
-          ? `${Math.round(database.storage_size_mib / 1024)} GB`
-          : "Managed",
+        value: (() => {
+          const storageGiB = getStorageGiB({
+            storageSizeMib: database.storage_size_mib,
+            size: database.size,
+            products,
+          });
+          return storageGiB ? `${storageGiB} GiB` : "Managed";
+        })(),
         icon: HardDrive,
       },
       {
@@ -248,7 +250,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
         icon: MapPin,
       },
     ];
-  }, [database]);
+  }, [database, products]);
 
   if (loading) {
     return (
@@ -485,6 +487,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
                 <TabsContent value="overview" className="mt-0">
                   <OverviewTab
                     database={database}
+                    products={products}
                     showPassword={showPassword}
                     setShowPassword={setShowPassword}
                     activeTab={connectionTab}

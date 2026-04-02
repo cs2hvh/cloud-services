@@ -112,61 +112,80 @@ export default function GlobalNetworkSection() {
           <WorldMap locations={POP_LOCATIONS} />
         </motion.div>
 
-        {/* Locations by continent */}
+        {/* Stats Row */}
         <motion.div
-          className="mt-6 lg:mt-8 pt-6 lg:pt-8"
+          className="mt-6 lg:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06]"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-50px" }}
           transition={{ duration: 0.6, delay: 0.25, ease: [0.25, 0.4, 0.25, 1] as const }}
         >
-          <div className="flex flex-wrap justify-center gap-12 lg:gap-16">
+          {STATS.map((stat) => (
+            <div
+              key={stat.label}
+              className="bg-black p-5 sm:p-6 text-center transition-colors duration-300 hover:bg-white/[0.03]"
+            >
+              <div className="text-2xl sm:text-3xl font-semibold text-white">
+                {stat.value}
+              </div>
+              <div className="mt-1 text-[11px] sm:text-xs text-white/35 tracking-wide uppercase">
+                {stat.label}
+              </div>
+            </div>
+          ))}
+        </motion.div>
+
+        {/* Locations by continent */}
+        <motion.div
+          className="mt-8 lg:mt-10"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6, delay: 0.35, ease: [0.25, 0.4, 0.25, 1] as const }}
+        >
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06]">
             {REGIONS.map((region) => (
-              <div key={region.continent}>
-                <h4 className="text-[11px] font-medium text-white/30 uppercase tracking-widest mb-4">
-                  {region.continent}
-                </h4>
-                <ul className="space-y-2.5">
+              <div
+                key={region.continent}
+                className="bg-black p-5 sm:p-6"
+              >
+                {/* Continent header */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/30" />
+                  <h4 className="text-[11px] font-semibold text-white/40 uppercase tracking-[0.14em]">
+                    {region.continent}
+                  </h4>
+                  <span className="ml-auto text-[10px] text-white/20">
+                    {region.locations.length} PoPs
+                  </span>
+                </div>
+
+                {/* Location list */}
+                <ul className="space-y-2">
                   {region.locations.map((loc) => (
-                    <li key={loc.city} className="flex items-center gap-2.5">
+                    <li key={loc.city} className="flex items-center gap-2.5 group">
+                      {/* Live status dot */}
+                      <span className="relative flex h-1.5 w-1.5 shrink-0">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/40 animate-ping" style={{ animationDuration: "2.5s" }} />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
+                      </span>
                       <Image
                         src={`https://flagcdn.com/w40/${loc.flag}.png`}
                         alt={loc.flag}
-                        width={18}
-                        height={12}
-                        className="rounded-[1px] shrink-0"
+                        width={16}
+                        height={11}
+                        className="rounded-[1px] shrink-0 opacity-70"
                         unoptimized
                       />
-                      <span className="text-[13px] text-white/60">{loc.city}</span>
+                      <span className="text-[12px] text-white/55 group-hover:text-white/80 transition-colors">
+                        {loc.city}
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
             ))}
           </div>
-        </motion.div>
-
-        {/* Stats Row */}
-        <motion.div
-          className="mt-8 lg:mt-10 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06]"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          transition={{ duration: 0.6, delay: 0.35, ease: [0.25, 0.4, 0.25, 1] as const }}
-        >
-          {STATS.map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-black p-5 sm:p-6 text-center transition-colors duration-300 hover:bg-white/[0.02]"
-            >
-              <div className="text-2xl sm:text-3xl font-semibold text-[#0095FF]">
-                {stat.value}
-              </div>
-              <div className="mt-1 text-xs sm:text-sm text-white/40">
-                {stat.label}
-              </div>
-            </div>
-          ))}
         </motion.div>
       </Container>
     </section>

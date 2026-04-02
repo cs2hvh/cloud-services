@@ -131,6 +131,7 @@ export type PlatformApp = {
   id: string;
   name: string;
   slug: string;
+  deployment_url?: string | null;
   repository_url: string;
   repository_name: string;
   repository_id: string;
@@ -814,6 +815,7 @@ export type Database = {
           owner_id:string;
           controlPlane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          createDroplet?: boolean;
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -830,6 +832,7 @@ export type Database = {
 
           controlPlane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          createDroplet?: boolean;
           createStatus?: boolean;
           connectStatus?: boolean;
           verifyStatus?: boolean;
@@ -853,6 +856,7 @@ export type Database = {
           owner_id:string;
           control_plane?: { public_ip: string; private_ip: string; droplet_id: string } | null; // e.g., API VIP or CP-1 IP
           workers?: { public_ip: string; private_ip: string; droplet_id: string }[] | null; // list of worker IPs/hosts
+          create_droplet?: boolean;
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;
@@ -869,6 +873,7 @@ export type Database = {
           owner_id:string;
           control_plane?: string | null; // e.g., API VIP or CP-1 IP
           workers?: string[]; // list of worker IPs/hosts
+          create_droplet?: boolean;
           create_status?: boolean;
           connect_status?: boolean;
           verify_status?: boolean;

@@ -78,6 +78,7 @@ const GameDevPage = () => {
       { name: "workload", placeholder: "Tell us about your 3D workload...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Game Development & Hosting",
   };
   return (
     <main className="bg-[#0E0F0F]">

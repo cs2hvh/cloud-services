@@ -22,6 +22,26 @@ type IpRecord = {
 
 // In-memory store for IP rate limiting (use Redis/Upstash for multi-instance in future)
 const ipStore = new Map<string, IpRecord>();
+const IP_STORE_MAX_SIZE = 10_000;
+const IP_STORE_CLEANUP_INTERVAL_MS = 5 * 60_000; // 5 minutes
+
+// Periodic cleanup of stale entries to prevent memory leaks
+function cleanupIpStore() {
+  const now = Date.now();
+  for (const [ip, rec] of ipStore) {
+    const windowExpired = now - rec.windowStart > AUTH_WINDOW_MS * 2;
+    const cooldownExpired = !rec.cooldownUntil || now > rec.cooldownUntil;
+    if (windowExpired && cooldownExpired) {
+      ipStore.delete(ip);
+    }
+  }
+}
+
+// Periodic cleanup interval — unref so it doesn't keep the process alive
+const _cleanupInterval = setInterval(cleanupIpStore, IP_STORE_CLEANUP_INTERVAL_MS);
+if (typeof _cleanupInterval === 'object' && _cleanupInterval?.unref) {
+  _cleanupInterval.unref();
+}
 
 function getClientIp(req: NextRequest): string {
   return (
@@ -52,6 +72,17 @@ function applyIpCooldown(req: NextRequest): NextResponse | null {
   // These routes have their own per-user rate limiting via limitByUser()
   if (!shouldApplyIpRateLimit(pathname)) {
     return null;
+  }
+
+  // Evict oldest entries if store grows too large (memory safety valve)
+  if (ipStore.size > IP_STORE_MAX_SIZE) {
+    cleanupIpStore();
+    // If still over limit after cleanup, drop oldest half
+    if (ipStore.size > IP_STORE_MAX_SIZE) {
+      const entries = [...ipStore.entries()].sort((a, b) => a[1].windowStart - b[1].windowStart);
+      const toRemove = Math.floor(entries.length / 2);
+      for (let i = 0; i < toRemove; i++) ipStore.delete(entries[i][0]);
+    }
   }
 
   const ip = getClientIp(req);

@@ -66,35 +66,14 @@ export function BuildLogsPanel({
   // True while user is at (or near) the bottom — drives auto-scroll on new content
   const wasAtBottomRef = useRef(true);
 
-  // Tracks the last-seen active build so the dropdown entry survives when the user
-  // browses to a historical build (which replaces buildInfo but liveBuildRef remains).
-  const liveBuildRef = useRef<{ number: number; timestamp: number } | null>(null);
-  if (buildInfo?.building && buildInfo.number != null) {
-    liveBuildRef.current = { number: buildInfo.number, timestamp: buildInfo.timestamp || Date.now() };
-  }
-
-  // Build dropdown options — always ensure both the active live build AND the currently
-  // selected buildInfo are visible, regardless of session history or load timing:
-  //
-  //  Case A — active build not yet in DB:          adds synthetic BUILDING entry.
-  //  Case B — user switched to a historical build:  live entry stays via liveBuildRef.
-  //  Case C — fresh page load after completion:     buildInfo entry added even when
-  //            liveBuildRef is null (was never set this session).
+  // Build dropdown options — the active build entry now comes from Supabase
+  // (created at build start with status='building'). The only synthetic entry
+  // needed is when buildInfo is set but Supabase hasn't delivered the row yet
+  // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
     const opts = [...deployments];
 
-    // Keep the live build in the list even if the user switched away to a historical one
-    const live = liveBuildRef.current;
-    if (live != null && !opts.some((d) => d.build_number === live.number)) {
-      opts.unshift({
-        build_number: live.number,
-        status: 'BUILDING',
-        started_at: new Date(live.timestamp).toISOString(),
-      });
-    }
-
-    // Always show the currently-loaded build (handles fresh loads after completion
-    // where liveBuildRef was never set and deployments may not yet have the record)
+    // Ensure the currently-loaded build is always visible in the dropdown
     if (buildInfo?.number != null && !opts.some((d) => d.build_number === buildInfo.number)) {
       opts.unshift({
         build_number: buildInfo.number,

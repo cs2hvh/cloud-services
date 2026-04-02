@@ -1,9 +1,14 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
+import { createClient } from "@/lib/supabase/client";
 
 type HeroAction = {
   label: string;
@@ -41,6 +46,46 @@ export function ServiceHeroSection({
 }: ServiceHeroSectionProps) {
   const imageLeft = align === "left";
   const isIllustrationSvg = illustration.src.endsWith(".svg");
+  const [isRouting, setIsRouting] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const getPrimaryActionTarget = (path: string) => {
+    if (path.includes("/services/compute") || path.includes("/services/gpu")) {
+      return "/dashboard/services/compute/vps/new";
+    }
+    if (path.includes("/services/kubernetes")) {
+      return "/dashboard/services/kubernetes/new";
+    }
+    if (path.includes("/services/database")) {
+      return "/dashboard/services/database/new";
+    }
+    if (path.includes("/services/security")) {
+      return "/dashboard/services/network-ddos/new";
+    }
+    if (path.includes("/services/object-storage")) {
+      return "/dashboard/services/object-storage/new";
+    }
+    if (path.includes("/services/app-deployment") || path.includes("/services/application-deployment")) {
+      return "/dashboard/services/apps/new";
+    }
+    return primaryAction?.href ?? "/signin";
+  };
+
+  const handlePrimaryActionClick = async () => {
+    if (!primaryAction || isRouting) return;
+    setIsRouting(true);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const target = user ? getPrimaryActionTarget(pathname) : "/signin";
+      router.push(target);
+    } finally {
+      setIsRouting(false);
+    }
+  };
 
   return (
     <section
@@ -97,19 +142,21 @@ export function ServiceHeroSection({
                 {(primaryAction || secondaryAction) && (
                   <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                     {primaryAction && (
-                      <Link
-                        href={primaryAction.href}
-                        className="inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
+                      <button
+                        type="button"
+                        onClick={handlePrimaryActionClick}
+                        disabled={isRouting}
+                        className="cursor-pointer inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
                       >
                         {primaryAction.label}
                         <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </Link>
+                      </button>
                     )}
 
                     {secondaryAction && (
                       <Link
                         href={secondaryAction.href}
-                        className="inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
+                        className="cursor-pointer inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
                       >
                         {secondaryAction.label}
                       </Link>

@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     // GitLab App OAuth flow for repository access
     const clientId = process.env.GITLAB_CLIENT_ID;
-    const domain = process.env.DOMAIN || process.env.NEXT_PUBLIC_SITE_URL;
+    const domain = process.env.DOMAIN;
     const redirectUri = `${domain}/api/gitlab/callback`;
     
     if (!clientId) {

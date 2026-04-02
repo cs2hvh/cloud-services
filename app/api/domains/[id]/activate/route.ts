@@ -16,13 +16,29 @@ function scheduleActivationRun(params: {
   operationId: string;
   actor: ReturnType<typeof createDomainActor>;
   service: ReturnType<typeof getDomainService>;
+  domainId: string;
 }) {
   const run = async () => {
     if (typeof params.service.runActivationOperation !== "function") return;
     try {
+      console.log("[domains.activate] Background activation starting", {
+        operationId: params.operationId,
+        domainId: params.domainId,
+        userId: params.actor.userId,
+      });
       await params.service.runActivationOperation(params.operationId, params.actor);
+      console.log("[domains.activate] Background activation finished", {
+        operationId: params.operationId,
+        domainId: params.domainId,
+        userId: params.actor.userId,
+      });
     } catch (error) {
-      console.error("[domains.activate] Background activation failed", error);
+      console.error("[domains.activate] Background activation failed", {
+        operationId: params.operationId,
+        domainId: params.domainId,
+        userId: params.actor.userId,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -45,6 +61,7 @@ export async function POST(
 ) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
+  let domainIdForLog: string | null = null;
 
   try {
     const rl = await limitByUser(auth.user.id, {
@@ -60,6 +77,7 @@ export async function POST(
     }
 
     const rawParams = await context.params;
+    domainIdForLog = rawParams?.id ?? null;
     const params = ParamsSchema.safeParse(rawParams);
     if (!params.success) {
       return dashboardValidationError("Invalid route parameters", params.error.flatten());
@@ -76,11 +94,18 @@ export async function POST(
       domainId: params.data.id,
       idempotencyKey: resolveIdempotencyKey(req),
     });
+    console.log("[domains.activate] Activation accepted", {
+      operationId: operation.id,
+      domainId: params.data.id,
+      userId: auth.user.id,
+      status: operation.status,
+    });
 
     scheduleActivationRun({
       operationId: operation.id,
       actor,
       service,
+      domainId: params.data.id,
     });
 
     return NextResponse.json(
@@ -93,6 +118,11 @@ export async function POST(
       { status: 202 }
     );
   } catch (error: unknown) {
+    console.error("[domains.activate] Activation request failed", {
+      domainId: domainIdForLog,
+      userId: auth.user.id,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
     return toDashboardDomainErrorResponse(error);
   }
 }

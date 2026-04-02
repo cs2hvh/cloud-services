@@ -13,7 +13,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { cluster_id, status } = body;
+    const { cluster_id, status, create_droplet } = body as {
+      cluster_id?: string;
+      status?: string;
+      create_droplet?: boolean;
+    };
 
     if (!cluster_id) {
       return NextResponse.json(
@@ -38,11 +42,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update cluster status if provided
-    if (status) {
+    // Update cluster status fields if provided
+    if (status || typeof create_droplet === "boolean") {
+      const updatePayload: Record<string, unknown> = {};
+      if (status) updatePayload.status = status;
+      if (typeof create_droplet === "boolean") {
+        updatePayload.create_droplet = create_droplet;
+      }
+
       const { error: updateError } = await supabase
         .from("clusters")
-        .update({ status })
+        .update(updatePayload)
         .eq("cluster_id", cluster_id);
 
       if (updateError) {

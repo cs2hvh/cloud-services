@@ -3,7 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { resizePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { JenkinsService } from "@/lib/services/jenkins";
@@ -235,6 +235,15 @@ export async function POST(req: NextRequest) {
       const buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
+
+      // Create deployment row immediately so Supabase Realtime pushes it to the UI.
+      // BuildPollingService will UPDATE this row on completion (success/failed).
+      await Platform_App_Deployments.create({
+        app_id: app.id,
+        build_number: buildNumber,
+        status: 'building',
+        trigger: 'resize',
+      });
 
       // Update billing hourly rate for the new size
       try {

@@ -9,7 +9,7 @@ import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { getRatesForKubernetesExisting } from "@/config/pricing";
-import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { NotificationService } from "@/lib/notifications";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 
 
@@ -53,7 +53,8 @@ const Payload = z.object({
   ips: z.array(z.string().regex(ipRegex, "Invalid IPv4 address")),
   ownerId: z.string(),
   projectId: z.string(),
-  planId:z.string().uuid()
+  planId:z.string().uuid(),
+  clusterId: z.string().uuid().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -94,13 +95,18 @@ export async function POST(req: NextRequest) {
       //console.log(decryptedPassword,".........................60");
   }
 
-  const clusterId = crypto.randomUUID();
+  const clusterId = parsed.data.clusterId ?? crypto.randomUUID();
   // Derive role server-side to avoid trusting client-provided role
   const adminCheck = await requireAdmin();
   const derivedRole: "admin" | "user" = adminCheck.ok ? "admin" : "user";
 
-  // Billing: dynamic from admin pricing (existing cluster import uses default plan)
-  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(parsed.data.planId);
+  const totalNodes = Math.max(parsed.data.nodes.length, 1);
+
+  // Billing: dynamic from admin pricing and scaled by total nodes (workers + control plane)
+  const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } = await getRatesForKubernetesExisting(
+    parsed.data.planId,
+    totalNodes
+  );
 
   // Check balance BEFORE provisioning
   const balCheck = await ensureBalance(parsed.data.ownerId, INITIAL_COST);
@@ -161,20 +167,21 @@ export async function POST(req: NextRequest) {
       job_id: job.id,
       initial_cost: INITIAL_COST,
       hourly_rate: HOURLY_RATE,
+      node_count: totalNodes,
     },
   });
 
   // Create notification
-  await NotificationService.create(
-    createServiceNotification({
-      userId: parsed.data.ownerId,
-      type: 'success',
-      action: 'created',
-      serviceType: 'kubernetes',
-      serviceName: parsed.data.cluster.name,
-      serviceId: clusterId,
-    })
-  );
+  await NotificationService.create({
+    user_id: parsed.data.ownerId,
+    type: "info",
+    title: "Kubernetes Cluster Creation",
+    message: `kubernetes cluster ${parsed.data.cluster.name} creation started...`,
+    service_type: "kubernetes",
+    service_id: clusterId,
+    action: "created",
+    metadata: { serviceName: parsed.data.cluster.name },
+  });
 
   return NextResponse.json({ clusterId, job:job.id, status: "QUEUED" });
 }

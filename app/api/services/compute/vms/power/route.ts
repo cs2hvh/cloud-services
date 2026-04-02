@@ -1,149 +1,106 @@
 import { NextRequest } from "next/server";
-import { Agent as UndiciAgent } from "undici";
-import { createWorkerClient } from "@/lib/supabase/server";
-
+import { createClient, createWorkerClient } from "@/lib/supabase/server";
+import { proxmoxAuth, postForm, getDispatcher, type ProxmoxHost } from "@/lib/proxmox-utils";
+import { limitByUser } from "@/lib/cooldown/userbased";
 
 export const dynamic = "force-dynamic";
 
-type HostConfig = {
-  id: string;
-  host_url: string;
-  allow_insecure_tls: boolean;
-  token_id: string | null;
-  token_secret: string | null;
-  username: string | null;
-  password: string | null;
-};
-
-function withTimeout<T>(p: Promise<T>, ms = 60000): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const id = setTimeout(() => reject(new Error("Request timed out")), ms);
-    p.then((v) => { clearTimeout(id); resolve(v); })
-     .catch((e) => { clearTimeout(id); reject(e); });
-  });
-}
-
-async function proxmoxAuthCookie(apiBase: string, dispatcher: UndiciAgent | undefined, host: HostConfig) {
-  const tokenId = host.token_id || undefined;
-  const tokenSecret = host.token_secret || undefined;
-  const username = host.username || undefined;
-  const password = host.password || undefined;
-
-  if (tokenId && tokenSecret) {
-    const tokenAuth = { headers: { Authorization: `PVEAPIToken=${tokenId}=${tokenSecret}` } as HeadersInit };
-    try {
-      const verify = await withTimeout(
-        fetch(`${apiBase}/api2/json/nodes`, {
-          cache: "no-store",
-          redirect: "follow",
-          ...tokenAuth,
-          // @ts-expect-error undici dispatcher
-          dispatcher,
-        })
-      );
-      if (verify.ok) return tokenAuth;
-    } catch {}
-  }
-
-  if (!username || !password) throw new Error("Missing Proxmox credentials in DB");
-
-  const body = new URLSearchParams({ username, password });
-  const ticketRes = await withTimeout(
-    fetch(`${apiBase}/api2/json/access/ticket`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
-  if (!ticketRes.ok) {
-    const t = await ticketRes.text();
-    throw new Error(`login failed (${ticketRes.status}): ${t}`);
-  }
-  const ticketJson = (await ticketRes.json()) as { data?: { ticket?: string; CSRFPreventionToken?: string } };
-  const ticket = ticketJson?.data?.ticket as string | undefined;
-  const csrf = ticketJson?.data?.CSRFPreventionToken as string | undefined;
-  if (!ticket) throw new Error("Missing PVE ticket in response");
-  if (!csrf) throw new Error("Missing CSRFPreventionToken in response");
-  return { headers: { Cookie: `PVEAuthCookie=${ticket}`, CSRFPreventionToken: csrf } as HeadersInit };
-}
-
-async function postForm(apiBase: string, path: string, form: Record<string, string | number | boolean>, auth: RequestInit, dispatcher?: UndiciAgent) {
-  const body = new URLSearchParams();
-  Object.entries(form).forEach(([k, v]) => body.append(k, String(v)));
-  const res = await withTimeout(
-    fetch(`${apiBase}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded", ...(auth.headers as Record<string, string>) },
-      body,
-      redirect: "follow",
-      // @ts-expect-error undici dispatcher
-      dispatcher,
-    })
-  );
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`${path} failed (${res.status}): ${text}`);
-  }
-  return res.json();
-}
-
 export async function POST(req: NextRequest) {
+  // Authenticate the user via session cookie
+  const supabaseAuth = await createClient();
+  const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+  if (authError || !user) {
+    return Response.json({ ok: false, error: "Authentication required" }, { status: 401 });
+  }
+
+  // Rate limit: max 20 power actions per minute per user
+  const rl = await limitByUser(user.id, {
+    prefix: "rl:vm-power",
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return Response.json(
+      { ok: false, error: "Too many power actions. Please wait before trying again.", retryAfterSec: rl.retryAfterSec },
+      { status: 429 }
+    );
+  }
+
   const body = (await req.json().catch(() => ({}))) as { action?: string; serverId?: string };
   const action = String(body.action || '').toLowerCase();
   const serverId = body.serverId;
 
   if (!serverId || !['start', 'stop', 'reboot'].includes(action)) {
-    return Response.json({ ok: false, error: "serverId and valid action (start|stop|reboot) are required" }, { status: 400 });
+    return Response.json({ ok: false, error: "Please provide a valid server and action." }, { status: 400 });
   }
 
   const supabase = await createWorkerClient();
   const { data: server, error: serverErr } = await supabase
     .from('servers')
-    .select('id, vmid, node, location')
+    .select('id, vmid, node, location, owner_id')
     .eq('id', serverId)
     .maybeSingle();
 
-  if (serverErr) return Response.json({ ok: false, error: serverErr.message }, { status: 500 });
-  if (!server) return Response.json({ ok: false, error: "Server not found" }, { status: 404 });
+  if (serverErr) {
+    console.error("[VM Power] Server lookup failed:", serverErr.message);
+    return Response.json({ ok: false, error: "Unable to find your server. Please try again." }, { status: 500 });
+  }
+  if (!server) return Response.json({ ok: false, error: "Server not found." }, { status: 404 });
+
+  // Verify the user owns this server
+  if (!server.owner_id || server.owner_id !== user.id) {
+    return Response.json({ ok: false, error: "Not authorized" }, { status: 403 });
+  }
 
   const vmid = server.vmid as number | undefined;
   const node = server.node as string | undefined;
   const hostId = server.location as string | undefined;
-  if (!vmid || !node || !hostId) return Response.json({ ok: false, error: "Missing vmid/node/location" }, { status: 400 });
+  if (!vmid || !node || !hostId) {
+    console.error("[VM Power] Missing vmid/node/location for server:", serverId);
+    return Response.json({ ok: false, error: "Server configuration is incomplete. Please contact support." }, { status: 500 });
+  }
 
   const { data: host, error: hostErr } = await supabase
     .from('proxmox_hosts')
-    .select('id, host_url, allow_insecure_tls, token_id, token_secret, username, password')
+    .select('id, name, host_url, allow_insecure_tls, token_id, token_secret, username, password, node, storage, bridge, gateway_ip, dns_primary, dns_secondary')
     .eq('id', hostId)
     .maybeSingle();
 
-  if (hostErr) return Response.json({ ok: false, error: hostErr.message }, { status: 500 });
-  if (!host) return Response.json({ ok: false, error: "Host not found" }, { status: 404 });
+  if (hostErr) {
+    console.error("[VM Power] Host lookup failed:", hostErr.message);
+    return Response.json({ ok: false, error: "Unable to reach your server. Please try again." }, { status: 500 });
+  }
+  if (!host) return Response.json({ ok: false, error: "Server host is unavailable. Please contact support." }, { status: 404 });
 
-  const cfg = host as HostConfig;
-  const allowInsecure = !!cfg.allow_insecure_tls;
-  const dispatcher = allowInsecure ? new UndiciAgent({ connect: { rejectUnauthorized: false } }) : undefined;
-  const apiBase = cfg.host_url.startsWith('http:') ? cfg.host_url.replace(/^http:/, 'https:') : cfg.host_url;
+  const cfg = host as unknown as ProxmoxHost;
+  const dispatcher = getDispatcher(!!cfg.allow_insecure_tls);
 
   try {
-    const auth = await proxmoxAuthCookie(apiBase, dispatcher, cfg);
+    const auth = await proxmoxAuth(cfg, dispatcher);
 
-    let path = '';
-    if (action === 'start') path = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/start`;
-    else if (action === 'stop') path = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/shutdown`;
-    else if (action === 'reboot') path = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/reboot`;
+    let endpoint = '';
+    if (action === 'start') endpoint = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/start`;
+    else if (action === 'stop') endpoint = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/shutdown`;
+    else if (action === 'reboot') endpoint = `/api2/json/nodes/${encodeURIComponent(node)}/qemu/${vmid}/status/reboot`;
 
-    await postForm(apiBase, path, {}, auth, dispatcher);
+    await postForm(cfg, endpoint, {}, auth, dispatcher);
 
-    // Update status in DB
+    // Update status in DB — use the expected final status
+    // The Proxmox task runs async; realtime updates will sync actual status
     const newStatus = action === 'start' ? 'running' : action === 'stop' ? 'stopped' : 'running';
     await supabase.from('servers').update({ status: newStatus }).eq('id', serverId);
 
-    return Response.json({ ok: true, action, vmid, node, status: newStatus });
+    return Response.json({ ok: true, action, status: newStatus });
   } catch (e: unknown) {
-    return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    // Revert status on failure so UI doesn't show wrong state
+    try {
+      const { data: current } = await supabase.from('servers').select('status').eq('id', serverId).maybeSingle();
+      if (current && current.status !== 'provisioning') {
+        // Don't change status, it's already correct since the action failed
+      }
+    } catch {}
+    console.error("[VM Power] Action failed:", e instanceof Error ? e.message : e);
+    const actionLabel = action === 'start' ? 'start' : action === 'stop' ? 'shut down' : 'restart';
+    return Response.json({ ok: false, error: `Unable to ${actionLabel} your server. Please try again or contact support.` }, { status: 500 });
   }
 }

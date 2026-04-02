@@ -78,6 +78,7 @@ const EcommercePage = () => {
       { name: "workload", placeholder: "Tell us about your ecommerce needs...", type: "textarea" as const },
     ],
     buttonText: "Request Consultation",
+    consultationService: "Ecommerce Infrastructure",
   };
   return (
     <main className="bg-[#0E0F0F]">

@@ -2,29 +2,29 @@ import React from 'react';
 
 const cards = [
   {
-    title: '99.99% uptime Guarantee', 
-    desc: 'Ahura Cloud guarantees 99.99% uptime speeds! We offer everything from 1Gbps to 40Gbps internet speeds to boost your loading time!',
-    gradientFrom: '#5D23D3',
-    gradientTo: '#1085F2',
+    title: 'Personal Al Agents for Your Business ', 
+    desc: 'Sales Lead Qualification Agents, Customer Support Chat Agents, Internal Knowledge Assistants, DevOps Monitoring Agents',
+    gradientFrom: '#1089F8',
+    gradientTo: '#601FD1',
   },
   {
-    title: '24/7 Support',
-    desc: 'Any time, any day, you can rely on our 24/7 Technical Support Team to quickly and expertly handle any IT issues with your server.',
-    gradientFrom: '#5D23D3',
-    gradientTo: '#1085F2',
+    title: 'Train & Fine-Tune LLMs on Dedicated GPUs',
+    desc: 'Llama , Mistral,Falcon, Customer enterprise model',
+     gradientFrom: '#1089F8',
+    gradientTo: '#601FD1',
   },
   {
-    title: 'Diverse Server Hosting',
-    desc: 'Our diverse international servers are located in Los Angeles, Denver, Chicago, and Amsterdam to cover all your server needs!',
-    gradientFrom: '#5D23D3',
-    gradientTo: '#1085F2',
+    title: 'One-Click Agent Deployment',
+    desc: 'Pre-configured environments, Optimized GPU acceleration, Auto-scaling support, API & Webhook integrations',
+     gradientFrom: '#1089F8',
+    gradientTo: '#601FD1',
   },
 ];
 
 export default function FeatureSection() {
   return (
    <section className="select-none relative z-10 py-16 lg:py-24">
-      <div className="flex justify-center items-center flex-wrap py-10 bg-[#AFAFAF]">
+      <div className="flex justify-center items-center flex-wrap py-10 bg-[#CACACA]">
         {cards.map(({ title, desc, gradientFrom, gradientTo }, idx) => (
           <div
             key={idx}
@@ -32,7 +32,7 @@ export default function FeatureSection() {
           >
             {/* Skewed gradient panels */}
             <span
-              className="absolute top-[-10%] left-[50px] w-[73.333333%] h-[90%] rounded-lg transform skew-x-[15deg] transition-all duration-500 group-hover:skew-x-0 group-hover:left-[-25px] group-hover:w-[120%]"
+              className="absolute top-[-10%] left-[50px] w-[73.333333%] h-[90%] rounded-lg transform skew-x-[15deg] transition-all duration-500 group-hover:skew-x-0 group-hover:left-[-25px] group-hover:w-[100%]"
               style={{
                 background: `linear-gradient(315deg, ${gradientFrom}, ${gradientTo})`,
               }}

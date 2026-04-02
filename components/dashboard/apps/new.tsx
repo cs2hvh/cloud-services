@@ -21,9 +21,9 @@ import {
   Globe2,
   Layers3,
   Loader2,
-  Rocket,
   Settings2,
 } from "lucide-react";
+import Image from "next/image";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
@@ -37,7 +37,6 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Tables } from "@/lib/supabase/types";
 
@@ -208,28 +207,28 @@ const STEP_META = [
     name: "Provider",
     title: "Select source control provider",
     description: "Connect an approved Git provider and choose the account you want to deploy from.",
-    icon: Code,
+    iconSrc: "/dashboard icons/provider .png",
   },
   {
     id: 2,
     name: "Repository",
     title: "Choose repository and branch",
     description: "Select the repository, review available branches, and confirm the code source for deployment.",
-    icon: GitBranch,
+    iconSrc: "/dashboard icons/repository.png",
   },
   {
     id: 3,
     name: "Configure",
     title: "Define runtime and capacity",
     description: "Set the application name, framework profile, environment variables, and resource sizing.",
-    icon: Cpu,
+    iconSrc: "/dashboard icons/configure.png",
   },
   {
     id: 4,
     name: "Deploy",
     title: "Review and launch",
     description: "Confirm deployment settings, billing impact, and rollout preferences before provisioning begins.",
-    icon: Rocket,
+    iconSrc: "/dashboard icons/deploy.png",
   },
 ] as const;
 
@@ -767,7 +766,18 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to create application");
+        if (data.partial_success && data.app_id) {
+          toast.warning(
+            data.message ||
+              "Deployment started, but billing registration needs attention.",
+          );
+          router.push(`/dashboard/services/apps/${data.app_id}`);
+          return;
+        }
+
+        throw new Error(
+          data.message || data.error || "Failed to create application",
+        );
       }
 
       toast.success("Application deployment started successfully!");
@@ -863,7 +873,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
           <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
             {steps.map((step) => {
-              const Icon = step.icon;
               const isActive = currentStep === step.id;
               const isCompleted = currentStep > step.id;
 
@@ -884,21 +893,22 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         : "border-white/[0.06] bg-transparent"
                   } ${step.id < currentStep ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center border bg-white/[0.05] ${
-                        isActive
-                          ? "border-blue-400/30 text-blue-300"
-                          : "border-white/[0.10] text-white/78"
-                      }`}
-                    >
-                      {isCompleted ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
-                    </div>
+                  <div className="flex flex-col h-full">
                     <span className="text-xs font-semibold text-white/32">0{step.id}</span>
-                  </div>
-                  <div className="mt-3 text-sm font-semibold text-white">{step.name}</div>
-                  <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">
-                    {step.title}
+                    <div className="mt-2 flex items-center justify-between gap-2 pt-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-semibold text-white">{step.name}</div>
+                        <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-white/40">{step.title}</div>
+                      </div>
+                      <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+                        <Image src={step.iconSrc} alt={step.name} width={44} height={44} className="h-11 w-11 object-contain" />
+                        {isCompleted && (
+                          <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-emerald-500">
+                            <svg className="h-2 w-2 text-white" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </button>
               );
@@ -2012,39 +2022,44 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             <Card className={`${panelClassName} sticky top-6`}>
               <CardHeader className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                  Deployment Summary
+                  Summary
                 </p>
-                <CardTitle className="mt-2 text-xl font-semibold tracking-tight text-white">
-                  Current rollout profile
+                <CardTitle className="mt-1.5 text-lg font-semibold text-white">
+                  Deployment Configuration
                 </CardTitle>
               </CardHeader>
-              <CardContent className="px-6 py-6 sm:px-7 sm:py-7">
-                <SummaryRow label="Step" value={activeStepMeta.name} />
-                <SummaryRow label="Git provider" value={selectedProviderData?.name || "Pending"} />
-                <SummaryRow label="Repository" value={selectedRepoData?.name || "Pending"} />
-                <SummaryRow label="Application name" value={appName || "Pending"} />
-                <SummaryRow
-                  label="Deploy branch"
-                  value={selectedBranch || selectedRepoData?.defaultBranch || "Pending"}
-                />
-                <SummaryRow label="Framework" value={framework || "Pending"} />
-                <SummaryRow
-                  label="Project"
-                  value={
-                    selectedProject && selectedProject !== "none"
-                      ? projects.find((project) => project.id === selectedProject)?.name || "Assigned"
-                      : "Not attached"
-                  }
-                />
-                <SummaryRow
-                  label="Instance"
-                  value={`${size.charAt(0).toUpperCase() + size.slice(1)} / ${selectedSizeConfig.cpu} CPU / ${selectedSizeConfig.ram} RAM`}
-                />
-                <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
+              <CardContent className="px-6 py-5 sm:px-7">
+                {(selectedProviderData || selectedRepoData || appName || selectedBranch || framework) ? (
+                  <div className="divide-y divide-white/[0.05]">
+                    {selectedProviderData && (
+                      <SummaryRow label="Git provider" value={selectedProviderData.name} />
+                    )}
+                    {selectedRepoData && (
+                      <SummaryRow label="Repository" value={selectedRepoData.name} />
+                    )}
+                    {(selectedBranch || selectedRepoData?.defaultBranch) && (
+                      <SummaryRow label="Deploy branch" value={selectedBranch || selectedRepoData?.defaultBranch} />
+                    )}
+                    {appName && (
+                      <SummaryRow label="Application name" value={appName} />
+                    )}
+                    {framework && (
+                      <SummaryRow label="Framework" value={framework} />
+                    )}
+                    {selectedProject && selectedProject !== "none" && (
+                      <SummaryRow label="Project" value={projects.find((p) => p.id === selectedProject)?.name || "Assigned"} />
+                    )}
+                    <SummaryRow
+                      label="Instance"
+                      value={`${size.charAt(0).toUpperCase() + size.slice(1)} / ${selectedSizeConfig.cpu} CPU / ${selectedSizeConfig.ram} RAM`}
+                    />
+                    <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
+                  </div>
+                ) : null}
 
                 <Separator className="my-4 bg-white/[0.08]" />
 
-                <div className="rounded-xl border border-blue-400/20 bg-blue-500/10 p-4">
+                <div className="rounded border border-blue-400/20 bg-blue-500/10 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
                     Estimated cost
                   </p>
@@ -2085,4 +2100,3 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 };
 
 export default AppDeploymentSelect;
-

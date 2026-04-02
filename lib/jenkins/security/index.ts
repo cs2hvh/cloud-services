@@ -778,6 +778,44 @@ ${generateLoggingHelpers()}
                     echo "[INFO] INFO: ADD instruction found - COPY is preferred unless extracting archives"
                   fi
                   
+                  # Check for secret exposure patterns in RUN instructions
+                  echo ""
+                  echo "Checking for secret exposure patterns..."
+                  SECRET_EXPOSURE=0
+                  
+                  # Detect printenv / env dump in RUN commands
+                  if grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile may dump environment variables in build output"
+                    grep -nEi "^RUN.*(printenv|env|set)[[:space:]]*($|>|[|;])" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  # Detect echo $VAR patterns
+                  if grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile echoes environment variables (may leak secrets)"
+                    grep -nE "^RUN.*echo.*[$][{]?[A-Z_]+" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  # Detect writing env to files
+                  if grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile > /dev/null 2>&1; then
+                    echo "[WARN] WARNING: Dockerfile may write env vars to files (persists in image layer)"
+                    grep -nEi "^RUN.*(printenv|env|echo.*[$]).*>" Dockerfile | while IFS= read -r line; do
+                      echo "  -> $line"
+                    done
+                    SECRET_EXPOSURE=1
+                  fi
+                  
+                  if [ "$SECRET_EXPOSURE" = "0" ]; then
+                    echo "[PASS] No secret exposure patterns detected"
+                  else
+                    log_security "WARN" "$STAGE_ID" "Potential secret exposure patterns found in Dockerfile"
+                  fi
+                  
                   echo ""
                   log_security "INFO" "$STAGE_ID" "Dockerfile lint completed"
                   echo "[PASS] SECURITY: Dockerfile lint completed"
@@ -862,7 +900,7 @@ ${generateLoggingHelpers()}
                 
                 # Check if baseline file exists (for excluding known false positives)
                 if [ -f ".gitleaks-baseline.json" ]; then
-                  echo "✓ Using .gitleaks-baseline.json to exclude known false positives"
+                  echo "[OK] Using .gitleaks-baseline.json to exclude known false positives"
                   BASELINE_ARG="--baseline-path .gitleaks-baseline.json"
                 else
                   BASELINE_ARG=""
@@ -898,7 +936,7 @@ ${generateLoggingHelpers()}
                   echo ""
                   echo "Or create baseline: gitleaks detect --report-path .gitleaks-baseline.json"
                   echo ""
-                  echo "✓ BUILD CONTINUING (secrets are non-blocking for better user experience)"
+                  echo "[OK] BUILD CONTINUING (secrets are non-blocking for better user experience)"
                 else
                   log_security "INFO" "$STAGE_ID" "No secrets detected"
                   echo "[PASS] SECURITY: No secrets detected"
@@ -1379,6 +1417,4 @@ export function getContainerUsageReport() {
     recommendations,
   };
 }
-
-
 

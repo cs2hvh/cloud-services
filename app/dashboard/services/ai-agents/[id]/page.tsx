@@ -2,7 +2,6 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Image from 'next/image';
 import {
   Select,
   SelectContent,
@@ -35,8 +35,6 @@ import {
   Trash2,
   ArrowLeft,
   MessageSquare,
-  Settings,
-  Code,
 } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -350,111 +348,99 @@ export default function AgentDetailsPage({
   // const selectedModel = platformModels.find((m) => m.id === model);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard/services/ai-agents">
-              <ArrowLeft className="h-5 w-5" />
+      <div className="glass-panel overflow-hidden">
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link href="/dashboard/services/ai-agents" className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to agents
             </Link>
-          </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-white">{agent.name}</h1>
-              <Badge
-                variant={isActive ? 'default' : 'secondary'}
-                className={
-                  isActive
-                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
-                    : 'bg-slate-500/20 text-slate-400 border-slate-500/30'
-                }
-              >
+            <h1 className="mt-4 flex flex-wrap items-center gap-3 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              {agent.name}
+              <Badge className={isActive ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300' : 'border-white/10 bg-white/[0.05] text-white/60'}>
                 {isActive ? 'Active' : 'Disabled'}
               </Badge>
-            </div>
-            <p className="text-slate-400 text-sm">{agent.description || 'No description'}</p>
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-white/50">{agent.description || 'No description'}</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={copyEndpoint}>
-            <Copy className="h-4 w-4 mr-2" />
-            Copy Endpoint
-          </Button>
-          <Button asChild>
-            <Link href={`/dashboard/services/ai-agents/${id}/playground`}>
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Playground
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" onClick={copyEndpoint} className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
+              <Copy className="h-4 w-4 mr-2" />
+              Copy Endpoint
+            </Button>
+            <Button asChild className="border border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500">
+              <Link href={`/dashboard/services/ai-agents/${id}/playground`}>
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Playground
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Stats Cards */}
       {stats && (
         <div className="grid gap-4 md:grid-cols-4">
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Messages</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-white">{stats.total_messages}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Conversations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-white">{stats.total_conversations}</p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Tokens Used</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-white">
-                {(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-400">Total Cost</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-white">${stats.total_cost.toFixed(4)}</p>
-            </CardContent>
-          </Card>
+          <div className="glass-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Messages</p>
+                <p className="mt-3 text-2xl font-semibold text-white">{stats.total_messages}</p>
+              </div>
+              <Image src="/dashboard icons/messages .png" alt="Messages" width={32} height={32} className="shrink-0 opacity-80" />
+            </div>
+          </div>
+          <div className="glass-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Conversations</p>
+                <p className="mt-3 text-2xl font-semibold text-white">{stats.total_conversations}</p>
+              </div>
+              <Image src="/dashboard icons/agents .png" alt="Conversations" width={32} height={32} className="shrink-0 opacity-80" />
+            </div>
+          </div>
+          <div className="glass-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Tokens Used</p>
+                <p className="mt-3 text-2xl font-semibold text-white">{(stats.total_input_tokens + stats.total_output_tokens).toLocaleString()}</p>
+              </div>
+              <Image src="/dashboard icons/model.png" alt="Tokens" width={32} height={32} className="shrink-0 opacity-80" />
+            </div>
+          </div>
+          <div className="glass-panel p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Total Cost</p>
+                <p className="mt-3 text-2xl font-semibold text-white">${stats.total_cost.toFixed(4)}</p>
+              </div>
+              <Image src="/dashboard icons/agent api keys .png" alt="Cost" width={32} height={32} className="shrink-0 opacity-80" />
+            </div>
+          </div>
         </div>
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue="settings" className="space-y-6">
-        <TabsList className="bg-slate-900/50 border-slate-800">
-          <TabsTrigger value="settings">
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </TabsTrigger>
-          <TabsTrigger value="api">
-            <Code className="h-4 w-4 mr-2" />
-            API
-          </TabsTrigger>
+      <Tabs defaultValue="settings" className="space-y-5">
+        <TabsList className="grid grid-cols-2 border border-white/[0.08] bg-white/[0.04] p-1 sm:w-fit">
+          <TabsTrigger value="settings" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">Settings</TabsTrigger>
+          <TabsTrigger value="api" className="text-white/60 data-[state=active]:bg-blue-500/90 data-[state=active]:text-white">API</TabsTrigger>
         </TabsList>
 
         {/* Settings Tab */}
-        <TabsContent value="settings" className="space-y-6">
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>Basic Settings</CardTitle>
-              <CardDescription>Configure your agent&apos;s basic information</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <TabsContent value="settings" className="space-y-5">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Basic Settings</h3>
+              <p className="mt-1 text-sm text-white/45">Configure your agent&apos;s basic information</p>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Agent Status</Label>
-                  <p className="text-sm text-slate-400">Enable or disable the agent endpoint</p>
+                  <p className="text-sm text-white/45">Enable or disable the agent endpoint</p>
                 </div>
                 <Switch checked={isActive} onCheckedChange={setIsActive} />
               </div>
@@ -465,7 +451,7 @@ export default function AgentDetailsPage({
                   id="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="bg-slate-800 border-slate-700"
+                  className="bg-white/[0.04] border-white/[0.1] text-white"
                 />
               </div>
 
@@ -475,23 +461,23 @@ export default function AgentDetailsPage({
                   id="description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="bg-slate-800 border-slate-700"
+                  className="bg-white/[0.04] border-white/[0.1] text-white"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>Model Configuration</CardTitle>
-              <CardDescription>Choose the AI model and parameters</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Model Configuration</h3>
+              <p className="mt-1 text-sm text-white/45">Choose the AI model and parameters</p>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               {/* Platform Billing Toggle */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-800/50 border border-slate-700">
+              <div className="flex items-center justify-between border border-white/[0.08] bg-white/[0.03] p-3">
                 <div>
                   <p className="font-medium text-white">Use Platform Models</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-white/45">
                     Pay per token usage. No API key needed.
                   </p>
                 </div>
@@ -518,7 +504,7 @@ export default function AgentDetailsPage({
                 <div className="space-y-2">
                   <Label>Model</Label>
                   <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger className="bg-slate-800 border-slate-700">
+                    <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                       <SelectValue placeholder="Select a model" />
                     </SelectTrigger>
                     <SelectContent>
@@ -536,7 +522,7 @@ export default function AgentDetailsPage({
                     </SelectContent>
                   </Select>
                   {model && platformModels.find(m => m.id === model) && (
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-white/40">
                       Pricing: {platformModels.find(m => m.id === model)?.pricing.inputFormatted} input / {platformModels.find(m => m.id === model)?.pricing.outputFormatted} output
                     </p>
                   )}
@@ -552,7 +538,7 @@ export default function AgentDetailsPage({
                       setModelKeyId(v || null);
                       setModel(''); // Reset model when key changes
                     }}>
-                      <SelectTrigger className="bg-slate-800 border-slate-700">
+                      <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                         <SelectValue placeholder="Select an API key" />
                       </SelectTrigger>
                       <SelectContent>
@@ -563,7 +549,7 @@ export default function AgentDetailsPage({
                         ))}
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-white/40">
                       <Link href="/dashboard/services/ai-agents/settings" className="text-blue-400 hover:underline">
                         Manage API Keys
                       </Link>
@@ -605,7 +591,7 @@ export default function AgentDetailsPage({
                       <div className="space-y-2">
                         <Label>Model</Label>
                         <Select value={model} onValueChange={setModel}>
-                          <SelectTrigger className="bg-slate-800 border-slate-700">
+                          <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                             <SelectValue placeholder="Select a model" />
                           </SelectTrigger>
                           <SelectContent>
@@ -632,14 +618,14 @@ export default function AgentDetailsPage({
                     step="0.1"
                     value={temperature}
                     onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                    className="bg-slate-800"
+                    className="bg-white/[0.04]"
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Max Tokens</Label>
                   <Select value={maxTokens.toString()} onValueChange={(v) => setMaxTokens(parseInt(v))}>
-                    <SelectTrigger className="bg-slate-800 border-slate-700">
+                    <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -652,33 +638,33 @@ export default function AgentDetailsPage({
                   </Select>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>System Prompt</CardTitle>
-              <CardDescription>Define how your agent should behave</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">System Prompt</h3>
+              <p className="mt-1 text-sm text-white/45">Define how your agent should behave</p>
+            </div>
+            <div className="p-5 sm:p-6">
               <Textarea
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                className="bg-slate-800 border-slate-700 min-h-[200px] font-mono text-sm"
+                className="bg-white/[0.04] border-white/[0.1] text-white min-h-[200px] font-mono text-sm"
               />
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>Knowledge Base (RAG)</CardTitle>
-              <CardDescription>Enable RAG to use documents from a knowledge base for context</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Knowledge Base (RAG)</h3>
+              <p className="mt-1 text-sm text-white/45">Enable RAG to use documents from a knowledge base for context</p>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Enable RAG</Label>
-                  <p className="text-sm text-slate-400">Search knowledge base for relevant context</p>
+                  <p className="text-sm text-white/45">Search knowledge base for relevant context</p>
                 </div>
                 <Switch 
                   checked={ragEnabled} 
@@ -696,7 +682,7 @@ export default function AgentDetailsPage({
                     if (v === 'none') setRagEnabled(false);
                   }}
                 >
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                     <SelectValue placeholder="Select a knowledge base" />
                   </SelectTrigger>
                   <SelectContent>
@@ -714,20 +700,20 @@ export default function AgentDetailsPage({
                   </p>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Access Control */}
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>API Access Control</CardTitle>
-              <CardDescription>Configure who can access your agent&apos;s API endpoint</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">API Access Control</h3>
+              <p className="mt-1 text-sm text-white/45">Configure who can access your agent&apos;s API endpoint</p>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Public Access</Label>
-                  <p className="text-sm text-slate-400">Allow anyone to use this agent without authentication</p>
+                  <p className="text-sm text-white/45">Allow anyone to use this agent without authentication</p>
                 </div>
                 <Switch checked={isPublic} onCheckedChange={setIsPublic} />
               </div>
@@ -735,7 +721,7 @@ export default function AgentDetailsPage({
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Require API Key</Label>
-                  <p className="text-sm text-slate-400">Require x-api-key header for requests</p>
+                  <p className="text-sm text-white/45">Require x-api-key header for requests</p>
                 </div>
                 <Switch 
                   checked={requireAuth} 
@@ -745,9 +731,9 @@ export default function AgentDetailsPage({
               </div>
               
               {!isPublic && requireAuth && (
-                <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                <div className="border border-blue-500/20 bg-blue-500/10 p-3">
                   <p className="text-sm text-blue-400">
-                    💡 API keys can be generated in <Link href="/dashboard/services/ai-agents/settings" className="underline">AI Agents Settings</Link>
+                    API keys can be generated in <Link href="/dashboard/services/ai-agents/settings" className="underline">AI Agents Settings</Link>
                   </p>
                 </div>
               )}
@@ -758,15 +744,15 @@ export default function AgentDetailsPage({
                   value={allowedOrigins}
                   onChange={(e) => setAllowedOrigins(e.target.value)}
                   placeholder="https://example.com, https://app.example.com"
-                  className="bg-slate-800 border-slate-700"
+                  className="bg-white/[0.04] border-white/[0.1] text-white"
                 />
-                <p className="text-xs text-slate-500">Comma-separated list. Leave empty to allow all origins. Use * to allow any.</p>
+                <p className="text-xs text-white/40">Comma-separated list. Leave empty to allow all origins. Use * to allow any.</p>
               </div>
 
               <div className="space-y-2">
                 <Label>Rate Limit (requests/minute)</Label>
                 <Select value={rateLimitRpm.toString()} onValueChange={(v) => setRateLimitRpm(parseInt(v))}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white/[0.04] border-white/[0.1] text-white">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -778,8 +764,8 @@ export default function AgentDetailsPage({
                   </SelectContent>
                 </Select>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
           {/* Save Button */}
           <div className="flex items-center justify-between">
@@ -828,15 +814,15 @@ export default function AgentDetailsPage({
         </TabsContent>
 
         {/* API Tab */}
-        <TabsContent value="api" className="space-y-6">
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>API Endpoint</CardTitle>
-              <CardDescription>Use this endpoint to chat with your agent</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 rounded-lg bg-slate-800 font-mono text-sm">
-                <p className="text-slate-400">POST</p>
+        <TabsContent value="api" className="space-y-5">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">API Endpoint</h3>
+              <p className="mt-1 text-sm text-white/45">Use this endpoint to chat with your agent</p>
+            </div>
+            <div className="space-y-4 p-5 sm:p-6">
+              <div className="border border-white/[0.08] bg-white/[0.03] p-4 font-mono text-sm">
+                <p className="text-white/40">POST</p>
                 <p className="text-white break-all">
                   {typeof window !== 'undefined'
                     ? `${window.location.origin}/api/v1/agents/${agent.endpoint_id}/chat`
@@ -844,19 +830,19 @@ export default function AgentDetailsPage({
                 </p>
               </div>
 
-              <Button variant="outline" onClick={copyEndpoint}>
+              <Button variant="outline" onClick={copyEndpoint} className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]">
                 <Copy className="h-4 w-4 mr-2" />
                 Copy Endpoint URL
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>Request Example</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="p-4 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Request Example</h3>
+            </div>
+            <div className="p-5 sm:p-6">
+              <pre className="border border-white/[0.08] bg-white/[0.03] p-4 text-sm overflow-x-auto">
                 <code className="text-green-400">
                   {`curl -X POST \\
   "${typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/agents/${agent.endpoint_id}/chat" \\
@@ -867,15 +853,15 @@ export default function AgentDetailsPage({
   }'`}
                 </code>
               </pre>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardHeader>
-              <CardTitle>Response Format</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="p-4 rounded-lg bg-slate-800 text-sm overflow-x-auto">
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Response Format</h3>
+            </div>
+            <div className="p-5 sm:p-6">
+              <pre className="border border-white/[0.08] bg-white/[0.03] p-4 text-sm overflow-x-auto">
                 <code className="text-blue-400">
                   {`{
   "response": "Hello! I'm here to help you with...",
@@ -887,8 +873,8 @@ export default function AgentDetailsPage({
 }`}
                 </code>
               </pre>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

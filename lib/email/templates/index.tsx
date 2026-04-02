@@ -7,6 +7,7 @@ import { ForgotPasswordEmailTemplate } from "@/lib/email/templates/auth/forgot-p
 import { NewLoginAlertEmailTemplate } from "@/lib/email/templates/auth/new-login-alert";
 import { OtpEmailTemplate } from "@/lib/email/templates/auth/otp";
 import { SuspiciousActivityEmailTemplate } from "@/lib/email/templates/auth/suspicious-activity";
+import { ConsultationRequestEmailTemplate } from "@/lib/email/templates/alerts/consultation-request";
 import { SystemAlertEmailTemplate } from "@/lib/email/templates/alerts/system-alert";
 import type { EmailTemplateRegistry } from "@/lib/email/types";
 
@@ -108,6 +109,26 @@ export const emailTemplates: EmailTemplateRegistry = {
     tags: ({ severity }) => [
       { name: "category", value: "alerts" },
       { name: "severity", value: severity },
+    ],
+  },
+  consultationRequest: {
+    subject: ({ serviceName }) =>
+      `AhuraSense | New consultation request for ${serviceName}`,
+    previewText: ({ requesterName, serviceName }) =>
+      `${requesterName} requested consultation for ${serviceName}.`,
+    render: (data) => <ConsultationRequestEmailTemplate {...data} />,
+    text: ({ requesterName, requesterEmail, serviceName, messageBody, submittedAt }) =>
+      [
+        "New consultation request",
+        `Service: ${serviceName}`,
+        `Name: ${requesterName}`,
+        `Email: ${requesterEmail}`,
+        `Submitted At: ${submittedAt}`,
+        `Message: ${messageBody}`,
+      ].join("\n"),
+    tags: ({ serviceName }) => [
+      { name: "category", value: "consultation" },
+      { name: "service", value: serviceName.toLowerCase().replace(/\s+/g, "-") },
     ],
   },
 };

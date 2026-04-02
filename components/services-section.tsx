@@ -6,14 +6,14 @@ import { Container } from "@/components/ui/container";
 
 const figmaServices = [
   {
-    logoSrc: "/images/compute-page/compute-hero.png",
+    logoSrc: "/images/main-page/compute.png",
     logoAlt: "Compute",
     title: "Compute",
     description:
       "Elastic virtual machines across 12 global regions. Scale from a single core to hundreds of vCPUs with predictable pricing.",
   },
   {
-    logoSrc: "/images/hero/server-stack.png",
+    logoSrc: "/images/main-page/gpu aniamtion resized.png",
     logoAlt: "GPU Instances",
     title: "GPU Instances",
     description:
@@ -41,14 +41,14 @@ const figmaServices = [
       "Deploy autonomous AI agents that monitor, scale, and optimize your infrastructure — reducing manual ops and response times.",
   },
   {
-    logoSrc: "/images/Features/kubernetes.svg",
+    logoSrc: "/images/main-page/kubernetes.png",
     logoAlt: "Kubernetes",
     title: "Kubernetes",
     description:
       "Production-ready K8s clusters in minutes. Auto-scaling, service mesh, and integrated CI/CD — without the operational overhead.",
   },
   {
-    logoSrc: "/images/Features/object-space.svg",
+    logoSrc: "/images/main-page/object-space.png",
     logoAlt: "Object Storage",
     title: "Object Storage",
     description:

@@ -76,6 +76,26 @@ function mapSupabaseError(error: { code?: string; message: string }): ServiceFai
 }
 
 export class ProjectService {
+  static async ensureProjectOwnedByUser(input: {
+    projectId: string;
+    userId: string;
+  }): Promise<ServiceResult<{ id: string }>> {
+    const project = await Projects.get_by_id(input.projectId);
+    if (!project) {
+      return { success: false, error: "Project not found", errorCode: "NOT_FOUND" };
+    }
+
+    if (project.owner !== input.userId) {
+      return {
+        success: false,
+        error: "You do not have permission to create resources in this project",
+        errorCode: "FORBIDDEN",
+      };
+    }
+
+    return { success: true, data: { id: project.id } };
+  }
+
   static async listProjects(userId: string): Promise<ServiceResult<ProjectApiModel[]>> {
     const supabase = await createServiceClient();
     const { data, error } = await supabase
@@ -221,6 +241,23 @@ export class ProjectService {
     }
 
     const supabase = await createServiceClient();
+    const { count: ownedCount, error: countError } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", input.userId);
+
+    if (countError) {
+      return mapSupabaseError(countError);
+    }
+
+    if ((ownedCount ?? 0) <= 1) {
+      return {
+        success: false,
+        error: "You must keep at least one project. Create another project before deleting this one.",
+        errorCode: "LAST_PROJECT",
+      };
+    }
+
     const { error } = await supabase.from("projects").delete().eq("id", input.projectId);
 
     if (error) {

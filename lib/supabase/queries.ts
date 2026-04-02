@@ -66,6 +66,37 @@ const decryptEnvValue = (encryptedValue: string): string => {
   }
 };
 
+const DEFAULT_PROJECT_NAME = "My First Project";
+const DEFAULT_PROJECT_DESCRIPTION = "Default project created automatically.";
+
+async function ensureDefaultProjectForUser(userId: string): Promise<void> {
+  try {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", userId);
+
+    if (error || (count ?? 0) > 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("projects").insert({
+      name: DEFAULT_PROJECT_NAME,
+      description: DEFAULT_PROJECT_DESCRIPTION,
+      default_project: true,
+      owner: userId,
+      users: [userId],
+    });
+
+    if (insertError) {
+      console.log(`[Supabase] Error while creating default project: ${insertError.message}`);
+    }
+  } catch (err) {
+    console.log(`[Supabase] Error while ensuring default project: ${err}`);
+  }
+}
+
 
 export const Users = {
   // Get a user by ID
@@ -401,7 +432,26 @@ export const Projects = {
         );
         return [];
       }
-      return data || [];
+
+      if (data && data.length > 0) {
+        return data;
+      }
+
+      await ensureDefaultProjectForUser(userId);
+
+      const { data: refreshedData, error: refreshError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("owner", userId);
+
+      if (refreshError) {
+        console.log(
+          `[Supabase] Error............. while refreshing projects by userId: ${refreshError.message}`,
+        );
+        return [];
+      }
+
+      return refreshedData || [];
     } catch (err) {
       console.log(`[Supabase] Error while getting projects by userId: ${err}`);
       return [];
@@ -3037,7 +3087,7 @@ export const Platform_App_Deployments = {
     commit_sha?: string | null;
     image_tag?: string | null;
     image_digest?: string | null;
-    status: 'success' | 'failed';
+    status: 'success' | 'failed' | 'building';
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     failure_reason?: string | null;
   }) => {
@@ -3125,6 +3175,38 @@ export const Platform_App_Deployments = {
 
       const previous = (data || [])[0] || null;
       return { success: true, data: previous };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  update_status: async (
+    appId: string,
+    buildNumber: number,
+    updates: {
+      status: 'success' | 'failed';
+      image_tag?: string | null;
+      image_digest?: string | null;
+      failure_reason?: string | null;
+    }
+  ) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .update({
+          status: updates.status,
+          ...(updates.image_tag !== undefined && { image_tag: updates.image_tag }),
+          ...(updates.image_digest !== undefined && { image_digest: updates.image_digest }),
+          ...(updates.failure_reason !== undefined && { failure_reason: updates.failure_reason }),
+        })
+        .eq('app_id', appId)
+        .eq('build_number', buildNumber)
+        .select('*')
+        .single();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data };
     } catch (err) {
       return { success: false, error: String(err) };
     }

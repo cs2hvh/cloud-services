@@ -1,270 +1,395 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Server, Plus, Power, RotateCw, Play, Copy } from "lucide-react";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { toast } from "sonner";
+import { useEffect, useState, useRef, useCallback } from 'react';
+import { motion } from 'motion/react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  ChevronRight,
+  Copy,
+  Cpu,
+  HardDrive,
+  Loader2,
+  Plus,
+  RotateCw,
+  Server,
+  ShieldCheck,
+  XCircle,
+  Zap,
+} from 'lucide-react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+
+interface ProvisioningInfo {
+  stage: string;
+  progress: number;
+  message: string;
+  started_at?: string;
+  completed_at?: string;
+  failed_at?: string;
+}
 
 interface ServerData {
   id: number;
   name: string;
-  vmid: number;
-  node: string;
   ip: string;
   os: string;
-  location: string;
   cpu_cores: number;
   memory_mb: number;
   disk_gb: number;
   status: string;
   hourly_cost: number;
   created_at: string;
+  details?: { provisioning?: ProvisioningInfo } | null;
+}
+
+function statusColor(status: string) {
+  switch (status) {
+    case 'running':
+      return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20';
+    case 'stopped':
+      return 'bg-white/[0.06] text-white/50 border-white/10';
+    case 'provisioning':
+      return 'bg-blue-500/15 text-blue-400 border-blue-500/20';
+    case 'suspended':
+      return 'bg-amber-500/15 text-amber-400 border-amber-500/20';
+    default:
+      return 'bg-red-500/15 text-red-400 border-red-500/20';
+  }
 }
 
 export default function VPSPage() {
   const [servers, setServers] = useState<ServerData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actingId, setActingId] = useState<number | null>(null);
   const supabase = createClient();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
-  console.log('[VPS Page] Component mounted');
-
-  const loadServers = async () => {
+  const loadServers = useCallback(async () => {
     setLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
-      console.log('[VPS Page] Current user:', userData.user?.id, userData.user?.email);
-
       if (!userData.user) {
         setServers([]);
         return;
       }
+      userIdRef.current = userData.user.id;
 
       const { data, error } = await supabase
-        .from("servers")
-        .select("*")
-        .eq("owner_id", userData.user.id)
-        .order("created_at", { ascending: false });
+        .from('servers')
+        .select('id, name, ip, os, cpu_cores, memory_mb, disk_gb, status, hourly_cost, created_at, details')
+        .eq('owner_id', userData.user.id)
+        .order('created_at', { ascending: false });
 
-      console.log('[VPS Page] Servers query result:', { data, error, userId: userData.user.id });
-
-      if (error) {
-        console.error('[VPS Page] Query error:', error);
-        throw error;
-      }
-
+      if (error) throw error;
       setServers(data || []);
-      console.log('[VPS Page] Loaded servers:', data?.length || 0);
     } catch (err) {
-      console.error("Failed to load servers:", err);
-      toast.error("Failed to load servers");
+      console.error('[loadServers]', err);
+      toast.error('Unable to load your servers. Please refresh the page.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
-    console.log('[VPS Page] useEffect running, calling loadServers');
-    try {
-      loadServers().catch(err => {
-        console.error('[VPS Page] loadServers error in useEffect:', err);
-      });
-    } catch (err) {
-      console.error('[VPS Page] useEffect error:', err);
-    }
+    loadServers().catch(() => {});
+
+    const channel = supabase
+      .channel('servers-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'servers' },
+        (payload) => {
+          const newRecord = payload.new as ServerData | undefined;
+          const oldRecord = payload.old as { id?: number } | undefined;
+
+          setServers((prev) => {
+            if (payload.eventType === 'INSERT' && newRecord) {
+              if (prev.some((s) => s.id === newRecord.id)) {
+                return prev.map((s) => (s.id === newRecord.id ? newRecord : s));
+              }
+              return [newRecord, ...prev];
+            }
+            if (payload.eventType === 'UPDATE' && newRecord) {
+              return prev.map((s) => (s.id === newRecord.id ? newRecord : s));
+            }
+            if (payload.eventType === 'DELETE' && oldRecord?.id) {
+              return prev.filter((s) => s.id !== oldRecord.id);
+            }
+            return prev;
+          });
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+    return () => { channel.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const powerAction = async (serverId: number, action: "start" | "stop" | "reboot") => {
-    setActingId(serverId);
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const res = await fetch("/api/services/compute/vms/power", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: JSON.stringify({ serverId, action }),
-      });
-
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error || "Action failed");
-      }
-
-      toast.success(`Server ${action} successful`);
-      await loadServers();
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : `Failed to ${action} server`);
-    } finally {
-      setActingId(null);
-    }
-  };
-
-  const copyToClipboard = async (text: string, label: string) => {
+  const copyToClipboard = async (e: React.MouseEvent, text: string, label: string) => {
+    e.preventDefault();
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(text);
-      toast.success(`${label} copied to clipboard`);
+      toast.success(`${label} copied`);
     } catch {
       toast.error(`Failed to copy ${label}`);
     }
   };
 
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Virtual Private Servers</h1>
-          <p className="text-slate-400 mt-2">
-            Manage your VPS instances
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={loadServers} variant="outline" disabled={loading}>
-            <RotateCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard/services/compute/vps/new">
-              <Plus className="h-4 w-4 mr-2" />
-              Create New VPS
-            </Link>
-          </Button>
-        </div>
-      </div>
+  const runningCount = servers.filter((s) => s.status === 'running').length;
+  const provisioningCount = servers.filter((s) => s.status === 'provisioning').length;
+  const estimatedMonthlySpend = servers.reduce((t, s) => t + (s.hourly_cost || 0) * 730, 0);
 
-      {/* VPS Instances */}
-      <div className="space-y-4">
+  return (
+    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28 }}
+        className="mb-6"
+      >
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">
+              Compute Services
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                Virtual Private Servers
+              </h1>
+              <Badge className="border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+                <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                Live
+              </Badge>
+            </div>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">
+              Deploy, monitor, and manage your fleet of virtual machines.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={loadServers}
+              variant="outline"
+              disabled={loading}
+              className="border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]"
+            >
+              <RotateCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+            <Button asChild className="border border-cyan-400/25 bg-cyan-500/90 text-slate-950 hover:bg-cyan-400">
+              <Link href="/dashboard/services/compute/vps/new">
+                <Plus className="mr-2 h-4 w-4" />
+                Create VPS
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.04, duration: 0.24 }}
+        className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4"
+      >
+        {[
+          { label: 'Fleet Size', value: servers.length, sub: 'Total instances', icon: Server, color: 'text-cyan-300' },
+          { label: 'Healthy', value: runningCount, sub: 'Currently running', icon: ShieldCheck, color: 'text-emerald-300' },
+          { label: 'Provisioning', value: provisioningCount, sub: 'In progress', icon: Activity, color: 'text-blue-300' },
+          { label: 'Est. Monthly', value: `$${estimatedMonthlySpend.toFixed(2)}`, sub: 'Hourly pricing', icon: Zap, color: 'text-white/60' },
+        ].map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div key={stat.label} className="glass-panel p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">{stat.label}</p>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight text-white tabular-nums">{stat.value}</p>
+                  <p className="mt-1 text-sm text-white/45">{stat.sub}</p>
+                </div>
+                <div className={`flex h-10 w-10 items-center justify-center border border-white/[0.08] bg-white/[0.06] ${stat.color}`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </motion.div>
+
+      {/* Server list */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08, duration: 0.24 }}
+      >
         {loading ? (
-          <Card className="bg-slate-900/30 border-slate-800">
-            <CardContent className="flex items-center justify-center py-12">
-              <div className="text-slate-400">Loading servers...</div>
-            </CardContent>
-          </Card>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="glass-panel h-[88px] animate-pulse" style={{ animationDelay: `${i * 100}ms` }} />
+            ))}
+          </div>
         ) : servers.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4">
-            {servers.map((server) => {
-              const stopped = server.status?.toLowerCase() === 'stopped';
-              const isActing = actingId === server.id;
+          <div className="glass-panel overflow-hidden">
+            {/* Table header */}
+            <div className="hidden border-b border-white/[0.06] px-5 py-3 sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_40px] sm:gap-4">
+              {['Server', 'IP Address', 'Configuration', 'OS', 'Monthly'].map((h) => (
+                <div key={h} className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/30">{h}</div>
+              ))}
+              <div />
+            </div>
+
+            {/* Rows */}
+            {servers.map((server, i) => {
+              const isProvisioning = server.status === 'provisioning';
+              const isFailed = server.status === 'failed' || server.status === 'error';
+              const isRunning = server.status === 'running';
+              const provisioning = server.details?.provisioning;
+              const progress = provisioning?.progress || 10;
+              const monthly = ((server.hourly_cost || 0) * 730).toFixed(2);
 
               return (
-                <Card key={server.id} className="bg-slate-900/50 border-slate-800">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-3">
-                          <h3 className="text-xl font-semibold text-white">{server.name}</h3>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            server.status === 'running' ? 'bg-green-500/20 text-green-400' :
-                            server.status === 'stopped' ? 'bg-gray-500/20 text-gray-400' :
-                            server.status === 'provisioning' ? 'bg-blue-500/20 text-blue-400' :
-                            'bg-red-500/20 text-red-400'
-                          }`}>
-                            {server.status || 'unknown'}
+                <Link
+                  key={server.id}
+                  href={`/dashboard/services/compute/vps/${server.id}`}
+                  className={`group block border-b border-white/[0.04] last:border-b-0 transition-colors hover:bg-white/[0.03] ${
+                    i === 0 ? '' : ''
+                  }`}
+                >
+                  <div className="px-5 py-4">
+                    {/* Mobile layout */}
+                    <div className="flex items-center justify-between sm:hidden">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-semibold font-mono text-white truncate">{server.name}</span>
+                          <span className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium shrink-0 ${statusColor(server.status)}`}>
+                            {isProvisioning && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                            {isRunning && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                            {isFailed && <XCircle className="h-2.5 w-2.5" />}
+                            {server.status}
                           </span>
                         </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                          <div>
-                            <div className="text-slate-500 text-sm">IP Address</div>
-                            <div className="text-white flex items-center gap-2">
-                              {server.ip}
-                              <button
-                                onClick={() => copyToClipboard(server.ip, 'IP')}
-                                className="text-slate-400 hover:text-white"
-                              >
-                                <Copy className="h-3.5 w-3.5" />
-                              </button>
+                        {isProvisioning && (
+                          <div className="mt-2">
+                            <div className="h-1 bg-white/[0.06] overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700"
+                                style={{ width: `${progress}%` }}
+                              />
                             </div>
+                            <p className="mt-1 text-[11px] text-blue-400">{provisioning?.message}</p>
                           </div>
-                          <div>
-                            <div className="text-slate-500 text-sm">Configuration</div>
-                            <div className="text-white">
-                              {server.cpu_cores} vCPU • {Math.round(server.memory_mb / 1024)} GB RAM
-                            </div>
+                        )}
+                        {!isProvisioning && (
+                          <div className="mt-1.5 flex items-center gap-3 text-xs text-white/40">
+                            <span className="font-mono">{server.ip}</span>
+                            <span>{server.cpu_cores}vCPU · {Math.round(server.memory_mb / 1024)}GB</span>
                           </div>
-                          <div>
-                            <div className="text-slate-500 text-sm">OS</div>
-                            <div className="text-white">{server.os}</div>
-                          </div>
-                          <div>
-                            <div className="text-slate-500 text-sm">SSH Command</div>
-                            <button
-                              onClick={() => copyToClipboard(`ssh ubuntu@${server.ip}`, 'SSH command')}
-                              className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
-                            >
-                              <Copy className="h-3.5 w-3.5" /> Copy
-                            </button>
-                          </div>
-                        </div>
+                        )}
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-white/20 group-hover:text-white/50 transition-colors shrink-0 ml-3" />
+                    </div>
 
-                        <div className="flex gap-2">
-                          {stopped ? (
-                            <Button
-                              onClick={() => powerAction(server.id, 'start')}
-                              disabled={isActing}
-                              size="sm"
-                              className="bg-green-600 hover:bg-green-700 text-white"
-                            >
-                              <Play className="h-4 w-4 mr-2" />
-                              Start
-                            </Button>
-                          ) : (
-                            <>
-                              <Button
-                                onClick={() => powerAction(server.id, 'reboot')}
-                                disabled={isActing}
-                                size="sm"
-                                variant="outline"
-                                className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/10"
-                              >
-                                <RotateCw className="h-4 w-4 mr-2" />
-                                Reboot
-                              </Button>
-                              <Button
-                                onClick={() => powerAction(server.id, 'stop')}
-                                disabled={isActing}
-                                size="sm"
-                                variant="outline"
-                                className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-                              >
-                                <Power className="h-4 w-4 mr-2" />
-                                Stop
-                              </Button>
-                            </>
-                          )}
+                    {/* Desktop layout */}
+                    <div className="hidden sm:grid sm:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_40px] sm:gap-4 sm:items-center">
+                      {/* Server name + status */}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-sm font-semibold font-mono text-white truncate">{server.name}</span>
+                          <span className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium shrink-0 ${statusColor(server.status)}`}>
+                            {isProvisioning && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                            {isRunning && <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                            {isFailed && <XCircle className="h-2.5 w-2.5" />}
+                            {server.status}
+                          </span>
                         </div>
+                        {isProvisioning && (
+                          <div className="mt-2">
+                            <div className="h-1 bg-white/[0.06] overflow-hidden max-w-[200px]">
+                              <div
+                                className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-700"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <p className="mt-1 text-[11px] text-blue-400 truncate">{provisioning?.message}</p>
+                          </div>
+                        )}
+                        {isFailed && (
+                          <p className="mt-1 text-[11px] text-red-400 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            {provisioning?.message || 'Deployment failed'}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* IP */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-mono text-white/70 truncate">{server.ip}</span>
+                        <button
+                          onClick={(e) => copyToClipboard(e, server.ip, 'IP')}
+                          className="text-white/20 hover:text-white/60 transition-colors shrink-0"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+
+                      {/* Config */}
+                      <div className="flex items-center gap-2 text-xs text-white/50">
+                        <span className="inline-flex items-center gap-1">
+                          <Cpu className="h-3 w-3 text-cyan-300/70" /> {server.cpu_cores}
+                        </span>
+                        <span className="text-white/15">·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Zap className="h-3 w-3 text-blue-300/70" /> {Math.round(server.memory_mb / 1024)}G
+                        </span>
+                        <span className="text-white/15">·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <HardDrive className="h-3 w-3 text-white/30" /> {server.disk_gb}G
+                        </span>
+                      </div>
+
+                      {/* OS */}
+                      <div className="text-sm text-white/50 truncate">{server.os}</div>
+
+                      {/* Cost */}
+                      <div className="text-sm font-medium text-white tabular-nums">${monthly}</div>
+
+                      {/* Arrow */}
+                      <div className="flex justify-end">
+                        <ArrowRight className="h-4 w-4 text-white/15 group-hover:text-white/50 group-hover:translate-x-0.5 transition-all" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </Link>
               );
             })}
           </div>
         ) : (
-          <Card className="bg-slate-900/30 border-slate-800 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Server className="h-12 w-12 text-slate-600 mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">No VPS Instances</h3>
-              <p className="text-slate-400 text-center mb-4">
-                Create your first VPS instance to get started with scalable virtual servers.
+          <div className="glass-panel overflow-hidden border-dashed">
+            <div className="flex flex-col items-center justify-center py-16">
+              <Server className="mb-4 h-12 w-12 text-white/20" />
+              <h3 className="mb-2 text-lg font-medium text-white">No servers yet</h3>
+              <p className="mb-6 max-w-md text-center text-sm text-white/40">
+                Deploy your first virtual machine to get started with compute.
               </p>
-              <Button asChild>
+              <Button asChild className="border border-cyan-400/25 bg-cyan-500/90 text-slate-950 hover:bg-cyan-400">
                 <Link href="/dashboard/services/compute/vps/new">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Your First VPS
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create your first VPS
                 </Link>
               </Button>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

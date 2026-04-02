@@ -23,7 +23,7 @@ const supabase = createClient(
 // -----------------------------
 // 2. SECURITY CONSTANTS
 // -----------------------------
-const SECURITY_LIMITS = {
+export const SECURITY_LIMITS = {
   MAX_HOURLY_RATE: 1000, // Maximum $1000/hour to prevent malicious rates
   MAX_HOURS_PER_BILLING: 24, // Maximum 24 hours between billings
   MIN_HOURLY_RATE: 0.0001, // Minimum rate (effectively free tier)
@@ -32,18 +32,23 @@ const SECURITY_LIMITS = {
 };
 
 // UUID validation regex (RFC 4122)
-const UUID_REGEX =
+export const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Whitelist of valid table names to prevent SQL injection
-const VALID_TABLE_NAMES = [
+export const VALID_TABLE_NAMES = [
   "active_kubernetes",
   "active_database",
   "active_objectspace",
   "active_spectrum",
+  "active_platform_apps"
 ];
 
-async function billSingleService(tableName, svc) {
+function roundToCurrency(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+export async function billSingleService(tableName, svc) {
   // Validate table name to prevent SQL injection
   if (!VALID_TABLE_NAMES.includes(tableName)) {
     console.error(`❌ SECURITY: Invalid table name attempted: ${tableName}`);
@@ -176,31 +181,32 @@ async function billSingleService(tableName, svc) {
     rate = SECURITY_LIMITS.MAX_HOURLY_RATE;
   }
 
-  // Calculate cost with precision rounding to avoid floating-point errors
-  // Round to 6 decimal places for sub-cent precision, then to 4 for billing
+  // Calculate cost and round to 2 decimals for currency-safe deduction
   const rawCost = hoursUsed * rate;
-  const cost = Math.round(rawCost * 10000) / 10000; // Round to 4 decimal places
+  const cost = roundToCurrency(rawCost);
 
   // Security: Skip billing if cost is below minimum threshold (prevents dust transactions)
   if (cost < SECURITY_LIMITS.MIN_BILLABLE_COST) {
     console.log(
-      `ℹ️  Skipping billing for ${tableName} service_id=${service_id}: cost $${cost.toFixed(4)} below minimum $${SECURITY_LIMITS.MIN_BILLABLE_COST}`
+      `ℹ️  Skipping billing for ${tableName} service_id=${service_id}: cost $${cost.toFixed(2)} below minimum $${SECURITY_LIMITS.MIN_BILLABLE_COST}`
     );
     return;
   }
 
   // Security: Cap cost per billing cycle
-  const finalCost = Math.min(cost, SECURITY_LIMITS.MAX_COST_PER_CYCLE);
+  const finalCost = roundToCurrency(
+    Math.min(cost, SECURITY_LIMITS.MAX_COST_PER_CYCLE)
+  );
   if (cost > SECURITY_LIMITS.MAX_COST_PER_CYCLE) {
     console.warn(
-      `⚠️ SECURITY: Cost $${cost.toFixed(4)} exceeds maximum $${SECURITY_LIMITS.MAX_COST_PER_CYCLE} for service ${service_id}, capping`
+      `⚠️ SECURITY: Cost $${cost.toFixed(2)} exceeds maximum $${SECURITY_LIMITS.MAX_COST_PER_CYCLE} for service ${service_id}, capping`
     );
   }
 
   console.log(
     `💸 Billing ${tableName} → service_id=${service_id}, user_id=${user_id}, hours=${hoursUsed.toFixed(
       4
-    )}, rate=${rate}, cost=$${finalCost.toFixed(4)}`
+    )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 
   // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
@@ -250,12 +256,12 @@ async function billSingleService(tableName, svc) {
 
   console.log(
     `✅ Successfully billed ${tableName} service_id=${service_id}, cost=$${finalCost.toFixed(
-      4
+      2
     )}`
   );
 }
 
-async function processServiceTable(tableName) {
+export async function processServiceTable(tableName) {
   try {
     console.log(
       `💾 Fetching active services from billing schema table ${tableName}...`
@@ -308,7 +314,7 @@ async function processServiceTable(tableName) {
 
 // Run every 60 minutes for testing (3600 seconds)
 
-cron.schedule('0 * * * *', async () => {
+cron.schedule('*/5 * * * *', async () => {
   try {
     console.log("⏳ Billing cycle started:", new Date().toISOString());
 
@@ -317,6 +323,7 @@ cron.schedule('0 * * * *', async () => {
       processServiceTable("active_database"),
       processServiceTable("active_objectspace"),
       processServiceTable("active_spectrum"),
+      processServiceTable("active_platform_apps"),
     ]);
 
     // Log any table processing failures
@@ -326,6 +333,7 @@ cron.schedule('0 * * * *', async () => {
         "active_database",
         "active_objectspace",
         "active_spectrum",
+        "active_platform_apps"
       ];
       if (result.status === "rejected") {
         console.error(

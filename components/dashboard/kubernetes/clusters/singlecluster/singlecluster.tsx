@@ -18,7 +18,6 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -58,19 +57,42 @@ import {
 // import { read } from "fs";
 
 type CheckStatus = {
+  createDropletStatus: boolean;
   createStatus: boolean;
   connectStatus: boolean;
   verifyStatus: boolean;
   clusterInfo?: Row | null;
 };
 
+type StatusResponse = Partial<CheckStatus> & {
+  status?: Row["status"];
+};
+
+type ProvisionConfig = {
+  region: string;
+  size: string;
+  version: string;
+  node_count: number;
+  node_names: string[];
+  plan_id: string;
+};
+
 type Row = {
+  cluster_name: string;
+  create_droplet: boolean | null;
   createStatus: boolean;
   connectStatus: boolean;
   verifyStatus: boolean;
   status: "pending" | "creating" | "ready" | "failed" | "deleted" | null;
   kubeconfig: string | null;
-  node_config: { cpu: number; ram: number; storage: number } | null;
+  owner_id: string;
+  project_id: string | null;
+  node_config: {
+    cpu: number;
+    ram: number;
+    storage: number;
+    provision_config?: ProvisionConfig;
+  } | null;
   control_plane: {
     public_ip: string;
     private_ip: string;
@@ -149,6 +171,7 @@ function SingleCluster({
   userProjects: Project[];
 }) {
   const [status, setStatus] = useState<CheckStatus>({
+    createDropletStatus: false,
     createStatus: false,
     connectStatus: false,
     verifyStatus: false,
@@ -158,9 +181,10 @@ function SingleCluster({
   const [clusterData, setClusterData] = useState<CheckStatus | null>(null);
   const [clusterFailed, setClusterFailed] = useState(false);
   const [nodesData, setNodesData] = useState<NodeInfo | null>(null);
-  const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [clusterLifecycleStatus, setClusterLifecycleStatus] =
+    useState<Row["status"] | null>(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<string>("cluster");
@@ -195,6 +219,8 @@ function SingleCluster({
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const alertedRef = useRef(false);
+  const dropletStartRef = useRef(false);
+  const dropletFailureHandledRef = useRef(false);
   const router = useRouter();
 
   // Handler to open node delete confirmation dialog
@@ -216,21 +242,240 @@ function SingleCluster({
   const steps = useMemo(
     () =>
       [
-        { key: "createStatus", label: "1. Create cluster" },
-        { key: "connectStatus", label: "2. connectStatus cluster" },
-        { key: "verifyStatus", label: "3. verifyStatus cluster" },
+        { key: "createDropletStatus", label: "1. Create droplets" },
+        { key: "createStatus", label: "2. Create cluster" },
+        { key: "connectStatus", label: "3. Connect cluster" },
+        { key: "verifyStatus", label: "4. Verify cluster" },
       ] as const,
     []
   );
 
   const allDone =
-    status.createStatus && status.connectStatus && status.verifyStatus;
+    status.createDropletStatus &&
+    status.createStatus &&
+    status.connectStatus &&
+    status.verifyStatus;
   const currentIndex = useMemo(() => {
-    if (!status.createStatus) return 0;
-    if (!status.connectStatus) return 1;
-    if (!status.verifyStatus) return 2;
+    if (!status.createDropletStatus) return 0;
+    if (!status.createStatus) return 1;
+    if (!status.connectStatus) return 2;
+    if (!status.verifyStatus) return 3;
     return -1; // all done
   }, [status]);
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const handleDropletCreationFailure = async () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    abortRef.current?.abort();
+
+    if (dropletFailureHandledRef.current) return;
+    dropletFailureHandledRef.current = true;
+
+    try {
+      const response = await fetch("/api/services/kubernetes/clusters/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cluster_id: clusterId }),
+      });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        console.error(
+          "[handleDropletCreationFailure] Cluster cleanup failed:",
+          errorData?.message || errorData?.error || response.statusText,
+        );
+      }
+    } catch (deleteError) {
+      console.error("[handleDropletCreationFailure] Failed to delete cluster:", deleteError);
+    }
+
+    toast.error("This droplet is not available currently.");
+    router.push("/dashboard/services/kubernetes");
+  };
+
+  const startDropletCreation = async (clusterInfo: Row) => {
+    if (dropletStartRef.current) return;
+
+    const provisionConfig = clusterInfo.node_config?.provision_config;
+    if (!provisionConfig || !clusterInfo.project_id) {
+      return;
+    }
+
+    dropletStartRef.current = true;
+
+    try {
+      const createDropletRes = await fetch(
+        "/api/services/kubernetes/manageip/createdroplet",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            names: provisionConfig.node_names,
+            region: provisionConfig.region,
+            size: provisionConfig.size,
+            image: "ubuntu-25-04-x64",
+            backups: false,
+            ipv6: true,
+            monitoring: true,
+            tags: ["env:prod", "web", "ssh-allowed"],
+            ownerId: clusterInfo.owner_id,
+            initial_cost: 5.0,
+          }),
+        }
+      );
+
+      if (createDropletRes.status === 402) {
+        toast.error("Insufficient balance. Please top up your account.");
+        router.push("/dashboard/nav/billing");
+        return;
+      }
+
+      if (!createDropletRes.ok) {
+        throw new Error("Failed to create droplets.");
+      }
+
+      const createDropletData = await createDropletRes.json();
+
+      await fetch("/api/services/kubernetes/clusters/update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cluster_id: clusterId,
+          status: "creating",
+          create_droplet: true,
+        }),
+      });
+
+      setStatus((prev) => ({ ...prev, createDropletStatus: true }));
+
+      const sendPayload = {
+        provider: "existing",
+        cluster: {
+          name: clusterInfo.cluster_name,
+          location: provisionConfig.region,
+          pod_cidr: "10.244.0.0/16",
+          k8s_minor: provisionConfig.version,
+        },
+        auth: {
+          method: "password",
+          user: "root",
+          password: createDropletData.vmPassword,
+        },
+        planId: provisionConfig.plan_id,
+        nodes: [] as Array<{
+          host: string;
+          role: "control-plane" | "worker";
+          hostname: string;
+          cpu: number;
+          memory_mb: number;
+          storage: number;
+          private_ip?: string;
+          droplet_id?: number;
+        }>,
+        ips: [] as string[],
+      };
+
+      const actions = createDropletData?.data?.links?.actions || [];
+      let counter = 0;
+
+      while (counter < actions.length) {
+        const checkStatusRes = await fetch(
+          "/api/services/kubernetes/manageip/dropletstatus",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: actions[counter].id }),
+          }
+        );
+
+        if (!checkStatusRes.ok) {
+          await sleep(10000);
+          continue;
+        }
+
+        const checkStatusData = await checkStatusRes.json();
+        if (checkStatusData?.data?.action?.status !== "completed") {
+          await sleep(10000);
+          continue;
+        }
+
+        const vmDataRes = await fetch(
+          "/api/services/kubernetes/manageip/readdroplet",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: checkStatusData.data.action.resource_id,
+            }),
+          }
+        );
+
+        if (!vmDataRes.ok) {
+          await sleep(5000);
+          continue;
+        }
+
+        const vmData = await vmDataRes.json();
+        const publicIp = vmData?.data?.droplet?.networks?.v4?.find(
+          (item: { type: string; ip_address: string }) => item.type === "public"
+        )?.ip_address;
+        const privateIp = vmData?.data?.droplet?.networks?.v4?.find(
+          (item: { type: string; ip_address: string }) => item.type === "private"
+        )?.ip_address;
+
+        if (!publicIp) {
+          await sleep(5000);
+          continue;
+        }
+
+        sendPayload.ips.push(publicIp);
+        sendPayload.nodes.push({
+          host: publicIp,
+          role: counter === 0 ? "control-plane" : "worker",
+          hostname: vmData.data.droplet.name,
+          cpu: vmData.data.droplet.vcpus,
+          memory_mb: vmData.data.droplet.memory,
+          storage: vmData.data.droplet.disk,
+          private_ip: privateIp,
+          droplet_id: vmData.data.droplet.id,
+        });
+        counter++;
+      }
+
+      // Give droplets time to finish cloud-init/SSH readiness before provisioning.
+      await sleep(120000);
+
+      const startClusterRes = await fetch("/api/services/kubernetes/clusters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clusterId,
+          ...sendPayload,
+          ownerId: clusterInfo.owner_id,
+          projectId: clusterInfo.project_id,
+        }),
+      });
+
+      if (!startClusterRes.ok) {
+        throw new Error("Failed to start Kubernetes cluster provisioning.");
+      }
+
+      toast.success("Droplets created. Cluster provisioning started.");
+      await pollOnce();
+    } catch (error) {
+      console.error("[startDropletCreation] Error:", error);
+      await handleDropletCreationFailure();
+    } finally {
+      dropletStartRef.current = false;
+    }
+  };
 
   async function pollOnce() {
     //setError(null);
@@ -256,7 +501,15 @@ function SingleCluster({
         throw new Error(msg || `Status API returned ${res.status}`);
       }
 
-      const data = (await res.json()) as Partial<CheckStatus>;
+      const data = (await res.json()) as StatusResponse;
+      setClusterLifecycleStatus(data.clusterInfo?.status ?? data.status ?? null);
+      const hasExistingNodes =
+        !!data.clusterInfo?.control_plane ||
+        (data.clusterInfo?.workers?.length || 0) > 0;
+      const dropletStepDone =
+        !!data.createDropletStatus ||
+        hasExistingNodes ||
+        data.clusterInfo?.status === "ready";
 
       console.log(data, "........................................data");
 
@@ -281,6 +534,14 @@ function SingleCluster({
         const response=await api.post(`/services/kubernetes/clusters/delete`, {
           cluster_id: clusterId,
         })
+        const settledResponse = response as typeof response & {
+          error?: unknown;
+          data?: { message?: string };
+        };
+        if (settledResponse.error) {
+          toast.error(settledResponse.data?.message || "Failed to clean up cluster.");
+          return;
+        }
         if(response.status===200){
           router.push("/dashboard/services/kubernetes");
           toast.error(
@@ -294,12 +555,26 @@ function SingleCluster({
 
       // Merge new truthy statuses without flipping any true back to false
       setStatus((prev) => ({
+        createDropletStatus: prev.createDropletStatus || dropletStepDone,
         createStatus: prev.createStatus || !!data.createStatus,
         connectStatus: prev.connectStatus || !!data.connectStatus,
         verifyStatus: prev.verifyStatus || !!data.verifyStatus,
       }));
 
-      if (data.connectStatus && data.createStatus && data.verifyStatus) {
+      if (
+        !dropletStepDone &&
+        data.clusterInfo?.status === "pending" &&
+        !dropletStartRef.current
+      ) {
+        void startDropletCreation(data.clusterInfo);
+      }
+
+      if (
+        dropletStepDone &&
+        data.connectStatus &&
+        data.createStatus &&
+        data.verifyStatus
+      ) {
         setClusterData(data as CheckStatus);
         const workers = data?.clusterInfo?.workers ?? [];
         const controlPlane = data?.clusterInfo?.control_plane;
@@ -388,8 +663,6 @@ function SingleCluster({
       return;
     }
 
-    debugger
-
     setLoading(true);
     setDeleteClusterDialog(false);
 
@@ -402,11 +675,23 @@ function SingleCluster({
     const delCluster = await api.post(`/services/kubernetes/clusters/delete`, {
       cluster_id: clusterId,
     });
+    const settledDeleteCluster = delCluster as typeof delCluster & {
+      error?: unknown;
+      data?: { message?: string };
+    };
+
+    if (settledDeleteCluster.error) {
+      setLoading(false);
+      return;
+    }
 
     if (delCluster.status === 200) {
       toast.success("Cluster deleted successfully");
       router.push("/dashboard/services/kubernetes");
+      return;
     }
+
+    toast.error(settledDeleteCluster.data?.message || "Failed to delete cluster");
     setLoading(false);
   };
 
@@ -527,16 +812,21 @@ function SingleCluster({
       }
       abortRef.current?.abort();
       if (!alertedRef.current) {
-        //  debugger;
         alertedRef.current = true;
-        // const check = searchParams.get("clusterStatus");
-        if (searchParams.get("clusterStatus") != "ready") {
-          // alert("Cluster is ready!");
+        const readyToastKey = `k8s-ready-toast:${clusterId}`;
+        const alreadyShown =
+          typeof window !== "undefined" &&
+          window.localStorage.getItem(readyToastKey) === "1";
+
+        if (!alreadyShown) {
           toast.success("Cluster is ready!");
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(readyToastKey, "1");
+          }
         }
       }
     }
-  }, [allDone, searchParams]);
+  }, [allDone, clusterId]);
 
   // Start polling on mount, stop on unmount
   useEffect(() => {
@@ -739,7 +1029,9 @@ function SingleCluster({
           </motion.div>
         )}
 
-        {ready === false && !clusterFailed && (
+        {ready === false &&
+          !clusterFailed &&
+          (clusterLifecycleStatus === "pending"||clusterLifecycleStatus === "creating") && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -831,7 +1123,7 @@ function SingleCluster({
                         clusterData?.clusterInfo?.kubeconfig || ""
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                    className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
                   >
                     <Download className="h-4 w-4" />
                     Download kubeconfig
@@ -919,7 +1211,7 @@ function SingleCluster({
                                 handleDeleteNodeClick(n.droplet_id, index)
                               }
                               disabled={loading}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Trash2 className="h-3.5 w-3.5" /> Delete
                             </button>
@@ -1108,19 +1400,19 @@ function SingleCluster({
             <AlertDialogDescription className="text-slate-300">
               Are you sure you want to delete this node? This action cannot be
               undone.
-              {nodeToDelete && (
-                <div className="mt-2 p-2 bg-slate-800 rounded text-sm">
-                  <span className="text-slate-400">Node IP: </span>
-                  <span className="text-white font-mono">
-                    {
-                      nodesData?.find(
-                        (n) => n.droplet_id === nodeToDelete.droplet_id
-                      )?.public_ip
-                    }
-                  </span>
-                </div>
-              )}
             </AlertDialogDescription>
+            {nodeToDelete && (
+              <div className="mt-2 p-2 bg-slate-800 rounded text-sm">
+                <span className="text-slate-400">Node IP: </span>
+                <span className="text-white font-mono">
+                  {
+                    nodesData?.find(
+                      (n) => n.droplet_id === nodeToDelete.droplet_id
+                    )?.public_ip
+                  }
+                </span>
+              </div>
+            )}
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="bg-slate-700 text-white hover:bg-slate-600">
@@ -1148,17 +1440,16 @@ function SingleCluster({
             </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-300">
               Are you sure you want to delete this entire cluster? This will
-              permanently remove:
-              <ul className="mt-2 ml-4 list-disc text-sm space-y-1">
-                <li>
-                  All {nodesData?.length || 0} nodes (control plane and workers)
-                </li>
-                <li>All cluster data and configurations</li>
-                <li>All associated resources</li>
-                <li>This action cannot be undone!</li>
-              </ul>
-              
+              permanently remove.
             </AlertDialogDescription>
+            <ul className="mt-2 ml-4 list-disc text-sm text-slate-300 space-y-1">
+              <li>
+                All {nodesData?.length || 0} nodes (control plane and workers)
+              </li>
+              <li>All cluster data and configurations</li>
+              <li>All associated resources</li>
+              <li>This action cannot be undone!</li>
+            </ul>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="cursor-pointer bg-slate-700 text-white hover:bg-slate-600">

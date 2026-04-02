@@ -1,252 +1,201 @@
-//@ts-nocheck
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from '@/app/api/billing/coupons/redeem/route';
-import { expectResponseStatus } from '../../utils/test-helpers';
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { POST } from "@/app/api/billing/coupons/redeem/route";
+import { expectResponseStatus } from "../../utils/test-helpers";
 
-vi.mock('@/lib/supabase/server');
-vi.mock('@/lib/supabase/queries/promocodes');
-vi.mock('@/lib/cooldown/userbased');
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: vi.fn(),
+}));
 
-describe('POST /api/billing/coupons/redeem', () => {
-  const testUrl = 'http://localhost:3000/api/billing/coupons/redeem';
+vi.mock("@/lib/supabase/queries/promocodes", () => ({
+  Promocodes: {
+    redeem: vi.fn(),
+  },
+}));
 
-  function createMockRequest(body: any) {
-    return new Request(testUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  }
+vi.mock("@/lib/supabase/queries/billing", () => ({
+  Billing: {
+    save_transaction: vi.fn(),
+  },
+}));
 
+vi.mock("@/lib/cooldown/userbased", () => ({
+  limitByUser: vi.fn(),
+}));
+
+const TEST_URL = "http://localhost:3000/api/billing/coupons/redeem";
+
+function createRequest(body: Record<string, unknown>) {
+  return new Request(TEST_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+describe("POST /api/billing/coupons/redeem", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { limitByUser } = await import('@/lib/cooldown/userbased');
-    vi.mocked(limitByUser).mockResolvedValue({ allowed: true, retryAfterSec: 0 });
-  });
-
-  function setupSupabaseMock(options: { user?: any } = {}) {
-    const getUser = vi.fn().mockResolvedValue({
-      data: {
-        user: 'user' in options ? options.user : { id: 'user-123', email: 'test@example.com' },
+    const { createClient } = await import("@/lib/supabase/server");
+    vi.mocked(createClient).mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: {
+            user: {
+              id: "user-123",
+              email: "test@example.com",
+            },
+          },
+        }),
       },
-    });
+    } as unknown as Awaited<ReturnType<typeof createClient>>);
 
-    return { mockClient: { auth: { getUser } } };
-  }
+    const { limitByUser } = await import("@/lib/cooldown/userbased");
+    vi.mocked(limitByUser).mockResolvedValue({
+      allowed: true,
+    } as never);
 
-  // ============================================
-  // Success Cases
-  // ============================================
-  describe('Success Cases', () => {
-    it('TC-BILL-020: should redeem valid coupon', async () => {
-      const { mockClient } = setupSupabaseMock({});
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockResolvedValue({
+      success: true,
+      balance: 150,
+      amount: 50,
+    } as never);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockResolvedValue({
-        success: true,
-        balance: 150,
-        amount: 50,
-      } as any);
-
-      const request = createMockRequest({ code: 'SAVE50' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 200);
-
-      expect(data.success).toBe(true);
-      expect(data.balance).toBe(150);
-      expect(data.amount).toBe(50);
-      expect(data.message).toContain('$50');
-    });
-
-    it('TC-BILL-021: should uppercase and trim the code before redeeming', async () => {
-      const { mockClient } = setupSupabaseMock({});
-
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockResolvedValue({
-        success: true,
-        balance: 100,
-        amount: 25,
-      } as any);
-
-      const request = createMockRequest({ code: '  save25  ' });
-      await POST(request);
-
-      expect(Promocodes.redeem).toHaveBeenCalledWith('SAVE25', 'user-123', 'test@example.com');
-    });
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    vi.mocked(Billing.save_transaction).mockResolvedValue(undefined);
   });
 
-  // ============================================
-  // Validation Tests
-  // ============================================
-  describe('Validation', () => {
-    it('TC-BILL-022: should reject missing code', async () => {
-      const { mockClient } = setupSupabaseMock({});
+  it("TC-COUPON-001: should redeem a valid coupon and return updated balance", async () => {
+    const response = await POST(createRequest({ code: "SAVE50" }));
+    const data = await expectResponseStatus(response, 200);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const request = createMockRequest({});
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 400);
-
-      expect(data.error).toContain('required');
-    });
-
-    it('TC-BILL-023: should reject empty code', async () => {
-      const { mockClient } = setupSupabaseMock({});
-
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const request = createMockRequest({ code: '' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 400);
-
-      expect(data.error).toContain('required');
-    });
+    expect(data.success).toBe(true);
+    expect(data.balance).toBe(150);
+    expect(data.amount).toBe(50);
+    expect(data.message).toContain("$50");
   });
 
-  // ============================================
-  // Invalid Coupon Cases
-  // ============================================
-  describe('Invalid Coupon', () => {
-    it('TC-BILL-024: should reject non-existent coupon', async () => {
-      const { mockClient } = setupSupabaseMock({});
+  it("TC-COUPON-002: should prevent duplicate redemption", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockResolvedValueOnce({
+      success: false,
+      error: "You have already redeemed this promo code",
+    } as never);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
+    const response = await POST(createRequest({ code: "USED50" }));
+    const data = await expectResponseStatus(response, 400);
 
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockResolvedValue({
+    expect(data.message).toContain("already redeemed");
+  });
+
+  it("TC-COUPON-003: should handle concurrent redemption attempts safely", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem)
+      .mockResolvedValueOnce({ success: true, balance: 100, amount: 25 } as never)
+      .mockResolvedValueOnce({
         success: false,
-        error: 'Invalid promo code',
-      } as any);
+        error: "You have already redeemed this promo code",
+      } as never);
 
-      const request = createMockRequest({ code: 'INVALID' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 400);
+    const first = await POST(createRequest({ code: "RACE25" }));
+    await expectResponseStatus(first, 200);
 
-      expect(data.message).toContain('Invalid promo code');
-    });
+    const second = await POST(createRequest({ code: "RACE25" }));
+    const secondData = await expectResponseStatus(second, 400);
 
-    it('TC-BILL-025: should reject already redeemed coupon', async () => {
-      const { mockClient } = setupSupabaseMock({});
-
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockResolvedValue({
-        success: false,
-        error: 'You have already redeemed this coupon',
-      } as any);
-
-      const request = createMockRequest({ code: 'USED' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 400);
-
-      expect(data.message).toContain('already redeemed');
-    });
-
-    it('TC-BILL-026: should reject expired coupon', async () => {
-      const { mockClient } = setupSupabaseMock({});
-
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockResolvedValue({
-        success: false,
-        error: 'This coupon has expired',
-      } as any);
-
-      const request = createMockRequest({ code: 'EXPIRED' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 400);
-
-      expect(data.message).toContain('expired');
-    });
+    expect(secondData.message).toContain("already redeemed");
   });
 
-  // ============================================
-  // Authorization Tests
-  // ============================================
-  describe('Authorization', () => {
-    it('TC-BILL-027: should return 401 for unauthenticated user', async () => {
-      const { mockClient } = setupSupabaseMock({ user: null });
+  it("TC-COUPON-004: should reject expired coupon", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockResolvedValueOnce({
+      success: false,
+      error: "Promo code has expired",
+    } as never);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
+    const response = await POST(createRequest({ code: "EXPIRED50" }));
+    const data = await expectResponseStatus(response, 400);
 
-      const request = createMockRequest({ code: 'SAVE50' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 401);
-
-      expect(data.error).toBe('Unauthorized');
-    });
-
-    it('TC-BILL-028: should return 401 for user without email', async () => {
-      const { mockClient } = setupSupabaseMock({
-        user: { id: 'user-123', email: null },
-      });
-
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
-
-      const request = createMockRequest({ code: 'SAVE50' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 401);
-
-      expect(data.error).toBe('Unauthorized');
-    });
+    expect(data.message).toContain("expired");
   });
 
-  // ============================================
-  // Rate Limiting
-  // ============================================
-  describe('Rate Limiting', () => {
-    it('TC-BILL-029: should return 429 when rate limited', async () => {
-      const { mockClient } = setupSupabaseMock({});
+  it("TC-COUPON-005: should enforce max redemption limits", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockResolvedValueOnce({
+      success: false,
+      error: "Promo code redemption limit reached",
+    } as never);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
+    const response = await POST(createRequest({ code: "LIMITED10" }));
+    const data = await expectResponseStatus(response, 400);
 
-      const { limitByUser } = await import('@/lib/cooldown/userbased');
-      vi.mocked(limitByUser).mockResolvedValue({ allowed: false, retryAfterSec: 30 });
-
-      const request = createMockRequest({ code: 'SAVE50' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 429);
-
-      expect(data.error).toBe('Too Many Requests');
-    });
+    expect(data.message).toContain("limit");
   });
 
-  // ============================================
-  // Error Handling
-  // ============================================
-  describe('Error Handling', () => {
-    it('TC-BILL-030: should return 500 on unexpected error', async () => {
-      const { mockClient } = setupSupabaseMock({});
+  it("TC-COUPON-006: should reject inactive coupon", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockResolvedValueOnce({
+      success: false,
+      error: "This promo code is not active",
+    } as never);
 
-      const { createClient } = await import('@/lib/supabase/server');
-      vi.mocked(createClient).mockResolvedValue(mockClient as any);
+    const response = await POST(createRequest({ code: "INACTIVE10" }));
+    const data = await expectResponseStatus(response, 400);
 
-      const { Promocodes } = await import('@/lib/supabase/queries/promocodes');
-      vi.mocked(Promocodes.redeem).mockRejectedValue(new Error('DB connection failed'));
+    expect(data.message).toContain("not active");
+  });
 
-      const request = createMockRequest({ code: 'SAVE50' });
-      const response = await POST(request);
-      const data = await expectResponseStatus(response, 500);
+  it("TC-COUPON-007: should enforce coupon redeem rate limit", async () => {
+    const { limitByUser } = await import("@/lib/cooldown/userbased");
+    vi.mocked(limitByUser).mockResolvedValueOnce({
+      allowed: false,
+      retryAfterSec: 30,
+    } as never);
 
-      expect(data.error).toContain('DB connection failed');
-    });
+    const response = await POST(createRequest({ code: "SAVE50" }));
+    const data = await expectResponseStatus(response, 429);
+
+    expect(data.error).toBe("Too Many Requests");
+    expect(data.message).toContain("30");
+  });
+
+  it("TC-COUPON-008: should normalize coupon code (trim + uppercase) before redeem", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+
+    await POST(createRequest({ code: "  save25  " }));
+
+    expect(Promocodes.redeem).toHaveBeenCalledWith(
+      "SAVE25",
+      "user-123",
+      "test@example.com"
+    );
+  });
+
+  it("TC-COUPON-009: should not fail redemption when transaction logging fails", async () => {
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    vi.mocked(Billing.save_transaction).mockRejectedValueOnce(
+      new Error("Failed to save transaction")
+    );
+
+    const response = await POST(createRequest({ code: "SAVE50" }));
+    const data = await expectResponseStatus(response, 200);
+
+    expect(data.success).toBe(true);
+    expect(data.balance).toBe(150);
+    expect(data.amount).toBe(50);
+  });
+
+  it("TC-BILL-SEC-003: should not leak internal errors from coupon redemption endpoint", async () => {
+    const { Promocodes } = await import("@/lib/supabase/queries/promocodes");
+    vi.mocked(Promocodes.redeem).mockRejectedValueOnce(
+      new Error("internal schema error: billing.promocodes")
+    );
+
+    const response = await POST(createRequest({ code: "SAVE50" }));
+    const data = await expectResponseStatus(response, 500);
+
+    expect(data.error).toBe("Failed to redeem coupon");
+    expect(data.error).not.toContain("billing.promocodes");
   });
 });

@@ -1,14 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, Loader2, RefreshCw } from 'lucide-react';
-import { toast } from 'sonner';
+import { AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DomainOverviewTab } from '@/components/dashboard/domains/domain-overview-tab';
 import { DomainConnectionsTab } from '@/components/dashboard/domains/domain-connections-tab';
@@ -16,65 +13,142 @@ import { DomainDnsTab } from '@/components/dashboard/domains/domain-dns-tab';
 import { DomainSettingsTab } from '@/components/dashboard/domains/domain-settings-tab';
 import type { DomainAppOption } from '@/components/dashboard/domains/domain-attach-action';
 import {
-  type AppListItem,
-  type DnsFormState,
-  type DnsRecordItem,
-  type DomainConnectionItem,
-  type DomainInventoryItem,
-  type DomainPurchase,
-  type RegistrarSettings,
-  friendlyError,
-  hostLabelFor,
   looksInternal,
   normalizeDomain,
-  sanitizeOperationError,
+  type RelatedDomain,
 } from '@/components/dashboard/domains/domain-detail-types';
+import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
+import { useDomainData } from '@/hooks/use-domain-data';
+import { useDomainConnections } from '@/hooks/use-domain-connections';
+import { useDomainDns } from '@/hooks/use-domain-dns';
+import { useDomainRegistrarSettings } from '@/hooks/use-domain-registrar-settings';
 
-const DEFAULT_DNS_FORM: DnsFormState = {
-  recordId: null,
-  type: 'A',
-  host: '@',
-  answer: '',
-  ttl: 300,
-  priority: '',
-};
+/* ── Related-domain helpers ── */
+function computeRelated(domain: string, allDomains: string[]): RelatedDomain[] {
+  const set = new Set(allDomains);
+  const parts = domain.split('.');
+  const result: RelatedDomain[] = [];
+
+  // Parent zone (one label up, must exist in inventory)
+  if (parts.length > 2) {
+    const parent = parts.slice(1).join('.');
+    if (set.has(parent)) {
+      result.push({ domain: parent, role: 'parent' });
+      // Sibling subdomains — same immediate parent, same depth
+      for (const d of allDomains) {
+        if (d !== domain && d.endsWith('.' + parent) && d.split('.').length === parts.length) {
+          result.push({ domain: d, role: 'sibling' });
+        }
+      }
+    }
+  }
+
+  // Direct subdomains — exactly one level deeper
+  for (const d of allDomains) {
+    if (d !== domain && d.endsWith('.' + domain) && d.split('.').length === parts.length + 1) {
+      result.push({ domain: d, role: 'subdomain' });
+    }
+  }
+
+  return result.sort((a, b) => {
+    const order: Record<RelatedDomain['role'], number> = { parent: 0, sibling: 1, subdomain: 2 };
+    return order[a.role] - order[b.role] || a.domain.localeCompare(b.domain);
+  });
+}
+
+type OverallStatus = 'Active' | 'Purchase Pending' | 'Setup Pending' | 'Needs Attention' | 'Purchased' | 'Unknown';
+
+function StatusPill({ status }: { status: OverallStatus }) {
+  const cfg: Record<OverallStatus, { dot: string; text: string }> = {
+    Active:            { dot: 'bg-emerald-400', text: 'text-emerald-300' },
+    'Purchase Pending':{ dot: 'bg-amber-400',   text: 'text-amber-300' },
+    'Setup Pending':   { dot: 'bg-amber-400',   text: 'text-amber-300' },
+    'Needs Attention': { dot: 'bg-red-400',      text: 'text-red-300' },
+    Purchased:         { dot: 'bg-cyan-400',     text: 'text-cyan-300' },
+    Unknown:           { dot: 'bg-white/30',     text: 'text-white/50' },
+  };
+  const { dot, text } = cfg[status];
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${text}`}>
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {status}
+    </span>
+  );
+}
+
+/* ── Page skeleton while initializing ── */
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-8 w-56 animate-pulse rounded bg-white/[0.05]" />
+      <div className="flex gap-2">
+        {[80, 60, 100, 72].map((w, i) => (
+          <div key={i} className={`h-5 w-${w} animate-pulse rounded-full bg-white/[0.05]`} />
+        ))}
+      </div>
+      <div className="h-px w-full bg-white/[0.05]" />
+      <div className="grid grid-cols-4 gap-4 pt-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-24 animate-pulse rounded-lg bg-white/[0.04]" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function DomainDetailPage() {
   const params = useParams();
-  const domainName = useMemo(() => normalizeDomain(decodeURIComponent(String(params.domain || ''))), [params.domain]);
+  const domainName = useMemo(
+    () => normalizeDomain(decodeURIComponent(String(params.domain || ''))),
+    [params.domain]
+  );
 
-  const [apps, setApps] = useState<AppListItem[]>([]);
-  const [purchaseRequest, setPurchaseRequest] = useState<DomainPurchase | null>(null);
-  const [connections, setConnections] = useState<DomainConnectionItem[]>([]);
-  const [expiresAt, setExpiresAt] = useState<string | null>(null);
-  const [autoRenew, setAutoRenew] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const parentDomain = useMemo(() => {
+    const parts = domainName.split('.');
+    return parts.length > 2 ? parts.slice(1).join('.') : null;
+  }, [domainName]);
+
   const [subdomainInput, setSubdomainInput] = useState('');
-  const [verifyingConnectionId, setVerifyingConnectionId] = useState<string | null>(null);
-  const [activatingConnectionId, setActivatingConnectionId] = useState<string | null>(null);
-  const [settingPrimaryConnectionId, setSettingPrimaryConnectionId] = useState<string | null>(null);
-  const [removingConnectionId, setRemovingConnectionId] = useState<string | null>(null);
-  const [removeConfirmConnectionId, setRemoveConfirmConnectionId] = useState<string | null>(null);
-  const [deleteConfirmRecordId, setDeleteConfirmRecordId] = useState<number | null>(null);
-  const [dnsLoading, setDnsLoading] = useState(false);
-  const [dnsError, setDnsError] = useState<string | null>(null);
-  const [dnsManaged, setDnsManaged] = useState<boolean | null>(null);
-  const [dnsZone, setDnsZone] = useState<string | null>(null);
-  const [dnsRecords, setDnsRecords] = useState<DnsRecordItem[]>([]);
-  const [dnsForm, setDnsForm] = useState<DnsFormState>(DEFAULT_DNS_FORM);
-  const [dnsSaving, setDnsSaving] = useState(false);
-  const [dnsDeletingRecordId, setDnsDeletingRecordId] = useState<number | null>(null);
-  const [registrarLoading, setRegistrarLoading] = useState(false);
-  const [registrarError, setRegistrarError] = useState<string | null>(null);
-  const [registrarSettings, setRegistrarSettings] = useState<RegistrarSettings | null>(null);
-  const [nameserversDraft, setNameserversDraft] = useState('');
-  const [savingAutorenew, setSavingAutorenew] = useState(false);
-  const [savingNameservers, setSavingNameservers] = useState(false);
+  const [initializing, setInitializing] = useState(true);
+  const [relatedDomains, setRelatedDomains] = useState<RelatedDomain[]>([]);
+  const refreshAllRef = useRef<() => Promise<void>>(async () => {});
 
-  const appOptions: DomainAppOption[] = useMemo(
-    () => apps.map((app) => ({ id: app.id, name: app.name, status: app.status })),
-    [apps]
+  const domainData = useDomainData(domainName);
+  const dnsData = useDomainDns(domainName);
+  const { setConnections, setExpiresAt, setAutoRenew, loadDomainContext } = domainData;
+  const { loadDnsRecords } = dnsData;
+
+  const syncDomainMeta = useCallback(
+    (expiresAt: string | null, autoRenew: boolean | null) => {
+      if (expiresAt !== null) setExpiresAt(expiresAt);
+      if (autoRenew !== null) setAutoRenew(autoRenew);
+    },
+    [setAutoRenew, setExpiresAt]
+  );
+
+  const registrarData = useDomainRegistrarSettings(
+    domainName,
+    useCallback(() => refreshAllRef.current(), []),
+    syncDomainMeta
+  );
+  const { loadRegistrarSettings } = registrarData;
+
+  const loadRelated = useCallback(async () => {
+    try {
+      const res = await fetch('/api/domains/inventory');
+      const data = await res.json() as { data?: { domains?: { domain: string }[] } };
+      const all = (data?.data?.domains ?? []).map((d) => d.domain);
+      setRelatedDomains(computeRelated(domainName, all));
+    } catch {
+      // non-critical — silently skip
+    }
+  }, [domainName]);
+
+  const connectionsData = useDomainConnections(
+    domainName,
+    domainData.connections,
+    setConnections,
+    useCallback(() => refreshAllRef.current(), [])
   );
 
   const attachDomain = useMemo(() => {
@@ -83,581 +157,229 @@ export default function DomainDetailPage() {
     return `${clean}.${domainName}`;
   }, [domainName, subdomainInput]);
 
-  const loadDomainContext = useCallback(async () => {
-    if (!domainName) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const res = await fetch(`/api/domains/inventory?domain=${encodeURIComponent(domainName)}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(friendlyError(data, 'Unable to load domain details. Refresh to try again.'));
-      }
-
-      const loadedApps = (data?.data?.apps || []) as AppListItem[];
-      const domainItems = (data?.data?.domains || []) as DomainInventoryItem[];
-
-      const rootItem = domainItems.find((item) => item.domain === domainName) || null;
-      const relatedItems = domainItems.filter(
-        (item) => item.domain === domainName || item.domain.endsWith(`.${domainName}`)
-      );
-
-      const connectionMap = new Map<string, DomainConnectionItem>();
-
-      relatedItems.forEach((item) => {
-        item.connections.forEach((connection) => {
-          connectionMap.set(connection.id, {
-            id: connection.id,
-            appId: connection.app_id,
-            appName: connection.app_name,
-            appStatus: connection.app_status,
-            domain: connection.domain,
-            hostLabel: hostLabelFor(connection.domain, domainName),
-            status: connection.status,
-            sslStatus: connection.ssl_status,
-            isPrimary: connection.is_primary,
-            lastError: connection.last_error,
-          });
-        });
-      });
-
-      const relatedConnections = Array.from(connectionMap.values()).sort((a, b) => a.domain.localeCompare(b.domain));
-
-      setApps(loadedApps);
-      setPurchaseRequest(rootItem?.purchase || null);
-      setConnections(relatedConnections);
-      setExpiresAt(rootItem?.expires_at || null);
-      setAutoRenew(rootItem?.auto_renew ?? null);
-    } catch (err) {
-      console.error('Failed to load domain details:', err);
-      setError(err instanceof Error ? err.message : 'Unable to load domain details. Refresh to try again.');
-      setApps([]);
-      setPurchaseRequest(null);
-      setConnections([]);
-      setExpiresAt(null);
-      setAutoRenew(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [domainName]);
-
-  const loadDnsRecords = useCallback(async () => {
-    if (!domainName) return;
-
-    setDnsLoading(true);
-    setDnsError(null);
-
-    try {
-      const res = await fetch(`/api/domains/dns?domain=${encodeURIComponent(domainName)}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(friendlyError(data, 'Unable to load DNS records. Refresh to try again.'));
-      }
-
-      setDnsManaged(Boolean(data?.data?.managed));
-      setDnsZone((data?.data?.zone || null) as string | null);
-      setDnsRecords((data?.data?.records || []) as DnsRecordItem[]);
-    } catch (err) {
-      console.error('Failed to load DNS records:', err);
-      setDnsError(err instanceof Error ? err.message : 'Unable to load DNS records. Refresh to try again.');
-      setDnsManaged(null);
-      setDnsZone(null);
-      setDnsRecords([]);
-    } finally {
-      setDnsLoading(false);
-    }
-  }, [domainName]);
-
-  const loadRegistrarSettings = useCallback(async () => {
-    if (!domainName) return;
-
-    setRegistrarLoading(true);
-    setRegistrarError(null);
-
-    try {
-      const res = await fetch(`/api/domains/registrar?domain=${encodeURIComponent(domainName)}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(friendlyError(data, 'Unable to load domain settings. Refresh to try again.'));
-      }
-
-      const settings = (data?.data || null) as RegistrarSettings | null;
-      setRegistrarSettings(settings);
-      setNameserversDraft((settings?.nameservers || []).join('\n'));
-
-      if (settings?.expires_at) {
-        setExpiresAt(settings.expires_at);
-      }
-      if (typeof settings?.autorenew_enabled === 'boolean') {
-        setAutoRenew(settings.autorenew_enabled);
-      }
-    } catch (err) {
-      console.error('Failed to load registrar settings:', err);
-      setRegistrarError(err instanceof Error ? err.message : 'Unable to load domain settings. Refresh to try again.');
-      setRegistrarSettings(null);
-      setNameserversDraft('');
-    } finally {
-      setRegistrarLoading(false);
-    }
-  }, [domainName]);
-
-  const refreshAll = useCallback(async () => {
-    await Promise.all([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings()]);
-  }, [loadDnsRecords, loadDomainContext, loadRegistrarSettings]);
-
   useEffect(() => {
-    void refreshAll();
-  }, [refreshAll]);
-
-  const resetDnsForm = useCallback(() => setDnsForm(DEFAULT_DNS_FORM), []);
-
-  const pollOperation = async (operationId: string) => {
-    const maxAttempts = 75; // 75 × 2s = 150s — covers the full activation window
-    const delayMs = 2000;
-
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const res = await fetch(`/api/domains/operations/${operationId}`);
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error('Unable to check setup status. Please refresh and try again.');
-      }
-
-      const status = data?.operation?.status;
-      if (status === 'succeeded') {
-        return;
-      }
-      if (status === 'failed') {
-        const rawMsg = data?.operation?.error_message;
-        throw new Error(sanitizeOperationError(rawMsg, 'Domain setup failed. Please try again or contact support.'));
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    }
-
-    throw new Error('Setup is taking longer than expected. Refresh to check the current status.');
-  };
-
-  const handleVerifyConnection = async (domainId: string) => {
-    setVerifyingConnectionId(domainId);
-    try {
-      const res = await fetch(`/api/domains/${domainId}/verify`, {
-        method: 'POST',
+    let isActive = true;
+    setInitializing(true);
+    void Promise.allSettled([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings(), loadRelated()])
+      .finally(() => {
+        if (isActive) setInitializing(false);
       });
-      const data = await res.json();
+    return () => { isActive = false; };
+  }, [domainName, loadDnsRecords, loadDomainContext, loadRegistrarSettings, loadRelated]);
 
-      if (data?.verified) {
-        const connectionDomain = connections.find((c) => c.id === domainId)?.domain;
-        toast.success(`${connectionDomain ? `${connectionDomain} verified` : 'Domain verified'} — you can now activate it.`);
-        await refreshAll();
-        return;
-      }
+  const isPageLoading = domainData.loading || dnsData.dnsLoading || registrarData.registrarLoading;
 
-      toast.error(
-        friendlyError(
-          data,
-          'Verification failed — check that your TXT record exactly matches the value shown and try again.',
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to verify domain:', err);
-      toast.error('Verification check failed. Check your connection and try again.');
-    } finally {
-      setVerifyingConnectionId(null);
-    }
-  };
-
-  const handleActivateConnection = async (domainId: string) => {
-    setActivatingConnectionId(domainId);
-    const connectionDomain = connections.find((c) => c.id === domainId)?.domain;
-    try {
-      const res = await fetch(`/api/domains/${domainId}/activate`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        toast.error(friendlyError(data, 'Activation failed. Please try again.'));
-        return;
-      }
-
-      if (data?.operation_id) {
-        toast.info(`Setting up ${connectionDomain || 'domain'}\u2026 this may take up to 2 minutes.`);
-        await pollOperation(String(data.operation_id));
-      }
-
-      toast.success(`${connectionDomain || 'Domain'} is now live\u2014your SSL certificate will be ready shortly.`);
-      await refreshAll();
-    } catch (err) {
-      console.error('Failed to activate domain:', err);
-      toast.error(err instanceof Error ? err.message : 'Activation failed. Please try again.');
-    } finally {
-      setActivatingConnectionId(null);
-    }
-  };
-
-  const handleSetPrimaryConnection = async (domainId: string) => {
-    setSettingPrimaryConnectionId(domainId);
-    const connectionDomain = connections.find((c) => c.id === domainId)?.domain;
-    try {
-      const res = await fetch(`/api/domains/${domainId}/set-primary`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        toast.error(friendlyError(data, 'Failed to update primary domain. Please try again.'));
-        return;
-      }
-      toast.success(`${connectionDomain || 'Domain'} is now your primary domain.`);
-      await refreshAll();
-    } catch (err) {
-      console.error('Failed to set primary domain:', err);
-      toast.error('Failed to update primary domain. Please try again.');
-    } finally {
-      setSettingPrimaryConnectionId(null);
-    }
-  };
-
-  const handleRemoveConnection = useCallback(async (domainId: string) => {
-    const connectionDomain = connections.find((c) => c.id === domainId)?.domain;
-    setRemovingConnectionId(domainId);
-    try {
-      const res = await fetch(`/api/domains/${domainId}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to remove connection. Please try again.'));
-        return;
-      }
-      toast.success(`${connectionDomain ? `${connectionDomain} disconnected` : 'Connection removed'} from this app.`);
-      await refreshAll();
-    } catch (err) {
-      console.error('Failed to remove domain connection:', err);
-      toast.error('Failed to remove connection. Please try again.');
-    } finally {
-      setRemovingConnectionId(null);
-      setRemoveConfirmConnectionId(null);
-    }
-  }, [connections, refreshAll]);
-
-  const handleToggleAutorenew = useCallback(async () => {
-    if (!registrarSettings?.managed || typeof registrarSettings.autorenew_enabled !== 'boolean') {
-      return;
-    }
-
-    setSavingAutorenew(true);
-    try {
-      const res = await fetch('/api/domains/registrar', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          autorenew_enabled: !registrarSettings.autorenew_enabled,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to update auto-renew. Please try again.'));
-        return;
-      }
-
-      toast.success(`Auto-renew ${data?.data?.autorenew_enabled ? 'enabled' : 'turned off'}.`);
-      await refreshAll();
-    } catch (err) {
-      console.error('Failed to update auto-renew:', err);
-      toast.error('Failed to update auto-renew. Please try again.');
-    } finally {
-      setSavingAutorenew(false);
-    }
-  }, [domainName, refreshAll, registrarSettings]);
-
-  const handleSaveNameservers = useCallback(async () => {
-    if (!registrarSettings?.managed) {
-      return;
-    }
-
-    const nameservers = nameserversDraft
-      .split('\n')
-      .map((value) => value.trim().toLowerCase())
-      .filter(Boolean);
-
-    if (nameservers.length < 2) {
-      toast.error('Please add at least two nameservers.');
-      return;
-    }
-
-    setSavingNameservers(true);
-    try {
-      const res = await fetch('/api/domains/registrar', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          nameservers,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to update nameservers. Please try again.'));
-        return;
-      }
-
-      toast.success('Nameservers updated. Changes may take up to 48 hours to fully propagate.');
-      await refreshAll();
-    } catch (err) {
-      console.error('Failed to update nameservers:', err);
-      toast.error('Failed to update nameservers. Please try again.');
-    } finally {
-      setSavingNameservers(false);
-    }
-  }, [domainName, nameserversDraft, refreshAll, registrarSettings]);
-
-  const handleEditDnsRecord = useCallback((record: DnsRecordItem) => {
-    setDnsForm({
-      recordId: record.id,
-      type: (record.type?.toUpperCase() as DnsFormState['type']) || 'A',
-      host: record.host || '@',
-      answer: record.answer || '',
-      ttl: Number(record.ttl || 300),
-      priority: record.priority !== null ? String(record.priority) : '',
-    });
-  }, []);
-
-  const handleSaveDnsRecord = useCallback(async () => {
-    if (!dnsManaged) {
-      toast.error('DNS records can only be edited for domains managed through your account.');
-      return;
-    }
-
-    const answer = dnsForm.answer.trim();
-    const host = (dnsForm.host.trim() || '@').toLowerCase();
-    const ttl = Number.isFinite(dnsForm.ttl) ? Math.max(60, Math.min(86400, Math.floor(dnsForm.ttl))) : 300;
-    const needsPriority = dnsForm.type === 'MX' || dnsForm.type === 'SRV';
-    const priorityNumber = dnsForm.priority.trim() ? Number(dnsForm.priority.trim()) : NaN;
-
-    if (!answer) {
-      toast.error('Record value is required.');
-      return;
-    }
-    if (host === '@' && dnsForm.type === 'CNAME') {
-      toast.error('The root domain cannot use a CNAME record. Use A or ANAME instead.');
-      return;
-    }
-    if (needsPriority && (!Number.isInteger(priorityNumber) || priorityNumber < 0 || priorityNumber > 65535)) {
-      toast.error(`${dnsForm.type} records require a priority value between 0 and 65535.`);
-      return;
-    }
-
-    setDnsSaving(true);
-    try {
-      const method = dnsForm.recordId ? 'PATCH' : 'POST';
-      const res = await fetch('/api/domains/dns', {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          record_id: dnsForm.recordId ?? undefined,
-          type: dnsForm.type,
-          host,
-          answer,
-          ttl,
-          priority: needsPriority ? priorityNumber : undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to save DNS record. Please try again.'));
-        return;
-      }
-
-      toast.success(dnsForm.recordId ? 'DNS record updated.' : 'DNS record added.');
-      resetDnsForm();
-      await loadDnsRecords();
-    } catch (err) {
-      console.error('Failed to save DNS record:', err);
-      toast.error('Failed to save DNS record. Please try again.');
-    } finally {
-      setDnsSaving(false);
-    }
-  }, [dnsForm, dnsManaged, domainName, loadDnsRecords, resetDnsForm]);
-
-  const handleDeleteDnsRecord = useCallback(async (recordId: number) => {
-    if (!dnsManaged) return;
-    setDeleteConfirmRecordId(null); // clear dialog before async work
-
-    setDnsDeletingRecordId(recordId);
-    try {
-      const res = await fetch('/api/domains/dns', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          domain: domainName,
-          record_id: recordId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(friendlyError(data, 'Failed to delete DNS record. Please try again.'));
-        return;
-      }
-
-      toast.success('DNS record deleted.');
-      if (dnsForm.recordId === recordId) {
-        resetDnsForm();
-      }
-      await loadDnsRecords();
-    } catch (err) {
-      console.error('Failed to delete DNS record:', err);
-      toast.error('Failed to delete DNS record. Please try again.');
-    } finally {
-      setDnsDeletingRecordId(null);
-    }
-  }, [dnsForm.recordId, dnsManaged, domainName, loadDnsRecords, resetDnsForm]);
+  const appOptions: DomainAppOption[] = useMemo(
+    () => domainData.apps.map((app) => ({ id: app.id, name: app.name, status: app.status })),
+    [domainData.apps]
+  );
 
   const connectedAppNames = useMemo(() => {
-    const unique = new Set(connections.map((item) => item.appName));
+    const unique = new Set(domainData.connections.map((item) => item.appName));
     return Array.from(unique);
-  }, [connections]);
+  }, [domainData.connections]);
 
-  const overallStatus = useMemo(() => {
-    if (connections.some((c) => c.status === 'failed')) return 'Needs Attention';
-    if (purchaseRequest?.status === 'requested' || purchaseRequest?.status === 'processing') return 'Purchase Pending';
-    if (connections.some((c) => c.status === 'pending' || c.status === 'verified')) return 'Setup Pending';
-    if (connections.some((c) => c.status === 'active')) return 'Active';
-    if (purchaseRequest?.status === 'completed') return 'Purchased';
+  const overallStatus = useMemo((): OverallStatus => {
+    if (domainData.connections.some((c) => c.status === 'failed')) return 'Needs Attention';
+    if (
+      domainData.purchaseRequest?.status === 'requested' ||
+      domainData.purchaseRequest?.status === 'processing'
+    ) return 'Purchase Pending';
+    if (domainData.connections.some((c) => c.status === 'pending' || c.status === 'verified')) return 'Setup Pending';
+    if (domainData.connections.some((c) => c.status === 'active')) return 'Active';
+    if (domainData.purchaseRequest?.status === 'completed') return 'Purchased';
     return 'Unknown';
-  }, [connections, purchaseRequest]);
+  }, [domainData.connections, domainData.purchaseRequest]);
+
+  const issuingConnectionIds = useMemo(
+    () => domainData.connections.filter((c) => c.sslStatus === 'issuing').map((c) => c.id),
+    [domainData.connections]
+  );
+  useAutoSslRefresh(issuingConnectionIds, domainData.loadDomainContext);
+
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings()]);
+  }, [loadDomainContext, loadDnsRecords, loadRegistrarSettings]);
+
+  useEffect(() => {
+    refreshAllRef.current = handleRefresh;
+  }, [handleRefresh]);
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <div className="mb-6">
-        <Link href="/dashboard/domains" className="inline-flex items-center text-sm text-white/70 hover:text-white">
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Domains
-        </Link>
-      </div>
+    <div className="flex-1 min-h-screen px-6 py-6 text-white sm:px-8 sm:py-8">
+      <div className="max-w-5xl mx-auto space-y-6">
 
-      <Card className="mb-6 border-white/10 bg-white/[0.03]">
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <div>
-            <CardTitle className="text-2xl">{domainName}</CardTitle>
-            <CardDescription className="text-white/60 mt-1">Domain control and routing details</CardDescription>
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-1.5 text-sm text-white/40">
+          <Link href="/dashboard/domains" className="hover:text-white/70 transition-colors">
+            Domains
+          </Link>
+          {parentDomain && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5 text-white/20" />
+              <Link
+                href={`/dashboard/domains/${encodeURIComponent(parentDomain)}`}
+                className="font-mono hover:text-white/70 transition-colors"
+              >
+                {parentDomain}
+              </Link>
+            </>
+          )}
+          <ChevronRight className="h-3.5 w-3.5 text-white/20" />
+          <span className="font-mono text-white/70">{domainName}</span>
+        </nav>
+
+        {/* Domain header */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2 min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight font-mono text-white truncate">
+              {domainName}
+            </h1>
+            {/* Meta row */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-white/45">
+              <StatusPill status={overallStatus} />
+              <span>{domainData.connections.length} connection{domainData.connections.length !== 1 ? 's' : ''}</span>
+              {connectedAppNames.length > 0 && (
+                <span>{connectedAppNames.join(', ')}</span>
+              )}
+              {domainData.expiresAt && (
+                <span>
+                  Expires{' '}
+                  <span className="text-white/60">
+                    {new Date(domainData.expiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </span>
+              )}
+              {domainData.autoRenew !== null && (
+                <span className={domainData.autoRenew ? 'text-emerald-400/80' : 'text-white/35'}>
+                  Auto-renew {domainData.autoRenew ? 'on' : 'off'}
+                </span>
+              )}
+            </div>
           </div>
+
           <Button
-            variant="outline"
-            className="border-white/20 text-white hover:bg-white/10"
-            onClick={() => void refreshAll()}
-            disabled={loading}
+            variant="ghost"
+            size="sm"
+            className="self-start text-white/40 hover:text-white hover:bg-white/[0.06] shrink-0"
+            onClick={handleRefresh}
+            disabled={isPageLoading}
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {isPageLoading ? (
+              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </Button>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
-          <Badge className="border-cyan-500/30 bg-cyan-500/20 text-cyan-100">Status: {overallStatus}</Badge>
-          <Badge className="border-white/20 bg-white/10 text-white/90">Connected apps: {connectedAppNames.length}</Badge>
-          <Badge className="border-white/20 bg-white/10 text-white/90">Connections: {connections.length}</Badge>
-          {expiresAt && (
-            <Badge className="border-white/20 bg-white/10 text-white/90">
-              Expires: {new Date(expiresAt).toLocaleDateString()}
-            </Badge>
-          )}
-          {autoRenew !== null && (
-            <Badge className="border-white/20 bg-white/10 text-white/90">Auto-renew: {autoRenew ? 'On' : 'Off'}</Badge>
-          )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {error && (
-        <Card className="mb-4 border-red-500/30 bg-red-500/10">
-          <CardContent className="py-4 text-sm text-red-100 flex items-center gap-2">
+        {/* Error */}
+        {domainData.error && (
+          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-200">
             <AlertTriangle className="h-4 w-4 shrink-0" />
-            {looksInternal(error) ? 'Unable to load this domain. Refresh the page to try again.' : error}
-          </CardContent>
-        </Card>
-      )}
+            {looksInternal(domainData.error)
+              ? 'Unable to load this domain. Refresh the page to try again.'
+              : domainData.error}
+          </div>
+        )}
 
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="bg-white/5 border border-white/10 flex-wrap">
-          <TabsTrigger value="overview" className="data-[state=active]:bg-white/10">Overview</TabsTrigger>
-          <TabsTrigger value="connections" className="data-[state=active]:bg-white/10">Connections</TabsTrigger>
-          <TabsTrigger value="dns" className="data-[state=active]:bg-white/10">DNS</TabsTrigger>
-          <TabsTrigger value="settings" className="data-[state=active]:bg-white/10">Settings</TabsTrigger>
-        </TabsList>
+        {/* Tabs */}
+        {initializing ? (
+          <PageSkeleton />
+        ) : (
+          <Tabs defaultValue="overview">
+            {/* Underline tab bar */}
+            <div className="border-b border-white/[0.06]">
+              <TabsList className="bg-transparent border-0 h-auto p-0 gap-0 rounded-none -mb-px">
+                {[
+                  { value: 'overview',     label: 'Overview' },
+                  { value: 'connections',  label: 'Connections' },
+                  { value: 'dns',          label: 'DNS' },
+                  { value: 'settings',     label: 'Settings' },
+                ].map((tab) => (
+                  <TabsTrigger
+                    key={tab.value}
+                    value={tab.value}
+                    className="rounded-none border-b-2 border-transparent px-4 py-2.5 text-sm font-medium text-white/45 data-[state=active]:border-white data-[state=active]:text-white data-[state=active]:bg-transparent data-[state=active]:shadow-none hover:text-white/70 transition-colors"
+                  >
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
-        <TabsContent value="overview" className="space-y-4">
-          <DomainOverviewTab
-            purchaseRequest={purchaseRequest}
-            connections={connections}
-            connectedAppNames={connectedAppNames}
-          />
-        </TabsContent>
+            <div className="pt-5">
+              <TabsContent value="overview" className="mt-0">
+                <DomainOverviewTab
+                  purchaseRequest={domainData.purchaseRequest}
+                  connections={domainData.connections}
+                  connectedAppNames={connectedAppNames}
+                  relatedDomains={relatedDomains}
+                />
+              </TabsContent>
 
-        <TabsContent value="connections" className="space-y-4">
-          <DomainConnectionsTab
-            domainName={domainName}
-            connections={connections}
-            loading={loading}
-            appOptions={appOptions}
-            subdomainInput={subdomainInput}
-            attachDomain={attachDomain}
-            removeConfirmConnectionId={removeConfirmConnectionId}
-            verifyingConnectionId={verifyingConnectionId}
-            activatingConnectionId={activatingConnectionId}
-            settingPrimaryConnectionId={settingPrimaryConnectionId}
-            removingConnectionId={removingConnectionId}
-            onSubdomainChange={setSubdomainInput}
-            onAttached={() => { setSubdomainInput(''); void refreshAll(); }}
-            onVerify={(id) => void handleVerifyConnection(id)}
-            onActivate={(id) => void handleActivateConnection(id)}
-            onSetPrimary={(id) => void handleSetPrimaryConnection(id)}
-            onRemoveRequest={setRemoveConfirmConnectionId}
-            onRemoveConfirm={(id) => void handleRemoveConnection(id)}
-            onRemoveCancel={() => setRemoveConfirmConnectionId(null)}
-          />
-        </TabsContent>
+              <TabsContent value="connections" className="mt-0">
+                <DomainConnectionsTab
+                  domainName={domainName}
+                  connections={domainData.connections}
+                  loading={domainData.loading}
+                  appOptions={appOptions}
+                  subdomainInput={subdomainInput}
+                  attachDomain={attachDomain}
+                  removeConfirmConnectionId={connectionsData.removeConfirmConnectionId}
+                  verifyingConnectionId={connectionsData.verifyingConnectionId}
+                  activatingConnectionId={connectionsData.activatingConnectionId}
+                  settingPrimaryConnectionId={connectionsData.settingPrimaryConnectionId}
+                  removingConnectionId={connectionsData.removingConnectionId}
+                  checkingSslId={connectionsData.checkingSslId}
+                  onSubdomainChange={setSubdomainInput}
+                  onAttached={() => { setSubdomainInput(''); void handleRefresh(); }}
+                  onVerify={connectionsData.onVerify}
+                  onActivate={connectionsData.onActivate}
+                  onSetPrimary={connectionsData.onSetPrimary}
+                  onRemoveRequest={connectionsData.onRemoveRequest}
+                  onRemoveConfirm={connectionsData.onRemoveConfirm}
+                  onRemoveCancel={connectionsData.onRemoveCancel}
+                  onCheckSsl={connectionsData.onCheckSsl}
+                />
+              </TabsContent>
 
-        <TabsContent value="dns" className="space-y-4">
-          <DomainDnsTab
-            connections={connections}
-            dnsLoading={dnsLoading}
-            dnsError={dnsError}
-            dnsManaged={dnsManaged}
-            dnsZone={dnsZone}
-            dnsRecords={dnsRecords}
-            dnsForm={dnsForm}
-            dnsSaving={dnsSaving}
-            dnsDeletingRecordId={dnsDeletingRecordId}
-            deleteConfirmRecordId={deleteConfirmRecordId}
-            domainName={domainName}
-            onFormChange={(patch) => setDnsForm((prev) => ({ ...prev, ...patch }))}
-            onEditRecord={handleEditDnsRecord}
-            onSaveRecord={() => void handleSaveDnsRecord()}
-            onCancelEdit={resetDnsForm}
-            onDeleteRequest={setDeleteConfirmRecordId}
-            onDeleteConfirm={(id) => void handleDeleteDnsRecord(id)}
-            onDeleteCancel={() => setDeleteConfirmRecordId(null)}
-          />
-        </TabsContent>
+              <TabsContent value="dns" className="mt-0">
+                <DomainDnsTab
+                  connections={domainData.connections}
+                  dnsLoading={dnsData.dnsLoading}
+                  dnsError={dnsData.dnsError}
+                  dnsManaged={dnsData.dnsManaged}
+                  dnsZone={dnsData.dnsZone}
+                  dnsRecords={dnsData.dnsRecords}
+                  dnsForm={dnsData.dnsForm}
+                  dnsSaving={dnsData.dnsSaving}
+                  dnsDeletingRecordId={dnsData.dnsDeletingRecordId}
+                  deleteConfirmRecordId={dnsData.deleteConfirmRecordId}
+                  domainName={domainName}
+                  onFormChange={dnsData.onFormChange}
+                  onEditRecord={dnsData.onEditRecord}
+                  onSaveRecord={dnsData.onSaveRecord}
+                  onCancelEdit={dnsData.onCancelEdit}
+                  onDeleteRequest={dnsData.onDeleteRequest}
+                  onDeleteConfirm={dnsData.onDeleteConfirm}
+                  onDeleteCancel={dnsData.onDeleteCancel}
+                />
+              </TabsContent>
 
-        <TabsContent value="settings" className="space-y-4">
-          <DomainSettingsTab
-            registrarLoading={registrarLoading}
-            registrarError={registrarError}
-            registrarSettings={registrarSettings}
-            nameserversDraft={nameserversDraft}
-            savingAutorenew={savingAutorenew}
-            savingNameservers={savingNameservers}
-            onNameserversDraftChange={setNameserversDraft}
-            onToggleAutorenew={() => void handleToggleAutorenew()}
-            onSaveNameservers={() => void handleSaveNameservers()}
-          />
-        </TabsContent>
-      </Tabs>
+              <TabsContent value="settings" className="mt-0">
+                <DomainSettingsTab
+                  registrarLoading={registrarData.registrarLoading}
+                  registrarError={registrarData.registrarError}
+                  registrarSettings={registrarData.registrarSettings}
+                  savingAutorenew={registrarData.savingAutorenew}
+                  onToggleAutorenew={registrarData.onToggleAutorenew}
+                />
+              </TabsContent>
+            </div>
+          </Tabs>
+        )}
+      </div>
     </div>
   );
 }
