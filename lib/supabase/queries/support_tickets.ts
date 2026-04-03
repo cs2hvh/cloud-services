@@ -57,6 +57,42 @@ export interface SupportTicketDetail extends SupportTicketSummary {
   attachments: SupportTicketAttachment[];
 }
 
+export interface SupportTicketOwnerSummary {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  email: string | null;
+  avatar: string | null;
+}
+
+export interface AdminSupportTicketSummary extends SupportTicketSummary {
+  owner_id: string;
+  owner: SupportTicketOwnerSummary | null;
+}
+
+export interface AdminSupportTicketDetail extends SupportTicketDetail {
+  owner_id: string;
+  owner: SupportTicketOwnerSummary | null;
+}
+
+export interface SupportTicketAdminListInput {
+  page?: number;
+  limit?: number;
+  status?: SupportTicketStatus | "all";
+  topic?: string;
+  search?: string;
+}
+
+export interface SupportTicketAdminListResult {
+  tickets: AdminSupportTicketSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 export interface SupportTicketCreateInput {
   ownerId: string;
   topic: string;
@@ -112,6 +148,45 @@ async function getSupportDb() {
   const supabase = await createServiceClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (supabase as any).schema("support");
+}
+
+async function getOwnerProfiles(ownerIds: string[]): Promise<Map<string, SupportTicketOwnerSummary>> {
+  const uniqueOwnerIds = Array.from(new Set(ownerIds)).filter(Boolean);
+  if (uniqueOwnerIds.length === 0) {
+    return new Map<string, SupportTicketOwnerSummary>();
+  }
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("id, username, display_name, avatar")
+    .in("id", uniqueOwnerIds);
+
+  if (error) {
+    console.error("[SupportTickets] getOwnerProfiles failed:", error.message);
+    return new Map<string, SupportTicketOwnerSummary>();
+  }
+
+  const { data: authUsersData, error: authUsersError } = await supabase.auth.admin.listUsers();
+  if (authUsersError) {
+    console.error("[SupportTickets] getOwnerProfiles auth users failed:", authUsersError.message);
+  }
+  const emailMap = new Map<string, string | null>(
+    (authUsersData?.users ?? []).map((user) => [user.id, user.email ?? null])
+  );
+
+  const map = new Map<string, SupportTicketOwnerSummary>();
+  (data ?? []).forEach((profile) => {
+    map.set(profile.id, {
+      id: profile.id,
+      username: profile.username ?? null,
+      display_name: profile.display_name ?? null,
+      email: emailMap.get(profile.id) ?? null,
+      avatar: profile.avatar ?? null,
+    });
+  });
+
+  return map;
 }
 
 export const SupportTickets = {
@@ -185,6 +260,195 @@ export const SupportTickets = {
       messages: (messages ?? []) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
+  },
+
+  async listForAdmin(input: SupportTicketAdminListInput = {}): Promise<SupportTicketAdminListResult> {
+    const supportDb = await getSupportDb();
+    const page = Math.max(1, input.page ?? 1);
+    const limit = Math.min(100, Math.max(1, input.limit ?? 10));
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+    const searchTerm = (input.search ?? "")
+      .trim()
+      .replace(/[^a-zA-Z0-9@._\-\s]/g, " ")
+      .replaceAll(",", " ");
+
+    let query = supportDb
+      .from("support_tickets")
+      .select(
+        "id, ticket_number, status, topic, sub_topic, tertiary_topic, subject, affected_resource_type, affected_resource_id, affected_resource_name, created_at, updated_at, latest_message_at, resolved_at, owner_id",
+        { count: "exact" }
+      )
+      .order("latest_message_at", { ascending: false })
+      .range(from, to);
+
+    if (input.status && input.status !== "all") {
+      query = query.eq("status", input.status);
+    }
+
+    if (input.topic && input.topic !== "all") {
+      query = query.eq("topic", input.topic);
+    }
+
+    if (searchTerm.length > 0) {
+      query = query.or(
+        `ticket_number.ilike.%${searchTerm}%,subject.ilike.%${searchTerm}%,owner_id.ilike.%${searchTerm}%,affected_resource_name.ilike.%${searchTerm}%`
+      );
+    }
+
+    const { data, error, count } = await query;
+    if (error) {
+      console.error("[SupportTickets] listForAdmin failed:", error.message);
+      return {
+        tickets: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const ownerProfiles = await getOwnerProfiles((data ?? []).map((ticket) => ticket.owner_id));
+    const tickets = (data ?? []).map((ticket) => ({
+      id: ticket.id,
+      ticket_number: ticket.ticket_number,
+      status: ticket.status as SupportTicketStatus,
+      topic: ticket.topic,
+      sub_topic: ticket.sub_topic,
+      tertiary_topic: ticket.tertiary_topic,
+      subject: ticket.subject,
+      affected_resource_type: ticket.affected_resource_type,
+      affected_resource_id: ticket.affected_resource_id,
+      affected_resource_name: ticket.affected_resource_name,
+      created_at: ticket.created_at,
+      updated_at: ticket.updated_at,
+      latest_message_at: ticket.latest_message_at,
+      resolved_at: ticket.resolved_at,
+      owner_id: ticket.owner_id,
+      owner: ownerProfiles.get(ticket.owner_id) || null,
+    })) as AdminSupportTicketSummary[];
+
+    const total = count ?? 0;
+    return {
+      tickets,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  },
+
+  async getByIdForAdmin(ticketId: string): Promise<AdminSupportTicketDetail | null> {
+    const supportDb = await getSupportDb();
+
+    const { data: ticket, error: ticketError } = await supportDb
+      .from("support_tickets")
+      .select(
+        "id, ticket_number, status, topic, sub_topic, tertiary_topic, subject, description, affected_resource_type, affected_resource_id, affected_resource_name, created_at, updated_at, latest_message_at, resolved_at, owner_id"
+      )
+      .eq("id", ticketId)
+      .maybeSingle();
+
+    if (ticketError) {
+      console.error("[SupportTickets] getByIdForAdmin failed:", ticketError.message);
+      return null;
+    }
+    if (!ticket) {
+      return null;
+    }
+
+    const [{ data: messages, error: messagesError }, { data: attachments, error: attachmentsError }] =
+      await Promise.all([
+        supportDb
+          .from("support_ticket_messages")
+          .select("id, ticket_id, author_id, actor_type, message, created_at")
+          .eq("ticket_id", ticketId)
+          .order("created_at", { ascending: true }),
+        supportDb
+          .from("support_ticket_attachments")
+          .select("id, ticket_id, message_id, uploaded_by, file_name, file_path, mime_type, file_size, created_at")
+          .eq("ticket_id", ticketId)
+          .order("created_at", { ascending: true }),
+      ]);
+
+    if (messagesError) {
+      console.error("[SupportTickets] getByIdForAdmin messages failed:", messagesError.message);
+    }
+    if (attachmentsError) {
+      console.error("[SupportTickets] getByIdForAdmin attachments failed:", attachmentsError.message);
+    }
+
+    const ownerProfiles = await getOwnerProfiles([ticket.owner_id]);
+
+    return {
+      id: ticket.id,
+      ticket_number: ticket.ticket_number,
+      status: ticket.status as SupportTicketStatus,
+      topic: ticket.topic,
+      sub_topic: ticket.sub_topic,
+      tertiary_topic: ticket.tertiary_topic,
+      subject: ticket.subject,
+      description: ticket.description,
+      affected_resource_type: ticket.affected_resource_type,
+      affected_resource_id: ticket.affected_resource_id,
+      affected_resource_name: ticket.affected_resource_name,
+      created_at: ticket.created_at,
+      updated_at: ticket.updated_at,
+      latest_message_at: ticket.latest_message_at,
+      resolved_at: ticket.resolved_at,
+      owner_id: ticket.owner_id,
+      owner: ownerProfiles.get(ticket.owner_id) || null,
+      messages: (messages ?? []) as SupportTicketMessage[],
+      attachments: (attachments ?? []) as SupportTicketAttachment[],
+    };
+  },
+
+  async addMessage(input: {
+    ticketId: string;
+    actorType: "user" | "admin" | "system";
+    message: string;
+    authorId?: string | null;
+  }): Promise<SupportTicketMessage | null> {
+    const supportDb = await getSupportDb();
+    const { data, error } = await supportDb
+      .from("support_ticket_messages")
+      .insert({
+        ticket_id: input.ticketId,
+        author_id: input.authorId ?? null,
+        actor_type: input.actorType,
+        message: input.message,
+      })
+      .select("id, ticket_id, author_id, actor_type, message, created_at")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupportTickets] addMessage failed:", error.message);
+      return null;
+    }
+    return (data as SupportTicketMessage | null) ?? null;
+  },
+
+  async updateStatusByAdmin(ticketId: string, status: SupportTicketStatus): Promise<boolean> {
+    const supportDb = await getSupportDb();
+    const updatePayload =
+      status === "resolved"
+        ? { status, resolved_at: new Date().toISOString() }
+        : { status, resolved_at: null };
+
+    const { error } = await supportDb
+      .from("support_tickets")
+      .update(updatePayload)
+      .eq("id", ticketId);
+
+    if (error) {
+      console.error("[SupportTickets] updateStatusByAdmin failed:", error.message);
+      return false;
+    }
+    return true;
   },
 
   async create(input: SupportTicketCreateInput): Promise<{ ticket: SupportTicketSummary; messageId: string | null } | null> {
