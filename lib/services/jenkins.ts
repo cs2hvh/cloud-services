@@ -761,7 +761,7 @@ export class JenkinsService {
       case 'spring-boot':
       case 'springboot':
         console.log(`[JenkinsService] Using JAVA/MAVEN pipeline (auto-Dockerfile with Maven build)`);
-        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deployTrigger, envVars, containerPort);
+        return createJavaPipeline(appName, githubUrl, branch, size, APP_DOMAIN, appId, webhookBaseUrl, deploymentRecordSecret, deployTrigger, envVars, containerPort);
 
       case 'express':
       case 'express.js':

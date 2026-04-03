@@ -113,7 +113,7 @@ pipeline {
     kubernetes {
       inheritFrom 'common-agent'
       podRetention never()
-      activeDeadlineSeconds 3200
+      activeDeadlineSeconds 1800
     }
   }
 
