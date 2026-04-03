@@ -18,7 +18,8 @@ export function createJavaPipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
+  deploymentRecordSecret: string = '',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
 ): string {
@@ -112,6 +113,7 @@ pipeline {
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -398,7 +400,7 @@ DEPLOYMENT_EOF
 
     stage('Send Deployment Notification') {
       when {
-        expression { return env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID }
+        expression { return env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET }
       }
       steps {
         script {
@@ -411,6 +413,7 @@ DEPLOYMENT_EOF
           sh(script: """
             curl -X POST "\${webhookUrl}" \\
               -H "Content-Type: application/json" \\
+              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
               -d '\${payload}' || echo 'Webhook notification failed (non-blocking)'
           """, returnStatus: false)
           
@@ -424,12 +427,13 @@ DEPLOYMENT_EOF
     failure {
       script {
         echo 'Pipeline failed - sending failure notification'
-        if (env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID) {
+        if (env.WEBHOOK_BASE_URL && env.PLATFORM_APP_ID && env.JENKINS_DEPLOYMENT_RECORD_SECRET) {
           def webhookUrl = "\${env.WEBHOOK_BASE_URL}/api/services/platform-apps/\${env.PLATFORM_APP_ID}/builds"
           def payload = """{"buildNumber":\${env.BUILD_NUMBER},"status":"FAILED","trigger":"\${env.DEPLOY_TRIGGER}","jenkinsUrl":"\${env.BUILD_URL}"}"""
           sh(script: """
             curl -X POST "\${webhookUrl}" \\
               -H "Content-Type: application/json" \\
+              -H "x-deployment-record-secret: \${env.JENKINS_DEPLOYMENT_RECORD_SECRET}" \\
               -d '\${payload}' || echo 'Failure webhook failed (non-blocking)'
           """, returnStatus: false)
         }

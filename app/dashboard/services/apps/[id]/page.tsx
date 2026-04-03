@@ -704,6 +704,39 @@ export default function AppDetailPage() {
     [activeTab]
   );
 
+  // ── Transparency: derive which build is actually serving traffic ──
+  const servingBuildNumber = useMemo(() => {
+    // The running container's imageTag is the Jenkins BUILD_NUMBER (e.g. "14")
+    const tag = details?.container?.imageTag;
+    if (!tag) return null;
+    const num = parseInt(tag, 10);
+    return Number.isNaN(num) ? null : num;
+  }, [details?.container?.imageTag]);
+
+  // Detect "degraded" state: app status is running (old pod healthy) but the
+  // latest deployment failed — meaning the new code never took over.
+  const latestDeployment = deployments.length > 0 ? deployments[0] : null;
+  const isDegraded = useMemo(() => {
+    if (app?.status !== 'running') return false;
+    if (!latestDeployment) return false;
+    // While a deploy is in progress the new pod hasn't started yet — not degraded.
+    if (latestDeployment.status === 'BUILDING') return false;
+    // No image tag info yet — can't determine serving version.
+    if (servingBuildNumber === null) return false;
+    // Sole ground truth: is a completed deployment (any recorded status) sitting at
+    // a higher build number than what the pod is actually running?
+    // We intentionally ignore latestDeployment.status here because the deployment
+    // record is written by a webhook that can silently fail (e.g. WEBHOOK_BASE_URL
+    // misconfigured). The running container's image tag is always reliable — if the
+    // build number matches what's serving, the deploy succeeded regardless of what
+    // the database says.
+    return latestDeployment.build_number > servingBuildNumber;
+  }, [app?.status, latestDeployment, servingBuildNumber]);
+
+  // High restart count warning (CrashLoopBackOff signature)
+  const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
+  const hasHighRestarts = restartCount >= 5;
+
   if (loading) {
     return (
       <div className="flex-1 bg-black min-h-screen p-6 sm:p-8 text-white flex items-center justify-center">
@@ -759,11 +792,24 @@ export default function AppDetailPage() {
                   Application Deployment
                 </p>
                 {getStatusBadge(app.status, buildInfo?.building)}
-                {/* Only show Live when the Supabase connection is up AND the app is actually running */}
+                {/* Live badge — but show Degraded when new deploy failed and old pod is serving */}
                 {appConnectionStatus === 'connected' && app.status === 'running' && !buildInfo?.building && (
-                  <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
-                    <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
-                    Live
+                  isDegraded ? (
+                    <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
+                      <AlertTriangle className="mr-1.5 h-2 w-2" />
+                      Degraded
+                    </Badge>
+                  ) : (
+                    <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/10 text-emerald-300 text-xs">
+                      <span className="mr-1.5 h-2 w-2 rounded-full bg-emerald-300 animate-pulse" />
+                      Live
+                    </Badge>
+                  )
+                )}
+                {/* Show which build is actually serving traffic */}
+                {servingBuildNumber !== null && app.status === 'running' && !buildInfo?.building && (
+                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs font-mono">
+                    Serving Build #{servingBuildNumber}
                   </Badge>
                 )}
               </div>
@@ -785,6 +831,24 @@ export default function AppDetailPage() {
                 <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
+                </div>
+              )}
+              {/* Degraded state warning: newer deploy exists but old build is still serving */}
+              {isDegraded && latestDeployment && servingBuildNumber !== null && (
+                <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    {`Build #${latestDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                  </span>
+                </div>
+              )}
+              {/* High restart warning */}
+              {hasHighRestarts && app.status === 'running' && !buildInfo?.building && (
+                <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
+                  <RefreshCw className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    Pod has restarted {restartCount} times. This may indicate a CrashLoop — check Runtime Logs.
+                  </span>
                 </div>
               )}
 
@@ -1010,6 +1074,7 @@ export default function AppDetailPage() {
                           <p className="text-xs text-white/40 mb-1">Status</p>
                           <Badge className={`rounded-none ${
                             health?.status === 'healthy' || details?.pod?.phase === 'Running' ? 'bg-green-500/20 text-green-400' :
+                            health?.status === 'degraded' ? 'bg-orange-500/20 text-orange-400' :
                             'bg-yellow-500/20 text-yellow-400'
                           }`}>
                             {health?.status || details?.pod?.phase || 'Unknown'}
@@ -1021,17 +1086,60 @@ export default function AppDetailPage() {
                             {details?.deployment?.readyReplicas || health?.pod_count || 0}/{details?.deployment?.replicas || 1}
                           </p>
                         </div>
-                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                        <div className={`border bg-white/[0.03] px-4 py-4 ${hasHighRestarts ? 'border-yellow-500/30' : 'border-white/[0.08]'}`}>
                           <p className="text-xs text-white/40 mb-1">Restarts</p>
-                          <p className="text-xl font-bold text-white">
-                            {details?.container?.restartCount || health?.restart_count || 0}
+                          <p className={`text-xl font-bold ${hasHighRestarts ? 'text-yellow-400' : 'text-white'}`}>
+                            {restartCount}
                           </p>
+                          {hasHighRestarts && (
+                            <p className="text-xs text-yellow-400/70 mt-1">Possible CrashLoop</p>
+                          )}
                         </div>
                         <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
                           <p className="text-xs text-white/40 mb-1">Uptime</p>
                           <p className="text-sm text-white">{details?.pod?.uptime || '-'}</p>
                         </div>
                       </div>
+
+                      {/* Container Info: what image is actually running */}
+                      {details?.container && (
+                        <div className="border border-white/[0.08] bg-white/[0.03] px-4 py-4">
+                          <h5 className="text-sm font-semibold text-white/70 mb-3 flex items-center gap-1.5">
+                            <Box className="w-4 h-4" />
+                            Running Container
+                          </h5>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Image Tag</p>
+                              <p className="text-sm font-mono text-white">{details.container.imageTag || 'latest'}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Container State</p>
+                              <Badge className={`rounded-none text-xs ${
+                                details.container.state === 'Running' ? 'bg-green-500/20 text-green-400' :
+                                details.container.state?.includes('CrashLoop') ? 'bg-red-500/20 text-red-400' :
+                                'bg-yellow-500/20 text-yellow-400'
+                              }`}>
+                                {details.container.state || 'Unknown'}
+                              </Badge>
+                            </div>
+                            <div>
+                              <p className="text-xs text-white/40 mb-1">Ready</p>
+                              <Badge className={`rounded-none text-xs ${
+                                details.container.ready ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {details.container.ready ? 'Yes' : 'No'}
+                              </Badge>
+                            </div>
+                            {servingBuildNumber !== null && (
+                              <div>
+                                <p className="text-xs text-white/40 mb-1">Serving Build</p>
+                                <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Resource Usage */}
                       {metrics && (
@@ -1105,6 +1213,29 @@ export default function AppDetailPage() {
                               <p className="text-xs text-white/40 mb-1">Port</p>
                               <p className="text-xs font-mono text-white">{details.network.servicePort}</p>
                             </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Warning Events from K8s */}
+                      {details?.events && details.events.filter(e => e.type === 'Warning').length > 0 && (
+                        <div className="border border-yellow-500/20 bg-yellow-500/[0.04] px-4 py-4">
+                          <h5 className="text-sm font-semibold text-yellow-400/80 mb-3 flex items-center gap-1.5">
+                            <AlertTriangle className="w-4 h-4" />
+                            Recent Warnings
+                          </h5>
+                          <div className="space-y-2">
+                            {details.events.filter(e => e.type === 'Warning').map((event, idx) => (
+                              <div key={idx} className="flex items-start gap-2 text-xs text-yellow-200/70">
+                                <span className="font-mono text-yellow-400/60 shrink-0">{event.reason}</span>
+                                <span className="text-white/50">{event.message}</span>
+                                {event.count > 1 && (
+                                  <Badge className="rounded-none bg-yellow-500/10 text-yellow-400/60 text-[10px] ml-auto shrink-0">
+                                    ×{event.count}
+                                  </Badge>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
@@ -1255,10 +1386,16 @@ export default function AppDetailPage() {
                   </div>
                 ) : deployments.length > 0 ? (
                   <div className="space-y-2">
-                    {deployments.map((deployment) => (
+                    {deployments.map((deployment) => {
+                      const isCurrentlyServing = servingBuildNumber !== null && deployment.build_number === servingBuildNumber;
+                      return (
                       <div
                         key={deployment.id}
-                        className="flex flex-col gap-3 border border-white/[0.08] bg-white/[0.03] px-4 py-4"
+                        className={`flex flex-col gap-3 border px-4 py-4 ${
+                          isCurrentlyServing
+                            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
+                            : 'border-white/[0.08] bg-white/[0.03]'
+                        }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -1272,6 +1409,18 @@ export default function AppDetailPage() {
                             }`}>
                               {deployment.status}
                             </Badge>
+                            {isCurrentlyServing && (
+                              <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/15 text-emerald-300 text-xs">
+                                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse inline-block" />
+                                Serving
+                              </Badge>
+                            )}
+                            {/* Flag when build succeeded but never became the serving version */}
+                            {deployment.status === 'SUCCESS' && !isCurrentlyServing && servingBuildNumber !== null && deployment.build_number > servingBuildNumber && (
+                              <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
+                                Deploy Failed
+                              </Badge>
+                            )}
                           </div>
                           <div className="flex items-center gap-4 text-xs text-white/50">
                             <span>
@@ -1313,7 +1462,8 @@ export default function AppDetailPage() {
                           </div>
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-white/50">
