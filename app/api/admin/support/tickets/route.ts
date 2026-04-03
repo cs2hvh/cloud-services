@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { SupportTicketStatus } from "@/lib/support/catalog";
+import { SUPPORT_STATUS_LABELS, SupportTicketStatus } from "@/lib/support/catalog";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 
 export const dynamic = "force-dynamic";
 
-const VALID_STATUS_FILTERS = new Set(["all", "open", "resolved"]);
+const VALID_STATUS_FILTERS = new Set<string>(["all", ...Object.keys(SUPPORT_STATUS_LABELS)]);
 
 export async function GET(request: Request) {
   const adminCheck = await requireAdmin();

@@ -1,4 +1,39 @@
-export type SupportTicketStatus = "open" | "resolved";
+export type SupportTicketStatus =
+  | "open"
+  | "in_progress"
+  | "pending"
+  | "resolved"
+  | "closed"
+  | "cancelled";
+
+export const SUPPORT_OPEN_STATUSES: SupportTicketStatus[] = [
+  "open",
+  "in_progress",
+  "pending",
+];
+
+export const SUPPORT_CLOSED_STATUSES: SupportTicketStatus[] = [
+  "resolved",
+  "closed",
+  "cancelled",
+];
+
+export const SUPPORT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
+  open: "OPEN",
+  in_progress: "IN_PROGRESS",
+  pending: "PENDING",
+  resolved: "RESOLVED",
+  closed: "CLOSED",
+  cancelled: "CANCELLED",
+};
+
+export function isSupportOpenStatus(status: SupportTicketStatus): boolean {
+  return SUPPORT_OPEN_STATUSES.includes(status);
+}
+
+export function isSupportClosedStatus(status: SupportTicketStatus): boolean {
+  return SUPPORT_CLOSED_STATUSES.includes(status);
+}
 
 export type SupportResourceType =
   | "vps"
@@ -355,6 +390,10 @@ export const ALLOWED_SUPPORT_FILE_EXTENSIONS = [
   "jpeg",
   "pdf",
   "docx",
+  "csv",
+  "xlsx",
+  "txt",
+  "doc",
 ] as const;
 
 export const ALLOWED_SUPPORT_FILE_MIME_TYPES = [
@@ -363,6 +402,11 @@ export const ALLOWED_SUPPORT_FILE_MIME_TYPES = [
   "image/jpeg",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "application/msword",
 ] as const;
 
 export const SUPPORT_FILE_MAX_SIZE_BYTES = 10 * 1024 * 1024;

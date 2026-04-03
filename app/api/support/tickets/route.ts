@@ -3,6 +3,9 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import {
+  SUPPORT_CLOSED_STATUSES,
+  SUPPORT_OPEN_STATUSES,
+  SUPPORT_STATUS_LABELS,
   getFileExtension,
   isAllowedSupportFile,
   isValidSupportTopicSelection,
@@ -10,6 +13,7 @@ import {
   SUPPORT_MAX_ATTACHMENTS,
   SupportTicketStatus,
 } from "@/lib/support/catalog";
+import { getSupportRichTextLength, sanitizeSupportRichText } from "@/lib/support/richtext";
 
 interface CreateTicketPayload {
   topic: string;
@@ -40,7 +44,7 @@ function normalizeCreateTicketPayload(payload: Record<string, unknown>): CreateT
       payload.affectedResourceName != null && String(payload.affectedResourceName).trim().length > 0
         ? String(payload.affectedResourceName).trim()
         : null,
-    description: String(payload.description || "").trim(),
+    description: String(payload.description || ""),
   };
 }
 
@@ -61,11 +65,13 @@ function validateCreatePayload(payload: CreateTicketPayload): string | null {
     return "Subject cannot exceed 160 characters";
   }
 
-  if (!payload.description || payload.description.length < 10) {
+  const richTextLength = getSupportRichTextLength(payload.description);
+
+  if (!payload.description || richTextLength < 10) {
     return "Issue description must be at least 10 characters";
   }
 
-  if (payload.description.length > 8000) {
+  if (richTextLength > 8000) {
     return "Issue description cannot exceed 8000 characters";
   }
 
@@ -79,7 +85,7 @@ function validateAttachment(file: File): string | null {
 
   if (!isAllowedSupportFile(file.name, file.type)) {
     const ext = getFileExtension(file.name);
-    return `${file.name} is not supported. Allowed types: svg, png, jpg, jpeg, pdf, docx (received .${ext || "unknown"})`;
+    return `${file.name} is not supported. Allowed types: svg, png, jpg, jpeg, pdf, docx, csv, xlsx, txt, doc (received .${ext || "unknown"})`;
   }
 
   return null;
@@ -92,8 +98,9 @@ export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const status = url.searchParams.get("status");
+    const validStatuses = Object.keys(SUPPORT_STATUS_LABELS) as SupportTicketStatus[];
 
-    if (status && status !== "open" && status !== "resolved") {
+    if (status && !validStatuses.includes(status as SupportTicketStatus)) {
       return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
     }
 
@@ -103,26 +110,26 @@ export async function GET(request: Request) {
         success: true,
         data: tickets,
         counts: {
-          open: status === "open" ? tickets.length : 0,
-          resolved: status === "resolved" ? tickets.length : 0,
+          open: SUPPORT_OPEN_STATUSES.includes(status as SupportTicketStatus) ? tickets.length : 0,
+          closed: SUPPORT_CLOSED_STATUSES.includes(status as SupportTicketStatus) ? tickets.length : 0,
         },
       });
     }
 
-    const [openTickets, resolvedTickets] = await Promise.all([
-      SupportTickets.listByUser(auth.user.id, "open"),
-      SupportTickets.listByUser(auth.user.id, "resolved"),
+    const [openTickets, closedTickets] = await Promise.all([
+      SupportTickets.listByUser(auth.user.id, SUPPORT_OPEN_STATUSES),
+      SupportTickets.listByUser(auth.user.id, SUPPORT_CLOSED_STATUSES),
     ]);
 
     return NextResponse.json({
       success: true,
       data: {
         open: openTickets,
-        resolved: resolvedTickets,
+        closed: closedTickets,
       },
       counts: {
         open: openTickets.length,
-        resolved: resolvedTickets.length,
+        closed: closedTickets.length,
       },
     });
   } catch (error) {
@@ -186,7 +193,7 @@ export async function POST(request: Request) {
       subTopic: payload.subTopic,
       tertiaryTopic: payload.tertiaryTopic,
       subject: payload.subject,
-      description: payload.description,
+      description: sanitizeSupportRichText(payload.description),
       affectedResourceType: payload.affectedResourceType ?? null,
       affectedResourceId: payload.affectedResourceId ?? null,
       affectedResourceName: payload.affectedResourceName ?? null,

@@ -11,6 +11,8 @@ import {
   SUPPORT_TOPICS,
   SupportResourceOption,
 } from "@/lib/support/catalog";
+import { plainTextFromRichText } from "@/lib/support/richtext";
+import SupportRichTextEditor from "./support-rich-text-editor";
 
 const STEP_TITLES = [
   "Select topic",
@@ -105,7 +107,9 @@ export default function SupportTicketCreateWizard() {
     if (step === 3 && !tertiaryTopic) return "Please choose a tertiary-topic.";
     if (step === 4 && subject.trim().length < 4) return "Subject must be at least 4 characters.";
     if (step === 5 && !affectedResourceId) return "Please select an affected resource.";
-    if (step === 6 && description.trim().length < 10) return "Description must be at least 10 characters.";
+    if (step === 6 && plainTextFromRichText(description).length < 10) {
+      return "Description must be at least 10 characters.";
+    }
     return null;
   }
 
@@ -194,7 +198,7 @@ export default function SupportTicketCreateWizard() {
       formData.append("affectedResourceType", selectedTopic.resourceType);
       formData.append("affectedResourceId", selectedResource?.id || "general");
       formData.append("affectedResourceName", selectedResource?.name || "General issue");
-      formData.append("description", description.trim());
+      formData.append("description", description);
       attachments.forEach((file) => formData.append("attachments", file));
 
       const response = await fetch("/api/support/tickets", {
@@ -345,12 +349,11 @@ export default function SupportTicketCreateWizard() {
         {currentStep === 6 && (
           <div>
             <label className="block text-sm text-white/75 mb-2">Issue description</label>
-            <textarea
+            <SupportRichTextEditor
               value={description}
-              onChange={(event) => setDescription(event.target.value)}
+              onChange={setDescription}
               placeholder="Share exact error, what you tried, and expected behavior."
-              rows={8}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm placeholder:text-white/30"
+              minHeightClassName="min-h-[220px]"
             />
           </div>
         )}
@@ -370,7 +373,7 @@ export default function SupportTicketCreateWizard() {
                 Choose files
                 <input
                   type="file"
-                  accept=".svg,.png,.jpg,.jpeg,.pdf,.docx"
+                  accept=".svg,.png,.jpg,.jpeg,.pdf,.docx,.csv,.xlsx,.txt,.doc"
                   multiple
                   onChange={handleFileInput}
                   className="hidden"
@@ -415,7 +418,7 @@ export default function SupportTicketCreateWizard() {
               <p className="mt-1"><span className="text-white/55">Tertiary-topic:</span> {tertiaryOptions.find((item) => item.id === tertiaryTopic)?.label || "-"}</p>
               <p className="mt-1"><span className="text-white/55">Subject:</span> {subject || "-"}</p>
               <p className="mt-1"><span className="text-white/55">Affected resource:</span> {selectedResource?.name || "-"}</p>
-              <p className="mt-3 whitespace-pre-wrap"><span className="text-white/55">Description:</span>{"\n"}{description || "-"}</p>
+              <p className="mt-3 whitespace-pre-wrap"><span className="text-white/55">Description:</span>{"\n"}{plainTextFromRichText(description) || "-"}</p>
               <p className="mt-3"><span className="text-white/55">Attachments:</span> {attachments.length}</p>
             </div>
           </div>

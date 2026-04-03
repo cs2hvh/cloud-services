@@ -5,10 +5,15 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
-import { getSupportTopicLabels, SupportTicketStatus } from "@/lib/support/catalog";
+import {
+  SUPPORT_STATUS_LABELS,
+  SupportTicketStatus,
+  getSupportTopicLabels,
+} from "@/lib/support/catalog";
 import { AdminSupportTicketDetail, SupportTicketAttachment } from "@/lib/supabase/queries/support_tickets";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { sanitizeSupportRichText } from "@/lib/support/richtext";
 
 type TicketAttachmentWithUrl = SupportTicketAttachment & { download_url?: string | null };
 type AdminTicketDetailWithUrl = Omit<AdminSupportTicketDetail, "attachments"> & {
@@ -30,9 +35,11 @@ function formatDateTime(date: string): string {
 }
 
 function statusBadgeClass(status: SupportTicketStatus): string {
-  if (status === "resolved") {
-    return "bg-emerald-950/40 text-emerald-400 border-emerald-900";
-  }
+  if (status === "resolved") return "bg-emerald-950/40 text-emerald-400 border-emerald-900";
+  if (status === "closed") return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  if (status === "cancelled") return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+  if (status === "in_progress") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (status === "pending") return "bg-violet-500/15 text-violet-300 border-violet-500/30";
   return "bg-amber-950/40 text-amber-400 border-amber-900";
 }
 
@@ -57,6 +64,24 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
 
   const ownerName =
     ticket.owner?.display_name || ticket.owner?.username || ticket.owner?.email || "Unknown user";
+
+  const getMessageIdentity = (actorType: "user" | "admin" | "system", author: typeof ticket.messages[number]["author"]) => {
+    if (author) {
+      return {
+        name: author.display_name || author.username || author.email || "User",
+        email: author.email || "No email",
+        avatar: author.avatar || null,
+      };
+    }
+
+    if (actorType === "admin") {
+      return { name: "Support Team", email: "support@ahuracloud.com", avatar: null };
+    }
+    if (actorType === "system") {
+      return { name: "System", email: "-", avatar: null };
+    }
+    return { name: "User", email: "-", avatar: null };
+  };
 
   const applyPatch = async (payload: { status?: SupportTicketStatus; reply?: string }) => {
     const response = await fetch(`/api/admin/support/tickets/${ticket.id}`, {
@@ -127,7 +152,7 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
             <span
               className={`inline-flex w-fit items-center px-2.5 py-1 rounded text-xs font-medium border capitalize ${statusBadgeClass(ticket.status)}`}
             >
-              {ticket.status}
+              {SUPPORT_STATUS_LABELS[ticket.status]}
             </span>
           </div>
         </div>
@@ -152,7 +177,10 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
               </div>
               <div className="mt-4">
                 <p className="text-xs text-neutral-500 uppercase tracking-wider">Description</p>
-                <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-200">{ticket.description}</p>
+                <div
+                  className="mt-1 text-sm text-neutral-200 prose prose-invert max-w-none prose-p:my-1 prose-li:my-0"
+                  dangerouslySetInnerHTML={{ __html: sanitizeSupportRichText(ticket.description) }}
+                />
               </div>
             </div>
 
@@ -167,15 +195,37 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
                 <div className="space-y-3">
                   {ticket.messages.map((message) => (
                     <div key={message.id} className="border border-neutral-800 bg-neutral-900/60 rounded-lg p-3">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <span
-                          className={`inline-flex items-center rounded px-2 py-1 text-xs capitalize border ${actorBadge(message.actor_type)}`}
-                        >
-                          {message.actor_type}
-                        </span>
-                        <span className="text-xs text-neutral-500">{formatDateTime(message.created_at)}</span>
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        {(() => {
+                          const identity = getMessageIdentity(message.actor_type, message.author);
+                          return (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-8 w-8 border border-neutral-700">
+                                <AvatarImage src={identity.avatar || undefined} />
+                                <AvatarFallback className="bg-neutral-700 text-neutral-200 text-xs">
+                                  {identity.name.charAt(0).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm text-neutral-100">{identity.name}</p>
+                                <p className="truncate text-xs text-neutral-500">{identity.email}</p>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <div className="text-right shrink-0">
+                          <span
+                            className={`inline-flex items-center rounded px-2 py-1 text-xs capitalize border ${actorBadge(message.actor_type)}`}
+                          >
+                            {message.actor_type}
+                          </span>
+                          <p className="mt-1 text-xs text-neutral-500">{formatDateTime(message.created_at)}</p>
+                        </div>
                       </div>
-                      <p className="whitespace-pre-wrap text-sm text-neutral-200">{message.message}</p>
+                      <div
+                        className="text-sm text-neutral-200 prose prose-invert max-w-none prose-p:my-1 prose-li:my-0"
+                        dangerouslySetInnerHTML={{ __html: sanitizeSupportRichText(message.message) }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -245,7 +295,11 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
                 className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-neutral-600"
               >
                 <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="pending">Pending</option>
                 <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+                <option value="cancelled">Cancelled</option>
               </select>
               <Button
                 type="button"

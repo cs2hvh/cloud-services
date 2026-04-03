@@ -4,6 +4,7 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { createClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import SupportTicketList from "@/components/dashboard/support/support-ticket-list";
+import { SUPPORT_CLOSED_STATUSES, SUPPORT_OPEN_STATUSES } from "@/lib/support/catalog";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,12 @@ async function SupportTicketsSuspense() {
     redirect("/signin");
   }
 
-  const [openTickets, resolvedTickets] = await Promise.all([
-    SupportTickets.listByUser(userId, "open"),
-    SupportTickets.listByUser(userId, "resolved"),
+  const [openTickets, closedTickets] = await Promise.all([
+    SupportTickets.listByUser(userId, SUPPORT_OPEN_STATUSES),
+    SupportTickets.listByUser(userId, SUPPORT_CLOSED_STATUSES),
   ]);
 
-  return <SupportTicketList openTickets={openTickets} resolvedTickets={resolvedTickets} />;
+  return <SupportTicketList openTickets={openTickets} closedTickets={closedTickets} />;
 }
 
 export default function SupportPage() {

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS support.support_tickets (
     'SUP-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('support.support_ticket_number_seq'::regclass)::text, 6, '0')
   ),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'pending', 'resolved', 'closed', 'cancelled')),
   topic TEXT NOT NULL,
   sub_topic TEXT NOT NULL,
   tertiary_topic TEXT NOT NULL,
@@ -128,8 +128,8 @@ DROP POLICY IF EXISTS "Users can update open support tickets" ON support.support
 CREATE POLICY "Users can update open support tickets"
   ON support.support_tickets
   FOR UPDATE
-  USING (owner_id = auth.uid() AND status = 'open')
-  WITH CHECK (owner_id = auth.uid() AND status = 'open');
+  USING (owner_id = auth.uid() AND status IN ('open', 'in_progress', 'pending'))
+  WITH CHECK (owner_id = auth.uid() AND status IN ('open', 'in_progress', 'pending'));
 
 -- Message policies
 DROP POLICY IF EXISTS "Users can view messages on own tickets" ON support.support_ticket_messages;
@@ -214,7 +214,12 @@ VALUES (
     'image/png',
     'image/jpeg',
     'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+    'application/msword'
   ]
 )
 ON CONFLICT (id) DO UPDATE SET

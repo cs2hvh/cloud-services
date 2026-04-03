@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { SupportTicketStatus } from "@/lib/support/catalog";
+import { SUPPORT_STATUS_LABELS, SupportTicketStatus } from "@/lib/support/catalog";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -79,7 +79,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Reply must be at least 2 characters" }, { status: 400 });
     }
 
-    if (nextStatus && nextStatus !== "open" && nextStatus !== "resolved") {
+    if (nextStatus && !(nextStatus in SUPPORT_STATUS_LABELS)) {
       return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
     }
 
@@ -105,10 +105,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       await SupportTickets.addMessage({
         ticketId,
         actorType: "system",
-        message:
-          nextStatus === "resolved"
-            ? "Ticket marked as resolved by support."
-            : "Ticket reopened by support.",
+        message: `Ticket status updated by support to ${nextStatus?.toUpperCase()}.`,
       });
     }
 

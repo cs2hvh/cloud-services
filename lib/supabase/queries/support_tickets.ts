@@ -7,6 +7,7 @@ import { ObjectSpaces } from "./object_spaces";
 import { Platform_Apps } from "./platform_apps";
 import { Spectrum_Apps } from "./spectrum_apps";
 import {
+  SUPPORT_OPEN_STATUSES,
   getSupportTopicById,
   getSupportTopicLabels,
   SupportResourceOption,
@@ -37,6 +38,7 @@ export interface SupportTicketMessage {
   actor_type: "user" | "admin" | "system";
   message: string;
   created_at: string;
+  author: SupportTicketOwnerSummary | null;
 }
 
 export interface SupportTicketAttachment {
@@ -126,6 +128,11 @@ export interface SupportAttachmentInsertInput {
   fileSize: number;
 }
 
+export interface SupportAttachmentDeleteResult {
+  id: string;
+  file_path: string;
+}
+
 const BILLING_RESOURCES: SupportResourceOption[] = [
   { id: "wallet", name: "Wallet balance", type: "billing" },
   { id: "topup", name: "One-time top-up", type: "billing" },
@@ -190,7 +197,10 @@ async function getOwnerProfiles(ownerIds: string[]): Promise<Map<string, Support
 }
 
 export const SupportTickets = {
-  async listByUser(userId: string, status?: SupportTicketStatus): Promise<SupportTicketSummary[]> {
+  async listByUser(
+    userId: string,
+    status?: SupportTicketStatus | SupportTicketStatus[]
+  ): Promise<SupportTicketSummary[]> {
     const supportDb = await getSupportDb();
     let query = supportDb
       .from("support_tickets")
@@ -200,7 +210,9 @@ export const SupportTickets = {
       .eq("owner_id", userId)
       .order("latest_message_at", { ascending: false });
 
-    if (status) {
+    if (Array.isArray(status) && status.length > 0) {
+      query = query.in("status", status);
+    } else if (status) {
       query = query.eq("status", status);
     }
 
@@ -255,9 +267,20 @@ export const SupportTickets = {
       console.error("[SupportTickets] get attachments failed:", attachmentsError.message);
     }
 
+    const typedMessages = (messages ?? []) as Array<Omit<SupportTicketMessage, "author">>;
+
+    const authorProfiles = await getOwnerProfiles(
+      typedMessages
+        .map((message) => message.author_id)
+        .filter((authorId): authorId is string => Boolean(authorId))
+    );
+
     return {
       ...(ticket as Omit<SupportTicketDetail, "messages" | "attachments">),
-      messages: (messages ?? []) as SupportTicketMessage[],
+      messages: typedMessages.map((message) => ({
+        ...message,
+        author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+      })) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
   },
@@ -310,8 +333,10 @@ export const SupportTickets = {
       };
     }
 
-    const ownerProfiles = await getOwnerProfiles((data ?? []).map((ticket) => ticket.owner_id));
-    const tickets = (data ?? []).map((ticket) => ({
+    type AdminTicketListRow = Omit<AdminSupportTicketSummary, "owner">;
+    const typedData = (data ?? []) as AdminTicketListRow[];
+    const ownerProfiles = await getOwnerProfiles(typedData.map((ticket) => ticket.owner_id));
+    const tickets = typedData.map((ticket) => ({
       id: ticket.id,
       ticket_number: ticket.ticket_number,
       status: ticket.status as SupportTicketStatus,
@@ -384,6 +409,14 @@ export const SupportTickets = {
 
     const ownerProfiles = await getOwnerProfiles([ticket.owner_id]);
 
+    const typedMessages = (messages ?? []) as Array<Omit<SupportTicketMessage, "author">>;
+
+    const authorProfiles = await getOwnerProfiles(
+      typedMessages
+        .map((message) => message.author_id)
+        .filter((authorId): authorId is string => Boolean(authorId))
+    );
+
     return {
       id: ticket.id,
       ticket_number: ticket.ticket_number,
@@ -402,7 +435,10 @@ export const SupportTickets = {
       resolved_at: ticket.resolved_at,
       owner_id: ticket.owner_id,
       owner: ownerProfiles.get(ticket.owner_id) || null,
-      messages: (messages ?? []) as SupportTicketMessage[],
+      messages: typedMessages.map((message) => ({
+        ...message,
+        author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+      })) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
   },
@@ -429,13 +465,23 @@ export const SupportTickets = {
       console.error("[SupportTickets] addMessage failed:", error.message);
       return null;
     }
-    return (data as SupportTicketMessage | null) ?? null;
+    const message = data as Omit<SupportTicketMessage, "author"> | null;
+    if (!message) return null;
+
+    const authorProfiles = await getOwnerProfiles(
+      message.author_id ? [message.author_id] : []
+    );
+
+    return {
+      ...message,
+      author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+    } as SupportTicketMessage;
   },
 
   async updateStatusByAdmin(ticketId: string, status: SupportTicketStatus): Promise<boolean> {
     const supportDb = await getSupportDb();
     const updatePayload =
-      status === "resolved"
+      status === "resolved" || status === "closed" || status === "cancelled"
         ? { status, resolved_at: new Date().toISOString() }
         : { status, resolved_at: null };
 
@@ -446,6 +492,30 @@ export const SupportTickets = {
 
     if (error) {
       console.error("[SupportTickets] updateStatusByAdmin failed:", error.message);
+      return false;
+    }
+    return true;
+  },
+
+  async updateStatusByUser(
+    userId: string,
+    ticketId: string,
+    status: SupportTicketStatus
+  ): Promise<boolean> {
+    const supportDb = await getSupportDb();
+    const updatePayload =
+      status === "resolved" || status === "closed" || status === "cancelled"
+        ? { status, resolved_at: new Date().toISOString() }
+        : { status, resolved_at: null };
+
+    const { error } = await supportDb
+      .from("support_tickets")
+      .update(updatePayload)
+      .eq("id", ticketId)
+      .eq("owner_id", userId);
+
+    if (error) {
+      console.error("[SupportTickets] updateStatusByUser failed:", error.message);
       return false;
     }
     return true;
@@ -521,7 +591,7 @@ export const SupportTickets = {
       .update(updatePayload)
       .eq("id", ticketId)
       .eq("owner_id", userId)
-      .eq("status", "open")
+      .in("status", SUPPORT_OPEN_STATUSES)
       .select(
         "id, ticket_number, status, topic, sub_topic, tertiary_topic, subject, affected_resource_type, affected_resource_id, affected_resource_name, created_at, updated_at, latest_message_at, resolved_at"
       )
@@ -556,6 +626,28 @@ export const SupportTickets = {
       return false;
     }
     return true;
+  },
+
+  async deleteAttachmentByUser(
+    userId: string,
+    ticketId: string,
+    attachmentId: string
+  ): Promise<SupportAttachmentDeleteResult | null> {
+    const supportDb = await getSupportDb();
+    const { data, error } = await supportDb
+      .from("support_ticket_attachments")
+      .delete()
+      .eq("id", attachmentId)
+      .eq("ticket_id", ticketId)
+      .eq("uploaded_by", userId)
+      .select("id, file_path")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[SupportTickets] deleteAttachmentByUser failed:", error.message);
+      return null;
+    }
+    return (data as SupportAttachmentDeleteResult | null) ?? null;
   },
 
   async listAffectedResources(userId: string, topicId: string): Promise<SupportResourceOption[]> {

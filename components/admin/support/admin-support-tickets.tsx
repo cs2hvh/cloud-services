@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { SUPPORT_TOPICS, SupportTicketStatus, getSupportTopicLabels } from "@/lib/support/catalog";
+import { SUPPORT_STATUS_LABELS, SUPPORT_TOPICS, SupportTicketStatus, getSupportTopicLabels } from "@/lib/support/catalog";
 import { AdminSupportTicketSummary } from "@/lib/supabase/queries/support_tickets";
 
 interface AdminSupportTicketsProps {
@@ -36,9 +36,11 @@ function formatDate(date: string): string {
 }
 
 function statusBadgeClass(status: SupportTicketStatus): string {
-  if (status === "resolved") {
-    return "bg-emerald-950/40 text-emerald-400 border-emerald-900";
-  }
+  if (status === "resolved") return "bg-emerald-950/40 text-emerald-400 border-emerald-900";
+  if (status === "closed") return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  if (status === "cancelled") return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+  if (status === "in_progress") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (status === "pending") return "bg-violet-500/15 text-violet-300 border-violet-500/30";
   return "bg-amber-950/40 text-amber-400 border-amber-900";
 }
 
@@ -180,8 +182,20 @@ export default function AdminSupportTickets({
               <SelectItem value="open" className="text-white focus:bg-neutral-800 focus:text-white">
                 Open
               </SelectItem>
+              <SelectItem value="in_progress" className="text-white focus:bg-neutral-800 focus:text-white">
+                In Progress
+              </SelectItem>
+              <SelectItem value="pending" className="text-white focus:bg-neutral-800 focus:text-white">
+                Pending
+              </SelectItem>
               <SelectItem value="resolved" className="text-white focus:bg-neutral-800 focus:text-white">
                 Resolved
+              </SelectItem>
+              <SelectItem value="closed" className="text-white focus:bg-neutral-800 focus:text-white">
+                Closed
+              </SelectItem>
+              <SelectItem value="cancelled" className="text-white focus:bg-neutral-800 focus:text-white">
+                Cancelled
               </SelectItem>
             </SelectContent>
           </Select>
@@ -318,7 +332,7 @@ export default function AdminSupportTickets({
                             <span
                               className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border capitalize ${statusBadgeClass(ticket.status)}`}
                             >
-                              {ticket.status}
+                              {SUPPORT_STATUS_LABELS[ticket.status]}
                             </span>
                           </td>
                           <td className="px-6 py-4">

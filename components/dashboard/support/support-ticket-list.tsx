@@ -4,12 +4,12 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { MessageSquarePlus, Search } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getSupportTopicLabels } from "@/lib/support/catalog";
+import { SUPPORT_STATUS_LABELS, getSupportTopicLabels, SupportTicketStatus } from "@/lib/support/catalog";
 import { SupportTicketSummary } from "@/lib/supabase/queries/support_tickets";
 
 interface SupportTicketListProps {
   openTickets: SupportTicketSummary[];
-  resolvedTickets: SupportTicketSummary[];
+  closedTickets: SupportTicketSummary[];
 }
 
 function formatDate(date: string): string {
@@ -20,10 +20,12 @@ function formatDate(date: string): string {
   });
 }
 
-function statusBadge(status: string): string {
-  if (status === "resolved") {
-    return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
-  }
+function statusBadge(status: SupportTicketStatus): string {
+  if (status === "resolved") return "bg-emerald-500/15 text-emerald-300 border-emerald-500/30";
+  if (status === "closed") return "bg-slate-500/15 text-slate-300 border-slate-500/30";
+  if (status === "cancelled") return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+  if (status === "in_progress") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
+  if (status === "pending") return "bg-violet-500/15 text-violet-300 border-violet-500/30";
   return "bg-amber-500/15 text-amber-300 border-amber-500/30";
 }
 
@@ -77,7 +79,7 @@ function TicketRows({ tickets }: { tickets: SupportTicketSummary[] }) {
                   <span
                     className={`inline-flex rounded-full border px-2 py-0.5 text-xs capitalize ${statusBadge(ticket.status)}`}
                   >
-                    {ticket.status}
+                    {SUPPORT_STATUS_LABELS[ticket.status]}
                   </span>
                 </div>
               </div>
@@ -91,9 +93,9 @@ function TicketRows({ tickets }: { tickets: SupportTicketSummary[] }) {
 
 export default function SupportTicketList({
   openTickets,
-  resolvedTickets,
+  closedTickets,
 }: SupportTicketListProps) {
-  const [activeTab, setActiveTab] = useState<"open" | "resolved">("open");
+  const [activeTab, setActiveTab] = useState<"open" | "closed">("open");
   const [query, setQuery] = useState("");
 
   const filteredOpen = useMemo(() => {
@@ -106,15 +108,15 @@ export default function SupportTicketList({
     );
   }, [openTickets, query]);
 
-  const filteredResolved = useMemo(() => {
-    if (!query.trim()) return resolvedTickets;
+  const filteredClosed = useMemo(() => {
+    if (!query.trim()) return closedTickets;
     const q = query.toLowerCase().trim();
-    return resolvedTickets.filter(
+    return closedTickets.filter(
       (ticket) =>
         ticket.ticket_number.toLowerCase().includes(q) ||
         ticket.subject.toLowerCase().includes(q)
     );
-  }, [resolvedTickets, query]);
+  }, [closedTickets, query]);
 
   return (
     <div className="max-w-[1600px] mx-auto">
@@ -147,7 +149,7 @@ export default function SupportTicketList({
 
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as "open" | "resolved")}
+        onValueChange={(value) => setActiveTab(value as "open" | "closed")}
         className="w-full"
       >
         <TabsList className="w-full grid grid-cols-2 bg-transparent p-0 h-auto gap-2 mb-4">
@@ -158,18 +160,18 @@ export default function SupportTicketList({
             Open ({openTickets.length})
           </TabsTrigger>
           <TabsTrigger
-            value="resolved"
+            value="closed"
             className="cursor-pointer rounded-lg border border-white/10 bg-black/30 py-2.5 text-white data-[state=active]:bg-white data-[state=active]:text-black"
           >
-            Resolved ({resolvedTickets.length})
+            Closed ({closedTickets.length})
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="open" className="mt-0">
           <TicketRows tickets={filteredOpen} />
         </TabsContent>
-        <TabsContent value="resolved" className="mt-0">
-          <TicketRows tickets={filteredResolved} />
+        <TabsContent value="closed" className="mt-0">
+          <TicketRows tickets={filteredClosed} />
         </TabsContent>
       </Tabs>
     </div>
