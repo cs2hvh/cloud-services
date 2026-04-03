@@ -428,7 +428,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
               { label: "Documentation", href: "/docs", icon: ArrowUpRight },
               { label: "Billing", href: "/dashboard/nav/billing", icon: ArrowUpRight },
               { label: "Settings", href: "/dashboard/settings", icon: ArrowUpRight },
-              { label: "Support", href: "/support", icon: ArrowUpRight },
+              { label: "Support", href: "/dashboard/support", icon: ArrowUpRight },
             ].map((link) => (
               <Link
                 key={link.label}

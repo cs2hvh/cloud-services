@@ -359,8 +359,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     },
     {
       name: "Help Center",
-      href: "/support",
-      current: false,
+      href: "/dashboard/support",
+      current: pathname.includes("/dashboard/support"),
       icon: HelpCircle,
     },
   ];
