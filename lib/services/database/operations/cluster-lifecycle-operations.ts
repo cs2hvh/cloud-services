@@ -25,6 +25,7 @@ import type {
   DeleteDatabaseClusterResult,
   UpdateDatabaseClusterProjectRequest,
 } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 export const clusterLifecycleOperations = {
   async createCluster(
@@ -251,7 +252,19 @@ export const clusterLifecycleOperations = {
     userEmail?: string
   ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
-      const beforeState = await Database_Clusters.read(request.clusterId);
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
+      const beforeState = {
+        success: true as const,
+        data: access.cluster,
+      };
       const result = await Database_Clusters.update_project(request.clusterId, request.projectId);
       if (!result.success) {
         return { ...result, statusCode: 500 };
@@ -334,9 +347,28 @@ export const clusterLifecycleOperations = {
     userEmail?: string
   ): Promise<DeleteDatabaseClusterResult> {
     try {
-      const clusterData = await Database_Clusters.read(request.clusterId);
-      const clusterName = clusterData.success ? clusterData.data.name : "Unknown";
-      const projectId = clusterData.success ? clusterData.data.project_id : null;
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "delete");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          errorCode: access.errorCode,
+          statusCode: access.statusCode,
+        };
+      }
+
+      const clusterData = access.cluster;
+      const clusterName =
+        typeof clusterData.name === "string" && clusterData.name.length > 0
+          ? clusterData.name
+          : "Unknown";
+      const projectId = typeof clusterData.project_id === "string" ? clusterData.project_id : null;
+      const clusterOwnerId =
+        typeof clusterData.owner_id === "string" ? clusterData.owner_id : request.userId;
+      const billingServiceId =
+        typeof clusterData.id === "string" && clusterData.id.length > 0
+          ? clusterData.id
+          : request.clusterId;
 
       const integrationCheck = await DatabaseIntegrationService.canDeleteDatabase(request.clusterId);
       if (!integrationCheck.canDelete && !request.force) {
@@ -356,7 +388,7 @@ export const clusterLifecycleOperations = {
       try {
         await Billing.close_active_service("database", {
           userId: request.userId,
-          serviceId: clusterData.success ? clusterData.data.id : request.clusterId,
+          serviceId: billingServiceId,
           failOnInsufficient: false,
         });
       } catch (billErr) {
@@ -405,25 +437,24 @@ export const clusterLifecycleOperations = {
         });
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "success",
-              action: "deleted",
-              serviceType: "database",
-              serviceName: clusterName,
-              serviceId: request.clusterId,
-            })
-          );
-        } catch (notifErr) {
-          console.error("[deleteCluster] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: clusterOwnerId,
+            type: "success",
+            action: "deleted",
+            serviceType: "database",
+            serviceName: clusterName,
+            serviceId: request.clusterId,
+          })
+        );
+      } catch (notifErr) {
+        console.error("[deleteCluster] Failed to create notification:", notifErr);
       }
 
       return { success: true };
     } catch (err: unknown) {
+      const axiosError = parseAxiosError(err);
       try {
         await NotificationService.create(
           createServiceNotification({
@@ -441,8 +472,11 @@ export const clusterLifecycleOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
-        errorCode: "UNKNOWN_ERROR",
+        error:
+          axiosError?.response?.data?.message ||
+          (err instanceof Error ? err.message : "Unknown error occurred"),
+        errorCode: axiosError?.response?.status === 404 ? "NOT_FOUND" : "UNKNOWN_ERROR",
+        statusCode: axiosError?.response?.status ?? 500,
       };
     }
   },

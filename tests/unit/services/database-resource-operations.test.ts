@@ -42,6 +42,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
       success: true,
       data: {
         engine: "pg",
+        owner_id: "user-1",
       },
     } as never);
     vi.mocked(axios.get).mockResolvedValue({
@@ -52,6 +53,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
     const result = await databaseResourceOperations.retrieveDatabase({
       clusterId: "cluster-1",
       name: "appdb",
+      userId: "user-1",
     });
 
     expect(result.success).toBe(true);
@@ -69,6 +71,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
       success: true,
       data: {
         engine: "mongodb",
+        owner_id: "user-1",
       },
     } as never);
     vi.mocked(axios.get)
@@ -84,6 +87,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
     const result = await databaseResourceOperations.retrieveDatabase({
       clusterId: "cluster-1",
       name: "appdb",
+      userId: "user-1",
     });
 
     expect(result.success).toBe(true);
@@ -101,6 +105,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
       success: true,
       data: {
         engine: "mongodb",
+        owner_id: "user-1",
       },
     } as never);
     vi.mocked(axios.get)
@@ -116,6 +121,7 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
     const result = await databaseResourceOperations.retrieveDatabase({
       clusterId: "cluster-1",
       name: "appdb",
+      userId: "user-1",
     });
 
     expect(result.success).toBe(false);
@@ -127,12 +133,14 @@ describe("databaseResourceOperations.retrieveDatabase", () => {
       success: true,
       data: {
         engine: "redis",
+        owner_id: "user-1",
       },
     } as never);
 
     const result = await databaseResourceOperations.retrieveDatabase({
       clusterId: "cluster-1",
       name: "appdb",
+      userId: "user-1",
     });
 
     expect(result.success).toBe(false);

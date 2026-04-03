@@ -323,8 +323,12 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                 Database Users
               </h2>
               <p className="mt-1 text-sm leading-6 text-white/45">
-                Create service users, rotate passwords, and remove identities
-                that no longer require access.
+                Create provider-managed database identities, rotate passwords,
+                and remove identities that no longer require access.
+              </p>
+              <p className="mt-2 text-xs leading-5 text-amber-200/65">
+                Actual grants and roles are enforced by the database provider
+                and may vary by engine.
               </p>
             </div>
             <Button
@@ -369,7 +373,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                           </div>
                           {user.role && (
                             <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
-                              {user.role}
+                              Role: {user.role}
                             </span>
                           )}
                         </div>

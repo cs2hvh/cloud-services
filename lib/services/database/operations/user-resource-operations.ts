@@ -16,14 +16,20 @@ import type {
   ListDatabaseUsersResult,
   ResetDatabaseUserPasswordRequest,
 } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 export const userResourceOperations = {
   async createDatabaseUser(
     request: CreateDatabaseUserRequest,
     req?: NextRequest,
     userEmail?: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.post(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users`,
         { name: request.name },
@@ -112,18 +118,25 @@ export const userResourceOperations = {
         return {
           success: false,
           error: axiosError?.response?.data?.message ?? "Invalid request",
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
 
   async listDatabaseUsers(request: ListDatabaseUsersRequest): Promise<ListDatabaseUsersResult> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users`,
         { headers: getDigitalOceanHeaders() }
@@ -183,12 +196,14 @@ export const userResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
@@ -196,12 +211,17 @@ export const userResourceOperations = {
   async deleteDatabaseUser(
     request: DeleteDatabaseUserRequest,
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     if (request.username.toLowerCase() === "doadmin") {
-      return { success: false, error: "cannot delete admin user" };
+      return { success: false, error: "cannot delete admin user", statusCode: 400 };
     }
 
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.delete(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}`,
         { headers: getDigitalOceanHeaders() }
@@ -284,26 +304,34 @@ export const userResourceOperations = {
           return {
             success: false,
             error: "cannot delete admin user",
+            statusCode: 400,
           };
         }
 
         return {
           success: false,
           error: apiMessage,
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
 
   async resetDatabaseUserPassword(
     request: ResetDatabaseUserPasswordRequest
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.post(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}/reset_auth`,
         {},
@@ -390,12 +418,14 @@ export const userResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },

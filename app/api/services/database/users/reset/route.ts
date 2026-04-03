@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!result.success) {
       return NextResponse.json(
         { error: result.error ?? "Failed to reset password" },
-        { status: 400 }
+        { status: result.statusCode ?? 400 }
       );
     }
 
