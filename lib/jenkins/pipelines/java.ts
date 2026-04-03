@@ -18,7 +18,7 @@ export function createJavaPipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
 ): string {
