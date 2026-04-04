@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
+import { ArrowLeft, Check, ChevronRight, Paperclip } from "lucide-react";
 import {
   ALLOWED_SUPPORT_FILE_EXTENSIONS,
   getFileExtension,
@@ -158,13 +160,13 @@ export default function SupportTicketCreateWizard() {
     setAttachments((previous) => [...previous, ...accepted.slice(0, remainingSlots)]);
   }
 
-  function handleFileInput(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileInput(event: ChangeEvent<HTMLInputElement>) {
     const selected = event.target.files ? Array.from(event.target.files) : [];
     processFiles(selected);
     event.target.value = "";
   }
 
-  function handleFileDrop(event: React.DragEvent<HTMLDivElement>) {
+  function handleFileDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     const dropped = Array.from(event.dataTransfer.files || []);
     processFiles(dropped);
@@ -227,234 +229,359 @@ export default function SupportTicketCreateWizard() {
     }
   }
 
-  return (
-    <div className="max-w-4xl mx-auto text-white">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Create Support Ticket</h1>
-        <p className="text-sm text-white/50 mt-1">
-          Follow the guided process so we can resolve your issue faster.
-        </p>
-      </div>
+  const completionPercentage = (currentStep / STEP_TITLES.length) * 100;
+  const panelClassName = "glass-panel overflow-hidden";
 
-      <div className="rounded-xl border border-white/10 bg-black/30 p-5">
-        <div className="mb-5">
-          <div className="flex items-center justify-between text-xs text-white/55 mb-2">
-            <span>{getStepCompletionLabel(currentStep)}</span>
-            <span>{Math.round((currentStep / STEP_TITLES.length) * 100)}%</span>
+  return (
+    <div className="mx-auto max-w-[1600px] text-white">
+      <div className={panelClassName}>
+        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <Link
+              href="/dashboard/support"
+              className="inline-flex items-center text-sm text-white/60 transition-colors hover:text-white"
+            >
+              <ArrowLeft size={16} className="mr-2" />
+              Back to tickets
+            </Link>
+            <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
+              Support Intake
+            </p>
+            <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              Create a support ticket with clear routing and context.
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">
+              Follow this guided flow so our team receives complete issue details, correct service mapping, and optional attachments on first submission.
+            </p>
           </div>
-          <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-300"
-              style={{ width: `${(currentStep / STEP_TITLES.length) * 100}%` }}
-            />
+
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Progress</div>
+              <div className="mt-1.5 text-lg font-semibold text-white">{getStepCompletionLabel(currentStep)}</div>
+            </div>
+            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Topic</div>
+              <div className="mt-1.5 line-clamp-1 text-lg font-semibold text-white">{selectedTopic?.label || "-"}</div>
+            </div>
           </div>
-          <h2 className="mt-3 text-lg font-medium">{STEP_TITLES[currentStep - 1]}</h2>
         </div>
 
-        {currentStep === 1 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Topic</label>
-            <select
-              value={topic}
-              onChange={(event) => {
-                setTopic(event.target.value);
-                setSubTopic("");
-                setTertiaryTopic("");
-              }}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-            >
-              <option value="">Select a topic</option>
-              {SUPPORT_TOPICS.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {currentStep === 2 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Sub-topic</label>
-            <select
-              value={subTopic}
-              onChange={(event) => {
-                setSubTopic(event.target.value);
-                setTertiaryTopic("");
-              }}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-              disabled={!selectedTopic}
-            >
-              <option value="">Select a sub-topic</option>
-              {(selectedTopic?.subTopics || []).map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {currentStep === 3 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Tertiary-topic</label>
-            <select
-              value={tertiaryTopic}
-              onChange={(event) => setTertiaryTopic(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-              disabled={!selectedSubTopic}
-            >
-              <option value="">Select a tertiary-topic</option>
-              {tertiaryOptions.map((entry) => (
-                <option key={entry.id} value={entry.id}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {currentStep === 4 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Subject</label>
-            <input
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="Example: Kubernetes cluster stuck on ready state"
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm placeholder:text-white/30"
-            />
-          </div>
-        )}
-
-        {currentStep === 5 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Affected resource</label>
-            <select
-              value={affectedResourceId}
-              onChange={(event) => setAffectedResourceId(event.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm"
-              disabled={resourcesLoading}
-            >
-              {resources.map((resource) => (
-                <option key={resource.id} value={resource.id}>
-                  {resource.name}
-                </option>
-              ))}
-            </select>
-            {resourcesLoading && <p className="mt-2 text-xs text-white/45">Loading resources...</p>}
-            {resourcesError && <p className="mt-2 text-xs text-red-300">{resourcesError}</p>}
-          </div>
-        )}
-
-        {currentStep === 6 && (
-          <div>
-            <label className="block text-sm text-white/75 mb-2">Issue description</label>
-            <SupportRichTextEditor
-              value={description}
-              onChange={setDescription}
-              placeholder="Share exact error, what you tried, and expected behavior."
-              minHeightClassName="min-h-[220px]"
-            />
-          </div>
-        )}
-
-        {currentStep === 7 && (
-          <div>
+        <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
+          <div className="mb-3 h-1.5 w-full overflow-hidden bg-white/[0.05]">
             <div
-              onDrop={handleFileDrop}
-              onDragOver={(event) => event.preventDefault()}
-              className="rounded-lg border border-dashed border-white/20 bg-black/25 p-6 text-center"
-            >
-              <p className="text-sm">Drop files here or choose manually.</p>
-              <p className="mt-1 text-xs text-white/45">
-                Allowed: {ALLOWED_SUPPORT_FILE_EXTENSIONS.join(", ")} | Max 10MB per file
-              </p>
-              <label className="inline-block mt-3 cursor-pointer rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15">
-                Choose files
-                <input
-                  type="file"
-                  accept=".svg,.png,.jpg,.jpeg,.pdf,.docx,.csv,.xlsx,.txt,.doc"
-                  multiple
-                  onChange={handleFileInput}
-                  className="hidden"
-                />
-              </label>
-            </div>
+              className="h-full bg-gradient-to-r from-blue-400/85 to-white transition-all duration-300"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
 
-            <div className="mt-4 space-y-2">
-              {attachments.length === 0 ? (
-                <p className="text-xs text-white/45">No files attached.</p>
-              ) : (
-                attachments.map((file, index) => (
-                  <div
-                    key={`${file.name}-${index}`}
-                    className="flex items-center justify-between rounded-md border border-white/10 bg-black/30 px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate">{file.name}</p>
-                      <p className="text-xs text-white/45">
-                        .{getFileExtension(file.name)} - {(file.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      className="ml-3 rounded border border-white/15 px-2 py-1 text-xs hover:bg-white/10"
-                    >
-                      Remove
-                    </button>
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+            {STEP_TITLES.map((title, index) => {
+              const stepNumber = index + 1;
+              const isActive = currentStep === stepNumber;
+              const isCompleted = currentStep > stepNumber;
+
+              return (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => {
+                    if (stepNumber < currentStep) {
+                      setCurrentStep(stepNumber);
+                      setSubmitError("");
+                    }
+                  }}
+                  className={`border px-3 py-3 text-left transition-colors ${
+                    isActive
+                      ? "border-blue-400/30 bg-blue-500/10"
+                      : isCompleted
+                        ? "border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06]"
+                        : "border-white/[0.06] bg-transparent"
+                  } ${stepNumber < currentStep ? "cursor-pointer" : "cursor-default"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs font-semibold text-white/32">0{stepNumber}</span>
+                    {isCompleted && (
+                      <span className="inline-flex h-5 w-5 items-center justify-center border border-blue-400/25 bg-blue-500/15 text-blue-100">
+                        <Check size={12} />
+                      </span>
+                    )}
                   </div>
-                ))
-              )}
-            </div>
+                  <p className="mt-2 text-sm font-semibold text-white">{title}</p>
+                </button>
+              );
+            })}
           </div>
-        )}
+        </div>
+      </div>
 
-        {currentStep === 8 && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-white/10 bg-black/35 p-4 text-sm">
-              <p><span className="text-white/55">Topic:</span> {selectedTopic?.label || "-"}</p>
-              <p className="mt-1"><span className="text-white/55">Sub-topic:</span> {selectedSubTopic?.label || "-"}</p>
-              <p className="mt-1"><span className="text-white/55">Tertiary-topic:</span> {tertiaryOptions.find((item) => item.id === tertiaryTopic)?.label || "-"}</p>
-              <p className="mt-1"><span className="text-white/55">Subject:</span> {subject || "-"}</p>
-              <p className="mt-1"><span className="text-white/55">Affected resource:</span> {selectedResource?.name || "-"}</p>
-              <p className="mt-3 whitespace-pre-wrap"><span className="text-white/55">Description:</span>{"\n"}{plainTextFromRichText(description) || "-"}</p>
-              <p className="mt-3"><span className="text-white/55">Attachments:</span> {attachments.length}</p>
-            </div>
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_360px]">
+        <div className={panelClassName}>
+          <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+            <h2 className="text-base font-semibold text-white">{STEP_TITLES[currentStep - 1]}</h2>
+            <p className="mt-1 text-sm text-white/45">Fill this step to continue to the next one.</p>
           </div>
-        )}
 
-        {submitError && <p className="mt-4 text-sm text-red-300">{submitError}</p>}
+          <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+            {currentStep === 1 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Topic</label>
+                <select
+                  value={topic}
+                  onChange={(event) => {
+                    setTopic(event.target.value);
+                    setSubTopic("");
+                    setTertiaryTopic("");
+                  }}
+                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                >
+                  <option value="">Select a topic</option>
+                  {SUPPORT_TOPICS.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-        <div className="mt-6 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={goBack}
-            disabled={currentStep === 1 || submitting}
-            className="rounded-md border border-white/15 px-4 py-2 text-sm disabled:opacity-50"
-          >
-            Back
-          </button>
+            {currentStep === 2 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Sub-topic</label>
+                <select
+                  value={subTopic}
+                  onChange={(event) => {
+                    setSubTopic(event.target.value);
+                    setTertiaryTopic("");
+                  }}
+                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                  disabled={!selectedTopic}
+                >
+                  <option value="">Select a sub-topic</option>
+                  {(selectedTopic?.subTopics || []).map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-          {currentStep < STEP_TITLES.length ? (
+            {currentStep === 3 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Tertiary-topic</label>
+                <select
+                  value={tertiaryTopic}
+                  onChange={(event) => setTertiaryTopic(event.target.value)}
+                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                  disabled={!selectedSubTopic}
+                >
+                  <option value="">Select a tertiary-topic</option>
+                  {tertiaryOptions.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {currentStep === 4 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Subject</label>
+                <input
+                  value={subject}
+                  onChange={(event) => setSubject(event.target.value)}
+                  placeholder="Example: Kubernetes cluster stuck on ready state"
+                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                />
+              </div>
+            )}
+
+            {currentStep === 5 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Affected resource</label>
+                <select
+                  value={affectedResourceId}
+                  onChange={(event) => setAffectedResourceId(event.target.value)}
+                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                  disabled={resourcesLoading}
+                >
+                  {resources.map((resource) => (
+                    <option key={resource.id} value={resource.id}>
+                      {resource.name}
+                    </option>
+                  ))}
+                </select>
+                {resourcesLoading && <p className="mt-2 text-xs text-white/45">Loading resources...</p>}
+                {resourcesError && <p className="mt-2 text-xs text-red-300">{resourcesError}</p>}
+              </div>
+            )}
+
+            {currentStep === 6 && (
+              <div>
+                <label className="mb-2 block text-sm text-white/75">Issue description</label>
+                <SupportRichTextEditor
+                  value={description}
+                  onChange={setDescription}
+                  placeholder="Share exact error, what you tried, and expected behavior."
+                  minHeightClassName="min-h-[240px]"
+                />
+              </div>
+            )}
+
+            {currentStep === 7 && (
+              <div>
+                <div
+                  onDrop={handleFileDrop}
+                  onDragOver={(event) => event.preventDefault()}
+                  className="border border-dashed border-white/[0.2] bg-white/[0.03] p-8 text-center"
+                >
+                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center border border-white/[0.12] bg-white/[0.04]">
+                    <Paperclip className="h-5 w-5 text-white/70" />
+                  </div>
+                  <p className="text-sm">Drop files here or choose manually.</p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Allowed: {ALLOWED_SUPPORT_FILE_EXTENSIONS.join(", ")} | Max 10MB per file
+                  </p>
+                  <label className="mt-4 inline-flex cursor-pointer items-center gap-2 border border-white/[0.12] bg-white/[0.04] px-3 py-2 text-sm text-white transition-colors hover:bg-white/[0.08]">
+                    Choose files
+                    <input
+                      type="file"
+                      accept=".svg,.png,.jpg,.jpeg,.pdf,.docx,.csv,.xlsx,.txt,.doc"
+                      multiple
+                      onChange={handleFileInput}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {attachments.length === 0 ? (
+                    <p className="text-xs text-white/45">No files attached.</p>
+                  ) : (
+                    attachments.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        className="flex items-center justify-between border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-white">{file.name}</p>
+                          <p className="text-xs text-white/45">
+                            .{getFileExtension(file.name)} - {(file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="ml-3 border border-white/[0.15] bg-white/[0.02] px-2 py-1 text-xs text-white/90 transition-colors hover:bg-white/[0.07]"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {currentStep === 8 && (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Topic</div>
+                    <div className="mt-2 text-sm font-medium text-white">{selectedTopic?.label || "-"}</div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Sub-topic</div>
+                    <div className="mt-2 text-sm font-medium text-white">{selectedSubTopic?.label || "-"}</div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Tertiary-topic</div>
+                    <div className="mt-2 text-sm font-medium text-white">
+                      {tertiaryOptions.find((item) => item.id === tertiaryTopic)?.label || "-"}
+                    </div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Subject</div>
+                    <div className="mt-2 text-sm font-medium text-white">{subject || "-"}</div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Affected resource</div>
+                    <div className="mt-2 text-sm font-medium text-white">{selectedResource?.name || "-"}</div>
+                  </div>
+                  <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Attachments</div>
+                    <div className="mt-2 text-sm font-medium text-white">{attachments.length}</div>
+                  </div>
+                </div>
+
+                <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Description</div>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/80">{plainTextFromRichText(description) || "-"}</p>
+                </div>
+              </div>
+            )}
+
+            {submitError && <p className="text-sm text-red-300">{submitError}</p>}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-4 sm:px-6">
             <button
               type="button"
-              onClick={goNext}
-              disabled={submitting}
-              className="rounded-md bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90"
+              onClick={goBack}
+              disabled={currentStep === 1 || submitting}
+              className="cursor-pointer rounded-md border border-white/[0.14] bg-white/[0.03] px-4 py-2 text-sm text-white/82 transition-colors hover:bg-white/[0.07] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Next
+              Back
             </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void submitTicket()}
-              disabled={submitting}
-              className="rounded-md bg-cyan-400 px-4 py-2 text-sm font-semibold text-black hover:bg-cyan-300 disabled:opacity-60"
-            >
-              {submitting ? "Submitting..." : "Submit Ticket"}
-            </button>
-          )}
+
+            {currentStep < STEP_TITLES.length ? (
+              <button
+                type="button"
+                onClick={goNext}
+                disabled={submitting}
+                className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Next <ChevronRight size={16} className="ml-1 inline" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void submitTicket()}
+                disabled={submitting}
+                className="cursor-pointer rounded-md border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? "Submitting..." : "Submit Ticket"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className={panelClassName + " xl:sticky xl:top-8"}>
+            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
+              <h3 className="text-base font-semibold text-white">Submission Summary</h3>
+            </div>
+            <div className="space-y-3 px-5 py-5 sm:px-6 sm:py-6">
+              <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Current step</div>
+                <div className="mt-2 text-sm font-medium text-white">{STEP_TITLES[currentStep - 1]}</div>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Progress</div>
+                <div className="mt-2 text-sm font-medium text-white">{Math.round(completionPercentage)}%</div>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Ticket subject</div>
+                <div className="mt-2 line-clamp-2 text-sm font-medium text-white">{subject || "Not set"}</div>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.03] p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Description length</div>
+                <div className="mt-2 text-sm font-medium text-white">{plainTextFromRichText(description).length} chars</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

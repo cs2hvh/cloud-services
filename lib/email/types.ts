@@ -125,6 +125,36 @@ export interface ConsultationRequestEmailData {
   submittedAt: string;
 }
 
+export interface SupportConversationEmailMessageData {
+  actorType: "user" | "admin" | "system";
+  actorLabel: string;
+  authorName: string;
+  authorEmail: string;
+  createdAt: string;
+  body: string;
+}
+
+export interface SupportTicketCreatedEmailData {
+  customerName: string;
+  ticketNumber: string;
+  ticketSubject: string;
+  ticketBody: string;
+  createdAt: string;
+  ticketUrl?: string;
+  conversation: SupportConversationEmailMessageData[];
+}
+
+export interface SupportTicketReplyEmailData {
+  customerName: string;
+  ticketNumber: string;
+  ticketSubject: string;
+  latestReply: string;
+  repliedAt: string;
+  ticketStatus: string;
+  ticketUrl?: string;
+  conversation: SupportConversationEmailMessageData[];
+}
+
 export interface EmailTemplateDataMap {
   otp: OtpEmailData;
   forgotPassword: ForgotPasswordEmailData;
@@ -137,6 +167,8 @@ export interface EmailTemplateDataMap {
   deploymentStatus: DeploymentStatusEmailData;
   systemAlert: SystemAlertEmailData;
   consultationRequest: ConsultationRequestEmailData;
+  supportTicketCreated: SupportTicketCreatedEmailData;
+  supportTicketReply: SupportTicketReplyEmailData;
 }
 
 export type EmailTemplateId = keyof EmailTemplateDataMap;

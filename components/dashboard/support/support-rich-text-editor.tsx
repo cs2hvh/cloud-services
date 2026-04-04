@@ -10,10 +10,10 @@ interface SupportRichTextEditorProps {
 }
 
 function iconButtonClassName(active = false): string {
-  return `rounded border px-2 py-1 text-xs transition-colors ${
+  return `border px-2 py-1 text-xs transition-colors ${
     active
-      ? "border-cyan-400/40 bg-cyan-500/15 text-cyan-200"
-      : "border-white/15 bg-black/25 text-white/80 hover:bg-white/10"
+      ? "border-blue-400/30 bg-blue-500/15 text-blue-100"
+      : "border-white/[0.12] bg-white/[0.04] text-white/80 hover:bg-white/[0.08]"
   }`;
 }
 
@@ -43,8 +43,8 @@ export default function SupportRichTextEditor({
   };
 
   return (
-    <div className="rounded-lg border border-white/10 bg-black/30">
-      <div className="flex flex-wrap gap-1 border-b border-white/10 p-2">
+    <div className="border border-white/[0.1] bg-white/[0.03]">
+      <div className="flex flex-wrap gap-1 border-b border-white/[0.1] p-2">
         <button type="button" onClick={() => runCommand("bold")} className={iconButtonClassName()}>
           Bold
         </button>
@@ -89,4 +89,3 @@ export default function SupportRichTextEditor({
     </div>
   );
 }
-

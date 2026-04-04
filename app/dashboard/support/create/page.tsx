@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export default function CreateSupportTicketPage() {
   return (
-    <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="dashboard-bg flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
       <SupportTicketCreateWizard />
     </div>
   );

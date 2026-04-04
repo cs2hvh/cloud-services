@@ -1,36 +1,58 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { SUPPORT_STATUS_LABELS, SupportTicketStatus } from "@/lib/support/catalog";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { adminSupportTicketsQuerySchema } from "@/lib/validation/support";
 
 export const dynamic = "force-dynamic";
 
-const VALID_STATUS_FILTERS = new Set<string>(["all", ...Object.keys(SUPPORT_STATUS_LABELS)]);
+function tooManyRequestsResponse(retryAfterSec: number) {
+  return NextResponse.json(
+    { error: "Too Many Requests", message: `Retry after ${retryAfterSec}s` },
+    { status: 429 }
+  );
+}
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
+  if (!adminCheck.ok || !adminCheck.userId) {
     return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 403 });
+  }
+
+  const rl = await limitByUser(adminCheck.userId, {
+    prefix: "rl:admin-support-tickets-list",
+    limit: 90,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
   }
 
   try {
     const url = new URL(request.url);
-    const page = Math.max(1, Number.parseInt(url.searchParams.get("page") || "1", 10));
-    const limit = Math.max(1, Math.min(100, Number.parseInt(url.searchParams.get("limit") || "10", 10)));
-    const statusParam = (url.searchParams.get("status") || "all").toLowerCase();
+    const status = (url.searchParams.get("status") || "all").trim().toLowerCase();
     const topic = (url.searchParams.get("topic") || "").trim();
     const search = (url.searchParams.get("search") || "").trim();
-
-    if (!VALID_STATUS_FILTERS.has(statusParam)) {
-      return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
-    }
-
-    const result = await SupportTickets.listForAdmin({
-      page,
-      limit,
-      status: statusParam as SupportTicketStatus | "all",
+    const parsed = adminSupportTicketsQuerySchema.safeParse({
+      page: url.searchParams.get("page") || "1",
+      limit: url.searchParams.get("limit") || "10",
+      status,
       topic: topic.length > 0 ? topic : undefined,
       search: search.length > 0 ? search : undefined,
+    });
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid query parameters", details: parsed.error.errors }, { status: 400 });
+    }
+
+    const query = parsed.data;
+
+    const result = await SupportTickets.listForAdmin({
+      page: query.page,
+      limit: query.limit,
+      status: query.status,
+      topic: query.topic,
+      search: query.search,
     });
 
     return NextResponse.json({

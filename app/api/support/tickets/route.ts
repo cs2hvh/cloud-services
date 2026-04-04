@@ -1,82 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { validateRequest } from "@/lib/middleware/validate-request";
 import { createServiceClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import {
   SUPPORT_CLOSED_STATUSES,
   SUPPORT_OPEN_STATUSES,
-  SUPPORT_STATUS_LABELS,
   getFileExtension,
   isAllowedSupportFile,
-  isValidSupportTopicSelection,
   SUPPORT_FILE_MAX_SIZE_BYTES,
   SUPPORT_MAX_ATTACHMENTS,
-  SupportTicketStatus,
 } from "@/lib/support/catalog";
-import { getSupportRichTextLength, sanitizeSupportRichText } from "@/lib/support/richtext";
-
-interface CreateTicketPayload {
-  topic: string;
-  subTopic: string;
-  tertiaryTopic: string;
-  subject: string;
-  affectedResourceType?: string | null;
-  affectedResourceId?: string | null;
-  affectedResourceName?: string | null;
-  description: string;
-}
-
-function normalizeCreateTicketPayload(payload: Record<string, unknown>): CreateTicketPayload {
-  return {
-    topic: String(payload.topic || "").trim(),
-    subTopic: String(payload.subTopic || "").trim(),
-    tertiaryTopic: String(payload.tertiaryTopic || "").trim(),
-    subject: String(payload.subject || "").trim(),
-    affectedResourceType:
-      payload.affectedResourceType != null && String(payload.affectedResourceType).trim().length > 0
-        ? String(payload.affectedResourceType).trim()
-        : null,
-    affectedResourceId:
-      payload.affectedResourceId != null && String(payload.affectedResourceId).trim().length > 0
-        ? String(payload.affectedResourceId).trim()
-        : null,
-    affectedResourceName:
-      payload.affectedResourceName != null && String(payload.affectedResourceName).trim().length > 0
-        ? String(payload.affectedResourceName).trim()
-        : null,
-    description: String(payload.description || ""),
-  };
-}
-
-function validateCreatePayload(payload: CreateTicketPayload): string | null {
-  if (!payload.topic || !payload.subTopic || !payload.tertiaryTopic) {
-    return "Topic, sub-topic, and tertiary-topic are required";
-  }
-
-  if (!isValidSupportTopicSelection(payload.topic, payload.subTopic, payload.tertiaryTopic)) {
-    return "Invalid topic selection";
-  }
-
-  if (!payload.subject || payload.subject.length < 4) {
-    return "Subject must be at least 4 characters";
-  }
-
-  if (payload.subject.length > 160) {
-    return "Subject cannot exceed 160 characters";
-  }
-
-  const richTextLength = getSupportRichTextLength(payload.description);
-
-  if (!payload.description || richTextLength < 10) {
-    return "Issue description must be at least 10 characters";
-  }
-
-  if (richTextLength > 8000) {
-    return "Issue description cannot exceed 8000 characters";
-  }
-
-  return null;
-}
+import { sanitizeSupportRichText } from "@/lib/support/richtext";
+import { createSupportTicketSchema, supportTicketListQuerySchema } from "@/lib/validation/support";
+import { sendSupportTicketCreatedEmail } from "@/lib/support/email";
 
 function validateAttachment(file: File): string | null {
   if (file.size > SUPPORT_FILE_MAX_SIZE_BYTES) {
@@ -91,27 +29,54 @@ function validateAttachment(file: File): string | null {
   return null;
 }
 
-export async function GET(request: Request) {
+function normalizeNullableField(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function tooManyRequestsResponse(retryAfterSec: number) {
+  return NextResponse.json(
+    { error: "Too Many Requests", message: `Retry after ${retryAfterSec}s` },
+    { status: 429 }
+  );
+}
+
+export async function GET(request: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-tickets-list",
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
   try {
     const url = new URL(request.url);
-    const status = url.searchParams.get("status");
-    const validStatuses = Object.keys(SUPPORT_STATUS_LABELS) as SupportTicketStatus[];
+    const parsedQuery = supportTicketListQuerySchema.safeParse({
+      status: url.searchParams.get("status") || undefined,
+    });
 
-    if (status && !validStatuses.includes(status as SupportTicketStatus)) {
+    if (!parsedQuery.success) {
       return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
     }
 
+    const { status } = parsedQuery.data;
+
     if (status) {
-      const tickets = await SupportTickets.listByUser(auth.user.id, status as SupportTicketStatus);
+      const tickets = await SupportTickets.listByUser(auth.user.id, status);
       return NextResponse.json({
         success: true,
         data: tickets,
         counts: {
-          open: SUPPORT_OPEN_STATUSES.includes(status as SupportTicketStatus) ? tickets.length : 0,
-          closed: SUPPORT_CLOSED_STATUSES.includes(status as SupportTicketStatus) ? tickets.length : 0,
+          open: SUPPORT_OPEN_STATUSES.includes(status) ? tickets.length : 0,
+          closed: SUPPORT_CLOSED_STATUSES.includes(status) ? tickets.length : 0,
         },
       });
     }
@@ -138,40 +103,57 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
+
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-ticket-create",
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
 
   try {
     const contentType = request.headers.get("content-type") || "";
 
-    let payload: CreateTicketPayload;
+    let payloadInput: Record<string, unknown>;
     let attachments: File[] = [];
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await request.formData();
-      payload = normalizeCreateTicketPayload({
+      payloadInput = {
         topic: formData.get("topic"),
         subTopic: formData.get("subTopic"),
         tertiaryTopic: formData.get("tertiaryTopic"),
         subject: formData.get("subject"),
-        affectedResourceType: formData.get("affectedResourceType"),
-        affectedResourceId: formData.get("affectedResourceId"),
-        affectedResourceName: formData.get("affectedResourceName"),
+        affectedResourceType: normalizeNullableField(formData.get("affectedResourceType")),
+        affectedResourceId: normalizeNullableField(formData.get("affectedResourceId")),
+        affectedResourceName: normalizeNullableField(formData.get("affectedResourceName")),
         description: formData.get("description"),
-      });
+      };
       attachments = formData
         .getAll("attachments")
         .filter((item): item is File => item instanceof File && item.size > 0);
     } else {
       const json = await request.json();
-      payload = normalizeCreateTicketPayload(json as Record<string, unknown>);
+      const input = json as Record<string, unknown>;
+      payloadInput = {
+        ...input,
+        affectedResourceType: normalizeNullableField(input.affectedResourceType),
+        affectedResourceId: normalizeNullableField(input.affectedResourceId),
+        affectedResourceName: normalizeNullableField(input.affectedResourceName),
+      };
     }
 
-    const validationError = validateCreatePayload(payload);
-    if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
+    const validation = validateRequest(createSupportTicketSchema, payloadInput);
+    if (!validation.success) {
+      return validation.response;
     }
+
+    const payload = validation.data;
 
     if (attachments.length > SUPPORT_MAX_ATTACHMENTS) {
       return NextResponse.json(
@@ -253,6 +235,28 @@ export async function POST(request: Request) {
         if (!saved) {
           uploadWarnings.push("Some uploaded files could not be linked to the ticket metadata");
         }
+      }
+    }
+
+    if (auth.user.email) {
+      const detail = await SupportTickets.getByIdForUser(auth.user.id, created.ticket.id);
+      const emailResult = await sendSupportTicketCreatedEmail({
+        to: auth.user.email,
+        customerName:
+          auth.user.user_metadata?.username ||
+          auth.user.user_metadata?.display_name ||
+          auth.user.email.split("@")[0] ||
+          "User",
+        ticketId: created.ticket.id,
+        ticketNumber: created.ticket.ticket_number,
+        ticketSubject: created.ticket.subject,
+        ticketBody: payload.description,
+        createdAt: created.ticket.created_at,
+        messages: detail?.messages || [],
+      });
+
+      if (!emailResult.success) {
+        console.error("[SupportTickets API] Failed to send ticket-created email:", emailResult.error);
       }
     }
 

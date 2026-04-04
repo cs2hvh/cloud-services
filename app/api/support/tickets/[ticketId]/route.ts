@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { validateRequest } from "@/lib/middleware/validate-request";
 import { createServiceClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import {
@@ -11,75 +13,33 @@ import {
   isAllowedSupportFile,
   isSupportClosedStatus,
   isSupportOpenStatus,
-  isValidSupportTopicSelection,
 } from "@/lib/support/catalog";
-import { getSupportRichTextLength, sanitizeSupportRichText } from "@/lib/support/richtext";
+import { sanitizeSupportRichText } from "@/lib/support/richtext";
+import {
+  supportAttachmentDeleteSchema,
+  supportTicketIdParamSchema,
+  updateSupportTicketSchema,
+} from "@/lib/validation/support";
 
 type RouteParams = { params: Promise<{ ticketId: string }> };
 
-interface UpdateTicketPayload {
-  topic?: string;
-  subTopic?: string;
-  tertiaryTopic?: string;
-  subject?: string;
-  description?: string;
-  affectedResourceType?: string | null;
-  affectedResourceId?: string | null;
-  affectedResourceName?: string | null;
-  action?: "reopen";
+function tooManyRequestsResponse(retryAfterSec: number) {
+  return NextResponse.json(
+    { error: "Too Many Requests", message: `Retry after ${retryAfterSec}s` },
+    { status: 429 }
+  );
 }
 
-function normalizeUpdatePayload(payload: Record<string, unknown>): UpdateTicketPayload {
-  const normalized: UpdateTicketPayload = {};
-
-  if (payload.topic !== undefined) normalized.topic = String(payload.topic || "").trim();
-  if (payload.subTopic !== undefined) normalized.subTopic = String(payload.subTopic || "").trim();
-  if (payload.tertiaryTopic !== undefined) normalized.tertiaryTopic = String(payload.tertiaryTopic || "").trim();
-  if (payload.subject !== undefined) normalized.subject = String(payload.subject || "").trim();
-  if (payload.description !== undefined) normalized.description = String(payload.description || "");
-  if (payload.action !== undefined && String(payload.action).trim() === "reopen") normalized.action = "reopen";
-
-  if (payload.affectedResourceType !== undefined) {
-    const value = String(payload.affectedResourceType || "").trim();
-    normalized.affectedResourceType = value.length > 0 ? value : null;
-  }
-  if (payload.affectedResourceId !== undefined) {
-    const value = String(payload.affectedResourceId || "").trim();
-    normalized.affectedResourceId = value.length > 0 ? value : null;
-  }
-  if (payload.affectedResourceName !== undefined) {
-    const value = String(payload.affectedResourceName || "").trim();
-    normalized.affectedResourceName = value.length > 0 ? value : null;
+async function parseTicketId(params: Promise<{ ticketId: string }>) {
+  const parsed = supportTicketIdParamSchema.safeParse(await params);
+  if (!parsed.success) {
+    return {
+      ticketId: null,
+      response: NextResponse.json({ error: "Invalid ticket id" }, { status: 400 }),
+    };
   }
 
-  return normalized;
-}
-
-function validateUpdatePayload(payload: UpdateTicketPayload): string | null {
-  const topicFieldsProvided =
-    payload.topic !== undefined || payload.subTopic !== undefined || payload.tertiaryTopic !== undefined;
-
-  if (topicFieldsProvided) {
-    if (!payload.topic || !payload.subTopic || !payload.tertiaryTopic) {
-      return "Topic, sub-topic, and tertiary-topic must be updated together";
-    }
-    if (!isValidSupportTopicSelection(payload.topic, payload.subTopic, payload.tertiaryTopic)) {
-      return "Invalid topic selection";
-    }
-  }
-
-  if (payload.subject !== undefined) {
-    if (payload.subject.length < 4) return "Subject must be at least 4 characters";
-    if (payload.subject.length > 160) return "Subject cannot exceed 160 characters";
-  }
-
-  if (payload.description !== undefined) {
-    const textLength = getSupportRichTextLength(payload.description);
-    if (textLength < 10) return "Issue description must be at least 10 characters";
-    if (textLength > 8000) return "Issue description cannot exceed 8000 characters";
-  }
-
-  return null;
+  return { ticketId: parsed.data.ticketId, response: null };
 }
 
 function validateAttachment(file: File): string | null {
@@ -95,15 +55,37 @@ function validateAttachment(file: File): string | null {
   return null;
 }
 
+function normalizeNullableField(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 async function getTicketForUser(userId: string, ticketId: string) {
   return SupportTickets.getByIdForUser(userId, ticketId);
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
-  const { ticketId } = await params;
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-ticket-read",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
 
   try {
     const ticket = await getTicketForUser(auth.user.id, ticketId);
@@ -139,11 +121,25 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 }
 
-export async function PATCH(request: Request, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
-  const { ticketId } = await params;
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-ticket-update",
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
 
   try {
     const existing = await getTicketForUser(auth.user.id, ticketId);
@@ -152,7 +148,20 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     const body = (await request.json()) as Record<string, unknown>;
-    const payload = normalizeUpdatePayload(body);
+    const normalizedBody = {
+      ...body,
+      action: typeof body.action === "string" ? body.action.trim() : body.action,
+      affectedResourceType: normalizeNullableField(body.affectedResourceType),
+      affectedResourceId: normalizeNullableField(body.affectedResourceId),
+      affectedResourceName: normalizeNullableField(body.affectedResourceName),
+    };
+
+    const validation = validateRequest(updateSupportTicketSchema, normalizedBody);
+    if (!validation.success) {
+      return validation.response;
+    }
+
+    const payload = validation.data;
 
     if (payload.action === "reopen") {
       if (!SUPPORT_CLOSED_STATUSES.includes(existing.status)) {
@@ -185,17 +194,18 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       );
     }
 
-    const validationError = validateUpdatePayload(payload);
-    if (validationError) {
-      return NextResponse.json({ error: validationError }, { status: 400 });
-    }
-
     const sanitizedDescription =
       payload.description !== undefined ? sanitizeSupportRichText(payload.description) : undefined;
 
     const updated = await SupportTickets.updateByUser(auth.user.id, ticketId, {
-      ...payload,
+      topic: payload.topic,
+      subTopic: payload.subTopic,
+      tertiaryTopic: payload.tertiaryTopic,
+      subject: payload.subject,
       description: sanitizedDescription,
+      affectedResourceType: payload.affectedResourceType,
+      affectedResourceId: payload.affectedResourceId,
+      affectedResourceName: payload.affectedResourceName,
     });
     if (!updated) {
       return NextResponse.json({ error: "Failed to update ticket" }, { status: 500 });
@@ -220,11 +230,25 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 }
 
-export async function POST(request: Request, { params }: RouteParams) {
+export async function POST(request: NextRequest, { params }: RouteParams) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
-  const { ticketId } = await params;
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-ticket-attachment-add",
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
 
   try {
     const existing = await getTicketForUser(auth.user.id, ticketId);
@@ -321,11 +345,25 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(request: Request, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
-  const { ticketId } = await params;
+  const rl = await limitByUser(auth.user.id, {
+    prefix: "rl:support-ticket-attachment-delete",
+    limit: 20,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
 
   try {
     const existing = await getTicketForUser(auth.user.id, ticketId);
@@ -339,12 +377,16 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
     const url = new URL(request.url);
     const attachmentIdParam = url.searchParams.get("attachmentId");
-    const body = (await request.json().catch(() => ({}))) as { attachmentId?: string };
-    const attachmentId = (attachmentIdParam || body.attachmentId || "").trim();
+    const body = (await request.json().catch(() => ({}))) as { attachmentId?: unknown };
 
-    if (!attachmentId) {
-      return NextResponse.json({ error: "attachmentId is required" }, { status: 400 });
+    const validation = validateRequest(supportAttachmentDeleteSchema, {
+      attachmentId: attachmentIdParam || body.attachmentId,
+    });
+    if (!validation.success) {
+      return validation.response;
     }
+
+    const { attachmentId } = validation.data;
 
     const deleted = await SupportTickets.deleteAttachmentByUser(auth.user.id, ticketId, attachmentId);
     if (!deleted) {
@@ -369,4 +411,3 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Failed to delete attachment" }, { status: 500 });
   }
 }
-

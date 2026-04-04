@@ -1,10 +1,35 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { SUPPORT_STATUS_LABELS, SupportTicketStatus } from "@/lib/support/catalog";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import { createServiceClient } from "@/lib/supabase/server";
+import { limitByUser } from "@/lib/cooldown/userbased";
+import { validateRequest } from "@/lib/middleware/validate-request";
+import {
+  adminSupportTicketPatchSchema,
+  supportTicketIdParamSchema,
+} from "@/lib/validation/support";
+import { sendSupportTicketReplyEmail } from "@/lib/support/email";
 
 type RouteParams = { params: Promise<{ ticketId: string }> };
+
+function tooManyRequestsResponse(retryAfterSec: number) {
+  return NextResponse.json(
+    { error: "Too Many Requests", message: `Retry after ${retryAfterSec}s` },
+    { status: 429 }
+  );
+}
+
+async function parseTicketId(params: Promise<{ ticketId: string }>) {
+  const parsed = supportTicketIdParamSchema.safeParse(await params);
+  if (!parsed.success) {
+    return {
+      ticketId: null,
+      response: NextResponse.json({ error: "Invalid ticket id" }, { status: 400 }),
+    };
+  }
+
+  return { ticketId: parsed.data.ticketId, response: null };
+}
 
 async function getAdminTicketWithSignedUrls(ticketId: string) {
   const ticket = await SupportTickets.getByIdForAdmin(ticketId);
@@ -31,14 +56,29 @@ async function getAdminTicketWithSignedUrls(ticketId: string) {
   };
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
+  if (!adminCheck.ok || !adminCheck.userId) {
     return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 403 });
   }
 
+  const rl = await limitByUser(adminCheck.userId, {
+    prefix: "rl:admin-support-ticket-read",
+    limit: 120,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
+
   try {
-    const { ticketId } = await params;
     const ticket = await getAdminTicketWithSignedUrls(ticketId);
     if (!ticket) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
@@ -54,34 +94,51 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 }
 
-export async function PATCH(request: Request, { params }: RouteParams) {
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
   const adminCheck = await requireAdmin();
   if (!adminCheck.ok || !adminCheck.userId) {
     return NextResponse.json({ error: "Unauthorized - Admin access required" }, { status: 403 });
   }
 
+  const rl = await limitByUser(adminCheck.userId, {
+    prefix: "rl:admin-support-ticket-update",
+    limit: 30,
+    windowMs: 60_000,
+  });
+  if (!rl.allowed) {
+    return tooManyRequestsResponse(rl.retryAfterSec);
+  }
+
+  const parsedTicket = await parseTicketId(params);
+  if (parsedTicket.response || !parsedTicket.ticketId) {
+    return parsedTicket.response as NextResponse;
+  }
+
+  const { ticketId } = parsedTicket;
+
   try {
-    const { ticketId } = await params;
     const existing = await SupportTickets.getByIdForAdmin(ticketId);
     if (!existing) {
       return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
     }
 
-    const body = (await request.json()) as { status?: string; reply?: string };
-    const nextStatus = body.status?.trim().toLowerCase();
-    const reply = body.reply?.trim() || "";
+    const body = (await request.json()) as Record<string, unknown>;
+    const normalizedBody = {
+      status: typeof body.status === "string" ? body.status.trim().toLowerCase() : body.status,
+      reply:
+        typeof body.reply === "string"
+          ? body.reply.trim() || undefined
+          : body.reply,
+    };
 
-    if (!nextStatus && !reply) {
-      return NextResponse.json({ error: "No update payload provided" }, { status: 400 });
+    const validation = validateRequest(adminSupportTicketPatchSchema, normalizedBody);
+    if (!validation.success) {
+      return validation.response;
     }
 
-    if (reply.length > 0 && reply.length < 2) {
-      return NextResponse.json({ error: "Reply must be at least 2 characters" }, { status: 400 });
-    }
-
-    if (nextStatus && !(nextStatus in SUPPORT_STATUS_LABELS)) {
-      return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
-    }
+    const nextStatus = validation.data.status;
+    const reply = validation.data.reply || "";
+    let replyCreatedAt: string | null = null;
 
     if (reply.length > 0) {
       const message = await SupportTickets.addMessage({
@@ -94,10 +151,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       if (!message) {
         return NextResponse.json({ error: "Failed to add reply" }, { status: 500 });
       }
+
+      replyCreatedAt = message.created_at;
     }
 
     if (nextStatus && nextStatus !== existing.status) {
-      const updated = await SupportTickets.updateStatusByAdmin(ticketId, nextStatus as SupportTicketStatus);
+      const updated = await SupportTickets.updateStatusByAdmin(ticketId, nextStatus);
       if (!updated) {
         return NextResponse.json({ error: "Failed to update ticket status" }, { status: 500 });
       }
@@ -105,13 +164,35 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       await SupportTickets.addMessage({
         ticketId,
         actorType: "system",
-        message: `Ticket status updated by support to ${nextStatus?.toUpperCase()}.`,
+        message: `Ticket status updated by support to ${nextStatus.toUpperCase()}.`,
       });
     }
 
     const refreshed = await getAdminTicketWithSignedUrls(ticketId);
     if (!refreshed) {
       return NextResponse.json({ error: "Ticket not found after update" }, { status: 404 });
+    }
+
+    if (reply.length > 0 && refreshed.owner?.email) {
+      const emailResult = await sendSupportTicketReplyEmail({
+        to: refreshed.owner.email,
+        customerName:
+          refreshed.owner.display_name ||
+          refreshed.owner.username ||
+          refreshed.owner.email ||
+          "User",
+        ticketId: refreshed.id,
+        ticketNumber: refreshed.ticket_number,
+        ticketSubject: refreshed.subject,
+        latestReply: reply,
+        repliedAt: replyCreatedAt || new Date().toISOString(),
+        ticketStatus: refreshed.status,
+        messages: refreshed.messages,
+      });
+
+      if (!emailResult.success) {
+        console.error("[Admin SupportTicket API] Failed to send support-reply email:", emailResult.error);
+      }
     }
 
     return NextResponse.json({
