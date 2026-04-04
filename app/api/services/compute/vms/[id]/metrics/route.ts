@@ -172,8 +172,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
     // Sanitize RRD data: only return numeric fields, drop any NaN/Infinity
     const history = (Array.isArray(rrdData) ? rrdData : [])
-      .filter((pt: any) => pt && typeof pt.time === "number")
-      .map((pt: any) => ({
+      .filter((pt) => pt && typeof pt.time === "number")
+      .map((pt) => ({
         time: pt.time,
         cpu: clampPct((pt.cpu ?? 0) * 100),
         mem_pct: pt.maxmem && pt.maxmem > 0

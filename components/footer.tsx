@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
-import { Shield, Lock, FileCheck } from "lucide-react";
+// import { Shield, Lock, FileCheck } from "lucide-react";
 
 const FOOTER_LINKS = [
   {
