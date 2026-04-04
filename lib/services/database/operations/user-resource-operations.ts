@@ -8,7 +8,7 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import type { Database_Connection, DatabaseUser, EncryptedData } from "@/lib/supabase/types";
 
-import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
+import { getDigitalOceanHeaders, isEncrypted, parseAxiosError } from "../helpers";
 import type {
   CreateDatabaseUserRequest,
   DeleteDatabaseUserRequest,
@@ -17,6 +17,25 @@ import type {
   ResetDatabaseUserPasswordRequest,
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
+
+function decryptStoredPassword(
+  value: unknown,
+  encryptionKey: string
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (isEncrypted(value)) {
+    return Encryption.decrypt(value, encryptionKey);
+  }
+
+  return undefined;
+}
 
 export const userResourceOperations = {
   async createDatabaseUser(
@@ -155,38 +174,42 @@ export const userResourceOperations = {
           ? existingUsersResult.data
           : [];
 
-      const existingPasswordMap = new Map<string, unknown>();
-      existingUsers.forEach((u: { name: string; password?: unknown }) => {
-        if (u.password) {
-          existingPasswordMap.set(u.name, u.password);
-        }
+      const existingUsersByName = new Map<string, { password?: unknown; created_at?: string }>();
+      existingUsers.forEach((u: { name: string; password?: unknown; created_at?: string }) => {
+        existingUsersByName.set(u.name, u);
       });
 
       const formattedUsers = users.map((user: { name: string; role?: string; password?: string }) => {
-        const existingPassword = existingPasswordMap.get(user.name);
+        const existingUser = existingUsersByName.get(user.name);
+        const resolvedPassword =
+          user.password || decryptStoredPassword(existingUser?.password, encryptionKey);
+
         return {
           id: user.name,
           name: user.name,
           role: user.role || "normal",
-          password: (user.password
-            ? Encryption.encrypt(user.password, encryptionKey)
-            : existingPassword) as unknown as string | undefined,
-          created_at: new Date().toISOString(),
+          password: resolvedPassword,
+          created_at: existingUser?.created_at,
         };
       });
 
-      const syncResult = await Database_Clusters.update_users(request.clusterId, formattedUsers);
+      const usersForSync = formattedUsers.map((user) => ({
+        ...user,
+        password: (user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined) as unknown as string | undefined,
+      }));
+
+      const syncResult = await Database_Clusters.update_users(request.clusterId, usersForSync);
       if (!syncResult.success) {
         return {
           success: true,
-          data: users,
+          data: formattedUsers,
           warning: syncResult.error,
         };
       }
 
       return {
         success: true,
-        data: users,
+        data: formattedUsers,
       };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);

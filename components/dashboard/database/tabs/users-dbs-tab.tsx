@@ -19,10 +19,11 @@ import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getDatabaseErrorMessage } from "../error-messages";
+import { supportsDashboardLogicalDatabases } from "../engine-capabilities";
 
 interface DatabaseUser {
   name: string;
-  password: string;
+  password?: string;
   role?: string;
   created_at?: string;
 }
@@ -34,9 +35,10 @@ interface DatabaseDb {
 
 interface UsersDbsTabProps {
   clusterId: string;
+  engine?: string | null;
 }
 
-export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
+export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
   const [users, setUsers] = useState<DatabaseUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [newUserName, setNewUserName] = useState("");
@@ -78,6 +80,8 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   const getProviderRoleLabel = (role?: string) =>
     role ? `Provider role: ${role}` : "Provider-managed identity";
 
+  const logicalDatabasesSupported = supportsDashboardLogicalDatabases(engine);
+
   const fetchUsers = useCallback(async () => {
     try {
       setLoadingUsers(true);
@@ -97,6 +101,12 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   }, [clusterId]);
 
   const fetchDatabases = useCallback(async () => {
+    if (!logicalDatabasesSupported) {
+      setDatabases([]);
+      setLoadingDatabases(false);
+      return;
+    }
+
     try {
       setLoadingDatabases(true);
       const response = await api.post("/services/database/dbs/list", {
@@ -112,7 +122,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     } finally {
       setLoadingDatabases(false);
     }
-  }, [clusterId]);
+  }, [clusterId, logicalDatabasesSupported]);
 
   useEffect(() => {
     fetchUsers();
@@ -207,6 +217,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   };
 
   const handleCreateDatabase = async () => {
+    if (!logicalDatabasesSupported) {
+      toast.error("Logical databases are not available for this database engine.");
+      return;
+    }
+
     if (!newDbName.trim()) {
       toast.error("Please enter a database name");
       return;
@@ -233,6 +248,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   };
 
   const handleDeleteDatabase = async () => {
+    if (!logicalDatabasesSupported) {
+      toast.error("Logical databases are not available for this database engine.");
+      return;
+    }
+
     if (deleteDbModal.confirmText !== deleteDbModal.dbName) {
       toast.error("Database name does not match!");
       return;
@@ -416,7 +436,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                             <span>
                               {isPrimaryUser(user)
                                 ? "Primary cluster identity"
-                                : "Managed database identity"}
+                                : "Provider-managed identity"}
                             </span>
                             {user.created_at && (
                               <span>
@@ -484,7 +504,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                                 {showPasswords[user.name] ? "Hide" : "Show"}
                               </button>
                               <button
-                                onClick={() => copyToClipboard(user.password, "Password")}
+                                onClick={() => copyToClipboard(user.password ?? "", "Password")}
                                 className="inline-flex items-center gap-2 border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
                                 title="Copy password"
                               >
@@ -549,7 +569,19 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
           </div>
 
           <div className="px-5 py-5">
-            {loadingDatabases ? (
+            {!logicalDatabasesSupported ? (
+              <div className="border border-white/[0.08] bg-black/20 px-6 py-10">
+                <Database className="mb-4 h-10 w-10 text-white/30" />
+                <h3 className="text-lg font-semibold text-white">
+                  Logical databases are not available for this engine
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  Manage access through provider users and connection settings
+                  instead. This cluster type does not expose separate logical
+                  database management in the dashboard.
+                </p>
+              </div>
+            ) : loadingDatabases ? (
               <div className="flex items-center justify-center py-14">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
               </div>
@@ -612,15 +644,16 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
             )}
           </div>
 
-          {renderCreateBar({
-            value: newDbName,
-            setValue: setNewDbName,
-            placeholder: "Database name",
-            onSubmit: handleCreateDatabase,
-            submitting: creatingDb,
-            disabled: !newDbName.trim(),
-            buttonLabel: "Add",
-          })}
+          {logicalDatabasesSupported &&
+            renderCreateBar({
+              value: newDbName,
+              setValue: setNewDbName,
+              placeholder: "Database name",
+              onSubmit: handleCreateDatabase,
+              submitting: creatingDb,
+              disabled: !newDbName.trim(),
+              buttonLabel: "Add",
+            })}
         </motion.section>
       </div>
 
@@ -851,8 +884,9 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   <strong>{credentialModal.username}</strong>
                 </p>
                 <p className="mt-2 text-xs leading-5 text-amber-200/70">
-                  Copy this password now. It may not be shown again after this
-                  dialog is closed.
+                  Copy this password now and store it securely. Dashboard
+                  visibility depends on the latest provider sync and may differ
+                  by engine.
                 </p>
               </div>
 

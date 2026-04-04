@@ -41,24 +41,42 @@ async function listDatabasesFromProvider(
     }
 
     const databases = response.data.dbs as DatabaseInstance[];
-    const formattedDbs = databases.map((db: DatabaseInstance) => ({
-      id: db.name,
-      name: db.name,
-      created_at: new Date().toISOString(),
-    }));
+    const existingDbsResult = await Database_Clusters.get_dbs(clusterId);
+    const existingDbs =
+      existingDbsResult.success && Array.isArray(existingDbsResult.data)
+        ? existingDbsResult.data
+        : [];
+    const existingDbsByName = new Map<string, DatabaseInstance>();
+
+    existingDbs.forEach((db: DatabaseInstance) => {
+      existingDbsByName.set(db.name, db);
+    });
+
+    const formattedDbs = databases.map((db: DatabaseInstance) => {
+      const existingDb = existingDbsByName.get(db.name);
+
+      return {
+        id: db.name,
+        name: db.name,
+        created_at:
+          typeof db.created_at === "string" && db.created_at.length > 0
+            ? db.created_at
+            : existingDb?.created_at,
+      };
+    });
 
     const syncResult = await Database_Clusters.update_dbs(clusterId, formattedDbs);
     if (!syncResult.success) {
       return {
         success: true,
-        data: databases,
+        data: formattedDbs,
         warning: syncResult.error,
       };
     }
 
     return {
       success: true,
-      data: databases,
+      data: formattedDbs,
     };
   } catch (err: unknown) {
     const axiosError = parseAxiosError(err);
