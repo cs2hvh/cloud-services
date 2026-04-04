@@ -33,12 +33,13 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const result = await DatabaseService.readMaintenanceWindow(database_id);
+    const result = await DatabaseService.readMaintenanceWindow(database_id, auth.user.id);
 
     if (!result.success) {
-      const message = result.error || "Failed to fetch maintenance window";
-      const status = message.toLowerCase().includes("not found") ? 404 : 400;
-      return NextResponse.json({ error: message }, { status });
+      return NextResponse.json(
+        { error: result.error || "Failed to fetch maintenance window" },
+        { status: result.statusCode || 400 }
+      );
     }
 
     return NextResponse.json(

@@ -38,6 +38,7 @@ export async function PUT(req: NextRequest) {
       {
         clusterId: validatedData.database_id,
         storageSizeMib: validatedData.storage_size_mib,
+        userId: auth.user.id,
       },
       req
     );
@@ -47,6 +48,13 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json(
           { error: result.error || "Database cluster not found" },
           { status: 404 }
+        );
+      }
+
+      if (result.errorCode === "FORBIDDEN") {
+        return NextResponse.json(
+          { error: result.error || "You are not authorized to modify this database cluster" },
+          { status: 403 }
         );
       }
 
@@ -72,7 +80,7 @@ export async function PUT(req: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: "Unable to upsize storage right now. Please try again." },
+        { error: result.error || "Unable to upsize storage right now. Please try again." },
         { status: result.statusCode || 500 }
       );
     }

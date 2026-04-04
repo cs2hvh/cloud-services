@@ -39,7 +39,7 @@ export const PUT = withV1Auth("databases:storage:update", async (req, auth, cont
     return v1TransformValidationError(validation.error);
   }
 
-  const result = await DatabaseService.updateStorage(clusterId, validation.data.size);
+  const result = await DatabaseService.updateStorage(clusterId, validation.data.size, auth.userId);
   if (!result.success) {
     return v1DatabaseServiceError(
       result,

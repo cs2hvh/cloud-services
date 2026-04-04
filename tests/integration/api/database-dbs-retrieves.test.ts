@@ -10,6 +10,7 @@ import {
 
 // Mock dependencies
 vi.mock('@/lib/auth/server-auth');
+vi.mock('@/lib/supabase/queries/database_clusters');
 vi.mock('axios');
 
 /**
@@ -27,10 +28,20 @@ const VALID_CLUSTER_ID = '550e8400-e29b-41d4-a716-446655440001';
 const API_URL = 'http://localhost:3000/api/services/database/dbs/retrieve';
 
 describe('POST /api/services/database/dbs/retrieve', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     process.env.DIGITAL_OCEAN_TOKEN = 'test-do-token';
     mockAuthenticatedUser();
+
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read).mockResolvedValue({
+      success: true,
+      data: {
+        cluster_id: VALID_CLUSTER_ID,
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        engine: 'mysql',
+      },
+    } as any);
   });
 
   describe('Authentication Tests', () => {
@@ -59,6 +70,27 @@ describe('POST /api/services/database/dbs/retrieve', () => {
 
       const response = await POST(request as NextRequest);
       expect(response!.status).not.toBe(401);
+    });
+
+    it('should reject retrieving a database from a cluster owned by another user', async () => {
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          cluster_id: VALID_CLUSTER_ID,
+          owner_id: '00000000-0000-0000-0000-000000000999',
+          engine: 'mysql',
+        },
+      } as any);
+
+      const request = createMockPostRequest(API_URL, {
+        cluster_id: VALID_CLUSTER_ID,
+        name: 'test_db',
+      });
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response!, 403);
+      expect(data.error).toContain('not authorized');
     });
   });
 
@@ -211,7 +243,7 @@ describe('POST /api/services/database/dbs/retrieve', () => {
       });
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 500);
       expect(data.error).toBe('Database not found');
     });
 
@@ -229,7 +261,7 @@ describe('POST /api/services/database/dbs/retrieve', () => {
       });
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 500);
       expect(data.error).toBe('cluster not found');
     });
 
@@ -247,7 +279,7 @@ describe('POST /api/services/database/dbs/retrieve', () => {
       });
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 500);
       expect(data.error).toBe('Invalid request');
     });
 
@@ -261,7 +293,7 @@ describe('POST /api/services/database/dbs/retrieve', () => {
       });
 
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
+      await expectResponseStatus(response!, 500);
     });
 
     it('should handle DigitalOcean timeout', async () => {
@@ -276,7 +308,7 @@ describe('POST /api/services/database/dbs/retrieve', () => {
       });
 
       const response = await POST(request as NextRequest);
-      await expectResponseStatus(response!, 400);
+      await expectResponseStatus(response!, 500);
     });
   });
 

@@ -175,7 +175,7 @@ export interface DatabaseUser {
 export interface DatabaseInstance {
   id: string;           // Database name (unique identifier)
   name: string;         // Database name
-  created_at: string;   // ISO timestamp
+  created_at?: string;  // ISO timestamp when known
 }
 
 export interface Database_Connection{
