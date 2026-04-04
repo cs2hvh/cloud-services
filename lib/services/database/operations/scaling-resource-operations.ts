@@ -198,7 +198,6 @@ export const scalingResourceOperations = {
         } catch (notifErr) {
           console.error("[updateStorageInternal] Failed to create notification:", notifErr);
         }
-
         return { success: true, statusCode: 200 };
       }
 
@@ -382,6 +381,28 @@ export const scalingResourceOperations = {
 
       if (migrationComplete) {
         await Database_Clusters.update_region(request.clusterId, request.targetRegion, "online");
+
+        if (access.cluster.status !== "online") {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: String(access.cluster.owner_id),
+                type: "success",
+                action: "migrated",
+                serviceType: "database",
+                serviceName: String(access.cluster.name),
+                serviceId: request.clusterId,
+                metadata: {
+                  updateType: "region",
+                  newRegion: request.targetRegion,
+                },
+              })
+            );
+          } catch (notifErr) {
+            console.error("[readMigrationStatus] Failed to create notification:", notifErr);
+          }
+
+        }
       }
 
       return {

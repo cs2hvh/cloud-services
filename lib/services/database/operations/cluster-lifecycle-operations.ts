@@ -25,6 +25,7 @@ import type {
   DeleteDatabaseClusterResult,
   UpdateDatabaseClusterProjectRequest,
 } from "../types";
+import { sendDatabaseAlertEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
 export const clusterLifecycleOperations = {
@@ -450,6 +451,22 @@ export const clusterLifecycleOperations = {
         );
       } catch (notifErr) {
         console.error("[deleteCluster] Failed to create notification:", notifErr);
+      }
+
+      try {
+        await sendDatabaseAlertEmail({
+          userEmail,
+          serviceName: clusterName,
+          alertTitle: "Database cluster deleted",
+          summary: `Database cluster "${clusterName}" was deleted successfully.`,
+          severity: "warning",
+          metadata: {
+            Operation: "Delete database cluster",
+            Cluster: clusterName,
+          },
+        });
+      } catch (emailErr) {
+        console.error("[deleteCluster] Failed to send email:", emailErr);
       }
 
       return { success: true };

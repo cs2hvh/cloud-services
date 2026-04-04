@@ -16,6 +16,7 @@ import type {
   ListDatabaseUsersResult,
   ResetDatabaseUserPasswordRequest,
 } from "../types";
+import { sendDatabaseAlertEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
 
 function decryptStoredPassword(
@@ -347,7 +348,9 @@ export const userResourceOperations = {
   },
 
   async resetDatabaseUserPassword(
-    request: ResetDatabaseUserPasswordRequest
+    request: ResetDatabaseUserPasswordRequest,
+    req?: NextRequest,
+    userEmail?: string
   ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
       const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
@@ -383,8 +386,8 @@ export const userResourceOperations = {
         await Database_Clusters.update_users(request.clusterId, updatedUsers);
       }
 
+      const clusterResult = await Database_Clusters.read(request.clusterId);
       if (user.password) {
-        const clusterResult = await Database_Clusters.read(request.clusterId);
         if (clusterResult.success && clusterResult.data) {
           const cluster = clusterResult.data;
           const connectionUser = cluster.public_connection?.user;
@@ -429,6 +432,71 @@ export const userResourceOperations = {
               updatedPrivateConnection as Database_Connection
             );
           }
+        }
+      }
+
+      if (clusterResult.success && clusterResult.data.project_id) {
+        await Projects.add_log({
+          project_id: clusterResult.data.project_id,
+          event: "RefreshCw",
+          text: `Database user '${request.username}' password reset`,
+        });
+      }
+
+      if (clusterResult.success && req) {
+        try {
+          const auditContext = getAuditContext(req);
+          await AuditLogService.create({
+            user_id: clusterResult.data.owner_id,
+            user_role: "user",
+            user_email: userEmail,
+            action: "update",
+            service_type: "database",
+            service_id: request.clusterId,
+            service_name: clusterResult.data.name,
+            after_state: { user_name: request.username },
+            metadata: { operation: "user_password_reset" },
+            ip_address: auditContext.ipAddress,
+            user_agent: auditContext.userAgent,
+            request_id: auditContext.requestId,
+          });
+        } catch (auditErr) {
+          console.error("[resetDatabaseUserPassword] Failed to create audit log:", auditErr);
+        }
+      }
+
+      if (clusterResult.success) {
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: clusterResult.data.owner_id,
+              type: "warning",
+              action: "updated",
+              serviceType: "database",
+              serviceName: clusterResult.data.name,
+              serviceId: request.clusterId,
+              metadata: { updateType: "user_password_reset", userName: request.username },
+            })
+          );
+        } catch (notifErr) {
+          console.error("[resetDatabaseUserPassword] Failed to create notification:", notifErr);
+        }
+
+        try {
+          await sendDatabaseAlertEmail({
+            userEmail,
+            serviceName: String(clusterResult.data.name),
+            alertTitle: "Database user password reset",
+            summary: `The password for database user "${request.username}" was reset on cluster "${clusterResult.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Reset database user password",
+              "Database user": request.username,
+              Cluster: String(clusterResult.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[resetDatabaseUserPassword] Failed to send email:", emailErr);
         }
       }
 

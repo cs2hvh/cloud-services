@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
 
     const validatedData = validation.data;
 
-    const result = await DatabaseService.resetDatabaseUserPassword({
-      clusterId: validatedData.cluster_id,
-      username: validatedData.username,
-      userId: auth.user.id,
-    });
+    const result = await DatabaseService.resetDatabaseUserPassword(
+      {
+        clusterId: validatedData.cluster_id,
+        username: validatedData.username,
+        userId: auth.user.id,
+      },
+      req,
+      auth.user?.email
+    );
 
     if (!result.success) {
       return NextResponse.json(
