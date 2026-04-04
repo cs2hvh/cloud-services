@@ -9,14 +9,25 @@ import type { Rule } from "@/lib/supabase/types";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import type { AddFirewallRuleResult, DeleteFirewallRuleRequest, DeleteFirewallRuleResult } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 export const networkResourceOperations = {
   async addFirewallRule(
     clusterId: string,
     ipAddress: string,
+    userId: string,
     req?: NextRequest
   ): Promise<AddFirewallRuleResult> {
     try {
+      const access = await resolveOwnedCluster(clusterId, userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
       const readExistingFirewall = await axios.get(
         `https://api.digitalocean.com/v2/databases/${clusterId}/firewall`,
         { headers: getDigitalOceanHeaders() }
@@ -78,25 +89,25 @@ export const networkResourceOperations = {
         };
       }
 
-      const clusterData = await Database_Clusters.read(clusterId);
-      if (clusterData.success && clusterData.data.project_id) {
+      const clusterData = access.cluster;
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Shield",
           text: `Added firewall rule: ${ipAddress}`,
         });
       }
 
-      if (clusterData.success && req) {
+      if (req) {
         try {
           const auditContext = getAuditContext(req);
           await AuditLogService.create({
-            user_id: clusterData.data.owner_id,
+            user_id: String(clusterData.owner_id),
             user_role: "user",
             action: "update",
             service_type: "database",
             service_id: clusterId,
-            service_name: clusterData.data.name,
+            service_name: String(clusterData.name),
             before_state: { rules: existingRules },
             after_state: { rules: readFirewall.data?.rules },
             metadata: { operation: "firewall_rule_added", ip_address: ipAddress },
@@ -109,22 +120,20 @@ export const networkResourceOperations = {
         }
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "updated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: clusterId,
-              metadata: { updateType: "firewall", ipAddress },
-            })
-          );
-        } catch (notifErr) {
-          console.error("[addFirewallRule] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: String(clusterData.owner_id),
+            type: "info",
+            action: "updated",
+            serviceType: "database",
+            serviceName: String(clusterData.name),
+            serviceId: clusterId,
+            metadata: { updateType: "firewall", ipAddress },
+          })
+        );
+      } catch (notifErr) {
+        console.error("[addFirewallRule] Failed to create notification:", notifErr);
       }
 
       return { success: true, rules: readFirewall.data?.rules };
@@ -157,24 +166,39 @@ export const networkResourceOperations = {
   },
 
   async readNetworkRules(
-    clusterId: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    clusterId: string,
+    userId: string
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
-      const cluster = await Database_Clusters.read(clusterId);
-      if (!cluster.success) {
-        return { success: false, error: cluster.error || "Failed to read database cluster" };
+      const access = await resolveOwnedCluster(clusterId, userId, "access");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
       }
-      return { success: true, data: cluster.data.network_rules };
+      return { success: true, data: access.cluster.network_rules };
     } catch (err: unknown) {
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
 
   async deleteFirewallRule(request: DeleteFirewallRuleRequest): Promise<DeleteFirewallRuleResult> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
       const readFirewall = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/firewall`,
         { headers: getDigitalOceanHeaders() }
@@ -228,31 +252,29 @@ export const networkResourceOperations = {
         };
       }
 
-      const clusterData = await Database_Clusters.read(request.clusterId);
-      if (clusterData.success && clusterData.data.project_id) {
+      const clusterData = access.cluster;
+      if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
-          project_id: clusterData.data.project_id,
+          project_id: clusterData.project_id,
           event: "Shield",
           text: `Removed firewall rule: ${deletedRuleValue}`,
         });
       }
 
-      if (clusterData.success) {
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: clusterData.data.owner_id,
-              type: "info",
-              action: "updated",
-              serviceType: "database",
-              serviceName: clusterData.data.name,
-              serviceId: request.clusterId,
-              metadata: { updateType: "firewall_deleted", ipAddress: deletedRuleValue },
-            })
-          );
-        } catch (notifErr) {
-          console.error("[deleteFirewallRule] Failed to create notification:", notifErr);
-        }
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: String(clusterData.owner_id),
+            type: "info",
+            action: "updated",
+            serviceType: "database",
+            serviceName: String(clusterData.name),
+            serviceId: request.clusterId,
+            metadata: { updateType: "firewall_deleted", ipAddress: deletedRuleValue },
+          })
+        );
+      } catch (notifErr) {
+        console.error("[deleteFirewallRule] Failed to create notification:", notifErr);
       }
 
       return { success: true };

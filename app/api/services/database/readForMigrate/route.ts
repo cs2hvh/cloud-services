@@ -37,12 +37,13 @@ export async function GET(req: NextRequest) {
     const result = await DatabaseService.readMigrationStatus({
       clusterId: database_id,
       targetRegion: target_region,
+      userId: auth.user.id,
     });
 
     if (!result.success || !result.data) {
       return NextResponse.json(
         { error: result.error || "Failed to check migration status" },
-        { status: 400 }
+        { status: result.statusCode || 400 }
       );
     }
 

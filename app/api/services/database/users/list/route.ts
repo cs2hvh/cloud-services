@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (!result.success) {
       return NextResponse.json(
         { error: result.error ?? "Invalid request" },
-        { status: 400 }
+        { status: result.statusCode ?? 400 }
       );
     }
 

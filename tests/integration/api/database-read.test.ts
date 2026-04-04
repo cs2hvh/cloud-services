@@ -132,6 +132,26 @@ describe('POST /api/services/database/read', () => {
       const response = await POST(request as NextRequest);
       await expectResponseStatus(response!, 401);
     });
+
+    it('should reject reading a cluster owned by another user', async () => {
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          ...mockDatabaseCluster,
+          owner_id: '00000000-0000-0000-0000-000000000999',
+        },
+      });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/database/read',
+        { id: mockDatabaseCluster.cluster_id }
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response!, 403);
+      expect(data.error).toContain('not authorized');
+    });
   });
 
   describe('Validation Errors', () => {
@@ -169,7 +189,7 @@ describe('POST /api/services/database/read', () => {
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response!, 400);
+      const data = await expectResponseStatus(response!, 500);
 
       expect(data.error).toBeDefined();
     });

@@ -42,12 +42,13 @@ export async function POST(req: NextRequest) {
 
     const result = await DatabaseService.listDatabasesInternal({
       clusterId: validatedData.cluster_id,
+      userId: auth.user.id,
     });
 
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || "Invalid request" },
-        { status: 400 }
+        { status: result.statusCode ?? 400 }
       );
     }
 

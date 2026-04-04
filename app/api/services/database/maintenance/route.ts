@@ -37,7 +37,8 @@ export async function PUT(req: NextRequest) {
     const result = await DatabaseService.updateMaintenanceWindow(
       validatedData.database_id,
       validatedData.day,
-      validatedData.hour
+      validatedData.hour,
+      auth.user.id
     );
 
     if (!result.success) {

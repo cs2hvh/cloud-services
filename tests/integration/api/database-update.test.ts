@@ -35,6 +35,16 @@ describe('PUT /api/services/database/update', () => {
 
     const { NotificationService } = await import('@/lib/notifications');
     vi.mocked(NotificationService.create).mockResolvedValue(undefined as any);
+
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read).mockResolvedValue({
+      success: true,
+      data: {
+        name: 'my-cluster',
+        project_id: 'old-project',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
+      },
+    } as any);
   });
 
   // ============================================
@@ -50,6 +60,29 @@ describe('PUT /api/services/database/update', () => {
       });
       const response = await PUT(request as any);
       await expectResponseStatus(response, 401);
+    });
+
+    it('should return 403 when the cluster belongs to another user', async () => {
+      await mockAuthenticatedUser();
+
+      const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+      vi.mocked(Database_Clusters.read).mockResolvedValue({
+        success: true,
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '00000000-0000-0000-0000-000000000999',
+        },
+      } as any);
+
+      const request = createMockPutRequest(testUrl, {
+        cluster_id: 'cluster-1',
+        project_id: 'project-1',
+      });
+      const response = await PUT(request as any);
+      const data = await expectResponseStatus(response, 403);
+
+      expect(data.error).toContain('not authorized');
     });
   });
 
@@ -98,7 +131,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,
@@ -126,7 +163,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,
@@ -157,7 +198,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,
@@ -191,7 +236,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,
@@ -224,7 +273,10 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster' },
+        data: {
+          name: 'my-cluster',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: false,
@@ -247,7 +299,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,
@@ -270,7 +326,7 @@ describe('PUT /api/services/database/update', () => {
       await expectResponseStatus(response, 200);
     });
 
-    it('TC-DB-111: should return 400 on unexpected Error', async () => {
+    it('TC-DB-111: should return 500 on unexpected Error', async () => {
       await mockAuthenticatedUser();
 
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
@@ -281,7 +337,7 @@ describe('PUT /api/services/database/update', () => {
         project_id: 'project-1',
       });
       const response = await PUT(request as any);
-      const data = await expectResponseStatus(response, 400);
+      const data = await expectResponseStatus(response, 500);
 
       expect(data.error).toContain('Connection lost');
     });
@@ -299,7 +355,7 @@ describe('PUT /api/services/database/update', () => {
       const response = await PUT(request as any);
       const data = await expectResponseStatus(response, 500);
 
-      expect(data.error).toContain('Unknown error');
+      expect(data.error).toContain('string error');
     });
   });
 
@@ -316,7 +372,11 @@ describe('PUT /api/services/database/update', () => {
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success: true,
-        data: { name: 'my-cluster', project_id: 'old-project', owner_id: 'user-1' },
+        data: {
+          name: 'my-cluster',
+          project_id: 'old-project',
+          owner_id: '550e8400-e29b-41d4-a716-446655440000',
+        },
       } as any);
       vi.mocked(Database_Clusters.update_project).mockResolvedValue({
         success: true,

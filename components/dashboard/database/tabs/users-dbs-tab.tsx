@@ -19,10 +19,11 @@ import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getDatabaseErrorMessage } from "../error-messages";
+import { supportsDashboardLogicalDatabases } from "../engine-capabilities";
 
 interface DatabaseUser {
   name: string;
-  password: string;
+  password?: string;
   role?: string;
   created_at?: string;
 }
@@ -34,9 +35,10 @@ interface DatabaseDb {
 
 interface UsersDbsTabProps {
   clusterId: string;
+  engine?: string | null;
 }
 
-export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
+export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
   const [users, setUsers] = useState<DatabaseUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [newUserName, setNewUserName] = useState("");
@@ -65,11 +67,20 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   const [deletingUser, setDeletingUser] = useState(false);
   const [deletingDb, setDeletingDb] = useState(false);
   const [resettingUser, setResettingUser] = useState<string | null>(null);
-  const [resetPasswordModal, setResetPasswordModal] = useState<{
+  const [credentialModal, setCredentialModal] = useState<{
     show: boolean;
     username: string;
-    newPassword: string;
-  }>({ show: false, username: "", newPassword: "" });
+    password: string;
+    mode: "created" | "reset";
+  }>({ show: false, username: "", password: "", mode: "reset" });
+
+  const isPrimaryUser = (user: DatabaseUser) =>
+    user.role?.toLowerCase() === "primary" || user.name.toLowerCase() === "doadmin";
+
+  const getProviderRoleLabel = (role?: string) =>
+    role ? `Provider role: ${role}` : "Provider-managed identity";
+
+  const logicalDatabasesSupported = supportsDashboardLogicalDatabases(engine);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -90,6 +101,12 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   }, [clusterId]);
 
   const fetchDatabases = useCallback(async () => {
+    if (!logicalDatabasesSupported) {
+      setDatabases([]);
+      setLoadingDatabases(false);
+      return;
+    }
+
     try {
       setLoadingDatabases(true);
       const response = await api.post("/services/database/dbs/list", {
@@ -105,7 +122,7 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
     } finally {
       setLoadingDatabases(false);
     }
-  }, [clusterId]);
+  }, [clusterId, logicalDatabasesSupported]);
 
   useEffect(() => {
     fetchUsers();
@@ -126,6 +143,15 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       });
 
       if (response.status === 200) {
+        const createdUser = response.data?.data;
+        if (createdUser?.name && createdUser?.password) {
+          setCredentialModal({
+            show: true,
+            username: createdUser.name,
+            password: createdUser.password,
+            mode: "created",
+          });
+        }
         toast.success("User created successfully!");
         setNewUserName("");
         await fetchUsers();
@@ -173,10 +199,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       });
 
       if (response.status === 200) {
-        setResetPasswordModal({
+        setCredentialModal({
           show: true,
           username,
-          newPassword: response.data.data.password,
+          password: response.data.data.password,
+          mode: "reset",
         });
         toast.success("Password reset successfully!");
         await fetchUsers();
@@ -190,6 +217,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   };
 
   const handleCreateDatabase = async () => {
+    if (!logicalDatabasesSupported) {
+      toast.error("Logical databases are not available for this database engine.");
+      return;
+    }
+
     if (!newDbName.trim()) {
       toast.error("Please enter a database name");
       return;
@@ -216,6 +248,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
   };
 
   const handleDeleteDatabase = async () => {
+    if (!logicalDatabasesSupported) {
+      toast.error("Logical databases are not available for this database engine.");
+      return;
+    }
+
     if (deleteDbModal.confirmText !== deleteDbModal.dbName) {
       toast.error("Database name does not match!");
       return;
@@ -323,8 +360,8 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                 Database Users
               </h2>
               <p className="mt-1 text-sm leading-6 text-white/45">
-                Create service users, rotate passwords, and remove identities
-                that no longer require access.
+                Create provider-managed database identities, rotate passwords,
+                and remove identities that no longer require access.
               </p>
             </div>
             <Button
@@ -347,12 +384,24 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                 <Users className="mx-auto mb-4 h-10 w-10 text-white/30" />
                 <h3 className="text-lg font-semibold text-white">No users yet</h3>
                 <p className="mt-2 text-sm leading-6 text-white/45">
-                  Create dedicated database users for applications, operators,
-                  or read-only workflows.
+                  Create separate provider-managed identities for applications
+                  and operators, then verify effective grants before production
+                  use.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
+                <div className="border border-amber-400/15 bg-amber-500/[0.08] px-4 py-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-amber-200/72">
+                    Access Scope
+                  </div>
+                  <p className="mt-1 text-sm leading-6 text-amber-100/72">
+                    Roles and privileges are enforced by the database provider
+                    and may be broader than a single logical database.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
                 {users.map((user, index) => (
                   <motion.div
                     key={user.name}
@@ -361,79 +410,120 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                     transition={{ delay: index * 0.03 }}
                     className="border border-white/[0.08] bg-black/20 p-4"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-sm font-semibold text-white">
-                            {user.name}
-                          </div>
-                          {user.role && (
-                            <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] text-white/40">
-                              {user.role}
-                            </span>
-                          )}
-                        </div>
-                        {user.password && (
-                          <div className="mt-3 flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] p-3">
-                            <code className="min-w-0 flex-1 truncate font-mono text-xs text-white/60">
-                              {showPasswords[user.name]
-                                ? user.password
-                                : "••••••••••••••••"}
-                            </code>
-                            <button
-                              onClick={() => togglePasswordVisibility(user.name)}
-                              className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
-                              title={
-                                showPasswords[user.name]
-                                  ? "Hide password"
-                                  : "Show password"
-                              }
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="break-all text-base font-semibold text-white">
+                              {user.name}
+                            </div>
+                            <span
+                              className={`px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.12em] ${
+                                isPrimaryUser(user)
+                                  ? "border border-amber-400/20 bg-amber-500/10 text-amber-200/80"
+                                  : "border border-white/[0.08] bg-white/[0.03] text-white/40"
+                              }`}
                             >
-                              {showPasswords[user.name] ? (
-                                <EyeOff className="h-4 w-4" />
-                              ) : (
-                                <Eye className="h-4 w-4" />
-                              )}
-                            </button>
+                              {isPrimaryUser(user) ? "Primary account" : "Managed identity"}
+                            </span>
+                            {user.role && (
+                              <span className="border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[11px] font-medium text-white/45">
+                                {getProviderRoleLabel(user.role)}
+                              </span>
+                            )}
                           </div>
-                        )}
+                          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-white/42">
+                            <span>
+                              {isPrimaryUser(user)
+                                ? "Primary cluster identity"
+                                : "Provider-managed identity"}
+                            </span>
+                            {user.created_at && (
+                              <span>
+                                Added {new Date(user.created_at).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+                          <button
+                            onClick={() => handleResetPassword(user.name)}
+                            disabled={Boolean(resettingUser)}
+                            className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {resettingUser === user.name ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Resetting...
+                              </>
+                            ) : (
+                              <>
+                                <RefreshCw className="h-4 w-4" />
+                                Reset
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={() =>
+                              setDeleteUserModal({
+                                show: true,
+                                username: user.name,
+                                confirmText: "",
+                              })
+                            }
+                            className="inline-flex cursor-pointer items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/16"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleResetPassword(user.name)}
-                          disabled={Boolean(resettingUser)}
-                          className="inline-flex cursor-pointer items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {resettingUser === user.name ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              Resetting...
-                            </>
-                          ) : (
-                            <>
-                              <RefreshCw className="h-4 w-4" />
-                              Reset
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={() =>
-                            setDeleteUserModal({
-                              show: true,
-                              username: user.name,
-                              confirmText: "",
-                            })
-                          }
-                          className="inline-flex cursor-pointer items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/16"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete
-                        </button>
-                      </div>
+                      {user.password && (
+                        <div className="border border-white/[0.08] bg-white/[0.03] p-3">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                              Saved Password
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                onClick={() => togglePasswordVisibility(user.name)}
+                                className="inline-flex items-center gap-2 border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
+                                title={
+                                  showPasswords[user.name]
+                                    ? "Hide password"
+                                    : "Show password"
+                                }
+                              >
+                                {showPasswords[user.name] ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                                {showPasswords[user.name] ? "Hide" : "Show"}
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(user.password ?? "", "Password")}
+                                className="inline-flex items-center gap-2 border border-white/[0.08] bg-black/20 px-3 py-2 text-xs font-medium text-white/65 transition-colors hover:bg-white/[0.08]"
+                                title="Copy password"
+                              >
+                                <Copy className="h-4 w-4" />
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                          <code className="mt-3 block min-h-12 min-w-0 break-all border border-white/[0.06] bg-black/20 px-3 py-3 font-mono text-sm text-white/78">
+                            {showPasswords[user.name]
+                              ? user.password
+                              : "••••••••••••••••"}
+                          </code>
+                        </div>
+                      )}
                     </div>
                   </motion.div>
                 ))}
+                </div>
               </div>
             )}
           </div>
@@ -479,7 +569,19 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
           </div>
 
           <div className="px-5 py-5">
-            {loadingDatabases ? (
+            {!logicalDatabasesSupported ? (
+              <div className="border border-white/[0.08] bg-black/20 px-6 py-10">
+                <Database className="mb-4 h-10 w-10 text-white/30" />
+                <h3 className="text-lg font-semibold text-white">
+                  Logical databases are not available for this engine
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-white/45">
+                  Manage access through provider users and connection settings
+                  instead. This cluster type does not expose separate logical
+                  database management in the dashboard.
+                </p>
+              </div>
+            ) : loadingDatabases ? (
               <div className="flex items-center justify-center py-14">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-300" />
               </div>
@@ -542,15 +644,16 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
             )}
           </div>
 
-          {renderCreateBar({
-            value: newDbName,
-            setValue: setNewDbName,
-            placeholder: "Database name",
-            onSubmit: handleCreateDatabase,
-            submitting: creatingDb,
-            disabled: !newDbName.trim(),
-            buttonLabel: "Add",
-          })}
+          {logicalDatabasesSupported &&
+            renderCreateBar({
+              value: newDbName,
+              setValue: setNewDbName,
+              placeholder: "Database name",
+              onSubmit: handleCreateDatabase,
+              submitting: creatingDb,
+              disabled: !newDbName.trim(),
+              buttonLabel: "Add",
+            })}
         </motion.section>
       </div>
 
@@ -743,17 +846,18 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {resetPasswordModal.show && (
+        {credentialModal.show && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
             onClick={() =>
-              setResetPasswordModal({
+              setCredentialModal({
                 show: false,
                 username: "",
-                newPassword: "",
+                password: "",
+                mode: "reset",
               })
             }
           >
@@ -769,24 +873,36 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
                   <Shield className="h-5 w-5" />
                 </div>
                 <h3 className="mt-4 text-lg font-semibold text-white">
-                  Password Reset Completed
+                  {credentialModal.mode === "created"
+                    ? "User Created"
+                    : "Password Reset Completed"}
                 </h3>
                 <p className="mt-2 text-sm leading-6 text-white/45">
-                  New password for <strong>{resetPasswordModal.username}</strong>
+                  {credentialModal.mode === "created"
+                    ? "One-time password for"
+                    : "New password for"}{" "}
+                  <strong>{credentialModal.username}</strong>
+                </p>
+                <p className="mt-2 text-xs leading-5 text-amber-200/70">
+                  Copy this password now and store it securely. Dashboard
+                  visibility depends on the latest provider sync and may differ
+                  by engine.
                 </p>
               </div>
 
               <div className="mt-6 border border-white/[0.08] bg-white/[0.03] p-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                  New Password
+                  {credentialModal.mode === "created"
+                    ? "Generated Password"
+                    : "New Password"}
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <code className="min-w-0 flex-1 break-all font-mono text-sm text-emerald-300">
-                    {resetPasswordModal.newPassword}
+                    {credentialModal.password}
                   </code>
                   <button
                     onClick={() =>
-                      copyToClipboard(resetPasswordModal.newPassword, "Password")
+                      copyToClipboard(credentialModal.password, "Password")
                     }
                     className="border border-white/[0.08] bg-white/[0.03] p-2 text-white/55 transition-colors hover:bg-white/[0.08]"
                     title="Copy password"
@@ -798,10 +914,11 @@ export const UsersDbsTab = ({ clusterId }: UsersDbsTabProps) => {
 
               <Button
                 onClick={() =>
-                  setResetPasswordModal({
+                  setCredentialModal({
                     show: false,
                     username: "",
-                    newPassword: "",
+                    password: "",
+                    mode: "reset",
                   })
                 }
                 className="mt-6 w-full rounded-none border border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.08]"
