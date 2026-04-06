@@ -329,6 +329,28 @@ export default function AgentDetailsPage({
     }
   };
 
+  const getRequestExampleCurl = () => {
+    if (!agent) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `curl -X POST \\
+  "${origin}/api/v1/agents/${agent.endpoint_id}/chat" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "message": "Hello, how can you help me?",
+    "conversation_id": "optional-conversation-id"
+  }'`;
+  };
+
+  const copyRequestExample = async () => {
+    if (!agent) return;
+    try {
+      await navigator.clipboard.writeText(getRequestExampleCurl());
+      toast.success('cURL example copied');
+    } catch {
+      toast.error('Failed to copy');
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -837,24 +859,27 @@ export default function AgentDetailsPage({
             </div>
           </div>
 
-          <div className="glass-panel overflow-hidden">
-            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
-              <h3 className="text-base font-semibold text-white">Request Example</h3>
-            </div>
-            <div className="p-5 sm:p-6">
-              <pre className="border border-white/[0.08] bg-white/[0.03] p-4 text-sm overflow-x-auto">
-                <code className="text-green-400">
-                  {`curl -X POST \\
-  "${typeof window !== 'undefined' ? window.location.origin : ''}/api/v1/agents/${agent.endpoint_id}/chat" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "message": "Hello, how can you help me?",
-    "conversation_id": "optional-conversation-id"
-  }'`}
-                </code>
-              </pre>
-            </div>
-          </div>
+	          <div className="glass-panel overflow-hidden">
+	            <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6 flex items-center justify-between gap-3">
+	              <h3 className="text-base font-semibold text-white">Request Example</h3>
+	              <Button
+	                variant="outline"
+	                size="sm"
+	                onClick={copyRequestExample}
+	                className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
+	              >
+	                <Copy className="h-4 w-4 mr-2" />
+	                Copy cURL
+	              </Button>
+	            </div>
+	            <div className="p-5 sm:p-6">
+	              <pre className="border border-white/[0.08] bg-white/[0.03] p-4 text-sm overflow-x-auto">
+	                <code className="text-green-400">
+	                  {getRequestExampleCurl()}
+	                </code>
+	              </pre>
+	            </div>
+	          </div>
 
           <div className="glass-panel overflow-hidden">
             <div className="border-b border-white/[0.06] px-5 py-4 sm:px-6">
