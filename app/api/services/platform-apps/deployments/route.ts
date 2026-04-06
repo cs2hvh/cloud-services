@@ -8,7 +8,7 @@ import jenkins from "@/lib/jenkins";
 const DEPLOYMENT_HISTORY_LIMIT = 10;
 
 interface BuildInfo {
-  build_number: number;
+  build_number: number | null;
   status: string;
   started_at: string;
   duration?: number;
@@ -82,10 +82,11 @@ export async function GET(req: NextRequest) {
     const dbDeployments = await Platform_App_Deployments.list_by_app(appId, DEPLOYMENT_HISTORY_LIMIT);
     const dbDeploymentMap = new Map<number, typeof dbDeployments[0]>();
     for (const dep of dbDeployments) {
-      if (dep.build_number) {
+      if (typeof dep.build_number === 'number') {
         dbDeploymentMap.set(dep.build_number, dep);
       }
     }
+    const seenBuildNumbers = new Set<number>();
 
     try {
       // Get job info which includes build history
@@ -181,13 +182,38 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        const builds = await Promise.all(buildPromises);
+        const builds: BuildInfo[] = await Promise.all(buildPromises);
+        builds.forEach((build: BuildInfo) => {
+          if (typeof build.build_number === 'number') {
+            seenBuildNumbers.add(build.build_number);
+          }
+        });
         deployments.push(...builds);
       }
     } catch (jenkinsError) {
       console.error(`[API] Error fetching Jenkins builds for ${jobName}:`, jenkinsError);
       // Return empty array if Jenkins fails - don't block the response
     }
+
+    for (const dep of dbDeployments) {
+      const hasJenkinsEntry =
+        typeof dep.build_number === 'number' && seenBuildNumbers.has(dep.build_number);
+
+      if (hasJenkinsEntry) continue;
+
+      deployments.push({
+        build_number: dep.build_number ?? null,
+        status: dep.status === 'success' ? 'SUCCESS' : dep.status === 'failed' ? 'FAILURE' : 'BUILDING',
+        started_at: dep.created_at,
+        commit_sha: dep.commit_sha?.substring(0, 7) ?? undefined,
+        trigger: dep.trigger,
+        failure_reason: dep.failure_reason,
+      });
+    }
+
+    deployments.sort(
+      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+    );
 
     return NextResponse.json({
       app_id: appId,

@@ -25,7 +25,7 @@ export interface AppBuildState {
  * - 5-second polling for active builds (status + logs)
  * - Incremental log streaming with byte-offset tracking
  * - Build-start cache eviction with generation-safe guard (justStartedBuildingRef)
- * - Stale-build reconciliation via the health endpoint (BuildPollingService crash recovery)
+ * - Stale-build reconciliation via the recover-build endpoint (BuildPollingService crash recovery)
  * - Supabase-authoritative completion: immediately clears building flag when Supabase
  *   says running/failed, without waiting for the next Jenkins poll
  * - Completion log swap: replaces raw streaming logs with deployment-filtered view
@@ -160,8 +160,8 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
   // If the DB says 'building' but BuildPollingService died before writing the
   // final status (dev server restart, process crash), the status stays stale
   // forever. Once Jenkins confirms the build finished (building=false), call the
-  // health endpoint to let the server sync actual K8s pod state and write the
-  // corrected status. Supabase Realtime then pushes the fix to the UI.
+  // recover-build endpoint to let the backend re-run the canonical recovery path.
+  // Supabase Realtime then pushes the corrected deployment/app state to the UI.
   //
   // justStartedBuildingRef prevents firing during the window between Supabase
   // pushing 'building' and Jenkins returning building=true — see Effect 2.
@@ -182,7 +182,12 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
       if (info && !info.building && !justStartedBuildingRef.current.has(app.id)) {
         reconciledRef.current.add(app.id);
         api
-          .get(`/services/platform-apps/health?app_id=${app.id}`)
+          .post('/services/platform-apps/recover-build', { app_id: app.id })
+          .then((res) => {
+            if (!res.data?.recovered) {
+              reconciledRef.current.delete(app.id);
+            }
+          })
           .catch(() => {
             // Allow retry on transient failure (429, network blip)
             reconciledRef.current.delete(app.id);

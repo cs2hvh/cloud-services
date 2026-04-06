@@ -47,7 +47,7 @@ interface DeploymentRecord extends Record<string, unknown> {
 interface Deployment {
   id: string;
   app_id: string;
-  build_number: number;
+  build_number: number | null;
   commit_sha: string | null;
   image_tag: string | null;
   image_digest: string | null;
@@ -72,7 +72,7 @@ function transformDeployment(record: DeploymentRecord): Deployment {
   return {
     id: record.id,
     app_id: record.app_id,
-    build_number: record.build_number ?? 0,
+    build_number: record.build_number,
     commit_sha: record.commit_sha,
     image_tag: record.image_tag,
     image_digest: record.image_digest,
@@ -112,9 +112,7 @@ export function useRealtimeDeployments({
   });
 
   return {
-    // Filter out records where build_number was null in the DB;
-    // they coalesce to 0 in transformDeployment and are not useful in the UI.
-    deployments: deployments.filter((d) => d.build_number > 0),
+    deployments,
     loading,
     error,
     connectionStatus,

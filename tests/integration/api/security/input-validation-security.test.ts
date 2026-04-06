@@ -16,68 +16,45 @@ describe('Security: Input Validation', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
-
-    // Set up webhook secret for all tests
-    vi.stubEnv('WEBHOOK_DEPLOYMENT_SECRET', 'test-webhook-secret');
+    vi.stubEnv('JENKINS_DEPLOYMENT_RECORD_SECRET', 'test-webhook-secret');
   });
 
-  function createAuthenticatedWebhookRequest(
-    body: unknown
-  ): NextRequest {
+  function createAuthenticatedWebhookRequest(body: unknown): NextRequest {
     return new NextRequest(
-      'http://localhost:3000/api/webhooks/deployment-status',
+      'http://localhost:3000/api/webhooks/platform-apps/deployment-record',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-webhook-secret': 'test-webhook-secret',
+          'x-deployment-record-secret': 'test-webhook-secret',
         },
         body: JSON.stringify(body),
       }
     );
   }
 
-  describe('SQL Injection Prevention', () => {
-    it('SEC-INJ-001: should handle SQL injection in app_name safely', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.list_by_owner).mockResolvedValue([] as any);
-
-      const { POST } = await import(
-        '@/app/api/webhooks/deployment-status/route'
-      );
-
-      const sqlPayloads = [
-        "'; DROP TABLE platform_apps; --",
-        "' OR '1'='1",
-        "' UNION SELECT password FROM users--",
-      ];
-
-      for (const payload of sqlPayloads) {
-        const req = createAuthenticatedWebhookRequest({
-          app_name: payload,
-          status: 'running',
-        });
-
-        const res = await POST(req);
-        // Supabase parameterizes queries — SQL injection won't execute
-        // Should return 404 (app not found) safely
-        expect(res.status).toBe(404);
-      }
-    });
-  });
-
   describe('Prototype Pollution Prevention', () => {
     it('SEC-INJ-010: should not allow __proto__ pollution', async () => {
+      const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
+      vi.mocked(Platform_App_Deployments.complete_build).mockResolvedValue({
+        success: true,
+        data: { id: 'dep-1', status: 'success', failure_reason: null },
+        updated: true,
+        created: false,
+      } as any);
       const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.list_by_owner).mockResolvedValue([] as any);
+      vi.mocked(Platform_Apps.update).mockResolvedValue({ success: true } as any);
 
       const { POST } = await import(
-        '@/app/api/webhooks/deployment-status/route'
+        '@/app/api/webhooks/platform-apps/deployment-record/route'
       );
 
       const req = createAuthenticatedWebhookRequest({
-        app_name: 'test-app',
-        status: 'running',
+        app_id: 'test-app',
+        status: 'success',
+        trigger: 'webhook',
+        build_number: 42,
+        image_tag: 'test-app:42',
         __proto__: { isAdmin: true },
         constructor: { prototype: { isAdmin: true } },
       });
@@ -90,16 +67,16 @@ describe('Security: Input Validation', () => {
   describe('Malformed Input Handling', () => {
     it('SEC-INJ-020: should handle malformed JSON gracefully', async () => {
       const { POST } = await import(
-        '@/app/api/webhooks/deployment-status/route'
+        '@/app/api/webhooks/platform-apps/deployment-record/route'
       );
 
       const req = new NextRequest(
-        'http://localhost:3000/api/webhooks/deployment-status',
+        'http://localhost:3000/api/webhooks/platform-apps/deployment-record',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-webhook-secret': 'test-webhook-secret',
+            'x-deployment-record-secret': 'test-webhook-secret',
           },
           body: '{invalid json!!!',
         }
@@ -110,16 +87,16 @@ describe('Security: Input Validation', () => {
     });
 
     it('SEC-INJ-021: should handle extremely long input', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.list_by_owner).mockResolvedValue([] as any);
-
       const { POST } = await import(
-        '@/app/api/webhooks/deployment-status/route'
+        '@/app/api/webhooks/platform-apps/deployment-record/route'
       );
 
       const req = createAuthenticatedWebhookRequest({
-        app_name: 'a'.repeat(100000),
-        status: 'running',
+        app_id: 'a'.repeat(100000),
+        status: 'success',
+        trigger: 'webhook',
+        build_number: 'not-a-number',
+        image_tag: 'test-app:42',
       });
 
       const res = await POST(req);
@@ -130,12 +107,29 @@ describe('Security: Input Validation', () => {
 
     it('SEC-INJ-022: should reject missing required fields', async () => {
       const { POST } = await import(
-        '@/app/api/webhooks/deployment-status/route'
+        '@/app/api/webhooks/platform-apps/deployment-record/route'
       );
 
       const req = createAuthenticatedWebhookRequest({
-        // Missing app_name and status
+        // Missing app_id, status, trigger
         build_number: 42,
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(400);
+    });
+
+    it('SEC-INJ-023: should reject invalid build_number values', async () => {
+      const { POST } = await import(
+        '@/app/api/webhooks/platform-apps/deployment-record/route'
+      );
+
+      const req = createAuthenticatedWebhookRequest({
+        app_id: 'app-1',
+        status: 'success',
+        trigger: 'webhook',
+        build_number: 'abc',
+        image_tag: 'test-app:42',
       });
 
       const res = await POST(req);

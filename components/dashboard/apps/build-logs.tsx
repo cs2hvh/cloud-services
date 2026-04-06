@@ -71,7 +71,29 @@ export function BuildLogsPanel({
   // needed is when buildInfo is set but Supabase hasn't delivered the row yet
   // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
-    const opts = [...deployments];
+    // Jenkins is authoritative: if it confirms the build is done, override any
+    // stale 'BUILDING' status that Supabase hasn't propagated yet.
+    const opts = deployments.map((d) => {
+      if (
+        d.build_number === buildInfo?.number &&
+        buildInfo.building === false &&
+        d.status === 'BUILDING'
+      ) {
+        const terminalStatus =
+          buildInfo.result === 'SUCCESS'
+            ? 'SUCCESS'
+            : buildInfo.result === 'ABORTED'
+            ? 'ABORTED'
+            : buildInfo.result === 'UNSTABLE'
+            ? 'UNSTABLE'
+            : 'FAILURE';
+        return {
+          ...d,
+          status: terminalStatus as DeploymentSummary['status'],
+        };
+      }
+      return d;
+    });
 
     // Ensure the currently-loaded build is always visible in the dropdown
     if (buildInfo?.number != null && !opts.some((d) => d.build_number === buildInfo.number)) {
@@ -262,6 +284,10 @@ export function BuildLogsPanel({
                             ? 'text-green-400'
                             : d.status === 'BUILDING'
                             ? 'text-blue-400'
+                            : d.status === 'ABORTED'
+                            ? 'text-orange-400'
+                            : d.status === 'UNSTABLE'
+                            ? 'text-yellow-400'
                             : 'text-red-400'
                         }`}
                       >

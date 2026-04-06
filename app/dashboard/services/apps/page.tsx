@@ -16,6 +16,7 @@ import { AppsList } from "@/components/dashboard/apps";
 import { useRealtimeApps } from "@/hooks/use-realtime-apps";
 import { useAppBuildState } from "@/hooks/use-app-build-state";
 import { createClient } from "@/lib/supabase/client";
+import api from "@/lib/axios/axios";
 
 function MetricCard({
   label,
@@ -93,9 +94,41 @@ export default function ApplicationDeploymentPage() {
     limit: 100,
   });
 
+  // Sync realtime updates while preserving can_rollback values already fetched from the API
   useEffect(() => {
-    setLocalApps(realtimeApps);
+    setLocalApps(prev => {
+      if (prev.length === 0) return realtimeApps;
+      const prevMap = new Map(prev.map(a => [a.id, a]));
+      return realtimeApps.map(app => ({
+        ...app,
+        can_rollback: prevMap.get(app.id)?.can_rollback ?? app.can_rollback,
+      }));
+    });
   }, [realtimeApps]);
+
+  const rollbackRefreshKey = useMemo(
+    () => realtimeApps.map((app) => `${app.id}:${app.status}:${app.updated_at ?? ""}`).join("|"),
+    [realtimeApps]
+  );
+
+  // Re-enrich rollback capability whenever the live app inventory changes.
+  // Supabase realtime cannot compute can_rollback because it depends on
+  // deployment history, so refresh it from the list API whenever statuses move.
+  useEffect(() => {
+    if (realtimeApps.length === 0) return;
+    api
+      .get("/services/platform-apps/list")
+      .then(res => {
+        if (res.data?.apps) {
+          const map: Record<string, boolean> = {};
+          (res.data.apps as Array<{ id: string; can_rollback: boolean }>).forEach(a => {
+            map[a.id] = !!a.can_rollback;
+          });
+          setLocalApps(prev => prev.map(app => ({ ...app, can_rollback: map[app.id] ?? app.can_rollback })));
+        }
+      })
+      .catch(() => {}); // non-critical — rollback buttons just stay disabled
+  }, [rollbackRefreshKey, realtimeApps]);
 
   const deployedApps = localApps;
 

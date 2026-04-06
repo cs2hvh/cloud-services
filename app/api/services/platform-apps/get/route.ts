@@ -4,7 +4,7 @@ import { getPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -41,9 +41,15 @@ export async function POST(req: NextRequest) {
     // Get environment variables (internal API feature)
     const env_vars = await Platform_Apps.get_env_vars(validation.data.app_id);
 
+    const rollbackInfo = await Platform_App_Deployments.get_previous_successful(
+      validation.data.app_id,
+      typeof app.active_deployment_id === "string" ? app.active_deployment_id : null
+    );
+
     return NextResponse.json({ 
       ...app,
-      env_vars 
+      env_vars,
+      can_rollback: !!(rollbackInfo.success && rollbackInfo.data),
     });
   } catch (err: unknown) {
     if (err instanceof Error && 'code' in err) {
