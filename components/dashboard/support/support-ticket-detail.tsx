@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ArrowLeft, MessageSquare, Paperclip, Pencil, RotateCcw, Save, XCircle, Clock3 } from "lucide-react";
@@ -10,8 +10,8 @@ import {
   SUPPORT_TOPICS,
   SupportResourceOption,
   SupportTicketStatus,
+  canSupportStatusBeReopened,
   getSupportTopicLabels,
-  isSupportClosedStatus,
   isSupportOpenStatus,
 } from "@/lib/support/catalog";
 import { plainTextFromRichText, sanitizeSupportRichText } from "@/lib/support/richtext";
@@ -29,6 +29,14 @@ interface SupportTicketDetailProps {
   initialResources: SupportResourceOption[];
 }
 
+const SELECT_OPTION_STYLE: CSSProperties = {
+  backgroundColor: "#0b1220",
+  color: "#ffffff",
+};
+
+const SELECT_CLASS_NAME =
+  "h-11 w-full border border-white/[0.12] bg-[#0b1220] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35";
+
 function formatDateTime(date: string): string {
   return new Date(date).toLocaleString("en-US", {
     month: "short",
@@ -43,6 +51,7 @@ function statusBadge(status: SupportTicketStatus): string {
   if (status === "resolved") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
   if (status === "closed") return "border-slate-500/20 bg-slate-500/10 text-slate-300";
   if (status === "cancelled") return "border-rose-500/20 bg-rose-500/10 text-rose-300";
+  if (status === "permantly_close") return "border-red-500/30 bg-red-500/15 text-red-200";
   if (status === "in_progress") return "border-blue-500/20 bg-blue-500/10 text-blue-300";
   if (status === "pending") return "border-violet-500/20 bg-violet-500/10 text-violet-300";
   return "border-amber-500/20 bg-amber-500/10 text-amber-300";
@@ -135,7 +144,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const topicLabels = getSupportTopicLabels(ticket.topic, ticket.sub_topic, ticket.tertiary_topic);
 
   const canEdit = isSupportOpenStatus(ticket.status);
-  const canReopen = isSupportClosedStatus(ticket.status);
+  const canReopen = canSupportStatusBeReopened(ticket.status);
   const canManageAttachments = canEdit;
   const panelClassName = "glass-panel overflow-hidden";
 
@@ -383,10 +392,10 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                         setTertiaryTopic("");
                         void loadResources(nextTopic);
                       }}
-                      className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                      className={SELECT_CLASS_NAME}
                     >
                       {SUPPORT_TOPICS.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
                           {entry.label}
                         </option>
                       ))}
@@ -400,11 +409,11 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                         setSubTopic(event.target.value);
                         setTertiaryTopic("");
                       }}
-                      className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                      className={SELECT_CLASS_NAME}
                     >
-                      <option value="">Select sub-topic</option>
+                      <option style={SELECT_OPTION_STYLE} value="">Select sub-topic</option>
                       {(selectedTopic?.subTopics || []).map((entry) => (
-                        <option key={entry.id} value={entry.id}>
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
                           {entry.label}
                         </option>
                       ))}
@@ -415,11 +424,11 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                     <select
                       value={tertiaryTopic}
                       onChange={(event) => setTertiaryTopic(event.target.value)}
-                      className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                      className={SELECT_CLASS_NAME}
                     >
-                      <option value="">Select tertiary-topic</option>
+                      <option style={SELECT_OPTION_STYLE} value="">Select tertiary-topic</option>
                       {tertiaryOptions.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
                           {entry.label}
                         </option>
                       ))}
@@ -438,11 +447,16 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                     <select
                       value={affectedResourceId}
                       onChange={(event) => setAffectedResourceId(event.target.value)}
-                      className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                      className={SELECT_CLASS_NAME}
                       disabled={resourcesLoading}
                     >
+                      {resources.length === 0 && (
+                        <option style={SELECT_OPTION_STYLE} value="general">
+                          General issue
+                        </option>
+                      )}
                       {resources.map((entry) => (
-                        <option key={entry.id} value={entry.id}>
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
                           {entry.name}
                         </option>
                       ))}

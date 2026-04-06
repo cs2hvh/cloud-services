@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS support.support_tickets (
     'SUP-' || to_char(now(), 'YYYY') || '-' || lpad(nextval('support.support_ticket_number_seq'::regclass)::text, 6, '0')
   ),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'pending', 'resolved', 'closed', 'cancelled')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'pending', 'resolved', 'closed', 'cancelled','permantly_close')),
   topic TEXT NOT NULL,
   sub_topic TEXT NOT NULL,
   tertiary_topic TEXT NOT NULL,

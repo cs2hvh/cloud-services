@@ -35,6 +35,7 @@ function statusBadge(status: SupportTicketStatus): string {
   if (status === "resolved") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
   if (status === "closed") return "border-slate-500/20 bg-slate-500/10 text-slate-300";
   if (status === "cancelled") return "border-rose-500/20 bg-rose-500/10 text-rose-300";
+  if (status === "permantly_close") return "border-red-500/30 bg-red-500/15 text-red-200";
   if (status === "in_progress") return "border-blue-500/20 bg-blue-500/10 text-blue-300";
   if (status === "pending") return "border-violet-500/20 bg-violet-500/10 text-violet-300";
   return "border-amber-500/20 bg-amber-500/10 text-amber-300";

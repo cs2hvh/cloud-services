@@ -4,7 +4,8 @@ export type SupportTicketStatus =
   | "pending"
   | "resolved"
   | "closed"
-  | "cancelled";
+  | "cancelled"
+  | "permantly_close";
 
 export const SUPPORT_OPEN_STATUSES: SupportTicketStatus[] = [
   "open",
@@ -13,6 +14,13 @@ export const SUPPORT_OPEN_STATUSES: SupportTicketStatus[] = [
 ];
 
 export const SUPPORT_CLOSED_STATUSES: SupportTicketStatus[] = [
+  "resolved",
+  "closed",
+  "cancelled",
+  "permantly_close",
+];
+
+export const SUPPORT_REOPENABLE_STATUSES: SupportTicketStatus[] = [
   "resolved",
   "closed",
   "cancelled",
@@ -25,6 +33,7 @@ export const SUPPORT_STATUS_LABELS: Record<SupportTicketStatus, string> = {
   resolved: "RESOLVED",
   closed: "CLOSED",
   cancelled: "CANCELLED",
+  permantly_close: "PERMANENTLY_CLOSED",
 };
 
 export function isSupportOpenStatus(status: SupportTicketStatus): boolean {
@@ -33,6 +42,10 @@ export function isSupportOpenStatus(status: SupportTicketStatus): boolean {
 
 export function isSupportClosedStatus(status: SupportTicketStatus): boolean {
   return SUPPORT_CLOSED_STATUSES.includes(status);
+}
+
+export function canSupportStatusBeReopened(status: SupportTicketStatus): boolean {
+  return SUPPORT_REOPENABLE_STATUSES.includes(status);
 }
 
 export type SupportResourceType =

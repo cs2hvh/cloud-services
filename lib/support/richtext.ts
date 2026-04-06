@@ -12,6 +12,18 @@ const ALLOWED_TAGS = new Set([
   "div",
   "span",
   "blockquote",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "a",
+  "pre",
+  "code",
+  "hr",
+  "s",
+  "strike",
 ]);
 
 function escapeHtml(value: string): string {
@@ -35,6 +47,15 @@ function stripDangerousMarkup(input: string): string {
     .replace(/\s(href|src)\s*=\s*'vbscript:[^']*'/gi, "");
 }
 
+function sanitizeHref(rawHref: string): string | null {
+  const value = rawHref.trim();
+  if (!value) return null;
+  if (/^(https?:|mailto:|\/|#)/i.test(value)) {
+    return value;
+  }
+  return null;
+}
+
 function sanitizeTag(tagName: string, attrs: string, isClosing: boolean): string {
   const normalized = tagName.toLowerCase();
   if (!ALLOWED_TAGS.has(normalized)) {
@@ -49,7 +70,21 @@ function sanitizeTag(tagName: string, attrs: string, isClosing: boolean): string
     return "<br>";
   }
 
-  if ((normalized === "p" || normalized === "div") && attrs) {
+  if (normalized === "hr") {
+    return "<hr>";
+  }
+
+  if (
+    (normalized === "p" ||
+      normalized === "div" ||
+      normalized === "h1" ||
+      normalized === "h2" ||
+      normalized === "h3" ||
+      normalized === "h4" ||
+      normalized === "h5" ||
+      normalized === "h6") &&
+    attrs
+  ) {
     const styleMatch = attrs.match(/style\s*=\s*["']([^"']+)["']/i);
     if (styleMatch && /text-align\s*:\s*(left|center|right|justify)/i.test(styleMatch[1])) {
       const align = styleMatch[1].match(/text-align\s*:\s*(left|center|right|justify)/i)?.[1].toLowerCase();
@@ -59,13 +94,21 @@ function sanitizeTag(tagName: string, attrs: string, isClosing: boolean): string
     }
   }
 
+  if (normalized === "a" && attrs) {
+    const hrefMatch = attrs.match(/href\s*=\s*["']([^"']+)["']/i);
+    const href = hrefMatch ? sanitizeHref(hrefMatch[1]) : null;
+    if (href) {
+      return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer nofollow">`;
+    }
+  }
+
   return `<${normalized}>`;
 }
 
 export function plainTextFromRichText(input: string): string {
   return input
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|blockquote)>/gi, "\n")
+    .replace(/<\/(p|div|li|blockquote|h1|h2|h3|h4|h5|h6|pre)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")

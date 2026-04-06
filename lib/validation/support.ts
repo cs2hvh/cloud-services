@@ -9,6 +9,7 @@ export const supportTicketStatusSchema = z.enum([
   "resolved",
   "closed",
   "cancelled",
+  "permantly_close",
 ]);
 
 const optionalNullableTrimmedString = z.string().min(1).max(255).nullable().optional();

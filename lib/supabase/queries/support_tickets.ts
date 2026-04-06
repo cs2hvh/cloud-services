@@ -481,7 +481,10 @@ export const SupportTickets = {
   async updateStatusByAdmin(ticketId: string, status: SupportTicketStatus): Promise<boolean> {
     const supportDb = await getSupportDb();
     const updatePayload =
-      status === "resolved" || status === "closed" || status === "cancelled"
+      status === "resolved" ||
+      status === "closed" ||
+      status === "cancelled" ||
+      status === "permantly_close"
         ? { status, resolved_at: new Date().toISOString() }
         : { status, resolved_at: null };
 
@@ -504,7 +507,10 @@ export const SupportTickets = {
   ): Promise<boolean> {
     const supportDb = await getSupportDb();
     const updatePayload =
-      status === "resolved" || status === "closed" || status === "cancelled"
+      status === "resolved" ||
+      status === "closed" ||
+      status === "cancelled" ||
+      status === "permantly_close"
         ? { status, resolved_at: new Date().toISOString() }
         : { status, resolved_at: null };
 

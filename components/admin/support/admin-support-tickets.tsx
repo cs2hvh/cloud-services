@@ -39,6 +39,7 @@ function statusBadgeClass(status: SupportTicketStatus): string {
   if (status === "resolved") return "bg-emerald-950/40 text-emerald-400 border-emerald-900";
   if (status === "closed") return "bg-slate-500/15 text-slate-300 border-slate-500/30";
   if (status === "cancelled") return "bg-rose-500/15 text-rose-300 border-rose-500/30";
+  if (status === "permantly_close") return "bg-red-500/15 text-red-200 border-red-500/30";
   if (status === "in_progress") return "bg-blue-500/15 text-blue-300 border-blue-500/30";
   if (status === "pending") return "bg-violet-500/15 text-violet-300 border-violet-500/30";
   return "bg-amber-950/40 text-amber-400 border-amber-900";
@@ -196,6 +197,9 @@ export default function AdminSupportTickets({
               </SelectItem>
               <SelectItem value="cancelled" className="text-white focus:bg-neutral-800 focus:text-white">
                 Cancelled
+              </SelectItem>
+              <SelectItem value="permantly_close" className="text-white focus:bg-neutral-800 focus:text-white">
+                Permanently Closed
               </SelectItem>
             </SelectContent>
           </Select>

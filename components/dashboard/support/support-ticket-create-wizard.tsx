@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ChangeEvent, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Check, ChevronRight, Paperclip } from "lucide-react";
 import {
@@ -16,16 +16,15 @@ import {
 import { plainTextFromRichText } from "@/lib/support/richtext";
 import SupportRichTextEditor from "./support-rich-text-editor";
 
-const STEP_TITLES = [
-  "Select topic",
-  "Select sub-topic",
-  "Select tertiary-topic",
-  "Input subject",
-  "Select affected resource",
-  "Describe issue",
-  "Attach files",
-  "Review & submit",
-];
+const STEP_TITLES = ["Select topic", "Details", "Review & submit"];
+
+const SELECT_OPTION_STYLE: CSSProperties = {
+  backgroundColor: "#0b1220",
+  color: "#ffffff",
+};
+
+const SELECT_CLASS_NAME =
+  "h-11 w-full border border-white/[0.12] bg-[#0b1220] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35";
 
 function getStepCompletionLabel(step: number): string {
   return `Step ${step} of ${STEP_TITLES.length}`;
@@ -105,13 +104,17 @@ export default function SupportTicketCreateWizard() {
 
   function validateStep(step: number): string | null {
     if (step === 1 && !topic) return "Please choose a topic.";
-    if (step === 2 && !subTopic) return "Please choose a sub-topic.";
-    if (step === 3 && !tertiaryTopic) return "Please choose a tertiary-topic.";
-    if (step === 4 && subject.trim().length < 4) return "Subject must be at least 4 characters.";
-    if (step === 5 && !affectedResourceId) return "Please select an affected resource.";
-    if (step === 6 && plainTextFromRichText(description).length < 10) {
-      return "Description must be at least 10 characters.";
+
+    if (step === 2) {
+      if (!subTopic) return "Please choose a sub-topic.";
+      if (!tertiaryTopic) return "Please choose a tertiary-topic.";
+      if (subject.trim().length < 4) return "Subject must be at least 4 characters.";
+      if (!affectedResourceId) return "Please select an affected resource.";
+      if (plainTextFromRichText(description).length < 10) {
+        return "Description must be at least 10 characters.";
+      }
     }
+
     return null;
   }
 
@@ -177,7 +180,7 @@ export default function SupportTicketCreateWizard() {
   }
 
   async function submitTicket() {
-    const validationError = validateStep(6);
+    const validationError = validateStep(2);
     if (validationError) {
       setSubmitError(validationError);
       return;
@@ -275,7 +278,7 @@ export default function SupportTicketCreateWizard() {
             />
           </div>
 
-          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             {STEP_TITLES.map((title, index) => {
               const stepNumber = index + 1;
               const isActive = currentStep === stepNumber;
@@ -333,11 +336,11 @@ export default function SupportTicketCreateWizard() {
                     setSubTopic("");
                     setTertiaryTopic("");
                   }}
-                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                  className={SELECT_CLASS_NAME}
                 >
-                  <option value="">Select a topic</option>
+                  <option style={SELECT_OPTION_STYLE} value="">Select a topic</option>
                   {SUPPORT_TOPICS.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
+                    <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
                       {entry.label}
                     </option>
                   ))}
@@ -346,146 +349,146 @@ export default function SupportTicketCreateWizard() {
             )}
 
             {currentStep === 2 && (
-              <div>
-                <label className="mb-2 block text-sm text-white/75">Sub-topic</label>
-                <select
-                  value={subTopic}
-                  onChange={(event) => {
-                    setSubTopic(event.target.value);
-                    setTertiaryTopic("");
-                  }}
-                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
-                  disabled={!selectedTopic}
-                >
-                  <option value="">Select a sub-topic</option>
-                  {(selectedTopic?.subTopics || []).map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-5">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-sm text-white/75">Sub-topic</label>
+                    <select
+                      value={subTopic}
+                      onChange={(event) => {
+                        setSubTopic(event.target.value);
+                        setTertiaryTopic("");
+                      }}
+                      className={SELECT_CLASS_NAME}
+                      disabled={!selectedTopic}
+                    >
+                      <option style={SELECT_OPTION_STYLE} value="">Select a sub-topic</option>
+                      {(selectedTopic?.subTopics || []).map((entry) => (
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm text-white/75">Tertiary-topic</label>
+                    <select
+                      value={tertiaryTopic}
+                      onChange={(event) => setTertiaryTopic(event.target.value)}
+                      className={SELECT_CLASS_NAME}
+                      disabled={!selectedSubTopic}
+                    >
+                      <option style={SELECT_OPTION_STYLE} value="">Select a tertiary-topic</option>
+                      {tertiaryOptions.map((entry) => (
+                        <option style={SELECT_OPTION_STYLE} key={entry.id} value={entry.id}>
+                          {entry.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/75">Subject</label>
+                  <input
+                    value={subject}
+                    onChange={(event) => setSubject(event.target.value)}
+                    placeholder="Example: Kubernetes cluster stuck on ready state"
+                    className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/35"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/75">Affected resource</label>
+                  <select
+                    value={affectedResourceId}
+                    onChange={(event) => setAffectedResourceId(event.target.value)}
+                    className={SELECT_CLASS_NAME}
+                    disabled={resourcesLoading}
+                  >
+                    {resources.length === 0 && (
+                      <option style={SELECT_OPTION_STYLE} value="general">
+                        General issue
+                      </option>
+                    )}
+                    {resources.map((resource) => (
+                      <option style={SELECT_OPTION_STYLE} key={resource.id} value={resource.id}>
+                        {resource.name}
+                      </option>
+                    ))}
+                  </select>
+                  {resourcesLoading && <p className="mt-2 text-xs text-white/45">Loading resources...</p>}
+                  {resourcesError && <p className="mt-2 text-xs text-red-300">{resourcesError}</p>}
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/75">Issue description</label>
+                  <SupportRichTextEditor
+                    value={description}
+                    onChange={setDescription}
+                    placeholder="Share exact error, what you tried, and expected behavior."
+                    minHeightClassName="min-h-[240px]"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm text-white/75">Attachments (optional)</label>
+                  <div
+                    onDrop={handleFileDrop}
+                    onDragOver={(event) => event.preventDefault()}
+                    className="border border-dashed border-white/[0.2] bg-white/[0.03] p-8 text-center"
+                  >
+                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center border border-white/[0.12] bg-white/[0.04]">
+                      <Paperclip className="h-5 w-5 text-white/70" />
+                    </div>
+                    <p className="text-sm">Drop files here or choose manually.</p>
+                    <p className="mt-1 text-xs text-white/45">
+                      Allowed: {ALLOWED_SUPPORT_FILE_EXTENSIONS.join(", ")} | Max 10MB per file
+                    </p>
+                    <label className="mt-4 inline-flex cursor-pointer items-center gap-2 border border-white/[0.12] bg-white/[0.04] px-3 py-2 text-sm text-white transition-colors hover:bg-white/[0.08]">
+                      Choose files
+                      <input
+                        type="file"
+                        accept=".svg,.png,.jpg,.jpeg,.pdf,.docx,.csv,.xlsx,.txt,.doc"
+                        multiple
+                        onChange={handleFileInput}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {attachments.length === 0 ? (
+                      <p className="text-xs text-white/45">No files attached.</p>
+                    ) : (
+                      attachments.map((file, index) => (
+                        <div
+                          key={`${file.name}-${index}`}
+                          className="flex items-center justify-between border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-white">{file.name}</p>
+                            <p className="text-xs text-white/45">
+                              .{getFileExtension(file.name)} - {(file.size / 1024).toFixed(1)} KB
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFile(index)}
+                            className="ml-3 border border-white/[0.15] bg-white/[0.02] px-2 py-1 text-xs text-white/90 transition-colors hover:bg-white/[0.07]"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
             {currentStep === 3 && (
-              <div>
-                <label className="mb-2 block text-sm text-white/75">Tertiary-topic</label>
-                <select
-                  value={tertiaryTopic}
-                  onChange={(event) => setTertiaryTopic(event.target.value)}
-                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
-                  disabled={!selectedSubTopic}
-                >
-                  <option value="">Select a tertiary-topic</option>
-                  {tertiaryOptions.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {currentStep === 4 && (
-              <div>
-                <label className="mb-2 block text-sm text-white/75">Subject</label>
-                <input
-                  value={subject}
-                  onChange={(event) => setSubject(event.target.value)}
-                  placeholder="Example: Kubernetes cluster stuck on ready state"
-                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-blue-500/35"
-                />
-              </div>
-            )}
-
-            {currentStep === 5 && (
-              <div>
-                <label className="mb-2 block text-sm text-white/75">Affected resource</label>
-                <select
-                  value={affectedResourceId}
-                  onChange={(event) => setAffectedResourceId(event.target.value)}
-                  className="h-11 w-full border border-white/[0.12] bg-white/[0.04] px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500/35"
-                  disabled={resourcesLoading}
-                >
-                  {resources.map((resource) => (
-                    <option key={resource.id} value={resource.id}>
-                      {resource.name}
-                    </option>
-                  ))}
-                </select>
-                {resourcesLoading && <p className="mt-2 text-xs text-white/45">Loading resources...</p>}
-                {resourcesError && <p className="mt-2 text-xs text-red-300">{resourcesError}</p>}
-              </div>
-            )}
-
-            {currentStep === 6 && (
-              <div>
-                <label className="mb-2 block text-sm text-white/75">Issue description</label>
-                <SupportRichTextEditor
-                  value={description}
-                  onChange={setDescription}
-                  placeholder="Share exact error, what you tried, and expected behavior."
-                  minHeightClassName="min-h-[240px]"
-                />
-              </div>
-            )}
-
-            {currentStep === 7 && (
-              <div>
-                <div
-                  onDrop={handleFileDrop}
-                  onDragOver={(event) => event.preventDefault()}
-                  className="border border-dashed border-white/[0.2] bg-white/[0.03] p-8 text-center"
-                >
-                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center border border-white/[0.12] bg-white/[0.04]">
-                    <Paperclip className="h-5 w-5 text-white/70" />
-                  </div>
-                  <p className="text-sm">Drop files here or choose manually.</p>
-                  <p className="mt-1 text-xs text-white/45">
-                    Allowed: {ALLOWED_SUPPORT_FILE_EXTENSIONS.join(", ")} | Max 10MB per file
-                  </p>
-                  <label className="mt-4 inline-flex cursor-pointer items-center gap-2 border border-white/[0.12] bg-white/[0.04] px-3 py-2 text-sm text-white transition-colors hover:bg-white/[0.08]">
-                    Choose files
-                    <input
-                      type="file"
-                      accept=".svg,.png,.jpg,.jpeg,.pdf,.docx,.csv,.xlsx,.txt,.doc"
-                      multiple
-                      onChange={handleFileInput}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 space-y-2">
-                  {attachments.length === 0 ? (
-                    <p className="text-xs text-white/45">No files attached.</p>
-                  ) : (
-                    attachments.map((file, index) => (
-                      <div
-                        key={`${file.name}-${index}`}
-                        className="flex items-center justify-between border border-white/[0.1] bg-white/[0.03] px-3 py-2 text-sm"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-white">{file.name}</p>
-                          <p className="text-xs text-white/45">
-                            .{getFileExtension(file.name)} - {(file.size / 1024).toFixed(1)} KB
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFile(index)}
-                          className="ml-3 border border-white/[0.15] bg-white/[0.02] px-2 py-1 text-xs text-white/90 transition-colors hover:bg-white/[0.07]"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {currentStep === 8 && (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <div className="border border-white/[0.08] bg-white/[0.03] p-4">

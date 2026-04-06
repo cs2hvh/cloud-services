@@ -5,13 +5,12 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createServiceClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
 import {
-  SUPPORT_CLOSED_STATUSES,
   SUPPORT_FILE_MAX_SIZE_BYTES,
   SUPPORT_MAX_ATTACHMENTS,
   SUPPORT_OPEN_STATUSES,
+  canSupportStatusBeReopened,
   getFileExtension,
   isAllowedSupportFile,
-  isSupportClosedStatus,
   isSupportOpenStatus,
 } from "@/lib/support/catalog";
 import { sanitizeSupportRichText } from "@/lib/support/richtext";
@@ -112,7 +111,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
         ...ticket,
         attachments: attachmentsWithUrls,
         can_edit: isSupportOpenStatus(ticket.status),
-        can_reopen: isSupportClosedStatus(ticket.status),
+        can_reopen: canSupportStatusBeReopened(ticket.status),
       },
     });
   } catch (error) {
@@ -164,7 +163,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const payload = validation.data;
 
     if (payload.action === "reopen") {
-      if (!SUPPORT_CLOSED_STATUSES.includes(existing.status)) {
+      if (existing.status === "permantly_close") {
+        return NextResponse.json(
+          { error: "Permanently closed tickets cannot be reopened" },
+          { status: 409 }
+        );
+      }
+
+      if (!canSupportStatusBeReopened(existing.status)) {
         return NextResponse.json({ error: "Only closed tickets can be reopened" }, { status: 409 });
       }
 
