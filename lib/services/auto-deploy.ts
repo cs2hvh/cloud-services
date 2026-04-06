@@ -11,12 +11,17 @@
 
 import { JenkinsService } from './jenkins';
 import { BuildPollingService } from './build-polling';
-import { Platform_Apps, Platform_App_Deployments } from '@/lib/supabase/queries';
+import { Platform_Apps } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
 import { gitlabTokenManager } from '@/lib/providers/gitlab/token-manager';
 import { bitbucketTokenManager } from '@/lib/providers/bitbucket/token-manager';
 import { KubernetesInfoService } from './kubernetes-info';
 import { reconcileRuntimeEnv } from '@/lib/services/runtime-env-reconciler';
+import {
+  AppReleaseBuildService,
+  JenkinsBuildAdapter,
+  resolveBuildBackedOperationState,
+} from '@/lib/app-operations';
 
 export interface AutoDeployConfig {
   appId: string;
@@ -40,11 +45,6 @@ export interface AutoDeployResult {
   skipReason?: string;
 }
 
-// In-memory store for recent deliveries (prevents duplicate processing)
-// In production, you might want to use Redis for this
-const recentDeliveries = new Map<string, { timestamp: number; status: string }>();
-const DELIVERY_TTL = 5 * 60 * 1000; // 5 minutes
-
 export class AutoDeployService {
   /**
    * Main entry point for auto-deploy
@@ -52,9 +52,7 @@ export class AutoDeployService {
    */
   static async deploy(config: AutoDeployConfig): Promise<AutoDeployResult> {
     const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, size, commitSha, deliveryId } = config;
-    let buildTriggered = false;
-    let buildNumber: number | null = null;
-    let pollingStarted = false;
+    const idempotencyKey = `auto-deploy:${appId}:${branch}:${commitSha || 'HEAD'}:${deliveryId || 'no-delivery'}`;
 
     console.log(`[AutoDeploy] Starting auto-deploy for ${appName}`);
     console.log(`[AutoDeploy] Provider: ${gitProvider}, Branch: ${branch}, Commit: ${commitSha?.substring(0, 7) || 'unknown'}`);
@@ -64,22 +62,7 @@ export class AutoDeployService {
       KubernetesInfoService.logAppImages(appName, `auto-deploy-pre-build delivery=${deliveryId || 'n/a'}`)
         .catch(() => undefined);
 
-      // Step 1: Check for duplicate delivery (idempotency)
-      if (deliveryId) {
-        const isDuplicate = this.checkDuplicateDelivery(deliveryId);
-        if (isDuplicate) {
-          console.log(`[AutoDeploy] Duplicate delivery detected: ${deliveryId}`);
-          return {
-            success: true,
-            skipped: true,
-            skipReason: 'Duplicate webhook delivery',
-          };
-        }
-        // Mark this delivery as being processed
-        this.markDeliveryInProgress(deliveryId);
-      }
-
-      // Step 2: Get fresh access token for private repository access
+      // Step 1: Get fresh access token for private repository access
       console.log(`[AutoDeploy] Step 1/4: Refreshing access token...`);
       const accessToken = await this.getAccessToken(userId, gitProvider);
       
@@ -87,7 +70,7 @@ export class AutoDeployService {
         console.warn(`[AutoDeploy] ⚠️ No access token available - proceeding with public repo assumption`);
       }
 
-      // Step 3: Build authenticated URL
+      // Step 2: Build authenticated URL
       const authenticatedUrl = accessToken 
         ? this.buildAuthenticatedUrl(repositoryUrl, accessToken, gitProvider)
         : repositoryUrl;
@@ -103,139 +86,132 @@ export class AutoDeployService {
       
       console.log(`[AutoDeploy] Found ${envVars.length} environment variables`);
 
-      const runtimeSync = await reconcileRuntimeEnv({
+      const appRecord = await Platform_Apps.get(appId);
+      const appStatus = appRecord.success && appRecord.data ? appRecord.data.status : null;
+
+      const releaseBuildService = new AppReleaseBuildService();
+      const jenkins = new JenkinsBuildAdapter();
+      const operation = await releaseBuildService.startReleaseBuild({
+        appId,
         appName,
-        framework: framework ?? null,
-        envVars,
-        policy: 'strict',
-        action: 'secret_only',
-        // Keep existing runtime secret until the deployment pipeline applies the new manifest.
-        // This avoids transient failures if current pods still reference the secret.
-        cleanupWhenEmpty: false,
-        retryCount: 3,
-        retryDelayMs: 1000,
-        timeoutMs: 8000,
+        appStatus,
+        trigger: 'webhook',
+        operationType: 'deploy',
+        commitSha: commitSha || null,
+        idempotencyKey,
+        onBeforeTrigger: async () => {
+          const runtimeSync = await reconcileRuntimeEnv({
+            appName,
+            framework: framework ?? null,
+            envVars,
+            policy: 'strict',
+            action: 'secret_only',
+            // Keep existing runtime secret until the deployment pipeline applies the new manifest.
+            // This avoids transient failures if current pods still reference the secret.
+            cleanupWhenEmpty: false,
+            retryCount: 3,
+            retryDelayMs: 1000,
+            timeoutMs: 8000,
+          });
+          if (runtimeSync.status === 'failed') {
+            throw new Error(runtimeSync.error || runtimeSync.reason);
+          }
+        },
+        executor: async () => {
+          console.log(`[AutoDeploy] Step 3/4: Updating Jenkins job config...`);
+          await JenkinsService.updateJobConfig(
+            appName,
+            appId,
+            authenticatedUrl,
+            branch,
+            framework,
+            size || 'small',
+            'webhook',
+            envVars
+          );
+          console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
+
+          console.log(`[AutoDeploy] Step 4/4: Triggering build...`);
+          const execution = await jenkins.triggerBuild({
+            appName,
+            commitSha,
+          });
+          console.log(
+            `[AutoDeploy] ✅ Build #${execution.buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`
+          );
+          return {
+            buildNumber: execution.buildNumber,
+            executor: {
+              type: 'jenkins' as const,
+              job_name: execution.jobName,
+              run_number: execution.buildNumber,
+              url: execution.url,
+            },
+          };
+        },
       });
-      if (runtimeSync.status === 'failed') {
-        throw new Error(runtimeSync.error || runtimeSync.reason);
+
+      const resolvedOperation = resolveBuildBackedOperationState({
+        result: operation,
+        actionLabel: 'Auto-deploy',
+      });
+
+      if (resolvedOperation.kind === 'failed') {
+        return {
+          success: false,
+          error: resolvedOperation.message,
+        };
       }
 
-      // Step 4: Update Jenkins job configuration with fresh token
-      console.log(`[AutoDeploy] Step 3/4: Updating Jenkins job config...`);
-      try {
-        await JenkinsService.updateJobConfig(
-          appName,
-          appId,
-          authenticatedUrl,
-          branch,
-          framework,
-          size || 'small',
-          'webhook',
-          envVars
-        );
-        console.log(`[AutoDeploy] ✅ Jenkins job config updated`);
-      } catch (updateError: unknown) {
-        // If job doesn't exist, this is a problem
-        const errorMessage = updateError instanceof Error ? updateError.message : 'Unknown error';
-        console.error(`[AutoDeploy] Failed to update job config:`, errorMessage);
-        throw new Error(`Failed to update Jenkins job: ${errorMessage}`);
+      if (resolvedOperation.kind === 'invalid') {
+        return {
+          success: false,
+          error: resolvedOperation.message,
+        };
       }
 
-      // Step 5: Trigger the build with specific commit SHA
-      // This ensures the exact commit from the webhook is deployed, not branch HEAD
-      console.log(`[AutoDeploy] Step 4/4: Triggering build...`);
-      buildNumber = await JenkinsService.triggerBuild(appName, commitSha);
-      buildTriggered = true;
-      console.log(`[AutoDeploy] ✅ Build #${buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`);
+      if (resolvedOperation.kind === 'pending') {
+        return {
+          success: true,
+          skipped: true,
+          skipReason: operation.reused
+            ? 'Duplicate webhook delivery already being processed'
+            : resolvedOperation.message,
+        };
+      }
 
+      const buildNumber = resolvedOperation.buildNumber;
       let trackingWarning: string | undefined;
-      try {
-        // Step 6: Update app status in database
-        await Platform_Apps.update(appId, {
-          status: 'building',
-          last_deploy_trigger: 'webhook',
-          last_deploy_commit: commitSha || null,
-        });
-
-        // Create deployment row immediately so Supabase Realtime pushes the
-        // in-progress build to the UI. The Jenkins webhook will UPDATE this
-        // to the final status (success/failed) when the build finishes.
-        const buildRecord = await Platform_App_Deployments.start_build({
-          app_id: appId,
-          build_number: buildNumber,
-          trigger: 'webhook',
-          commit_sha: commitSha || null,
-        });
-        if (!buildRecord.success) {
-          throw new Error(buildRecord.error || 'Failed to create in-progress deployment record');
-        }
-
-        // Step 7: Start build status polling (async, don't await)
-        BuildPollingService.startPolling({
-          appId,
-          appName,
-          buildNumber,
-          trigger: 'webhook',
-        });
-        pollingStarted = true;
-      } catch (trackingError: unknown) {
-        trackingWarning = trackingError instanceof Error ? trackingError.message : 'Unknown tracking error';
-        console.warn(`[AutoDeploy] Build #${buildNumber} started but deployment tracking needs recovery: ${trackingWarning}`);
-
-        if (!pollingStarted) {
+      if (buildNumber) {
+        try {
           BuildPollingService.startPolling({
             appId,
             appName,
             buildNumber,
             trigger: 'webhook',
           });
-          pollingStarted = true;
+        } catch (trackingError: unknown) {
+          trackingWarning = trackingError instanceof Error ? trackingError.message : 'Unknown tracking error';
+          console.warn(`[AutoDeploy] Build #${buildNumber} started but deployment tracking needs recovery: ${trackingWarning}`);
         }
       }
 
-      // Mark delivery as successful
-      if (deliveryId) {
-        this.markDeliveryComplete(deliveryId, 'success');
-      }
-
       console.log(`[AutoDeploy] ✅ Auto-deploy initiated successfully`);
-      console.log(`[AutoDeploy] Monitor at: ${process.env.JENKINS_URL}/job/${appName}-job/${buildNumber}/`);
+      if (buildNumber) {
+        console.log(`[AutoDeploy] Monitor at: ${process.env.JENKINS_URL}/job/${appName}-job/${buildNumber}/`);
+      }
 
       return {
         success: true,
-        buildNumber,
+        buildNumber: buildNumber ?? undefined,
         warning: trackingWarning,
+        skipped: operation.reused,
+        skipReason: operation.reused ? 'Duplicate webhook delivery' : undefined,
       };
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[AutoDeploy] ❌ Auto-deploy failed:`, errorMessage);
-
-      if (buildTriggered && buildNumber) {
-        if (!pollingStarted) {
-          BuildPollingService.startPolling({
-            appId,
-            appName,
-            buildNumber,
-            trigger: 'webhook',
-          });
-        }
-
-        if (deliveryId) {
-          this.markDeliveryComplete(deliveryId, 'success');
-        }
-
-        return {
-          success: true,
-          buildNumber,
-          warning: errorMessage,
-        };
-      }
-      
-      // Mark delivery as failed
-      if (deliveryId) {
-        this.markDeliveryComplete(deliveryId, 'failed');
-      }
 
       return {
         success: false,
@@ -323,49 +299,4 @@ export class AutoDeployService {
     }
   }
 
-  /**
-   * Check if this delivery was already processed (idempotency)
-   */
-  private static checkDuplicateDelivery(deliveryId: string): boolean {
-    this.cleanupOldDeliveries();
-    
-    const existing = recentDeliveries.get(deliveryId);
-    if (existing && existing.status !== 'failed') {
-      // If it's in progress or completed successfully, it's a duplicate
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Mark a delivery as in-progress
-   */
-  private static markDeliveryInProgress(deliveryId: string): void {
-    recentDeliveries.set(deliveryId, {
-      timestamp: Date.now(),
-      status: 'in-progress',
-    });
-  }
-
-  /**
-   * Mark a delivery as complete
-   */
-  private static markDeliveryComplete(deliveryId: string, status: 'success' | 'failed'): void {
-    recentDeliveries.set(deliveryId, {
-      timestamp: Date.now(),
-      status,
-    });
-  }
-
-  /**
-   * Clean up old delivery records
-   */
-  private static cleanupOldDeliveries(): void {
-    const now = Date.now();
-    for (const [id, data] of recentDeliveries.entries()) {
-      if (now - data.timestamp > DELIVERY_TTL) {
-        recentDeliveries.delete(id);
-      }
-    }
-  }
 }

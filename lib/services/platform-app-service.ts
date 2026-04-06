@@ -12,6 +12,7 @@ import { AuditLogService } from "@/lib/audit";
 import { AppStatusService } from "./app-status";
 import { getRatesForPlatformApp } from "@/config/pricing";
 import { ensureBalance } from "@/config/billing-flow";
+import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
 
 export interface CreateAppRequest {
   name: string;
@@ -37,6 +38,7 @@ export interface CreateAppRequest {
     request_id?: string;
     user_role?: 'user' | 'admin';
   };
+  idempotencyKey?: string | null;
 }
 
 export interface CreateAppResult {
@@ -89,6 +91,24 @@ export interface ListAppsOptions {
   includeRollbackInfo?: boolean;  // Check deployment history for rollback capability
 }
 
+export interface DeploymentPresentation {
+  can_rollback: boolean;
+  serving_build_number: number | null;
+  last_operation_build_number: number | null;
+  last_operation_trigger: string | null;
+  rollback_target_build_number: number | null;
+  rollback_target_commit_sha: string | null;
+}
+
+const DEFAULT_DEPLOYMENT_PRESENTATION: DeploymentPresentation = {
+  can_rollback: false,
+  serving_build_number: null,
+  last_operation_build_number: null,
+  last_operation_trigger: null,
+  rollback_target_build_number: null,
+  rollback_target_commit_sha: null,
+};
+
 export interface UpdateAppMetadataOptions {
   appId: string;
   userId: string;
@@ -99,6 +119,50 @@ export interface UpdateAppMetadataOptions {
 type GitProvider = CreateAppRequest["git_provider"];
 
 export class PlatformAppService {
+  static async getDeploymentPresentation(options: {
+    appId: string;
+    activeDeploymentId?: string | null;
+  }): Promise<DeploymentPresentation> {
+    const { appId, activeDeploymentId = null } = options;
+
+    try {
+      const ctx = await Platform_App_Deployments.get_rollback_context(appId, activeDeploymentId);
+
+      if (!ctx.success) {
+        console.warn(`[PlatformAppService.getDeploymentPresentation] Failed for ${appId}:`, ctx.error);
+        return DEFAULT_DEPLOYMENT_PRESENTATION;
+      }
+
+      const { serving_release, rollback_target, latest_operation, can_rollback } = ctx.data;
+
+      return {
+        can_rollback,
+        serving_build_number:
+          typeof serving_release?.build_number === "number" ? serving_release.build_number : null,
+        last_operation_build_number:
+          typeof latest_operation?.build_number === "number"
+            ? latest_operation.build_number
+            : typeof (latest_operation as { rollback_target_build_number?: unknown } | null)
+                ?.rollback_target_build_number === "number"
+              ? ((latest_operation as { rollback_target_build_number?: number }).rollback_target_build_number ?? null)
+              : null,
+        last_operation_trigger:
+          typeof latest_operation?.trigger === "string" ? latest_operation.trigger : null,
+        rollback_target_build_number:
+          can_rollback && typeof rollback_target?.build_number === "number"
+            ? rollback_target.build_number
+            : null,
+        rollback_target_commit_sha:
+          can_rollback && typeof rollback_target?.commit_sha === "string"
+            ? rollback_target.commit_sha
+            : null,
+      };
+    } catch (err) {
+      console.warn(`[PlatformAppService.getDeploymentPresentation] Failed for ${appId}:`, err);
+      return DEFAULT_DEPLOYMENT_PRESENTATION;
+    }
+  }
+
   private static async getSessionProviderToken(provider: GitProvider): Promise<string | null> {
     try {
       const { createClient } = await import("@/lib/supabase/server");
@@ -209,6 +273,30 @@ export class PlatformAppService {
    * - Registers webhook if auto_deploy enabled
    */
   static async createApp(request: CreateAppRequest): Promise<CreateAppResult> {
+    const idempotency = new PlatformAppCreateIdempotencyService();
+    const operation = await idempotency.begin<CreateAppResult>({
+      userId: request.userId,
+      idempotencyKey: request.idempotencyKey ?? null,
+      shouldPersistResult: (result) => result.success,
+      execute: async () => this.createAppUnchecked(request),
+    });
+
+    if (operation.kind === "completed") {
+      return operation.result;
+    }
+
+    if (operation.kind === "in_progress") {
+      return {
+        success: false,
+        error: `App creation is already in progress. Retry after ${operation.retryAfter}s.`,
+        errorCode: "OPERATION_IN_PROGRESS",
+      };
+    }
+
+    return operation.execute();
+  }
+
+  private static async createAppUnchecked(request: CreateAppRequest): Promise<CreateAppResult> {
     try {
       // 1. Validate project ownership
       if (request.project_id) {
@@ -296,6 +384,7 @@ export class PlatformAppService {
         deploy_branch: request.deploy_branch || request.branch || 'main',
         project_id: request.project_id,
         container_port: request.container_port,
+        idempotencyKey: request.idempotencyKey ?? null,
       };
 
       const deploymentResult = await DeploymentService.deploy(deploymentConfig);
@@ -528,17 +617,11 @@ export class PlatformAppService {
     // Add rollback capability check
     const appsWithRollback = await Promise.all(
       (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
-        try {
-          const prev = await Platform_App_Deployments.get_previous_rollback_target(
-            app.id,
-            app.active_deployment_id ?? null
-          );
-          const canRollback = !!(prev.success && prev.data);
-          return { ...app, can_rollback: canRollback };
-        } catch (err) {
-          console.warn(`[PlatformAppService.listApps] Rollback check failed for ${app.id}:`, err);
-          return { ...app, can_rollback: false };
-        }
+        const deploymentPresentation = await PlatformAppService.getDeploymentPresentation({
+          appId: app.id,
+          activeDeploymentId: app.active_deployment_id ?? null,
+        });
+        return { ...app, ...deploymentPresentation };
       })
     );
 

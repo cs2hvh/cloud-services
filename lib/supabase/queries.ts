@@ -1,4 +1,8 @@
 import { Encryption } from "@/config/functions";
+import {
+  findRollbackTarget,
+  findServingRelease,
+} from "@/lib/app-operations/core/release-history";
 // import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
@@ -3232,6 +3236,8 @@ export const Platform_App_Deployments = {
         .select('*')
         .eq('app_id', app_id)
         .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -3251,6 +3257,8 @@ export const Platform_App_Deployments = {
         .select('*')
         .eq('app_id', app_id)
         .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -3269,6 +3277,71 @@ export const Platform_App_Deployments = {
   },
 
   get_previous_rollback_target: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      const servingRelease = await Platform_App_Deployments.get_serving_release(
+        app_id,
+        reference_deployment_id
+      );
+      if (!servingRelease.success) {
+        return { success: false, error: servingRelease.error };
+      }
+      if (servingRelease.data) {
+        currentDeployment = servingRelease.data;
+      }
+
+      if (!currentDeployment && reference_deployment_id) {
+        const { data, error } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('id', reference_deployment_id)
+          .maybeSingle();
+
+        if (error) return { success: false, error: error.message };
+        currentDeployment = data ?? null;
+      }
+
+      if (!currentDeployment) {
+        const latestSuccessful = await Platform_App_Deployments.get_latest_successful(app_id);
+        if (!latestSuccessful.success) {
+          return { success: false, error: latestSuccessful.error };
+        }
+        currentDeployment = latestSuccessful.data ?? null;
+      }
+
+      const currentBuildNumber =
+        typeof currentDeployment?.build_number === 'number' ? currentDeployment.build_number : null;
+
+      if (currentBuildNumber === null) {
+        return { success: true, data: null };
+      }
+
+      const { data: rollbackTarget, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
+        .lt('build_number', currentBuildNumber)
+        .order('build_number', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+
+      return { success: true, data: rollbackTarget };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_serving_release: async (app_id: string, reference_deployment_id?: string | null) => {
     try {
       const supabase = await createServiceClient();
 
@@ -3294,44 +3367,158 @@ export const Platform_App_Deployments = {
         currentDeployment = latestSuccessful.data ?? null;
       }
 
+      if (!currentDeployment) {
+        return { success: true, data: null };
+      }
+
       const { data: successfulDeployments, error } = await supabase
         .from('platform_app_deployments')
         .select('*')
         .eq('app_id', app_id)
         .eq('status', 'success')
+        .in('trigger', ['manual', 'webhook'])
+        .not('build_number', 'is', null)
         .order('created_at', { ascending: false })
         .limit(20);
 
       if (error) return { success: false, error: error.message };
+      const servingRelease = findServingRelease({
+        currentDeployment,
+        successfulReleases: successfulDeployments || [],
+      });
 
-      const currentImageTag =
-        typeof currentDeployment?.image_tag === 'string' ? currentDeployment.image_tag : null;
-      const currentImageDigest =
-        typeof currentDeployment?.image_digest === 'string' ? currentDeployment.image_digest : null;
-      const currentDeploymentId =
-        typeof currentDeployment?.id === 'string' ? currentDeployment.id : null;
-
-      const rollbackTarget =
-        (successfulDeployments || []).find((deployment) => {
-          if (!deployment || deployment.id === currentDeploymentId) return false;
-
-          // Rollback should move to a different serving image. Resize deployments
-          // can create a new successful deployment event while intentionally
-          // keeping the same image/build number, so exclude same-image rows.
-          if (currentImageDigest && deployment.image_digest) {
-            return deployment.image_digest !== currentImageDigest;
-          }
-
-          if (currentImageTag && deployment.image_tag) {
-            return deployment.image_tag !== currentImageTag;
-          }
-
-          return true;
-        }) || null;
-
-      return { success: true, data: rollbackTarget };
+      return { success: true, data: servingRelease };
     } catch (err) {
       return { success: false, error: String(err) };
+    }
+  },
+
+  /**
+   * Single source of truth for rollback eligibility and deployment presentation.
+   * Fetches data in ONE pass (2 DB queries total) and returns everything needed
+   * by the API, the rollback route, and the UI.
+   *
+   * Replaces the need to call get_serving_release, get_previous_rollback_target,
+   * and get_latest_by_app separately.
+   */
+  get_rollback_context: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      // ── 1. Two parallel queries ──
+      // q1: any-status recent 5 — for latest_operation + quick reference lookup
+      // q2: successful only 20 — for serving release + rollback target (reliable window)
+      const [{ data: recentAll, error: err1 }, { data: successData, error: err2 }] =
+        await Promise.all([
+          supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .eq('status', 'success')
+            .in('trigger', ['manual', 'webhook'])
+            .not('build_number', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
+
+      if (err1) return { success: false as const, error: err1.message };
+      if (err2) return { success: false as const, error: err2.message };
+
+      const recentDeployments = recentAll || [];
+      const successfulDeployments = successData || [];
+
+      // Latest operation from any-status window
+      const latestOperation = recentDeployments[0] ?? null;
+
+      // ── 2. Resolve current deployment ──
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      if (reference_deployment_id) {
+        // Check recent any-status first (rollback/resize records land here)
+        currentDeployment = recentDeployments.find((d) => d.id === reference_deployment_id) ?? null;
+
+        // Check successful history (old but successful deployment)
+        if (!currentDeployment) {
+          currentDeployment = successfulDeployments.find((d) => d.id === reference_deployment_id) ?? null;
+        }
+
+        // Not in either window — targeted fetch
+        if (!currentDeployment) {
+          const { data, error: refErr } = await supabase
+            .from('platform_app_deployments')
+            .select('*')
+            .eq('app_id', app_id)
+            .eq('id', reference_deployment_id)
+            .maybeSingle();
+          if (refErr) return { success: false as const, error: refErr.message };
+          currentDeployment = data ?? null;
+        }
+      }
+
+      if (!currentDeployment) {
+        currentDeployment = successfulDeployments[0] ?? null;
+      }
+
+      // ── 3. Derive serving release ──
+      // Serving release is the most recent REAL BUILD deployment (trigger='webhook'|'manual')
+      // that matches the active image. Rollback and resize records are excluded —
+      // rollbacks copy an image but don't represent a new build, and resize records
+      // only change runtime size without changing the serving image.
+      const servingRelease = findServingRelease({
+        currentDeployment,
+        successfulReleases: successfulDeployments,
+      });
+
+      // ── 4. Derive rollback target ──
+      let rollbackTarget = findRollbackTarget({
+        currentDeployment,
+        servingRelease,
+        successfulReleases: successfulDeployments,
+      });
+
+      const servingBuildNumber =
+        typeof servingRelease?.build_number === 'number' ? servingRelease.build_number : null;
+
+      if (!rollbackTarget && servingBuildNumber !== null) {
+        const { data: directRollbackTarget, error: rollbackErr } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('status', 'success')
+          .in('trigger', ['manual', 'webhook'])
+          .not('build_number', 'is', null)
+          .lt('build_number', servingBuildNumber)
+          .order('build_number', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (rollbackErr) {
+          return { success: false as const, error: rollbackErr.message };
+        }
+
+        rollbackTarget = directRollbackTarget ?? null;
+      }
+
+      // ── 5. Latest operation already resolved above ──
+
+      return {
+        success: true as const,
+        data: {
+          serving_release: servingRelease,
+          rollback_target: rollbackTarget,
+          latest_operation: latestOperation,
+          can_rollback: rollbackTarget !== null,
+        },
+      };
+    } catch (err) {
+      return { success: false as const, error: String(err) };
     }
   },
 

@@ -3,12 +3,9 @@
  * Handles background polling of Jenkins build status
  */
 import { JenkinsService } from "./jenkins";
-import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
 import { AppStatusService } from "./app-status";
 import { KubernetesInfoService } from "./kubernetes-info";
-import { Billing } from "@/lib/supabase/queries/billing";
-import { getRatesForPlatformApp } from "@/config/pricing";
-import { PlatformAppBillingService } from "./platform-app-billing";
+import { AppOperationFinalizer } from "@/lib/app-operations";
 
 export interface BuildPollConfig {
   appId: string;
@@ -44,6 +41,7 @@ export class BuildPollingService {
   static readonly STALE_BUILD_AGE_MS = 35 * 60 * 1000;
   static readonly BUILD_FINALIZATION_GRACE_MS =
     BuildPollingService.HEALTH_CHECK_MAX_ATTEMPTS * BuildPollingService.HEALTH_CHECK_INTERVAL + 15000;
+  private static readonly finalizer = new AppOperationFinalizer();
 
   static isStaleBuildRecord(createdAt?: string | null): boolean {
     if (!createdAt) return false;
@@ -80,32 +78,6 @@ export class BuildPollingService {
       previousSize: actualRuntimeSize ?? targetSize,
       targetSize,
     };
-  }
-
-  private static async applyResizeSideEffects(
-    appId: string,
-    status: 'success' | 'failed',
-    resizeContext?: BuildPollConfig['resizeContext']
-  ): Promise<void> {
-    if (!resizeContext) return;
-
-    try {
-      if (status === 'success') {
-        const { hourlyRate } = await getRatesForPlatformApp(resizeContext.targetSize);
-        await Promise.all([
-          Platform_Apps.update(appId, { size: resizeContext.targetSize }),
-          Billing.update_active_platform_app_rate({
-            serviceId: appId,
-            newHourlyRate: hourlyRate,
-          }),
-        ]);
-        return;
-      }
-
-      await Platform_Apps.update(appId, { size: resizeContext.previousSize });
-    } catch (error) {
-      console.error(`[BuildPolling] Failed to apply resize side-effects for ${appId}:`, error);
-    }
   }
 
   private static async getCurrentImageIdentity(appName: string): Promise<{
@@ -217,7 +189,6 @@ export class BuildPollingService {
       status: 'success' | 'failed';
       failureReason?: string | null;
       allowedCurrentStatuses: Array<'building' | 'success' | 'failed'>;
-      setActiveOnSuccess?: boolean;
       resizeContext?: BuildPollConfig['resizeContext'];
     }
   ): Promise<void> {
@@ -229,8 +200,6 @@ export class BuildPollingService {
       status,
       failureReason,
       allowedCurrentStatuses,
-      setActiveOnSuccess = false,
-      resizeContext,
     } = params;
 
     if (!buildNumber) return;
@@ -238,59 +207,17 @@ export class BuildPollingService {
     const imageIdentity =
       status === 'success' ? await this.getCurrentImageIdentity(appName) : {};
 
-    const finalized = await Platform_App_Deployments.complete_build({
-      app_id: appId,
-      build_number: buildNumber,
-      status,
-      failure_reason: status === 'failed' ? (failureReason ?? null) : null,
-      image_tag: imageIdentity.image_tag,
-      image_digest: imageIdentity.image_digest,
-      allowed_current_statuses: allowedCurrentStatuses,
-      create_if_missing: true,
+    await this.finalizer.finalizeBuildOperation({
+      appId,
+      appName,
+      buildNumber,
       trigger,
-    });
-
-    if (!finalized.success || !finalized.data) {
-      console.error(`[BuildPolling] ❌ Failed to finalize deployment record for build #${buildNumber}: ${finalized.error}`);
-      return;
-    }
-
-    const recordChanged = finalized.updated || finalized.created;
-
-    if (trigger === 'resize' && recordChanged) {
-      await this.applyResizeSideEffects(appId, status, resizeContext);
-    }
-
-    if (status === 'success') {
-      if (trigger !== 'resize' && trigger !== 'rollback') {
-        const billingActivation = await PlatformAppBillingService.activateInitialBillingIfNeeded(
-          appId,
-          finalized.data.id
-        );
-        if (!billingActivation.success) {
-          console.error(
-            `[BuildPolling] Failed to activate initial billing for ${appId}: ${billingActivation.error}`
-          );
-        }
-      }
-
-      if ((recordChanged || setActiveOnSuccess) && finalized.data.id) {
-        await Platform_App_Deployments.set_active_for_app(appId, finalized.data.id);
-      }
-      await Platform_Apps.update(appId, {
-        status: 'running',
-        last_deploy_trigger: finalized.data.trigger,
-        last_deploy_commit: finalized.data.commit_sha ?? null,
-        last_failure_reason: null,
-      });
-      return;
-    }
-
-    await Platform_Apps.update(appId, {
-      status: 'failed',
-      last_deploy_trigger: finalized.data.trigger,
-      last_deploy_commit: finalized.data.commit_sha ?? null,
-      last_failure_reason: failureReason ?? null,
+      status,
+      failureReason: status === 'failed' ? (failureReason ?? null) : null,
+      imageTag: imageIdentity.image_tag,
+      imageDigest: imageIdentity.image_digest,
+      allowedCurrentStatuses: allowedCurrentStatuses,
+      allowLegacyCreate: false,
     });
   }
 
@@ -479,7 +406,6 @@ export class BuildPollingService {
         trigger,
         status: 'success',
         allowedCurrentStatuses: ['building'],
-        setActiveOnSuccess: true,
         resizeContext,
       });
 

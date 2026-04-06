@@ -13,6 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { AppsList } from "@/components/dashboard/apps";
+import { mergeDeploymentPresentation } from "@/components/dashboard/apps/types";
 import { useRealtimeApps } from "@/hooks/use-realtime-apps";
 import { useAppBuildState } from "@/hooks/use-app-build-state";
 import { createClient } from "@/lib/supabase/client";
@@ -94,15 +95,12 @@ export default function ApplicationDeploymentPage() {
     limit: 100,
   });
 
-  // Sync realtime updates while preserving can_rollback values already fetched from the API
+  // Sync realtime updates while preserving deployment metadata already fetched from the API.
   useEffect(() => {
     setLocalApps(prev => {
       if (prev.length === 0) return realtimeApps;
       const prevMap = new Map(prev.map(a => [a.id, a]));
-      return realtimeApps.map(app => ({
-        ...app,
-        can_rollback: prevMap.get(app.id)?.can_rollback ?? app.can_rollback,
-      }));
+      return realtimeApps.map(app => mergeDeploymentPresentation(app, prevMap.get(app.id)));
     });
   }, [realtimeApps]);
 
@@ -111,20 +109,28 @@ export default function ApplicationDeploymentPage() {
     [realtimeApps]
   );
 
-  // Re-enrich rollback capability whenever the live app inventory changes.
-  // Supabase realtime cannot compute can_rollback because it depends on
-  // deployment history, so refresh it from the list API whenever statuses move.
+  // Re-enrich deployment metadata whenever the live app inventory changes.
+  // Supabase realtime cannot compute rollback targets or serving release info because
+  // they depend on deployment history, so refresh them from the list API whenever
+  // statuses move.
   useEffect(() => {
     if (realtimeApps.length === 0) return;
     api
       .get("/services/platform-apps/list")
       .then(res => {
         if (res.data?.apps) {
-          const map: Record<string, boolean> = {};
-          (res.data.apps as Array<{ id: string; can_rollback: boolean }>).forEach(a => {
-            map[a.id] = !!a.can_rollback;
-          });
-          setLocalApps(prev => prev.map(app => ({ ...app, can_rollback: map[app.id] ?? app.can_rollback })));
+          const map = new Map(
+            (res.data.apps as Array<{
+              id: string;
+              can_rollback?: boolean;
+              serving_build_number?: number | null;
+              last_operation_build_number?: number | null;
+              last_operation_trigger?: string | null;
+              rollback_target_build_number?: number | null;
+              rollback_target_commit_sha?: string | null;
+            }>).map((app) => [app.id, app])
+          );
+          setLocalApps(prev => prev.map(app => mergeDeploymentPresentation(app, map.get(app.id))));
         }
       })
       .catch(() => {}); // non-critical — rollback buttons just stay disabled

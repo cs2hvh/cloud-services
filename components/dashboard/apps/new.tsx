@@ -759,7 +759,10 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
       const response = await fetch("/api/services/platform-apps/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": `app-create:${crypto.randomUUID()}`,
+        },
         body: JSON.stringify(payload),
       });
 

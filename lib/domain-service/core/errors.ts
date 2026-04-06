@@ -6,6 +6,7 @@ export const DOMAIN_ERROR_CODES = {
   DOMAIN_NOT_AVAILABLE: "DOMAIN_NOT_AVAILABLE",
   DOMAIN_INVALID: "DOMAIN_INVALID",
   APP_NOT_FOUND: "APP_NOT_FOUND",
+  APP_NOT_RUNNING: "APP_NOT_RUNNING",
   FORBIDDEN: "FORBIDDEN",
   OPERATION_NOT_FOUND: "OPERATION_NOT_FOUND",
   PURCHASE_REQUEST_NOT_FOUND: "PURCHASE_REQUEST_NOT_FOUND",
@@ -84,6 +85,7 @@ export function mapDomainErrorToHttp(error: DomainServiceError): {
       return { status: 400, code: error.code, message: error.message, details: error.details };
     case DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE:
     case DOMAIN_ERROR_CODES.DOMAIN_NOT_AVAILABLE:
+    case DOMAIN_ERROR_CODES.APP_NOT_RUNNING:
     case DOMAIN_ERROR_CODES.OPERATION_IN_PROGRESS:
     case DOMAIN_ERROR_CODES.TRANSFER_ALREADY_IN_PROGRESS:
       return { status: 409, code: error.code, message: error.message, details: error.details };

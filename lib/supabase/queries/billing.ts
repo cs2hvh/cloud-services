@@ -470,9 +470,9 @@ export const Billing = {
   update_active_platform_app_rate: async (params: {
     serviceId: string;
     newHourlyRate: number;
-  }): Promise<void> => {
+  }): Promise<{ updated: boolean }> => {
     const supabase = await createServiceClient();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .schema("billing")
       .from("active_platform_apps")
       .update({
@@ -480,14 +480,23 @@ export const Billing = {
         updated_at: new Date().toISOString(),
       })
       .eq("service_id", params.serviceId)
-      .eq("status", "active");
+      .eq("status", "active")
+      .select("service_id");
 
     if (error) {
       console.error(`[Billing] Failed to update platform app rate:`, error.message);
       throw new Error(`Failed to update hourly rate: ${error.message}`);
     }
 
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active platform app billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
     console.log(`[Billing] Updated platform app ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
   },
 
   // Internal helper: compute prorated charge for remaining fraction of hour

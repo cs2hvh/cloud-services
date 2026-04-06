@@ -13,6 +13,32 @@ import {
   mockUnauthenticatedUser,
 } from '../../utils/test-helpers';
 
+const appOpsMocks = vi.hoisted(() => {
+  class MockAppOperationError extends Error {
+    code: string;
+    statusCode: number;
+    retryable: boolean;
+
+    constructor(params: {
+      code: string;
+      message: string;
+      statusCode?: number;
+      retryable?: boolean;
+    }) {
+      super(params.message);
+      this.code = params.code;
+      this.statusCode = params.statusCode ?? 500;
+      this.retryable = params.retryable ?? false;
+    }
+  }
+
+  return {
+    resizeOperationMock: vi.fn(),
+    jenkinsBuildTriggerMock: vi.fn(),
+    MockAppOperationError,
+  };
+});
+
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/queries');
@@ -21,6 +47,64 @@ vi.mock('@/lib/services/jenkins');
 vi.mock('@/lib/services/build-polling');
 vi.mock('@/lib/providers/github');
 vi.mock('@/lib/services/runtime-env-reconciler');
+vi.mock('@/lib/app-operations', () => {
+  class MockAppRuntimeMutationService {
+    resize = appOpsMocks.resizeOperationMock;
+  }
+
+  class MockJenkinsBuildAdapter {
+    triggerBuild = appOpsMocks.jenkinsBuildTriggerMock;
+  }
+
+  class MockAppOperationFinalizer {}
+
+  function resolveBuildBackedOperationState(params: any) {
+    if (typeof params.result.buildNumber === 'number') {
+      return {
+        kind: 'ready',
+        buildNumber: params.result.buildNumber,
+        reused: params.result.reused,
+      };
+    }
+
+    if (params.result.operation?.status === 'building') {
+      return {
+        kind: 'pending',
+        code: 'APP_OPERATION_IN_PROGRESS',
+        message: `${params.actionLabel} is already in progress. Jenkins build number is not available yet.`,
+        reused: params.result.reused,
+      };
+    }
+
+    if (params.result.operation?.status === 'failed') {
+      return {
+        kind: 'failed',
+        code: params.result.operation?.operation_details?.error?.code ?? 'APP_OPERATION_FAILED',
+        message:
+          params.result.operation?.failure_reason ??
+          params.result.operation?.operation_details?.error?.message ??
+          `${params.actionLabel} failed.`,
+        reused: params.result.reused,
+        retryable: false,
+      };
+    }
+
+    return {
+      kind: 'invalid',
+      code: 'BUILD_NUMBER_UNAVAILABLE',
+      message: `${params.actionLabel} completed without a Jenkins build number.`,
+      reused: params.result.reused,
+    };
+  }
+
+  return {
+    AppRuntimeMutationService: MockAppRuntimeMutationService,
+    JenkinsBuildAdapter: MockJenkinsBuildAdapter,
+    AppOperationFinalizer: MockAppOperationFinalizer,
+    AppOperationError: appOpsMocks.MockAppOperationError,
+    resolveBuildBackedOperationState,
+  };
+});
 
 describe('POST /api/services/platform-apps/resize', () => {
   beforeEach(async () => {
@@ -32,7 +116,7 @@ describe('POST /api/services/platform-apps/resize', () => {
       retryAfterSec: 0,
     } as any);
 
-    const { Platform_Apps, Platform_App_Deployments } = await import('@/lib/supabase/queries');
+    const { Platform_Apps } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
       success: true,
       data: {
@@ -46,24 +130,17 @@ describe('POST /api/services/platform-apps/resize', () => {
       data: { ...mockPlatformApp, size: 'medium', status: 'building' },
     } as any);
     vi.mocked(Platform_Apps.get_env_vars).mockResolvedValue([]);
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: false,
-      blocker: null,
-      deployment: null,
-      message: null,
-    } as any);
-    vi.mocked(Platform_App_Deployments.start_build).mockResolvedValue({
-      success: true,
-      data: { id: 'dep-1' },
-    } as any);
 
     const { Projects } = await import('@/lib/supabase/queries/projects');
     vi.mocked(Projects.add_log).mockResolvedValue({ success: true } as any);
 
     const { JenkinsService } = await import('@/lib/services/jenkins');
     vi.mocked(JenkinsService.updateJobConfig).mockResolvedValue(undefined as any);
-    vi.mocked(JenkinsService.triggerBuild).mockResolvedValue(2);
+    appOpsMocks.jenkinsBuildTriggerMock.mockResolvedValue({
+      buildNumber: 2,
+      jobName: `${mockPlatformApp.name}-job`,
+      url: `https://jenkins.example/job/${mockPlatformApp.name}-job/2/`,
+    });
 
     const { BuildPollingService } = await import('@/lib/services/build-polling');
     vi.mocked(BuildPollingService.startPolling).mockResolvedValue(undefined as any);
@@ -81,6 +158,42 @@ describe('POST /api/services/platform-apps/resize', () => {
     vi.mocked(reconcileRuntimeEnv).mockResolvedValue({
       status: 'success',
     } as any);
+
+    appOpsMocks.resizeOperationMock.mockImplementation(async (params) => {
+      if (params.appStatus === 'building') {
+        throw new appOpsMocks.MockAppOperationError({
+          code: 'APP_OPERATION_IN_PROGRESS',
+          message: 'Build #2 is still in progress. Please wait for it to complete.',
+          statusCode: 409,
+          retryable: true,
+        });
+      }
+
+      if (params.onBeforeTrigger) {
+        await params.onBeforeTrigger();
+      }
+
+      try {
+        const execution = await params.executor('op-1');
+        if (params.onAfterTrigger) {
+          await params.onAfterTrigger(execution.buildNumber);
+        }
+        return {
+          operation: {
+            id: 'op-1',
+            build_number: execution.buildNumber,
+            status: 'building',
+          },
+          buildNumber: execution.buildNumber,
+          reused: false,
+        };
+      } catch (error) {
+        if (params.onTriggerFailure) {
+          await params.onTriggerFailure();
+        }
+        throw error;
+      }
+    });
   });
 
   it('requires authentication', async () => {
@@ -95,16 +208,32 @@ describe('POST /api/services/platform-apps/resize', () => {
     await expectResponseStatus(response, 401);
   });
 
-  it('blocks resize while another deployment is active', async () => {
+  it('returns the stored failure for a reused resize request that failed before Jenkins returned a build number', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: true,
-      blocker: 'building',
-      deployment: { id: 'dep-1' },
-      message: 'Cannot resize while a deployment is in progress.',
-    } as any);
+    const { BuildPollingService } = await import('@/lib/services/build-polling');
+
+    appOpsMocks.resizeOperationMock.mockResolvedValueOnce({
+      operation: {
+        id: 'op-failed',
+        build_number: null,
+        status: 'failed',
+        trigger: 'resize',
+        failure_reason: 'Runtime secret sync failed',
+        operation_details: {
+          schema_version: 1,
+          type: 'resize',
+          trigger_origin: 'manual',
+          steps: [],
+          error: {
+            code: 'RESIZE_TRIGGER_FAILED',
+            message: 'Runtime secret sync failed',
+            retryable: false,
+          },
+        },
+      },
+      buildNumber: null,
+      reused: true,
+    });
 
     const request = createMockPostRequest(
       'http://localhost:3000/api/services/platform-apps/resize',
@@ -114,7 +243,32 @@ describe('POST /api/services/platform-apps/resize', () => {
     const response = await POST(request as NextRequest);
     const data = await expectResponseStatus(response, 409);
 
-    expect(data.error).toContain('deployment is in progress');
+    expect(data.code).toBe('RESIZE_TRIGGER_FAILED');
+    expect(data.error).toBe('Runtime secret sync failed');
+    expect(data.reused).toBe(true);
+    expect(BuildPollingService.startPolling).not.toHaveBeenCalled();
+  });
+
+  it('blocks resize while another deployment is active', async () => {
+    await mockAuthenticatedUser(mockPlatformAppUser.id);
+    appOpsMocks.resizeOperationMock.mockRejectedValueOnce(
+      new appOpsMocks.MockAppOperationError({
+        code: 'APP_OPERATION_IN_PROGRESS',
+        message: 'Build #2 is still in progress. Please wait for it to complete.',
+        statusCode: 409,
+        retryable: true,
+      })
+    );
+
+    const request = createMockPostRequest(
+      'http://localhost:3000/api/services/platform-apps/resize',
+      { app_id: mockPlatformApp.id, new_size: 'medium' }
+    );
+
+    const response = await POST(request as NextRequest);
+    const data = await expectResponseStatus(response, 409);
+
+    expect(data.error).toContain('still in progress');
   });
 
   it('rejects downsize requests', async () => {
@@ -142,7 +296,7 @@ describe('POST /api/services/platform-apps/resize', () => {
 
   it('starts a resize build and creates the in-progress deployment row', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
+    const { Platform_Apps } = await import('@/lib/supabase/queries');
     const { BuildPollingService } = await import('@/lib/services/build-polling');
 
     const request = createMockPostRequest(
@@ -155,11 +309,10 @@ describe('POST /api/services/platform-apps/resize', () => {
 
     expect(data.message).toContain('Resize started');
     expect(data.build_number).toBe(2);
-    expect(Platform_App_Deployments.start_build).toHaveBeenCalledWith({
-      app_id: mockPlatformApp.id,
-      build_number: 2,
-      trigger: 'resize',
-    });
+    expect(Platform_Apps.update).not.toHaveBeenCalledWith(
+      mockPlatformApp.id,
+      expect.objectContaining({ size: 'medium' })
+    );
     expect(BuildPollingService.startPolling).toHaveBeenCalledWith(
       expect.objectContaining({
         appId: mockPlatformApp.id,
@@ -176,12 +329,10 @@ describe('POST /api/services/platform-apps/resize', () => {
 
   it('recovers gracefully if tracking fails after Jenkins already started the build', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
     const { BuildPollingService } = await import('@/lib/services/build-polling');
-    vi.mocked(Platform_App_Deployments.start_build).mockResolvedValue({
-      success: false,
-      error: 'Failed to create in-progress deployment record',
-    } as any);
+    vi.mocked(BuildPollingService.startPolling).mockImplementation(() => {
+      throw new Error('Tracking startup failed');
+    });
 
     const request = createMockPostRequest(
       'http://localhost:3000/api/services/platform-apps/resize',
@@ -191,15 +342,14 @@ describe('POST /api/services/platform-apps/resize', () => {
     const response = await POST(request as NextRequest);
     const data = await expectResponseStatus(response, 200);
 
-    expect(data.warning).toContain('Failed to create in-progress deployment record');
+    expect(data.message).toContain('Resize started');
     expect(BuildPollingService.startPolling).toHaveBeenCalled();
   });
 
   it('reverts local app state if Jenkins never starts the build', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { JenkinsService } = await import('@/lib/services/jenkins');
     const { Platform_Apps } = await import('@/lib/supabase/queries');
-    vi.mocked(JenkinsService.triggerBuild).mockRejectedValue(new Error('Jenkins unavailable'));
+    appOpsMocks.jenkinsBuildTriggerMock.mockRejectedValue(new Error('Jenkins unavailable'));
 
     const request = createMockPostRequest(
       'http://localhost:3000/api/services/platform-apps/resize',
@@ -210,19 +360,17 @@ describe('POST /api/services/platform-apps/resize', () => {
     const data = await expectResponseStatus(response, 500);
 
     expect(data.error).toContain('Jenkins unavailable');
-    expect(Platform_Apps.update).toHaveBeenNthCalledWith(
-      2,
+    expect(Platform_Apps.update).not.toHaveBeenCalledWith(
       mockPlatformApp.id,
       expect.objectContaining({
         size: 'small',
-        status: 'running',
       })
     );
   });
 
   it('rejects resize for an app already marked building', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_Apps, Platform_App_Deployments } = await import('@/lib/supabase/queries');
+    const { Platform_Apps } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
       success: true,
       data: {
@@ -230,13 +378,6 @@ describe('POST /api/services/platform-apps/resize', () => {
         user_id: mockPlatformAppUser.id,
         size: 'small',
       },
-    } as any);
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: true,
-      blocker: 'building',
-      deployment: { id: 'dep-2' },
-      message: 'Cannot resize while a deployment is in progress.',
     } as any);
 
     const request = createMockPostRequest(
