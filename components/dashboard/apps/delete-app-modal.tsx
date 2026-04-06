@@ -64,16 +64,22 @@ export function DeleteAppModal({
         },
         body: JSON.stringify({ app_id: appId }),
       });
+      const payload = await res.json().catch(() => ({}));
 
       if (res.ok) {
         toast.success(`${appName} deleted successfully`, {
           description: 'All resources have been cleaned up including DNS, Kubernetes, and certificates.',
         });
+        if (payload?.warning) {
+          toast.warning(`Deletion completed with billing warning`, {
+            description: payload.warning,
+            duration: 7000,
+          });
+        }
         onDeleteSuccess(appId);
       } else {
-        const errorData = await res.json();
         toast.error(`Failed to delete ${appName}`, {
-          description: errorData.error || 'An unexpected error occurred',
+          description: payload?.error || 'An unexpected error occurred',
         });
         onDeleteError(appId);
       }

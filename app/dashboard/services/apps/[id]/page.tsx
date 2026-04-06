@@ -93,6 +93,16 @@ interface AppDetail {
   last_failure_reason?: string | null;
 }
 
+function isReleaseBuildTrigger(trigger?: string | null) {
+  return trigger !== 'resize';
+}
+
+function getDeploymentEventLabel(buildNumber: number | null, trigger?: string | null) {
+  if (buildNumber === null) return 'Rollback';
+  if (trigger === 'resize') return `Resize #${buildNumber}`;
+  return `Build #${buildNumber}`;
+}
+
 // Size specifications
 const SIZE_SPECS = {
   small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1, price: "$5/mo" },
@@ -136,11 +146,11 @@ const SECTION_META: Array<{
   },
   {
     value: 'build-logs',
-    label: 'Build Logs',
-    description: 'Trace build output, pipeline execution, and release logs.',
+    label: 'Build & Ops',
+    description: 'Trace build output, pipeline execution, and operational rollout logs.',
     eyebrow: 'Build',
     icon: Terminal,
-    helper: 'Use build logs to validate pipeline output and diagnose release failures quickly.',
+    helper: 'Use these logs to validate release builds, resize runs, and rollout execution details.',
   },
   {
     value: 'runtime-logs',
@@ -306,6 +316,11 @@ export default function AppDetailPage() {
   );
 
   const latestBuildDeployment = buildDeployments[0] ?? null;
+  const releaseDeployments = useMemo(
+    () => buildDeployments.filter((deployment) => isReleaseBuildTrigger(deployment.trigger)),
+    [buildDeployments]
+  );
+  const latestReleaseDeployment = releaseDeployments[0] ?? null;
   const activeBuildNumber = useMemo(() => {
     if (buildInfo?.building && buildInfo.number) return buildInfo.number;
     if (latestBuildDeployment?.status === 'BUILDING') return latestBuildDeployment.build_number;
@@ -870,22 +885,26 @@ export default function AppDetailPage() {
     return Number.isNaN(num) ? null : num;
   }, [details?.container?.imageTag]);
   const canRollback = useMemo(() => {
-    const successfulBuilds = buildDeployments.filter((deployment) => deployment.status === 'SUCCESS');
+    const successfulReleaseBuilds = releaseDeployments.filter(
+      (deployment) => deployment.status === 'SUCCESS'
+    );
 
     if (servingBuildNumber !== null) {
-      return successfulBuilds.some((deployment) => deployment.build_number !== servingBuildNumber);
+      return successfulReleaseBuilds.some(
+        (deployment) => deployment.build_number < servingBuildNumber
+      );
     }
 
-    return successfulBuilds.length > 1 || !!app?.can_rollback;
-  }, [app?.can_rollback, buildDeployments, servingBuildNumber]);
+    return successfulReleaseBuilds.length > 1 || !!app?.can_rollback;
+  }, [app?.can_rollback, releaseDeployments, servingBuildNumber]);
 
   // Detect "degraded" state: app status is running (old pod healthy) but the
   // latest deployment failed — meaning the new code never took over.
   const isDegraded = useMemo(() => {
     if (app?.status !== 'running') return false;
-    if (!latestBuildDeployment) return false;
+    if (!latestReleaseDeployment) return false;
     // While a deploy is in progress the new pod hasn't started yet — not degraded.
-    if (latestBuildDeployment.status === 'BUILDING') return false;
+    if (latestReleaseDeployment.status === 'BUILDING') return false;
     // While actively building — not degraded.
     if (isBuilding) return false;
     // No image tag info yet — can't determine serving version.
@@ -899,8 +918,8 @@ export default function AppDetailPage() {
     // misconfigured). The running container's image tag is always reliable — if the
     // build number matches what's serving, the deploy succeeded regardless of what
     // the database says.
-    return latestBuildDeployment.build_number > servingBuildNumber;
-  }, [app?.status, latestBuildDeployment, servingBuildNumber, isBuilding, detailsLoading]);
+    return latestReleaseDeployment.build_number > servingBuildNumber;
+  }, [app?.status, latestReleaseDeployment, servingBuildNumber, isBuilding, detailsLoading]);
 
   // High restart count warning (CrashLoopBackOff signature)
   const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
@@ -962,7 +981,7 @@ export default function AppDetailPage() {
                 </p>
                 {getStatusBadge(app.status, isBuilding)}
                 {/* Live badge — but show Degraded when new deploy failed and old pod is serving */}
-                {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
+              {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
                     <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
                       <AlertTriangle className="mr-1.5 h-2 w-2" />
@@ -979,6 +998,11 @@ export default function AppDetailPage() {
                 {servingBuildNumber !== null && app.status === 'running' && !isBuilding && (
                   <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs font-mono">
                     Serving Build #{servingBuildNumber}
+                  </Badge>
+                )}
+                {latestBuildDeployment && !isBuilding && (
+                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs">
+                    Last Operation: {getDeploymentEventLabel(latestBuildDeployment.build_number, latestBuildDeployment.trigger)}
                   </Badge>
                 )}
               </div>
@@ -1003,11 +1027,11 @@ export default function AppDetailPage() {
                 </div>
               )}
               {/* Degraded state warning: newer deploy exists but old build is still serving */}
-              {isDegraded && latestBuildDeployment && servingBuildNumber !== null && (
+              {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestBuildDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
                   </span>
                 </div>
               )}
@@ -1312,6 +1336,14 @@ export default function AppDetailPage() {
                                 <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
                               </div>
                             )}
+                            {latestBuildDeployment && (
+                              <div>
+                                <p className="text-xs text-white/40 mb-1">Last Operation</p>
+                                <p className="text-sm text-white">
+                                  {getDeploymentEventLabel(latestBuildDeployment.build_number, latestBuildDeployment.trigger)}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1580,7 +1612,7 @@ export default function AppDetailPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-mono text-white">
-                              {isBuildEntry ? `#${buildNumber}` : 'Rollback'}
+                              {getDeploymentEventLabel(buildNumber, deployment.trigger)}
                             </span>
                             <Badge className={`rounded-none ${
                               deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
@@ -1596,7 +1628,7 @@ export default function AppDetailPage() {
                               </Badge>
                             )}
                             {/* Flag when build succeeded but never became the serving version */}
-                            {deployment.status === 'SUCCESS' && isBuildEntry && !isCurrentlyServing && servingBuildNumber !== null && buildNumber > servingBuildNumber && (
+                            {deployment.status === 'SUCCESS' && isBuildEntry && isReleaseBuildTrigger(deployment.trigger) && !isCurrentlyServing && servingBuildNumber !== null && buildNumber > servingBuildNumber && (
                               <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
                                 Deploy Failed
                               </Badge>
@@ -1624,6 +1656,12 @@ export default function AppDetailPage() {
                             <code className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-200">
                               {deployment.commit_sha.substring(0, 7)}
                             </code>
+                          </div>
+                        )}
+                        {deployment.trigger === 'resize' && deployment.status === 'SUCCESS' && servingBuildNumber !== null && buildNumber !== null && buildNumber !== servingBuildNumber && (
+                          <div className="flex items-center gap-2 border border-blue-500/20 bg-blue-500/10 px-2 py-2 text-xs text-blue-200">
+                            <Box className="w-3 h-3 flex-shrink-0" />
+                            <span>{`Resize succeeded using the currently serving image from Build #${servingBuildNumber}.`}</span>
                           </div>
                         )}
                         {/* Failure Reason Row */}

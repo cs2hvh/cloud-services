@@ -41,8 +41,8 @@ describe('GET /api/services/platform-apps/list', () => {
       mockFailedApp,
     ] as any);
 
-    // Default mock for Platform_App_Deployments.get_previous_successful
-    vi.mocked(Platform_App_Deployments.get_previous_successful).mockResolvedValue({
+    // Default mock for Platform_App_Deployments.get_previous_rollback_target
+    vi.mocked(Platform_App_Deployments.get_previous_rollback_target).mockResolvedValue({
       success: true,
       data: mockPreviousDeployment,
     } as any);
@@ -151,12 +151,12 @@ describe('GET /api/services/platform-apps/list', () => {
       await GET();
 
       // Should check for previous successful deployment for each app
-      expect(Platform_App_Deployments.get_previous_successful).toHaveBeenCalled();
+      expect(Platform_App_Deployments.get_previous_rollback_target).toHaveBeenCalled();
     });
 
     it('should set can_rollback=true when previous deployment exists', async () => {
       const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_App_Deployments.get_previous_successful).mockResolvedValue({
+      vi.mocked(Platform_App_Deployments.get_previous_rollback_target).mockResolvedValue({
         success: true,
         data: mockPreviousDeployment,
       } as any);
@@ -169,7 +169,7 @@ describe('GET /api/services/platform-apps/list', () => {
 
     it('should set can_rollback=false when no previous deployment', async () => {
       const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_App_Deployments.get_previous_successful).mockResolvedValue({
+      vi.mocked(Platform_App_Deployments.get_previous_rollback_target).mockResolvedValue({
         success: false,
         data: null,
       } as any);
@@ -262,7 +262,7 @@ describe('GET /api/services/platform-apps/list', () => {
       const data = await expectResponseStatus(response, 200);
 
       expect(data.apps.length).toBe(1);
-      expect(Platform_App_Deployments.get_previous_successful).toHaveBeenCalledWith(
+      expect(Platform_App_Deployments.get_previous_rollback_target).toHaveBeenCalledWith(
         mockPlatformApp.id,
         null
       );
@@ -289,7 +289,7 @@ describe('GET /api/services/platform-apps/list', () => {
       }));
       
       vi.mocked(Platform_Apps.list_by_owner).mockResolvedValue(manyApps as any);
-      vi.mocked(Platform_App_Deployments.get_previous_successful).mockResolvedValue({
+      vi.mocked(Platform_App_Deployments.get_previous_rollback_target).mockResolvedValue({
         success: true,
         data: mockPreviousDeployment,
       } as any);
@@ -299,7 +299,7 @@ describe('GET /api/services/platform-apps/list', () => {
 
       expect(data.apps.length).toBe(10);
       // Should check rollback for each app
-      expect(Platform_App_Deployments.get_previous_successful).toHaveBeenCalledTimes(10);
+      expect(Platform_App_Deployments.get_previous_rollback_target).toHaveBeenCalledTimes(10);
     });
   });
 });

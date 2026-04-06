@@ -35,7 +35,7 @@ describe('POST /api/services/platform-apps/get', () => {
     } as any);
 
     // Default mock for Platform_Apps.get
-    const { Platform_Apps } = await import('@/lib/supabase/queries');
+    const { Platform_Apps, Platform_App_Deployments } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
       success: true,
       data: {
@@ -46,6 +46,12 @@ describe('POST /api/services/platform-apps/get', () => {
 
     // Default mock for Platform_Apps.get_env_vars
     vi.mocked(Platform_Apps.get_env_vars).mockResolvedValue(mockEnvVars);
+
+    // Default mock for rollback capability lookup
+    vi.mocked(Platform_App_Deployments.get_previous_rollback_target).mockResolvedValue({
+      success: true,
+      data: null,
+    } as any);
 
     // Default mock for AppStatusService.syncStatus
     const { AppStatusService } = await import('@/lib/services/app-status');

@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { POST } from '@/app/api/webhooks/platform-apps/deployment-record/route';
 
 vi.mock('@/lib/supabase/queries');
+vi.mock('@/lib/services/platform-app-billing');
 
 describe('POST /api/webhooks/platform-apps/deployment-record', () => {
   const testUrl = 'http://localhost:3000/api/webhooks/platform-apps/deployment-record';
@@ -48,6 +49,7 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
     process.env.JENKINS_DEPLOYMENT_RECORD_SECRET = webhookSecret;
 
     const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
+    const { PlatformAppBillingService } = await import('@/lib/services/platform-app-billing');
 
     vi.mocked(Platform_App_Deployments.complete_build).mockResolvedValue({
       success: true,
@@ -57,6 +59,12 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
     } as any);
     vi.mocked(Platform_App_Deployments.set_active_for_app).mockResolvedValue(undefined as any);
     vi.mocked(Platform_Apps.update).mockResolvedValue({ success: true } as any);
+    vi.mocked(PlatformAppBillingService.activateInitialBillingIfNeeded).mockResolvedValue({
+      success: true,
+      activated: true,
+      alreadyActive: false,
+      skipped: false,
+    } as any);
   });
 
   it('returns 401 when the shared secret is missing', async () => {
@@ -106,6 +114,7 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
 
   it('finalizes a successful deployment and marks the app running', async () => {
     const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
+    const { PlatformAppBillingService } = await import('@/lib/services/platform-app-billing');
 
     const req = createRequest(validPayload);
     const res = await POST(req);
@@ -123,6 +132,10 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
       })
     );
     expect(Platform_App_Deployments.set_active_for_app).toHaveBeenCalledWith('app-1', 'deploy-1');
+    expect(PlatformAppBillingService.activateInitialBillingIfNeeded).toHaveBeenCalledWith(
+      'app-1',
+      'deploy-1'
+    );
     expect(Platform_Apps.update).toHaveBeenCalledWith(
       'app-1',
       expect.objectContaining({
@@ -146,6 +159,7 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
 
   it('updates app status to failed and does not set active deployment on terminal failure', async () => {
     const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
+    const { PlatformAppBillingService } = await import('@/lib/services/platform-app-billing');
     vi.mocked(Platform_App_Deployments.complete_build).mockResolvedValue({
       success: true,
       data: {
@@ -166,6 +180,7 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
 
     expect(res.status).toBe(200);
     expect(Platform_App_Deployments.set_active_for_app).not.toHaveBeenCalled();
+    expect(PlatformAppBillingService.activateInitialBillingIfNeeded).not.toHaveBeenCalled();
     expect(Platform_Apps.update).toHaveBeenCalledWith(
       'app-1',
       expect.objectContaining({

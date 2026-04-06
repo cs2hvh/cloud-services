@@ -8,6 +8,7 @@ import { AppStatusService } from "./app-status";
 import { KubernetesInfoService } from "./kubernetes-info";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { getRatesForPlatformApp } from "@/config/pricing";
+import { PlatformAppBillingService } from "./platform-app-billing";
 
 export interface BuildPollConfig {
   appId: string;
@@ -261,6 +262,18 @@ export class BuildPollingService {
     }
 
     if (status === 'success') {
+      if (trigger !== 'resize' && trigger !== 'rollback') {
+        const billingActivation = await PlatformAppBillingService.activateInitialBillingIfNeeded(
+          appId,
+          finalized.data.id
+        );
+        if (!billingActivation.success) {
+          console.error(
+            `[BuildPolling] Failed to activate initial billing for ${appId}: ${billingActivation.error}`
+          );
+        }
+      }
+
       if ((recordChanged || setActiveOnSuccess) && finalized.data.id) {
         await Platform_App_Deployments.set_active_for_app(appId, finalized.data.id);
       }

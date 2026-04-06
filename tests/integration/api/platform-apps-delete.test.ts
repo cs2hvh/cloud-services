@@ -52,7 +52,11 @@ describe('POST /api/services/platform-apps/delete', () => {
     } as any);
 
     const { PlatformAppService } = await import('@/lib/services/platform-app-service');
-    vi.mocked(PlatformAppService.deleteApp).mockResolvedValue(undefined as any);
+    vi.mocked(PlatformAppService.deleteApp).mockResolvedValue({
+      success: true,
+      appName: mockPlatformApp.name,
+      warning: null,
+    } as any);
 
     const { AppStatusService } = await import('@/lib/services/app-status');
     vi.mocked(AppStatusService.setStatus).mockResolvedValue(undefined as any);

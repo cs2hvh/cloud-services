@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Platform_App_Deployments, Platform_Apps } from '@/lib/supabase/queries';
+import { PlatformAppBillingService } from '@/lib/services/platform-app-billing';
 import * as crypto from 'crypto';
 
 type DeploymentRecordPayload = {
@@ -128,6 +129,19 @@ export async function POST(req: NextRequest) {
     // This avoids late webhook deliveries flipping app state when complete_build()
     // intentionally kept an existing terminal failure.
     if (finalStatus === 'success') {
+      if (body.trigger !== 'resize' && body.trigger !== 'rollback') {
+        const billingActivation = await PlatformAppBillingService.activateInitialBillingIfNeeded(
+          body.app_id,
+          deployment.id
+        );
+        if (!billingActivation.success) {
+          console.error(
+            '[DeploymentRecordWebhook] Failed to activate initial billing:',
+            billingActivation.error
+          );
+        }
+      }
+
       if (finalized.updated || finalized.created) {
         console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
         await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);

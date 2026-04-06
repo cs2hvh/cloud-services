@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
 
     const activeDeploymentId: string | null = app.active_deployment_id ?? null;
 
-    const previous = await Platform_App_Deployments.get_previous_successful(app_id, activeDeploymentId);
+    const previous = await Platform_App_Deployments.get_previous_rollback_target(app_id, activeDeploymentId);
     if (!previous.success) {
       return NextResponse.json({ error: previous.error || "Failed to query deployment history" }, { status: 500 });
     }

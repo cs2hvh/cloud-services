@@ -3268,6 +3268,73 @@ export const Platform_App_Deployments = {
     }
   },
 
+  get_previous_rollback_target: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      if (reference_deployment_id) {
+        const { data, error } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('id', reference_deployment_id)
+          .maybeSingle();
+
+        if (error) return { success: false, error: error.message };
+        currentDeployment = data ?? null;
+      }
+
+      if (!currentDeployment) {
+        const latestSuccessful = await Platform_App_Deployments.get_latest_successful(app_id);
+        if (!latestSuccessful.success) {
+          return { success: false, error: latestSuccessful.error };
+        }
+        currentDeployment = latestSuccessful.data ?? null;
+      }
+
+      const { data: successfulDeployments, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) return { success: false, error: error.message };
+
+      const currentImageTag =
+        typeof currentDeployment?.image_tag === 'string' ? currentDeployment.image_tag : null;
+      const currentImageDigest =
+        typeof currentDeployment?.image_digest === 'string' ? currentDeployment.image_digest : null;
+      const currentDeploymentId =
+        typeof currentDeployment?.id === 'string' ? currentDeployment.id : null;
+
+      const rollbackTarget =
+        (successfulDeployments || []).find((deployment) => {
+          if (!deployment || deployment.id === currentDeploymentId) return false;
+
+          // Rollback should move to a different serving image. Resize deployments
+          // can create a new successful deployment event while intentionally
+          // keeping the same image/build number, so exclude same-image rows.
+          if (currentImageDigest && deployment.image_digest) {
+            return deployment.image_digest !== currentImageDigest;
+          }
+
+          if (currentImageTag && deployment.image_tag) {
+            return deployment.image_tag !== currentImageTag;
+          }
+
+          return true;
+        }) || null;
+
+      return { success: true, data: rollbackTarget };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
   update_status: async (
     appId: string,
     buildNumber: number,

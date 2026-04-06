@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
       // Supabase Realtime pushes the visual "Deleting…" state to all clients.
       await AppStatusService.setStatus(app_id, "deleting");
 
-      await PlatformAppService.deleteApp({
+      const deletionResult = await PlatformAppService.deleteApp({
         appId: app_id,
         userId: auth.user!.id,
         isAdmin: isAdminUser,
@@ -107,7 +107,10 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return NextResponse.json({ message: "App deleted successfully" });
+      return NextResponse.json({
+        message: "App deleted successfully",
+        warning: deletionResult.warning ?? null,
+      });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       const statusCode = errorMsg === "App not found" ? 404 :

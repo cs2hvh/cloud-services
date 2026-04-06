@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     // Get environment variables (internal API feature)
     const env_vars = await Platform_Apps.get_env_vars(validation.data.app_id);
 
-    const rollbackInfo = await Platform_App_Deployments.get_previous_successful(
+    const rollbackInfo = await Platform_App_Deployments.get_previous_rollback_target(
       validation.data.app_id,
       typeof app.active_deployment_id === "string" ? app.active_deployment_id : null
     );
