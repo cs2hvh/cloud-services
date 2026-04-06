@@ -1,7 +1,6 @@
 import { createServiceClient } from "../server";
 import { handleQueryError } from "@/lib/utils/error-handler";
 import { Promocode, Coupon } from "../types";
-import { Billing } from "./billing";
 
 interface PromocodeRedemptionEntry {
   userId?: string;
@@ -95,7 +94,7 @@ export const Promocodes = {
       max_redemptions?: number;
       is_active?: boolean;
     }
-  ): Promise<{ success: boolean; data?: Promocode; error?: string }> => {
+  ): Promise<{ success: boolean; data?: Coupon; error?: string }> => {
     try {
       const supabase = await createServiceClient();
 
@@ -115,7 +114,14 @@ export const Promocodes = {
         return { success: false, error: error.message };
       }
 
-      return { success: true, data: updated };
+      const redeemBy = getPromocodeRedemptions(updated.redeem_by);
+      return {
+        success: true,
+        data: {
+          ...updated,
+          redemption_count: redeemBy.length,
+        },
+      };
     } catch (err) {
       handleQueryError("Update promocode", err, "Promocodes");
       return { success: false, error: "Failed to update promocode" };
@@ -343,57 +349,38 @@ export const Promocodes = {
   }> => {
     try {
       const supabase = await createServiceClient();
+      const { data, error } = await supabase.schema("billing").rpc(
+        "billing_redeem_promocode_atomic",
+        {
+          p_code: code.toUpperCase().trim(),
+          p_user_id: userId,
+          p_email: email,
+        }
+      );
 
-      // Validate the code first
-      const validation = await Promocodes.validate_code(code, userId, email);
-      if (!validation.valid) {
-        return { success: false, error: validation.error };
-      }
-
-      const promo = validation.data;
-      if (!promo) {
-        return { success: false, error: "Promo code not found" };
-      }
-
-      // Update redeem_by array
-      const redeemBy = [
-        ...getPromocodeRedemptions(promo.redeem_by),
-        { userId, email, redeemedAt: new Date().toISOString() },
-      ];
-
-      // Check if we need to deactivate the coupon (for limited type)
-      const shouldDeactivate =
-        promo.coupon_type === "limited" &&
-        promo.max_redemptions &&
-        redeemBy.length >= promo.max_redemptions;
-
-      // Update promocode
-      const { error: updateError } = await supabase
-        .schema("billing")
-        .from("promocodes")
-        .update({
-          redeem_by: redeemBy as Promocode["redeem_by"],
-          updated_at: new Date().toISOString(),
-          ...(shouldDeactivate && { is_active: false }),
-        })
-        .eq("id", promo.id);
-
-      if (updateError) {
-        handleQueryError(
-          "Update promocode redeem_by",
-          updateError,
-          "Promocodes"
-        );
+      if (error) {
+        handleQueryError("Redeem promocode (atomic rpc)", error, "Promocodes");
         return { success: false, error: "Failed to redeem promo code" };
       }
 
-      // Add amount to user balance
-      const topupResult = await Billing.topup(userId, promo.amount);
+      const payload = (data ?? {}) as {
+        success?: boolean;
+        error?: string;
+        amount?: number;
+        balance?: number;
+      };
+
+      if (!payload.success) {
+        return {
+          success: false,
+          error: payload.error || "Failed to redeem promo code",
+        };
+      }
 
       return {
         success: true,
-        balance: topupResult.credit_balance,
-        amount: promo.amount,
+        balance: payload.balance,
+        amount: payload.amount,
       };
     } catch (err) {
       handleQueryError("Redeem promocode", err, "Promocodes");

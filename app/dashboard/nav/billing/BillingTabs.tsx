@@ -107,7 +107,7 @@ export default function BillingTabs({
         throw new Error("No checkout URL returned");
       }
     } catch (_err: unknown) {
-      pushToast("error", _err instanceof Error ? _err.message : "Failed to start payment");
+      pushToast("error", _err instanceof Error ? _err?.message : "Failed to start payment");
       setLoadingTopup(false);
     }
   };

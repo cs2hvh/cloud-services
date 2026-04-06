@@ -16,6 +16,8 @@ export type {
   NewLoginAlertEmailData,
   OtpEmailData,
   SendEmailResult,
+  SupportTicketCreatedEmailData,
+  SupportTicketReplyEmailData,
   SuspiciousActivityEmailData,
   SystemAlertEmailData,
 } from "@/lib/email/types";
