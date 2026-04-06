@@ -1915,7 +1915,7 @@ export default function AppDetailPage() {
                           </div>
 
                           <p className="mt-3 text-sm font-medium text-white/90">
-                            {sizePrices[size] ? `$${sizePrices[size]}/mo` : specs.price}
+                            {specs.price}
                           </p>
                         </div>
                       );
