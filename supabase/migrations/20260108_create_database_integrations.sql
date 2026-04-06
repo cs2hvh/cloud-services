@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS database_integrations (
     -- Error tracking
     error_message TEXT
 );
-
 -- ============================================
 -- UNIQUE CONSTRAINT: Prevent duplicate active links
 -- Only one active (pending/linked) integration per app+database combo
@@ -41,7 +40,6 @@ CREATE TABLE IF NOT EXISTS database_integrations (
 CREATE UNIQUE INDEX idx_db_integrations_unique_active 
 ON database_integrations (database_cluster_id, platform_app_id) 
 WHERE status IN ('pending', 'linked');
-
 -- ============================================
 -- INDEXES
 -- ============================================
@@ -50,20 +48,16 @@ CREATE INDEX idx_db_integrations_db ON database_integrations(database_cluster_id
 CREATE INDEX idx_db_integrations_user ON database_integrations(user_id);
 CREATE INDEX idx_db_integrations_status ON database_integrations(status);
 CREATE INDEX idx_db_integrations_project ON database_integrations(project_id);
-
 -- ============================================
 -- ROW LEVEL SECURITY
 -- ============================================
 ALTER TABLE database_integrations ENABLE ROW LEVEL SECURITY;
-
 -- Users can view integrations they created
 CREATE POLICY "Users can view their integrations" ON database_integrations
     FOR SELECT USING (auth.uid() = user_id);
-
 -- Users can create integrations (ownership verified in application layer)
 CREATE POLICY "Users can create integrations" ON database_integrations
     FOR INSERT WITH CHECK (auth.uid() = user_id);
-
 -- Users can update integrations they own OR if they own the app
 -- (This allows both app owner and database owner to manage)
 CREATE POLICY "Users can update their integrations" ON database_integrations
@@ -74,11 +68,9 @@ CREATE POLICY "Users can update their integrations" ON database_integrations
             WHERE id = platform_app_id AND user_id = auth.uid()
         )
     );
-
 -- Users can delete integrations they own
 CREATE POLICY "Users can delete their integrations" ON database_integrations
     FOR DELETE USING (auth.uid() = user_id);
-
 -- ============================================
 -- TRIGGER: Auto-update updated_at
 -- ============================================
@@ -86,7 +78,6 @@ CREATE TRIGGER update_database_integrations_updated_at
     BEFORE UPDATE ON database_integrations
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
-
 -- ============================================
 -- VERIFICATION
 -- ============================================

@@ -2,6 +2,7 @@
 // POST /api/v1/kubernetes — create a new kubernetes cluster
 import { withV1Auth, v1Error, v1Ok } from "@/lib/api/v1-middleware";
 import { v1TransformValidationError } from "@/lib/api/v1-helpers";
+import { v1NotFound, v1Forbidden } from "@/lib/api/v1-errors";
 import { KubernetesService } from "@/lib/services/kubernetes-service";
 import { ProjectService } from "@/lib/services/project-service";
 import { createKubernetesClusterSchema } from "@/lib/validation/kubernetes";
@@ -49,15 +50,11 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
   });
 
   if (!ownership.success && ownership.errorCode === "NOT_FOUND") {
-    return v1Error("NOT_FOUND", 404, "Project not found");
+    return v1NotFound("project");
   }
 
   if (!ownership.success && ownership.errorCode === "FORBIDDEN") {
-    return v1Error(
-      "FORBIDDEN",
-      403,
-      "You do not have permission to create a Kubernetes cluster in this project"
-    );
+    return v1Forbidden("project", "access");
   }
 
   if (!ownership.success) {
@@ -75,12 +72,12 @@ export const POST = withV1Auth("kubernetes:create", async (req, auth) => {
   );
 
   if (!result.success) {
-    const statusCode = result.errorCode === "INSUFFICIENT_BALANCE" ? 402 : 500;
-    return v1Error(
-      result.errorCode || "CREATE_FAILED",
-      statusCode,
-      result.error || "Failed to create Kubernetes cluster"
-    );
+    if (result.errorCode === "INSUFFICIENT_BALANCE") {
+      return v1Error("INSUFFICIENT_BALANCE", 402, result.error || "Insufficient credits");
+    }
+    if (result.errorCode === "NOT_FOUND") return v1NotFound("project");
+    if (result.errorCode === "FORBIDDEN") return v1Forbidden("project", "access");
+    return v1Error(result.errorCode || "CREATE_FAILED", 500, result.error || "Failed to create Kubernetes cluster");
   }
 
   const clusterData =

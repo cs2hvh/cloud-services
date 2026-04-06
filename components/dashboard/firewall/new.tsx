@@ -29,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import Link from "next/link";
 
 interface FirewallRule {
   id: string;
@@ -237,9 +238,9 @@ const FirewallRuleCreate = () => {
                       You need to have VPS or dedicated servers to configure firewall rules.
                     </p>
                     <Button asChild>
-                      <a href="/dashboard/services/compute/vps/new" className="bg-white text-black hover:bg-gray-200">
+                      <Link href="/dashboard/services/compute/vps/new" className="bg-white text-black hover:bg-gray-200">
                         Deploy a VPS
-                      </a>
+                      </Link>
                     </Button>
                   </div>
                 )}

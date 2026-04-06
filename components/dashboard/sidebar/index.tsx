@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Activity,
   Archive,
+  ArrowRightLeft,
+  BadgeDollarSign,
   BookOpen,
   Bot,
   Box,
@@ -274,9 +276,15 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       icon: ShoppingCart,
     },
     {
+      name: "Transfer Domain",
+      href: "/dashboard/domains/transfer",
+      current: pathname.includes("/dashboard/domains/transfer"),
+      icon: ArrowRightLeft,
+    },
+    {
       name: "My Domains",
       href: "/dashboard/domains",
-      current: pathname === "/dashboard/domains" || (pathname.includes("/dashboard/domains") && !pathname.includes("/marketplace")),
+      current: pathname === "/dashboard/domains" || (pathname.includes("/dashboard/domains") && !pathname.includes("/marketplace") && !pathname.includes("/transfer")),
       icon: Globe,
     },
   ];
@@ -349,6 +357,12 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/docs",
       current: false,
       icon: FileText,
+    },
+     {
+      name: "Billing & Transaction",
+      href: "/dashboard/nav/billing",
+      current: false,
+      icon: BadgeDollarSign,
     },
     {
       name: "Help Center",

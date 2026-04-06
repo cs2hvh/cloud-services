@@ -10,7 +10,8 @@ export function createNextJsPipeline(
   appDomain: string = 'galaxyhvh.com',
   appId: string = '',
   webhookBaseUrl: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
+  deploymentRecordSecret: string = '',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
   envVars: EnvVar[] = [],
   containerPort?: number,
 ): string {
@@ -124,6 +125,7 @@ pipeline {
     CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
+    JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
     DEPLOY_TRIGGER = '${deployTrigger}'
 
     DOCKER_IMAGE_VERSION = "hav0ky/${appName}:\${BUILD_NUMBER}"
@@ -402,8 +404,8 @@ INGRESS_EOF
             echo "Deployment completed successfully for $APP_NAME"
             echo "Service URL: https://$DOMAIN"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -433,6 +435,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
                 -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -440,6 +443,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \
                 --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \
                 "$DEPLOYMENT_RECORD_URL" || true
             else
@@ -457,8 +461,8 @@ JSON
             echo "PIPELINE: Failure"
             echo "Deployment failed for $APP_NAME"
 
-            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ]; then
-              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID not set; skipping deployment record"
+            if [ -z "$WEBHOOK_BASE_URL" ] || [ -z "$PLATFORM_APP_ID" ] || [ -z "$JENKINS_DEPLOYMENT_RECORD_SECRET" ]; then
+              echo "WARN: WEBHOOK_BASE_URL/PLATFORM_APP_ID/JENKINS_DEPLOYMENT_RECORD_SECRET not set; skipping deployment record"
               exit 0
             fi
 
@@ -488,6 +492,7 @@ JSON
             if command -v curl >/dev/null 2>&1; then
               RESPONSE=$(curl -sS -w "\\n%{http_code}" -X POST "$DEPLOYMENT_RECORD_URL" \
                 -H "content-type: application/json" \
+                -H "x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --data "$PAYLOAD" 2>&1) || true
               HTTP_CODE=$(echo "$RESPONSE" | tail -1)
               BODY=$(echo "$RESPONSE" | sed '$d')
@@ -495,6 +500,7 @@ JSON
             elif command -v wget >/dev/null 2>&1; then
               wget -qO- \
                 --header="content-type: application/json" \
+                --header="x-deployment-record-secret: $JENKINS_DEPLOYMENT_RECORD_SECRET" \
                 --post-data="$PAYLOAD" \
                 "$DEPLOYMENT_RECORD_URL" || true
             else

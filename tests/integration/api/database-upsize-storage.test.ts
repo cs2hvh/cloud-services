@@ -44,6 +44,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
       vi.mocked(Database_Clusters.read).mockResolvedValue({
         success,
         data: success ? data : undefined,
+        error: success ? undefined : 'Database cluster not found',
       } as any);
     });
   }
@@ -61,6 +62,26 @@ describe('PUT /api/services/database/upsize-storage', () => {
       });
       const response = await PUT(request as any);
       await expectResponseStatus(response, 401);
+    });
+
+    it('should return 403 when cluster belongs to another user', async () => {
+      await mockAuthenticatedUser();
+      await mockClusterRead({
+        name: 'my-cluster',
+        size: 'db-s-4vcpu-8gb',
+        storage_size_mib: 10240,
+        engine: 'pg',
+        owner_id: '00000000-0000-0000-0000-000000000999',
+      });
+
+      const request = createMockPutRequest(testUrl, {
+        database_id: validClusterId,
+        storage_size_mib: 20480,
+      });
+      const response = await PUT(request as any);
+      const data = await expectResponseStatus(response, 403);
+
+      expect(data.error).toContain('not authorized');
     });
   });
 
@@ -159,7 +180,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 30720,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const request = createMockPutRequest(testUrl, {
@@ -179,7 +200,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 20480,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const request = createMockPutRequest(testUrl, {
@@ -199,7 +220,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-1vcpu-1gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       // pg with 1gb RAM has max 30 GiB = 30720 MiB
@@ -226,7 +247,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
         project_id: 'project-1',
       });
 
@@ -258,7 +279,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
@@ -296,7 +317,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
@@ -331,7 +352,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const axios = (await import('axios')).default;
@@ -354,7 +375,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const axios = (await import('axios')).default;
@@ -413,7 +434,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
       const response = await PUT(request as any);
       const data = await expectResponseStatus(response, 500);
 
-      expect(data.error).toContain('unexpected');
+      expect(data.error).toContain('unknown');
     });
 
     it('TC-DB-138: should still succeed even if Supabase update fails', async () => {
@@ -423,7 +444,7 @@ describe('PUT /api/services/database/upsize-storage', () => {
         size: 'db-s-4vcpu-8gb',
         storage_size_mib: 10240,
         engine: 'pg',
-        owner_id: 'user-1',
+        owner_id: '550e8400-e29b-41d4-a716-446655440000',
       });
 
       const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');

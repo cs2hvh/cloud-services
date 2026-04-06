@@ -36,7 +36,8 @@ export async function PUT(req: NextRequest) {
 
     const result = await DatabaseService.updateStorageInternal(
       validatedData.database_id,
-      validatedData.size
+      validatedData.size,
+      auth.user.id
     );
 
     if (!result.success) {

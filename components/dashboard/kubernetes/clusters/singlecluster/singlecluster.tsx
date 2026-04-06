@@ -277,11 +277,21 @@ function SingleCluster({
     dropletFailureHandledRef.current = true;
 
     try {
-      await fetch("/api/services/kubernetes/clusters/delete", {
+      const response = await fetch("/api/services/kubernetes/clusters/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cluster_id: clusterId }),
       });
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        console.error(
+          "[handleDropletCreationFailure] Cluster cleanup failed:",
+          errorData?.message || errorData?.error || response.statusText,
+        );
+      }
     } catch (deleteError) {
       console.error("[handleDropletCreationFailure] Failed to delete cluster:", deleteError);
     }
@@ -524,6 +534,14 @@ function SingleCluster({
         const response=await api.post(`/services/kubernetes/clusters/delete`, {
           cluster_id: clusterId,
         })
+        const settledResponse = response as typeof response & {
+          error?: unknown;
+          data?: { message?: string };
+        };
+        if (settledResponse.error) {
+          toast.error(settledResponse.data?.message || "Failed to clean up cluster.");
+          return;
+        }
         if(response.status===200){
           router.push("/dashboard/services/kubernetes");
           toast.error(
@@ -657,11 +675,23 @@ function SingleCluster({
     const delCluster = await api.post(`/services/kubernetes/clusters/delete`, {
       cluster_id: clusterId,
     });
+    const settledDeleteCluster = delCluster as typeof delCluster & {
+      error?: unknown;
+      data?: { message?: string };
+    };
+
+    if (settledDeleteCluster.error) {
+      setLoading(false);
+      return;
+    }
 
     if (delCluster.status === 200) {
       toast.success("Cluster deleted successfully");
       router.push("/dashboard/services/kubernetes");
+      return;
     }
+
+    toast.error(settledDeleteCluster.data?.message || "Failed to delete cluster");
     setLoading(false);
   };
 
@@ -1093,7 +1123,7 @@ function SingleCluster({
                         clusterData?.clusterInfo?.kubeconfig || ""
                       );
                     }}
-                    className="inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
+                    className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-blue-400/25 bg-blue-500/90 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
                   >
                     <Download className="h-4 w-4" />
                     Download kubeconfig
@@ -1181,7 +1211,7 @@ function SingleCluster({
                                 handleDeleteNodeClick(n.droplet_id, index)
                               }
                               disabled={loading}
-                              className="inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="cursor-pointer inline-flex items-center gap-1 rounded-lg border border-red-500/35 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/15 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Trash2 className="h-3.5 w-3.5" /> Delete
                             </button>

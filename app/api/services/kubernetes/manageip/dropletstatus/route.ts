@@ -1,16 +1,3 @@
-// await axios.post(
-//         "https://api.digitalocean.com/v2/droplets",
-//         payload,
-//         {
-//           headers: {
-//             Authorization:
-//               "Bearer dop_v1_d8c411020fc7d2d41f5f30f35b1e8d8a0b06fffd4de117c28b93a5a461be5e8a",
-//             "Content-Type": "application/json",
-//           },
-//         }
-//       );
-
-
 import { NextRequest, NextResponse } from "next/server";
 // import { vmCreateSchema } from "@/types/zod/vm";
 // import bcrypt from "bcryptjs";

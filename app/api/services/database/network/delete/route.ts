@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     const result = await DatabaseService.deleteFirewallRule({
       clusterId: validatedData.id,
       ruleUuid: validatedData.rule_uuid,
+      userId: auth.user.id,
     });
 
     if (!result.success) {

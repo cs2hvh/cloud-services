@@ -1,9 +1,13 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 const { createClient } = require("@supabase/supabase-js");
 const { Client } = require("ssh2");
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error("Error: SUPABASE_SERVICE_ROLE_KEY environment variable is required");
+  process.exit(1);
+}
 const sb = createClient(
-  "https://xafjjpgazdxhktpfeuri.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhhZmpqcGdhemR4aGt0cGZldXJpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MjA1ODU3MiwiZXhwIjoyMDY3NjM0NTcyfQ.lWrNK4jO0xM0j9Hcb-0i8rhojswcCuh_-Qbg80RoKqE"
+  process.env.SUPABASE_URL || "https://xafjjpgazdxhktpfeuri.supabase.co",
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 const vmid = process.argv[2] || "104";
 function ssh(host, cmd, t = 30000) {

@@ -104,7 +104,20 @@ export function useDomainRegistrarSettings(
       }
 
       toast.success(`Auto-renew ${data?.data?.autorenew_enabled ? 'enabled' : 'turned off'}.`);
-      await onRefresh();
+
+      // Update local state directly from the API response — avoids triggering registrarLoading
+      // (which blanks the entire settings panel) just to flip one field.
+      const updated = data?.data as RegistrarSettings | null;
+      if (updated) {
+        setRegistrarSettings(updated);
+        onSyncDomainMeta?.(
+          typeof updated.expires_at === 'string' && updated.expires_at.trim() ? updated.expires_at : null,
+          typeof updated.autorenew_enabled === 'boolean' ? updated.autorenew_enabled : null
+        );
+      } else {
+        // Fallback: do a silent background refresh without resetting registrarLoading
+        await onRefresh();
+      }
     } catch (err) {
       console.error('Failed to update auto-renew:', err);
       toast.error('Failed to update auto-renew. Please try again.');

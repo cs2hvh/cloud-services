@@ -1,19 +1,26 @@
 import { Products } from "@/lib/supabase/queries/products";
-import { UUID } from "crypto";
 
 type Rates = { initialCost: number; hourlyRate: number };
 
 const HOURS_IN_MONTH = 24 * 30;
 
+function roundToTwoDecimals(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 function monthlyToHourly(priceMonthly?: number | null): number {
   const p = typeof priceMonthly === "number" ? priceMonthly : 0;
   if (!p || p <= 0) return 0;
-  return Number((p / HOURS_IN_MONTH).toFixed(6));
+  return roundToTwoDecimals(p / HOURS_IN_MONTH);
 }
 
-function ratesFromProduct(product?: { price?: number | null; fixed_price?: number | null } | null): Rates {
-  const initialCost = (product?.fixed_price ?? 0) || 0;
-  const hourlyRate = monthlyToHourly(product?.price ?? 0);
+function ratesFromProduct(
+  product?: { price?: number | null; fixed_price?: number | null } | null,
+  options?: { monthlyMultiplier?: number }
+): Rates {
+  const monthlyMultiplier = Math.max(options?.monthlyMultiplier ?? 1, 1);
+  const initialCost = roundToTwoDecimals((product?.fixed_price ?? 0) || 0);
+  const hourlyRate = monthlyToHourly((product?.price ?? 0) * monthlyMultiplier);
   return { initialCost, hourlyRate };
 }
 
@@ -24,16 +31,16 @@ export async function getRatesForDatabase(planId:string): Promise<Rates> {
   return ratesFromProduct(products);
 }
 
-export async function getRatesForKubernetes(plan_id:string): Promise<Rates> {
+export async function getRatesForKubernetes(plan_id:string, totalNodes = 1): Promise<Rates> {
     console.log("Fetching rates for Kubernetes plan ID:", plan_id);
   const products = await Products.get_by_id(plan_id);
-  return ratesFromProduct(products);
+  return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
 }
 
-export async function getRatesForKubernetesExisting(plan_id:string): Promise<Rates> {
+export async function getRatesForKubernetesExisting(plan_id:string, totalNodes = 1): Promise<Rates> {
     console.log("Fetching rates for Kubernetes plan ID:", plan_id);
   const products = await Products.get_by_id(plan_id);
-  return ratesFromProduct(products);
+  return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
 }
 
 export async function getRatesForObjectStorage(): Promise<Rates> {

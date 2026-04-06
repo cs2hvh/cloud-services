@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists in Supabase Auth
     const { data: authUsers } = await supabase.auth.admin.listUsers();
-    console.log(authUsers,".............authUsers12345")
+    //console.log(authUsers,".............authUsers12345")
     const existingUser = authUsers.users.find((u) => u.email === email);
 
     // --------------------------
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (signUpError || !newUser.user) {
       console.error("Error creating user:", signUpError);
       return Response.json(
-        { message: "Failed to create user" },
+        { message: "Failed to create user.Email is not valid" },
         { status: 500 },
       );
     }

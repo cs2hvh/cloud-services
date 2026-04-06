@@ -67,6 +67,21 @@ export function DomainSettingsTab({
                 </div>
               )}
 
+              {registrarSettings.expires_at && (
+                <PropRow
+                  label="Expiry date"
+                  description="When this domain registration expires."
+                >
+                  <span className="text-xs font-mono text-white/70">
+                    {new Date(registrarSettings.expires_at).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </PropRow>
+              )}
+
               <PropRow
                 label="Auto-renew"
                 description="Automatically renew this domain before it expires."

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createHmac, timingSafeEqual } from "crypto";
 
 /**
  * Bitbucket OAuth callback handler
@@ -14,9 +15,138 @@ import { createClient } from "@/lib/supabase/server";
  *   "scopes": "repository account"
  * }
  */
+
+function getAppBaseUrl(request: NextRequest): string {
+  const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const hostHeader = request.headers.get("host");
+
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  const host = hostHeader || requestUrl.host;
+  if (host) {
+    const normalizedHost = host.replace(/^0\.0\.0\.0(?=[:]|$)/, "localhost");
+    const proto =
+      process.env.NODE_ENV === "development"
+        ? "http"
+        : requestUrl.protocol.replace(":", "") || "https";
+    return `${proto}://${normalizedHost}`;
+  }
+
+  return (process.env.DOMAIN || "http://localhost:3000").replace(/\/$/, "");
+}
+
+type ParsedState = {
+  userId: string;
+  returnTo: string;
+  issuedAt: number;
+};
+type ParsedStateResult =
+  | { ok: true; data: ParsedState }
+  | {
+      ok: false;
+      reason:
+        | "missing_secret"
+        | "format"
+        | "invalid_signature"
+        | "invalid_payload"
+        | "expired";
+    };
+
+function getStateSecret(): string {
+  return (
+    process.env.BITBUCKET_STATE_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
+}
+
+function safeReturnPath(path: string | undefined): string {
+  if (
+    typeof path === "string" &&
+    path.startsWith("/") &&
+    !path.startsWith("//")
+  ) {
+    return path;
+  }
+  return "/dashboard/settings";
+}
+
+function parseSignedState(state: string): ParsedStateResult {
+  const secret = getStateSecret();
+  if (!secret) {
+    return { ok: false, reason: "missing_secret" };
+  }
+
+  const [payloadB64, signatureB64] = state.split(".");
+  if (!payloadB64 || !signatureB64) {
+    return { ok: false, reason: "format" };
+  }
+
+  try {
+    const expectedSignature = createHmac("sha256", secret)
+      .update(payloadB64)
+      .digest();
+    const receivedSignature = Buffer.from(signatureB64, "base64url");
+
+    if (
+      expectedSignature.length !== receivedSignature.length ||
+      !timingSafeEqual(expectedSignature, receivedSignature)
+    ) {
+      return { ok: false, reason: "invalid_signature" };
+    }
+
+    const payloadRaw = Buffer.from(payloadB64, "base64url").toString("utf8");
+    const payload = JSON.parse(payloadRaw) as {
+      userId?: string;
+      returnTo?: string;
+      issuedAt?: number;
+    };
+
+    if (!payload.userId || typeof payload.userId !== "string") {
+      return { ok: false, reason: "invalid_payload" };
+    }
+
+    const issuedAt =
+      typeof payload.issuedAt === "number" && Number.isFinite(payload.issuedAt)
+        ? payload.issuedAt
+        : 0;
+
+    // State is valid for 30 minutes
+    if (!issuedAt || Date.now() - issuedAt > 30 * 60 * 1000) {
+      return { ok: false, reason: "expired" };
+    }
+
+    return {
+      ok: true,
+      data: {
+        userId: payload.userId,
+        returnTo: safeReturnPath(payload.returnTo),
+        issuedAt,
+      },
+    };
+  } catch {
+    return { ok: false, reason: "invalid_payload" };
+  }
+}
+
+function readReturnToFromSignedPayloadUnsafe(state: string): string {
+  try {
+    const [payloadB64] = state.split(".");
+    if (!payloadB64) return "/dashboard/settings";
+    const payloadRaw = Buffer.from(payloadB64, "base64url").toString("utf8");
+    const payload = JSON.parse(payloadRaw) as { returnTo?: string };
+    return safeReturnPath(payload.returnTo);
+  } catch {
+    return "/dashboard/settings";
+  }
+}
+
 export async function GET(request: NextRequest) {
-  // Define domain once at the top for all redirects
-  const domain = process.env.DOMAIN;
+  const domain = getAppBaseUrl(request);
   
   try {
     const { searchParams } = new URL(request.url);
@@ -27,31 +157,52 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${domain}/dashboard/settings?error=missing_code`);
     }
 
-    // Decode state to extract userId, timestamp, and returnTo path
-    let userId: string;
-    let returnTo = '/dashboard/settings';
-    try {
-      const decoded = Buffer.from(state, 'base64').toString('utf-8');
-      const parts = decoded.split('|');
-      userId = parts[0];
-      returnTo = parts[2] || '/dashboard/settings';
-    } catch {
-      // Fallback for old state format
-      userId = state.split('-')[0];
+    // Decode state to extract userId and returnTo path
+    let userId = "";
+    let returnTo = "/dashboard/settings";
+    let usedLegacyState = false;
+    const hasSignedFormat = state.includes(".");
+    const parsedState: ParsedStateResult = hasSignedFormat ? parseSignedState(state) : { ok: false, reason: "format" as const };
+
+    if (parsedState.ok) {
+      userId = parsedState.data.userId;
+      returnTo = parsedState.data.returnTo;
+    } else if (hasSignedFormat) {
+      // Signed state present but invalid (signature/expiry/secret mismatch).
+      // Do not fall back to legacy parsing for security.
+      returnTo = readReturnToFromSignedPayloadUnsafe(state);
+      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_state`);
+    } else {
+      usedLegacyState = true;
+      // Backward compatibility with old state format
+      try {
+        const decoded = Buffer.from(state, "base64").toString("utf-8");
+        const parts = decoded.split("|");
+        userId = parts[0] || "";
+        returnTo = safeReturnPath(parts[2]);
+      } catch {
+        userId = state.split("-")[0] || "";
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_state`);
     }
     
     const supabase = await createClient();
     
-    // Verify the user
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user || user.id !== userId) {
+    // Check active session (if present). Signed state remains source of truth.
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Legacy unsigned state is only accepted when an authenticated session matches.
+    // Signed state can continue even if session cookies are stale or belong to a different tab/account.
+    if (usedLegacyState && (!user || user.id !== userId)) {
       return NextResponse.redirect(`${domain}${returnTo}?error=invalid_user`);
     }
 
     const clientId = process.env.BITBUCKET_CLIENT_ID;
     const clientSecret = process.env.BITBUCKET_CLIENT_SECRET;
-    const redirectUri = `${domain}/api/bitbucket/callback`;
+    const explicitRedirectUri = process.env.BITBUCKET_REDIRECT_URI?.trim();
 
     if (!clientId || !clientSecret) {
       console.error('Bitbucket OAuth credentials not configured');
@@ -62,7 +213,16 @@ export async function GET(request: NextRequest) {
     const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
     // Exchange code for access token
-    // IMPORTANT: Bitbucket requires the same redirect_uri used in authorization
+    // If redirect_uri was provided during authorization, it must be provided here as well.
+    const tokenParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: code,
+    });
+
+    if (explicitRedirectUri) {
+      tokenParams.set('redirect_uri', explicitRedirectUri);
+    }
+
     const tokenResponse = await fetch('https://bitbucket.org/site/oauth2/access_token', {
       method: 'POST',
       headers: {
@@ -70,11 +230,7 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Basic ${basicAuth}`,
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: redirectUri,
-      }),
+      body: tokenParams,
     });
 
     if (!tokenResponse.ok) {
@@ -119,10 +275,11 @@ export async function GET(request: NextRequest) {
     // Store the Bitbucket access token in database
     // IMPORTANT: auth_source='direct' means we issued this token with OUR OAuth credentials
     // and can refresh it ourselves (unlike Supabase-sourced tokens)
-    const { error: insertError } = await supabase
+    const serviceSupabase = await createServiceClient();
+    const { error: insertError } = await serviceSupabase
       .from('bitbucket_tokens')
       .upsert({
-        user_id: user.id,
+        user_id: userId,
         access_token: accessToken,
         bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
         bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,

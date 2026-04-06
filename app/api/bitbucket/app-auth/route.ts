@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { createHmac } from "crypto";
 
 /**
  * Bitbucket App OAuth flow for repository access
@@ -10,6 +11,34 @@ import { AuditLogService, createAuditContext } from "@/lib/audit";
  * - Refresh tokens must be stored and used to get new access tokens
  * - Required scopes: repository, account
  */
+
+function getStateSecret(): string {
+  return (
+    process.env.BITBUCKET_STATE_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
+}
+
+function createSignedState(userId: string, returnTo: string): string {
+  const secret = getStateSecret();
+  if (!secret) {
+    throw new Error(
+      "Missing BITBUCKET_STATE_SECRET (or SUPABASE_SERVICE_ROLE_KEY) for OAuth state signing"
+    );
+  }
+
+  const payload = {
+    userId,
+    returnTo,
+    issuedAt: Date.now(),
+  };
+
+  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  return `${payloadB64}.${signature}`;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -64,8 +93,7 @@ export async function POST(request: Request) {
 
     // Bitbucket App OAuth flow for repository access
     const clientId = process.env.BITBUCKET_CLIENT_ID;
-    const domain = process.env.DOMAIN;
-    const redirectUri = `${domain}/api/bitbucket/callback`;
+    const explicitRedirectUri = process.env.BITBUCKET_REDIRECT_URI?.trim();
     
     if (!clientId) {
       return Response.json(
@@ -81,16 +109,29 @@ export async function POST(request: Request) {
     
     // Generate state parameter for CSRF protection + returnTo path
     const returnPath = returnTo || '/dashboard/settings';
-    const stateData = `${user.id}|${Date.now()}|${returnPath}`;
-    const state = Buffer.from(stateData).toString('base64');
+    const safeReturnPath =
+      typeof returnPath === "string" &&
+      returnPath.startsWith("/") &&
+      !returnPath.startsWith("//")
+        ? returnPath
+        : "/dashboard/settings";
+    const state = createSignedState(user.id, safeReturnPath);
     
     // Build Bitbucket authorization URL
-    const bitbucketAuthUrl = `https://bitbucket.org/site/oauth2/authorize?` +
-      `client_id=${clientId}&` +
-      `response_type=code&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `scope=${encodeURIComponent(scopes)}&` +
-      `state=${state}`;
+    // Bitbucket supports omitting redirect_uri to use the consumer callback URL.
+    // This avoids strict mismatch issues caused by callback URL formatting differences.
+    const authorizeParams = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      scope: scopes,
+      state,
+    });
+
+    if (explicitRedirectUri) {
+      authorizeParams.set("redirect_uri", explicitRedirectUri);
+    }
+
+    const bitbucketAuthUrl = `https://bitbucket.org/site/oauth2/authorize?${authorizeParams.toString()}`;
 
     // Audit log: Bitbucket connect initiated
     const auditContext = createAuditContext(

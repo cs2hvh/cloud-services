@@ -15,12 +15,46 @@ import type { DomainAppOption } from '@/components/dashboard/domains/domain-atta
 import {
   looksInternal,
   normalizeDomain,
+  type RelatedDomain,
 } from '@/components/dashboard/domains/domain-detail-types';
 import { useAutoSslRefresh } from '@/hooks/use-auto-ssl-refresh';
 import { useDomainData } from '@/hooks/use-domain-data';
 import { useDomainConnections } from '@/hooks/use-domain-connections';
 import { useDomainDns } from '@/hooks/use-domain-dns';
 import { useDomainRegistrarSettings } from '@/hooks/use-domain-registrar-settings';
+
+/* ── Related-domain helpers ── */
+function computeRelated(domain: string, allDomains: string[]): RelatedDomain[] {
+  const set = new Set(allDomains);
+  const parts = domain.split('.');
+  const result: RelatedDomain[] = [];
+
+  // Parent zone (one label up, must exist in inventory)
+  if (parts.length > 2) {
+    const parent = parts.slice(1).join('.');
+    if (set.has(parent)) {
+      result.push({ domain: parent, role: 'parent' });
+      // Sibling subdomains — same immediate parent, same depth
+      for (const d of allDomains) {
+        if (d !== domain && d.endsWith('.' + parent) && d.split('.').length === parts.length) {
+          result.push({ domain: d, role: 'sibling' });
+        }
+      }
+    }
+  }
+
+  // Direct subdomains — exactly one level deeper
+  for (const d of allDomains) {
+    if (d !== domain && d.endsWith('.' + domain) && d.split('.').length === parts.length + 1) {
+      result.push({ domain: d, role: 'subdomain' });
+    }
+  }
+
+  return result.sort((a, b) => {
+    const order: Record<RelatedDomain['role'], number> = { parent: 0, sibling: 1, subdomain: 2 };
+    return order[a.role] - order[b.role] || a.domain.localeCompare(b.domain);
+  });
+}
 
 type OverallStatus = 'Active' | 'Purchase Pending' | 'Setup Pending' | 'Needs Attention' | 'Purchased' | 'Unknown';
 
@@ -69,8 +103,14 @@ export default function DomainDetailPage() {
     [params.domain]
   );
 
+  const parentDomain = useMemo(() => {
+    const parts = domainName.split('.');
+    return parts.length > 2 ? parts.slice(1).join('.') : null;
+  }, [domainName]);
+
   const [subdomainInput, setSubdomainInput] = useState('');
   const [initializing, setInitializing] = useState(true);
+  const [relatedDomains, setRelatedDomains] = useState<RelatedDomain[]>([]);
   const refreshAllRef = useRef<() => Promise<void>>(async () => {});
 
   const domainData = useDomainData(domainName);
@@ -93,6 +133,17 @@ export default function DomainDetailPage() {
   );
   const { loadRegistrarSettings } = registrarData;
 
+  const loadRelated = useCallback(async () => {
+    try {
+      const res = await fetch('/api/domains/inventory');
+      const data = await res.json() as { data?: { domains?: { domain: string }[] } };
+      const all = (data?.data?.domains ?? []).map((d) => d.domain);
+      setRelatedDomains(computeRelated(domainName, all));
+    } catch {
+      // non-critical — silently skip
+    }
+  }, [domainName]);
+
   const connectionsData = useDomainConnections(
     domainName,
     domainData.connections,
@@ -109,12 +160,12 @@ export default function DomainDetailPage() {
   useEffect(() => {
     let isActive = true;
     setInitializing(true);
-    void Promise.allSettled([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings()])
+    void Promise.allSettled([loadDomainContext(), loadDnsRecords(), loadRegistrarSettings(), loadRelated()])
       .finally(() => {
         if (isActive) setInitializing(false);
       });
     return () => { isActive = false; };
-  }, [domainName, loadDnsRecords, loadDomainContext, loadRegistrarSettings]);
+  }, [domainName, loadDnsRecords, loadDomainContext, loadRegistrarSettings, loadRelated]);
 
   const isPageLoading = domainData.loading || dnsData.dnsLoading || registrarData.registrarLoading;
 
@@ -163,6 +214,17 @@ export default function DomainDetailPage() {
           <Link href="/dashboard/domains" className="hover:text-white/70 transition-colors">
             Domains
           </Link>
+          {parentDomain && (
+            <>
+              <ChevronRight className="h-3.5 w-3.5 text-white/20" />
+              <Link
+                href={`/dashboard/domains/${encodeURIComponent(parentDomain)}`}
+                className="font-mono hover:text-white/70 transition-colors"
+              >
+                {parentDomain}
+              </Link>
+            </>
+          )}
           <ChevronRight className="h-3.5 w-3.5 text-white/20" />
           <span className="font-mono text-white/70">{domainName}</span>
         </nav>
@@ -252,6 +314,7 @@ export default function DomainDetailPage() {
                   purchaseRequest={domainData.purchaseRequest}
                   connections={domainData.connections}
                   connectedAppNames={connectedAppNames}
+                  relatedDomains={relatedDomains}
                 />
               </TabsContent>
 

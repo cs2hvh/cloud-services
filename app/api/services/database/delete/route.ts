@@ -46,6 +46,13 @@ export async function POST(req: NextRequest) {
     );
 
     if (!result.success) {
+      if (result.errorCode === "FORBIDDEN" || result.errorCode === "NOT_FOUND") {
+        return NextResponse.json(
+          { error: result.error || "Invalid request" },
+          { status: result.statusCode ?? (result.errorCode === "FORBIDDEN" ? 403 : 404) }
+        );
+      }
+
       if (result.errorCode === "DATABASE_HAS_ACTIVE_LINKS") {
         return NextResponse.json(
           {
@@ -69,7 +76,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         { error: result.error || "Invalid request" },
-        { status: 400 }
+        { status: result.statusCode || 400 }
       );
     }
 

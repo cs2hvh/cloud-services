@@ -80,6 +80,37 @@ export function validateRequest<T>(
 }
 
 /**
+ * Maps a service result errorCode to the correct HTTP status for internal routes.
+ *
+ * Internal routes share this mapping:
+ *   NOT_FOUND  → 404
+ *   FORBIDDEN  → 403
+ *   anything else → 500
+ *
+ * @example
+ * if (!result.success) {
+ *   return serviceErrorResponse(result);
+ * }
+ */
+export function serviceErrorResponse(
+  result: { error?: string; errorCode?: string }
+): NextResponse {
+  const status =
+    result.errorCode === "NOT_FOUND"
+      ? 404
+      : result.errorCode === "FORBIDDEN"
+        ? 403
+        : 500;
+  return NextResponse.json(
+    {
+      error: result.error,
+      message: result.error,
+    },
+    { status }
+  );
+}
+
+/**
  * Async version of validateRequest for schemas with async refinements
  */
 export async function validateRequestAsync<T>(

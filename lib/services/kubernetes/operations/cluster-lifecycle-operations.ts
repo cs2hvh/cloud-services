@@ -24,6 +24,8 @@ import type {
   CreateKubernetesClusterResult,
   DeleteKubernetesClusterRequest,
   DeleteKubernetesClusterResult,
+  InitKubernetesClusterRequest,
+  InitKubernetesClusterResult,
   UpdateKubernetesClusterRequest,
   ServiceResult,
 } from "../types";
@@ -31,9 +33,8 @@ import type {
 /**
  * Resolve user role for audit logs
  */
-async function resolveAuditUserRole(): Promise<"user" | "admin"> {
-  // For now, default to "user" - can be extended based on your auth logic
-  return "user";
+function resolveAuditUserRole(isAdmin?: boolean): "user" | "admin" {
+  return isAdmin ? "admin" : "user";
 }
 
 /**
@@ -70,10 +71,14 @@ export const clusterLifecycleOperations = {
     request: CreateKubernetesClusterRequest,
     req?: NextRequest
   ): Promise<CreateKubernetesClusterResult> {
+    let clusterId: string | null = null;
+
     try {
+      const totalNodes = Math.max(request.node_pool.count, 1);
+
       // Check billing
       const { initialCost: INITIAL_COST, hourlyRate: HOURLY_RATE } =
-        await getRatesForKubernetes(request.plan_id);
+        await getRatesForKubernetes(request.plan_id, totalNodes);
 
       const balCheck = await ensureBalance(request.owner_id, INITIAL_COST);
       if (!balCheck.ok) {
@@ -94,7 +99,7 @@ export const clusterLifecycleOperations = {
         };
       }
 
-      if (project.owner !== request.owner_id) {
+      if (!request.isAdmin && project.owner !== request.owner_id) {
         return {
           success: false,
           error: "You do not have permission to create clusters in this project",
@@ -231,7 +236,27 @@ export const clusterLifecycleOperations = {
       await sleep(120000);
 
       // Step 5: Create the Kubernetes cluster by calling the existing provision endpoint
-      const clusterId = crypto.randomUUID();
+      clusterId = crypto.randomUUID();
+
+      // Persist the cluster row immediately so GET /kubernetes/{id} cannot 404
+      // between POST returning and the background worker completing provisioning.
+      const dbCreateResult = await Clusters.create({
+        cluster_id: clusterId,
+        cluster_name: request.name,
+        status: "creating",
+        owner_id: request.owner_id,
+        project_id: request.project_id,
+        k8s_version: request.version,
+      });
+
+      if (!dbCreateResult.success) {
+        return {
+          success: false,
+          error: dbCreateResult.error || "Failed to persist cluster record",
+          errorCode: "CREATE_FAILED",
+        };
+      }
+
       const clusterPayload = {
         provider: "existing",
         cluster: {
@@ -297,7 +322,7 @@ export const clusterLifecycleOperations = {
       // Audit log
       if (req) {
         const auditContext = getAuditContext(req);
-        const userRole = await resolveAuditUserRole();
+        const userRole = resolveAuditUserRole(request.isAdmin);
 
         await AuditLogService.create({
           user_id: request.owner_id,
@@ -316,7 +341,7 @@ export const clusterLifecycleOperations = {
             pod_cidr: "10.244.0.0/16",
             nodes,
             project_id: request.project_id,
-            status: "QUEUED",
+            status: "creating",
           },
           ip_address: auditContext.ipAddress,
           user_agent: auditContext.userAgent,
@@ -343,32 +368,45 @@ export const clusterLifecycleOperations = {
         metadata: { serviceName: request.name },
       });
 
+      // Return the persisted DB record so the response shape is identical to GET /kubernetes/{id}
+      const persistedCluster = dbCreateResult.data ?? await Clusters.get_by_id(clusterId);
+      if (!persistedCluster) {
+        return {
+          success: false,
+          error: "Failed to load persisted cluster record",
+          errorCode: "CREATE_FAILED",
+        };
+      }
       return {
         success: true,
-        clusterId: clusterId,
-        data: {
-          cluster_id: clusterId,
-          cluster_name: request.name,
-          status: "QUEUED",
-          k8s_version: request.version,
-          region: request.region,
-          project_id: request.project_id,
-          owner_id: request.owner_id,
-          node_config: {
-            size: request.node_pool.size,
-            count: request.node_pool.count,
-            region: request.region,
-          },
-          nodes: nodes.map(n => ({
-            host: n.host,
-            role: n.role,
-            hostname: n.hostname,
-          })),
-        },
+        clusterId,
+        data: persistedCluster,
       };
     } catch (error) {
       const errorMessage = parseAxiosError(error);
       console.error("[K8s Create] Error:", errorMessage);
+      if (clusterId) {
+        try {
+          await Clusters.update(clusterId, { status: "failed" });
+        } catch (updateErr) {
+          console.error("[K8s Create] Failed to mark cluster as failed:", updateErr);
+        }
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: request.owner_id,
+              type: "error",
+              action: "failed",
+              serviceType: "kubernetes",
+              serviceName: request.name,
+              serviceId: clusterId,
+              error: errorMessage,
+            })
+          );
+        } catch {
+          // best-effort only
+        }
+      }
       return {
         success: false,
         error: errorMessage,
@@ -394,8 +432,8 @@ export const clusterLifecycleOperations = {
         };
       }
 
-      // Verify ownership
-      if (cluster.owner_id !== request.userId) {
+      // Verify ownership (skip for admins)
+      if (!request.isAdmin && cluster.owner_id !== request.userId) {
         return {
           success: false,
           error: "You do not have permission to update this cluster",
@@ -414,7 +452,7 @@ export const clusterLifecycleOperations = {
           };
         }
 
-        if (project.owner !== request.userId) {
+        if (!request.isAdmin && project.owner !== request.userId) {
           return {
             success: false,
             error: "You do not have permission to move cluster to this project",
@@ -432,9 +470,19 @@ export const clusterLifecycleOperations = {
         console.log("Node pool updates not yet implemented");
       }
 
+      // Re-read the cluster so the API response contains the full, up-to-date record
+      const updatedCluster = await Clusters.get_by_id(request.clusterId);
+      if (!updatedCluster) {
+        return {
+          success: false,
+          error: "Failed to load updated cluster",
+          errorCode: "UPDATE_FAILED",
+        };
+      }
+
       return {
         success: true,
-        data: { id: request.clusterId, updated: true },
+        data: updatedCluster,
       };
     } catch (error) {
       return {
@@ -463,8 +511,8 @@ export const clusterLifecycleOperations = {
         };
       }
 
-      // Verify ownership
-      if (cluster.owner_id !== request.userId) {
+      // Verify ownership (skip for admins)
+      if (!request.isAdmin && cluster.owner_id !== request.userId) {
         return {
           success: false,
           error: "You do not have permission to delete this cluster",
@@ -472,49 +520,91 @@ export const clusterLifecycleOperations = {
         };
       }
 
-      // Delete via DigitalOcean API
+      const clusterName = cluster.cluster_name || "Unknown";
+      const projectId = cluster.project_id ?? null;
+      const dropletDeletionErrors: string[] = [];
+
+      // Close billing first (proration + cleanup)
       try {
-        await axios.delete(
-          `https://api.digitalocean.com/v2/kubernetes/clusters/${cluster.cluster_id}`,
-          {
-            headers: getDigitalOceanHeaders(),
-          }
-        );
-      } catch (err) {
-        // Continue even if DO deletion fails (cluster might already be gone)
-        console.warn("DigitalOcean cluster deletion warning:", err);
+        await Billing.close_active_service("kubernetes", {
+          userId: cluster.owner_id,
+          serviceId: request.clusterId,
+          failOnInsufficient: false,
+        });
+      } catch (billErr) {
+        console.warn(`[deleteCluster] Billing close failed:`, billErr);
+        // proceed with deletion regardless
       }
 
-      // Mark as deleted in database
+      // Delete individual droplets from DigitalOcean
+      const clusterRecord = cluster as Record<string, unknown>;
+      const controlPlane = clusterRecord.control_plane as Record<string, unknown> | null | undefined;
+      const workers = clusterRecord.workers as Array<Record<string, unknown>> | null | undefined;
+
+      if (controlPlane?.droplet_id) {
+        try {
+          await axios.delete(
+            `https://api.digitalocean.com/v2/droplets/${controlPlane.droplet_id}`,
+            { headers: getDigitalOceanHeaders() }
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          dropletDeletionErrors.push(`Control plane: ${msg}`);
+        }
+      }
+
+      if (Array.isArray(workers)) {
+        for (const worker of workers) {
+          if (worker?.droplet_id) {
+            try {
+              await axios.delete(
+                `https://api.digitalocean.com/v2/droplets/${worker.droplet_id}`,
+                { headers: getDigitalOceanHeaders() }
+              );
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : "Unknown error";
+              dropletDeletionErrors.push(`Worker ${worker.droplet_id}: ${msg}`);
+            }
+          }
+        }
+      }
+
+      // Mark as deleted in database (soft delete)
       await Clusters.update(request.clusterId, { status: "deleted" });
 
-      // Stop billing - use service_id which should be the database record ID
-      const dbId =
-        "id" in cluster && typeof cluster.id === "string"
-          ? cluster.id
-          : cluster.cluster_id;
-      try {
-        await Billing.remove_active_kubernetes(dbId);
-      } catch (billingErr) {
-        console.error("Failed to stop billing:", billingErr);
+      // Project activity log
+      if (projectId) {
+        const logText =
+          dropletDeletionErrors.length > 0
+            ? `Kubernetes cluster '${clusterName}' deleted (with droplet deletion warnings: ${dropletDeletionErrors.join(", ")})`
+            : `Kubernetes cluster '${clusterName}' deleted`;
+        await Projects.add_log({
+          project_id: projectId,
+          event: "Trash2",
+          text: logText,
+        });
       }
 
       // Audit log
       if (req) {
         const auditContext = getAuditContext(req);
-        const userRole = await resolveAuditUserRole();
+        const userRole = resolveAuditUserRole(request.isAdmin);
 
         await AuditLogService.create({
           user_id: request.userId,
           user_role: userRole,
           action: "delete",
           service_type: "kubernetes",
-          service_id: dbId,
-          service_name: cluster.cluster_name,
+          service_id: request.clusterId,
+          service_name: clusterName,
           before_state: cluster,
           ip_address: auditContext.ipAddress,
           user_agent: auditContext.userAgent,
           request_id: auditContext.requestId,
+          metadata: {
+            project_id: projectId,
+            droplet_warnings: dropletDeletionErrors.length > 0 ? dropletDeletionErrors : undefined,
+          },
         });
       }
 
@@ -522,10 +612,10 @@ export const clusterLifecycleOperations = {
       await NotificationService.create(
         createServiceNotification({
           userId: request.userId,
-          type: "info",
+          type: "success",
           action: "deleted",
           serviceType: "kubernetes",
-          serviceName: cluster.cluster_name,
+          serviceName: clusterName,
           serviceId: cluster.cluster_id,
         })
       );
@@ -533,13 +623,131 @@ export const clusterLifecycleOperations = {
       return {
         success: true,
         clusterId: cluster.cluster_id,
+        droplet_warnings: dropletDeletionErrors.length > 0 ? dropletDeletionErrors : undefined,
       };
     } catch (error) {
       const errorMessage = parseAxiosError(error);
+      try {
+        await NotificationService.create(
+          createServiceNotification({
+            userId: request.userId,
+            type: "error",
+            action: "deleted",
+            serviceType: "kubernetes",
+            serviceName: "Kubernetes Cluster",
+            error: errorMessage,
+          })
+        );
+      } catch {
+        // ignore notification failure
+      }
       return {
         success: false,
         error: errorMessage,
         errorCode: "DELETE_FAILED",
+      };
+    }
+  },
+
+  /**
+   * Initialize a Kubernetes cluster record (pending state, no droplets yet).
+   * Droplet provisioning begins separately from the cluster page.
+   */
+  async initCluster(
+    request: InitKubernetesClusterRequest,
+    req?: NextRequest
+  ): Promise<InitKubernetesClusterResult> {
+    try {
+      // Verify project ownership
+      const project = await Projects.get_by_id(request.projectId);
+      if (!project) {
+        return { success: false, error: "Project not found", errorCode: "NOT_FOUND" };
+      }
+
+      if (!request.isAdmin && project.owner !== request.ownerId) {
+        return {
+          success: false,
+          error: "Project does not belong to selected user",
+          errorCode: "FORBIDDEN",
+        };
+      }
+
+      const clusterId = crypto.randomUUID();
+      const nodeNames = makeNodeKeys(request.nodeCount, request.name);
+      const ramInMb = request.resources.ram * 1024;
+
+      const createResult = await Clusters.create({
+        cluster_id: clusterId,
+        cluster_name: request.name,
+        owner_id: request.ownerId,
+        project_id: request.projectId,
+        status: "pending",
+        create_droplet: false,
+        create_status: false,
+        connect_status: false,
+        verify_status: false,
+        k8s_version: request.version,
+        node_config: {
+          cpu: request.resources.cpu,
+          ram: ramInMb,
+          storage: request.resources.storage,
+          provision_config: {
+            region: request.region,
+            size: request.size,
+            version: request.version,
+            node_count: request.nodeCount,
+            node_names: nodeNames,
+            plan_id: request.planId,
+          },
+        },
+      });
+
+      if (!createResult.success) {
+        return {
+          success: false,
+          error: createResult.error || "Failed to initialize cluster",
+          errorCode: "CREATE_FAILED",
+        };
+      }
+
+      // Audit log
+      if (req) {
+        const auditContext = getAuditContext(req);
+        const userRole = resolveAuditUserRole(request.isAdmin);
+
+        await AuditLogService.create({
+          user_id: request.actorUserId ?? request.ownerId,
+          user_role: userRole,
+          user_email: request.userEmail,
+          action: "create",
+          service_type: "kubernetes",
+          service_id: clusterId,
+          service_name: request.name,
+          ip_address: auditContext.ipAddress,
+          user_agent: auditContext.userAgent,
+          request_id: auditContext.requestId,
+          metadata: { project_id: request.projectId, status: "pending" },
+        });
+      }
+
+      // Notification
+      await NotificationService.create(
+        createServiceNotification({
+          userId: request.ownerId,
+          type: "info",
+          action: "created",
+          serviceType: "kubernetes",
+          serviceName: request.name,
+          serviceId: clusterId,
+        })
+      );
+
+      return { success: true, clusterId };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to initialize cluster",
+        errorCode: "INIT_FAILED",
       };
     }
   },

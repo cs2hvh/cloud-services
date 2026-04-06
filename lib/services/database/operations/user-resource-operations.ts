@@ -8,7 +8,7 @@ import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
 import type { Database_Connection, DatabaseUser, EncryptedData } from "@/lib/supabase/types";
 
-import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
+import { getDigitalOceanHeaders, isEncrypted, parseAxiosError } from "../helpers";
 import type {
   CreateDatabaseUserRequest,
   DeleteDatabaseUserRequest,
@@ -16,14 +16,40 @@ import type {
   ListDatabaseUsersResult,
   ResetDatabaseUserPasswordRequest,
 } from "../types";
+import { sendDatabaseAlertEmail } from "./database-alert-email";
+import { resolveOwnedCluster } from "./cluster-access";
+
+function decryptStoredPassword(
+  value: unknown,
+  encryptionKey: string
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (isEncrypted(value)) {
+    return Encryption.decrypt(value, encryptionKey);
+  }
+
+  return undefined;
+}
 
 export const userResourceOperations = {
   async createDatabaseUser(
     request: CreateDatabaseUserRequest,
     req?: NextRequest,
     userEmail?: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.post(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users`,
         { name: request.name },
@@ -112,18 +138,25 @@ export const userResourceOperations = {
         return {
           success: false,
           error: axiosError?.response?.data?.message ?? "Invalid request",
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
 
   async listDatabaseUsers(request: ListDatabaseUsersRequest): Promise<ListDatabaseUsersResult> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.get(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users`,
         { headers: getDigitalOceanHeaders() }
@@ -142,38 +175,42 @@ export const userResourceOperations = {
           ? existingUsersResult.data
           : [];
 
-      const existingPasswordMap = new Map<string, unknown>();
-      existingUsers.forEach((u: { name: string; password?: unknown }) => {
-        if (u.password) {
-          existingPasswordMap.set(u.name, u.password);
-        }
+      const existingUsersByName = new Map<string, { password?: unknown; created_at?: string }>();
+      existingUsers.forEach((u: { name: string; password?: unknown; created_at?: string }) => {
+        existingUsersByName.set(u.name, u);
       });
 
       const formattedUsers = users.map((user: { name: string; role?: string; password?: string }) => {
-        const existingPassword = existingPasswordMap.get(user.name);
+        const existingUser = existingUsersByName.get(user.name);
+        const resolvedPassword =
+          user.password || decryptStoredPassword(existingUser?.password, encryptionKey);
+
         return {
           id: user.name,
           name: user.name,
           role: user.role || "normal",
-          password: (user.password
-            ? Encryption.encrypt(user.password, encryptionKey)
-            : existingPassword) as unknown as string | undefined,
-          created_at: new Date().toISOString(),
+          password: resolvedPassword,
+          created_at: existingUser?.created_at,
         };
       });
 
-      const syncResult = await Database_Clusters.update_users(request.clusterId, formattedUsers);
+      const usersForSync = formattedUsers.map((user) => ({
+        ...user,
+        password: (user.password ? Encryption.encrypt(user.password, encryptionKey) : undefined) as unknown as string | undefined,
+      }));
+
+      const syncResult = await Database_Clusters.update_users(request.clusterId, usersForSync);
       if (!syncResult.success) {
         return {
           success: true,
-          data: users,
+          data: formattedUsers,
           warning: syncResult.error,
         };
       }
 
       return {
         success: true,
-        data: users,
+        data: formattedUsers,
       };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
@@ -183,12 +220,14 @@ export const userResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
@@ -196,8 +235,17 @@ export const userResourceOperations = {
   async deleteDatabaseUser(
     request: DeleteDatabaseUserRequest,
     req?: NextRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
+    if (request.username.toLowerCase() === "doadmin") {
+      return { success: false, error: "cannot delete admin user", statusCode: 400 };
+    }
+
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.delete(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}`,
         { headers: getDigitalOceanHeaders() }
@@ -268,23 +316,48 @@ export const userResourceOperations = {
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
       if (axiosError?.response) {
+        const apiMessage = String(
+          axiosError?.response?.data?.message ?? "Invalid request"
+        );
+        const loweredMessage = apiMessage.toLowerCase();
+        if (
+          loweredMessage.includes("doadmin") ||
+          (loweredMessage.includes("admin") &&
+            (loweredMessage.includes("delete") || loweredMessage.includes("remove")))
+        ) {
+          return {
+            success: false,
+            error: "cannot delete admin user",
+            statusCode: 400,
+          };
+        }
+
         return {
           success: false,
-          error: axiosError?.response?.data?.message ?? "Invalid request",
+          error: apiMessage,
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
 
   async resetDatabaseUserPassword(
-    request: ResetDatabaseUserPasswordRequest
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+    request: ResetDatabaseUserPasswordRequest,
+    req?: NextRequest,
+    userEmail?: string
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
+      }
+
       const response = await axios.post(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}/reset_auth`,
         {},
@@ -313,8 +386,8 @@ export const userResourceOperations = {
         await Database_Clusters.update_users(request.clusterId, updatedUsers);
       }
 
+      const clusterResult = await Database_Clusters.read(request.clusterId);
       if (user.password) {
-        const clusterResult = await Database_Clusters.read(request.clusterId);
         if (clusterResult.success && clusterResult.data) {
           const cluster = clusterResult.data;
           const connectionUser = cluster.public_connection?.user;
@@ -362,6 +435,71 @@ export const userResourceOperations = {
         }
       }
 
+      if (clusterResult.success && clusterResult.data.project_id) {
+        await Projects.add_log({
+          project_id: clusterResult.data.project_id,
+          event: "RefreshCw",
+          text: `Database user '${request.username}' password reset`,
+        });
+      }
+
+      if (clusterResult.success && req) {
+        try {
+          const auditContext = getAuditContext(req);
+          await AuditLogService.create({
+            user_id: clusterResult.data.owner_id,
+            user_role: "user",
+            user_email: userEmail,
+            action: "update",
+            service_type: "database",
+            service_id: request.clusterId,
+            service_name: clusterResult.data.name,
+            after_state: { user_name: request.username },
+            metadata: { operation: "user_password_reset" },
+            ip_address: auditContext.ipAddress,
+            user_agent: auditContext.userAgent,
+            request_id: auditContext.requestId,
+          });
+        } catch (auditErr) {
+          console.error("[resetDatabaseUserPassword] Failed to create audit log:", auditErr);
+        }
+      }
+
+      if (clusterResult.success) {
+        try {
+          await NotificationService.create(
+            createServiceNotification({
+              userId: clusterResult.data.owner_id,
+              type: "warning",
+              action: "updated",
+              serviceType: "database",
+              serviceName: clusterResult.data.name,
+              serviceId: request.clusterId,
+              metadata: { updateType: "user_password_reset", userName: request.username },
+            })
+          );
+        } catch (notifErr) {
+          console.error("[resetDatabaseUserPassword] Failed to create notification:", notifErr);
+        }
+
+        try {
+          await sendDatabaseAlertEmail({
+            userEmail,
+            serviceName: String(clusterResult.data.name),
+            alertTitle: "Database user password reset",
+            summary: `The password for database user "${request.username}" was reset on cluster "${clusterResult.data.name}".`,
+            severity: "warning",
+            metadata: {
+              Operation: "Reset database user password",
+              "Database user": request.username,
+              Cluster: String(clusterResult.data.name),
+            },
+          });
+        } catch (emailErr) {
+          console.error("[resetDatabaseUserPassword] Failed to send email:", emailErr);
+        }
+      }
+
       return { success: true, data: user };
     } catch (err: unknown) {
       const axiosError = parseAxiosError(err);
@@ -371,12 +509,14 @@ export const userResourceOperations = {
           error:
             axiosError?.response?.data?.message ||
             (err instanceof Error ? err.message : "Unknown error occurred"),
+          statusCode: axiosError.response.status,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },

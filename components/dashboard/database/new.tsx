@@ -1045,7 +1045,7 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               <Button
                 type="button"
                 onClick={handleNextStep}
-                className="border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
+                className="cursor-pointer border border-blue-400/25 bg-blue-500/90 px-5 text-white hover:bg-blue-500"
               >
                 Continue
                 <ChevronRight className="ml-2 h-4 w-4" />

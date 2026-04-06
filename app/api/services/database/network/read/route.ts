@@ -41,11 +41,11 @@ export async function POST(req: NextRequest) {
     }
     const validatedData = validation.data;
 
-    const result = await DatabaseService.readNetworkRules(validatedData.id);
+    const result = await DatabaseService.readNetworkRules(validatedData.id, auth.user.id);
     if (!result.success) {
       return NextResponse.json(
         { error: result.error || "Failed to read network rules" },
-        { status: 400 }
+        { status: result.statusCode || 400 }
       );
     }
 

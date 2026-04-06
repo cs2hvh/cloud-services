@@ -32,11 +32,9 @@ VALUES (
 ON CONFLICT (id) DO UPDATE SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
-
 -- Add storage_path column to kb_documents table
 ALTER TABLE agents.kb_documents 
 ADD COLUMN IF NOT EXISTS storage_path TEXT;
-
 -- RLS policies for kb-documents bucket
 -- Allow authenticated users to upload to their own folder
 CREATE POLICY "Users can upload to their folder"
@@ -46,7 +44,6 @@ WITH CHECK (
   bucket_id = 'kb-documents' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
-
 -- Allow users to read their own files
 CREATE POLICY "Users can read their own files"
 ON storage.objects FOR SELECT
@@ -55,7 +52,6 @@ USING (
   bucket_id = 'kb-documents' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
-
 -- Allow users to delete their own files
 CREATE POLICY "Users can delete their own files"
 ON storage.objects FOR DELETE
@@ -64,7 +60,6 @@ USING (
   bucket_id = 'kb-documents' AND
   (storage.foldername(name))[1] = auth.uid()::text
 );
-
 -- Allow service role full access (for API operations)
 CREATE POLICY "Service role has full access"
 ON storage.objects FOR ALL

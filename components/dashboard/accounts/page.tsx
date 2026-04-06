@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { twMerge } from "tailwind-merge";
 import {
@@ -19,6 +19,8 @@ type OAuthProvider = "github" | "google" | "gitlab" | "bitbucket" | "email";
 type ProviderItem = {
   provider: string;
   status: boolean;
+  identity_linked?: boolean;
+  integration_connected?: boolean;
 };
 
 const PROVIDER_META: Record<Exclude<OAuthProvider, "email">, {
@@ -87,9 +89,11 @@ function ProviderRow({
     return null;
   }
 
-  const isLinked = item.status;
-  const btnText = isLinked ? "Disconnect" : "Connect";
-  const btnAction = isLinked ? onDisconnect : onConnect;
+  const isIdentityLinked = item.identity_linked ?? item.status;
+  const isIntegrationConnected = item.integration_connected ?? item.status;
+  const isGitProvider = item.provider === "gitlab" || item.provider === "bitbucket";
+  const btnText = isIdentityLinked ? "Disconnect" : "Connect";
+  const btnAction = isIdentityLinked ? onDisconnect : onConnect;
 
   return (
     <motion.div
@@ -105,17 +109,29 @@ function ProviderRow({
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-semibold text-white">{meta.label}</div>
+                <div className="text-sm font-semibold text-white">{meta.label}</div>
               <span
                 className={twMerge(
                   "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                  isLinked
+                  isIdentityLinked
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
                     : "border-white/[0.08] bg-white/[0.04] text-white/55"
                 )}
               >
-                {isLinked ? "Connected" : "Not connected"}
+                {isIdentityLinked ? "Identity linked" : "Identity not linked"}
               </span>
+              {isGitProvider && (
+                <span
+                  className={twMerge(
+                    "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
+                    isIntegrationConnected
+                      ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
+                      : "border-white/[0.08] bg-white/[0.04] text-white/55"
+                  )}
+                >
+                  {isIntegrationConnected ? "Repo connected" : "Repo not connected"}
+                </span>
+              )}
             </div>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{meta.description}</p>
           </div>
@@ -127,7 +143,7 @@ function ProviderRow({
           onClick={() => btnAction(item.provider as OAuthProvider)}
           className={twMerge(
             "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
-            isLinked
+            isIdentityLinked
               ? "border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
               : "border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500",
             loading && "cursor-not-allowed opacity-60"
@@ -138,7 +154,7 @@ function ProviderRow({
               <Loader2 className="h-4 w-4 animate-spin" />
               Please wait...
             </>
-          ) : isLinked ? (
+          ) : isIdentityLinked ? (
             <>
               <Unplug className="h-4 w-4" />
               {btnText}
@@ -158,6 +174,7 @@ function ProviderRow({
 const Accounts = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [providers, setProviders] = useState<ProviderItem[]>([]);
+  const autoRepoConnectStartedRef = useRef(false);
 
   const fetchProviders = async () => {
     try {
@@ -170,12 +187,31 @@ const Accounts = () => {
     }
   };
 
-  const { connectProvider: performConnection } = useProviderConnection();
+  const { connectProvider: performConnection } = useProviderConnection({
+    returnTo: "/dashboard/settings",
+    mode: "identity",
+  });
+  const { connectProvider: performIntegrationConnection } = useProviderConnection({
+    returnTo: "/dashboard/settings",
+    mode: "integration",
+  });
 
   const handleConnect = async (provider: OAuthProvider) => {
     setLoadingProvider(provider);
     try {
-      await performConnection(provider, "connect");
+      const providerState = providers.find((item) => item.provider === provider);
+      const integrationConnected =
+        providerState?.integration_connected ?? providerState?.status ?? false;
+      const shouldChainRepoConnect =
+        (provider === "gitlab" || provider === "bitbucket") && !integrationConnected;
+      const returnTo = shouldChainRepoConnect
+        ? `/dashboard/settings?auto_repo_connect=${provider}`
+        : "/dashboard/settings";
+
+      await performConnection(provider, "connect", {
+        returnTo,
+        mode: "identity",
+      });
     } catch (error) {
       console.error("Connect failed:", error);
       setLoadingProvider(null);
@@ -204,8 +240,37 @@ const Accounts = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    const autoRepoConnect = params.get("auto_repo_connect");
+    const shouldAutoConnectRepo =
+      !autoRepoConnectStartedRef.current &&
+      (autoRepoConnect === "gitlab" || autoRepoConnect === "bitbucket");
 
     fetchProviders();
+
+    if (shouldAutoConnectRepo) {
+      autoRepoConnectStartedRef.current = true;
+
+      params.delete("auto_repo_connect");
+      const nextQuery = params.toString();
+      const nextUrl = nextQuery
+        ? `${window.location.pathname}?${nextQuery}`
+        : window.location.pathname;
+      window.history.replaceState({}, "", nextUrl);
+
+      const provider = autoRepoConnect;
+      setLoadingProvider(provider);
+      void (async () => {
+        const result = await performIntegrationConnection(provider, "connect", {
+          returnTo: "/dashboard/settings",
+          mode: "integration",
+        });
+
+        if (!result.success) {
+          setLoadingProvider(null);
+        }
+      })();
+      return;
+    }
 
     if (
       params.get("gitlab_connected") === "true" ||
@@ -216,14 +281,16 @@ const Accounts = () => {
         fetchProviders();
       }, 500);
     }
-  }, []);
+  }, [performIntegrationConnection]);
 
   const visibleProviders = useMemo(
     () => providers.filter((item) => item.provider !== "email"),
     [providers]
   );
 
-  const linkedProviders = visibleProviders.filter((item) => item.status).length;
+  const linkedProviders = visibleProviders.filter(
+    (item) => item.identity_linked ?? item.status
+  ).length;
   const availableProviders = visibleProviders.length;
 
   return (

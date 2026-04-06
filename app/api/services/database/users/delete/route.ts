@@ -45,10 +45,21 @@ export async function POST(req: NextRequest) {
     );
 
     if (!result.success) {
+      if (result.statusCode === 403 || result.statusCode === 404) {
+        return NextResponse.json(
+          {
+            error: result.error ?? "Invalid request",
+            message: result.error ?? "Invalid request",
+          },
+          { status: result.statusCode }
+        );
+      }
+
       if (result.error === "User deleted from DigitalOcean but failed to sync with database") {
         return NextResponse.json(
           {
-            error: "User deleted from DigitalOcean but failed to sync with database",
+            error: "User deletion failed. Kindly contact support",
+            message: "User deletion failed. Kindly contact support",
             details: result.error,
           },
           { status: 500 }
@@ -56,7 +67,10 @@ export async function POST(req: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: result.error ?? "Invalid request" },
+        {
+          error: result.error ?? "Invalid request",
+          message: result.error ?? "Invalid request",
+        },
         { status: 400 }
       );
     }
@@ -70,13 +84,16 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err instanceof Error) {
       return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
+        {
+          error: err.message ?? "Invalid request",
+          message: err.message ?? "Invalid request",
+        },
         { status: 400 }
       );
     }
 
     return NextResponse.json(
-      { error: "Unknown error occurred" },
+      { error: "Unknown error occurred", message: "Unknown error occurred" },
       { status: 400 }
     );
   }

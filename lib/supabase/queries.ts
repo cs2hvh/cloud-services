@@ -66,6 +66,37 @@ const decryptEnvValue = (encryptedValue: string): string => {
   }
 };
 
+const DEFAULT_PROJECT_NAME = "My First Project";
+const DEFAULT_PROJECT_DESCRIPTION = "Default project created automatically.";
+
+async function ensureDefaultProjectForUser(userId: string): Promise<void> {
+  try {
+    const supabase = await createServiceClient();
+    const { count, error } = await supabase
+      .from("projects")
+      .select("id", { count: "exact", head: true })
+      .eq("owner", userId);
+
+    if (error || (count ?? 0) > 0) {
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("projects").insert({
+      name: DEFAULT_PROJECT_NAME,
+      description: DEFAULT_PROJECT_DESCRIPTION,
+      default_project: true,
+      owner: userId,
+      users: [userId],
+    });
+
+    if (insertError) {
+      console.log(`[Supabase] Error while creating default project: ${insertError.message}`);
+    }
+  } catch (err) {
+    console.log(`[Supabase] Error while ensuring default project: ${err}`);
+  }
+}
+
 
 export const Users = {
   // Get a user by ID
@@ -401,7 +432,26 @@ export const Projects = {
         );
         return [];
       }
-      return data || [];
+
+      if (data && data.length > 0) {
+        return data;
+      }
+
+      await ensureDefaultProjectForUser(userId);
+
+      const { data: refreshedData, error: refreshError } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("owner", userId);
+
+      if (refreshError) {
+        console.log(
+          `[Supabase] Error............. while refreshing projects by userId: ${refreshError.message}`,
+        );
+        return [];
+      }
+
+      return refreshedData || [];
     } catch (err) {
       console.log(`[Supabase] Error while getting projects by userId: ${err}`);
       return [];

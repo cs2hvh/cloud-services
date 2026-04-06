@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
         app.branch || "main",
         app.framework || undefined,
         new_size,
-        "manual",
+        "resize",
         envVars
       );
 

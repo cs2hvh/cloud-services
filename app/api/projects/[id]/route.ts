@@ -135,6 +135,13 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       );
     }
 
+    if (!deleted.success && deleted.errorCode === "LAST_PROJECT") {
+      return NextResponse.json(
+        { message: deleted.error },
+        { status: 409 },
+      );
+    }
+
     if (!deleted.success) {
       return NextResponse.json(
         { message: "Failed to delete project" },

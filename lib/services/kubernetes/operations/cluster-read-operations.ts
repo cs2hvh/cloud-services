@@ -28,8 +28,17 @@ export const clusterReadOperations = {
         };
       }
 
-      // Verify ownership
-      if (cluster.owner_id !== request.userId) {
+      // Keep old route behavior: deleted clusters are treated as not found.
+      if (cluster.status === "deleted") {
+        return {
+          success: false,
+          error: "Cluster not found",
+          errorCode: "NOT_FOUND",
+        };
+      }
+
+      // Verify ownership (skip for admins)
+      if (!request.isAdmin && cluster.owner_id !== request.userId) {
         return {
           success: false,
           error: "You do not have permission to access this cluster",

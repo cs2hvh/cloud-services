@@ -30,6 +30,7 @@ export const GET = withV1Auth("databases:dbs:get", async (_req, auth, context) =
   const result = await DatabaseService.retrieveDatabase({
     clusterId,
     name: nameParam.value,
+    userId: auth.userId,
   });
 
   if (!result.success) {

@@ -40,9 +40,17 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.success) {
+      const status =
+        result.errorCode === "NOT_FOUND"
+          ? 404
+          : result.errorCode === "FORBIDDEN"
+            ? 403
+            : result.errorCode === "INTERNAL_ERROR"
+              ? 500
+              : 400;
       return NextResponse.json(
         { error: result.error || "Invalid request" },
-        { status: 400 }
+        { status }
       );
     }
 

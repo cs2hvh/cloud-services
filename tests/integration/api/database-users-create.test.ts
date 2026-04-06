@@ -30,6 +30,12 @@ describe('POST /api/services/database/users/create', () => {
       },
       response: null,
     } as any);
+
+    const { Database_Clusters } = await import('@/lib/supabase/queries/database_clusters');
+    vi.mocked(Database_Clusters.read).mockResolvedValue({
+      success: true,
+      data: mockDatabaseCluster,
+    });
   });
 
   describe('Success Cases', () => {

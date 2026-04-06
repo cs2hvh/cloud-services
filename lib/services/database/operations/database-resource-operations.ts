@@ -24,6 +24,7 @@ import type {
   ListDatabasesResult,
   RetrieveDatabaseRequest,
 } from "../types";
+import { resolveOwnedCluster } from "./cluster-access";
 
 async function listDatabasesFromProvider(
   clusterId: string,
@@ -40,24 +41,42 @@ async function listDatabasesFromProvider(
     }
 
     const databases = response.data.dbs as DatabaseInstance[];
-    const formattedDbs = databases.map((db: DatabaseInstance) => ({
-      id: db.name,
-      name: db.name,
-      created_at: new Date().toISOString(),
-    }));
+    const existingDbsResult = await Database_Clusters.get_dbs(clusterId);
+    const existingDbs =
+      existingDbsResult.success && Array.isArray(existingDbsResult.data)
+        ? existingDbsResult.data
+        : [];
+    const existingDbsByName = new Map<string, DatabaseInstance>();
+
+    existingDbs.forEach((db: DatabaseInstance) => {
+      existingDbsByName.set(db.name, db);
+    });
+
+    const formattedDbs = databases.map((db: DatabaseInstance) => {
+      const existingDb = existingDbsByName.get(db.name);
+
+      return {
+        id: db.name,
+        name: db.name,
+        created_at:
+          typeof db.created_at === "string" && db.created_at.length > 0
+            ? db.created_at
+            : existingDb?.created_at,
+      };
+    });
 
     const syncResult = await Database_Clusters.update_dbs(clusterId, formattedDbs);
     if (!syncResult.success) {
       return {
         success: true,
-        data: databases,
+        data: formattedDbs,
         warning: syncResult.error,
       };
     }
 
     return {
       success: true,
-      data: databases,
+      data: formattedDbs,
     };
   } catch (err: unknown) {
     const axiosError = parseAxiosError(err);
@@ -66,6 +85,7 @@ async function listDatabasesFromProvider(
       error:
         axiosError?.response?.data?.message ||
         (err instanceof Error ? err.message : unknownErrorFallback),
+      statusCode: axiosError?.response?.status ?? 500,
     };
   }
 }
@@ -74,7 +94,7 @@ async function retrieveDatabaseFromProvider(
   clusterId: string,
   name: string,
   unknownErrorFallback: string
-): Promise<{ success: boolean; data?: unknown; error?: string }> {
+): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
   try {
     const response = await axios.get(
       `https://api.digitalocean.com/v2/databases/${clusterId}/dbs/${name}`,
@@ -114,6 +134,7 @@ async function retrieveDatabaseFromProvider(
       error:
         axiosError?.response?.data?.message ||
         (err instanceof Error ? err.message : unknownErrorFallback),
+      statusCode: axiosError?.response?.status ?? 500,
     };
   }
 }
@@ -123,7 +144,7 @@ export const databaseResourceOperations = {
     request: CreateDatabaseRequest,
     req?: NextRequest,
     userEmail?: string
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
       const clusterResult = await Database_Clusters.read(request.clusterId);
       if (!clusterResult.success || !clusterResult.data) {
@@ -357,17 +378,19 @@ export const databaseResourceOperations = {
 
   async deleteDatabase(
     request: DeleteDatabaseRequest
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     try {
-      const clusterResult = await Database_Clusters.read(request.clusterId);
-      if (!clusterResult.success || !clusterResult.data) {
-        return { success: false, error: "Database cluster not found" };
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
       }
 
-      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+      const clusterResult = access.cluster;
+
+      if (!supportsLogicalDatabases(String(clusterResult.engine))) {
         return {
           success: false,
-          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+          error: getLogicalDatabaseEngineError(String(clusterResult.engine)),
         };
       }
 
@@ -422,12 +445,14 @@ export const databaseResourceOperations = {
         return {
           success: false,
           error: axiosError?.response?.data?.message ?? "Invalid request",
+          statusCode: axiosError?.response?.status ?? 400,
         };
       }
 
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown error occurred",
+        statusCode: 500,
       };
     }
   },
@@ -438,6 +463,15 @@ export const databaseResourceOperations = {
     request: InternalDeleteDatabaseRequest
   ): Promise<{ success: boolean; error?: string; details?: string; statusCode?: number }> {
     try {
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "modify");
+      if (!access.success) {
+        return {
+          success: false,
+          error: access.error,
+          statusCode: access.statusCode,
+        };
+      }
+
       const response = await axios.delete(
         `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.dbName}`,
         { headers: getDigitalOceanHeaders() }
@@ -500,15 +534,16 @@ export const databaseResourceOperations = {
 
   async listDatabases(request: ListDatabasesRequest): Promise<ListDatabasesResult> {
     try {
-      const clusterResult = await Database_Clusters.read(request.clusterId);
-      if (!clusterResult.success || !clusterResult.data) {
-        return { success: false, error: "Database cluster not found" };
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
       }
 
-      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+      if (!supportsLogicalDatabases(String(access.cluster.engine))) {
         return {
           success: false,
-          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+          error: getLogicalDatabaseEngineError(String(access.cluster.engine)),
+          statusCode: 400,
         };
       }
 
@@ -520,6 +555,7 @@ export const databaseResourceOperations = {
         error:
           axiosError?.response?.data?.message ||
           (err instanceof Error ? err.message : "Unknown error occurred"),
+        statusCode: axiosError?.response?.status ?? 500,
       };
     }
   },
@@ -529,22 +565,28 @@ export const databaseResourceOperations = {
   async listDatabasesInternal(
     request: InternalListDatabasesRequest
   ): Promise<ListDatabasesResult> {
+    const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+    if (!access.success) {
+      return { success: false, error: access.error, statusCode: access.statusCode };
+    }
+
     return listDatabasesFromProvider(request.clusterId, "Invalid request");
   },
 
   async retrieveDatabase(
     request: RetrieveDatabaseRequest
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
     try {
-      const clusterResult = await Database_Clusters.read(request.clusterId);
-      if (!clusterResult.success || !clusterResult.data) {
-        return { success: false, error: "Database cluster not found" };
+      const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+      if (!access.success) {
+        return { success: false, error: access.error, statusCode: access.statusCode };
       }
 
-      if (!supportsLogicalDatabases(clusterResult.data.engine)) {
+      if (!supportsLogicalDatabases(String(access.cluster.engine))) {
         return {
           success: false,
-          error: getLogicalDatabaseEngineError(clusterResult.data.engine),
+          error: getLogicalDatabaseEngineError(String(access.cluster.engine)),
+          statusCode: 400,
         };
       }
 
@@ -560,6 +602,7 @@ export const databaseResourceOperations = {
         error:
           axiosError?.response?.data?.message ||
           (err instanceof Error ? err.message : "Unknown error occurred"),
+        statusCode: axiosError?.response?.status ?? 500,
       };
     }
   },
@@ -568,7 +611,12 @@ export const databaseResourceOperations = {
   // DigitalOcean directly without cluster engine/precheck gates.
   async retrieveDatabaseInternal(
     request: InternalRetrieveDatabaseRequest
-  ): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
+    const access = await resolveOwnedCluster(request.clusterId, request.userId, "access");
+    if (!access.success) {
+      return { success: false, error: access.error, statusCode: access.statusCode };
+    }
+
     return retrieveDatabaseFromProvider(request.clusterId, request.name, "Invalid request");
   },
 };

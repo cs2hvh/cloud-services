@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, Fragment } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -110,6 +110,59 @@ function copyDomain(domain: string) {
   toast.success('Domain copied');
 }
 
+/* ── Domain grouping ── */
+type DomainGroup = {
+  rootDomain: string;
+  root: DomainInventoryItem | null;
+  children: DomainInventoryItem[];
+};
+
+function groupDomains(items: DomainInventoryItem[]): DomainGroup[] {
+  const domainSet = new Set(items.map((i) => i.domain));
+
+  function findParent(domain: string): string | null {
+    const parts = domain.split('.');
+    for (let i = 1; i < parts.length - 1; i++) {
+      const candidate = parts.slice(i).join('.');
+      if (domainSet.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  const groupMap = new Map<string, DomainGroup>();
+
+  // First pass: establish parent relationships
+  const parentOf = new Map<string, string>();
+  for (const item of items) {
+    const parent = findParent(item.domain);
+    if (parent) parentOf.set(item.domain, parent);
+  }
+
+  for (const item of items) {
+    const parent = parentOf.get(item.domain);
+    if (!parent) {
+      const existing = groupMap.get(item.domain);
+      if (existing) {
+        existing.root = item;
+      } else {
+        groupMap.set(item.domain, { rootDomain: item.domain, root: item, children: [] });
+      }
+    } else {
+      // Walk up to the true root (top-most ancestor that has no parent)
+      let rootKey = parent;
+      while (parentOf.has(rootKey)) rootKey = parentOf.get(rootKey)!;
+      if (!groupMap.has(rootKey)) {
+        groupMap.set(rootKey, { rootDomain: rootKey, root: null, children: [] });
+      }
+      groupMap.get(rootKey)!.children.push(item);
+    }
+  }
+
+  return Array.from(groupMap.values())
+    .sort((a, b) => a.rootDomain.localeCompare(b.rootDomain))
+    .map((g) => ({ ...g, children: [...g.children].sort((a, b) => a.domain.localeCompare(b.domain)) }));
+}
+
 /* ── Skeleton rows for loading state ── */
 function TableSkeleton() {
   return (
@@ -118,7 +171,6 @@ function TableSkeleton() {
         <tr key={i} className="border-t border-white/[0.04]">
           <td className="px-4 py-3"><div className="h-4 w-40 animate-pulse rounded bg-white/[0.06]" /></td>
           <td className="px-4 py-3"><div className="h-4 w-20 animate-pulse rounded bg-white/[0.06]" /></td>
-          <td className="px-4 py-3 hidden md:table-cell"><div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" /></td>
           <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-8 animate-pulse rounded bg-white/[0.06]" /></td>
           <td className="px-4 py-3 hidden lg:table-cell"><div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" /></td>
           <td className="px-4 py-3 hidden xl:table-cell"><div className="h-4 w-12 animate-pulse rounded bg-white/[0.06]" /></td>
@@ -130,20 +182,35 @@ function TableSkeleton() {
 }
 
 /* ── Domain table row ── */
-function DomainRow({ item }: { item: DomainInventoryItem }) {
+function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDomain?: string }) {
   const { status, label } = getDomainStatus(item);
   const activeConns = item.connections.filter((c) => c.status === 'active').length;
+  const isChild = !!parentDomain;
+  const subPrefix =
+    isChild && item.domain.endsWith('.' + parentDomain)
+      ? item.domain.slice(0, item.domain.length - parentDomain.length - 1)
+      : null;
 
   return (
-    <tr className="group border-t border-white/[0.04] transition-colors hover:bg-white/[0.02]">
+    <tr className={`group border-t border-white/[0.04] transition-colors hover:bg-white/[0.02]${isChild ? ' bg-white/[0.005]' : ''}`}>
       {/* Domain */}
       <td className="px-4 py-3">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className={`flex items-center gap-2 min-w-0${isChild ? ' pl-5' : ''}`}>
+          {isChild && (
+            <span className="shrink-0 text-white/20 text-xs select-none leading-none">└</span>
+          )}
           <Link
             href={`/dashboard/domains/${encodeURIComponent(item.domain)}`}
             className="text-sm font-medium font-mono text-white hover:text-cyan-300 transition-colors truncate"
           >
-            {item.domain}
+            {subPrefix ? (
+              <>
+                <span>{subPrefix}</span>
+                <span className="text-white/35">.{parentDomain}</span>
+              </>
+            ) : (
+              item.domain
+            )}
           </Link>
           <button
             type="button"
@@ -158,11 +225,6 @@ function DomainRow({ item }: { item: DomainInventoryItem }) {
       {/* Status */}
       <td className="px-4 py-3">
         <StatusLabel status={status} label={label} />
-      </td>
-
-      {/* Source */}
-      <td className="px-4 py-3 hidden md:table-cell">
-        <span className="text-xs text-white/50 capitalize">{item.source}</span>
       </td>
 
       {/* Connections */}
@@ -295,7 +357,6 @@ export default function DomainsDashboardPage() {
             <tr className="text-left text-[11px] font-medium uppercase tracking-wider text-white/35">
               <th className="px-4 py-3">Domain</th>
               <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 hidden md:table-cell">Source</th>
               <th className="px-4 py-3 hidden lg:table-cell">Connections</th>
               <th className="px-4 py-3 hidden lg:table-cell">Expires</th>
               <th className="px-4 py-3 hidden xl:table-cell">Auto-renew</th>
@@ -307,7 +368,7 @@ export default function DomainsDashboardPage() {
               <TableSkeleton />
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={6}>
                   <EmptyState
                     message={searchQuery ? 'No domains match your search' : emptyMessage}
                     isFiltered={!!searchQuery}
@@ -315,7 +376,23 @@ export default function DomainsDashboardPage() {
                 </td>
               </tr>
             ) : (
-              filtered.map((item) => <DomainRow key={item.domain} item={item} />)
+              groupDomains(filtered).map((group) => (
+                <Fragment key={group.rootDomain}>
+                  {group.root ? (
+                    <DomainRow item={group.root} />
+                  ) : (
+                    <tr className="border-t border-white/[0.04]">
+                      <td className="px-4 py-2.5">
+                        <span className="text-[11px] font-mono text-white/30 uppercase tracking-wider">{group.rootDomain}</span>
+                      </td>
+                      <td colSpan={5} />
+                    </tr>
+                  )}
+                  {group.children.map((child) => (
+                    <DomainRow key={child.domain} item={child} parentDomain={group.rootDomain} />
+                  ))}
+                </Fragment>
+              ))
             )}
           </tbody>
         </table>

@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     const result = await DatabaseService.addFirewallRule(
       validatedData.id,
       validatedData.ip_address,
+      auth.user.id,
       req
     );
 
