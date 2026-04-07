@@ -61,10 +61,10 @@ spec:
     resources:
       requests:
         memory: "128Mi"
-        cpu: "100m"
+        cpu: "50m"
       limits:
         memory: "256Mi"
-        cpu: "300m"
+        cpu: "200m"
 '''
     }
   }
@@ -97,7 +97,6 @@ spec:
               kubectl delete secret \${ENV_SECRET_NAME} --namespace=default --ignore-not-found=true
               
               # Delete custom domain certificates and secrets (if any)
-              # Pattern: app-name-custom-*-tls
               echo "Cleaning up custom domain certificates and secrets..."
               kubectl get certificates -n default -o name | grep "^certificate/${name}-custom-" | xargs -r kubectl delete -n default || true
               kubectl get secrets -n default -o name | grep "^secret/${name}-custom-.*-tls" | xargs -r kubectl delete -n default || true

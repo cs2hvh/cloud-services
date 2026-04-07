@@ -28,17 +28,39 @@ export class InfrastructureCleanupService {
    */
   static async deleteKubernetesResources(appName: string): Promise<void> {
     console.log(`[InfrastructureCleanupService] Creating Jenkins deletion job for Kubernetes resources of ${appName}`);
+    let buildNumber: number;
+    // Delete jobs are temporary. Remove any stale one so retries are not blocked.
     try {
-      // Create and trigger a Jenkins deletion job
-      const buildNumber = await JenkinsService.createDeleteJob(appName);
+      await JenkinsService.deleteDeleteJob(appName);
+      console.log(`[InfrastructureCleanupService] Removed stale Jenkins deletion job for ${appName}`);
+    } catch {
+      // No stale delete job exists, or Jenkins returned a non-critical error here.
+    }
+
+    try {
+      buildNumber = await JenkinsService.createDeleteJob(appName);
       console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job created and triggered for ${appName} (Build #${buildNumber})`);
-      
-      // Wait for the job to complete (with timeout)
+    } catch (error) {
+      console.error(`[InfrastructureCleanupService] ❌ Failed to create Jenkins deletion job for ${appName}:`, error);
+      throw error;
+    }
+
+    try {
       await this.waitForDeleteJobCompletion(appName, buildNumber);
-      
       console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job completed for ${appName}`);
     } catch (error) {
-      console.error(`[InfrastructureCleanupService] ❌ Failed to create or wait for Jenkins deletion job for ${appName}:`, error);
+      const jobNeverRan = (error as { buildEverExisted?: boolean }).buildEverExisted === false;
+      if (jobNeverRan) {
+        console.warn(`[InfrastructureCleanupService] ⚠️ Delete pod was never scheduled for ${appName}, removing hanging Jenkins job`);
+        try {
+          await JenkinsService.deleteDeleteJob(appName);
+          console.log(`[InfrastructureCleanupService] ✅ Hanging Jenkins deletion job removed for ${appName}`);
+        } catch (cleanupError) {
+          console.warn(`[InfrastructureCleanupService] ⚠️ Could not remove hanging delete job (non-critical):`, cleanupError);
+        }
+      } else {
+        console.error(`[InfrastructureCleanupService] ❌ Jenkins deletion job did not succeed for ${appName} — kept in Jenkins for inspection`);
+      }
       throw error;
     }
   }
@@ -63,7 +85,6 @@ export class InfrastructureCleanupService {
         if (!status.building) {
           if (status.result === 'SUCCESS') {
             console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job completed successfully`);
-            // Clean up the delete job itself
             try {
               await JenkinsService.deleteDeleteJob(appName);
               console.log(`[InfrastructureCleanupService] ✅ Jenkins deletion job cleaned up`);
@@ -72,14 +93,20 @@ export class InfrastructureCleanupService {
             }
             return;
           } else {
-            throw new Error(`Jenkins deletion job failed with result: ${status.result}`);
+            const err = Object.assign(
+              new Error(`Jenkins deletion job failed with result: ${status.result}`),
+              { buildEverExisted: true }
+            );
+            throw err;
           }
         }
         
         console.log(`[InfrastructureCleanupService] Jenkins deletion job still running...`);
         await new Promise(resolve => setTimeout(resolve, pollInterval));
       } catch (error: unknown) {
-        const errorObj = error as { notFound?: boolean };
+        const errorObj = error as { notFound?: boolean; buildEverExisted?: boolean };
+        // Re-throw errors that already carry buildEverExisted (e.g. FAILURE above)
+        if (errorObj.buildEverExisted !== undefined) throw error;
         // Handle the case where the build doesn't exist yet
         if (errorObj.notFound && !buildExists && retryCount < maxRetries) {
           retryCount++;
@@ -89,11 +116,16 @@ export class InfrastructureCleanupService {
         }
         
         console.error(`[InfrastructureCleanupService] Error checking deletion job status:`, error);
-        throw error;
+        // Attach buildEverExisted so the caller knows whether cleaning up is safe
+        throw Object.assign(error as Error, { buildEverExisted: buildExists });
       }
     }
     
-    throw new Error(`Jenkins deletion job timed out after ${timeoutMs}ms`);
+    // Timed out — attach whether the build was ever seen so the caller can act accordingly
+    throw Object.assign(
+      new Error(`Jenkins deletion job timed out after ${timeoutMs / 1000}s`),
+      { buildEverExisted: buildExists }
+    );
   }
 
   /**

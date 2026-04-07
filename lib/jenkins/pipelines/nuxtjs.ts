@@ -372,6 +372,7 @@ metadata:
     framework: nuxtjs
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}

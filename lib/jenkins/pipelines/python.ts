@@ -310,6 +310,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
