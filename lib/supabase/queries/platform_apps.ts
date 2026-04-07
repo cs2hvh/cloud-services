@@ -196,6 +196,21 @@ export const Platform_Apps = {
     }
   },
 
+  delete_admin: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { error, count } = await supabase
+        .from("platform_apps")
+        .delete({ count: "exact" })
+        .eq("id", app_id);
+      if (error) return { success: false, error: error.message };
+      if (count === 0) return { success: false, error: "App not found" };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
   // Environment variables
   set_env_vars: async (app_id: string, env_vars: { key: string; value: string }[]) => {
     try {

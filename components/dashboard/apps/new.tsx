@@ -504,13 +504,33 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
               Sinatra: "Dockerfile",
             };
 
-            normalizedFramework =
-              frameworkMap[data.framework] || data.framework;
+            normalizedFramework = frameworkMap[data.framework] || data.framework;
 
-            setFramework(normalizedFramework);
+            const dockerfileDetected = data.hasDockerfile || false;
+            if (
+              normalizedFramework === "React" ||
+              normalizedFramework === "Svelte" ||
+              normalizedFramework === "Static"
+            ) {
+              if (dockerfileDetected) {
+                toast.info("Repository Dockerfile detected", {
+                  description:
+                    "This framework does not have a dedicated platform pipeline. Using the Dockerfile pipeline instead.",
+                });
+                setFramework("Dockerfile");
+              } else {
+                toast.error("Framework detected but not directly supported", {
+                  description:
+                    "Add a Dockerfile to the repository or choose one of the supported deployment pipelines.",
+                });
+                setFramework("");
+              }
+            } else {
+              setFramework(normalizedFramework);
+            }
 
             // Store Dockerfile detection result
-            setHasDockerfile(data.hasDockerfile || false);
+            setHasDockerfile(dockerfileDetected);
 
             // Handle detected port from Dockerfile
             if (data.detectedPort) {
@@ -734,15 +754,17 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         framework: framework as
           | "simple-test"
           | "Next.js"
-          | "React"
+          | "Nuxt.js"
+          | "Vite-React"
           | "Vue.js"
+          | "Angular"
+          | "SvelteKit"
           | "Node.js"
           | "express"
           | "python"
           | "django"
           | "flask"
           | "fastapi"
-          | "Static"
           | "Java"
           | "Dockerfile",
         env_vars: envVars.filter((ev) => ev.key && ev.value),
@@ -1547,14 +1569,11 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                               <SelectItem value="Angular">Angular (auto-Dockerfile)</SelectItem>
                               <SelectItem value="SvelteKit">SvelteKit (auto-Dockerfile)</SelectItem>
                               <SelectItem value="express">Express.js (auto-Dockerfile)</SelectItem>
-                              <SelectItem value="React">React CRA (bring Dockerfile)</SelectItem>
-                              <SelectItem value="Svelte">Svelte (bring Dockerfile)</SelectItem>
                               <SelectItem value="Node.js">Node.js (bring Dockerfile)</SelectItem>
                               <SelectItem value="python">Python (auto-Dockerfile)</SelectItem>
                               <SelectItem value="django">Django (auto-Dockerfile)</SelectItem>
                               <SelectItem value="flask">Flask (auto-Dockerfile)</SelectItem>
                               <SelectItem value="fastapi">FastAPI (auto-Dockerfile)</SelectItem>
-                              <SelectItem value="Static">Static site</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>

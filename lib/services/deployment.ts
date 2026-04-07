@@ -304,7 +304,7 @@ export class DeploymentService {
    * @param userId - The user ID requesting deletion
    * @param isAdmin - If true, bypass ownership check (for admin operations)
    */
-  static async delete(appId: string, userId: string, isAdmin: boolean = false): Promise<boolean> {
+  static async delete(appId: string, userId: string, isAdmin: boolean = false): Promise<{ warning?: string }> {
     console.log(`[DeploymentService] Starting deletion for app: ${appId}${isAdmin ? ' (admin override)' : ''}`);
 
     try {
@@ -325,13 +325,18 @@ export class DeploymentService {
       await this.cleanupCustomDomains(appId, app.name);
 
       // Delete from database (will cascade to platform_app_domains)
-      await Platform_Apps.delete(appId, userId);
+      const deleteResult = isAdmin
+        ? await Platform_Apps.delete_admin(appId)
+        : await Platform_Apps.delete(appId, userId);
+      if (!deleteResult.success) {
+        throw new Error(deleteResult.error || "Failed to delete app record");
+      }
       console.log(`[DeploymentService] Database record deleted`);
 
       // Clean up infrastructure (now waits for completion)
-      await this.cleanupInfrastructure(app.name);
+      const warning = await this.cleanupInfrastructure(app.name);
 
-      return true;
+      return { warning };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[DeploymentService] ❌ Deletion failed:`, errorMessage);
@@ -444,7 +449,7 @@ export class DeploymentService {
   /**
    * Clean up infrastructure asynchronously
    */
-  private static async cleanupInfrastructure(appName: string): Promise<void> {
+  private static async cleanupInfrastructure(appName: string): Promise<string | undefined> {
     console.log(`[DeploymentService] Cleaning up infrastructure for ${appName}`);
 
     const errors: string[] = [];
@@ -481,9 +486,12 @@ export class DeploymentService {
     }
 
     if (errors.length > 0) {
-      console.warn(`[DeploymentService] ⚠️ Cleanup completed with errors: ${errors.join(', ')}`);
+      const warning = `Cleanup completed with errors: ${errors.join(', ')}`;
+      console.warn(`[DeploymentService] ⚠️ ${warning}`);
+      return warning;
     } else {
       console.log(`[DeploymentService] ✅ Infrastructure cleanup completed for ${appName}`);
+      return undefined;
     }
   }
 }

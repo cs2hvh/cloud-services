@@ -693,7 +693,7 @@ export class PlatformAppService {
 
     try {
       // 1. Delete infrastructure using deployment service
-      await DeploymentService.delete(appId, userId, isAdmin);
+      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
 
       // 2. Close active billing (prorated final charge)
       try {
@@ -765,7 +765,8 @@ export class PlatformAppService {
         console.error('[PlatformAppService.deleteApp] Failed to create notification:', notifError);
       }
 
-      return { success: true, appName, warning: billingWarning };
+      const warning = [deploymentDeletion.warning, billingWarning].filter(Boolean).join("; ") || undefined;
+      return { success: true, appName, warning };
 
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";

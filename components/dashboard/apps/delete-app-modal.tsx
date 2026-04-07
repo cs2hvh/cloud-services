@@ -68,10 +68,12 @@ export function DeleteAppModal({
 
       if (res.ok) {
         toast.success(`${appName} deleted successfully`, {
-          description: 'All resources have been cleaned up including DNS, Kubernetes, and certificates.',
+          description: payload?.warning
+            ? 'The app was removed, but some cleanup steps may still need attention.'
+            : 'The app and its related resources were cleaned up successfully.',
         });
         if (payload?.warning) {
-          toast.warning(`Deletion completed with billing warning`, {
+          toast.warning(`Deletion completed with warnings`, {
             description: payload.warning,
             duration: 7000,
           });

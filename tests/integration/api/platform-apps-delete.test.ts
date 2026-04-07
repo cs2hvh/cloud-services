@@ -14,12 +14,45 @@ import {
   mockUnauthenticatedUser,
 } from '../../utils/test-helpers';
 
+const withAppMutationLockMock = vi.fn();
+
 vi.mock('@/lib/auth/server-auth');
 vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/auth');
 vi.mock('@/lib/supabase/queries');
 vi.mock('@/lib/services/platform-app-service');
 vi.mock('@/lib/services/app-status');
+vi.mock('@/lib/app-operations', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/app-operations')>();
+
+  class MockResourceMutationLockService {
+    withAppMutationLock = withAppMutationLockMock;
+  }
+
+  class MockAppOperationError extends Error {
+    code: string;
+    statusCode: number;
+    retryable: boolean;
+
+    constructor(params: {
+      code: string;
+      message: string;
+      statusCode?: number;
+      retryable?: boolean;
+    }) {
+      super(params.message);
+      this.code = params.code;
+      this.statusCode = params.statusCode ?? 500;
+      this.retryable = params.retryable ?? false;
+    }
+  }
+
+  return {
+    ...actual,
+    ResourceMutationLockService: MockResourceMutationLockService,
+    AppOperationError: MockAppOperationError,
+  };
+});
 
 describe('POST /api/services/platform-apps/delete', () => {
   beforeEach(async () => {
@@ -34,7 +67,7 @@ describe('POST /api/services/platform-apps/delete', () => {
     const { requireAdmin } = await import('@/lib/supabase/auth');
     vi.mocked(requireAdmin).mockResolvedValue({ ok: false } as any);
 
-    const { Platform_Apps, Platform_App_Deployments } = await import('@/lib/supabase/queries');
+    const { Platform_Apps } = await import('@/lib/supabase/queries');
     vi.mocked(Platform_Apps.get).mockResolvedValue({
       success: true,
       data: {
@@ -43,13 +76,7 @@ describe('POST /api/services/platform-apps/delete', () => {
       },
     } as any);
     vi.mocked(Platform_Apps.update).mockResolvedValue({ success: true } as any);
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: false,
-      blocker: null,
-      deployment: null,
-      message: null,
-    } as any);
+    withAppMutationLockMock.mockImplementation(async ({ run }) => run());
 
     const { PlatformAppService } = await import('@/lib/services/platform-app-service');
     vi.mocked(PlatformAppService.deleteApp).mockResolvedValue({
@@ -125,14 +152,13 @@ describe('POST /api/services/platform-apps/delete', () => {
 
   it('blocks delete while a build is in progress', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: true,
-      blocker: 'building',
-      deployment: { id: 'dep-1' },
-      message: 'Cannot delete while building',
-    } as any);
+    const { AppOperationError } = await import('@/lib/app-operations');
+    withAppMutationLockMock.mockRejectedValueOnce(new AppOperationError({
+      code: 'APP_OPERATION_IN_PROGRESS',
+      message: 'Build is still in progress. Please wait for it to complete.',
+      statusCode: 409,
+      retryable: true,
+    }));
 
     const request = createMockPostRequest(
       'http://localhost:3000/api/services/platform-apps/delete',
@@ -142,19 +168,17 @@ describe('POST /api/services/platform-apps/delete', () => {
     const response = await POST(request as NextRequest);
     const data = await expectResponseStatus(response, 409);
 
-    expect(data.error).toContain('build is in progress');
+    expect(data.error).toContain('another app operation is in progress');
   });
 
   it('blocks delete while the app is already deleting', async () => {
     await mockAuthenticatedUser(mockPlatformAppUser.id);
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.get_operation_lock).mockResolvedValue({
-      success: true,
-      blocked: true,
-      blocker: 'deleting',
-      deployment: null,
-      message: 'App is already being deleted.',
-    } as any);
+    const { AppOperationError } = await import('@/lib/app-operations');
+    withAppMutationLockMock.mockRejectedValueOnce(new AppOperationError({
+      code: 'APP_DELETING',
+      message: 'App is being deleted and cannot accept changes right now.',
+      statusCode: 409,
+    }));
 
     const request = createMockPostRequest(
       'http://localhost:3000/api/services/platform-apps/delete',
