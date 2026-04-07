@@ -56,9 +56,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
+    const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, appResult.data.status);
+    if (!operationLock.success) {
+      return NextResponse.json({ error: operationLock.message || "Failed to check deployment state" }, { status: 500 });
+    }
+    if (operationLock.blocked) {
+      return NextResponse.json(
+        { error: operationLock.blocker === 'deleting' ? "App is being deleted and cannot be rolled back." : "Cannot roll back while a deployment is in progress." },
+        { status: 409 }
+      );
+    }
+
     const activeDeploymentId: string | null = app.active_deployment_id ?? null;
 
-    const previous = await Platform_App_Deployments.get_previous_successful(app_id, activeDeploymentId);
+    const previous = await Platform_App_Deployments.get_previous_rollback_target(app_id, activeDeploymentId);
     if (!previous.success) {
       return NextResponse.json({ error: previous.error || "Failed to query deployment history" }, { status: 500 });
     }
@@ -95,16 +106,18 @@ export async function POST(req: NextRequest) {
       trigger: "rollback",
     });
 
-    if (record.success) {
-      await Promise.all([
-        Platform_App_Deployments.set_active_for_app(app_id, record.data.id),
-        Platform_Apps.update(app_id, {
-          status: "running",
-          last_deploy_trigger: "rollback",
-          last_deploy_commit: previous.data.commit_sha ?? null,
-        }),
-      ]);
-    }
+    await Promise.all([
+      Platform_App_Deployments.set_active_for_app(
+        app_id,
+        record.success ? record.data.id : previous.data.id
+      ),
+      Platform_Apps.update(app_id, {
+        status: "running",
+        last_deploy_trigger: "rollback",
+        last_deploy_commit: previous.data.commit_sha ?? null,
+        last_failure_reason: null,
+      }),
+    ]);
 
     // Best-effort: log images after rollback
     KubernetesInfoService.logAppImages(app.name, `rollback app_id=${app_id}`).catch(() => undefined);
@@ -118,6 +131,7 @@ export async function POST(req: NextRequest) {
         commit_sha: previous.data.commit_sha ?? null,
       },
       rollback_record_id: record.success ? record.data.id : null,
+      warning: record.success ? null : record.error || "Rollback event could not be recorded, but serving state was updated.",
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";

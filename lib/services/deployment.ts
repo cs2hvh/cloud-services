@@ -43,6 +43,7 @@ export interface DeploymentResult {
   port?: number;
   build_number?: number;
   error?: string;
+  warning?: string;
 }
 
 export class DeploymentService {
@@ -165,6 +166,8 @@ export class DeploymentService {
         throw new Error(`DNS creation failed: ${errorMessage}`);
       }
 
+      let deploymentWarning: string | undefined;
+
       // Step 5: Create Jenkins job and start build monitoring
       try {
         // Update status to 'building' before triggering Jenkins
@@ -194,27 +197,37 @@ export class DeploymentService {
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 
-        // Create deployment row immediately so Supabase Realtime pushes it to the UI.
-        // BuildPollingService will UPDATE this row on completion (success/failed).
-        // Note: we seed the initial deployment row with build_number: 1 for
-        // brand-new jobs. This assumes Jenkins will start numbering builds at
-        // 1 for a new job. If your CI setup can retry or replay jobs that reuse
-        // build numbers, consider deriving the build number from Jenkins' job
-        // creation response or querying the next expected build number.
-        await Platform_App_Deployments.create({
-          app_id: app.id,
-          build_number: 1,
-          status: 'building',
-          trigger: 'manual',
-        });
+        try {
+          // Create deployment row immediately so Supabase Realtime pushes it to the UI.
+          // The Jenkins webhook (deployment-record) will UPDATE this to the final status.
+          const buildRecord = await Platform_App_Deployments.start_build({
+            app_id: app.id,
+            build_number: 1,
+            trigger: 'manual',
+          });
+          if (!buildRecord.success) {
+            throw new Error(buildRecord.error || 'Failed to create initial deployment record');
+          }
 
-        // Start background polling for build status
-        BuildPollingService.startPolling({
-          appId: app.id,
-          appName: config.name,
-          buildNumber: 1, // First build for new job
-          trigger: 'manual',
-        });
+          // Start background polling for build status
+          BuildPollingService.startPolling({
+            appId: app.id,
+            appName: config.name,
+            buildNumber: 1, // First build for new job
+            trigger: 'manual',
+          });
+        } catch (trackingError: unknown) {
+          deploymentWarning = trackingError instanceof Error ? trackingError.message : 'Unknown tracking error';
+          console.warn(
+            `[DeploymentService] Build #1 started but deployment tracking needs recovery: ${deploymentWarning}`
+          );
+          BuildPollingService.startPolling({
+            appId: app.id,
+            appName: config.name,
+            buildNumber: 1,
+            trigger: 'manual',
+          });
+        }
         
       } catch (jenkinsError: unknown) {
         const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : 'Unknown error';
@@ -271,6 +284,7 @@ export class DeploymentService {
         deployment_url: deploymentUrl,
         port: containerPort,
         build_number: buildNumber,
+        warning: deploymentWarning,
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown deployment error';

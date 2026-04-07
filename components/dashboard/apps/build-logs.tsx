@@ -30,6 +30,7 @@ interface DeploymentSummary {
   build_number: number;
   status: string;
   started_at: string;
+  trigger?: string | null;
 }
 
 interface BuildLogsPanelProps {
@@ -61,6 +62,13 @@ export function BuildLogsPanel({
   const [logLevel, setLogLevel] = useState<'all' | 'error' | 'warn' | 'success'>('all');
   const [showJumpButton, setShowJumpButton] = useState(false);
 
+  const getRunLabel = useCallback((deployment: Pick<DeploymentSummary, 'build_number' | 'trigger'>) => {
+    if (deployment.trigger === 'resize') {
+      return `Resize #${deployment.build_number}`;
+    }
+    return `Build #${deployment.build_number}`;
+  }, []);
+
   // Ref on the <pre> element for imperative scroll control
   const preRef = useRef<HTMLPreElement>(null);
   // True while user is at (or near) the bottom — drives auto-scroll on new content
@@ -71,7 +79,29 @@ export function BuildLogsPanel({
   // needed is when buildInfo is set but Supabase hasn't delivered the row yet
   // (fresh page load or brief race window).
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
-    const opts = [...deployments];
+    // Jenkins is authoritative: if it confirms the build is done, override any
+    // stale 'BUILDING' status that Supabase hasn't propagated yet.
+    const opts = deployments.map((d) => {
+      if (
+        d.build_number === buildInfo?.number &&
+        buildInfo.building === false &&
+        d.status === 'BUILDING'
+      ) {
+        const terminalStatus =
+          buildInfo.result === 'SUCCESS'
+            ? 'SUCCESS'
+            : buildInfo.result === 'ABORTED'
+            ? 'ABORTED'
+            : buildInfo.result === 'UNSTABLE'
+            ? 'UNSTABLE'
+            : 'FAILURE';
+        return {
+          ...d,
+          status: terminalStatus as DeploymentSummary['status'],
+        };
+      }
+      return d;
+    });
 
     // Ensure the currently-loaded build is always visible in the dropdown
     if (buildInfo?.number != null && !opts.some((d) => d.build_number === buildInfo.number)) {
@@ -84,6 +114,16 @@ export function BuildLogsPanel({
 
     return opts;
   }, [deployments, buildInfo]);
+
+  const selectedDeployment = useMemo(
+    () =>
+      buildInfo?.number != null
+        ? buildOptions.find((deployment) => deployment.build_number === buildInfo.number) ?? null
+        : null,
+    [buildInfo?.number, buildOptions]
+  );
+  const selectedRunLabel = selectedDeployment ? getRunLabel(selectedDeployment) : null;
+  const isResizeRun = selectedDeployment?.trigger === 'resize';
 
   // Track whether user is near the bottom
   const handleScroll = useCallback(() => {
@@ -225,15 +265,15 @@ export function BuildLogsPanel({
           <div className="flex items-center gap-2 mr-1">
             <Terminal className="w-4 h-4 text-white/60" />
             <span className="text-sm font-semibold text-white">
-              Build Logs
+              {isResizeRun ? 'Operation Logs' : 'Build Logs'}
             </span>
-            {buildInfo?.number != null && (
-              <span className="font-mono text-xs text-white/40">#{buildInfo.number}</span>
+            {selectedRunLabel && (
+              <span className="font-mono text-xs text-white/40">{selectedRunLabel}</span>
             )}
             {buildInfo?.building && (
               <Badge className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] px-1.5 py-0">
                 <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-                Building
+                {isResizeRun ? 'Running' : 'Building'}
               </Badge>
             )}
           </div>
@@ -245,7 +285,7 @@ export function BuildLogsPanel({
               onValueChange={(val) => onSelectBuild(Number(val))}
             >
               <SelectTrigger className="h-7 w-auto min-w-[200px] max-w-[280px] text-xs border-white/[0.12] bg-white/[0.03] rounded-none focus:ring-0 focus:ring-offset-0">
-                <SelectValue placeholder="Select build…" />
+                <SelectValue placeholder="Select run…" />
               </SelectTrigger>
               <SelectContent className="bg-[#0f0f0f] border-white/[0.1] rounded-none">
                 {buildOptions.map((d) => (
@@ -255,13 +295,17 @@ export function BuildLogsPanel({
                     className="text-xs font-mono cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <span className="text-white/80">#{d.build_number}</span>
+                      <span className="text-white/80">{getRunLabel(d)}</span>
                       <span
                         className={`text-[10px] font-sans ${
                           d.status === 'SUCCESS'
                             ? 'text-green-400'
                             : d.status === 'BUILDING'
                             ? 'text-blue-400'
+                            : d.status === 'ABORTED'
+                            ? 'text-orange-400'
+                            : d.status === 'UNSTABLE'
+                            ? 'text-yellow-400'
                             : 'text-red-400'
                         }`}
                       >
@@ -334,6 +378,12 @@ export function BuildLogsPanel({
             </Button>
           </div>
         </div>
+
+        {isResizeRun && (
+          <div className="mt-3 border-t border-white/[0.06] pt-3 text-xs text-blue-200/80">
+            Resize runs reuse the currently serving release image. These logs show the resize operation, not a new application build.
+          </div>
+        )}
 
         {/* Expandable Filter Bar */}
         {showFilters && (

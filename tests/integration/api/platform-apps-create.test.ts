@@ -21,8 +21,10 @@ vi.mock('@/lib/cooldown/userbased');
 vi.mock('@/lib/supabase/queries');
 vi.mock('@/lib/supabase/queries/projects');
 vi.mock('@/lib/supabase/queries/billing');
+vi.mock('@/lib/supabase/auth');
 vi.mock('@/lib/supabase/server');
 vi.mock('@/lib/services');
+vi.mock('@/lib/services/platform-app-service');
 vi.mock('@/config/billing-flow');
 vi.mock('@/config/pricing');
 vi.mock('@/lib/providers/github');
@@ -56,9 +58,8 @@ describe('POST /api/services/platform-apps/create', () => {
     } as any);
 
     // Default mock for billing flow
-    const { ensureBalance, postProvisionBilling } = await import('@/config/billing-flow');
+    const { ensureBalance } = await import('@/config/billing-flow');
     vi.mocked(ensureBalance).mockResolvedValue({ ok: true, balance: 100 } as any);
-    vi.mocked(postProvisionBilling).mockResolvedValue(undefined);
 
     // Default mock for pricing
     const { getRatesForPlatformApp } = await import('@/config/pricing');
@@ -88,7 +89,26 @@ describe('POST /api/services/platform-apps/create', () => {
 
     // Default mock for Projects.add_log
     const { Projects } = await import('@/lib/supabase/queries/projects');
+    vi.mocked(Projects.get_by_id).mockResolvedValue({
+      id: mockCreatePlatformAppPayload.project_id,
+      owner: mockPlatformAppUser.id,
+    } as any);
     vi.mocked(Projects.add_log).mockResolvedValue({ success: true } as any);
+
+    const { requireAdmin } = await import('@/lib/supabase/auth');
+    vi.mocked(requireAdmin).mockResolvedValue({ ok: false } as any);
+
+    const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+    vi.mocked(PlatformAppService.createApp).mockResolvedValue({
+      success: true,
+      appId: mockPlatformApp.id,
+      deploymentUrl: mockPlatformApp.deployment_url,
+      port: mockPlatformApp.port,
+      billingInfo: {
+        initialCost: mockPlatformAppPricing.small.initialCost,
+        hourlyRate: mockPlatformAppPricing.small.hourlyRate,
+      },
+    } as any);
 
     // Default mock for supabase server client (used for GitHub token retrieval)
     const { createClient } = await import('@/lib/supabase/server');
@@ -267,10 +287,13 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('TC-PA-I005: should reject when insufficient credits', async () => {
-      const { ensureBalance } = await import('@/config/billing-flow');
-      vi.mocked(ensureBalance).mockResolvedValue({
-        ok: false,
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
+        success: false,
+        error: 'Insufficient credits',
+        errorCode: 'INSUFFICIENT_BALANCE',
         balance: 2,
+        required: mockPlatformAppPricing.small.initialCost,
       } as any);
 
       const request = createMockPostRequest(
@@ -286,25 +309,26 @@ describe('POST /api/services/platform-apps/create', () => {
       expect(data.required).toBeDefined();
     });
 
-    it('TC-PA-I012: should trigger billing after successful creation', async () => {
-      const { postProvisionBilling } = await import('@/config/billing-flow');
-
+    it('TC-PA-I012: should return deferred billing activation details after successful creation', async () => {
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
         mockCreatePlatformAppPayload
       );
 
-      await POST(request as NextRequest);
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 201);
 
-      expect(postProvisionBilling).toHaveBeenCalled();
+      expect(data.billing).toEqual(
+        expect.objectContaining({
+          initial_cost: mockPlatformAppPricing.small.initialCost,
+          hourly_rate: mockPlatformAppPricing.small.hourlyRate,
+          activation: 'on_first_successful_deployment',
+        })
+      );
     });
 
     it('should use correct pricing for different sizes', async () => {
-      const { getRatesForPlatformApp } = await import('@/config/pricing');
-      vi.mocked(getRatesForPlatformApp).mockResolvedValue({
-        initialCost: mockPlatformAppPricing.medium.initialCost,
-        hourlyRate: mockPlatformAppPricing.medium.hourlyRate,
-      });
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -313,7 +337,9 @@ describe('POST /api/services/platform-apps/create', () => {
 
       await POST(request as NextRequest);
 
-      expect(getRatesForPlatformApp).toHaveBeenCalledWith('medium');
+      expect(PlatformAppService.createApp).toHaveBeenCalledWith(
+        expect.objectContaining({ size: 'medium' })
+      );
     });
   });
 
@@ -326,8 +352,14 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('TC-PA-I006: should reject when app limit reached (20 apps)', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.count_by_owner).mockResolvedValue(20);
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
+        success: false,
+        error: 'App limit reached',
+        errorCode: 'APP_LIMIT_EXCEEDED',
+        currentCount: 20,
+        maxLimit: 20,
+      } as any);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -335,7 +367,7 @@ describe('POST /api/services/platform-apps/create', () => {
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response, 403);
+      const data = await expectResponseStatus(response, 429);
 
       expect(data.error).toBe('App limit reached');
       expect(data.current_count).toBe(20);
@@ -343,9 +375,6 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('should allow creation when below limit', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.count_by_owner).mockResolvedValue(5);
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
         mockCreatePlatformAppPayload
@@ -365,8 +394,12 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('TC-PA-I007: should reject duplicate app name', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.check_name_exists).mockResolvedValue(true);
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
+        success: false,
+        error: 'App name already exists',
+        errorCode: 'NAME_EXISTS',
+      } as any);
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -381,9 +414,6 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('should allow unique app name', async () => {
-      const { Platform_Apps } = await import('@/lib/supabase/queries');
-      vi.mocked(Platform_Apps.check_name_exists).mockResolvedValue(false);
-
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
         mockCreatePlatformAppPayload
@@ -417,7 +447,7 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('should call DeploymentService.deploy with correct config', async () => {
-      const { DeploymentService } = await import('@/lib/services');
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -426,7 +456,7 @@ describe('POST /api/services/platform-apps/create', () => {
 
       await POST(request as NextRequest);
 
-      expect(DeploymentService.deploy).toHaveBeenCalledWith(
+      expect(PlatformAppService.createApp).toHaveBeenCalledWith(
         expect.objectContaining({
           name: mockCreatePlatformAppPayload.name,
           repository_url: mockCreatePlatformAppPayload.repository_url,
@@ -438,7 +468,7 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('TC-PA-I013: should add project log when project_id is provided', async () => {
-      const { Projects } = await import('@/lib/supabase/queries/projects');
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
 
       const request = createMockPostRequest(
         'http://localhost:3000/api/services/platform-apps/create',
@@ -447,22 +477,24 @@ describe('POST /api/services/platform-apps/create', () => {
 
       await POST(request as NextRequest);
 
-      expect(Projects.add_log).toHaveBeenCalledWith(
+      expect(PlatformAppService.createApp).toHaveBeenCalledWith(
         expect.objectContaining({
           project_id: mockCreatePlatformAppPayload.project_id,
-          event: expect.stringContaining('Platform App'),
         })
       );
     });
 
     it('TC-PA-I014: should assign port 3000 for Next.js framework', async () => {
-      const { DeploymentService } = await import('@/lib/services');
-      vi.mocked(DeploymentService.deploy).mockResolvedValue({
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
         success: true,
-        app_id: mockPlatformApp.id,
-        deployment_url: mockPlatformApp.deployment_url,
+        appId: mockPlatformApp.id,
+        deploymentUrl: mockPlatformApp.deployment_url,
         port: 3000,
-        build_number: 1,
+        billingInfo: {
+          initialCost: mockPlatformAppPricing.small.initialCost,
+          hourlyRate: mockPlatformAppPricing.small.hourlyRate,
+        },
       });
 
       const request = createMockPostRequest(
@@ -477,13 +509,16 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('TC-PA-I015: should assign port 8000 for Python framework', async () => {
-      const { DeploymentService } = await import('@/lib/services');
-      vi.mocked(DeploymentService.deploy).mockResolvedValue({
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
         success: true,
-        app_id: 'app-python-123',
-        deployment_url: 'https://python-app.apps.hostguardian.net',
+        appId: 'app-python-123',
+        deploymentUrl: 'https://python-app.apps.hostguardian.net',
         port: 8000,
-        build_number: 1,
+        billingInfo: {
+          initialCost: mockPlatformAppPricing.small.initialCost,
+          hourlyRate: mockPlatformAppPricing.small.hourlyRate,
+        },
       });
 
       const request = createMockPostRequest(
@@ -498,7 +533,7 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('should pass env_vars to deployment service', async () => {
-      const { DeploymentService } = await import('@/lib/services');
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
 
       const payloadWithEnvVars = {
         ...mockCreatePlatformAppPayload,
@@ -515,7 +550,7 @@ describe('POST /api/services/platform-apps/create', () => {
 
       await POST(request as NextRequest);
 
-      expect(DeploymentService.deploy).toHaveBeenCalledWith(
+      expect(PlatformAppService.createApp).toHaveBeenCalledWith(
         expect.objectContaining({
           env_vars: payloadWithEnvVars.env_vars,
         })
@@ -532,10 +567,11 @@ describe('POST /api/services/platform-apps/create', () => {
     });
 
     it('should return error when deployment fails', async () => {
-      const { DeploymentService } = await import('@/lib/services');
-      vi.mocked(DeploymentService.deploy).mockResolvedValue({
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
         success: false,
         error: 'Jenkins job creation failed',
+        errorCode: 'DEPLOYMENT_FAILED',
       });
 
       const request = createMockPostRequest(
@@ -544,7 +580,7 @@ describe('POST /api/services/platform-apps/create', () => {
       );
 
       const response = await POST(request as NextRequest);
-      const data = await expectResponseStatus(response, 500);
+      const data = await expectResponseStatus(response, 502);
 
       expect(data.error).toBeDefined();
     });

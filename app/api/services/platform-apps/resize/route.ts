@@ -5,11 +5,9 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import { Projects } from "@/lib/supabase/queries/projects";
-import { Billing } from "@/lib/supabase/queries/billing";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { GitHubProvider } from "@/lib/providers/github";
-import { getRatesForPlatformApp } from "@/config/pricing";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 
 // Size order for validation (upsize only)
@@ -133,6 +131,14 @@ export async function POST(req: NextRequest) {
     }
 
     const app = existing.data;
+    const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, app.status);
+    if (!operationLock.success) {
+      return NextResponse.json({ error: operationLock.message || "Failed to check deployment state" }, { status: 500 });
+    }
+    if (operationLock.blocked) {
+      return NextResponse.json({ error: operationLock.message }, { status: 409 });
+    }
+
     const currentSize = app.size || "small";
     // Validate upsize only
     if (SIZE_ORDER[new_size] <= SIZE_ORDER[currentSize]) {
@@ -144,21 +150,6 @@ export async function POST(req: NextRequest) {
           requested_size: new_size,
         },
         { status: 400 }
-      );
-    }
-
-    // Check if app is in a state that can be resized
-    if (app.status === "building") {
-      return NextResponse.json(
-        { error: "App is currently building. Please wait for the build to complete." },
-        { status: 409 }
-      );
-    }
-
-    if (app.status === "deleting") {
-      return NextResponse.json(
-        { error: "App is being deleted and cannot be resized." },
-        { status: 409 }
       );
     }
 
@@ -174,6 +165,10 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    let buildTriggered = false;
+    let buildNumber: number | null = null;
+    let pollingStarted = false;
 
     try {
       // Get git provider from app data
@@ -232,30 +227,20 @@ export async function POST(req: NextRequest) {
       );
 
       // Trigger a resize-only build (skips checkout, dockerfile, and build stages)
-      const buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
+      buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
+      buildTriggered = true;
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
 
       // Create deployment row immediately so Supabase Realtime pushes it to the UI.
-      // BuildPollingService will UPDATE this row on completion (success/failed).
-      await Platform_App_Deployments.create({
+      // The Jenkins webhook will UPDATE this to the final status when the build finishes.
+      const buildRecord = await Platform_App_Deployments.start_build({
         app_id: app.id,
         build_number: buildNumber,
-        status: 'building',
         trigger: 'resize',
       });
-
-      // Update billing hourly rate for the new size
-      try {
-        const { hourlyRate: newHourlyRate } = await getRatesForPlatformApp(new_size as "small" | "medium" | "large");
-        await Billing.update_active_platform_app_rate({
-          serviceId: app.id,
-          newHourlyRate: newHourlyRate,
-        });
-        console.log(`[Resize] Updated billing rate to ${newHourlyRate}/hr for ${app.name}`);
-      } catch (billingError) {
-        // Log but don't fail the resize if billing update fails
-        console.error("[platform-apps/resize] Failed to update billing rate:", billingError);
+      if (!buildRecord.success) {
+        throw new Error(buildRecord.error || 'Failed to create in-progress deployment record');
       }
 
       // Start background polling for build status
@@ -264,7 +249,12 @@ export async function POST(req: NextRequest) {
         appName: app.name,
         buildNumber: buildNumber,
         trigger: 'resize',
+        resizeContext: {
+          previousSize: currentSize as 'small' | 'medium' | 'large',
+          targetSize: new_size as 'small' | 'medium' | 'large',
+        },
       });
+      pollingStarted = true;
 
       // Add project log if project_id exists
       if (app.project_id) {
@@ -272,10 +262,10 @@ export async function POST(req: NextRequest) {
           const oldSpecs = SIZE_SPECS[currentSize];
           const newSpecs = SIZE_SPECS[new_size];
           await Projects.add_log({
-            project_id: app.project_id,
-            event: "Platform App Resized",
-            text: `Resized "${app.name}" from ${currentSize} (${oldSpecs.cpu}, ${oldSpecs.memory}) to ${new_size} (${newSpecs.cpu}, ${newSpecs.memory})`,
-          });
+              project_id: app.project_id,
+              event: "Platform App Resize Requested",
+              text: `Requested resize for "${app.name}" from ${currentSize} (${oldSpecs.cpu}, ${oldSpecs.memory}) to ${new_size} (${newSpecs.cpu}, ${newSpecs.memory})`,
+            });
         } catch (logError) {
           console.warn("[platform-apps/resize] Failed to add project log:", logError);
         }
@@ -283,7 +273,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: `App resized from ${currentSize} to ${new_size}`,
+        message: `Resize started from ${currentSize} to ${new_size}`,
         build_number: buildNumber,
         app_id: app_id,
         app_name: app.name,
@@ -292,13 +282,43 @@ export async function POST(req: NextRequest) {
         new_specs: SIZE_SPECS[new_size],
       });
     } catch (jenkinsError: unknown) {
-      // Revert size if Jenkins fails
-      await Platform_Apps.update(app_id, { 
-        size: currentSize,
-        status: app.status || "failed" 
-      });
-
       const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : "Unknown error";
+      // Only revert the local size change if the Jenkins build never started.
+      if (!buildTriggered) {
+        await Platform_Apps.update(app_id, { 
+          size: currentSize,
+          status: app.status || "failed" 
+        });
+      }
+
+      if (buildTriggered && buildNumber) {
+        if (!pollingStarted) {
+          BuildPollingService.startPolling({
+            appId: app.id,
+            appName: app.name,
+            buildNumber,
+            trigger: 'resize',
+            resizeContext: {
+              previousSize: currentSize as 'small' | 'medium' | 'large',
+              targetSize: new_size as 'small' | 'medium' | 'large',
+            },
+          });
+        }
+
+        console.warn(`[Resize] Build #${buildNumber} started but post-trigger tracking failed: ${errorMessage}`);
+        return NextResponse.json({
+          success: true,
+          message: `Resize started from ${currentSize} to ${new_size}. Deployment tracking is being recovered in the background.`,
+          warning: errorMessage,
+          build_number: buildNumber,
+          app_id: app_id,
+          app_name: app.name,
+          old_size: currentSize,
+          new_size: new_size,
+          new_specs: SIZE_SPECS[new_size],
+        });
+      }
+
       console.error(`[Resize] Jenkins error for ${app.name}:`, errorMessage);
 
       return NextResponse.json(

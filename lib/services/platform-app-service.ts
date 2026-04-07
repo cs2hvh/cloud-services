@@ -11,7 +11,7 @@ import { NotificationService, createServiceNotification } from "@/lib/notificati
 import { AuditLogService } from "@/lib/audit";
 import { AppStatusService } from "./app-status";
 import { getRatesForPlatformApp } from "@/config/pricing";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { ensureBalance } from "@/config/billing-flow";
 
 export interface CreateAppRequest {
   name: string;
@@ -74,6 +74,7 @@ export interface DeleteAppResult {
   success: boolean;
   appName: string;
   error?: string;
+  warning?: string;
 }
 
 export interface GetAppOptions {
@@ -321,44 +322,7 @@ export class PlatformAppService {
         }
       }
 
-      // 8. Register billing — failure is returned as an error (matches K8s pattern)
-      try {
-        await postProvisionBilling({
-          userId: request.userId,
-          initialCost: INITIAL_COST,
-          hourlyRate: HOURLY_RATE,
-          serviceId: appId,
-          addActive: Billing.add_active_platform_app,
-        });
-      } catch (billingErr) {
-        const billingMessage = billingErr instanceof Error ? billingErr.message : String(billingErr);
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: request.userId,
-              type: "error",
-              action: "failed",
-              serviceType: "platform_app",
-              serviceName: request.name,
-              serviceId: appId,
-              error: `Billing registration failed after deployment: ${billingMessage}`,
-            })
-          );
-        } catch (notifErr) {
-          console.error("[PlatformAppService.createApp] Billing failure notification failed:", notifErr);
-        }
-        return {
-          success: false,
-          error: `Post-provision billing failed: ${billingMessage}`,
-          errorCode: "POST_PROVISION_BILLING_FAILED",
-          appId,
-          deploymentUrl: deploymentResult.deployment_url,
-          port: deploymentResult.port,
-          partialSuccess: true,
-        };
-      }
-
-      // 9. Create audit log
+      // 8. Create audit log
       if (request.auditContext) {
         try {
           await AuditLogService.create({
@@ -394,28 +358,33 @@ export class PlatformAppService {
         }
       }
 
-      // 10. Send success notification
+      // 9. Send creation/start notification.
+      // The app record now exists, but the initial deployment may still be building.
+      // Keep the user-facing message truthful and avoid implying the first release
+      // is already healthy or billable.
       try {
         await NotificationService.create(
-          createServiceNotification({
-            userId: request.userId,
-            type: 'success',
+          {
+            user_id: request.userId,
+            type: 'info',
+            title: 'Application Deployment Started',
+            message: `Application "${request.name}" has been created and the initial deployment is in progress. Billing will activate after the first successful deployment.`,
+            service_type: 'platform_app',
+            service_id: appId,
             action: 'created',
-            serviceType: 'platform_app',
-            serviceName: request.name,
-            serviceId: appId,
             metadata: {
+              serviceName: request.name,
               framework: request.framework,
               repository: request.repository_name,
               branch: request.branch || 'main',
             },
-          })
+          }
         );
       } catch (notifErr) {
         console.error('[PlatformAppService.createApp] Notification failed:', notifErr);
       }
 
-      // 11. Register webhook if auto_deploy enabled
+      // 10. Register webhook if auto_deploy enabled
       if (request.auto_deploy) {
         try {
           // providerToken was already resolved in step 5 — reuse it directly
@@ -560,7 +529,7 @@ export class PlatformAppService {
     const appsWithRollback = await Promise.all(
       (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
         try {
-          const prev = await Platform_App_Deployments.get_previous_successful(
+          const prev = await Platform_App_Deployments.get_previous_rollback_target(
             app.id,
             app.active_deployment_id ?? null
           );
@@ -637,6 +606,7 @@ export class PlatformAppService {
     const appName = appDetails.success ? appDetails.data?.name : 'Unknown';
     const projectId = appDetails.success ? appDetails.data?.project_id : null;
     const repoName = appDetails.success ? appDetails.data?.repository_name : 'Unknown';
+    let billingWarning: string | undefined;
 
     try {
       // 1. Delete infrastructure using deployment service
@@ -656,7 +626,10 @@ export class PlatformAppService {
         });
       } catch (billingError) {
         console.warn('[PlatformAppService.deleteApp] Failed to close billing:', billingError);
-        // Don't fail the deletion - billing cleanup can be handled separately
+        billingWarning =
+          billingError instanceof Error
+            ? billingError.message
+            : String(billingError);
       }
 
       // 3. Add project activity log if project_id exists
@@ -709,7 +682,7 @@ export class PlatformAppService {
         console.error('[PlatformAppService.deleteApp] Failed to create notification:', notifError);
       }
 
-      return { success: true, appName };
+      return { success: true, appName, warning: billingWarning };
 
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Platform_App_Deployments, Platform_Apps } from '@/lib/supabase/queries';
-import { createServiceClient } from '@/lib/supabase/server';
+import { PlatformAppBillingService } from '@/lib/services/platform-app-billing';
 import * as crypto from 'crypto';
 
 type DeploymentRecordPayload = {
@@ -9,6 +9,7 @@ type DeploymentRecordPayload = {
   commit_sha?: string | null;
   image_tag?: string | null;
   image_digest?: string | null;
+  failure_reason?: string | null;
   status: 'success' | 'failed';
   trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
 };
@@ -81,9 +82,17 @@ export async function POST(req: NextRequest) {
 
     const buildNumber = normalizeInt(body.build_number);
 
+    if (buildNumber === null) {
+      return NextResponse.json(
+        { error: 'Missing required field: build_number' },
+        { status: 400 }
+      );
+    }
+
     // Record should include at least one stable image identity.
     const image_tag = body.image_tag ?? null;
     const image_digest = body.image_digest ?? null;
+    const failure_reason = body.failure_reason ?? null;
     if (!image_tag && !image_digest) {
       return NextResponse.json(
         { error: 'Missing required fields: image_tag or image_digest' },
@@ -91,62 +100,68 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const insert = await Platform_App_Deployments.create({
+    const finalized = await Platform_App_Deployments.complete_build({
       app_id: body.app_id,
+      status: body.status,
       build_number: buildNumber,
-      commit_sha: body.commit_sha ?? null,
       image_tag,
       image_digest,
-      status: body.status,
+      failure_reason: body.status === 'failed' ? failure_reason : null,
+      allowed_current_statuses: ['building'],
+      create_if_missing: true,
       trigger: body.trigger,
+      commit_sha: body.commit_sha ?? null,
     });
 
-    // Handle idempotency: Jenkins/webhook retries can repeat the same build_number.
-    let deployment = insert.success ? insert.data : null;
-
-    if (!deployment && insert.error && buildNumber !== null) {
-      const msg = String(insert.error);
-      const looksLikeDuplicate =
-        msg.includes('duplicate') ||
-        msg.includes('uq_platform_app_deployments_app_build_number') ||
-        msg.includes('unique') ||
-        msg.includes('23505');
-
-      if (looksLikeDuplicate) {
-        const supabase = await createServiceClient();
-        const { data } = await supabase
-          .from('platform_app_deployments')
-          .select('*')
-          .eq('app_id', body.app_id)
-          .eq('build_number', buildNumber)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        deployment = data || null;
-      }
-    }
-
-    if (!deployment) {
-      console.error('[DeploymentRecordWebhook] Failed to create deployment record:', insert.error);
+    if (!finalized.success || !finalized.data) {
+      console.error('[DeploymentRecordWebhook] Failed to finalize deployment record:', finalized.error);
       return NextResponse.json(
-        { error: insert.error || 'Failed to create deployment record' },
+        { error: finalized.error || 'Failed to finalize deployment record' },
         { status: 500 }
       );
     }
 
-    // Mark as active + update app status on successful deploy
-    if (body.status === 'success') {
-      console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
-      await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);
+    const deployment = finalized.data;
+
+    const finalStatus = deployment.status;
+
+    // Update app status and mark active deployment based on the finalized deployment row.
+    // This avoids late webhook deliveries flipping app state when complete_build()
+    // intentionally kept an existing terminal failure.
+    if (finalStatus === 'success') {
+      if (body.trigger !== 'resize' && body.trigger !== 'rollback') {
+        const billingActivation = await PlatformAppBillingService.activateInitialBillingIfNeeded(
+          body.app_id,
+          deployment.id
+        );
+        if (!billingActivation.success) {
+          console.error(
+            '[DeploymentRecordWebhook] Failed to activate initial billing:',
+            billingActivation.error
+          );
+        }
+      }
+
+      if (finalized.updated || finalized.created) {
+        console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
+        await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);
+      }
       await Platform_Apps.update(body.app_id, {
         status: 'running',
         last_deploy_trigger: body.trigger,
         last_deploy_commit: body.commit_sha ?? null,
+        last_failure_reason: null,
+      });
+    } else {
+      await Platform_Apps.update(body.app_id, {
+        status: 'failed',
+        last_deploy_trigger: body.trigger,
+        last_deploy_commit: body.commit_sha ?? null,
+        last_failure_reason: deployment.failure_reason ?? failure_reason,
       });
     }
 
-    console.log('[DeploymentRecordWebhook] ✅ Deployment record created:', deployment.id);
+    console.log('[DeploymentRecordWebhook] ✅ Deployment record finalized:', deployment.id);
 
     return NextResponse.json({
       success: true,

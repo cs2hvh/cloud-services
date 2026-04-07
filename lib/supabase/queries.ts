@@ -3136,6 +3136,94 @@ export const Platform_App_Deployments = {
     }
   },
 
+  get_latest_by_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || null };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_in_progress_by_app: async (app_id: string) => {
+    try {
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'building')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return { success: false, error: error.message };
+      return { success: true, data: data || null };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
+  get_operation_lock: async (app_id: string, appStatus?: string | null) => {
+    if (appStatus === 'deleting') {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'deleting' as const,
+        message: 'App is being deleted and cannot accept changes right now.',
+        deployment: null,
+      };
+    }
+
+    if (appStatus === 'building' || appStatus === 'pending') {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'building' as const,
+        message: 'A deployment is already in progress. Please wait for it to complete.',
+        deployment: null,
+      };
+    }
+
+    const inProgress = await Platform_App_Deployments.get_in_progress_by_app(app_id);
+    if (!inProgress.success) {
+      return {
+        success: false,
+        blocked: false,
+        blocker: null,
+        message: inProgress.error || 'Failed to check deployment state',
+        deployment: null,
+      };
+    }
+
+    if (inProgress.data) {
+      return {
+        success: true,
+        blocked: true,
+        blocker: 'building' as const,
+        message: `Build #${inProgress.data.build_number ?? 'unknown'} is still in progress.`,
+        deployment: inProgress.data,
+      };
+    }
+
+    return {
+      success: true,
+      blocked: false,
+      blocker: null,
+      message: null,
+      deployment: null,
+    };
+  },
+
   get_latest_successful: async (app_id: string) => {
     try {
       const supabase = await createServiceClient();
@@ -3180,6 +3268,73 @@ export const Platform_App_Deployments = {
     }
   },
 
+  get_previous_rollback_target: async (app_id: string, reference_deployment_id?: string | null) => {
+    try {
+      const supabase = await createServiceClient();
+
+      let currentDeployment: Record<string, unknown> | null = null;
+
+      if (reference_deployment_id) {
+        const { data, error } = await supabase
+          .from('platform_app_deployments')
+          .select('*')
+          .eq('app_id', app_id)
+          .eq('id', reference_deployment_id)
+          .maybeSingle();
+
+        if (error) return { success: false, error: error.message };
+        currentDeployment = data ?? null;
+      }
+
+      if (!currentDeployment) {
+        const latestSuccessful = await Platform_App_Deployments.get_latest_successful(app_id);
+        if (!latestSuccessful.success) {
+          return { success: false, error: latestSuccessful.error };
+        }
+        currentDeployment = latestSuccessful.data ?? null;
+      }
+
+      const { data: successfulDeployments, error } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', app_id)
+        .eq('status', 'success')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) return { success: false, error: error.message };
+
+      const currentImageTag =
+        typeof currentDeployment?.image_tag === 'string' ? currentDeployment.image_tag : null;
+      const currentImageDigest =
+        typeof currentDeployment?.image_digest === 'string' ? currentDeployment.image_digest : null;
+      const currentDeploymentId =
+        typeof currentDeployment?.id === 'string' ? currentDeployment.id : null;
+
+      const rollbackTarget =
+        (successfulDeployments || []).find((deployment) => {
+          if (!deployment || deployment.id === currentDeploymentId) return false;
+
+          // Rollback should move to a different serving image. Resize deployments
+          // can create a new successful deployment event while intentionally
+          // keeping the same image/build number, so exclude same-image rows.
+          if (currentImageDigest && deployment.image_digest) {
+            return deployment.image_digest !== currentImageDigest;
+          }
+
+          if (currentImageTag && deployment.image_tag) {
+            return deployment.image_tag !== currentImageTag;
+          }
+
+          return true;
+        }) || null;
+
+      return { success: true, data: rollbackTarget };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
+  },
+
   update_status: async (
     appId: string,
     buildNumber: number,
@@ -3190,30 +3345,171 @@ export const Platform_App_Deployments = {
       failure_reason?: string | null;
     }
   ) => {
-    try {
-      const supabase = await createServiceClient();
-      const { data, error } = await supabase
-        .from('platform_app_deployments')
-        .update({
-          status: updates.status,
-          ...(updates.image_tag !== undefined && { image_tag: updates.image_tag }),
-          ...(updates.image_digest !== undefined && { image_digest: updates.image_digest }),
-          ...(updates.failure_reason !== undefined && { failure_reason: updates.failure_reason }),
-        })
-        .eq('app_id', appId)
-        .eq('build_number', buildNumber)
-        .select('*')
-        .single();
-
-      if (error) return { success: false, error: error.message };
-      return { success: true, data };
-    } catch (err) {
-      return { success: false, error: String(err) };
-    }
+    return Platform_App_Deployments.complete_build({
+      app_id: appId,
+      build_number: buildNumber,
+      status: updates.status,
+      image_tag: updates.image_tag,
+      image_digest: updates.image_digest,
+      failure_reason: updates.failure_reason,
+    });
   },
 
   set_active_for_app: async (app_id: string, deployment_id: string | null) => {
     return Platform_Apps.update(app_id, { active_deployment_id: deployment_id });
+  },
+
+  /**
+   * Create a 'building' record at the start of every build trigger.
+   * This is the only way to create an initial deployment record — use this
+   * instead of calling create() directly with status: 'building'.
+   * The Jenkins webhook (deployment-record) will UPDATE this to success/failed.
+   */
+  start_build: async (payload: {
+    app_id: string;
+    build_number: number;
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
+    commit_sha?: string | null;
+  }) => {
+    return Platform_App_Deployments.create({
+      app_id: payload.app_id,
+      build_number: payload.build_number,
+      status: 'building',
+      trigger: payload.trigger,
+      commit_sha: payload.commit_sha ?? null,
+    });
+  },
+
+  complete_build: async (payload: {
+    app_id: string;
+    build_number: number;
+    status: 'success' | 'failed';
+    image_tag?: string | null;
+    image_digest?: string | null;
+    failure_reason?: string | null;
+    allowed_current_statuses?: Array<'building' | 'success' | 'failed'>;
+    create_if_missing?: boolean;
+    trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
+    commit_sha?: string | null;
+  }) => {
+    try {
+      const supabase = await createServiceClient();
+      const canRecoverFailedRecord = (failureReason: string | null | undefined) => {
+        if (!failureReason) return true;
+        return (
+          failureReason === 'Build never started' ||
+          failureReason.startsWith('Build timeout:')
+        );
+      };
+      const updatePayload = {
+        status: payload.status,
+        ...(payload.image_tag !== undefined && { image_tag: payload.image_tag }),
+        ...(payload.image_digest !== undefined && { image_digest: payload.image_digest }),
+        failure_reason: payload.status === 'success' ? null : (payload.failure_reason ?? null),
+      };
+
+      let updateQuery = supabase
+        .from('platform_app_deployments')
+        .update(updatePayload)
+        .eq('app_id', payload.app_id)
+        .eq('build_number', payload.build_number);
+
+      if (payload.allowed_current_statuses && payload.allowed_current_statuses.length > 0) {
+        updateQuery = updateQuery.in('status', payload.allowed_current_statuses);
+      }
+
+      const { data: updatedRows, error: updateError } = await updateQuery.select('*');
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+
+      const updated = updatedRows?.[0] || null;
+      if (updated) {
+        return { success: true, data: updated, updated: true, created: false };
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from('platform_app_deployments')
+        .select('*')
+        .eq('app_id', payload.app_id)
+        .eq('build_number', payload.build_number)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingError) {
+        return { success: false, error: existingError.message };
+      }
+
+      if (existing) {
+        const shouldRecoverFailedToSuccess =
+          payload.status === 'success' &&
+          existing.status === 'failed' &&
+          canRecoverFailedRecord(existing.failure_reason);
+        const shouldClearFailureReason =
+          payload.status === 'success' &&
+          existing.status === 'success' &&
+          existing.failure_reason !== null;
+        const shouldBackfillFailureReason =
+          payload.status === 'failed' &&
+          !!payload.failure_reason &&
+          !existing.failure_reason &&
+          existing.status === 'failed';
+
+        if (shouldRecoverFailedToSuccess || shouldClearFailureReason || shouldBackfillFailureReason) {
+          const { data: repaired, error: repairError } = await supabase
+            .from('platform_app_deployments')
+            .update({
+              ...(shouldRecoverFailedToSuccess && { status: 'success' }),
+              ...(shouldClearFailureReason && { failure_reason: null }),
+              ...(shouldRecoverFailedToSuccess && { failure_reason: null }),
+              ...(shouldBackfillFailureReason && { failure_reason: payload.failure_reason ?? null }),
+              ...(payload.image_tag !== undefined && { image_tag: payload.image_tag }),
+              ...(payload.image_digest !== undefined && { image_digest: payload.image_digest }),
+            })
+            .eq('id', existing.id)
+            .select('*')
+            .maybeSingle();
+
+          if (repairError) {
+            return { success: false, error: repairError.message };
+          }
+
+          if (repaired) {
+            return { success: true, data: repaired, updated: true, created: false };
+          }
+        }
+
+        return { success: true, data: existing, updated: false, created: false };
+      }
+
+      if (!payload.create_if_missing) {
+        return { success: false, error: 'Deployment record not found' };
+      }
+
+      if (!payload.trigger) {
+        return { success: false, error: 'Missing trigger for create_if_missing fallback' };
+      }
+
+      const created = await Platform_App_Deployments.create({
+        app_id: payload.app_id,
+        build_number: payload.build_number,
+        commit_sha: payload.commit_sha ?? null,
+        image_tag: payload.image_tag,
+        image_digest: payload.image_digest,
+        status: payload.status,
+        trigger: payload.trigger,
+        failure_reason: payload.status === 'success' ? null : (payload.failure_reason ?? null),
+      });
+
+      if (!created.success) {
+        return { success: false, error: created.error };
+      }
+
+      return { success: true, data: created.data, updated: true, created: true };
+    } catch (err) {
+      return { success: false, error: String(err) };
+    }
   },
 };
 

@@ -36,6 +36,16 @@ const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction")
   }
 };
 
+const isUniqueViolation = (error: unknown): boolean => {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === "23505" ||
+    (typeof maybeError.message === "string" &&
+      maybeError.message.toLowerCase().includes("duplicate key"))
+  );
+};
+
 type RecurringInterval = "week" | "month" | "year";
 type RecurringStatus =
   | "pending"
@@ -330,6 +340,129 @@ export const Billing = {
       throw new Error(`Failed to insert active_platform_apps: ${error.message}`);
   },
 
+  get_active_platform_app: async (params: {
+    serviceId: string;
+    userId?: string;
+  }): Promise<{
+    success: boolean;
+    data?: {
+      id: string;
+      service_id: string;
+      user_id: string;
+      hourly_rate: number;
+      status: string;
+      created_at: string | null;
+      updated_at: string | null;
+      last_billed_at: string | null;
+    } | null;
+    error?: string;
+  }> => {
+    try {
+      const supabase = await createServiceClient();
+      let query = supabase
+        .schema("billing")
+        .from("active_platform_apps")
+        .select("*")
+        .eq("service_id", params.serviceId)
+        .eq("status", "active");
+
+      if (params.userId) {
+        query = query.eq("user_id", params.userId);
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      return { success: true, data: data ?? null };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
+
+  activate_platform_app: async (params: {
+    userId: string;
+    serviceId: string;
+    initialCost: number;
+    hourlyRate: number;
+  }): Promise<{
+    activated: boolean;
+    alreadyActive: boolean;
+    newBalance: number | null;
+  }> => {
+    const existing = await Billing.get_active_platform_app({
+      serviceId: params.serviceId,
+      userId: params.userId,
+    });
+
+    if (!existing.success) {
+      throw new Error(existing.error || "Failed to check active platform app billing");
+    }
+
+    if (existing.data) {
+      return {
+        activated: false,
+        alreadyActive: true,
+        newBalance: null,
+      };
+    }
+
+    let newBalance: number | null = null;
+    try {
+      newBalance = await Billing.deduct(params.userId, params.initialCost);
+    } catch (error) {
+      throw new Error(
+        `Failed to deduct initial platform app charge: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+
+    try {
+      await Billing.add_active_platform_app({
+        userId: params.userId,
+        serviceId: params.serviceId,
+        hourlyRate: params.hourlyRate,
+      });
+      return {
+        activated: true,
+        alreadyActive: false,
+        newBalance,
+      };
+    } catch (error) {
+      const raceLostToExistingActiveRow = isUniqueViolation(error);
+      try {
+        await Billing.topup(params.userId, params.initialCost);
+      } catch (refundError) {
+        throw new Error(
+          `Failed to create active platform app billing row after deducting credits${
+            raceLostToExistingActiveRow ? " because another activation won the race" : ""
+          }, and refund also failed: ${
+            refundError instanceof Error ? refundError.message : String(refundError)
+          }`
+        );
+      }
+
+      if (raceLostToExistingActiveRow) {
+        return {
+          activated: false,
+          alreadyActive: true,
+          newBalance: null,
+        };
+      }
+
+      throw new Error(
+        `Failed to create active platform app billing row after deducting credits; initial charge was refunded: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  },
+
   /**
    * Update the hourly rate for an active platform app (used during resize)
    * This ensures the user is charged the correct rate after resizing
@@ -461,9 +594,11 @@ export const Billing = {
 
     // Deduct credits
     let newBalance: number | null = null;
+    let deductionApplied = false;
     if (charge > 0) {
       try {
         newBalance = await Billing.deduct(row.user_id, charge);
+        deductionApplied = true;
         console.log(`[Billing.close_active_service] Deduction successful`, {
           userId: params.userId,
           charge,
@@ -490,11 +625,26 @@ export const Billing = {
       .eq("service_id", params.serviceId)
       .eq("user_id", params.userId);
     if (delErr) {
+      if (deductionApplied && charge > 0) {
+        try {
+          await Billing.topup(row.user_id, charge);
+        } catch (refundError) {
+          console.error(
+            `[Billing.close_active_service] Failed to refund charge after delete error for ${type}:`,
+            refundError instanceof Error ? refundError.message : String(refundError)
+          );
+          throw new Error(
+            `Failed to delete active ${type}: ${delErr.message}. Charge refund also failed.`
+          );
+        }
+      }
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,
         delErr.message
       );
-      throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
+      throw new Error(
+        `Failed to delete active ${type}: ${delErr.message}. Charge of ${charge} was refunded.`
+      );
     }
 
     console.log(`[Billing.close_active_service] Closed service successfully`, {

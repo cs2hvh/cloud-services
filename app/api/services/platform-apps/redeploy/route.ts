@@ -57,23 +57,20 @@ export async function POST(req: NextRequest) {
     }
 
     const app = existing.data;
-    // Check if app is in a state that can be redeployed
-    if (app.status === 'building') {
-      return NextResponse.json(
-        { error: "App is already building. Please wait for the current build to complete." },
-        { status: 409 }
-      );
+    const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, app.status);
+    if (!operationLock.success) {
+      return NextResponse.json({ error: operationLock.message || 'Failed to check deployment state' }, { status: 500 });
     }
-
-    if (app.status === 'deleting') {
-      return NextResponse.json(
-        { error: "App is being deleted and cannot be redeployed." },
-        { status: 409 }
-      );
+    if (operationLock.blocked) {
+      return NextResponse.json({ error: operationLock.message }, { status: 409 });
     }
 
     // Update status to building using AppStatusService for consistency
     await AppStatusService.setStatus(app_id, "building");
+
+    let buildTriggered = false;
+    let buildNumber: number | null = null;
+    let pollingStarted = false;
 
     try {
       // Fetch environment variables from database
@@ -192,18 +189,21 @@ export async function POST(req: NextRequest) {
       console.log(`[Redeploy] Pipeline XML updated successfully`);
       
       // Trigger a new build using JenkinsService
-      const buildNumber = await JenkinsService.triggerBuild(app.name);
+      buildNumber = await JenkinsService.triggerBuild(app.name);
+      buildTriggered = true;
 
       console.log(`[Redeploy] Triggered build #${buildNumber} for app: ${app.name}`);
 
       // Create deployment row immediately so Supabase Realtime pushes it to the UI.
-      // BuildPollingService will UPDATE this row on completion (success/failed).
-      await Platform_App_Deployments.create({
+      // The Jenkins webhook will UPDATE this to the final status when the build finishes.
+      const buildRecord = await Platform_App_Deployments.start_build({
         app_id: app.id,
         build_number: buildNumber,
-        status: 'building',
         trigger: 'manual',
       });
+      if (!buildRecord.success) {
+        throw new Error(buildRecord.error || 'Failed to create in-progress deployment record');
+      }
 
       // Start background polling for build status
       BuildPollingService.startPolling({
@@ -212,6 +212,7 @@ export async function POST(req: NextRequest) {
         buildNumber: buildNumber,
         trigger: 'manual',
       });
+      pollingStarted = true;
 
       // Add project log if project_id exists
       if (app.project_id) {
@@ -256,10 +257,35 @@ export async function POST(req: NextRequest) {
         app_name: app.name,
       });
     } catch (jenkinsError: unknown) {
-      // Revert status if Jenkins fails - use AppStatusService
-      await AppStatusService.setStatus(app_id, "failed", "Jenkins trigger failed");
-      
       const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : "Unknown error";
+      // If the Jenkins build has not started, revert the app status so the user can retry.
+      if (!buildTriggered) {
+        await Platform_Apps.update(app_id, {
+          status: app.status || 'failed',
+          last_failure_reason: null,
+        });
+      }
+
+      if (buildTriggered && buildNumber) {
+        if (!pollingStarted) {
+          BuildPollingService.startPolling({
+            appId: app.id,
+            appName: app.name,
+            buildNumber,
+            trigger: 'manual',
+          });
+        }
+
+        console.warn(`[Redeploy] Build #${buildNumber} started but post-trigger tracking failed: ${errorMessage}`);
+        return NextResponse.json({
+          message: "Redeploy started. Deployment tracking is being recovered in the background.",
+          warning: errorMessage,
+          build_number: buildNumber,
+          app_id: app_id,
+          app_name: app.name,
+        });
+      }
+
       console.error(`[Redeploy] Jenkins error for ${app.name}:`, errorMessage);
       
       return NextResponse.json(

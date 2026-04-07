@@ -19,9 +19,25 @@ export async function ensureBalance(userId: string, required: number): Promise<{
   return { ok: true };
 }
 
-// After successful provisioning: deduct upfront, then register active service
+// After successful provisioning: deduct upfront, then register active service.
+// If the active-row insert fails, refund the deducted amount so credits are not lost.
 export async function postProvisionBilling({ userId, initialCost, hourlyRate, serviceId, addActive }: PostProvisionBillingArgs)
 {
   await Billing.deduct(userId, initialCost);
-  await addActive({ userId, serviceId, hourlyRate });
+  try {
+    await addActive({ userId, serviceId, hourlyRate });
+  } catch (insertError) {
+    try {
+      await Billing.topup(userId, initialCost);
+    } catch (refundError) {
+      throw new Error(
+        `Failed to register active service billing and refund also failed: ${
+          refundError instanceof Error ? refundError.message : String(refundError)
+        }. Original insert error: ${
+          insertError instanceof Error ? insertError.message : String(insertError)
+        }`
+      );
+    }
+    throw insertError;
+  }
 }

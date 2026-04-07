@@ -6,7 +6,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { AppStatusService } from "@/lib/services/app-status";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Delete using shared service (handles all cleanup)
+    let previousStatus: string | null = null;
+    let previousFailureReason: string | null = null;
     try {
       // Verify app exists and check ownership before setting status
       const existing = await Platform_Apps.get(app_id);
@@ -60,11 +62,30 @@ export async function POST(req: NextRequest) {
       if (!isAdminUser && existing.data.user_id !== auth.user!.id) {
         return NextResponse.json({ error: "Unauthorized", message: "Unauthorized" }, { status: 403 });
       }
+      previousStatus = existing.data.status ?? null;
+      previousFailureReason = existing.data.last_failure_reason ?? null;
+
+      const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, existing.data.status);
+      if (!operationLock.success) {
+        return NextResponse.json(
+          { error: operationLock.message || "Failed to check deployment state", message: operationLock.message || "Failed to check deployment state" },
+          { status: 500 }
+        );
+      }
 
       // Block deletion while a build is actively in progress
-      if (existing.data.status === 'building') {
+      if (operationLock.blocked) {
         return NextResponse.json(
-          { error: "Cannot delete while a build is in progress. Wait for the build to complete or fail.", message: "Cannot delete while building" },
+          {
+            error:
+              operationLock.blocker === 'deleting'
+                ? "App is already being deleted."
+                : "Cannot delete while a build is in progress. Wait for the build to complete or fail.",
+            message:
+              operationLock.blocker === 'deleting'
+                ? "App is already being deleted."
+                : "Cannot delete while building",
+          },
           { status: 409 }
         );
       }
@@ -73,7 +94,7 @@ export async function POST(req: NextRequest) {
       // Supabase Realtime pushes the visual "Deleting…" state to all clients.
       await AppStatusService.setStatus(app_id, "deleting");
 
-      await PlatformAppService.deleteApp({
+      const deletionResult = await PlatformAppService.deleteApp({
         appId: app_id,
         userId: auth.user!.id,
         isAdmin: isAdminUser,
@@ -86,15 +107,28 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      return NextResponse.json({ message: "App deleted successfully" });
+      return NextResponse.json({
+        message: "App deleted successfully",
+        warning: deletionResult.warning ?? null,
+      });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       const statusCode = errorMsg === "App not found" ? 404 :
                         errorMsg === "Unauthorized" ? 403 : 400;
 
-      // Revert status from "deleting" back to "failed" so the user can retry
+      // Revert status from "deleting" back to the last known app state so the
+      // control plane does not claim the app failed when deletion itself failed.
       try {
-        await AppStatusService.setStatus(app_id, "failed", `Deletion failed: ${errorMsg}`);
+        if (previousStatus === "running") {
+          await AppStatusService.setStatus(app_id, "running");
+        } else if (previousStatus === "failed") {
+          await AppStatusService.setStatus(app_id, "failed", previousFailureReason ?? undefined);
+        } else if (previousStatus) {
+          await Platform_Apps.update(app_id, {
+            status: previousStatus,
+            last_failure_reason: previousStatus === "failed" ? previousFailureReason : null,
+          });
+        }
       } catch { /* best-effort revert */ }
 
       return NextResponse.json(

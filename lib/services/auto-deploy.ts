@@ -11,7 +11,7 @@
 
 import { JenkinsService } from './jenkins';
 import { BuildPollingService } from './build-polling';
-import { Platform_Apps } from '@/lib/supabase/queries';
+import { Platform_Apps, Platform_App_Deployments } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
 import { gitlabTokenManager } from '@/lib/providers/gitlab/token-manager';
 import { bitbucketTokenManager } from '@/lib/providers/bitbucket/token-manager';
@@ -35,6 +35,7 @@ export interface AutoDeployResult {
   success: boolean;
   buildNumber?: number;
   error?: string;
+  warning?: string;
   skipped?: boolean;
   skipReason?: string;
 }
@@ -51,6 +52,9 @@ export class AutoDeployService {
    */
   static async deploy(config: AutoDeployConfig): Promise<AutoDeployResult> {
     const { appId, appName, userId, gitProvider, repositoryUrl, branch, framework, size, commitSha, deliveryId } = config;
+    let buildTriggered = false;
+    let buildNumber: number | null = null;
+    let pollingStarted = false;
 
     console.log(`[AutoDeploy] Starting auto-deploy for ${appName}`);
     console.log(`[AutoDeploy] Provider: ${gitProvider}, Branch: ${branch}, Commit: ${commitSha?.substring(0, 7) || 'unknown'}`);
@@ -140,23 +144,54 @@ export class AutoDeployService {
       // Step 5: Trigger the build with specific commit SHA
       // This ensures the exact commit from the webhook is deployed, not branch HEAD
       console.log(`[AutoDeploy] Step 4/4: Triggering build...`);
-      const buildNumber = await JenkinsService.triggerBuild(appName, commitSha);
+      buildNumber = await JenkinsService.triggerBuild(appName, commitSha);
+      buildTriggered = true;
       console.log(`[AutoDeploy] ✅ Build #${buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`);
 
-      // Step 6: Update app status in database
-      await Platform_Apps.update(appId, {
-        status: 'building',
-        last_deploy_trigger: 'webhook',
-        last_deploy_commit: commitSha || null,
-      });
+      let trackingWarning: string | undefined;
+      try {
+        // Step 6: Update app status in database
+        await Platform_Apps.update(appId, {
+          status: 'building',
+          last_deploy_trigger: 'webhook',
+          last_deploy_commit: commitSha || null,
+        });
 
-      // Step 7: Start build status polling (async, don't await)
-      BuildPollingService.startPolling({
-        appId,
-        appName,
-        buildNumber,
-        trigger: 'webhook',
-      });
+        // Create deployment row immediately so Supabase Realtime pushes the
+        // in-progress build to the UI. The Jenkins webhook will UPDATE this
+        // to the final status (success/failed) when the build finishes.
+        const buildRecord = await Platform_App_Deployments.start_build({
+          app_id: appId,
+          build_number: buildNumber,
+          trigger: 'webhook',
+          commit_sha: commitSha || null,
+        });
+        if (!buildRecord.success) {
+          throw new Error(buildRecord.error || 'Failed to create in-progress deployment record');
+        }
+
+        // Step 7: Start build status polling (async, don't await)
+        BuildPollingService.startPolling({
+          appId,
+          appName,
+          buildNumber,
+          trigger: 'webhook',
+        });
+        pollingStarted = true;
+      } catch (trackingError: unknown) {
+        trackingWarning = trackingError instanceof Error ? trackingError.message : 'Unknown tracking error';
+        console.warn(`[AutoDeploy] Build #${buildNumber} started but deployment tracking needs recovery: ${trackingWarning}`);
+
+        if (!pollingStarted) {
+          BuildPollingService.startPolling({
+            appId,
+            appName,
+            buildNumber,
+            trigger: 'webhook',
+          });
+          pollingStarted = true;
+        }
+      }
 
       // Mark delivery as successful
       if (deliveryId) {
@@ -169,11 +204,33 @@ export class AutoDeployService {
       return {
         success: true,
         buildNumber,
+        warning: trackingWarning,
       };
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[AutoDeploy] ❌ Auto-deploy failed:`, errorMessage);
+
+      if (buildTriggered && buildNumber) {
+        if (!pollingStarted) {
+          BuildPollingService.startPolling({
+            appId,
+            appName,
+            buildNumber,
+            trigger: 'webhook',
+          });
+        }
+
+        if (deliveryId) {
+          this.markDeliveryComplete(deliveryId, 'success');
+        }
+
+        return {
+          success: true,
+          buildNumber,
+          warning: errorMessage,
+        };
+      }
       
       // Mark delivery as failed
       if (deliveryId) {

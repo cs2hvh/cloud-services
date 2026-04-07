@@ -4,7 +4,7 @@ import { updateEnvVarsSchema } from "@/lib/validation/platform-apps";
 import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
 import { analyzeEnvLifecycle } from "@/lib/env/lifecycle";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 
@@ -46,6 +46,22 @@ export async function POST(req: NextRequest) {
     // Validate environment variables according to framework rules (Vercel approach)
     // Log warnings/errors for awareness, but ALLOW updates (like Vercel)
     const app = existing.data;
+    const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, app.status);
+    if (!operationLock.success) {
+      return NextResponse.json({ error: operationLock.message }, { status: 500 });
+    }
+    if (operationLock.blocked) {
+      return NextResponse.json(
+        {
+          error:
+            operationLock.blocker === 'deleting'
+              ? "App is being deleted and cannot be updated."
+              : "Cannot update environment variables while a deployment is in progress.",
+        },
+        { status: 409 }
+      );
+    }
+
     if (env_vars && env_vars.length > 0 && app.framework) {
       const envValidation = validateEnvVars(app.framework, env_vars);
       

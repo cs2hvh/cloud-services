@@ -32,6 +32,7 @@ import {
   Zap,
   Server,
   AlertTriangle,
+  RotateCcw,
   FolderOpen,
   Edit2,
   type LucideIcon,
@@ -87,8 +88,19 @@ interface AppDetail {
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
   size?: string;
+  can_rollback?: boolean;
   // Failure tracking
   last_failure_reason?: string | null;
+}
+
+function isReleaseBuildTrigger(trigger?: string | null) {
+  return trigger !== 'resize';
+}
+
+function getDeploymentEventLabel(buildNumber: number | null, trigger?: string | null) {
+  if (buildNumber === null) return 'Rollback';
+  if (trigger === 'resize') return `Resize #${buildNumber}`;
+  return `Build #${buildNumber}`;
 }
 
 // Size specifications
@@ -134,11 +146,11 @@ const SECTION_META: Array<{
   },
   {
     value: 'build-logs',
-    label: 'Build Logs',
-    description: 'Trace build output, pipeline execution, and release logs.',
+    label: 'Build & Ops',
+    description: 'Trace build output, pipeline execution, and operational rollout logs.',
     eyebrow: 'Build',
     icon: Terminal,
-    helper: 'Use build logs to validate pipeline output and diagnose release failures quickly.',
+    helper: 'Use these logs to validate release builds, resize runs, and rollout execution details.',
   },
   {
     value: 'runtime-logs',
@@ -237,6 +249,12 @@ export default function AppDetailPage() {
   const [initialLogLoading, setInitialLogLoading] = useState(false);
   // tracks the byte/char offset for incremental raw log fetches during active builds
   const logOffsetRef = useRef(0);
+  const prevBuildingRef = useRef<boolean | undefined>(undefined);
+  const prevBuildNumberRef = useRef<number | null>(null);
+  // Tracks consecutive polls where Jenkins says "done" but the DB row is still
+  // BUILDING — used to detect potentially orphaned builds and ask the backend
+  // to run the canonical recovery path.
+  const stalePollingCountRef = useRef(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -246,11 +264,13 @@ export default function AppDetailPage() {
   const [envVarsModified, setEnvVarsModified] = useState(false);
   const [savingEnvVars, setSavingEnvVars] = useState(false);
   const [redeploying, setRedeploying] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
 
   // Resize state
   const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
+  const [pendingResizeSize, setPendingResizeSize] = useState<SizeKey | null>(null);
   const [resizing, setResizing] = useState(false);
   const [resizeError, setResizeError] = useState<string | null>(null);
   const [resizeSuccess, setResizeSuccess] = useState<string | null>(null);
@@ -278,12 +298,58 @@ export default function AppDetailPage() {
   const { 
     deployments, 
     loading: deploymentsLoading, 
-    connectionStatus 
+    connectionStatus,
+    refetch: refetchDeployments,
   } = useRealtimeDeployments({ 
     appId,
     limit: 50,
     enabled: !!app 
   });
+
+  const buildDeployments = useMemo(
+    () =>
+      deployments.filter(
+        (deployment): deployment is typeof deployment & { build_number: number } =>
+          typeof deployment.build_number === 'number' && deployment.build_number > 0
+      ),
+    [deployments]
+  );
+
+  const latestBuildDeployment = buildDeployments[0] ?? null;
+  const releaseDeployments = useMemo(
+    () => buildDeployments.filter((deployment) => isReleaseBuildTrigger(deployment.trigger)),
+    [buildDeployments]
+  );
+  const latestReleaseDeployment = releaseDeployments[0] ?? null;
+  const activeBuildNumber = useMemo(() => {
+    if (buildInfo?.building && buildInfo.number) return buildInfo.number;
+    if (latestBuildDeployment?.status === 'BUILDING') return latestBuildDeployment.build_number;
+    return null;
+  }, [buildInfo?.building, buildInfo?.number, latestBuildDeployment]);
+  const isBuilding = activeBuildNumber !== null;
+  const resizeInProgress = useMemo(() => {
+    if (pendingResizeSize) return true;
+    return latestBuildDeployment?.status === 'BUILDING' && latestBuildDeployment.trigger === 'resize';
+  }, [latestBuildDeployment, pendingResizeSize]);
+  const displayBuildInfo = useMemo<BuildInfo | null>(() => {
+    if (activeBuildNumber !== null) {
+      if (buildInfo?.number === activeBuildNumber) {
+        return { ...buildInfo, building: true };
+      }
+
+      return {
+        number: activeBuildNumber,
+        building: true,
+        result: null,
+        duration: 0,
+        timestamp: Date.now(),
+        url: '',
+      };
+    }
+
+    return buildInfo;
+  }, [activeBuildNumber, buildInfo]);
+  const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
   const { 
@@ -312,7 +378,7 @@ export default function AppDetailPage() {
     }
   }, [appId]);
 
-  const fetchBuildInfo = useCallback(async (appName: string) => {
+  const fetchBuildInfo = useCallback(async (appName: string): Promise<BuildInfo | null> => {
     try {
        const res = await api.get(`/jenkins/build-info?app=${appName}`);
       if (res.data) {
@@ -327,10 +393,12 @@ export default function AppDetailPage() {
           }
           return res.data;
         });
+        return res.data as BuildInfo;
       }
     } catch (error) {
       console.error('Error fetching build info:', error);
     }
+    return null;
   }, []);
 
   const fetchBuildLogs = useCallback(async (
@@ -375,13 +443,17 @@ export default function AppDetailPage() {
     fetchApp();
   }, [fetchApp]);
 
-  // Sync real-time app updates to local state
+  // Sync real-time app updates to local state.
+  // Preserve computed fields (e.g. can_rollback) that come from the API but are
+  // absent in the Supabase realtime payload — spread realtimeApp AFTER prev so
+  // undefined fields in realtimeApp don't overwrite known values.
   useEffect(() => {
     if (realtimeApp) {
       setApp((prev) => {
         // Only update if there are actual changes
-        if (!prev || JSON.stringify(prev) !== JSON.stringify({ ...prev, ...realtimeApp })) {
-          return { ...prev, ...realtimeApp } as AppDetail;
+        const merged = { ...prev, ...realtimeApp, can_rollback: prev?.can_rollback } as AppDetail;
+        if (!prev || JSON.stringify(prev) !== JSON.stringify(merged)) {
+          return merged;
         }
         return prev;
       });
@@ -395,12 +467,13 @@ export default function AppDetailPage() {
   }, [app?.name, fetchBuildInfo]);
 
   useEffect(() => {
-    if (app?.name && buildInfo?.number) {
+    const targetBuildNumber = activeBuildNumber ?? buildInfo?.number ?? null;
+    if (app?.name && targetBuildNumber) {
       // Use raw logs while building (deployment stage hasn't run yet),
       // switch to deployment-filtered summary once the build completes.
-      fetchBuildLogs(app.name, buildInfo.number, !!buildInfo.building);
+      fetchBuildLogs(app.name, targetBuildNumber, isBuilding);
     }
-  }, [app?.name, buildInfo?.number, buildInfo?.building, fetchBuildLogs]);
+  }, [app?.name, activeBuildNumber, buildInfo?.number, isBuilding, fetchBuildLogs]);
 
   // Poll build info and APPEND new log lines while a build is actively running.
   // - 2s interval (down from 5s) for faster perceived updates
@@ -408,21 +481,38 @@ export default function AppDetailPage() {
   // - when Jenkins signals more data is ready (X-More-Data: true), schedule
   //   a catch-up fetch 400ms later instead of waiting the full 2s
   useEffect(() => {
-    if (!app?.name || !buildInfo?.building || !buildInfo?.number) return;
+    if (!app?.name || !isBuilding || !activeBuildNumber) return;
 
     // Capture stable values to avoid stale closures inside the interval
     const appName = app.name;
-    const buildNum = buildInfo.number;
+    const buildNum = activeBuildNumber;
     let catchupId: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(async () => {
       // Cancel any pending catch-up — the regular tick covers it
       if (catchupId) { clearTimeout(catchupId); catchupId = null; }
 
-      const [, more] = await Promise.all([
+      const [latestBuildInfo, more] = await Promise.all([
         fetchBuildInfo(appName),
         fetchBuildLogs(appName, buildNum, true, true),
       ]);
+
+      // Stale-build detection: Jenkins says the build is finished but the
+      // Supabase deployment row is still BUILDING. After a few consecutive
+      // "Jenkins done" polls, ask the backend to run stale-build recovery.
+      // The backend decides whether the build is truly orphaned or still within
+      // the normal post-build health verification window.
+      if (latestBuildInfo && !latestBuildInfo.building) {
+        stalePollingCountRef.current += 1;
+        if (stalePollingCountRef.current >= 3) {
+          stalePollingCountRef.current = 0;
+          api
+            .post('/services/platform-apps/recover-build', { app_id: appId })
+            .catch(() => {/* non-critical — recovery is best-effort */});
+        }
+      } else {
+        stalePollingCountRef.current = 0;
+      }
 
       // Jenkins has more buffered output  — fetch again quickly without waiting the full 2s
       if (more) {
@@ -436,8 +526,57 @@ export default function AppDetailPage() {
     return () => {
       clearInterval(interval);
       if (catchupId) clearTimeout(catchupId);
+      stalePollingCountRef.current = 0;
     };
-  }, [app?.name, buildInfo?.building, buildInfo?.number, fetchBuildInfo, fetchBuildLogs]);
+  }, [app?.name, isBuilding, activeBuildNumber, fetchBuildInfo, fetchBuildLogs]);
+
+  // After a build completes, refetch K8s details so servingBuildNumber reflects
+  // the new pod's image tag and clears any false-positive degraded banner.
+  useEffect(() => {
+    const wasBuilding = prevBuildingRef.current;
+    prevBuildingRef.current = isBuilding;
+
+    if (wasBuilding === true && !isBuilding) {
+      // Immediately refetch deployments to pick up any status already written to DB
+      refetchDeployments();
+      // Give K8s a few seconds to complete the rolling update, then refetch both
+      const t = setTimeout(() => {
+        refetchDetails();
+        refetchDeployments();
+      }, 8000);
+      return () => clearTimeout(t);
+    }
+  }, [isBuilding, refetchDetails, refetchDeployments]);
+
+  // Idle poll: when no build is running, check Jenkins every 15 s so webhook-triggered
+  // builds (started entirely on the backend) are detected promptly. Once Jenkins
+  // reports building=true the fast 2 s polling loop above takes over.
+  useEffect(() => {
+    if (!app?.name || isBuilding) return;
+    const id = setInterval(() => fetchBuildInfo(app.name), 15_000);
+    return () => clearInterval(id);
+  }, [app?.name, isBuilding, fetchBuildInfo]);
+
+  useEffect(() => {
+    if (!isBuilding) {
+      setPendingResizeSize(null);
+      stalePollingCountRef.current = 0;
+    }
+  }, [isBuilding]);
+
+  // Notify when a new active build number appears.
+  // This follows the merged active build state (optimistic local start or DB row),
+  // so it still works during the realtime gap after manual resize/redeploy.
+  useEffect(() => {
+    if (!activeBuildNumber) return;
+    const prev = prevBuildNumberRef.current;
+    prevBuildNumberRef.current = activeBuildNumber;
+    // prev === null means this is the first fetch — don't toast for an already-running build.
+    if (prev === null) return;
+    if (activeBuildNumber > prev) {
+      toast.info(`Build #${activeBuildNumber} started`, { duration: 5000 });
+    }
+  }, [activeBuildNumber]);
 
   // Initialize edited env vars when app data loads
   useEffect(() => {
@@ -632,7 +771,8 @@ export default function AppDetailPage() {
         throw new Error(data.error || data.message || 'Failed to resize app');
       }
 
-      setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
+      setPendingResizeSize(selectedSize);
+      setResizeSuccess(data.message || `Resize started to ${selectedSize} (Build #${data.build_number})`);
       setSelectedSize(null);
 
       // Clear stale logs immediately and reflect the new in-progress build
@@ -644,6 +784,38 @@ export default function AppDetailPage() {
       setResizeError(message);
     } finally {
       setResizing(false);
+    }
+  };
+
+  const handleRollback = async () => {
+    if (!app) return;
+
+    setRollingBack(true);
+    setEnvVarError(null);
+    setEnvVarSuccess(null);
+
+    try {
+      const res = await fetch('/api/services/platform-apps/rollback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to roll back application');
+      }
+
+      setEnvVarSuccess('Rollback completed successfully');
+      toast.success('Rollback completed');
+      await Promise.all([refetchDeployments(), refetchDetails()]);
+      await fetchApp();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to roll back application';
+      setEnvVarError(message);
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -712,17 +884,33 @@ export default function AppDetailPage() {
     const num = parseInt(tag, 10);
     return Number.isNaN(num) ? null : num;
   }, [details?.container?.imageTag]);
+  const canRollback = useMemo(() => {
+    const successfulReleaseBuilds = releaseDeployments.filter(
+      (deployment) => deployment.status === 'SUCCESS'
+    );
+
+    if (servingBuildNumber !== null) {
+      return successfulReleaseBuilds.some(
+        (deployment) => deployment.build_number < servingBuildNumber
+      );
+    }
+
+    return successfulReleaseBuilds.length > 1 || !!app?.can_rollback;
+  }, [app?.can_rollback, releaseDeployments, servingBuildNumber]);
 
   // Detect "degraded" state: app status is running (old pod healthy) but the
   // latest deployment failed — meaning the new code never took over.
-  const latestDeployment = deployments.length > 0 ? deployments[0] : null;
   const isDegraded = useMemo(() => {
     if (app?.status !== 'running') return false;
-    if (!latestDeployment) return false;
+    if (!latestReleaseDeployment) return false;
     // While a deploy is in progress the new pod hasn't started yet — not degraded.
-    if (latestDeployment.status === 'BUILDING') return false;
+    if (latestReleaseDeployment.status === 'BUILDING') return false;
+    // While actively building — not degraded.
+    if (isBuilding) return false;
     // No image tag info yet — can't determine serving version.
     if (servingBuildNumber === null) return false;
+    // Details still loading — don't flash a false degraded banner.
+    if (detailsLoading) return false;
     // Sole ground truth: is a completed deployment (any recorded status) sitting at
     // a higher build number than what the pod is actually running?
     // We intentionally ignore latestDeployment.status here because the deployment
@@ -730,8 +918,8 @@ export default function AppDetailPage() {
     // misconfigured). The running container's image tag is always reliable — if the
     // build number matches what's serving, the deploy succeeded regardless of what
     // the database says.
-    return latestDeployment.build_number > servingBuildNumber;
-  }, [app?.status, latestDeployment, servingBuildNumber]);
+    return latestReleaseDeployment.build_number > servingBuildNumber;
+  }, [app?.status, latestReleaseDeployment, servingBuildNumber, isBuilding, detailsLoading]);
 
   // High restart count warning (CrashLoopBackOff signature)
   const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
@@ -791,9 +979,9 @@ export default function AppDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
                   Application Deployment
                 </p>
-                {getStatusBadge(app.status, buildInfo?.building)}
+                {getStatusBadge(app.status, isBuilding)}
                 {/* Live badge — but show Degraded when new deploy failed and old pod is serving */}
-                {appConnectionStatus === 'connected' && app.status === 'running' && !buildInfo?.building && (
+              {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
                     <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
                       <AlertTriangle className="mr-1.5 h-2 w-2" />
@@ -807,9 +995,14 @@ export default function AppDetailPage() {
                   )
                 )}
                 {/* Show which build is actually serving traffic */}
-                {servingBuildNumber !== null && app.status === 'running' && !buildInfo?.building && (
+                {servingBuildNumber !== null && app.status === 'running' && !isBuilding && (
                   <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs font-mono">
                     Serving Build #{servingBuildNumber}
+                  </Badge>
+                )}
+                {latestBuildDeployment && !isBuilding && (
+                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs">
+                    Last Operation: {getDeploymentEventLabel(latestBuildDeployment.build_number, latestBuildDeployment.trigger)}
                   </Badge>
                 )}
               </div>
@@ -834,16 +1027,16 @@ export default function AppDetailPage() {
                 </div>
               )}
               {/* Degraded state warning: newer deploy exists but old build is still serving */}
-              {isDegraded && latestDeployment && servingBuildNumber !== null && (
+              {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
                   </span>
                 </div>
               )}
               {/* High restart warning */}
-              {hasHighRestarts && app.status === 'running' && !buildInfo?.building && (
+              {hasHighRestarts && app.status === 'running' && !isBuilding && (
                 <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
                   <RefreshCw className="h-4 w-4 flex-shrink-0" />
                   <span>
@@ -891,6 +1084,7 @@ export default function AppDetailPage() {
               variant="destructive"
               size="sm"
               onClick={() => setDeleteModalOpen(true)}
+              disabled={deploymentMutationBlocked}
               className="rounded-none"
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -933,7 +1127,7 @@ export default function AppDetailPage() {
             </div>
             <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Runtime Size
+                {resizeInProgress ? 'Requested Size' : 'Runtime Size'}
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-3">
                 <div>
@@ -941,6 +1135,11 @@ export default function AppDetailPage() {
                   <p className="text-xs text-white/45">
                     {currentSizeSpec.cpu} · {currentSizeSpec.memory}
                   </p>
+                  {resizeInProgress ? (
+                    <p className="mt-1 text-[11px] text-amber-300/80">
+                      Resize rollout in progress. Serving capacity updates after deployment finishes.
+                    </p>
+                  ) : null}
                 </div>
                 <Badge className="rounded-none border-white/[0.08] bg-white/[0.04] text-white/75">
                   {currentSizeSpec.price}
@@ -1137,6 +1336,14 @@ export default function AppDetailPage() {
                                 <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
                               </div>
                             )}
+                            {latestBuildDeployment && (
+                              <div>
+                                <p className="text-xs text-white/40 mb-1">Last Operation</p>
+                                <p className="text-sm text-white">
+                                  {getDeploymentEventLabel(latestBuildDeployment.build_number, latestBuildDeployment.trigger)}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1319,12 +1526,12 @@ export default function AppDetailPage() {
           {/* Build Logs Tab */}
           <TabsContent value="build-logs">
             <BuildLogsPanel 
-              buildInfo={buildInfo} 
+              buildInfo={displayBuildInfo} 
               buildLogs={buildLogs}
               initialLoading={initialLogLoading}
               appName={app.name}
               fetchBuildLogs={fetchBuildLogs}
-              deployments={deployments}
+              deployments={buildDeployments}
               onSelectBuild={handleSelectBuild}
             />
           </TabsContent>
@@ -1387,7 +1594,12 @@ export default function AppDetailPage() {
                 ) : deployments.length > 0 ? (
                   <div className="space-y-2">
                     {deployments.map((deployment) => {
-                      const isCurrentlyServing = servingBuildNumber !== null && deployment.build_number === servingBuildNumber;
+                      const buildNumber =
+                        typeof deployment.build_number === 'number' && deployment.build_number > 0
+                          ? deployment.build_number
+                          : null;
+                      const isBuildEntry = buildNumber !== null;
+                      const isCurrentlyServing = isBuildEntry && servingBuildNumber !== null && buildNumber === servingBuildNumber;
                       return (
                       <div
                         key={deployment.id}
@@ -1400,7 +1612,7 @@ export default function AppDetailPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-mono text-white">
-                              #{deployment.build_number}
+                              {getDeploymentEventLabel(buildNumber, deployment.trigger)}
                             </span>
                             <Badge className={`rounded-none ${
                               deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
@@ -1416,7 +1628,7 @@ export default function AppDetailPage() {
                               </Badge>
                             )}
                             {/* Flag when build succeeded but never became the serving version */}
-                            {deployment.status === 'SUCCESS' && !isCurrentlyServing && servingBuildNumber !== null && deployment.build_number > servingBuildNumber && (
+                            {deployment.status === 'SUCCESS' && isBuildEntry && isReleaseBuildTrigger(deployment.trigger) && !isCurrentlyServing && servingBuildNumber !== null && buildNumber > servingBuildNumber && (
                               <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
                                 Deploy Failed
                               </Badge>
@@ -1426,9 +1638,9 @@ export default function AppDetailPage() {
                             <span>
                               {new Date(deployment.started_at).toLocaleString()}
                             </span>
-                            {deployment.build_number > 0 && (
+                            {isBuildEntry && (
                               <button
-                                onClick={() => handleSelectBuild(deployment.build_number)}
+                                onClick={() => handleSelectBuild(buildNumber)}
                                 className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
                               >
                                 <Terminal className="w-3 h-3" />
@@ -1444,6 +1656,12 @@ export default function AppDetailPage() {
                             <code className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-200">
                               {deployment.commit_sha.substring(0, 7)}
                             </code>
+                          </div>
+                        )}
+                        {deployment.trigger === 'resize' && deployment.status === 'SUCCESS' && servingBuildNumber !== null && buildNumber !== null && buildNumber !== servingBuildNumber && (
+                          <div className="flex items-center gap-2 border border-blue-500/20 bg-blue-500/10 px-2 py-2 text-xs text-blue-200">
+                            <Box className="w-3 h-3 flex-shrink-0" />
+                            <span>{`Resize succeeded using the currently serving image from Build #${servingBuildNumber}.`}</span>
                           </div>
                         )}
                         {/* Failure Reason Row */}
@@ -1484,23 +1702,44 @@ export default function AppDetailPage() {
                     <Settings className="w-5 h-5" />
                     App Settings
                   </CardTitle>
-                  <Button
-                    onClick={handleRedeploy}
-                    disabled={redeploying || app.status === 'building' || app.status === 'deleting'}
-                    className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {redeploying ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Redeploying...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Redeploy
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={handleRollback}
+                      disabled={rollingBack || deploymentMutationBlocked || !canRollback}
+                      variant="outline"
+                      className="rounded-none border-white/15 bg-transparent text-white hover:bg-white/10"
+                      title={canRollback ? 'Rollback to the previous successful deployment' : 'No previous successful deployment available'}
+                    >
+                      {rollingBack ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Rolling Back...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-4 h-4 mr-2" />
+                          Rollback
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleRedeploy}
+                      disabled={redeploying || deploymentMutationBlocked}
+                      className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {redeploying ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Redeploying...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Redeploy
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5 pt-5">
@@ -1630,7 +1869,7 @@ export default function AppDetailPage() {
                         (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(size) > 
                         (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(currentSize);
                       const isSelected = selectedSize === size;
-                      const isDisabled = !isUpgrade || app.status === 'building' || app.status === 'deleting';
+                      const isDisabled = !isUpgrade || deploymentMutationBlocked;
 
                       return (
                         <div
@@ -1676,7 +1915,7 @@ export default function AppDetailPage() {
                           </div>
 
                           <p className="mt-3 text-sm font-medium text-white/90">
-                            {sizePrices[size] ? `$${sizePrices[size]}/mo` : specs.price}
+                            {specs.price}
                           </p>
                         </div>
                       );
@@ -1687,7 +1926,7 @@ export default function AppDetailPage() {
                     <div className="mt-4 flex items-center gap-3">
                       <Button
                         onClick={handleResize}
-                        disabled={resizing || app.status === 'building'}
+                        disabled={resizing || deploymentMutationBlocked}
                         className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {resizing ? (
@@ -1739,7 +1978,7 @@ export default function AppDetailPage() {
                     <div className="mt-4 flex items-center gap-3">
                       <Button
                         onClick={handleSaveEnvVars}
-                        disabled={savingEnvVars}
+                        disabled={savingEnvVars || deploymentMutationBlocked}
                         className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {savingEnvVars ? (
@@ -1781,6 +2020,7 @@ export default function AppDetailPage() {
                   <Button
                     variant="destructive"
                     onClick={() => setDeleteModalOpen(true)}
+                    disabled={deploymentMutationBlocked}
                     className="w-full rounded-none md:w-auto"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -1811,4 +2051,3 @@ export default function AppDetailPage() {
     </div>
   );
 }
-

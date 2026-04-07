@@ -159,21 +159,6 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (result.errorCode === 'POST_PROVISION_BILLING_FAILED') {
-        return NextResponse.json(
-          {
-            error: result.error || "Billing registration failed after deployment",
-            partial_success: result.partialSuccess || false,
-            app_id: result.appId,
-            deployment_url: result.deploymentUrl,
-            port: result.port,
-            message:
-              "App deployment was started, but billing registration failed. Do not redeploy with the same name; contact support with the app_id.",
-          },
-          { status: 500 }
-        );
-      }
-
       // Default error
       return NextResponse.json(
         { error: result.error || "Failed to create app" },
@@ -182,7 +167,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      message: 'Created App Successfully!',
+      message: 'App created. Initial deployment in progress.',
       app_id: result.appId,
       deployment_url: result.deploymentUrl,
       port: result.port,
@@ -191,6 +176,7 @@ export async function POST(req: NextRequest) {
         initial_cost: result.billingInfo?.initialCost,
         hourly_rate: result.billingInfo?.hourlyRate,
         instance_size: appData.size || 'small',
+        activation: 'on_first_successful_deployment',
       },
     }, { status: 201 });
   } catch (err: unknown) {

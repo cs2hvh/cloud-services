@@ -157,7 +157,10 @@ export function AppCard({
   };
 
   const canRollback = !!app.can_rollback;
-  const rollbackDisabled = isAppDeleting || rollingBack || !canRollback;
+  const isAppBuilding = app.status === 'building';
+  const hasActiveBuild = isAppBuilding || !!build?.building;
+  const rollbackDisabled = isAppDeleting || hasActiveBuild || rollingBack || !canRollback;
+  const deleteDisabled = isAppDeleting || hasActiveBuild;
 
   const handleRollback = async () => {
     if (rollbackDisabled) return;
@@ -339,7 +342,7 @@ export function AppCard({
             <Button
               size="sm"
               variant="ghost"
-              disabled={isAppDeleting}
+              disabled={deleteDisabled}
               onClick={onDelete}
               className="cursor-pointer h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
               title="Delete App"
