@@ -111,4 +111,43 @@ describe("release-history helpers", () => {
 
     expect(rollbackTarget?.id).toBe("release-2");
   });
+
+  it("does not select older same-image releases as rollback targets", () => {
+    const currentDeployment = {
+      id: "rollback-3",
+      trigger: "rollback",
+      image_tag: "registry/app:build-3",
+      image_digest: "sha256:333",
+    };
+    const servingRelease = {
+      id: "release-3",
+      trigger: "manual",
+      build_number: 3,
+      image_tag: "registry/app:build-3",
+      image_digest: "sha256:333",
+    };
+
+    const rollbackTarget = findRollbackTarget({
+      currentDeployment,
+      servingRelease,
+      successfulReleases: [
+        {
+          id: "release-2",
+          trigger: "webhook",
+          build_number: 2,
+          image_tag: "registry/app:build-2",
+          image_digest: "sha256:333",
+        },
+        {
+          id: "release-1",
+          trigger: "manual",
+          build_number: 1,
+          image_tag: "registry/app:build-1",
+          image_digest: "sha256:333",
+        },
+      ],
+    });
+
+    expect(rollbackTarget).toBeNull();
+  });
 });

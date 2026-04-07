@@ -20,6 +20,26 @@ function getImageDigest(value: Record<string, unknown> | null | undefined): stri
   return typeof value?.image_digest === "string" ? value.image_digest : null;
 }
 
+function hasDifferentImageIdentity(params: {
+  currentDeployment: Record<string, unknown> | null;
+  candidateDeployment: Record<string, unknown> | null | undefined;
+}): boolean {
+  const currentImageDigest = getImageDigest(params.currentDeployment);
+  const currentImageTag = getImageTag(params.currentDeployment);
+  const candidateDigest = getImageDigest(params.candidateDeployment);
+  const candidateTag = getImageTag(params.candidateDeployment);
+
+  if (currentImageDigest && candidateDigest) {
+    return candidateDigest !== currentImageDigest;
+  }
+
+  if (currentImageTag && candidateTag) {
+    return candidateTag !== currentImageTag;
+  }
+
+  return true;
+}
+
 export function isReleaseBuildTrigger(trigger?: string | null): boolean {
   return trigger === "manual" || trigger === "webhook";
 }
@@ -70,8 +90,6 @@ export function findRollbackTarget(params: {
   successfulReleases: Array<Record<string, unknown>>;
 }): Record<string, unknown> | null {
   const { currentDeployment, servingRelease, successfulReleases } = params;
-  const currentImageDigest = getImageDigest(currentDeployment);
-  const currentImageTag = getImageTag(currentDeployment);
   const currentDeploymentId = getDeploymentId(currentDeployment);
   const servingBuildNumber = getBuildNumber(servingRelease);
 
@@ -86,17 +104,10 @@ export function findRollbackTarget(params: {
       if (getDeploymentId(deployment) === currentDeploymentId) return false;
       if (buildNumber >= servingBuildNumber) return false;
 
-      const candidateDigest = getImageDigest(deployment);
-      if (currentImageDigest && candidateDigest && candidateDigest === currentImageDigest) {
-        return false;
-      }
-
-      const candidateTag = getImageTag(deployment);
-      if (currentImageTag && candidateTag && candidateTag === currentImageTag) {
-        return false;
-      }
-
-      return true;
+      return hasDifferentImageIdentity({
+        currentDeployment,
+        candidateDeployment: deployment,
+      });
     }) ?? null
   );
 }

@@ -6,6 +6,12 @@ import { JenkinsService } from "./jenkins";
 import { AppStatusService } from "./app-status";
 import { KubernetesInfoService } from "./kubernetes-info";
 import { AppOperationFinalizer } from "@/lib/app-operations";
+import {
+  BUILD_POLLING_FINALIZATION_GRACE_MS,
+  BUILD_POLLING_HEALTH_CHECK_INTERVAL_MS,
+  BUILD_POLLING_HEALTH_CHECK_MAX_ATTEMPTS,
+  BUILD_POLLING_STALE_BUILD_AGE_MS,
+} from "./build-polling.constants";
 
 export interface BuildPollConfig {
   appId: string;
@@ -36,11 +42,10 @@ export class BuildPollingService {
   private static readonly DEFAULT_POLL_INTERVAL = 10000; // 10 seconds
   private static readonly DEFAULT_STARTUP_WAIT = 5000; // 5 seconds
   private static readonly DEFAULT_BUILD_START_TIMEOUT = 60000; // 1 minute
-  private static readonly HEALTH_CHECK_MAX_ATTEMPTS = 6; // 60 seconds total
-  private static readonly HEALTH_CHECK_INTERVAL = 10000; // 10 seconds
-  static readonly STALE_BUILD_AGE_MS = 35 * 60 * 1000;
-  static readonly BUILD_FINALIZATION_GRACE_MS =
-    BuildPollingService.HEALTH_CHECK_MAX_ATTEMPTS * BuildPollingService.HEALTH_CHECK_INTERVAL + 15000;
+  private static readonly HEALTH_CHECK_MAX_ATTEMPTS = BUILD_POLLING_HEALTH_CHECK_MAX_ATTEMPTS; // 60 seconds total
+  private static readonly HEALTH_CHECK_INTERVAL = BUILD_POLLING_HEALTH_CHECK_INTERVAL_MS; // 10 seconds
+  static readonly STALE_BUILD_AGE_MS = BUILD_POLLING_STALE_BUILD_AGE_MS;
+  static readonly BUILD_FINALIZATION_GRACE_MS = BUILD_POLLING_FINALIZATION_GRACE_MS;
   private static readonly finalizer = new AppOperationFinalizer();
 
   static isStaleBuildRecord(createdAt?: string | null): boolean {

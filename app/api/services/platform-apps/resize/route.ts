@@ -120,6 +120,8 @@ export async function POST(req: NextRequest) {
         appId: app.id,
         appName: app.name,
         appStatus: app.status,
+        appFailureReason:
+          typeof app.last_failure_reason === "string" ? app.last_failure_reason : null,
         currentSize: currentSize as 'small' | 'medium' | 'large',
         targetSize: new_size as 'small' | 'medium' | 'large',
         idempotencyKey: getIdempotencyKey(req.headers),

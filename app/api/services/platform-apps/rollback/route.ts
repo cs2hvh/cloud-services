@@ -112,6 +112,10 @@ export async function POST(req: NextRequest) {
       appId: app_id,
       appName: app.name,
       appStatus: appResult.data.status,
+      appFailureReason:
+        typeof appResult.data.last_failure_reason === "string"
+          ? appResult.data.last_failure_reason
+          : null,
       activeDeploymentId,
       commitSha: typeof target.commit_sha === "string" ? target.commit_sha : null,
       rollbackTargetBuildNumber: targetBuildNumber,

@@ -18,6 +18,7 @@ import type {
 } from "@/lib/app-operations/core/types";
 import { AppDeploymentRepository } from "@/lib/app-operations/persistence/app-deployment.repository";
 import { ResourceMutationLockService } from "@/lib/app-operations/application/resource-mutation-lock.service";
+import { BUILD_POLLING_STALE_BUILD_AGE_MS } from "@/lib/services/build-polling.constants";
 
 export class AppReleaseBuildService {
   constructor(
@@ -143,6 +144,7 @@ export class AppReleaseBuildService {
         appName: params.appName,
         appStatus: params.appStatus,
         holder: params.operationType,
+        ttlMs: BUILD_POLLING_STALE_BUILD_AGE_MS,
         metadata: {
           operation_type: params.operationType,
           trigger: params.trigger,

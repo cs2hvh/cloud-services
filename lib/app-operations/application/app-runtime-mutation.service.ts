@@ -11,6 +11,7 @@ import { AppOperationFinalizer } from "@/lib/app-operations/application/app-oper
 import { ResourceMutationLockService } from "@/lib/app-operations/application/resource-mutation-lock.service";
 import { ContainerRegistryAdapter } from "@/lib/app-operations/integrations/container-registry.adapter";
 import { AppDeploymentRepository } from "@/lib/app-operations/persistence/app-deployment.repository";
+import { BUILD_POLLING_STALE_BUILD_AGE_MS } from "@/lib/services/build-polling.constants";
 import type {
   AppOperationResult,
   ResourceMutationLockRecord,
@@ -35,11 +36,15 @@ export class AppRuntimeMutationService {
     }
   }
 
-  private async restoreAppState(appId: string, appStatus?: string | null) {
+  private async restoreAppState(
+    appId: string,
+    appStatus?: string | null,
+    failureReason?: string | null
+  ) {
     const targetStatus = appStatus ?? "failed";
     const result = await Platform_Apps.update(appId, {
       status: targetStatus,
-      last_failure_reason: null,
+      last_failure_reason: targetStatus === "failed" ? (failureReason ?? null) : null,
     });
     if (!result.success) {
       throw new Error(result.error || "Failed to restore app state");
@@ -50,6 +55,7 @@ export class AppRuntimeMutationService {
     operationId: string;
     appId: string;
     appStatus?: string | null;
+    appFailureReason?: string | null;
     details: ReturnType<typeof createOperationDetails>;
     statusCode: number;
     code: string;
@@ -71,7 +77,7 @@ export class AppRuntimeMutationService {
     }
 
     try {
-      await this.restoreAppState(params.appId, params.appStatus);
+      await this.restoreAppState(params.appId, params.appStatus, params.appFailureReason);
     } catch (error) {
       cleanupError = cleanupError ?? (error instanceof Error ? error.message : String(error));
     }
@@ -108,6 +114,7 @@ export class AppRuntimeMutationService {
     appId: string;
     appName: string;
     appStatus?: string | null;
+    appFailureReason?: string | null;
     activeDeploymentId?: string | null;
     commitSha?: string | null;
     rollbackTargetBuildNumber: number;
@@ -303,6 +310,7 @@ export class AppRuntimeMutationService {
         operationId: operation.id,
         appId: params.appId,
         appStatus: params.appStatus,
+        appFailureReason: params.appFailureReason,
         details,
         code: "ROLLBACK_FAILED",
         message,
@@ -316,6 +324,7 @@ export class AppRuntimeMutationService {
     appId: string;
     appName: string;
     appStatus?: string | null;
+    appFailureReason?: string | null;
     currentSize: "small" | "medium" | "large";
     targetSize: "small" | "medium" | "large";
     idempotencyKey?: string | null;
@@ -353,6 +362,7 @@ export class AppRuntimeMutationService {
         appName: params.appName,
         appStatus: params.appStatus,
         holder: "resize",
+        ttlMs: BUILD_POLLING_STALE_BUILD_AGE_MS,
         metadata: {
           operation_type: "resize",
           source_size: params.currentSize,
@@ -506,6 +516,7 @@ export class AppRuntimeMutationService {
         operationId: operation.id,
         appId: params.appId,
         appStatus: params.appStatus,
+        appFailureReason: params.appFailureReason,
         details,
         code: "RESIZE_TRIGGER_FAILED",
         message,

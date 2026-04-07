@@ -3486,7 +3486,7 @@ export const Platform_App_Deployments = {
         typeof servingRelease?.build_number === 'number' ? servingRelease.build_number : null;
 
       if (!rollbackTarget && servingBuildNumber !== null) {
-        const { data: directRollbackTarget, error: rollbackErr } = await supabase
+        const { data: olderSuccessfulReleases, error: rollbackErr } = await supabase
           .from('platform_app_deployments')
           .select('*')
           .eq('app_id', app_id)
@@ -3496,14 +3496,17 @@ export const Platform_App_Deployments = {
           .lt('build_number', servingBuildNumber)
           .order('build_number', { ascending: false })
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(20);
 
         if (rollbackErr) {
           return { success: false as const, error: rollbackErr.message };
         }
 
-        rollbackTarget = directRollbackTarget ?? null;
+        rollbackTarget = findRollbackTarget({
+          currentDeployment,
+          servingRelease,
+          successfulReleases: olderSuccessfulReleases ?? [],
+        });
       }
 
       // ── 5. Latest operation already resolved above ──
