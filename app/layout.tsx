@@ -90,7 +90,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} select-none`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable}`}>
         {children}
         <Toaster
           position="top-right"
