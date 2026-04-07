@@ -84,6 +84,7 @@ export interface AppReadPort {
 export interface AppWritePort {
   setHasCustomDomains(appId: string, hasCustomDomains: boolean): Promise<void>;
   clearCustomDomain(appId: string, clearedDomain: string): Promise<void>;
+  setPrimaryCustomDomain(appId: string, domain: string): Promise<void>;
 }
 
 export interface DnsRoutingPort {

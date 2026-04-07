@@ -36,7 +36,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
-import { toast } from 'sonner';
+import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
 
 interface AppCardProps {
   app: App;
@@ -51,6 +51,7 @@ interface AppCardProps {
   metrics?: AppMetrics | null;
   health?: AppHealth | null;
   metricsLoading?: boolean;
+  onRollback: () => void;
 }
 
 function getStatusBadge(status: string, build?: BuildInfo) {
@@ -114,12 +115,12 @@ export function AppCard({
   metrics,
   health,
   metricsLoading,
+  onRollback,
 }: AppCardProps) {
   const domain = app.deployment_url
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
-  const [rollingBack, setRollingBack] = useState(false);
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   
@@ -159,36 +160,8 @@ export function AppCard({
   const canRollback = !!app.can_rollback;
   const isAppBuilding = app.status === 'building';
   const hasActiveBuild = isAppBuilding || !!build?.building;
-  const rollbackDisabled = isAppDeleting || hasActiveBuild || rollingBack || !canRollback;
+  const rollbackDisabled = isAppDeleting || hasActiveBuild || !canRollback;
   const deleteDisabled = isAppDeleting || hasActiveBuild;
-
-  const handleRollback = async () => {
-    if (rollbackDisabled) return;
-
-    setRollingBack(true);
-    try {
-      const res = await fetch('/api/services/platform-apps/rollback', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ app_id: app.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.error || 'Rollback failed');
-      }
-
-      toast.success('Rollback started');
-      if (isExpanded && activeTab === 'metrics') {
-        refetchDetails();
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Rollback failed';
-      toast.error(msg);
-    } finally {
-      setRollingBack(false);
-    }
-  };
 
   return (
     <div
@@ -254,21 +227,36 @@ export function AppCard({
               <p className="text-xs text-white/40 mb-0.5">Port</p>
               <p className="text-sm text-white font-mono">{app.port}</p>
             </div>
-            {build && (
+            {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
               <div className="text-center">
-                <p className="text-xs text-white/40 mb-0.5">Build</p>
+                <p className="text-xs text-white/40 mb-0.5">Serving</p>
                 <p className="text-sm text-white font-mono flex items-center gap-1">
-                  #{build.number}
-                  {build.building ? (
+                  #{app.serving_build_number ?? build?.number}
+                  {app.serving_build_number == null && build?.building ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                  ) : build.result === 'SUCCESS' ? (
+                  ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                     <CheckCircle2 className="w-3 h-3 text-green-400" />
-                  ) : build.result === 'FAILURE' ? (
+                  ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                     <XCircle className="w-3 h-3 text-red-400" />
                   ) : null}
                 </p>
               </div>
-            )}
+            ) : null}
+            {(app.last_operation_build_number !== null && app.last_operation_build_number !== undefined) || app.last_operation_trigger ? (
+              <div className="text-center">
+                <p className="text-xs text-white/40 mb-0.5">Last Op</p>
+                <p className="text-xs text-white/70">
+                  {getAppOperationLabel({
+                    buildNumber: app.last_operation_build_number ?? null,
+                    trigger: app.last_operation_trigger,
+                    rollbackTargetBuildNumber:
+                      app.last_operation_trigger === 'rollback'
+                        ? app.last_operation_build_number ?? null
+                        : null,
+                  })}
+                </p>
+              </div>
+            ) : null}
             {/* Quick Metrics Summary */}
             {app.status === 'running' && (
               <div 
@@ -328,15 +316,17 @@ export function AppCard({
               size="sm"
               variant="ghost"
               disabled={rollbackDisabled}
-              onClick={handleRollback}
+              onClick={onRollback}
               className="cursor-pointer h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
-              title={canRollback ? 'Rollback to previous successful deployment' : 'No previous successful deployment available'}
+              title={
+                canRollback
+                  ? app.rollback_target_build_number
+                    ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                    : 'Rollback to the previous successful release'
+                  : 'No previous release available. Resize-only operations do not create rollback targets.'
+              }
             >
-              {rollingBack ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RotateCcw className="w-4 h-4" />
-              )}
+              <RotateCcw className="w-4 h-4" />
             </Button>
 
             <Button
@@ -362,18 +352,18 @@ export function AppCard({
             <GitBranch className="w-3 h-3" />
             Port {app.port}
           </span>
-          {build && (
+          {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
             <span className="flex items-center gap-1">
-              Build #{build.number}
-              {build.building ? (
+              Serving #{app.serving_build_number ?? build?.number}
+              {app.serving_build_number == null && build?.building ? (
                 <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-              ) : build.result === 'SUCCESS' ? (
+              ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                 <CheckCircle2 className="w-3 h-3 text-green-400" />
-              ) : build.result === 'FAILURE' ? (
+              ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                 <XCircle className="w-3 h-3 text-red-400" />
               ) : null}
             </span>
-          )}
+          ) : null}
           {app.status === 'running' && (
             <button
               onClick={handleToggleMetrics}

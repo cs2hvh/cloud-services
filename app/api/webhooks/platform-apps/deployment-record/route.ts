@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Platform_App_Deployments, Platform_Apps } from '@/lib/supabase/queries';
-import { PlatformAppBillingService } from '@/lib/services/platform-app-billing';
+import { Platform_Apps } from '@/lib/supabase/queries';
 import * as crypto from 'crypto';
+import { AppOperationFinalizer } from '@/lib/app-operations';
 
 type DeploymentRecordPayload = {
   app_id: string;
@@ -89,77 +89,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Record should include at least one stable image identity.
     const image_tag = body.image_tag ?? null;
     const image_digest = body.image_digest ?? null;
     const failure_reason = body.failure_reason ?? null;
-    if (!image_tag && !image_digest) {
+    if (body.status === 'success' && !image_tag && !image_digest) {
       return NextResponse.json(
         { error: 'Missing required fields: image_tag or image_digest' },
         { status: 400 }
       );
     }
 
-    const finalized = await Platform_App_Deployments.complete_build({
-      app_id: body.app_id,
-      status: body.status,
-      build_number: buildNumber,
-      image_tag,
-      image_digest,
-      failure_reason: body.status === 'failed' ? failure_reason : null,
-      allowed_current_statuses: ['building'],
-      create_if_missing: true,
+    const finalizer = new AppOperationFinalizer();
+    const appLookup = await Platform_Apps.get(body.app_id);
+    const appName =
+      appLookup.success && appLookup.data?.name
+        ? appLookup.data.name
+        : image_tag?.split("/").pop()?.split(":")[0] || body.app_id;
+    const finalization = await finalizer.finalizeBuildOperation({
+      appId: body.app_id,
+      appName,
+      buildNumber,
       trigger: body.trigger,
-      commit_sha: body.commit_sha ?? null,
+      status: body.status,
+      failureReason: body.status === 'failed' ? failure_reason : null,
+      imageTag: image_tag,
+      imageDigest: image_digest,
+      commitSha: body.commit_sha ?? null,
+      allowedCurrentStatuses: ['building'],
+      allowLegacyCreate: false,
     });
 
-    if (!finalized.success || !finalized.data) {
-      console.error('[DeploymentRecordWebhook] Failed to finalize deployment record:', finalized.error);
-      return NextResponse.json(
-        { error: finalized.error || 'Failed to finalize deployment record' },
-        { status: 500 }
-      );
-    }
-
-    const deployment = finalized.data;
-
-    const finalStatus = deployment.status;
-
-    // Update app status and mark active deployment based on the finalized deployment row.
-    // This avoids late webhook deliveries flipping app state when complete_build()
-    // intentionally kept an existing terminal failure.
-    if (finalStatus === 'success') {
-      if (body.trigger !== 'resize' && body.trigger !== 'rollback') {
-        const billingActivation = await PlatformAppBillingService.activateInitialBillingIfNeeded(
-          body.app_id,
-          deployment.id
-        );
-        if (!billingActivation.success) {
-          console.error(
-            '[DeploymentRecordWebhook] Failed to activate initial billing:',
-            billingActivation.error
-          );
-        }
-      }
-
-      if (finalized.updated || finalized.created) {
-        console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
-        await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);
-      }
-      await Platform_Apps.update(body.app_id, {
-        status: 'running',
-        last_deploy_trigger: body.trigger,
-        last_deploy_commit: body.commit_sha ?? null,
-        last_failure_reason: null,
-      });
-    } else {
-      await Platform_Apps.update(body.app_id, {
-        status: 'failed',
-        last_deploy_trigger: body.trigger,
-        last_deploy_commit: body.commit_sha ?? null,
-        last_failure_reason: deployment.failure_reason ?? failure_reason,
-      });
-    }
+    const deployment = finalization.record;
 
     console.log('[DeploymentRecordWebhook] ✅ Deployment record finalized:', deployment.id);
 

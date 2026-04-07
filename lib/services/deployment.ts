@@ -2,14 +2,13 @@
  * Deployment Service - Orchestrates app deployment
  */
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
-import { Platform_App_Deployments } from "@/lib/supabase/queries";
 import { DNSService } from "./dns";
 import { JenkinsService } from "./jenkins";
 import { BuildPollingService } from "./build-polling";
 import { InfrastructureCleanupService } from "./infrastructure-cleanup";
-import { AppStatusService } from "./app-status";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { randomBytes } from "crypto";
+import { AppReleaseBuildService, JenkinsBuildAdapter } from "@/lib/app-operations";
 
 // Generate a random ID
 function generateId(length: number = 10): string {
@@ -34,6 +33,7 @@ export interface DeploymentConfig {
   deploy_branch?: string;
   project_id?: string;
   container_port?: number; // User-specified or auto-detected port
+  idempotencyKey?: string | null;
 }
 
 export interface DeploymentResult {
@@ -166,69 +166,68 @@ export class DeploymentService {
         throw new Error(`DNS creation failed: ${errorMessage}`);
       }
 
-      let deploymentWarning: string | undefined;
-
       // Step 5: Create Jenkins job and start build monitoring
+      let deploymentWarning: string | undefined;
+      let latestBuildNumber: number | undefined;
       try {
-        // Update status to 'building' before triggering Jenkins
-        // Use AppStatusService for consistent status management
-        await AppStatusService.setStatus(app.id, "building");
-        console.log(`[DeploymentService] Step 5/5: Status updated to 'building'`);
-        
-        // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
+        const releaseBuildService = new AppReleaseBuildService();
+        const jenkins = new JenkinsBuildAdapter();
         const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
-        
-        // Get env vars to pass to Jenkins/Kubernetes
         const envVarsToPass = config.env_vars || [];
 
-        // Sync runtime secrets via backend service (do not embed runtime secret values in Jenkins job XML).
-        await this.syncRuntimeEnvSecret(config.name, config.framework, envVarsToPass);
-        
-        await JenkinsService.createJob(
-          config.name,
-          app.id,
-          jenkinsRepoUrl,
-          config.branch,
-          config.framework,
-          config.size || 'small',
-          'manual',
-          envVarsToPass,
-          containerPort
-        );
-        console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
+        const operation = await releaseBuildService.startReleaseBuild({
+          appId: app.id,
+          appName: config.name,
+          appStatus: null,
+          trigger: "manual",
+          operationType: "deploy",
+          idempotencyKey: config.idempotencyKey ?? null,
+          onBeforeTrigger: async () => {
+            await this.syncRuntimeEnvSecret(config.name, config.framework, envVarsToPass);
+          },
+          executor: async () => {
+            const execution = await jenkins.createJobAndTrigger({
+              appName: config.name,
+              appId: app.id,
+              gitUrl: jenkinsRepoUrl,
+              branch: config.branch,
+              framework: config.framework,
+              size: config.size || "small",
+              deployTrigger: "manual",
+              envVars: envVarsToPass,
+              containerPort,
+            });
+            console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
+            return {
+              buildNumber: execution.buildNumber,
+              executor: {
+                type: "jenkins" as const,
+                job_name: execution.jobName,
+                run_number: execution.buildNumber,
+                url: execution.url,
+              },
+            };
+          },
+        });
 
-        try {
-          // Create deployment row immediately so Supabase Realtime pushes it to the UI.
-          // The Jenkins webhook (deployment-record) will UPDATE this to the final status.
-          const buildRecord = await Platform_App_Deployments.start_build({
-            app_id: app.id,
-            build_number: 1,
-            trigger: 'manual',
-          });
-          if (!buildRecord.success) {
-            throw new Error(buildRecord.error || 'Failed to create initial deployment record');
+        latestBuildNumber = operation.buildNumber ?? undefined;
+
+        if (operation.buildNumber) {
+          try {
+            BuildPollingService.startPolling({
+              appId: app.id,
+              appName: config.name,
+              buildNumber: operation.buildNumber,
+              trigger: "manual",
+            });
+          } catch (trackingError: unknown) {
+            deploymentWarning =
+              trackingError instanceof Error ? trackingError.message : "Unknown tracking error";
+            console.warn(
+              `[DeploymentService] Build #${operation.buildNumber} started but deployment tracking needs recovery: ${deploymentWarning}`
+            );
           }
-
-          // Start background polling for build status
-          BuildPollingService.startPolling({
-            appId: app.id,
-            appName: config.name,
-            buildNumber: 1, // First build for new job
-            trigger: 'manual',
-          });
-        } catch (trackingError: unknown) {
-          deploymentWarning = trackingError instanceof Error ? trackingError.message : 'Unknown tracking error';
-          console.warn(
-            `[DeploymentService] Build #1 started but deployment tracking needs recovery: ${deploymentWarning}`
-          );
-          BuildPollingService.startPolling({
-            appId: app.id,
-            appName: config.name,
-            buildNumber: 1,
-            trigger: 'manual',
-          });
         }
-        
       } catch (jenkinsError: unknown) {
         const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : 'Unknown error';
         console.error(`[DeploymentService] Jenkins job creation failed:`, errorMessage);
@@ -271,7 +270,10 @@ export class DeploymentService {
       await Platform_Apps.update(app.id, { deployment_url: deploymentUrl });
 
       // Get build number for response
-      const buildNumber = await JenkinsService.getLatestBuildNumber(config.name) || 1;
+      const buildNumber =
+        latestBuildNumber ??
+        (await JenkinsService.getLatestBuildNumber(config.name)) ??
+        1;
 
       console.log(`[DeploymentService] ✅ Deployment completed successfully`);
       console.log(`[DeploymentService] App ID: ${app.id}`);

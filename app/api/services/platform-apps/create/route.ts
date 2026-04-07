@@ -7,6 +7,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { getIdempotencyKey } from "@/lib/idempotency";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -27,8 +28,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Server configuration error',
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
-        details: 'Please configure all required environment variables in .env.local'
+        message: 'The server is not properly configured. Please contact support.',
       },
       { status: 500 }
     );
@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
         request_id: auditContext.requestId,
         user_role: isAdmin ? "admin" : "user",
       },
+      idempotencyKey: getIdempotencyKey(req.headers),
     });
 
     if (!result.success) {
@@ -156,6 +157,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           { error: result.error || "Deployment failed" },
           { status: 502 }
+        );
+      }
+
+      if (result.errorCode === 'OPERATION_IN_PROGRESS') {
+        return NextResponse.json(
+          { error: result.error || "App creation is already in progress" },
+          { status: 409 }
         );
       }
 

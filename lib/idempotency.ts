@@ -5,7 +5,12 @@
 import { redis } from "./redis";
 
 export type IdempotencyResult = 
-  | { status: "new"; reserve: () => Promise<boolean>; complete: (data: unknown) => Promise<void> }
+  | {
+      status: "new";
+      reserve: () => Promise<boolean>;
+      complete: (data: unknown) => Promise<void>;
+      abort: () => Promise<void>;
+    }
   | { status: "in-progress"; retryAfter: number }
   | { status: "completed"; data: unknown };
 
@@ -61,6 +66,9 @@ export async function checkIdempotency(
           { ex: ttlSeconds }
         );
       },
+      abort: async () => {
+        await redis.del(redisKey);
+      },
     };
   } catch (error) {
     console.error("[Idempotency] Redis error:", error);
@@ -69,6 +77,7 @@ export async function checkIdempotency(
       status: "new",
       reserve: async () => true,
       complete: async () => {},
+      abort: async () => {},
     };
   }
 }

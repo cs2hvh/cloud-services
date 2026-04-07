@@ -23,6 +23,18 @@ export class SupabaseAppWriteAdapter implements AppWritePort {
     // Non-throwing: app flag is denormalised; failure is logged but not fatal.
   }
 
+  async setPrimaryCustomDomain(appId: string, domain: string): Promise<void> {
+    const supabase = await createServiceClient();
+    await supabase
+      .from("platform_apps")
+      .update({
+        has_custom_domains: true,
+        custom_domain: domain,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", appId);
+  }
+
   async clearCustomDomain(appId: string, clearedDomain: string): Promise<void> {
     const supabase = await createServiceClient();
 

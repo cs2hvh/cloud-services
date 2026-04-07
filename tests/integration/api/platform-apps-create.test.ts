@@ -590,4 +590,33 @@ describe('POST /api/services/platform-apps/create', () => {
   // requires complex class mocking. Provider token handling is covered by the success cases above
   // which use session provider_token. GitHubProvider integration testing would be better suited
   // for unit tests of the provider itself.
+
+  // ============================================
+  // Server Configuration Error Tests
+  // ============================================
+  describe('Server Configuration Error Tests', () => {
+    it('should return 500 without disclosing internal env var names', async () => {
+      await mockAuthenticatedUser(mockPlatformAppUser.id);
+
+      // Remove a required env var to trigger the 500 path
+      const cleanEnv = { ...process.env };
+      delete cleanEnv.JENKINS_URL;
+      process.env = cleanEnv;
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/create',
+        mockCreatePlatformAppPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 500);
+
+      expect(data.error).toBe('Server configuration error');
+      // Must NOT expose internal variable names to the client
+      expect(JSON.stringify(data)).not.toContain('JENKINS_URL');
+      expect(JSON.stringify(data)).not.toContain('CLOUDFLARE_API_TOKEN');
+      expect(JSON.stringify(data)).not.toContain('.env.local');
+      expect(JSON.stringify(data)).not.toContain('Missing required environment');
+    });
+  });
 });

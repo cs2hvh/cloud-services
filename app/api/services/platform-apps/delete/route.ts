@@ -6,7 +6,8 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { AppStatusService } from "@/lib/services/app-status";
-import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
+import { Platform_Apps } from "@/lib/supabase/queries";
+import { AppOperationError, ResourceMutationLockService } from "@/lib/app-operations";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -65,52 +66,57 @@ export async function POST(req: NextRequest) {
       previousStatus = existing.data.status ?? null;
       previousFailureReason = existing.data.last_failure_reason ?? null;
 
-      const operationLock = await Platform_App_Deployments.get_operation_lock(app_id, existing.data.status);
-      if (!operationLock.success) {
-        return NextResponse.json(
-          { error: operationLock.message || "Failed to check deployment state", message: operationLock.message || "Failed to check deployment state" },
-          { status: 500 }
-        );
-      }
-
-      // Block deletion while a build is actively in progress
-      if (operationLock.blocked) {
-        return NextResponse.json(
-          {
-            error:
-              operationLock.blocker === 'deleting'
-                ? "App is already being deleted."
-                : "Cannot delete while a build is in progress. Wait for the build to complete or fail.",
-            message:
-              operationLock.blocker === 'deleting'
-                ? "App is already being deleted."
-                : "Cannot delete while building",
+      const lockService = new ResourceMutationLockService();
+      try {
+        return await lockService.withAppMutationLock({
+          appId: app_id,
+          appName: existing.data.name,
+          appStatus: existing.data.status,
+          holder: "delete",
+          metadata: {
+            operation_type: "delete",
           },
-          { status: 409 }
-        );
+          run: async () => {
+            await AppStatusService.setStatus(app_id, "deleting");
+
+            const deletionResult = await PlatformAppService.deleteApp({
+              appId: app_id,
+              userId: auth.user!.id,
+              isAdmin: isAdminUser,
+              audit_context: {
+                ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
+                user_agent: req.headers.get("user-agent") || "unknown",
+                request_id: crypto.randomUUID(),
+                user_email: auth.user!.email,
+                user_role: isAdminUser ? "admin" : "user",
+              },
+            });
+
+            return NextResponse.json({
+              message: "App deleted successfully",
+              warning: deletionResult.warning ?? null,
+            });
+          },
+        });
+      } catch (error) {
+        if (error instanceof AppOperationError) {
+          const message =
+            error.code === "APP_DELETING"
+              ? "App is already being deleted."
+              : "Cannot delete while another app operation is in progress.";
+
+          return NextResponse.json(
+            {
+              error: message,
+              message,
+              code: error.code,
+            },
+            { status: error.statusCode }
+          );
+        }
+
+        throw error;
       }
-
-      // Mark as "deleting" in DB so syncStatus skips this app and
-      // Supabase Realtime pushes the visual "Deleting…" state to all clients.
-      await AppStatusService.setStatus(app_id, "deleting");
-
-      const deletionResult = await PlatformAppService.deleteApp({
-        appId: app_id,
-        userId: auth.user!.id,
-        isAdmin: isAdminUser,
-        audit_context: {
-          ip_address: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
-          user_agent: req.headers.get("user-agent") || "unknown",
-          request_id: crypto.randomUUID(),
-          user_email: auth.user!.email,
-          user_role: isAdminUser ? "admin" : "user",
-        },
-      });
-
-      return NextResponse.json({
-        message: "App deleted successfully",
-        warning: deletionResult.warning ?? null,
-      });
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
       const statusCode = errorMsg === "App not found" ? 404 :
