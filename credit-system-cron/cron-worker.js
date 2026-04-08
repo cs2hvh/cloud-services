@@ -44,8 +44,162 @@ export const VALID_TABLE_NAMES = [
   "active_platform_apps"
 ];
 
+const TABLE_TO_SERVICE_TYPE = {
+  active_kubernetes: "kubernetes",
+  active_database: "database",
+  active_objectspace: "objectspace",
+  active_spectrum: "spectrum",
+  active_platform_apps: "platform_apps",
+};
+
+let transactionHistoryMode = "unknown";
+let hasWarnedServiceLedgerUnavailable = false;
+let lastServiceLedgerMismatchAt = 0;
+const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
+
 function roundToCurrency(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function isTransactionHistorySchemaMismatch(error) {
+  if (!error || typeof error !== "object") return false;
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  const mentionsNewColumn =
+    message.includes("service_id") ||
+    message.includes("service_type") ||
+    message.includes("period_start") ||
+    message.includes("period_end") ||
+    message.includes("metadata");
+
+  return Boolean(
+    mentionsNewColumn &&
+      (error.code === "PGRST204" ||
+        error.code === "42703" ||
+        message.includes("could not find the") ||
+        message.includes("column"))
+  );
+}
+
+function isTransactionTypeConstraintMismatch(error) {
+  if (!error || typeof error !== "object") return false;
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  return (
+    error.code === "23514" ||
+    message.includes("transactions_type_check") ||
+    (message.includes("check constraint") && message.includes("type"))
+  );
+}
+
+function warnServiceLedgerUnavailable(error) {
+  if (hasWarnedServiceLedgerUnavailable) return;
+  hasWarnedServiceLedgerUnavailable = true;
+  console.warn(
+    "⚠️ Service usage transaction history is unavailable until the billing.transactions ledger migration is applied.",
+    error?.message || ""
+  );
+}
+
+function shouldAttemptServiceLedger() {
+  if (transactionHistoryMode !== "legacy") return true;
+  return Date.now() - lastServiceLedgerMismatchAt >= SERVICE_LEDGER_REPROBE_INTERVAL_MS;
+}
+
+function markServiceLedgerAvailable() {
+  transactionHistoryMode = "service_ledger";
+  hasWarnedServiceLedgerUnavailable = false;
+  lastServiceLedgerMismatchAt = 0;
+}
+
+function markServiceLedgerLegacy() {
+  transactionHistoryMode = "legacy";
+  lastServiceLedgerMismatchAt = Date.now();
+}
+
+async function getBalanceAfterDeduction(userId) {
+  const { data, error } = await supabase
+    .schema("billing")
+    .from("user_credits")
+    .select("credit_balance")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`⚠️ Failed to fetch balance after deduction for ${userId}: ${error.message}`);
+    return null;
+  }
+
+  if (typeof data?.credit_balance === "number") {
+    return data.credit_balance;
+  }
+
+  if (data?.credit_balance != null) {
+    const parsed = Number(data.credit_balance);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+async function recordUsageTransaction({
+  userId,
+  serviceId,
+  serviceType,
+  amount,
+  balanceAfter,
+  periodStart,
+  periodEnd,
+  hourlyRate,
+  hoursUsed,
+  tableName,
+}) {
+  if (!shouldAttemptServiceLedger()) {
+    return;
+  }
+
+  const { error } = await supabase
+    .schema("billing")
+    .from("transactions")
+    .insert({
+      user_id: userId,
+      amount,
+      currency: "usd",
+      status: "completed",
+      type: "usage",
+      balance_after: balanceAfter,
+      description: `${serviceType.replace("_", " ")} usage charge`,
+      service_id: serviceId,
+      service_type: serviceType,
+      period_start: periodStart,
+      period_end: periodEnd,
+      metadata: {
+        source: "credit-system-cron",
+        table: tableName,
+        hourly_rate: rateToMetadata(hourlyRate),
+        hours_used: Number(hoursUsed.toFixed(6)),
+      },
+      completed_at: periodEnd,
+    });
+
+  if (!error) {
+    markServiceLedgerAvailable();
+    return;
+  }
+
+  if (isTransactionHistorySchemaMismatch(error) || isTransactionTypeConstraintMismatch(error)) {
+    markServiceLedgerLegacy();
+    warnServiceLedgerUnavailable(error);
+    return;
+  }
+
+  console.warn(
+    `⚠️ Failed to record usage transaction for ${serviceId}: ${error.message}`
+  );
+}
+
+function rateToMetadata(value) {
+  if (typeof value === "number") return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function billSingleService(tableName, svc) {
@@ -209,6 +363,13 @@ export async function billSingleService(tableName, svc) {
     )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 
+  const periodStart = last
+    ? last.toISOString()
+    : created_at
+      ? new Date(created_at).toISOString()
+      : null;
+  const periodEnd = now.toISOString();
+
   // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
   // If credit deduction fails, timestamp is updated but no charge occurs (safer than opposite)
   const { error: updateError } = await supabase
@@ -253,6 +414,23 @@ export async function billSingleService(tableName, svc) {
     // TODO: Track failed billing attempts and suspend service if needed
     return;
   }
+
+  const balanceAfter =
+    transactionHistoryMode === "legacy"
+      ? null
+      : await getBalanceAfterDeduction(user_id);
+  await recordUsageTransaction({
+    userId: user_id,
+    serviceId: service_id,
+    serviceType: TABLE_TO_SERVICE_TYPE[tableName],
+    amount: finalCost,
+    balanceAfter,
+    periodStart,
+    periodEnd,
+    hourlyRate: rate,
+    hoursUsed,
+    tableName,
+  });
 
   console.log(
     `✅ Successfully billed ${tableName} service_id=${service_id}, cost=$${finalCost.toFixed(
@@ -355,7 +533,7 @@ cron.schedule('*/5 * * * *', async () => {
 });
 
 console.log("🚀 Cron worker started successfully");
-console.log("📅 Schedule: Every 1 hr(0 * * * *)");
+console.log("📅 Schedule: Every 5 minutes (*/5 * * * *)");
 console.log("🔧 Supabase connected:", process.env.SUPABASE_URL ? "✓" : "✗");
 console.log(
   "🛡️  Security limits: Max rate=$" +
@@ -367,4 +545,4 @@ console.log(
     ", Min billable=$" +
     SECURITY_LIMITS.MIN_BILLABLE_COST
 );
-console.log("⏰ Next run:", new Date(Date.now() + 6 * 60 * 1000).toISOString());
+console.log("⏰ Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());

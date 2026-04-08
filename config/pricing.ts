@@ -8,8 +8,23 @@ function roundToTwoDecimals(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function toFiniteNumber(value?: number | null): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function clampCurrencyAmount(value?: number | null): number {
+  const amount = toFiniteNumber(value);
+  if (amount <= 0) return 0;
+  return roundToTwoDecimals(amount);
+}
+
+function normalizeMonthlyMultiplier(value?: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 1;
+  return Math.max(Math.trunc(value), 1);
+}
+
 function monthlyToHourly(priceMonthly?: number | null): number {
-  const p = typeof priceMonthly === "number" ? priceMonthly : 0;
+  const p = toFiniteNumber(priceMonthly);
   if (!p || p <= 0) return 0;
   return roundToTwoDecimals(p / HOURS_IN_MONTH);
 }
@@ -18,9 +33,9 @@ function ratesFromProduct(
   product?: { price?: number | null; fixed_price?: number | null } | null,
   options?: { monthlyMultiplier?: number }
 ): Rates {
-  const monthlyMultiplier = Math.max(options?.monthlyMultiplier ?? 1, 1);
-  const initialCost = roundToTwoDecimals((product?.fixed_price ?? 0) || 0);
-  const hourlyRate = monthlyToHourly((product?.price ?? 0) * monthlyMultiplier);
+  const monthlyMultiplier = normalizeMonthlyMultiplier(options?.monthlyMultiplier);
+  const initialCost = clampCurrencyAmount(product?.fixed_price);
+  const hourlyRate = monthlyToHourly(toFiniteNumber(product?.price) * monthlyMultiplier);
   return { initialCost, hourlyRate };
 }
 
@@ -74,7 +89,7 @@ export async function getAllPlatformAppRates(): Promise<Record<string, Rates & {
     rates[size] = {
       initialCost,
       hourlyRate,
-      price: (product as any)?.price ?? 0,
+      price: clampCurrencyAmount((product as any)?.price),
     };
   }
   

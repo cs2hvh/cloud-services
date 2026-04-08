@@ -307,6 +307,7 @@ export const clusterLifecycleOperations = {
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
           serviceId: clusterId,
+          serviceType: "kubernetes",
           addActive: Billing.add_active_kubernetes,
         });
       } catch (billingErr) {

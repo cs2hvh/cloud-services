@@ -1,4 +1,4 @@
-import { ensureBalance } from "@/config/billing-flow";
+import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import {
   createSpectrumApp,
   deleteSpectrumApp,
@@ -55,7 +55,7 @@ export class SpectrumService {
   }) {
     const { userId, payload, audit_context } = input;
 
-    const { initialCost } = await getRatesForSpectrum();
+    const { initialCost, hourlyRate } = await getRatesForSpectrum();
     const balanceCheck = await ensureBalance(userId, initialCost);
     if (!balanceCheck.ok) {
       throw makeError("INSUFFICIENT_CREDITS", "Insufficient credits", {
@@ -72,6 +72,30 @@ export class SpectrumService {
       "user"
     );
 
+    const serviceId = result.app?.id ?? result.cloudflare?.id;
+    if (!serviceId) {
+      throw makeError(
+        "BILLING_REGISTRATION_FAILED",
+        "Spectrum app created but missing service id for billing registration"
+      );
+    }
+
+    try {
+      await postProvisionBilling({
+        userId,
+        initialCost,
+        hourlyRate,
+        serviceId,
+        serviceType: "spectrum",
+        addActive: Billing.add_active_spectrum,
+      });
+    } catch (error) {
+      throw makeError(
+        "BILLING_REGISTRATION_FAILED",
+        error instanceof Error ? error.message : "Failed to register billing after Spectrum create"
+      );
+    }
+
     // Audit log
     if (audit_context) {
       try {
@@ -81,7 +105,7 @@ export class SpectrumService {
           user_email: audit_context.user_email,
           action: 'create',
           service_type: 'network_ddos',
-          service_id: result.app?.spectrum_id || '',
+          service_id: serviceId,
           service_name: payload.protocol || 'spectrum-app',
           after_state: result.app as unknown as Record<string, unknown>,
           ip_address: audit_context.ip_address,
@@ -103,7 +127,7 @@ export class SpectrumService {
           action: 'created',
           serviceType: 'spectrum',
           serviceName: payload.protocol || 'spectrum-app',
-          serviceId: result.app?.spectrum_id || '',
+          serviceId,
         })
       );
     } catch (notifErr) {

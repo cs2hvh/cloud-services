@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
       initialCost: INITIAL_COST,
       hourlyRate: HOURLY_RATE,
       serviceId: clusterId,
+      serviceType: "kubernetes",
       addActive: Billing.add_active_kubernetes,
     });
   } catch (e: unknown) {

@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
           serviceId,
+          serviceType: "spectrum",
           addActive: Billing.add_active_spectrum,
         });
       }
