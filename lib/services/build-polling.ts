@@ -17,6 +17,7 @@ export interface BuildPollConfig {
   appId: string;
   appName: string;
   buildNumber: number;
+  userId?: string;
   trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
   resizeContext?: {
     previousSize: 'small' | 'medium' | 'large';
@@ -235,6 +236,7 @@ export class BuildPollingService {
       appId,
       appName,
       buildNumber,
+      userId,
       trigger = 'manual',
       resizeContext,
       maxPolls = this.DEFAULT_MAX_POLLS,
@@ -252,6 +254,7 @@ export class BuildPollingService {
         appId,
         appName,
         buildNumber,
+        userId,
         trigger,
         resizeContext,
         maxPolls,
@@ -270,6 +273,7 @@ export class BuildPollingService {
     appId: string;
     appName: string;
     buildNumber: number;
+    userId?: string;
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     resizeContext?: BuildPollConfig['resizeContext'];
     maxPolls: number;
@@ -278,7 +282,7 @@ export class BuildPollingService {
     pollCount: number;
     buildFound: boolean;
   }): Promise<void> {
-    const { appId, appName, buildNumber, trigger, maxPolls, pollInterval, resizeContext } = context;
+    const { appId, appName, buildNumber, userId, trigger, maxPolls, pollInterval, resizeContext } = context;
     let { pollCount, buildFound } = context;
 
     pollCount++;
@@ -303,7 +307,7 @@ export class BuildPollingService {
 
       // Check if build is complete
       if (!buildStatus.building) {
-        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber, trigger, resizeContext);
+        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber, userId, trigger, resizeContext);
         return;
       }
 
@@ -328,6 +332,7 @@ export class BuildPollingService {
   /**
    * Handle build completion
    * If build succeeded, verify the app is actually healthy before marking as 'running'
+   * For resize, update billing rate only after successful completion
    * Records deployment history for rollback capability
    */
   private static async handleBuildComplete(
@@ -335,6 +340,7 @@ export class BuildPollingService {
     appName: string,
     buildStatus: { status: string; result: string | null; building: boolean },
     buildNumber?: number,
+    userId?: string,
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
     resizeContext?: BuildPollConfig['resizeContext']
   ): Promise<void> {
@@ -392,6 +398,36 @@ export class BuildPollingService {
             resizeContext,
           });
           return;
+        }
+      }
+
+      // Update billing rate for successful resize (after verification, before marking as running)
+      if (trigger === 'resize' && resizeContext?.targetSize && userId) {
+        try {
+          const { Billing } = await import('@/lib/supabase/queries/billing');
+          const { getRatesForPlatformApp } = await import('@/config/pricing');
+          const { hourlyRate } = await getRatesForPlatformApp(resizeContext.targetSize);
+          await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });
+          console.log(`[BuildPolling] ✅ Billing rate updated for resize to ${resizeContext.targetSize} (${hourlyRate}/hr)`);
+        } catch (billingErr) {
+          console.warn(`[BuildPolling] ⚠️ Failed to update billing rate for successful resize:`, billingErr);
+          // Don't fail the entire build - the app is healthy and resized, billing update is secondary
+        }
+
+        try {
+          const { AuditLogService } = await import('@/lib/audit');
+          await AuditLogService.create({
+            user_id: userId,
+            user_role: 'user',
+            action: 'update',
+            service_type: 'platform_app',
+            service_id: appId,
+            service_name: appName,
+            after_state: { size: resizeContext.targetSize },
+            metadata: { update_type: 'resize', trigger },
+          });
+        } catch (auditErr) {
+          console.warn(`[BuildPolling] ⚠️ Failed to create audit log for resize:`, auditErr);
         }
       }
 

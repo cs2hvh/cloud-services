@@ -180,6 +180,7 @@ export async function POST(req: NextRequest) {
         result: operation,
         actionLabel: "Resize",
       });
+
       if (resolvedOperation.kind === "pending") {
         return NextResponse.json(
           {
@@ -228,6 +229,7 @@ export async function POST(req: NextRequest) {
           appId: app.id,
           appName: app.name,
           buildNumber,
+          userId: auth.user!.id,
           trigger: 'resize',
           resizeContext: {
             previousSize: currentSize as 'small' | 'medium' | 'large',

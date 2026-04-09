@@ -51,9 +51,10 @@ export class SpectrumService {
   static async createApp(input: {
     userId: string;
     payload: CreateSpectrumAppPayload;
+    role?: string;
     audit_context?: AuditContext;
   }) {
-    const { userId, payload, audit_context } = input;
+    const { userId, payload, role = 'user', audit_context } = input;
 
     const { initialCost, hourlyRate } = await getRatesForSpectrum();
     const balanceCheck = await ensureBalance(userId, initialCost);
@@ -69,7 +70,7 @@ export class SpectrumService {
         ...payload,
         owner_id: userId,
       },
-      "user"
+      role
     );
 
     const serviceId = result.app?.id ?? result.cloudflare?.id;
@@ -134,7 +135,7 @@ export class SpectrumService {
       console.warn('[SpectrumService.createApp] Notification failed:', notifErr);
     }
 
-    return result.app;
+    return result; // { app: Supabase row, cloudflare: Cloudflare response }
   }
 
   static async getApp(input: { appId: string; userId: string }) {
@@ -172,14 +173,15 @@ export class SpectrumService {
     });
   }
 
-  static async deleteApp(input: { appId: string; userId: string; audit_context?: AuditContext }) {
-    const { appId, userId, audit_context } = input;
+  static async deleteApp(input: { appId: string; userId: string; isAdmin?: boolean; audit_context?: AuditContext }) {
+    const { appId, userId, isAdmin = false, audit_context } = input;
 
     const existing = await Spectrum_Apps.get(appId);
     if (!existing.success || !existing.data) {
       throw makeError("NOT_FOUND", "Spectrum app not found");
     }
-    if (existing.data.owner_id !== userId) {
+    // Admins can delete any user's app; regular users can only delete their own
+    if (!isAdmin && existing.data.owner_id !== userId) {
       throw makeError("FORBIDDEN", "Access denied");
     }
 
@@ -205,9 +207,14 @@ export class SpectrumService {
     }
 
     try {
+      // Use the local Supabase UUID (existing.data.id), NOT appId (Cloudflare spectrum_id)
+      // billing.active_spectrum.service_id is the Supabase row UUID set at create time
+      // Always use the owner's userId for billing lookup (admin delete must still close the owner's billing)
+      const billingUserId = String(existing.data.owner_id);
+      const billingServiceId = (existing.data as { id?: string }).id ?? appId;
       await Billing.close_active_service("spectrum", {
-        userId,
-        serviceId: appId,
+        userId: billingUserId,
+        serviceId: billingServiceId,
         failOnInsufficient: false,
       });
     } catch (billErr) {
@@ -216,11 +223,12 @@ export class SpectrumService {
 
     const result = await deleteSpectrumApp(appId);
 
-    // Notification
+    // Notification — always notify the app owner, not the requester (admin may differ)
     try {
+      const notifyUserId = String(existing.data.owner_id);
       await NotificationService.create(
         createServiceNotification({
-          userId,
+          userId: notifyUserId,
           type: 'success',
           action: 'deleted',
           serviceType: 'spectrum',

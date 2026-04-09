@@ -99,6 +99,22 @@ export const scalingResourceOperations = {
         console.error("[updateStorage] Failed to update billing hourly rate:", billingRateErr);
       }
 
+      try {
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: "user",
+          action: "update",
+          service_type: "database",
+          service_id: clusterId,
+          service_name: String(clusterData.name),
+          before_state: { size: clusterData.size },
+          after_state: { size: requestedSize },
+          metadata: { update_type: "tier_resize" },
+        });
+      } catch (auditErr) {
+        console.error("[updateStorage] Failed to create audit log:", auditErr);
+      }
+
       if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
           project_id: clusterData.project_id,
@@ -203,6 +219,23 @@ export const scalingResourceOperations = {
         }
 
         const clusterData = access.cluster;
+
+        try {
+          await AuditLogService.create({
+            user_id: userId,
+            user_role: "user",
+            action: "update",
+            service_type: "database",
+            service_id: clusterId,
+            service_name: String(clusterData.name),
+            before_state: { size: clusterData.size },
+            after_state: { size: requestedSize },
+            metadata: { update_type: "tier_resize" },
+          });
+        } catch (auditErr) {
+          console.error("[updateStorageInternal] Failed to create audit log:", auditErr);
+        }
+
         if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
           await Projects.add_log({
             project_id: clusterData.project_id,
