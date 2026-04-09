@@ -296,7 +296,7 @@ function SingleCluster({
       console.error("[handleDropletCreationFailure] Failed to delete cluster:", deleteError);
     }
 
-    toast.error("This droplet is not available currently.");
+    toast.error("Cluster provisioning failed. Please try again.");
     router.push("/dashboard/services/kubernetes");
   };
 
@@ -317,22 +317,27 @@ function SingleCluster({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            cluster_id: clusterId,
             names: provisionConfig.node_names,
             region: provisionConfig.region,
             size: provisionConfig.size,
-            image: "ubuntu-25-04-x64",
+            image: "ubuntu-24-04-x64",
             backups: false,
             ipv6: true,
             monitoring: true,
             tags: ["env:prod", "web", "ssh-allowed"],
             ownerId: clusterInfo.owner_id,
-            initial_cost: 5.0,
+            plan_id: provisionConfig.plan_id,
+            expected_node_count: provisionConfig.node_count + 1,
           }),
         }
       );
 
       if (createDropletRes.status === 402) {
-        toast.error("Insufficient balance. Please top up your account.");
+        const errorData = (await createDropletRes.json().catch(() => null)) as
+          | { error?: string; message?: string; balance?: number; required?: number }
+          | null;
+        toast.error(errorData?.message || errorData?.error || "Insufficient credits to start this cluster.");
         router.push("/dashboard/nav/billing");
         return;
       }
@@ -1072,6 +1077,7 @@ function SingleCluster({
                 )}
               </div>
             </div>
+
           </motion.div>
         )}
 

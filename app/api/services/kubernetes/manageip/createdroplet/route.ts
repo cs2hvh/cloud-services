@@ -19,14 +19,20 @@ export async function POST(req: NextRequest) {
       userId: auth.user!.id,
       userEmail: auth.user!.email,
       dropletPayload: json,
-      initialCost: typeof json?.initial_cost === "number" ? json.initial_cost : 5.0,
+      initialCost: typeof json?.initial_cost === "number" ? json.initial_cost : undefined,
+      expectedNodeCount:
+        typeof json?.expected_node_count === "number" ? json.expected_node_count : undefined,
       auditContext: context,
     });
 
     if (!result.success) {
       if (result.errorCode === "INSUFFICIENT_BALANCE") {
         return NextResponse.json(
-          { error: "Insufficient credits", ...(result.data as object) },
+          {
+            error: result.error || "Insufficient credits to start this cluster.",
+            message: result.error || "Insufficient credits to start this cluster.",
+            ...(result.data as object),
+          },
           { status: 402 }
         );
       }
@@ -42,12 +48,11 @@ export async function POST(req: NextRequest) {
       { status: 202 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { message: "our server is not responding. please try later" },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json({ message: "Unknown error occurred" }, { status: 503 });
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("[createdroplet route] Error:", errorMsg, err);
+    return NextResponse.json(
+      { message: `Error: ${errorMsg}` },
+      { status: 400 }
+    );
   }
 }

@@ -417,7 +417,7 @@ const NewClusterPage = ({
       });
       const settledResponse = response as typeof response & {
         error?: unknown;
-        data?: { message?: string; clusterId?: string };
+        data?: { message?: string; clusterId?: string; balance?: number; required?: number };
       };
 
       if (settledResponse.error) {
@@ -425,7 +425,6 @@ const NewClusterPage = ({
       }
 
       if (settledResponse.status === 200) {
-        toast.success("Cluster initialized.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {

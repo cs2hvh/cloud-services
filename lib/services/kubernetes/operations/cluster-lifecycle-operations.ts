@@ -763,17 +763,25 @@ export const clusterLifecycleOperations = {
    * Handles balance check, DigitalOcean API call, and billing rate update.
    */
   async addNode(request: AddKubernetesNodeRequest): Promise<AddKubernetesNodeResult> {
-    const { clusterId, planId, userId, userEmail, dropletPayload, initialCost = 5.0, expectedNodeCount, auditContext } = request;
+    const { clusterId, planId, userId, userEmail, dropletPayload, initialCost, expectedNodeCount, auditContext } = request;
+
+    // Resolve cost: use provided, or fetch from plan pricing, or safe fallback
+    const resolvedInitialCost =
+      typeof initialCost === "number"
+        ? initialCost
+        : planId
+          ? (await getRatesForKubernetesExisting(planId, expectedNodeCount ?? 1)).initialCost
+          : 5.0;
 
     // Pre-flight balance check
-    const hasBalance = await Billing.has_balance(userId, initialCost);
+    const hasBalance = await Billing.has_balance(userId, resolvedInitialCost);
     if (!hasBalance) {
       const balance = await Billing.get_balance(userId);
       return {
         success: false,
-        error: "Insufficient credits",
+        error: "Insufficient credits to start this cluster.",
         errorCode: "INSUFFICIENT_BALANCE",
-        data: { balance, required: initialCost },
+        data: { balance, required: resolvedInitialCost },
       };
     }
 
@@ -782,27 +790,52 @@ export const clusterLifecycleOperations = {
 
     // Whitelist only the fields DigitalOcean accepts for droplet creation
     const {
-      name, region, size, image, ssh_keys, backups, ipv6,
-      private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+      names, region, size, image, ssh_keys, backups, ipv6,
+      monitoring, private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
     } = dropletPayload as Record<string, unknown>;
     const doPayload = {
-      name, region, size, image, ssh_keys, backups, ipv6,
-      private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+      names, region, size, image, ssh_keys, backups, ipv6,
+      monitoring, private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
       user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
     };
 
+    console.log("[addNode] DO payload:", JSON.stringify({ ...doPayload, user_data: "[redacted]" }));
+
     // Create droplet on DigitalOcean
-    const response = await axios.post(
-      "https://api.digitalocean.com/v2/droplets",
-      doPayload,
-      { headers: getDigitalOceanHeaders() }
-    );
+    let response;
+    try {
+      response = await axios.post(
+        "https://api.digitalocean.com/v2/droplets",
+        doPayload,
+        { headers: getDigitalOceanHeaders() }
+      );
+    } catch (doErr: unknown) {
+      const doRes = (doErr as { response?: { data?: unknown; status?: number } })?.response;
+      console.error("[addNode] DigitalOcean API error:", doRes?.status, JSON.stringify(doRes?.data));
+      return { success: false, error: `DigitalOcean API error: ${doRes?.status} ${JSON.stringify(doRes?.data)}`, errorCode: "DO_ERROR" };
+    }
 
     if (response.status !== 202) {
+      console.error("[addNode] Unexpected DO status:", response.status, JSON.stringify(response.data));
       return { success: false, error: "DigitalOcean droplet creation failed", errorCode: "DO_ERROR" };
     }
 
     const vmPasswordEncrypted = Encryption.encrypt(vmPassword, process.env.ENCRYPTION_KEY!);
+
+    // Deduct the cost upfront and register active kubernetes billing
+    try {
+      await postProvisionBilling({
+        userId,
+        initialCost: resolvedInitialCost,
+        hourlyRate: 0, // Will be recalculated below
+        serviceId: clusterId,
+        serviceType: "kubernetes",
+        addActive: Billing.add_active_kubernetes,
+      });
+    } catch (billingErr) {
+      console.error("[KubernetesService.addNode] Failed to deduct cost:", billingErr);
+      // Note: droplet already created. Consider cleanup strategy or admin manual correction
+    }
 
     // Update billing rate to reflect new node count (non-fatal)
     // Use caller-supplied expectedNodeCount to avoid a stale-read race condition
@@ -861,7 +894,7 @@ export const clusterLifecycleOperations = {
     // Fetch current cluster state
     const { data, error } = await db
       .from("clusters")
-      .select("workers, cluster_name, project_id, provision_config")
+      .select("workers, cluster_name, project_id, node_config")
       .eq("cluster_id", clusterId)
       .single();
 
@@ -896,14 +929,17 @@ export const clusterLifecycleOperations = {
 
     // Update billing rate to reflect reduced node count (non-fatal)
     try {
-      const planId = (data.provision_config as Record<string, unknown> | null)?.plan_id as string | undefined;
+      const nodeConfig = data.node_config as Record<string, unknown> | null;
+      const provisionConfig = nodeConfig?.provision_config as Record<string, unknown> | null;
+      const planId = provisionConfig?.plan_id as string | undefined;
       if (planId) {
-        const newNodeCount = Math.max(filtered.length, 1);
+        // filtered = workers only, +1 for control plane
+        const newNodeCount = Math.max(filtered.length + 1, 1);
         const { hourlyRate: newHourlyRate } = await getRatesForKubernetesExisting(planId, newNodeCount);
         await Billing.update_active_kubernetes_rate({ serviceId: clusterId, newHourlyRate });
         console.log(`[KubernetesService.removeNode] ✅ Billing rate updated to ${newHourlyRate}/hr for ${newNodeCount} nodes`);
       } else {
-        console.warn("[KubernetesService.removeNode] plan_id not found in provision_config; skipping billing rate update");
+        console.warn("[KubernetesService.removeNode] plan_id not found in node_config.provision_config; skipping billing rate update");
       }
     } catch (billingErr) {
       console.error("[KubernetesService.removeNode] Failed to update billing rate (non-fatal):", billingErr);

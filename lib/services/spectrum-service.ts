@@ -90,7 +90,7 @@ export class SpectrumService {
         serviceType: "spectrum",
         addActive: Billing.add_active_spectrum,
       });
-    } catch (error) {
+    } catch {
       // Billing registration failed — roll back the Cloudflare app so it doesn't run for free
       const cleanupErrors: string[] = [];
       
