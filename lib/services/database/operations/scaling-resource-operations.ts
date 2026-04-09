@@ -5,6 +5,8 @@ import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
+import { getRatesForDatabaseBySlug } from "@/config/pricing";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import type {
@@ -83,6 +85,19 @@ export const scalingResourceOperations = {
       }
 
       await Database_Clusters.update_storage(clusterId, requestedSize);
+
+      // Update billing rate to match the new plan so future cron charges are correct
+      try {
+        const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+        if (hourlyRate > 0) {
+          await Billing.update_active_database_rate({
+            serviceId: clusterId,
+            newHourlyRate: hourlyRate,
+          });
+        }
+      } catch (billingRateErr) {
+        console.error("[updateStorage] Failed to update billing hourly rate:", billingRateErr);
+      }
 
       if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
@@ -172,6 +187,19 @@ export const scalingResourceOperations = {
         const supabaseUpdate = await Database_Clusters.update_storage(clusterId, requestedSize);
         if (!supabaseUpdate.success) {
           console.error("[updateStorageInternal] Failed to update Supabase:", supabaseUpdate.error);
+        }
+
+        // Update billing rate to match the new plan
+        try {
+          const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+          if (hourlyRate > 0) {
+            await Billing.update_active_database_rate({
+              serviceId: clusterId,
+              newHourlyRate: hourlyRate,
+            });
+          }
+        } catch (billingRateErr) {
+          console.error("[updateStorageInternal] Failed to update billing hourly rate:", billingRateErr);
         }
 
         const clusterData = access.cluster;

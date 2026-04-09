@@ -620,6 +620,38 @@ export const Billing = {
    * Update the hourly rate for an active platform app (used during resize)
    * This ensures the user is charged the correct rate after resizing
    */
+  update_active_database_rate: async (params: {
+    serviceId: string;
+    newHourlyRate: number;
+  }): Promise<{ updated: boolean }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("active_database")
+      .update({
+        hourly_rate: params.newHourlyRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active")
+      .select("service_id");
+
+    if (error) {
+      console.error(`[Billing] Failed to update database rate:`, error.message);
+      throw new Error(`Failed to update hourly rate: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active database billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
+    console.log(`[Billing] Updated database ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
+  },
+
   update_active_platform_app_rate: async (params: {
     serviceId: string;
     newHourlyRate: number;
