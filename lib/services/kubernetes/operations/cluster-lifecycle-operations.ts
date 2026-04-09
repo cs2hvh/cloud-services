@@ -7,9 +7,10 @@ import { NextRequest } from "next/server";
 
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { Encryption, generateStrongPassword } from "@/config/functions";
-import { getRatesForKubernetes } from "@/config/pricing";
+import { getRatesForKubernetes, getRatesForKubernetesExisting } from "@/config/pricing";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
+import { createServiceClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
@@ -28,6 +29,10 @@ import type {
   InitKubernetesClusterResult,
   UpdateKubernetesClusterRequest,
   ServiceResult,
+  AddKubernetesNodeRequest,
+  AddKubernetesNodeResult,
+  RemoveKubernetesNodeRequest,
+  RemoveKubernetesNodeResult,
 } from "../types";
 
 /**
@@ -751,5 +756,184 @@ export const clusterLifecycleOperations = {
         errorCode: "INIT_FAILED",
       };
     }
+  },
+
+  /**
+   * Add a node (DigitalOcean droplet) to an existing cluster.
+   * Handles balance check, DigitalOcean API call, and billing rate update.
+   */
+  async addNode(request: AddKubernetesNodeRequest): Promise<AddKubernetesNodeResult> {
+    const { clusterId, planId, userId, userEmail, dropletPayload, initialCost = 5.0, expectedNodeCount, auditContext } = request;
+
+    // Pre-flight balance check
+    const hasBalance = await Billing.has_balance(userId, initialCost);
+    if (!hasBalance) {
+      const balance = await Billing.get_balance(userId);
+      return {
+        success: false,
+        error: "Insufficient credits",
+        errorCode: "INSUFFICIENT_BALANCE",
+        data: { balance, required: initialCost },
+      };
+    }
+
+    // Generate VM credentials
+    const vmPassword = generateStrongPassword();
+
+    // Whitelist only the fields DigitalOcean accepts for droplet creation
+    const {
+      name, region, size, image, ssh_keys, backups, ipv6,
+      private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+    } = dropletPayload as Record<string, unknown>;
+    const doPayload = {
+      name, region, size, image, ssh_keys, backups, ipv6,
+      private_networking, volumes, tags, vpc_uuid, with_droplet_agent,
+      user_data: `#cloud-config\npassword: ${vmPassword}!\nchpasswd:\n  list: |\n    root:${vmPassword}\n  expire: false\nssh_pwauth: true`,
+    };
+
+    // Create droplet on DigitalOcean
+    const response = await axios.post(
+      "https://api.digitalocean.com/v2/droplets",
+      doPayload,
+      { headers: getDigitalOceanHeaders() }
+    );
+
+    if (response.status !== 202) {
+      return { success: false, error: "DigitalOcean droplet creation failed", errorCode: "DO_ERROR" };
+    }
+
+    const vmPasswordEncrypted = Encryption.encrypt(vmPassword, process.env.ENCRYPTION_KEY!);
+
+    // Update billing rate to reflect new node count (non-fatal)
+    // Use caller-supplied expectedNodeCount to avoid a stale-read race condition
+    try {
+      if (planId) {
+        let newNodeCount = expectedNodeCount;
+        if (!newNodeCount) {
+          const db = await createServiceClient();
+          const { data: clusterData } = await db
+            .from("clusters")
+            .select("workers")
+            .eq("cluster_id", clusterId)
+            .single();
+          newNodeCount = Math.max(((clusterData?.workers as unknown[]) ?? []).length + 1, 1);
+        }
+        const { hourlyRate: newHourlyRate } = await getRatesForKubernetesExisting(planId, newNodeCount);
+        await Billing.update_active_kubernetes_rate({ serviceId: clusterId, newHourlyRate });
+        console.log(`[KubernetesService.addNode] ✅ Billing rate updated to ${newHourlyRate}/hr for ${newNodeCount} nodes`);
+      } else {
+        console.warn("[KubernetesService.addNode] planId not provided; skipping billing rate update");
+      }
+    } catch (billingErr) {
+      console.error("[KubernetesService.addNode] Failed to update billing rate (non-fatal):", billingErr);
+    }
+
+    // Audit log (non-fatal)
+    try {
+      await AuditLogService.create({
+        user_id: userId,
+        user_role: "user",
+        user_email: userEmail ?? undefined,
+        action: "create",
+        service_type: "kubernetes",
+        service_id: clusterId,
+        after_state: { droplet: response.data?.droplet },
+        metadata: { operation: "node_addition", nodes_added: 1 },
+        ip_address: auditContext?.ipAddress,
+        user_agent: auditContext?.userAgent,
+        request_id: auditContext?.requestId,
+      });
+    } catch (auditErr) {
+      console.error("[KubernetesService.addNode] Failed to create audit log:", auditErr);
+    }
+
+    return { success: true, dropletData: response.data, vmPassword: vmPasswordEncrypted };
+  },
+
+  /**
+   * Remove a worker node from an existing cluster.
+   * Updates the cluster workers list and billing rate.
+   */
+  async removeNode(request: RemoveKubernetesNodeRequest): Promise<RemoveKubernetesNodeResult> {
+    const { clusterId, dropletId, userId, userEmail, auditContext } = request;
+    const db = await createServiceClient();
+
+    // Fetch current cluster state
+    const { data, error } = await db
+      .from("clusters")
+      .select("workers, cluster_name, project_id, provision_config")
+      .eq("cluster_id", clusterId)
+      .single();
+
+    if (error || !data) {
+      return { success: false, error: error?.message ?? "Cluster not found", errorCode: "NOT_FOUND" };
+    }
+
+    const workersBefore = (data.workers ?? []) as Array<{ droplet_id: string } & Record<string, unknown>>;
+    const filtered = workersBefore.filter(
+      (w) => String(w.droplet_id) !== String(dropletId)
+    );
+
+    // Persist updated workers list
+    const { error: updErr } = await db
+      .from("clusters")
+      .update({ workers: filtered })
+      .eq("cluster_id", clusterId)
+      .single();
+
+    if (updErr) {
+      return { success: false, error: updErr.message, errorCode: "UPDATE_FAILED" };
+    }
+
+    // Activity log
+    if (data.project_id) {
+      await Projects.add_log({
+        project_id: data.project_id as string,
+        event: "Server",
+        text: `Worker node removed from Kubernetes cluster '${data.cluster_name}'`,
+      });
+    }
+
+    // Update billing rate to reflect reduced node count (non-fatal)
+    try {
+      const planId = (data.provision_config as Record<string, unknown> | null)?.plan_id as string | undefined;
+      if (planId) {
+        const newNodeCount = Math.max(filtered.length, 1);
+        const { hourlyRate: newHourlyRate } = await getRatesForKubernetesExisting(planId, newNodeCount);
+        await Billing.update_active_kubernetes_rate({ serviceId: clusterId, newHourlyRate });
+        console.log(`[KubernetesService.removeNode] ✅ Billing rate updated to ${newHourlyRate}/hr for ${newNodeCount} nodes`);
+      } else {
+        console.warn("[KubernetesService.removeNode] plan_id not found in provision_config; skipping billing rate update");
+      }
+    } catch (billingErr) {
+      console.error("[KubernetesService.removeNode] Failed to update billing rate (non-fatal):", billingErr);
+    }
+
+    // Audit log (non-fatal)
+    try {
+      await AuditLogService.create({
+        user_id: userId,
+        user_role: "user",
+        user_email: userEmail ?? undefined,
+        action: "delete",
+        service_type: "kubernetes",
+        service_id: clusterId,
+        service_name: data.cluster_name as string | undefined,
+        before_state: { workers: workersBefore },
+        after_state: { workers: filtered },
+        metadata: { operation: "node_deletion", droplet_id: dropletId, nodes_removed: 1 },
+        ip_address: auditContext?.ipAddress,
+        user_agent: auditContext?.userAgent,
+        request_id: auditContext?.requestId,
+      });
+    } catch (auditErr) {
+      console.error("[KubernetesService.removeNode] Failed to create audit log:", auditErr);
+    }
+
+    return {
+      success: true,
+      workers: filtered as Array<Record<string, unknown>>,
+      data: { workers: filtered, clusterName: data.cluster_name },
+    };
   },
 };

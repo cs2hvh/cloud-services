@@ -34,8 +34,16 @@ function ratesFromProduct(
   options?: { monthlyMultiplier?: number }
 ): Rates {
   const monthlyMultiplier = normalizeMonthlyMultiplier(options?.monthlyMultiplier);
-  const initialCost = clampCurrencyAmount(product?.fixed_price);
-  const hourlyRate = monthlyToHourly(toFiniteNumber(product?.price) * monthlyMultiplier);
+  const rawFixed = toFiniteNumber(product?.fixed_price);
+  const rawPrice = toFiniteNumber(product?.price);
+  // Guard: negative prices would cause deduct(-X) to ADD credits to the user
+  if (rawFixed < 0 || rawPrice < 0) {
+    throw new Error(
+      `Invalid product pricing: price=${rawPrice}, fixed_price=${rawFixed}. Negative prices are not allowed.`
+    );
+  }
+  const initialCost = clampCurrencyAmount(rawFixed);
+  const hourlyRate = monthlyToHourly(rawPrice * monthlyMultiplier);
   return { initialCost, hourlyRate };
 }
 
@@ -57,11 +65,7 @@ export async function getRatesForKubernetes(plan_id:string, totalNodes = 1): Pro
   return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
 }
 
-export async function getRatesForKubernetesExisting(plan_id:string, totalNodes = 1): Promise<Rates> {
-    console.log("Fetching rates for Kubernetes plan ID:", plan_id);
-  const products = await Products.get_by_id(plan_id);
-  return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
-}
+export const getRatesForKubernetesExisting = getRatesForKubernetes;
 
 export async function getRatesForObjectStorage(): Promise<Rates> {
   const products = await Products.get_by_type("object-storage");

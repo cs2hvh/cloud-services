@@ -112,6 +112,7 @@ export class BuildPollingService {
     buildNumber: number;
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     desiredSize?: PlatformAppSize | null;
+    userId?: string; // Optional: for audit logging during recovery
   }): Promise<{
     success: boolean;
     recovered: boolean;
@@ -120,7 +121,7 @@ export class BuildPollingService {
     message?: string;
     error?: string;
   }> {
-    const { appId, appName, buildNumber, trigger, desiredSize } = params;
+    const { appId, appName, buildNumber, trigger, desiredSize, userId } = params;
 
     const resizeContext =
       trigger === 'resize'
@@ -175,6 +176,7 @@ export class BuildPollingService {
       appName,
       buildStatus,
       buildNumber,
+      userId, // userId now optionally available from recovery context
       trigger,
       resizeContext
     );
@@ -420,7 +422,7 @@ export class BuildPollingService {
             user_id: userId,
             user_role: 'user',
             action: 'update',
-            service_type: 'platform_app',
+            service_type: 'platform_apps',
             service_id: appId,
             service_name: appName,
             after_state: { size: resizeContext.targetSize },

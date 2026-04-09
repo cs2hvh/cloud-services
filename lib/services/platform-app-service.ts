@@ -874,8 +874,8 @@ export class PlatformAppService {
           user_id: userId,
           user_role: audit_context.user_role || 'user',
           user_email: audit_context.user_email,
-          action: 'resize',
-          service_type: 'platform_app',
+          action: 'update',
+          service_type: 'platform_apps',
           service_id: appId,
           service_name: app.name,
           after_state: { ...app, size: newSize } as Record<string, unknown>,
@@ -900,4 +900,26 @@ export class PlatformAppService {
       newSize,
     };
   }
+
+  /**
+   * Check whether the user's balance covers the target resize tier's hourly rate.
+   * Returns a result object — never throws.
+   */
+  static async checkBalanceForResize(
+    userId: string,
+    newSize: 'small' | 'medium' | 'large'
+  ): Promise<{ ok: boolean; balance?: number; required?: number }> {
+    let hourlyRate: number;
+    try {
+      ({ hourlyRate } = await getRatesForPlatformApp(newSize));
+    } catch {
+      // Pricing data is corrupt (e.g. negative price guard). Block resize rather than charging wrong rate.
+      console.error(`[PlatformAppService.checkBalanceForResize] Failed to get rates for size "${newSize}"`);
+      return { ok: false };
+    }
+    if (hourlyRate <= 0) return { ok: true };
+    const check = await ensureBalance(userId, hourlyRate);
+    return { ok: check.ok, balance: check.balance ?? 0, required: hourlyRate };
+  }
+
 }

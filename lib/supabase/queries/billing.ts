@@ -684,6 +684,38 @@ export const Billing = {
     return { updated: true };
   },
 
+  update_active_kubernetes_rate: async (params: {
+    serviceId: string;
+    newHourlyRate: number;
+  }): Promise<{ updated: boolean }> => {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .update({
+        hourly_rate: params.newHourlyRate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("service_id", params.serviceId)
+      .eq("status", "active")
+      .select("service_id");
+
+    if (error) {
+      console.error(`[Billing] Failed to update kubernetes rate:`, error.message);
+      throw new Error(`Failed to update hourly rate: ${error.message}`);
+    }
+
+    if (!data || data.length === 0) {
+      console.log(
+        `[Billing] No active kubernetes billing row found for ${params.serviceId}; skipping hourly rate update`
+      );
+      return { updated: false };
+    }
+
+    console.log(`[Billing] Updated kubernetes ${params.serviceId} hourly rate to ${params.newHourlyRate}`);
+    return { updated: true };
+  },
+
   // Internal helper: compute prorated charge for remaining fraction of hour
   _computeProratedCharge: (
     hourlyRate: number | string,

@@ -91,9 +91,43 @@ export class SpectrumService {
         addActive: Billing.add_active_spectrum,
       });
     } catch (error) {
+      // Billing registration failed — roll back the Cloudflare app so it doesn't run for free
+      const cleanupErrors: string[] = [];
+      
+      try {
+        const cfId = result.cloudflare?.id;
+        if (cfId) {
+          await deleteSpectrumApp(cfId);
+          console.warn('[SpectrumService.createApp] Rolled back Cloudflare app after billing failure');
+        } else {
+          console.error('[SpectrumService.createApp] Cannot roll back CF app: cloudflare.id missing');
+        }
+      } catch (cleanupErr) {
+        const cfErrorMsg = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+        cleanupErrors.push(`Cloudflare rollback failed: ${cfErrorMsg}`);
+        console.error('[SpectrumService.createApp] Billing failed AND Cloudflare rollback failed:', cleanupErr);
+      }
+      
+      // Roll back the Supabase row to avoid an orphaned record
+      try {
+        if (result.app?.id) {
+          await Spectrum_Apps.delete(result.app.id);
+          console.warn('[SpectrumService.createApp] Rolled back Supabase spectrum app row after billing failure');
+        }
+      } catch (dbCleanupErr) {
+        const dbErrorMsg = dbCleanupErr instanceof Error ? dbCleanupErr.message : String(dbCleanupErr);
+        cleanupErrors.push(`Supabase rollback failed: ${dbErrorMsg}`);
+        console.error('[SpectrumService.createApp] Billing failed AND Supabase rollback failed:', dbCleanupErr);
+      }
+      
+      // Log rollback issues server-side but do NOT expose internal resource IDs / error details to the client
+      if (cleanupErrors.length > 0) {
+        console.error('[SpectrumService.createApp] Rollback issues:', cleanupErrors.join(' | '));
+      }
+
       throw makeError(
         "BILLING_REGISTRATION_FAILED",
-        error instanceof Error ? error.message : "Failed to register billing after Spectrum create"
+        "Billing registration failed after provisioning. The app has been rolled back."
       );
     }
 

@@ -68,7 +68,7 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
       return v1ValidationError(errors);
     }
 
-    const app = await SpectrumService.createApp({
+    const result = await SpectrumService.createApp({
       userId: auth.userId,
       payload: validation.data,
       audit_context: {
@@ -79,6 +79,9 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
         user_role: "user",
       },
     });
+
+    // result = { app: Supabase row, cloudflare: CF response }
+    const app = result.app;
 
     return v1Ok(
       {
@@ -101,6 +104,9 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
     const error = err as Error & { code?: string; details?: Record<string, unknown> };
     if (error.code === "INSUFFICIENT_CREDITS") {
       return v1Error("INSUFFICIENT_CREDITS", 402, "Insufficient credits", error.details);
+    }
+    if (error.code === "BILLING_REGISTRATION_FAILED") {
+      return v1Error("BILLING_REGISTRATION_FAILED", 500, error.message || "Billing registration failed after provisioning");
     }
     console.error("[POST /api/v1/network/spectrum]", error);
     return v1Error("INTERNAL_ERROR", 500, error.message || "Failed to create spectrum app");
