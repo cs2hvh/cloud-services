@@ -36,13 +36,69 @@ export class JenkinsService {
   }
 
   /**
+   * Public accessor for safe Jenkins URL in logs from other services.
+   */
+  static getSafeBaseUrlForLogs(): string {
+    return this.getSafeJenkinsUrl();
+  }
+
+  /**
+   * Remove embedded credentials from repository URL.
+   */
+  private static sanitizeGitUrl(gitUrl: string): string {
+    return gitUrl
+      .replace(/https:\/\/[^@]+@github\.com\//, "https://github.com/")
+      .replace(/https:\/\/oauth2:[^@]+@gitlab\.com\//, "https://gitlab.com/")
+      .replace(/https:\/\/x-token-auth:[^@]+@bitbucket\.org\//, "https://bitbucket.org/")
+      .replace(/https:\/\/[^@]+@/g, "https://");
+  }
+
+  /**
+   * Ensure every generated pipeline supports ephemeral auth URL injection
+   * and does not print tokenized clone commands.
+   */
+  private static hardenPipelineXml(pipelineXml: string): string {
+    let xml = pipelineXml;
+
+    if (!xml.includes("<name>GIT_AUTH_URL</name>") && xml.includes("</parameterDefinitions>")) {
+      const gitAuthParam = `        <hudson.model.PasswordParameterDefinition>
+          <name>GIT_AUTH_URL</name>
+          <description>Ephemeral authenticated repository URL for private repo checkout (optional)</description>
+          <defaultValue></defaultValue>
+        </hudson.model.PasswordParameterDefinition>
+`;
+      xml = xml.replace("</parameterDefinitions>", `${gitAuthParam}      </parameterDefinitions>`);
+    }
+
+    xml = xml.replace(
+      /git clone --branch ([^\s]+) ([^\s]+) \./g,
+      (_match, branchArg: string, repoUrl: string) => {
+        const safeRepoUrl = repoUrl.replace(/"/g, '\\"');
+        return [
+          `REPO_URL="${'$'}{GIT_AUTH_URL:-${safeRepoUrl}}"`,
+          "set +x",
+          `git clone --branch ${branchArg} "$REPO_URL" .`,
+          "set -x",
+        ].join("\n              ");
+      }
+    );
+
+    return xml;
+  }
+
+  /**
    * Trigger a build for an existing Jenkins job
    * Used by webhooks for auto-deploy
    * @param appName - The application name
    * @param commitSha - Optional specific commit SHA to checkout
    * @param resizeOnly - If true, skips build stages and only updates K8s deployment
    */
-  static async triggerBuild(appName: string, commitSha?: string, resizeOnly: boolean = false): Promise<number> {
+  static async triggerBuild(
+    appName: string,
+    commitSha?: string,
+    resizeOnly: boolean = false,
+    gitAuthUrl?: string
+  ): Promise<number> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
     }
@@ -73,12 +129,17 @@ export class JenkinsService {
       // IMPORTANT: Jobs with parameter definitions MUST use buildWithParameters
       // Passing empty COMMIT_SHA uses branch HEAD (default behavior)
       // RESIZE_ONLY=true skips checkout, dockerfile prep, and build stages
+      const buildParams: Record<string, string | boolean> = {
+        COMMIT_SHA: commitSha || "",
+        RESIZE_ONLY: resizeOnly,
+      };
+      if (gitAuthUrl) {
+        buildParams.GIT_AUTH_URL = gitAuthUrl;
+      }
+
       await jenkins.job.build({
         name: jobName,
-        parameters: { 
-          COMMIT_SHA: commitSha || '',
-          RESIZE_ONLY: resizeOnly,
-        },
+        parameters: buildParams,
       });
       
       console.log(`[JenkinsService] Build #${expectedBuildNumber} triggered for: ${jobName}${resizeOnly ? ' (resize only)' : ''}`);
@@ -104,7 +165,8 @@ export class JenkinsService {
     size: string = 'small',
     deployTrigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
     envVars: Array<{ key: string; value: string }> = [],
-    containerPort?: number
+    containerPort?: number,
+    gitAuthUrl?: string
   ): Promise<void> {
     if (!process.env.JENKINS_URL) {
       throw new Error("JENKINS_URL not configured");
@@ -119,8 +181,21 @@ export class JenkinsService {
       console.log(`[JenkinsService] Container port: ${containerPort}`);
     }
 
+    const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
+
     // Select pipeline based on framework
-    const pipeline = JenkinsService.selectPipeline(appName, appId, githubUrl, branch, framework, size, deployTrigger, envVars, containerPort);
+    const pipelineRaw = JenkinsService.selectPipeline(
+      appName,
+      appId,
+      cleanGitUrl,
+      branch,
+      framework,
+      size,
+      deployTrigger,
+      envVars,
+      containerPort
+    );
+    const pipeline = this.hardenPipelineXml(pipelineRaw);
 
     // Create the job
     try {
@@ -141,7 +216,11 @@ export class JenkinsService {
       // Pass empty COMMIT_SHA to use branch HEAD (default behavior)
       await jenkins.job.build({
         name: jobName,
-        parameters: { COMMIT_SHA: '' }
+        parameters: {
+          COMMIT_SHA: '',
+          RESIZE_ONLY: false,
+          ...(gitAuthUrl ? { GIT_AUTH_URL: gitAuthUrl } : {}),
+        }
       });
       console.log(`[JenkinsService] Build #1 triggered for: ${jobName}`);
       console.log(`[JenkinsService] Monitor at: ${this.getSafeJenkinsUrl()}/job/${jobName}/`);
@@ -836,19 +915,20 @@ export class JenkinsService {
     }
 
     const jobName = `${appName}-job`;
+    const cleanGitUrl = this.sanitizeGitUrl(githubUrl);
     
     console.log(`[JenkinsService] Updating job config: ${jobName}`);
-    console.log(`[JenkinsService] New Git URL: ${githubUrl.replace(/https:\/\/[^@]+@/, 'https://***@')}`);
+    console.log(`[JenkinsService] New Git URL: ${cleanGitUrl}`);
     console.log(`[JenkinsService] Size: ${size}, EnvVars: ${envVars.length}`);
     if (containerPort) {
       console.log(`[JenkinsService] Container port: ${containerPort}`);
     }
 
     // Generate new pipeline with updated config
-    const pipeline = JenkinsService.selectPipeline(
+    const pipelineRaw = JenkinsService.selectPipeline(
       appName,
       appId,
-      githubUrl, 
+      cleanGitUrl,
       branch, 
       framework, 
       size,
@@ -856,6 +936,7 @@ export class JenkinsService {
       envVars,
       containerPort
     );
+    const pipeline = this.hardenPipelineXml(pipelineRaw);
 
     try {
       // Update the job configuration using Jenkins API

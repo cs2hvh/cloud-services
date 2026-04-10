@@ -22,6 +22,49 @@ type RecurringStatus =
 
 type BillingCreditKind = "topup" | "recurring";
 
+type BillingWithClaims = typeof Billing & {
+  claim_session_transaction?: (params: {
+    userId: string;
+    stripeSessionId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }) => Promise<boolean>;
+  claim_invoice_transaction?: (params: {
+    userId: string;
+    stripeInvoiceId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }) => Promise<boolean>;
+  mark_session_transaction_completed?: (params: {
+    stripeSessionId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }) => Promise<void>;
+  mark_invoice_transaction_completed?: (params: {
+    stripeInvoiceId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }) => Promise<void>;
+  mark_session_transaction_failed?: (stripeSessionId: string, description?: string) => Promise<void>;
+  mark_invoice_transaction_failed?: (stripeInvoiceId: string, description?: string) => Promise<void>;
+};
+
 const mapSubscriptionStatus = (status: Stripe.Subscription.Status): RecurringStatus => {
   if (status === "active") return "active";
   if (status === "past_due") return "past_due";
@@ -131,6 +174,134 @@ async function sendBillingCreditUserUpdates(params: {
   }
 }
 
+async function claimSessionTransaction(params: {
+  userId: string;
+  stripeSessionId: string;
+  amount: number;
+  currency?: string;
+  type?: "topup" | "refund" | "coupon" | "recurring";
+  stripePaymentIntent?: string;
+  description?: string;
+}): Promise<boolean> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.claim_session_transaction === "function") {
+    return billing.claim_session_transaction(params);
+  }
+  const existing = await Billing.get_transaction_by_session(params.stripeSessionId);
+  return existing?.status !== "completed";
+}
+
+async function claimInvoiceTransaction(params: {
+  userId: string;
+  stripeInvoiceId: string;
+  amount: number;
+  currency?: string;
+  type?: "topup" | "refund" | "coupon" | "recurring";
+  stripePaymentIntent?: string;
+  description?: string;
+}): Promise<boolean> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.claim_invoice_transaction === "function") {
+    return billing.claim_invoice_transaction(params);
+  }
+  const existing = await Billing.get_transaction_by_invoice(params.stripeInvoiceId);
+  return existing?.status !== "completed";
+}
+
+async function completeSessionTransaction(params: {
+  userId: string;
+  stripeSessionId: string;
+  stripePaymentIntent?: string;
+  amount: number;
+  currency?: string;
+  type?: "topup" | "refund" | "coupon" | "recurring";
+  balanceAfter?: number;
+  description?: string;
+  receiptUrl?: string;
+}): Promise<void> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.mark_session_transaction_completed === "function") {
+    await billing.mark_session_transaction_completed({
+      stripeSessionId: params.stripeSessionId,
+      stripePaymentIntent: params.stripePaymentIntent,
+      amount: params.amount,
+      currency: params.currency,
+      type: params.type,
+      balanceAfter: params.balanceAfter,
+      description: params.description,
+      receiptUrl: params.receiptUrl,
+    });
+    return;
+  }
+
+  await Billing.save_transaction({
+    userId: params.userId,
+    stripeSessionId: params.stripeSessionId,
+    stripePaymentIntent: params.stripePaymentIntent,
+    amount: params.amount,
+    currency: params.currency,
+    status: "completed",
+    type: params.type,
+    balanceAfter: params.balanceAfter,
+    description: params.description,
+    receiptUrl: params.receiptUrl,
+  });
+}
+
+async function completeInvoiceTransaction(params: {
+  userId: string;
+  stripeInvoiceId: string;
+  stripePaymentIntent?: string;
+  amount: number;
+  currency?: string;
+  type?: "topup" | "refund" | "coupon" | "recurring";
+  balanceAfter?: number;
+  description?: string;
+  receiptUrl?: string;
+}): Promise<void> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.mark_invoice_transaction_completed === "function") {
+    await billing.mark_invoice_transaction_completed({
+      stripeInvoiceId: params.stripeInvoiceId,
+      stripePaymentIntent: params.stripePaymentIntent,
+      amount: params.amount,
+      currency: params.currency,
+      type: params.type,
+      balanceAfter: params.balanceAfter,
+      description: params.description,
+      receiptUrl: params.receiptUrl,
+    });
+    return;
+  }
+
+  await Billing.save_transaction({
+    userId: params.userId,
+    stripeInvoiceId: params.stripeInvoiceId,
+    stripePaymentIntent: params.stripePaymentIntent,
+    amount: params.amount,
+    currency: params.currency,
+    status: "completed",
+    type: params.type,
+    balanceAfter: params.balanceAfter,
+    description: params.description,
+    receiptUrl: params.receiptUrl,
+  });
+}
+
+async function markSessionTransactionFailed(stripeSessionId: string, description?: string): Promise<void> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.mark_session_transaction_failed === "function") {
+    await billing.mark_session_transaction_failed(stripeSessionId, description);
+  }
+}
+
+async function markInvoiceTransactionFailed(stripeInvoiceId: string, description?: string): Promise<void> {
+  const billing = Billing as BillingWithClaims;
+  if (typeof billing.mark_invoice_transaction_failed === "function") {
+    await billing.mark_invoice_transaction_failed(stripeInvoiceId, description);
+  }
+}
+
 export async function POST(request: Request) {
   const signature = request.headers.get("stripe-signature");
   if (!signature) {
@@ -221,14 +392,30 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true });
       }
 
-      try {
-        const topupResult = await Billing.topup(userId, amount);
+      const paymentIntentId =
+        typeof session.payment_intent === "string"
+          ? session.payment_intent
+          : session.payment_intent?.id;
+      const currency = (session.currency || "usd").toLowerCase();
 
-        let receiptUrl: string | undefined;
-        const paymentIntentId =
-          typeof session.payment_intent === "string"
-            ? session.payment_intent
-            : session.payment_intent?.id;
+      const claimed = await claimSessionTransaction({
+        userId,
+        stripeSessionId: session.id,
+        stripePaymentIntent: paymentIntentId,
+        amount,
+        currency,
+        type: "topup",
+        description: "Stripe checkout session received",
+      });
+      if (!claimed) {
+        console.log("[Stripe Webhook] Session is already processing or processed:", session.id);
+        return NextResponse.json({ received: true });
+      }
+
+      let topupResult: { credit_balance: number } | null = null;
+      let receiptUrl: string | undefined;
+      try {
+        topupResult = await Billing.topup(userId, amount);
 
         if (paymentIntentId) {
           try {
@@ -258,12 +445,12 @@ export async function POST(request: Request) {
           }
         }
 
-        await Billing.save_transaction({
+        await completeSessionTransaction({
           userId,
           stripeSessionId: session.id,
           stripePaymentIntent: paymentIntentId,
           amount,
-          status: "completed",
+          currency,
           type: "topup",
           balanceAfter: topupResult.credit_balance,
           receiptUrl,
@@ -272,7 +459,7 @@ export async function POST(request: Request) {
         await sendBillingCreditUserUpdates({
           userId,
           amount,
-          currency: "usd",
+          currency,
           referenceId: session.id,
           kind: "topup",
           receiptUrl,
@@ -281,7 +468,15 @@ export async function POST(request: Request) {
         console.log(`[Stripe Webhook] Credited $${amount} to user ${userId} (session: ${session.id})`);
       } catch (err: unknown) {
         console.error("[Stripe Webhook] Failed to process payment:", err);
-        return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+        if (!topupResult) {
+          await markSessionTransactionFailed(
+            session.id,
+            err instanceof Error ? err.message : "Processing failed"
+          );
+          return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+        }
+        // Credit is already applied. Avoid retries that could lead to duplicate top-ups.
+        return NextResponse.json({ received: true });
       }
       break;
     }
@@ -305,6 +500,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ received: true });
       }
 
+      let recurringTopupApplied = false;
       try {
         const stripe = getStripeClient();
         let recurring = await Billing.get_recurring_topup_by_subscription(subscriptionId);
@@ -354,21 +550,36 @@ export async function POST(request: Request) {
           break;
         }
 
-        const topupResult = await Billing.topup(recurring.user_id, amount);
-
         const paymentIntentRef = invoice.payments?.data?.[0]?.payment?.payment_intent;
         const paymentIntentId =
           typeof paymentIntentRef === "string"
             ? paymentIntentRef
             : paymentIntentRef?.id;
-
-        await Billing.save_transaction({
+        const currency = (invoice.currency || "usd").toLowerCase();
+        const claimed = await claimInvoiceTransaction({
           userId: recurring.user_id,
           stripeInvoiceId,
           stripePaymentIntent: paymentIntentId,
           amount,
-          currency: (invoice.currency || "usd").toLowerCase(),
-          status: "completed",
+          currency,
+          type: "recurring",
+          description: "Recurring invoice payment received",
+        });
+        if (!claimed) {
+          console.log("[Stripe Webhook] Invoice is already processing or processed:", stripeInvoiceId);
+          return NextResponse.json({ received: true });
+        }
+
+        let topupResult: { credit_balance: number } | null = null;
+        topupResult = await Billing.topup(recurring.user_id, amount);
+        recurringTopupApplied = true;
+
+        await completeInvoiceTransaction({
+          userId: recurring.user_id,
+          stripeInvoiceId,
+          stripePaymentIntent: paymentIntentId,
+          amount,
+          currency,
           type: "recurring",
           balanceAfter: topupResult.credit_balance,
           receiptUrl: invoice.hosted_invoice_url ?? undefined,
@@ -377,7 +588,7 @@ export async function POST(request: Request) {
         await sendBillingCreditUserUpdates({
           userId: recurring.user_id,
           amount,
-          currency: (invoice.currency || "usd").toLowerCase(),
+          currency,
           referenceId: stripeInvoiceId,
           kind: "recurring",
           receiptUrl: invoice.hosted_invoice_url ?? undefined,
@@ -388,6 +599,14 @@ export async function POST(request: Request) {
         );
       } catch (err: unknown) {
         console.error("[Stripe Webhook] Failed to process recurring invoice:", err);
+        if (recurringTopupApplied) {
+          // Credit is already applied. Avoid retries that could lead to duplicate top-ups.
+          return NextResponse.json({ received: true });
+        }
+        await markInvoiceTransactionFailed(
+          stripeInvoiceId,
+          err instanceof Error ? err.message : "Recurring processing failed"
+        );
         return NextResponse.json({ error: "Recurring processing failed" }, { status: 500 });
       }
       break;

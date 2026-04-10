@@ -2,14 +2,33 @@ import { NextRequest } from "next/server";
 import { emailService } from "@/lib/email";
 import { createServiceClient } from "@/lib/supabase/server";
 import { OTPs } from "@/lib/supabase/queries/otps";
+import { limitByEmail } from "@/lib/cooldown/emailbased";
 
 export async function POST(request: NextRequest) {
   try {
+
+    
     const { email, otpCode } = await request.json();
-    if (!email || !otpCode) {
+    if (typeof email !== "string" || typeof otpCode !== "string" || !email || !otpCode) {
       return Response.json(
         { message: "Missing email or OTP code." },
         { status: 400 },
+      );
+    }
+
+    // Rate limiting - prevent OTP brute-force attempts
+    const windowLimit = await limitByEmail(email, {
+      prefix: "rl:auth-onboarding-verify-otp",
+      limit: 5,
+      windowMs: 300_000, // 5 minutes
+    });
+    if (!windowLimit.allowed) {
+      return Response.json(
+        { message: "Too many OTP verification attempts. Please try again later." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(windowLimit.retryAfterSec) },
+        },
       );
     }
 

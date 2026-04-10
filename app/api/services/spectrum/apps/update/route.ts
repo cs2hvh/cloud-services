@@ -32,14 +32,22 @@ export async function PUT(req: NextRequest) {
     const validation = validateRequest(updateSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
-    // Get before state
+    const adminCheck = await requireAdmin();
+
+    // Get before state and enforce ownership for non-admins
     const beforeState = await Spectrum_Apps.get(validation.data.app_id);
+    if (!beforeState.success || !beforeState.data) {
+      return NextResponse.json({ error: "Spectrum app not found" }, { status: 404 });
+    }
+
+    if (!adminCheck.ok && beforeState.data.owner_id !== auth.user!.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    }
 
     const result = await updateSpectrumApp(validation.data);
 
     // Create audit log
     const auditContext = getAuditContext(req);
-    const adminCheck = await requireAdmin();
     
     if (beforeState.success) {
       await AuditLogService.create({
