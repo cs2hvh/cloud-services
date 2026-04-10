@@ -1,3 +1,5 @@
+//this api is created for testing purpose only !!
+
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";

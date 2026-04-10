@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { encryptOAuthToken } from "@/lib/security/token-crypto";
 
 /**
  * GitLab OAuth callback handler
@@ -123,11 +124,11 @@ export async function GET(request: NextRequest) {
       .from('gitlab_tokens')
       .upsert({
         user_id: user.id,
-        access_token: accessToken,
+        access_token: encryptOAuthToken(accessToken),
         gitlab_username: gitlabUser.username,
         gitlab_user_id: gitlabUser.id,
         scopes: 'api read_user',
-        refresh_token: refreshToken, // Critical for GitLab - tokens expire in 2 hours!
+        refresh_token: encryptOAuthToken(refreshToken), // Critical for GitLab - tokens expire in 2 hours!
         expires_at: expiresAt,
         auth_source: 'direct', // Mark as direct OAuth - we can refresh this!
         created_at: new Date().toISOString(),

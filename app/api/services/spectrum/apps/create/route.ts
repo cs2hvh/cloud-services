@@ -11,6 +11,8 @@ import { requireAdmin } from "@/lib/supabase/auth";
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
+  const adminCheck = await requireAdmin();
+  const isAdmin = adminCheck.ok;
 
   try {
     const rl = await limitByUser(auth.user!.id, {
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
     const validation = validateRequest(createSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 

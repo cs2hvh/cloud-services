@@ -158,7 +158,7 @@ describe('SpectrumAppCreate Component', () => {
       render(<SpectrumAppCreate {...defaultProps} />);
       
       await waitFor(() => {
-        expect(axios.default.get).toHaveBeenCalledWith('/api/admin/products?type=network-ddos');
+        expect(axios.default.get).toHaveBeenCalledWith('/api/pricing?category=network-ddos');
       });
     });
   });
