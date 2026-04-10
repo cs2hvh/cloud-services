@@ -35,8 +35,6 @@ export async function POST(req: NextRequest) {
     if (!validation.success) return validation.response;
 
     const auditContext = getAuditContext(req);
-    const adminCheck = await requireAdmin();
-    const isAdmin = !!adminCheck.ok;
 
     // Use centralized service — handles all business logic
     // Cast is safe: Zod already validated and applied defaults (e.g. tls defaults to "off")
