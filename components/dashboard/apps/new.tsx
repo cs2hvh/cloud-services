@@ -882,7 +882,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 Monthly
               </div>
               <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedSizePrice?.price ? `$${selectedSizePrice.price.toFixed(2)}/mo` : "Free"}
+                {selectedSizePrice?.price && selectedSizePrice.price > 0
+                  ? `$${selectedSizePrice.price.toFixed(2)}/mo`
+                  : "Free"}
               </div>
             </div>
           </div>
@@ -1741,8 +1743,6 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                         {(["small", "medium", "large"] as const).map((sizeOption) => {
                           const config = instanceSizeConfigs[sizeOption];
                           const sizePrice = pricing?.[sizeOption];
-                          const monthlyPrice = sizePrice?.price ?? 0;
-                          const hourlyRate = sizePrice?.hourlyRate ?? 0;
 
                           return (
                             <div key={sizeOption}>
@@ -1775,14 +1775,14 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                                   </div>
 
                                   <div className="text-left sm:text-right">
-                                    {monthlyPrice > 0 ? (
+                                    {sizePrice?.price && sizePrice.price > 0 ? (
                                       <>
                                         <div className="text-sm font-semibold text-white">
-                                          ${monthlyPrice.toFixed(2)}
+                                          ${sizePrice.price.toFixed(2)}
                                           <span className="ml-1 text-xs text-white/50">/mo</span>
                                         </div>
                                         <div className="mt-1 text-xs text-white/45">
-                                          ${hourlyRate.toFixed(4)}/hour usage rate
+                                          ${sizePrice.hourlyRate.toFixed(4)}/hour usage rate
                                         </div>
                                       </>
                                     ) : (
@@ -1967,13 +1967,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                     <div className="flex justify-between">
                       <span className="text-white/60">Estimated Cost:</span>
                       <span className="text-white">
-                        {(() => {
-                          const sizePrice = pricing?.[size];
-                          const monthlyPrice = sizePrice?.price ?? 0;
-                          return monthlyPrice > 0
-                            ? `$${monthlyPrice.toFixed(2)}/mo`
-                            : "Free";
-                        })()}
+                        {selectedSizePrice?.price && selectedSizePrice.price > 0
+                          ? `$${selectedSizePrice.price.toFixed(2)}/mo`
+                          : "Free"}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -2085,7 +2081,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
                     Estimated cost
                   </p>
-                  {selectedSizePrice?.price ? (
+                  {selectedSizePrice?.price && selectedSizePrice.price > 0 ? (
                     <>
                       <div className="mt-2 text-2xl font-semibold text-white">
                         ${selectedSizePrice.price.toFixed(2)}
@@ -2096,9 +2092,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                           ? `$${selectedSizePrice.hourlyRate.toFixed(4)}/hour usage rate`
                           : "Billed hourly based on runtime usage."}
                       </p>
-                      {selectedSizePrice.initialCost > 0 && (
+                      {(selectedSizePrice?.initialCost ?? 0) > 0 && (
                         <p className="mt-2 text-sm text-white/55">
-                          + ${selectedSizePrice.initialCost.toFixed(2)} one-time setup fee
+                          + ${(selectedSizePrice?.initialCost ?? 0).toFixed(2)} one-time setup fee
                         </p>
                       )}
                     </>

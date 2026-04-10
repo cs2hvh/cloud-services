@@ -124,14 +124,25 @@ function getDeploymentEventLabel(params: {
   });
 }
 
-// Size specifications
-const SIZE_SPECS = {
-  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1, price: "$5/mo" },
-  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2, price: "$15/mo" },
-  large: { cpu: "2 CPU", memory: "2GB", replicas: 3, price: "$30/mo" },
-} as const;
+type PlatformAppSize = 'small' | 'medium' | 'large';
+type SizeKey = PlatformAppSize;
 
-type SizeKey = keyof typeof SIZE_SPECS;
+type PlatformAppRates = {
+  initialCost: number;
+  hourlyRate: number;
+  price: number;
+};
+
+const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large'];
+
+const PLATFORM_APP_SIZE_SPECS: Record<
+  SizeKey,
+  { cpu: string; memory: string; replicas: number }
+> = {
+  small: { cpu: '0.5 CPU', memory: '512MB', replicas: 1 },
+  medium: { cpu: '1 CPU', memory: '1GB', replicas: 2 },
+  large: { cpu: '2 CPU', memory: '2GB', replicas: 3 },
+};
 
 const SECTION_META: Array<{
   value: string;
@@ -298,6 +309,7 @@ export default function AppDetailPage() {
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
   const [operationLogs, setOperationLogs] = useState('');
   const [operationLogsLoading, setOperationLogsLoading] = useState(false);
+  const [platformPricing, setPlatformPricing] = useState<Partial<Record<SizeKey, PlatformAppRates>>>({});
 
   // Project assignment state
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -497,6 +509,32 @@ export default function AppDetailPage() {
   useEffect(() => {
     fetchApp();
   }, [fetchApp]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchPlatformPricing = async () => {
+      try {
+        const res = await fetch('/api/services/platform-apps/prices');
+        if (!res.ok) {
+          throw new Error('Failed to load platform pricing');
+        }
+
+        const data = await res.json();
+        if (!cancelled && data?.rates) {
+          setPlatformPricing(data.rates);
+        }
+      } catch (error) {
+        console.error('Error fetching platform pricing:', error);
+      }
+    };
+
+    fetchPlatformPricing();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Sync real-time app updates to local state.
   // Preserve computed fields (e.g. can_rollback) that come from the API but are
@@ -1036,8 +1074,9 @@ export default function AppDetailPage() {
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
-  const currentSize = (app.size || 'small') as SizeKey;
-  const currentSizeSpec = SIZE_SPECS[currentSize];
+  const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
+  const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
 
   return (
     <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
@@ -1241,7 +1280,7 @@ export default function AppDetailPage() {
                   ) : null}
                 </div>
                 <Badge className="rounded-none border-white/[0.08] bg-white/[0.04] text-white/75">
-                  {currentSizeSpec.price}
+                  {currentSizePrice > 0 ? `$${currentSizePrice.toFixed(2)}/mo` : 'Free'}
                 </Badge>
               </div>
             </div>
@@ -2000,13 +2039,14 @@ export default function AppDetailPage() {
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {(Object.keys(SIZE_SPECS) as SizeKey[]).map((size) => {
-                      const specs = SIZE_SPECS[size];
-                      const currentSize = (app.size || 'small') as SizeKey;
+                    {PLATFORM_APP_SIZE_ORDER.map((size) => {
+                      const specs = PLATFORM_APP_SIZE_SPECS[size];
+                      const monthlyPrice = platformPricing[size]?.price ?? 0;
+                      const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
                       const isCurrent = size === currentSize;
-                      const isUpgrade = SIZE_SPECS[size] && 
-                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(size) > 
-                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(currentSize);
+                      const isUpgrade =
+                        PLATFORM_APP_SIZE_ORDER.indexOf(size) >
+                        PLATFORM_APP_SIZE_ORDER.indexOf(currentSize);
                       const isSelected = selectedSize === size;
                       const isDisabled = !isUpgrade || deploymentMutationBlocked;
 
@@ -2054,7 +2094,7 @@ export default function AppDetailPage() {
                           </div>
 
                           <p className="mt-3 text-sm font-medium text-white/90">
-                            {specs.price}
+                            {monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}/mo` : 'Free'}
                           </p>
                         </div>
                       );
