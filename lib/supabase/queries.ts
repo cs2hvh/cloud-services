@@ -3,6 +3,7 @@ import {
   findRollbackTarget,
   findServingRelease,
 } from "@/lib/app-operations/core/release-history";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/security/token-crypto";
 // import Error from "next/error";
 import { createClient, createSSRClient, createWorkerClient } from "./server";
 import { createServiceClient } from "./server";
@@ -4022,7 +4023,11 @@ export const GitLab_Tokens = {
         return null;
       }
 
-      return data;
+      return {
+        ...data,
+        access_token: decryptOAuthToken(data?.access_token ?? null),
+        refresh_token: decryptOAuthToken(data?.refresh_token ?? null),
+      };
     } catch (err) {
       console.error(`[GitLab_Tokens] Error getting token for user ${user_id}: ${err}`);
       return null;
@@ -4041,10 +4046,15 @@ export const GitLab_Tokens = {
   }) => {
     try {
       const supabase = await createServiceClient();
+      const encryptedAccessToken = encryptOAuthToken(payload.access_token);
+      const encryptedRefreshToken = encryptOAuthToken(payload.refresh_token);
+
       const { data, error } = await supabase
         .from("gitlab_tokens")
         .upsert({
           ...payload,
+          access_token: encryptedAccessToken,
+          refresh_token: encryptedRefreshToken,
           updated_at: new Date().toISOString(),
         })
         .select()

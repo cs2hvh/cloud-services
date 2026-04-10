@@ -23,7 +23,7 @@ function validateAttachment(file: File): string | null {
 
   if (!isAllowedSupportFile(file.name, file.type)) {
     const ext = getFileExtension(file.name);
-    return `${file.name} is not supported. Allowed types: svg, png, jpg, jpeg, pdf, docx, csv, xlsx, txt, doc (received .${ext || "unknown"})`;
+    return `${file.name} is not supported. Allowed types: png, jpg, jpeg, pdf, docx, csv, xlsx, txt, doc (received .${ext || "unknown"})`;
   }
 
   return null;

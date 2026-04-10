@@ -8,6 +8,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
 import { getGitProviderToken, buildAuthenticatedGitUrl } from "@/lib/git/provider-token";
+import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { getIdempotencyKey } from "@/lib/idempotency";
 import {
@@ -84,6 +85,20 @@ export async function POST(req: NextRequest) {
           requested_size: new_size,
         },
         { status: 400 }
+      );
+    }
+
+    // Balance check — verify user can afford the new tier's hourly rate
+    const balanceCheck = await PlatformAppService.checkBalanceForResize(auth.user!.id, new_size as "small" | "medium" | "large");
+    if (!balanceCheck.ok) {
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          message: `Your balance ($${balanceCheck.balance ?? 0}) is below the new tier's hourly rate ($${balanceCheck.required}/hr). Please top up before resizing.`,
+          balance: balanceCheck.balance,
+          required: balanceCheck.required,
+        },
+        { status: 402 }
       );
     }
 
@@ -180,6 +195,7 @@ export async function POST(req: NextRequest) {
         result: operation,
         actionLabel: "Resize",
       });
+
       if (resolvedOperation.kind === "pending") {
         return NextResponse.json(
           {
@@ -228,6 +244,7 @@ export async function POST(req: NextRequest) {
           appId: app.id,
           appName: app.name,
           buildNumber,
+          userId: auth.user!.id,
           trigger: 'resize',
           resizeContext: {
             previousSize: currentSize as 'small' | 'medium' | 'large',

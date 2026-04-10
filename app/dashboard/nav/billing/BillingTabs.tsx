@@ -592,11 +592,19 @@ interface Transaction {
   balance_after: number | null;
   description: string | null;
   receipt_url: string | null;
+  service_id: string | null;
+  service_type: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
 type StatusFilter = "" | "completed" | "pending" | "failed";
-type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring";
+type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
+type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
+
+const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
 
 function TransactionsTab() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -608,6 +616,7 @@ function TransactionsTab() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchId, setSearchId] = useState("");
@@ -622,6 +631,7 @@ function TransactionsTab() {
       params.set("limit", String(limit));
       if (statusFilter) params.set("status", statusFilter);
       if (typeFilter) params.set("type", typeFilter);
+      if (serviceTypeFilter) params.set("service_type", serviceTypeFilter);
       if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
       if (dateTo) {
         const end = new Date(dateTo);
@@ -645,17 +655,18 @@ function TransactionsTab() {
   useEffect(() => {
     fetchTransactions(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter, dateFrom, dateTo]);
+  }, [statusFilter, typeFilter, serviceTypeFilter, dateFrom, dateTo]);
 
   const clearFilters = () => {
     setStatusFilter("");
     setTypeFilter("");
+    setServiceTypeFilter("");
     setDateFrom("");
     setDateTo("");
     setSearchId("");
   };
 
-  const hasActiveFilters = statusFilter || typeFilter || dateFrom || dateTo;
+  const hasActiveFilters = statusFilter || typeFilter || serviceTypeFilter || dateFrom || dateTo;
 
   const filteredTransactions = searchId
     ? transactions.filter(
@@ -691,8 +702,15 @@ function TransactionsTab() {
       refund: "bg-purple-500/15 text-purple-300 border-purple-500/20",
       coupon: "bg-amber-500/15 text-amber-300 border-amber-500/20",
       recurring: "bg-cyan-500/15 text-cyan-300 border-cyan-500/20",
+      setup: "bg-rose-500/15 text-rose-300 border-rose-500/20",
+      usage: "bg-orange-500/15 text-orange-300 border-orange-500/20",
     };
     return map[type] ?? "bg-white/10 text-neutral-300 border-white/10";
+  };
+
+  const formatAmount = (txn: Transaction) => {
+    const sign = CREDIT_TRANSACTION_TYPES.has(txn.type) ? "+" : "-";
+    return `${sign}$${txn.amount.toFixed(2)}`;
   };
 
   return (
@@ -735,6 +753,22 @@ function TransactionsTab() {
             <option value="refund">Refund</option>
             <option value="coupon">Coupon</option>
             <option value="recurring">Recurring</option>
+            <option value="setup">Setup charge</option>
+            <option value="usage">Usage</option>
+          </select>
+
+          {/* Service Type */}
+          <select
+            value={serviceTypeFilter}
+            onChange={(e) => setServiceTypeFilter(e.target.value as ServiceTypeFilter)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+          >
+            <option value="">All Services</option>
+            <option value="kubernetes">Kubernetes</option>
+            <option value="database">Database</option>
+            <option value="objectspace">Object Storage</option>
+            <option value="spectrum">DDoS / Spectrum</option>
+            <option value="platform_apps">Platform Apps</option>
           </select>
 
           {/* Date From */}
@@ -791,7 +825,7 @@ function TransactionsTab() {
           <p className="text-sm text-neutral-500 mt-1">
             {hasActiveFilters
               ? "Try adjusting your filters"
-              : "Transactions will appear here after your first top-up"}
+              : "Transactions will appear here after your first top-up or service charge"}
           </p>
         </div>
       ) : (
@@ -836,14 +870,19 @@ function TransactionsTab() {
                       </code>
                     </td>
                     <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
-                      >
-                        {txn.type}
-                      </span>
+                      <div className="space-y-1">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border capitalize ${typeBadge(txn.type)}`}
+                        >
+                          {txn.type.replace("_", " ")}
+                        </span>
+                        {txn.description && (
+                          <p className="text-xs text-neutral-500">{txn.description}</p>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-white">
-                      {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                      {formatAmount(txn)}
                     </td>
                     <td className="py-3 px-4 text-right text-neutral-300">
                       {txn.balance_after != null ? `$${txn.balance_after.toFixed(2)}` : "—"}
@@ -903,7 +942,7 @@ function TransactionsTab() {
                     </code>
                   </div>
                   <span className="text-base font-semibold text-white">
-                    {txn.type === "refund" ? "-" : "+"}${txn.amount.toFixed(2)}
+                    {formatAmount(txn)}
                   </span>
                 </div>
                 {txn.balance_after != null && (
@@ -914,7 +953,7 @@ function TransactionsTab() {
                 )}
                 {txn.description && (
                   <div className="text-xs text-neutral-500">
-                    Code: {txn.description}
+                    {txn.description}
                   </div>
                 )}
                 {txn.receipt_url && (

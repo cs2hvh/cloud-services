@@ -158,6 +158,13 @@ export async function createSpectrumApp(payload: CreateSpectrumAppInput,role:str
         ipAddress = checkIp.data.query;
         console.log("Resolved IP Address:", ipAddress);
         resolved = true;
+      } else {
+        // HTTP 200 but DNS not propagated yet — must still increment to avoid infinite loop
+        retryCount++;
+        console.log(`DNS resolution attempt ${retryCount}: not yet propagated, retrying...`);
+        if (retryCount === maxRetries) {
+          console.warn("Failed to resolve DNS after max retries, using original DNS name");
+        }
       }
     } catch (error) {
       retryCount++;

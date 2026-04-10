@@ -12,6 +12,9 @@ export interface PricingTier {
   name: string;
   shortDescription?: string;
   badge?: string;
+  subType?: string;
+  cpuType?: string;
+  machineType?: string;
   price: {
     monthly: number;
     yearly: number;
@@ -299,6 +302,9 @@ function productToPricingTier(product: Product): PricingTier {
     id: product.id,
     name: product.name || "",
     shortDescription: product.short_description || product.description || undefined,
+    subType: product.sub || undefined,
+    cpuType: product.cpu_type || undefined,
+    machineType: product.machine_type || undefined,
     price: {
       monthly: monthlyPrice,
       yearly: yearlyPrice,
@@ -339,6 +345,7 @@ export const PricingTiers = {
       const typeMapping: Record<string, string> = {
         "compute": "compute",
         "gpu": "gpu",
+        "gpu-instance": "gpu",
         "object-storage": "object-storage",
         "database": "database",
         "security": "security",
@@ -412,8 +419,22 @@ export async function getFullPricingData(): Promise<ServiceCategory[]> {
     });
 
     // Build service categories
+    const typeMapping: Record<string, string> = {
+      "compute": "compute",
+      "gpu": "gpu",
+      "gpu-instance": "gpu",
+      "object-storage": "object-storage",
+      "database": "database",
+      "security": "security",
+      "kubernetes": "kubernetes",
+      "ai-deployment": "ai-deployment",
+      "app-deployment": "app-deployment",
+      "network-ddos": "network-ddos",
+    };
+
     const serviceCategories: ServiceCategory[] = categories.map((category) => {
-      const products = productsByType[category.slug] || [];
+      const categoryType = typeMapping[category.slug] || category.slug;
+      const products = productsByType[categoryType] || [];
       const tiers = products.map(productToPricingTier);
 
       return {

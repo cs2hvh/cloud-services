@@ -79,6 +79,31 @@ export interface DeleteAppResult {
   warning?: string;
 }
 
+export interface ResizeAppOptions {
+  appId: string;
+  userId: string;
+  newSize: 'small' | 'medium' | 'large';
+  audit_context?: {
+    ip_address?: string;
+    user_agent?: string;
+    request_id?: string;
+    user_email?: string;
+    user_role?: 'user' | 'admin';
+  };
+}
+
+export interface ResizeAppResult {
+  success: boolean;
+  appId?: string;
+  appName?: string;
+  oldSize?: string;
+  newSize?: string;
+  buildNumber?: number;
+  operationId?: string;
+  error?: string;
+  errorCode?: string;
+}
+
 export interface GetAppOptions {
   appId: string;
   userId: string;
@@ -790,4 +815,111 @@ export class PlatformAppService {
       throw error; // Re-throw for caller to handle
     }
   }
+
+  /**
+   * Resize a platform app (upsize only)
+   * - Validates ownership and upsize direction
+   * - Updates billing rate
+   * - Creates audit log
+   */
+  static async resizeApp(options: ResizeAppOptions): Promise<ResizeAppResult> {
+    const { appId, userId, newSize, audit_context } = options;
+
+    // Get the app
+    const appResult = await Platform_Apps.get(appId);
+    if (!appResult.success || !appResult.data) {
+      const error = new Error('App not found') as Error & { code?: string };
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const app = appResult.data;
+
+    // Verify ownership
+    if (app.user_id !== userId) {
+      const error = new Error('Unauthorized') as Error & { code?: string };
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large';
+    const SIZE_ORDER: Record<string, number> = {
+      small: 1,
+      medium: 2,
+      large: 3,
+    };
+
+    // Validate upsize only
+    if (SIZE_ORDER[newSize] <= SIZE_ORDER[currentSize]) {
+      const error = new Error(
+        `Cannot resize from ${currentSize} to ${newSize}. Only upsizing is allowed.`
+      ) as Error & { code?: string };
+      error.code = 'INVALID_RESIZE';
+      throw error;
+    }
+
+    // Update billing rate (non-fatal)
+    try {
+      const { hourlyRate } = await getRatesForPlatformApp(newSize);
+      await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });
+      console.log(`[PlatformAppService.resizeApp] Billing rate updated for app ${appId}`);
+    } catch (billingErr) {
+      console.warn(`[PlatformAppService.resizeApp] Billing rate update failed for app ${appId}:`, billingErr);
+    }
+
+    // Create audit log
+    if (audit_context) {
+      try {
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: audit_context.user_role || 'user',
+          user_email: audit_context.user_email,
+          action: 'update',
+          service_type: 'platform_apps',
+          service_id: appId,
+          service_name: app.name,
+          after_state: { ...app, size: newSize } as Record<string, unknown>,
+          ip_address: audit_context.ip_address,
+          user_agent: audit_context.user_agent,
+          request_id: audit_context.request_id,
+          metadata: {
+            old_size: currentSize,
+            new_size: newSize,
+          },
+        });
+      } catch (auditErr) {
+        console.warn('[PlatformAppService.resizeApp] Audit log failed:', auditErr);
+      }
+    }
+
+    return {
+      success: true,
+      appId,
+      appName: app.name,
+      oldSize: currentSize,
+      newSize,
+    };
+  }
+
+  /**
+   * Check whether the user's balance covers the target resize tier's hourly rate.
+   * Returns a result object — never throws.
+   */
+  static async checkBalanceForResize(
+    userId: string,
+    newSize: 'small' | 'medium' | 'large'
+  ): Promise<{ ok: boolean; balance?: number; required?: number }> {
+    let hourlyRate: number;
+    try {
+      ({ hourlyRate } = await getRatesForPlatformApp(newSize));
+    } catch {
+      // Pricing data is corrupt (e.g. negative price guard). Block resize rather than charging wrong rate.
+      console.error(`[PlatformAppService.checkBalanceForResize] Failed to get rates for size "${newSize}"`);
+      return { ok: false };
+    }
+    if (hourlyRate <= 0) return { ok: true };
+    const check = await ensureBalance(userId, hourlyRate);
+    return { ok: check.ok, balance: check.balance ?? 0, required: hourlyRate };
+  }
+
 }

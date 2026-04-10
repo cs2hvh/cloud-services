@@ -189,6 +189,7 @@ export async function POST(req: NextRequest) {
             initialCost: INITIAL_COST,
             hourlyRate: HOURLY_RATE,
             serviceId,
+            serviceType: "database",
             addActive: Billing.add_active_database,
           });
         } catch (e) {

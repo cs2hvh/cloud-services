@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { decryptOAuthToken, encryptOAuthToken } from "@/lib/security/token-crypto";
 
 /**
  * Bitbucket OAuth Token Information:
@@ -92,7 +93,10 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
       .eq('user_id', userId)
       .single();
 
-    if (error || !tokenData?.access_token) {
+    const currentAccessToken = decryptOAuthToken(tokenData?.access_token ?? null);
+    const currentRefreshToken = decryptOAuthToken(tokenData?.refresh_token ?? null);
+
+    if (error || !currentAccessToken) {
       console.log('[Bitbucket Token] No stored token found for user:', userId);
       return null;
     }
@@ -105,7 +109,7 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
     // If no expiration set or token hasn't expired (with 5 min buffer), return current token
     if (!expiresAt || expiresAt > fiveMinutesFromNow) {
       console.log('[Bitbucket Token] Found valid stored token for user:', userId);
-      return tokenData.access_token;
+      return currentAccessToken;
     }
 
     // Token has expired or will expire soon, try to refresh
@@ -125,8 +129,8 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
         await supabase
           .from('bitbucket_tokens')
           .update({
-            access_token: session.provider_token,
-            refresh_token: session.provider_refresh_token || tokenData.refresh_token,
+            access_token: encryptOAuthToken(session.provider_token),
+            refresh_token: encryptOAuthToken(session.provider_refresh_token || currentRefreshToken),
             expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           })
@@ -141,7 +145,7 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
       return null;
     }
     
-    if (!tokenData.refresh_token) {
+    if (!currentRefreshToken) {
       console.log('[Bitbucket Token] No refresh token available, user needs to re-authenticate');
       // Delete the expired token
       await supabase
@@ -151,7 +155,7 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
       return null;
     }
 
-    const refreshResult = await refreshBitbucketToken(tokenData.refresh_token);
+    const refreshResult = await refreshBitbucketToken(currentRefreshToken);
     
     if (!refreshResult.accessToken) {
       console.log('[Bitbucket Token] Failed to refresh token, user needs to re-authenticate');
@@ -171,8 +175,8 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
     const { error: updateError } = await supabase
       .from('bitbucket_tokens')
       .update({
-        access_token: refreshResult.accessToken,
-        refresh_token: refreshResult.newRefreshToken || tokenData.refresh_token,
+        access_token: encryptOAuthToken(refreshResult.accessToken),
+        refresh_token: encryptOAuthToken(refreshResult.newRefreshToken || currentRefreshToken),
         expires_at: newExpiresAt,
         updated_at: new Date().toISOString(),
       })
@@ -244,8 +248,8 @@ export async function storeBitbucketToken(
       .from('bitbucket_tokens')
       .upsert({
         user_id: userId,
-        access_token: accessToken,
-        refresh_token: refreshToken,
+        access_token: encryptOAuthToken(accessToken),
+        refresh_token: encryptOAuthToken(refreshToken),
         expires_at: expiresAt,
         bitbucket_username: bitbucketUsername,
         bitbucket_user_id: bitbucketUserId,

@@ -48,6 +48,7 @@ describe("Billing flow helpers", () => {
       initialCost: 5,
       hourlyRate: 0.25,
       serviceId: "svc-123",
+      serviceType: "kubernetes",
       addActive,
     });
 

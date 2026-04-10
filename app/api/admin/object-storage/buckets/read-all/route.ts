@@ -1,6 +1,7 @@
 import {NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
+import { requireAdmin } from "@/lib/supabase/auth";
 
 export async function GET() {
   // Check authentication
@@ -9,8 +10,9 @@ export async function GET() {
     return auth.response;
   }
 
-  // Check if user is admin
-  if (auth.user?.role !== 'admin') {
+  // Re-validate admin status on every request (fresh profile check)
+  const adminCheck = await requireAdmin();
+  if (!adminCheck.ok) {
     return NextResponse.json(
       { error: "Unauthorized", message: "Admin access required" },
       { status: 403 }

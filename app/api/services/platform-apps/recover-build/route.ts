@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
     buildNumber: inProgress.data.build_number,
     trigger: inProgress.data.trigger,
     desiredSize: (app.size as "small" | "medium" | "large" | null | undefined) ?? null,
+    userId: auth.user!.id, // Pass user ID for audit trail on resize recovery
   });
 
   if (!recovery.success) {
