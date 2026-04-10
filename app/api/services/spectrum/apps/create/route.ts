@@ -14,6 +14,8 @@ import { Billing } from "@/lib/supabase/queries";
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
+  const adminCheck = await requireAdmin();
+  const isAdmin = adminCheck.ok;
 
   try {
 
@@ -34,10 +36,20 @@ export async function POST(req: NextRequest) {
 
 
 
-    const body = await req.json();
+    const body = (await req.json()) as Record<string, unknown>;
     const validation = validateRequest(createSpectrumAppSchema, body);
     if (!validation.success) return validation.response;
 
+    const requestedOwnerId = validation.data.owner_id;
+    if (!isAdmin && requestedOwnerId !== auth.user!.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 403 }
+      );
+    }
+
+    const ownerId = isAdmin ? requestedOwnerId : auth.user!.id;
+    const actorRole = isAdmin ? "admin" : "user";
 
     console.log("reached here")
 
@@ -45,7 +57,6 @@ export async function POST(req: NextRequest) {
     const { initialCost: INITIAL_COST,hourlyRate:HOURLY_RATE} = await getRatesForSpectrum();
 
     // Check balance BEFORE creating Spectrum app
-    const ownerId = validation.data.owner_id;
     const balCheck = await ensureBalance(ownerId, INITIAL_COST);
     if (!balCheck.ok) {
       return NextResponse.json(
@@ -54,16 +65,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await createSpectrumApp(validation.data, body.role);
+    const result = await createSpectrumApp(
+      { ...validation.data, owner_id: ownerId },
+      actorRole
+    );
      //console.log("reached here")
 
     // Create audit log
     const auditContext = getAuditContext(req);
-    const adminCheck = await requireAdmin();
     
     await AuditLogService.create({
       user_id: ownerId,
-      user_role: adminCheck.ok ? 'admin' : 'user',
+      user_role: isAdmin ? 'admin' : 'user',
       user_email: auth.user?.email,
       action: 'create',
       service_type: 'network_ddos',

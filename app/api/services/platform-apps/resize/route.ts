@@ -179,14 +179,15 @@ export async function POST(req: NextRequest) {
       // Get git provider from app data
       const gitProvider = app.git_provider as 'github' | 'gitlab' | 'bitbucket' | undefined;
       
-      // Get fresh access token for private repository access
-      let authenticatedUrl = app.repository_url;
+      // Keep clean repository URL in job config; auth URL is ephemeral per build.
+      const cleanRepositoryUrl = app.repository_url;
+      let gitAuthUrl: string | undefined;
       if (gitProvider) {
         console.log(`[Resize] Getting fresh token for ${gitProvider}...`);
         const accessToken = await getAccessToken(auth.user!.id, gitProvider);
         
         if (accessToken) {
-          authenticatedUrl = buildAuthenticatedUrl(app.repository_url, accessToken, gitProvider);
+          gitAuthUrl = buildAuthenticatedUrl(app.repository_url, accessToken, gitProvider);
           console.log(`[Resize] Token injected for ${gitProvider}`);
         } else {
           console.warn(`[Resize] No token available for ${gitProvider}, using stored URL`);
@@ -223,7 +224,7 @@ export async function POST(req: NextRequest) {
       await JenkinsService.updateJobConfig(
         app.name,
         app.id,
-        authenticatedUrl,
+        cleanRepositoryUrl,
         app.branch || "main",
         app.framework || undefined,
         new_size,
@@ -232,7 +233,9 @@ export async function POST(req: NextRequest) {
       );
 
       // Trigger a resize-only build (skips checkout, dockerfile, and build stages)
-      const buildNumber = await JenkinsService.triggerBuild(app.name, undefined, true);
+      const buildNumber = gitAuthUrl
+        ? await JenkinsService.triggerBuild(app.name, undefined, true, gitAuthUrl)
+        : await JenkinsService.triggerBuild(app.name, undefined, true);
 
       console.log(`[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${buildNumber}`);
 

@@ -103,12 +103,15 @@ export async function POST(req: NextRequest) {
         throw new Error(runtimeSync.error || runtimeSync.reason);
       }
 
-      // Get repository URL (database uses repository_url, not git_url)
-      let gitUrl = (app as { repository_url?: string; git_url?: string }).repository_url || (app as { repository_url?: string; git_url?: string }).git_url;
+      // Get clean repository URL (database uses repository_url, not git_url)
+      const cleanRepositoryUrl =
+        (app as { repository_url?: string; git_url?: string }).repository_url ||
+        (app as { repository_url?: string; git_url?: string }).git_url;
 
-      if (!gitUrl) {
+      if (!cleanRepositoryUrl) {
         throw new Error('Repository URL not found in app configuration');
       }
+      let gitAuthUrl: string | undefined;
 
       // Reconstruct authenticated URL by getting provider token from session/database
       const gitProvider = (app as { git_provider?: string }).git_provider;
@@ -144,7 +147,7 @@ export async function POST(req: NextRequest) {
             }
 
             if (accessToken) {
-              gitUrl = gitUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
+              gitAuthUrl = cleanRepositoryUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
               console.log('[Redeploy] ✅ Injected GitHub token for private repository access');
             }
           } else if (gitProvider === 'gitlab') {
@@ -153,7 +156,7 @@ export async function POST(req: NextRequest) {
             accessToken = await getValidGitLabToken(auth.user!.id);
 
             if (accessToken) {
-              gitUrl = gitUrl.replace(/https:\/\/(www\.)?gitlab\.com\//, `https://oauth2:${accessToken}@gitlab.com/`);
+              gitAuthUrl = cleanRepositoryUrl.replace(/https:\/\/(www\.)?gitlab\.com\//, `https://oauth2:${accessToken}@gitlab.com/`);
               console.log('[Redeploy] ✅ Injected GitLab token for private repository access');
             }
           } else if (gitProvider === 'bitbucket') {
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
             accessToken = await getValidBitbucketToken(auth.user!.id);
 
             if (accessToken) {
-              gitUrl = gitUrl.replace(/https:\/\/(www\.)?bitbucket\.org\//, `https://x-token-auth:${accessToken}@bitbucket.org/`);
+              gitAuthUrl = cleanRepositoryUrl.replace(/https:\/\/(www\.)?bitbucket\.org\//, `https://x-token-auth:${accessToken}@bitbucket.org/`);
               console.log('[Redeploy] ✅ Injected Bitbucket token for private repository access');
             }
           }
@@ -176,13 +179,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Update the pipeline XML with latest env vars and authenticated URL
+      // Update the pipeline XML with latest env vars and clean repository URL
       console.log(`[Redeploy] Updating pipeline XML with latest configuration`);
       
       await JenkinsService.updateJobConfig(
         app.name,
         app.id,
-        gitUrl, // Now using authenticated URL
+        cleanRepositoryUrl,
         app.branch || "main",
         app.framework || undefined,
         app.size || "small",
@@ -191,8 +194,10 @@ export async function POST(req: NextRequest) {
       );
       console.log(`[Redeploy] Pipeline XML updated successfully`);
       
-      // Trigger a new build using JenkinsService
-      const buildNumber = await JenkinsService.triggerBuild(app.name);
+      // Trigger a new build; authenticated URL is ephemeral build param only.
+      const buildNumber = gitAuthUrl
+        ? await JenkinsService.triggerBuild(app.name, undefined, false, gitAuthUrl)
+        : await JenkinsService.triggerBuild(app.name);
 
       console.log(`[Redeploy] Triggered build #${buildNumber} for app: ${app.name}`);
 

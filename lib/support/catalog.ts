@@ -397,7 +397,6 @@ export const SUPPORT_TOPICS: SupportTopic[] = [
 ];
 
 export const ALLOWED_SUPPORT_FILE_EXTENSIONS = [
-  "svg",
   "png",
   "jpg",
   "jpeg",
@@ -410,7 +409,6 @@ export const ALLOWED_SUPPORT_FILE_EXTENSIONS = [
 ] as const;
 
 export const ALLOWED_SUPPORT_FILE_MIME_TYPES = [
-  "image/svg+xml",
   "image/png",
   "image/jpeg",
   "application/pdf",

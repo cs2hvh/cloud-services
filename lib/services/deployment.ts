@@ -172,8 +172,13 @@ export class DeploymentService {
         await AppStatusService.setStatus(app.id, "building");
         console.log(`[DeploymentService] Step 5/5: Status updated to 'building'`);
         
-        // Use authenticated URL for Jenkins if available (for private repos), otherwise use regular URL
-        const jenkinsRepoUrl = config.authenticated_url || config.repository_url;
+        // Keep job config clean (no embedded credentials). If available, pass
+        // authenticated URL only as an ephemeral build parameter.
+        const jenkinsRepoUrl = config.repository_url;
+        const jenkinsAuthUrl =
+          config.authenticated_url && config.authenticated_url !== config.repository_url
+            ? config.authenticated_url
+            : undefined;
         
         // Get env vars to pass to Jenkins/Kubernetes
         const envVarsToPass = config.env_vars || [];
@@ -190,7 +195,8 @@ export class DeploymentService {
           config.size || 'small',
           'manual',
           envVarsToPass,
-          containerPort
+          containerPort,
+          jenkinsAuthUrl
         );
         console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
 

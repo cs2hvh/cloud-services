@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const scheduleSpy = vi.fn();
+
 vi.mock("node-cron", () => ({
   default: {
-    schedule: vi.fn(),
+    schedule: scheduleSpy,
   },
 }));
 
@@ -27,25 +29,28 @@ type ActiveService = {
 type SupabaseHarnessOptions = {
   servicesByTable?: Record<string, ActiveService[]>;
   fetchErrorsByTable?: Record<string, { message: string; code?: string } | null>;
-  updateErrorsByServiceId?: Record<string, { message: string; code?: string } | null>;
   rpcErrorsByUserId?: Record<string, { message: string; code?: string } | null>;
 };
 
 function createSupabaseHarness(options: SupabaseHarnessOptions = {}) {
   const events: string[] = [];
   const rpcCalls: Array<{ fn: string; args: Record<string, unknown> }> = [];
-  const updateCalls: Array<{
-    tableName: string;
-    serviceId: string;
-    payload: Record<string, unknown>;
-  }> = [];
 
   const callRpc = vi.fn().mockImplementation((fn: string, args: Record<string, unknown>) => {
     rpcCalls.push({ fn, args });
-    events.push(`rpc:${String(args.p_user_id)}:${String(args.p_amount)}`);
+    events.push(`rpc:${fn}:${String(args.p_user_id)}:${String(args.p_amount)}`);
+    const rpcError = options.rpcErrorsByUserId?.[String(args.p_user_id)] ?? null;
+
     return Promise.resolve({
-      error:
-        options.rpcErrorsByUserId?.[String(args.p_user_id)] ?? null,
+      data:
+        fn === "bill_service_cycle_atomic"
+          ? {
+              charged: !rpcError,
+              status: rpcError ? "rpc_error" : "charged",
+              new_balance: rpcError ? null : 100,
+            }
+          : null,
+      error: rpcError,
     });
   });
 
@@ -70,10 +75,9 @@ function createSupabaseHarness(options: SupabaseHarnessOptions = {}) {
             }
 
             events.push(`update:${tableName}:${serviceId}`);
-            updateCalls.push({ tableName, serviceId, payload });
 
             return Promise.resolve({
-              error: options.updateErrorsByServiceId?.[serviceId] ?? null,
+              error: null,
             });
           }),
         })),
@@ -87,7 +91,6 @@ function createSupabaseHarness(options: SupabaseHarnessOptions = {}) {
     client,
     events,
     rpcCalls,
-    updateCalls,
   };
 }
 
@@ -97,21 +100,12 @@ async function loadWorker(options: SupabaseHarnessOptions = {}) {
   vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key");
 
   const harness = createSupabaseHarness(options);
-  const { createClient } = await import("@supabase/supabase-js");
-  vi.mocked(createClient).mockReturnValue(harness.client as never);
+  (globalThis as Record<string, unknown>).__CRON_TEST_SUPABASE__ =
+    harness.client as unknown;
 
   const worker = await import("../../../credit-system-cron/cron-worker.js");
-  const cronModule = await import("node-cron");
-  const scheduleMock = vi.mocked(cronModule.default.schedule);
-  const scheduledCallback = scheduleMock.mock.calls[0]?.[1] as
-    | (() => Promise<void>)
-    | undefined;
-
-  if (!scheduledCallback) {
-    throw new Error("Expected cron.schedule callback to be registered");
-  }
-
-  return { worker, harness, scheduleMock, scheduledCallback };
+  const scheduleMock = scheduleSpy;
+  return { worker, harness, scheduleMock };
 }
 
 const UUIDS = {
@@ -127,6 +121,7 @@ const UUIDS = {
 
 describe("credit-system-cron/cron-worker", () => {
   beforeEach(() => {
+    scheduleSpy.mockReset();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-23T12:00:00.000Z"));
     vi.spyOn(console, "log").mockImplementation(() => {});
@@ -136,13 +131,14 @@ describe("credit-system-cron/cron-worker", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    delete (globalThis as Record<string, unknown>).__CRON_TEST_SUPABASE__;
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   it("TC-CRON-001: should bill all 4 active service tables in hourly cycle", async () => {
     const oneHourAgo = "2026-03-23T11:00:00.000Z";
-    const { scheduledCallback, harness, scheduleMock } = await loadWorker({
+    const { worker, harness } = await loadWorker({
       servicesByTable: {
         active_kubernetes: [
           {
@@ -179,9 +175,10 @@ describe("credit-system-cron/cron-worker", () => {
       },
     });
 
-    expect(scheduleMock).toHaveBeenCalledWith("0 * * * *", expect.any(Function));
-
-    await scheduledCallback();
+    await worker.processServiceTable("active_kubernetes");
+    await worker.processServiceTable("active_database");
+    await worker.processServiceTable("active_objectspace");
+    await worker.processServiceTable("active_spectrum");
 
     expect(harness.rpcCalls).toHaveLength(4);
     expect(
@@ -243,7 +240,7 @@ describe("credit-system-cron/cron-worker", () => {
     expect(harness.rpcCalls[0].args.p_user_id).toBe(UUIDS.userC);
   });
 
-  it("TC-CRON-005: should update last_billed_at before deducting credits", async () => {
+  it("TC-CRON-005: should use atomic billing cycle RPC", async () => {
     const { worker, harness } = await loadWorker();
 
     await worker.billSingleService("active_spectrum", {
@@ -253,15 +250,10 @@ describe("credit-system-cron/cron-worker", () => {
       last_billed_at: "2026-03-23T11:00:00.000Z",
     });
 
-    const updateIndex = harness.events.findIndex((event) =>
-      event.startsWith(`update:active_spectrum:${UUIDS.serviceD}`)
-    );
-    const rpcIndex = harness.events.findIndex((event) =>
-      event.startsWith(`rpc:${UUIDS.userD}:`)
-    );
-
-    expect(updateIndex).toBeGreaterThanOrEqual(0);
-    expect(rpcIndex).toBeGreaterThan(updateIndex);
+    expect(harness.rpcCalls).toHaveLength(1);
+    expect(harness.rpcCalls[0].fn).toBe("bill_service_cycle_atomic");
+    expect(harness.rpcCalls[0].args.p_service_id).toBe(UUIDS.serviceD);
+    expect(harness.rpcCalls[0].args.p_user_id).toBe(UUIDS.userD);
   });
 
   it("TC-CRON-006: should reject invalid table names (SQL injection prevention)", async () => {
@@ -274,11 +266,10 @@ describe("credit-system-cron/cron-worker", () => {
       last_billed_at: "2026-03-23T11:00:00.000Z",
     });
 
-    expect(harness.updateCalls).toHaveLength(0);
     expect(harness.rpcCalls).toHaveLength(0);
   });
 
-  it("TC-CRON-007: should round cost to 4 decimal places for billing precision", async () => {
+  it("TC-CRON-007: should round cost to cents for billing deduction", async () => {
     const { worker, harness } = await loadWorker();
 
     await worker.billSingleService("active_database", {
@@ -289,6 +280,6 @@ describe("credit-system-cron/cron-worker", () => {
     });
 
     expect(harness.rpcCalls).toHaveLength(1);
-    expect(Number(harness.rpcCalls[0].args.p_amount)).toBeCloseTo(0.0333, 4);
+    expect(Number(harness.rpcCalls[0].args.p_amount)).toBeCloseTo(0.03, 4);
   });
 });

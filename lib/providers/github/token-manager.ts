@@ -9,6 +9,7 @@
  */
 
 import { createServiceClient } from '@/lib/supabase/server';
+import { decryptOAuthToken, encryptOAuthToken } from '@/lib/security/token-crypto';
 
 export class GitHubTokenManager {
   /**
@@ -33,8 +34,14 @@ export class GitHubTokenManager {
         return null;
       }
 
+      const decryptedAccessToken = decryptOAuthToken(tokenData.access_token);
+      if (!decryptedAccessToken) {
+        console.log('[GitHub Token Manager] Stored token could not be decrypted for user:', userId);
+        return null;
+      }
+
       console.log('[GitHub Token Manager] Found stored token for user:', userId);
-      return tokenData.access_token;
+      return decryptedAccessToken;
     } catch (error) {
       console.error('[GitHub Token Manager] Error getting token:', error);
       return null;
@@ -74,7 +81,7 @@ export class GitHubTokenManager {
         .upsert(
           {
             user_id: userId,
-            access_token: token,
+            access_token: encryptOAuthToken(token),
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'user_id' }

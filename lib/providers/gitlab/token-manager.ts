@@ -14,6 +14,7 @@
 
 import { createServiceClient } from '@/lib/supabase/server';
 import { AuditLogService, createAuditContext } from '@/lib/audit';
+import { decryptOAuthToken, encryptOAuthToken } from '@/lib/security/token-crypto';
 
 interface GitLabTokenResponse {
   access_token: string;
@@ -103,7 +104,10 @@ export class GitLabTokenManager {
         .eq('user_id', userId)
         .single();
 
-      if (error || !tokenData?.access_token) {
+      const currentAccessToken = decryptOAuthToken(tokenData?.access_token ?? null);
+      const currentRefreshToken = decryptOAuthToken(tokenData?.refresh_token ?? null);
+
+      if (error || !currentAccessToken) {
         console.log('[GitLab Token Manager] No stored token found for user:', userId);
         return null;
       }
@@ -116,10 +120,10 @@ export class GitLabTokenManager {
       // If no expiration set or token hasn't expired (with 5 min buffer), validate and return
       if (!expiresAt || expiresAt > fiveMinutesFromNow) {
         // Validate the token is still working
-        const isValid = await this.validateToken(tokenData.access_token);
+        const isValid = await this.validateToken(currentAccessToken);
         if (isValid) {
           console.log('[GitLab Token Manager] Found valid stored token for user:', userId);
-          return tokenData.access_token;
+          return currentAccessToken;
         }
         console.log('[GitLab Token Manager] Stored token failed validation, will try refresh');
       }
@@ -153,7 +157,7 @@ export class GitLabTokenManager {
         return null;
       }
 
-      if (!tokenData.refresh_token) {
+      if (!currentRefreshToken) {
         console.log('[GitLab Token Manager] No refresh token available, user needs to re-authenticate');
         // Delete the expired token
         await supabase.from('gitlab_tokens').delete().eq('user_id', userId);
@@ -176,7 +180,7 @@ export class GitLabTokenManager {
         return null;
       }
 
-      const refreshResult = await this.refreshToken(tokenData.refresh_token);
+      const refreshResult = await this.refreshToken(currentRefreshToken);
 
       if (!refreshResult.accessToken) {
         console.log('[GitLab Token Manager] Failed to refresh token, user needs to re-authenticate');
@@ -209,8 +213,8 @@ export class GitLabTokenManager {
       const { error: updateError } = await supabase
         .from('gitlab_tokens')
         .update({
-          access_token: refreshResult.accessToken,
-          refresh_token: refreshResult.refreshToken || tokenData.refresh_token,
+          access_token: encryptOAuthToken(refreshResult.accessToken),
+          refresh_token: encryptOAuthToken(refreshResult.refreshToken || currentRefreshToken),
           expires_at: newExpiresAt,
           updated_at: new Date().toISOString(),
         })
@@ -290,8 +294,8 @@ export class GitLabTokenManager {
         .upsert(
           {
             user_id: userId,
-            access_token: accessToken,
-            refresh_token: refreshToken,
+            access_token: encryptOAuthToken(accessToken),
+            refresh_token: encryptOAuthToken(refreshToken),
             expires_at: expiresAt,
             gitlab_username: gitlabUsername,
             gitlab_user_id: gitlabUserId,

@@ -83,10 +83,11 @@ export class AutoDeployService {
         console.warn(`[AutoDeploy] ⚠️ No access token available - proceeding with public repo assumption`);
       }
 
-      // Step 3: Build authenticated URL
-      const authenticatedUrl = accessToken 
+      // Step 3: Build ephemeral authenticated URL for this build only
+      const cleanRepositoryUrl = repositoryUrl;
+      const gitAuthUrl = accessToken 
         ? this.buildAuthenticatedUrl(repositoryUrl, accessToken, gitProvider)
-        : repositoryUrl;
+        : undefined;
       
       console.log(`[AutoDeploy] Step 2/4: Token ${accessToken ? '✅ injected' : '⚠️ not available'}`);
 
@@ -122,7 +123,7 @@ export class AutoDeployService {
         await JenkinsService.updateJobConfig(
           appName,
           appId,
-          authenticatedUrl,
+          cleanRepositoryUrl,
           branch,
           framework,
           size || 'small',
@@ -140,7 +141,9 @@ export class AutoDeployService {
       // Step 5: Trigger the build with specific commit SHA
       // This ensures the exact commit from the webhook is deployed, not branch HEAD
       console.log(`[AutoDeploy] Step 4/4: Triggering build...`);
-      const buildNumber = await JenkinsService.triggerBuild(appName, commitSha);
+      const buildNumber = gitAuthUrl
+        ? await JenkinsService.triggerBuild(appName, commitSha, false, gitAuthUrl)
+        : await JenkinsService.triggerBuild(appName, commitSha);
       console.log(`[AutoDeploy] ✅ Build #${buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`);
 
       // Step 6: Update app status in database
@@ -164,7 +167,7 @@ export class AutoDeployService {
       }
 
       console.log(`[AutoDeploy] ✅ Auto-deploy initiated successfully`);
-      console.log(`[AutoDeploy] Monitor at: ${process.env.JENKINS_URL}/job/${appName}-job/${buildNumber}/`);
+      console.log(`[AutoDeploy] Monitor at: ${JenkinsService.getSafeBaseUrlForLogs()}/job/${appName}-job/${buildNumber}/`);
 
       return {
         success: true,

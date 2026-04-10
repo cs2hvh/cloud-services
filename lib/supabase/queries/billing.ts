@@ -36,6 +36,11 @@ const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction")
   }
 };
 
+const isUniqueViolation = (error: { code?: string; message?: string } | null | undefined): boolean => {
+  if (!error) return false;
+  return error.code === "23505" || /duplicate key/i.test(error.message || "");
+};
+
 type RecurringInterval = "week" | "month" | "year";
 type RecurringStatus =
   | "pending"
@@ -576,6 +581,244 @@ export const Billing = {
         completed_at: params.status === "completed" ? new Date().toISOString() : null,
       });
     if (error) throw new Error(`Failed to save transaction: ${error.message}`);
+  },
+
+  claim_session_transaction: async (params: {
+    userId: string;
+    stripeSessionId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }): Promise<boolean> => {
+    const supabase = await createServiceClient();
+    const payload = {
+      user_id: params.userId,
+      stripe_session_id: params.stripeSessionId,
+      stripe_payment_intent: params.stripePaymentIntent ?? null,
+      stripe_invoice_id: null,
+      amount: params.amount,
+      currency: params.currency ?? "usd",
+      status: "pending" as const,
+      type: params.type ?? "topup",
+      balance_after: null,
+      description: params.description ?? null,
+      receipt_url: null,
+      completed_at: null,
+    };
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert(payload);
+
+    if (!error) {
+      return true;
+    }
+
+    if (!isUniqueViolation(error)) {
+      throw new Error(`Failed to claim session transaction: ${error.message}`);
+    }
+
+    const existing = await Billing.get_transaction_by_session(params.stripeSessionId);
+    if (!existing) {
+      return false;
+    }
+    if (existing.status === "failed") {
+      const { error: retryError } = await supabase
+        .schema("billing")
+        .from("transactions")
+        .update({
+          user_id: params.userId,
+          stripe_payment_intent: params.stripePaymentIntent ?? null,
+          amount: params.amount,
+          currency: params.currency ?? "usd",
+          status: "pending",
+          type: params.type ?? "topup",
+          description: params.description ?? null,
+          receipt_url: null,
+          balance_after: null,
+          completed_at: null,
+        })
+        .eq("stripe_session_id", params.stripeSessionId)
+        .eq("status", "failed");
+
+      if (retryError) {
+        throw new Error(`Failed to reclaim session transaction: ${retryError.message}`);
+      }
+      return true;
+    }
+
+    return false;
+  },
+
+  claim_invoice_transaction: async (params: {
+    userId: string;
+    stripeInvoiceId: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    stripePaymentIntent?: string;
+    description?: string;
+  }): Promise<boolean> => {
+    const supabase = await createServiceClient();
+    const payload = {
+      user_id: params.userId,
+      stripe_session_id: null,
+      stripe_payment_intent: params.stripePaymentIntent ?? null,
+      stripe_invoice_id: params.stripeInvoiceId,
+      amount: params.amount,
+      currency: params.currency ?? "usd",
+      status: "pending" as const,
+      type: params.type ?? "recurring",
+      balance_after: null,
+      description: params.description ?? null,
+      receipt_url: null,
+      completed_at: null,
+    };
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .insert(payload);
+
+    if (!error) {
+      return true;
+    }
+
+    if (!isUniqueViolation(error)) {
+      throw new Error(`Failed to claim invoice transaction: ${error.message}`);
+    }
+
+    const existing = await Billing.get_transaction_by_invoice(params.stripeInvoiceId);
+    if (!existing) {
+      return false;
+    }
+    if (existing.status === "failed") {
+      const { error: retryError } = await supabase
+        .schema("billing")
+        .from("transactions")
+        .update({
+          user_id: params.userId,
+          stripe_payment_intent: params.stripePaymentIntent ?? null,
+          amount: params.amount,
+          currency: params.currency ?? "usd",
+          status: "pending",
+          type: params.type ?? "recurring",
+          description: params.description ?? null,
+          receipt_url: null,
+          balance_after: null,
+          completed_at: null,
+        })
+        .eq("stripe_invoice_id", params.stripeInvoiceId)
+        .eq("status", "failed");
+
+      if (retryError) {
+        throw new Error(`Failed to reclaim invoice transaction: ${retryError.message}`);
+      }
+      return true;
+    }
+
+    return false;
+  },
+
+  mark_session_transaction_completed: async (params: {
+    stripeSessionId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        status: "completed",
+        type: params.type ?? "topup",
+        balance_after: params.balanceAfter ?? null,
+        description: params.description ?? null,
+        receipt_url: params.receiptUrl ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("stripe_session_id", params.stripeSessionId);
+
+    if (error) {
+      throw new Error(`Failed to complete session transaction: ${error.message}`);
+    }
+  },
+
+  mark_invoice_transaction_completed: async (params: {
+    stripeInvoiceId: string;
+    stripePaymentIntent?: string;
+    amount: number;
+    currency?: string;
+    type?: "topup" | "refund" | "coupon" | "recurring";
+    balanceAfter?: number;
+    description?: string;
+    receiptUrl?: string;
+  }): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        stripe_payment_intent: params.stripePaymentIntent ?? null,
+        amount: params.amount,
+        currency: params.currency ?? "usd",
+        status: "completed",
+        type: params.type ?? "recurring",
+        balance_after: params.balanceAfter ?? null,
+        description: params.description ?? null,
+        receipt_url: params.receiptUrl ?? null,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("stripe_invoice_id", params.stripeInvoiceId);
+
+    if (error) {
+      throw new Error(`Failed to complete invoice transaction: ${error.message}`);
+    }
+  },
+
+  mark_session_transaction_failed: async (stripeSessionId: string, description?: string): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        status: "failed",
+        description: description ?? "Webhook processing failed",
+      })
+      .eq("stripe_session_id", stripeSessionId)
+      .eq("status", "pending");
+
+    if (error) {
+      console.warn("[Billing] Failed to mark session transaction as failed:", error.message);
+    }
+  },
+
+  mark_invoice_transaction_failed: async (stripeInvoiceId: string, description?: string): Promise<void> => {
+    const supabase = await createServiceClient();
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update({
+        status: "failed",
+        description: description ?? "Webhook processing failed",
+      })
+      .eq("stripe_invoice_id", stripeInvoiceId)
+      .eq("status", "pending");
+
+    if (error) {
+      console.warn("[Billing] Failed to mark invoice transaction as failed:", error.message);
+    }
   },
 
   get_transaction_by_session: async (stripeSessionId: string): Promise<{ id: string; status: string } | null> => {
