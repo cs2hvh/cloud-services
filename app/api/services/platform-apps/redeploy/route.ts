@@ -144,6 +144,7 @@ export async function POST(req: NextRequest) {
 
           const execution = await jenkins.triggerBuild({
             appName: app.name,
+            gitAuthUrl: gitUrl,
           });
 
           console.log(`[Redeploy] Triggered build #${execution.buildNumber} for app: ${app.name}`);

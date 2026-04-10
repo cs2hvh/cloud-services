@@ -15,11 +15,13 @@ export class JenkinsBuildAdapter {
     appName: string;
     commitSha?: string;
     resizeOnly?: boolean;
+    gitAuthUrl?: string;
   }) {
     const buildNumber = await JenkinsService.triggerBuild(
       params.appName,
       params.commitSha,
-      params.resizeOnly ?? false
+      params.resizeOnly ?? false,
+      params.gitAuthUrl
     );
 
     return {
