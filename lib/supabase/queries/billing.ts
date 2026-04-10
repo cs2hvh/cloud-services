@@ -359,6 +359,28 @@ export const Billing = {
     hourlyRate: number;
   }) => {
     const supabase = await createServiceClient();
+
+    // Check if an active row already exists for this service
+    const { data: existing } = await supabase
+      .schema("billing")
+      .from("active_kubernetes")
+      .select("service_id")
+      .eq("service_id", params.serviceId)
+      .maybeSingle();
+
+    if (existing) {
+      // Row already exists — update rate instead of inserting a duplicate
+      const { error: updErr } = await supabase
+        .schema("billing")
+        .from("active_kubernetes")
+        .update({ hourly_rate: params.hourlyRate })
+        .eq("service_id", params.serviceId);
+      if (updErr)
+        throw new Error(`Failed to update active_kubernetes: ${updErr.message}`);
+      console.log(`[Billing.add_active_kubernetes] Row already exists for ${params.serviceId}, updated rate to ${params.hourlyRate}`);
+      return;
+    }
+
     const { error } = await supabase
       .schema("billing")
       .from("active_kubernetes")
@@ -1244,6 +1266,7 @@ export const Billing = {
       offset?: number;
       status?: string;
       type?: string;
+      serviceType?: string;
       from?: string;
       to?: string;
     }
@@ -1291,6 +1314,12 @@ export const Billing = {
         ["topup", "refund", "coupon", "recurring", "setup", "usage"].includes(opts.type)
       ) {
         nextQuery = nextQuery.eq("type", opts.type);
+      }
+      if (
+        opts?.serviceType &&
+        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps"].includes(opts.serviceType)
+      ) {
+        nextQuery = nextQuery.eq("service_type", opts.serviceType);
       }
       if (opts?.from) {
         nextQuery = nextQuery.gte("created_at", opts.from);

@@ -389,8 +389,14 @@ function SingleCluster({
 
       const actions = createDropletData?.data?.links?.actions || [];
       let counter = 0;
+      const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes max
+      const pollStart = Date.now();
 
       while (counter < actions.length) {
+        if (Date.now() - pollStart > POLL_TIMEOUT_MS) {
+          throw new Error("Droplet creation timed out after 10 minutes.");
+        }
+
         const checkStatusRes = await fetch(
           "/api/services/kubernetes/manageip/dropletstatus",
           {
@@ -635,48 +641,34 @@ function SingleCluster({
     setLoading(true);
     setDeleteNodeDialog(false);
 
-    const res = await api.post(`/services/kubernetes/manageip/delete`, {
-      droplet_id: droplet_id,
-    });
-
-    if (res.status === 200) {
-      const delNode = await api.post(
-        "/services/kubernetes/clusters/delete_node",
-        {
-          droplet_id: droplet_id,
-          cluster_id: clusterId,
-        }
-      );
-
-      if (delNode.status === 200) {
-        toast.success("Node deleted successfully");
+    // Service layer handles DO droplet deletion + DB update + billing rate update
+    const delNode = await api.post(
+      "/services/kubernetes/clusters/delete_node",
+      {
+        droplet_id: droplet_id,
+        cluster_id: clusterId,
       }
+    );
 
+    if (delNode.status === 200) {
+      toast.success("Node deleted successfully");
       if (nodesData && nodesData?.length > 0) {
         setNodesData((prev) =>
           prev ? prev.filter((n) => n.droplet_id !== droplet_id) : []
         );
       }
+    } else {
+      toast.error("Failed to delete node");
     }
     setLoading(false);
     setNodeToDelete(null);
   };
 
   const onDeleteCluster = async () => {
-    if (!nodesData) {
-      console.error("nodesData is null or undefined");
-      return;
-    }
-
     setLoading(true);
     setDeleteClusterDialog(false);
 
-    for (let i = 0; i < nodesData.length; i++) {
-      await api.post(`/services/kubernetes/manageip/delete`, {
-        droplet_id: nodesData[i].droplet_id,
-      });
-    }
-
+    // Service layer handles: billing close + DO droplet deletion + DB soft-delete
     const delCluster = await api.post(`/services/kubernetes/clusters/delete`, {
       cluster_id: clusterId,
     });

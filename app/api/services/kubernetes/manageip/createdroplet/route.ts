@@ -13,6 +13,23 @@ export async function POST(req: NextRequest) {
     const json = await req.json();
     const context = getAuditContext(req);
 
+    // Validate node names: each must not exceed 20 characters
+    const names: unknown = json?.names;
+    if (Array.isArray(names)) {
+      const invalid = names.filter((n) => typeof n === "string" && n.length > 20);
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { message: `Node name(s) exceed 20 characters: ${invalid.join(", ")}` },
+          { status: 400 }
+        );
+      }
+    } else if (typeof names === "string" && names.length > 20) {
+      return NextResponse.json(
+        { message: `Node name "${names}" exceeds 20 characters` },
+        { status: 400 }
+      );
+    }
+
     const result = await clusterOperations.addNode({
       clusterId: json?.cluster_id,
       planId: json?.plan_id,

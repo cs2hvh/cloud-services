@@ -602,6 +602,7 @@ interface Transaction {
 
 type StatusFilter = "" | "completed" | "pending" | "failed";
 type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
+type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
 
 const CREDIT_TRANSACTION_TYPES = new Set(["topup", "refund", "coupon", "recurring"]);
 
@@ -615,6 +616,7 @@ function TransactionsTab() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("");
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchId, setSearchId] = useState("");
@@ -629,6 +631,7 @@ function TransactionsTab() {
       params.set("limit", String(limit));
       if (statusFilter) params.set("status", statusFilter);
       if (typeFilter) params.set("type", typeFilter);
+      if (serviceTypeFilter) params.set("service_type", serviceTypeFilter);
       if (dateFrom) params.set("from", new Date(dateFrom).toISOString());
       if (dateTo) {
         const end = new Date(dateTo);
@@ -652,17 +655,18 @@ function TransactionsTab() {
   useEffect(() => {
     fetchTransactions(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, typeFilter, dateFrom, dateTo]);
+  }, [statusFilter, typeFilter, serviceTypeFilter, dateFrom, dateTo]);
 
   const clearFilters = () => {
     setStatusFilter("");
     setTypeFilter("");
+    setServiceTypeFilter("");
     setDateFrom("");
     setDateTo("");
     setSearchId("");
   };
 
-  const hasActiveFilters = statusFilter || typeFilter || dateFrom || dateTo;
+  const hasActiveFilters = statusFilter || typeFilter || serviceTypeFilter || dateFrom || dateTo;
 
   const filteredTransactions = searchId
     ? transactions.filter(
@@ -751,6 +755,20 @@ function TransactionsTab() {
             <option value="recurring">Recurring</option>
             <option value="setup">Setup charge</option>
             <option value="usage">Usage</option>
+          </select>
+
+          {/* Service Type */}
+          <select
+            value={serviceTypeFilter}
+            onChange={(e) => setServiceTypeFilter(e.target.value as ServiceTypeFilter)}
+            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-600/50 cursor-pointer"
+          >
+            <option value="">All Services</option>
+            <option value="kubernetes">Kubernetes</option>
+            <option value="database">Database</option>
+            <option value="objectspace">Object Storage</option>
+            <option value="spectrum">DDoS / Spectrum</option>
+            <option value="platform_apps">Platform Apps</option>
           </select>
 
           {/* Date From */}
