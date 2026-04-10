@@ -8,8 +8,23 @@ function roundToTwoDecimals(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function toFiniteNumber(value?: number | null): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function clampCurrencyAmount(value?: number | null): number {
+  const amount = toFiniteNumber(value);
+  if (amount <= 0) return 0;
+  return roundToTwoDecimals(amount);
+}
+
+function normalizeMonthlyMultiplier(value?: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return 1;
+  return Math.max(Math.trunc(value), 1);
+}
+
 function monthlyToHourly(priceMonthly?: number | null): number {
-  const p = typeof priceMonthly === "number" ? priceMonthly : 0;
+  const p = toFiniteNumber(priceMonthly);
   if (!p || p <= 0) return 0;
   return roundToTwoDecimals(p / HOURS_IN_MONTH);
 }
@@ -18,9 +33,17 @@ function ratesFromProduct(
   product?: { price?: number | null; fixed_price?: number | null } | null,
   options?: { monthlyMultiplier?: number }
 ): Rates {
-  const monthlyMultiplier = Math.max(options?.monthlyMultiplier ?? 1, 1);
-  const initialCost = roundToTwoDecimals((product?.fixed_price ?? 0) || 0);
-  const hourlyRate = monthlyToHourly((product?.price ?? 0) * monthlyMultiplier);
+  const monthlyMultiplier = normalizeMonthlyMultiplier(options?.monthlyMultiplier);
+  const rawFixed = toFiniteNumber(product?.fixed_price);
+  const rawPrice = toFiniteNumber(product?.price);
+  // Guard: negative prices would cause deduct(-X) to ADD credits to the user
+  if (rawFixed < 0 || rawPrice < 0) {
+    throw new Error(
+      `Invalid product pricing: price=${rawPrice}, fixed_price=${rawFixed}. Negative prices are not allowed.`
+    );
+  }
+  const initialCost = clampCurrencyAmount(rawFixed);
+  const hourlyRate = monthlyToHourly(rawPrice * monthlyMultiplier);
   return { initialCost, hourlyRate };
 }
 
@@ -31,17 +54,18 @@ export async function getRatesForDatabase(planId:string): Promise<Rates> {
   return ratesFromProduct(products);
 }
 
+export async function getRatesForDatabaseBySlug(sizeSlug: string): Promise<Rates> {
+  const product = await Products.get_by_type_and_slug("database", sizeSlug);
+  return ratesFromProduct(product);
+}
+
 export async function getRatesForKubernetes(plan_id:string, totalNodes = 1): Promise<Rates> {
     console.log("Fetching rates for Kubernetes plan ID:", plan_id);
   const products = await Products.get_by_id(plan_id);
   return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
 }
 
-export async function getRatesForKubernetesExisting(plan_id:string, totalNodes = 1): Promise<Rates> {
-    console.log("Fetching rates for Kubernetes plan ID:", plan_id);
-  const products = await Products.get_by_id(plan_id);
-  return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
-}
+export const getRatesForKubernetesExisting = getRatesForKubernetes;
 
 export async function getRatesForObjectStorage(): Promise<Rates> {
   const products = await Products.get_by_type("object-storage");
@@ -74,7 +98,7 @@ export async function getAllPlatformAppRates(): Promise<Record<string, Rates & {
     rates[size] = {
       initialCost,
       hourlyRate,
-      price: (product as any)?.price ?? 0,
+      price: clampCurrencyAmount((product as any)?.price),
     };
   }
   

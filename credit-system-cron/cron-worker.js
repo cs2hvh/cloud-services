@@ -46,128 +46,162 @@ export const VALID_TABLE_NAMES = [
   "active_platform_apps",
 ];
 
+const TABLE_TO_SERVICE_TYPE = {
+  active_kubernetes: "kubernetes",
+  active_database: "database",
+  active_objectspace: "objectspace",
+  active_spectrum: "spectrum",
+  active_platform_apps: "platform_apps",
+};
+
+let transactionHistoryMode = "unknown";
+let hasWarnedServiceLedgerUnavailable = false;
+let lastServiceLedgerMismatchAt = 0;
+const SERVICE_LEDGER_REPROBE_INTERVAL_MS = 60_000;
+
 function roundToCurrency(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-function parseBillingTimestamp(value) {
-  if (!value) return null;
+function isTransactionHistorySchemaMismatch(error) {
+  if (!error || typeof error !== "object") return false;
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  const mentionsNewColumn =
+    message.includes("service_id") ||
+    message.includes("service_type") ||
+    message.includes("period_start") ||
+    message.includes("period_end") ||
+    message.includes("metadata");
 
-  const parsed =
-    typeof value === "string"
-      ? new Date(
-          value.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(value)
-            ? value
-            : `${value}Z`
-        )
-      : new Date(value);
-
-  if (isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isTransientSupabaseError(error) {
-  const code = String(error?.code || "");
-  const message = String(error?.message || "").toLowerCase();
-
-  return (
-    code === "40001" || // serialization_failure
-    code === "40P01" || // deadlock_detected
-    code === "55P03" || // lock_not_available
-    code === "57014" || // statement_timeout
-    code === "08006" || // connection_failure
-    code === "08001" || // sqlclient_unable_to_establish_sqlconnection
-    message.includes("timeout") ||
-    message.includes("temporarily") ||
-    message.includes("connection") ||
-    message.includes("network")
+  return Boolean(
+    mentionsNewColumn &&
+      (error.code === "PGRST204" ||
+        error.code === "42703" ||
+        message.includes("could not find the") ||
+        message.includes("column"))
   );
 }
 
-async function runAtomicBillingCycle(params) {
-  let lastError = null;
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const { data, error } = await supabase
-      .schema("billing")
-      .rpc("bill_service_cycle_atomic", params);
-
-    if (!error) {
-      return { data, error: null };
-    }
-
-    lastError = error;
-    if (!isTransientSupabaseError(error) || attempt === 2) {
-      break;
-    }
-
-    await sleep(200);
-  }
-
-  return { data: null, error: lastError };
+function isTransactionTypeConstraintMismatch(error) {
+  if (!error || typeof error !== "object") return false;
+  const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
+  return (
+    error.code === "23514" ||
+    message.includes("transactions_type_check") ||
+    (message.includes("check constraint") && message.includes("type"))
+  );
 }
 
-async function recordBillingFailure({
-  tableName,
-  serviceId,
+function warnServiceLedgerUnavailable(error) {
+  if (hasWarnedServiceLedgerUnavailable) return;
+  hasWarnedServiceLedgerUnavailable = true;
+  console.warn(
+    "⚠️ Service usage transaction history is unavailable until the billing.transactions ledger migration is applied.",
+    error?.message || ""
+  );
+}
+
+function shouldAttemptServiceLedger() {
+  if (transactionHistoryMode !== "legacy") return true;
+  return Date.now() - lastServiceLedgerMismatchAt >= SERVICE_LEDGER_REPROBE_INTERVAL_MS;
+}
+
+function markServiceLedgerAvailable() {
+  transactionHistoryMode = "service_ledger";
+  hasWarnedServiceLedgerUnavailable = false;
+  lastServiceLedgerMismatchAt = 0;
+}
+
+function markServiceLedgerLegacy() {
+  transactionHistoryMode = "legacy";
+  lastServiceLedgerMismatchAt = Date.now();
+}
+
+async function getBalanceAfterDeduction(userId) {
+  const { data, error } = await supabase
+    .schema("billing")
+    .from("user_credits")
+    .select("credit_balance")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn(`⚠️ Failed to fetch balance after deduction for ${userId}: ${error.message}`);
+    return null;
+  }
+
+  if (typeof data?.credit_balance === "number") {
+    return data.credit_balance;
+  }
+
+  if (data?.credit_balance != null) {
+    const parsed = Number(data.credit_balance);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+async function recordUsageTransaction({
   userId,
+  serviceId,
+  serviceType,
   amount,
-  failureType,
-  errorCode = null,
-  errorMessage = null,
-  occurredAt,
-  lastBilledAt = null,
+  balanceAfter,
+  periodStart,
+  periodEnd,
+  hourlyRate,
+  hoursUsed,
+  tableName,
 }) {
-  try {
-    await supabase
-      .schema("billing")
-      .from("billing_failure_events")
-      .insert({
-        service_table: tableName,
-        service_id: serviceId,
-        user_id: userId,
-        amount,
-        failure_type: failureType,
-        error_code: errorCode,
-        error_message: errorMessage,
-        occurred_at: occurredAt,
-        billing_attempted_at: occurredAt,
-        last_billed_at: lastBilledAt,
-      });
-  } catch (error) {
-    console.error("WARN: Failed to record billing failure event", {
-      tableName,
-      serviceId,
-      userId,
-      failureType,
-      error: error?.message || String(error),
-    });
+  if (!shouldAttemptServiceLedger()) {
+    return;
   }
+
+  const { error } = await supabase
+    .schema("billing")
+    .from("transactions")
+    .insert({
+      user_id: userId,
+      amount,
+      currency: "usd",
+      status: "completed",
+      type: "usage",
+      balance_after: balanceAfter,
+      description: `${serviceType.replace("_", " ")} usage charge`,
+      service_id: serviceId,
+      service_type: serviceType,
+      period_start: periodStart,
+      period_end: periodEnd,
+      metadata: {
+        source: "credit-system-cron",
+        table: tableName,
+        hourly_rate: rateToMetadata(hourlyRate),
+        hours_used: Number(hoursUsed.toFixed(6)),
+      },
+      completed_at: periodEnd,
+    });
+
+  if (!error) {
+    markServiceLedgerAvailable();
+    return;
+  }
+
+  if (isTransactionHistorySchemaMismatch(error) || isTransactionTypeConstraintMismatch(error)) {
+    markServiceLedgerLegacy();
+    warnServiceLedgerUnavailable(error);
+    return;
+  }
+
+  console.warn(
+    `⚠️ Failed to record usage transaction for ${serviceId}: ${error.message}`
+  );
 }
 
-async function resolveBillingFailures(tableName, serviceId, userId) {
-  try {
-    await supabase
-      .schema("billing")
-      .from("billing_failure_events")
-      .update({
-        resolved: true,
-        resolved_at: new Date().toISOString(),
-      })
-      .eq("service_table", tableName)
-      .eq("service_id", serviceId)
-      .eq("user_id", userId)
-      .eq("resolved", false);
-  } catch {
-    // Best effort only. Failure tracking should never break billing flow.
-  }
+function rateToMetadata(value) {
+  if (typeof value === "number") return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export async function billSingleService(tableName, svc) {
@@ -328,8 +362,20 @@ export async function billSingleService(tableName, svc) {
     )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 
-  const billedAtIso = now.toISOString();
-  const expectedLastBilledAtIso = last ? last.toISOString() : null;
+  const periodStart = last
+    ? last.toISOString()
+    : created_at
+      ? new Date(created_at).toISOString()
+      : null;
+  const periodEnd = now.toISOString();
+
+  // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
+  // If credit deduction fails, timestamp is updated but no charge occurs (safer than opposite)
+  const { error: updateError } = await supabase
+    .schema("billing")
+    .from(tableName)
+    .update({ last_billed_at: now.toISOString() })
+    .eq("service_id", service_id);
 
   const { data: cycleResult, error: cycleError } = await runAtomicBillingCycle({
     p_table_name: tableName,
@@ -399,7 +445,22 @@ export async function billSingleService(tableName, svc) {
     return;
   }
 
-  await resolveBillingFailures(tableName, service_id, user_id);
+  const balanceAfter =
+    transactionHistoryMode === "legacy"
+      ? null
+      : await getBalanceAfterDeduction(user_id);
+  await recordUsageTransaction({
+    userId: user_id,
+    serviceId: service_id,
+    serviceType: TABLE_TO_SERVICE_TYPE[tableName],
+    amount: finalCost,
+    balanceAfter,
+    periodStart,
+    periodEnd,
+    hourlyRate: rate,
+    hoursUsed,
+    tableName,
+  });
 
   console.log(
     `SUCCESS: Billed ${tableName} service_id=${service_id}, cost=$${finalCost.toFixed(
@@ -500,9 +561,9 @@ cron.schedule("*/5 * * * *", async () => {
   }
 });
 
-console.log("Cron worker started successfully");
-console.log("Schedule: Every 5 minutes (*/5 * * * *)");
-console.log("Supabase connected:", process.env.SUPABASE_URL ? "yes" : "no");
+console.log("🚀 Cron worker started successfully");
+console.log("📅 Schedule: Every 5 minutes (*/5 * * * *)");
+console.log("🔧 Supabase connected:", process.env.SUPABASE_URL ? "✓" : "✗");
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +
@@ -513,4 +574,4 @@ console.log(
     ", Min billable=$" +
     SECURITY_LIMITS.MIN_BILLABLE_COST
 );
-console.log("Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());
+console.log("⏰ Next run:", new Date(Date.now() + 5 * 60 * 1000).toISOString());

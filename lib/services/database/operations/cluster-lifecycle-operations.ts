@@ -138,6 +138,7 @@ export const clusterLifecycleOperations = {
           initialCost: INITIAL_COST,
           hourlyRate: HOURLY_RATE,
           serviceId: billingServiceId,
+          serviceType: "database",
           addActive: Billing.add_active_database,
         });
       } catch (billingErr) {

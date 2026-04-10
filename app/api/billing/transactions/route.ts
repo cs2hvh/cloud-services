@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     const offset = (page - 1) * limit;
     const status = url.searchParams.get("status") || undefined;
     const type = url.searchParams.get("type") || undefined;
+    const serviceType = url.searchParams.get("service_type") || undefined;
     const from = url.searchParams.get("from") || undefined;
     const to = url.searchParams.get("to") || undefined;
 
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
       offset,
       status,
       type,
+      serviceType,
       from,
       to,
     });

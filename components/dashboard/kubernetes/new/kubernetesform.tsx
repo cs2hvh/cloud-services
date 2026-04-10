@@ -271,6 +271,13 @@ const NewClusterPage = ({
         // debugger
         //check if cluster name already exists
         //const clusters = await Clusters.get_by_owner(userId);
+        if (state.selectedName.length > 20) {
+          setValidationErrors((prev) => ({
+            ...prev,
+            name: "Cluster name must not exceed 20 characters",
+          }));
+          return;
+        }
         const clusterExists = clusters?.some(
           (cluster) => cluster.cluster_name === state.selectedName
         );
@@ -417,7 +424,7 @@ const NewClusterPage = ({
       });
       const settledResponse = response as typeof response & {
         error?: unknown;
-        data?: { message?: string; clusterId?: string };
+        data?: { message?: string; clusterId?: string; balance?: number; required?: number };
       };
 
       if (settledResponse.error) {
@@ -425,7 +432,6 @@ const NewClusterPage = ({
       }
 
       if (settledResponse.status === 200) {
-        toast.success("Cluster initialized.");
         if (role === "admin") {
           router.push('/dashboard/admin/kubernetes');
         } else {
@@ -706,11 +712,13 @@ const NewClusterPage = ({
                       setState({ ...state, selectedName: e.target.value })
                     }
                     type="text"
-                    placeholder="my-production-cluster"
+                    maxLength={20}
+                    placeholder="my-cluster"
                     className={`bg-white/10 border-white/20 rounded-md text-white placeholder:text-white/50 ${
                       validationErrors.name ? "border-red-500" : ""
                     }`}
                   />
+                  <p className="text-xs text-white/40">{selectedName.length}/20 characters</p>
                   {validationErrors.name && (
                     <p className="text-sm text-red-500">
                       {validationErrors.name}
