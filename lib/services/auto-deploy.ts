@@ -135,6 +135,7 @@ export class AutoDeployService {
           const execution = await jenkins.triggerBuild({
             appName,
             commitSha,
+            gitAuthUrl: authenticatedUrl,
           });
           console.log(
             `[AutoDeploy] ✅ Build #${execution.buildNumber} triggered for commit ${commitSha?.substring(0, 7) || 'HEAD'}`
