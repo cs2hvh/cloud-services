@@ -6,6 +6,7 @@ import { AppOperationFinalizer } from '@/lib/app-operations';
 type DeploymentRecordPayload = {
   app_id: string;
   build_number?: number | string | null;
+  operation_id?: string | null; // resize: DB record UUID, bypasses build_number lookup
   commit_sha?: string | null;
   image_tag?: string | null;
   image_digest?: string | null;
@@ -81,12 +82,23 @@ export async function POST(req: NextRequest) {
     }
 
     const buildNumber = normalizeInt(body.build_number);
+    const operationId = typeof body.operation_id === 'string' && body.operation_id ? body.operation_id : null;
 
-    if (buildNumber === null) {
-      return NextResponse.json(
-        { error: 'Missing required field: build_number' },
-        { status: 400 }
-      );
+    // For resize, we use operationId; for all other triggers, build_number is required
+    if (body.trigger === 'resize') {
+      if (!operationId) {
+        return NextResponse.json(
+          { error: 'Missing required field: operation_id (required for resize trigger)' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (buildNumber === null) {
+        return NextResponse.json(
+          { error: 'Missing required field: build_number' },
+          { status: 400 }
+        );
+      }
     }
 
     const image_tag = body.image_tag ?? null;
@@ -108,7 +120,8 @@ export async function POST(req: NextRequest) {
     const finalization = await finalizer.finalizeBuildOperation({
       appId: body.app_id,
       appName,
-      buildNumber,
+      buildNumber: buildNumber ?? undefined,
+      operationId: operationId ?? undefined,
       trigger: body.trigger,
       status: body.status,
       failureReason: body.status === 'failed' ? failure_reason : null,

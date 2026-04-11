@@ -37,7 +37,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!inProgress.data || !inProgress.data.build_number) {
+  if (!inProgress.data) {
+    return NextResponse.json({
+      recovered: false,
+      message: "No in-progress build found",
+    });
+  }
+
+  const isResize = inProgress.data.trigger === 'resize';
+  // For resize, build_number is NULL in the DB — get it from operation_details.executor.run_number
+  const buildNumber = inProgress.data.build_number
+    ?? (isResize ? (inProgress.data.operation_details as { executor?: { run_number?: number } })?.executor?.run_number ?? null : null);
+
+  if (!buildNumber) {
     return NextResponse.json({
       recovered: false,
       message: "No in-progress build found",
@@ -45,7 +57,10 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const buildInfo = await JenkinsService.getBuildInfo(app.name, inProgress.data.build_number);
+    const buildInfo = isResize
+      ? await JenkinsService.checkResizeBuildStatus(app.name, buildNumber)
+          .then(s => ({ ...s, number: buildNumber, duration: 0, timestamp: 0, url: '' }))
+      : await JenkinsService.getBuildInfo(app.name, buildNumber);
 
     if (buildInfo.building) {
       return NextResponse.json({
@@ -53,22 +68,25 @@ export async function POST(req: NextRequest) {
         still_building: true,
         status: null,
         message: "Build is still running on Jenkins",
-        build_number: inProgress.data.build_number,
+        build_number: buildNumber,
       });
     }
 
-    const finishedAt = buildInfo.timestamp + buildInfo.duration;
-    if (
-      Number.isFinite(finishedAt) &&
-      Date.now() - finishedAt < BuildPollingService.BUILD_FINALIZATION_GRACE_MS
-    ) {
-      return NextResponse.json({
-        recovered: false,
-        still_building: false,
-        status: null,
-        message: "Build finished recently; waiting for normal deployment finalization",
-        build_number: inProgress.data.build_number,
-      });
+    if ('timestamp' in buildInfo && 'duration' in buildInfo) {
+      const finishedAt = buildInfo.timestamp + buildInfo.duration;
+      if (
+        Number.isFinite(finishedAt) &&
+        finishedAt > 0 &&
+        Date.now() - finishedAt < BuildPollingService.BUILD_FINALIZATION_GRACE_MS
+      ) {
+        return NextResponse.json({
+          recovered: false,
+          still_building: false,
+          status: null,
+          message: "Build finished recently; waiting for normal deployment finalization",
+          build_number: buildNumber,
+        });
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -83,10 +101,11 @@ export async function POST(req: NextRequest) {
   const recovery = await BuildPollingService.recoverBuild({
     appId: app_id,
     appName: app.name,
-    buildNumber: inProgress.data.build_number,
+    buildNumber,
     trigger: inProgress.data.trigger,
     desiredSize: (app.size as "small" | "medium" | "large" | null | undefined) ?? null,
     userId: auth.user!.id, // Pass user ID for audit trail on resize recovery
+    operationId: isResize ? inProgress.data.id : undefined,
   });
 
   if (!recovery.success) {
@@ -101,6 +120,6 @@ export async function POST(req: NextRequest) {
     still_building: recovery.stillBuilding ?? false,
     status: recovery.status ?? null,
     message: recovery.message ?? null,
-    build_number: inProgress.data.build_number,
+    build_number: buildNumber,
   });
 }

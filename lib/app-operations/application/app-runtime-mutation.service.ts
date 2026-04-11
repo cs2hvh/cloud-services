@@ -460,7 +460,9 @@ export class AppRuntimeMutationService {
 
       const updated = await this.deployments.updateById({
         operationId: operation.id,
-        buildNumber: execution.buildNumber,
+        // Resize builds do NOT store build_number: resize jobs have an
+        // independent build sequence and build_number is only meaningful for
+        // main job builds used in rollback. Tracking is done by operation ID.
         operationDetails: details,
       });
 

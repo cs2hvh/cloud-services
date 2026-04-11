@@ -167,7 +167,8 @@ export class AppOperationFinalizer {
   async finalizeBuildOperation(params: {
     appId: string;
     appName: string;
-    buildNumber: number;
+    buildNumber?: number;
+    operationId?: string; // For resize: the DB record ID; bypasses complete_build lookup
     trigger: AppDeploymentTrigger;
     status: "success" | "failed";
     failureReason?: string | null;
@@ -177,6 +178,15 @@ export class AppOperationFinalizer {
     allowedCurrentStatuses?: Array<"building" | "success" | "failed">;
     allowLegacyCreate?: boolean;
   }) {
+    // Resize records are identified by operationId, not build_number
+    if (params.trigger === "resize" && params.operationId) {
+      return this.finalizeResizeOperation(params as typeof params & { operationId: string });
+    }
+
+    if (!params.buildNumber) {
+      throw new Error("buildNumber is required for non-resize finalization");
+    }
+
     let operationId: string | null = null;
 
     try {
@@ -347,6 +357,125 @@ export class AppOperationFinalizer {
             error: error instanceof Error ? error.message : String(error),
           });
         }
+      }
+    }
+  }
+
+  /**
+   * Finalize a resize operation by its operationId (DB record UUID).
+   * Resize records have build_number = NULL and are never looked up by build_number.
+   */
+  private async finalizeResizeOperation(params: {
+    appId: string;
+    appName: string;
+    operationId: string;
+    trigger: AppDeploymentTrigger;
+    status: "success" | "failed";
+    failureReason?: string | null;
+    imageTag?: string | null;
+    imageDigest?: string | null;
+    commitSha?: string | null;
+  }) {
+    const { operationId } = params;
+    try {
+      const existing = await this.deployments.findById(operationId);
+      if (!existing) {
+        throw new Error(`Resize operation record not found: ${operationId}`);
+      }
+
+      let details = parseOperationDetails(
+        existing.operation_details ?? createOperationDetails({ trigger: params.trigger }),
+        { trigger: params.trigger }
+      );
+
+      details = upsertOperationStep(details, {
+        key: "finalize",
+        label: "Finalize resize",
+        status: params.status === "success" ? "success" : "failed",
+        message: params.status === "failed" ? (params.failureReason ?? "Resize failed") : undefined,
+      });
+
+      if (params.status === "success") {
+        details = setOperationVerification(details, await this.buildVerification(params.appName));
+        if (details.verification?.status === "degraded" && details.verification.message) {
+          details = appendOperationWarning(details, details.verification.message);
+        }
+      } else {
+        details = setOperationVerification(details, {
+          status: "failed",
+          message: params.failureReason ?? "Resize failed before verification",
+        });
+        details = setOperationError(details, {
+          code: "RESIZE_FAILED",
+          message: params.failureReason ?? "Resize failed",
+          retryable: false,
+        });
+      }
+
+      const updated = await this.deployments.updateById({
+        operationId,
+        status: params.status,
+        failureReason: params.status === "success" ? null : (params.failureReason ?? null),
+        operationDetails: details,
+      });
+
+      const sideEffectWarnings = await this.sideEffects.applyBuildFinalizationSideEffects({
+        appId: params.appId,
+        appName: params.appName,
+        record: updated,
+        details,
+        trigger: params.trigger,
+        status: params.status,
+      });
+
+      let finalRecord = updated;
+      let finalDetails = details;
+      if (sideEffectWarnings.length > 0) {
+        for (const warning of sideEffectWarnings) {
+          finalDetails = appendOperationWarning(finalDetails, warning);
+        }
+        finalRecord = await this.deployments.updateById({
+          operationId,
+          operationDetails: finalDetails,
+        });
+      }
+
+      if (params.status === "success") {
+        await this.updateAppState(params.appId, {
+          status: "running",
+          last_deploy_trigger: params.trigger,
+          last_deploy_commit: params.commitSha ?? null,
+          last_failure_reason: null,
+        });
+      } else {
+        await this.updateAppState(params.appId, {
+          status: "failed",
+          last_deploy_trigger: params.trigger,
+          last_deploy_commit: params.commitSha ?? null,
+          last_failure_reason: params.failureReason ?? null,
+        });
+      }
+
+      this.logger.child({
+        app_id: params.appId,
+        app_name: params.appName,
+        operation_id: operationId,
+        trigger: params.trigger,
+        status: params.status,
+      }).info("Finalized resize operation by operationId");
+
+      return { record: finalRecord, legacyCreated: false };
+    } finally {
+      try {
+        await this.locks.releaseAppMutationLockForOperation(operationId);
+      } catch (error) {
+        this.logger.child({
+          app_id: params.appId,
+          app_name: params.appName,
+          operation_id: operationId,
+        }).warn("Failed to release mutation lock for resize operation", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
   }

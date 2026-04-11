@@ -21,6 +21,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const auth = await authenticateUser();
+    if (!auth.authenticated) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!buildNumber) {
       // Get latest build number if not specified
       let latestBuild: number | null = null;
@@ -57,14 +62,6 @@ export async function GET(req: NextRequest) {
         ...buildInfo,
       });
     }
-
-
-    const auth = await authenticateUser();
-if (!auth.authenticated) {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-}
-
-// Verify the requesting user owns an app with this name
 
     const buildNum = parseInt(buildNumber, 10);
     if (isNaN(buildNum)) {
