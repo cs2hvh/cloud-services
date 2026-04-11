@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { CreditCard, Ticket, Shield, ExternalLink, Receipt, ChevronLeft, ChevronRight, Search, X, Download } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import api from "@/lib/axios/axios";
+import { createDepositPayment } from "@/actions/crypto-deposit";
 
 type Toast = { id: number; type: "success" | "error"; message: string };
 
@@ -52,6 +53,7 @@ export default function BillingTabs({
   const [coupons, setCoupons] = useState<Coupon[]>(availableCoupons);
   const [amount, setAmount] = useState("");
   const [loadingTopup, setLoadingTopup] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "crypto">("stripe");
   const [balance, setBalance] = useState<number>(initialBalance);
   const [manualCouponCode, setManualCouponCode] = useState("");
   const [loadingManualCoupon, setLoadingManualCoupon] = useState(false);
@@ -97,17 +99,31 @@ export default function BillingTabs({
     }
     try {
       setLoadingTopup(true);
-      const res = await api.post("/billing/create-checkout-session", {
-        amount: parsed,
-      });
-      const data = res.data;
-      if (data.url) {
-        window.location.href = data.url;
+      if (paymentMethod === "crypto") {
+        const formData = new FormData();
+        formData.set("amount_usd", String(parsed));
+        formData.set("currency", "USDT_TRC20");
+        const result = await createDepositPayment({ values: { amount_usd: parsed, currency: "USDT_TRC20" }, errors: null, success: false }, formData);
+        if (result.success && result.payment_url) {
+          window.location.href = result.payment_url;
+        } else {
+          const msg = result.errors?.amount_usd?.[0] ?? result.errors?.currency?.[0] ?? "Failed to create crypto payment";
+          pushToast("error", msg);
+        }
       } else {
-        throw new Error("No checkout URL returned");
+        const res = await api.post("/billing/create-checkout-session", {
+          amount: parsed,
+        });
+        const data = res.data;
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error("No checkout URL returned");
+        }
       }
     } catch (_err: unknown) {
       pushToast("error", _err instanceof Error ? _err?.message : "Failed to start payment");
+    } finally {
       setLoadingTopup(false);
     }
   };
@@ -263,26 +279,53 @@ export default function BillingTabs({
               <StatCard label="Remaining Balance" value={remaining} highlight />
             </div>
 
-            <form onSubmit={onTopup} className="space-y-3">
-              <label className="block text-sm text-gray-300">Enter amount to top up($)</label>
-              <div className="flex gap-2">
+            <form onSubmit={onTopup} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Enter amount to top up($)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="1"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600/50"
                   placeholder="e.g. 25"
                 />
-                <button
-                  disabled={loadingTopup}
-                  type="submit"
-                  className="cursor-pointer px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {loadingTopup ? "Redirecting to Stripe..." : "Top up"}
-                </button>
               </div>
+              <div>
+                <label className="block text-sm text-gray-300 mb-2">Payment method</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="stripe"
+                      checked={paymentMethod === "stripe"}
+                      onChange={() => setPaymentMethod("stripe")}
+                      className="accent-blue-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm text-white">Stripe</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="crypto"
+                      checked={paymentMethod === "crypto"}
+                      onChange={() => setPaymentMethod("crypto")}
+                      className="accent-blue-600 w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm text-white">Crypto</span>
+                  </label>
+                </div>
+              </div>
+              <button
+                disabled={loadingTopup}
+                type="submit"
+                className="cursor-pointer w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {loadingTopup ? (paymentMethod === "crypto" ? "Processing..." : "Redirecting to Stripe...") : "Pay"}
+              </button>
             </form>
 
             <div className="rounded-xl border border-white/10 bg-black/30 p-4 backdrop-blur-xl space-y-3">

@@ -79,6 +79,8 @@
     "next": "15.3.0",
     "pdfjs-dist": "^5.4.624",
     "proxmox-api": "^1.1.1",
+    "qrcode.react": "^4.2.0",
+    "radix-ui": "^1.4.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.55.0",
