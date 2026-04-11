@@ -196,6 +196,7 @@ export class DeploymentService {
               deployTrigger: "manual",
               envVars: envVarsToPass,
               containerPort,
+              gitAuthUrl: config.authenticated_url || undefined,
             });
             console.log(`[DeploymentService] Step 6/6: Jenkins job created and triggered`);
             return {

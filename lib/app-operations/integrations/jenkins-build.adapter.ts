@@ -41,6 +41,7 @@ export class JenkinsBuildAdapter {
     deployTrigger: "manual" | "webhook" | "resize";
     envVars: Array<{ key: string; value: string }>;
     containerPort?: number;
+    gitAuthUrl?: string;
   }) {
     await JenkinsService.createJob(
       params.appName,
@@ -51,7 +52,8 @@ export class JenkinsBuildAdapter {
       params.size,
       params.deployTrigger,
       params.envVars,
-      params.containerPort
+      params.containerPort,
+      params.gitAuthUrl
     );
 
     return {
