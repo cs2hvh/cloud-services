@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
 
     let logs: string;
     if (operation.trigger === "resize" && operation.build_number) {
-      logs = await JenkinsService.getDeploymentLog(appResult.data.name, operation.build_number);
+      logs = await JenkinsService.getResizeDeploymentLog(appResult.data.name, operation.build_number);
     } else {
       logs = synthesizeOperationLogs({
         appName: appResult.data.name,
