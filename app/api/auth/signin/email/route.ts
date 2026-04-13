@@ -27,16 +27,12 @@ export async function POST(request: NextRequest) {
   }
 
 
-  console.log(email, "...........email in signin route.ts........");
   const supabase = await createClient();
-console.log(email, "...........email in signin route.ts........");
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
-  console.log(data, "...........data in signin route.ts........");
 
-  //console.log(data?.user,"data?.user");
   const twofastatus =
     data?.user?.factors?.find((item) => item.factor_type === "totp")?.status ===
     "verified";
