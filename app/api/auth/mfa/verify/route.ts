@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 // Rate limiter: 10 verification attempts per minute per user
 const limiter = rateLimit({
@@ -58,9 +59,9 @@ export async function POST(req: NextRequest) {
     // Create challenge
     const challenge = await supabase.auth.mfa.challenge({ factorId });
     if (challenge.error) {
-      console.error("MFA challenge error:", challenge.error);
+        logError("POST /api/auth/mfa/verify challenge", challenge.error);
       return NextResponse.json(
-        { error: challenge.error.message },
+        { error: sanitizeAuthError(challenge.error) },
         { status: 400 }
       );
     }
@@ -84,9 +85,9 @@ export async function POST(req: NextRequest) {
         );
       }
       
-      console.error("MFA verification error:", verify.error);
+        logError("POST /api/auth/mfa/verify", verify.error);
       return NextResponse.json(
-        { error: verify.error.message },
+        { error: sanitizeAuthError(verify.error) },
         { status: 400 }
       );
     }
@@ -96,11 +97,10 @@ export async function POST(req: NextRequest) {
       message: "2FA verification successful",
     });
   } catch (error) {
-    console.error("MFA verification error:", error);
+    logError("POST /api/auth/mfa/verify", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to verify MFA",
+        error: sanitizeAuthError(error),
       },
       { status: 500 }
     );

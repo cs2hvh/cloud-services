@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -25,7 +26,8 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    logError("POST /api/auth/signout", error);
+    return NextResponse.json({ error: sanitizeAuthError(error) }, { status: 500 });
   }
 
   // Log logout action if we had a user
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
         ...context,
       });
     } catch (auditError) {
-      console.error('Failed to log logout action:', auditError);
+      logError('POST /api/auth/signout audit', auditError);
       // Don't fail logout if audit logging fails
     }
   }
