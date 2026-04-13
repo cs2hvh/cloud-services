@@ -34,6 +34,10 @@
       "description": "Manage projects used to organize cloud services and ownership."
     },
     {
+      "name": "Resources",
+      "description": "List available product plans/resources and filter by type."
+    },
+    {
       "name": "Databases",
       "description": "Manage database clusters, databases, and users."
     },
@@ -749,6 +753,90 @@
         },
         "required": [
           "data"
+        ]
+      },
+      "ResourceType": {
+        "type": "string",
+        "enum": [
+          "vps",
+          "vds",
+          "game",
+          "database",
+          "object-storage",
+          "kubernetes",
+          "network-ddos",
+          "platform-apps",
+          "compute",
+          "gpu",
+          "security",
+          "ai-deployment",
+          "app-deployment"
+        ],
+        "example": "database"
+      },
+      "ResourcePlan": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "f15eca8f-032e-4c35-99ee-b5a15f1ec18a"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true,
+            "example": "Starter DB Plan"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "General-purpose managed database plan."
+          },
+          "type": {
+            "$ref": "#/components/schemas/ResourceType"
+          },
+          "sub_type": {
+            "type": "string",
+            "nullable": true,
+            "example": "postgresql"
+          }
+        },
+        "required": [
+          "plan_id",
+          "name",
+          "description",
+          "type",
+          "sub_type"
+        ]
+      },
+      "ResourcePlanListResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourcePlan"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "number",
+                "example": 12
+              },
+              "type": {
+                "$ref": "#/components/schemas/ResourceType"
+              }
+            },
+            "required": [
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
         ]
       },
       "Bucket": {
@@ -4343,6 +4431,111 @@
                 "example": {
                   "error": "DELETE_FAILED",
                   "message": "Failed to delete project"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "summary": "List resource plans",
+        "description": "Returns available resource plans with minimal fields only: plan_id, name, description, type, and sub_type.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceType"
+                },
+                {
+                  "description": "Optional resource type filter."
+                }
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of resource plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourcePlanListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INVALID_PARAMETER",
+                  "message": "Invalid resource type",
+                  "details": {
+                    "field": "type"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "UNAUTHORIZED",
+                  "message": "Missing or invalid API key"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "RATE_LIMIT_EXCEEDED",
+                  "message": "Too many requests. Please try again later.",
+                  "details": {
+                    "retry_after": 58
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "INTERNAL_ERROR",
+                  "message": "Failed to fetch resources"
                 }
               }
             }
