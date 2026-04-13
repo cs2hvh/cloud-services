@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { ObjectStorageService } from "@/lib/services/object-storage-service";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -52,24 +53,24 @@ export async function POST(req: NextRequest) {
     // Map error codes to HTTP status codes
     if (err.code === 'NOT_FOUND') {
       return NextResponse.json(
-        { error: err.message, message: "Bucket not found" },
+        { error: "Bucket not found", message: "Bucket not found" },
         { status: 404 }
       );
     }
     
     if (err.code === 'FORBIDDEN') {
       return NextResponse.json(
-        { error: "Unauthorized", message: err.message || "Unauthorized" },
+        { error: "Unauthorized", message: "Unauthorized" },
         { status: 403 }
       );
     }
 
     // Generic error
-    const errorMessage = err.message || "An unexpected error occurred";
+    logError("services/object-storage/buckets/read", err);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(err),
       },
       { status: 500 }
     );

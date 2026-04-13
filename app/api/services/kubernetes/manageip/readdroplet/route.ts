@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 // import bcrypt from "bcryptjs";
 // import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 // import { generateStrongPassword } from "@/config/functions";
 
 export async function POST(req: NextRequest) {
@@ -37,16 +38,7 @@ export async function POST(req: NextRequest) {
 
         }
    catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    logError("services/kubernetes/manageip/readdroplet", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

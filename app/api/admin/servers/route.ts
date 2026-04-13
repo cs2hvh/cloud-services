@@ -248,7 +248,7 @@ export async function DELETE(req: NextRequest) {
       try {
         const { data: host } = await supabase
           .from("proxmox_hosts")
-          .select("*")
+          .select("id, host_url, allow_insecure_tls, token_id, token_secret, username, password")
           .eq("id", location)
           .maybeSingle();
 
@@ -330,7 +330,7 @@ export async function DELETE(req: NextRequest) {
     const serverIp = (server as Record<string, unknown>).ip as string | undefined;
     if (serverIp && location) {
       try {
-        const { data: hostForRoute } = await supabase.from("proxmox_hosts").select("*").eq("id", location).maybeSingle();
+        const { data: hostForRoute } = await supabase.from("proxmox_hosts").select("id, name, host_url, allow_insecure_tls, node, storage, bridge, gateway_ip, dns_primary, dns_secondary, template_vmid, is_active, token_id, token_secret, username, password").eq("id", location).maybeSingle();
         if (hostForRoute) await removeHostRoute(hostForRoute as ProxmoxHost, serverIp);
       } catch (e) {
         console.warn(`[Admin Delete] Failed to remove host route:`, e);

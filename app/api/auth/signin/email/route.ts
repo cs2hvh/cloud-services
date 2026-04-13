@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -26,22 +27,19 @@ export async function POST(request: NextRequest) {
   }
 
 
-  console.log(email, "...........email in signin route.ts........");
   const supabase = await createClient();
-console.log(email, "...........email in signin route.ts........");
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
-  console.log(data, "...........data in signin route.ts........");
 
-  //console.log(data?.user,"data?.user");
   const twofastatus =
     data?.user?.factors?.find((item) => item.factor_type === "totp")?.status ===
     "verified";
 
   if (error) {
-    return Response.json({ message: error.message }, { status: 401 });
+    logError("auth/signin/email", error);
+    return Response.json({ message: sanitizeAuthError(error) }, { status: 401 });
   }
 
   if (!data.user) {

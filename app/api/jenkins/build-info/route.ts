@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/jenkins/build-info?app=myapp&build=1
@@ -78,14 +79,14 @@ export async function GET(req: NextRequest) {
       ...buildInfo,
     });
   } catch (error: unknown) {
-    console.error("[API] Error getting build info:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get build info";
+    logError("[API] Error getting build info", error);
     
     // If it's a "not found" type error, return 404 with helpful message
+    const errorMessage = error instanceof Error ? error.message : "";
     if (errorMessage.includes('not found') || errorMessage.includes('does not exist')) {
       return NextResponse.json(
         { 
-          error: errorMessage,
+          error: "Build not found",
           message: "Build not found. It may still be initializing.",
           pending: true
         },
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Failed to get build info" },
       { status: 500 }
     );
   }

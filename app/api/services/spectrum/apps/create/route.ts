@@ -3,6 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
 import type { CreateSpectrumAppPayload } from "@/lib/validation/spectrum";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { SpectrumService } from "@/lib/services/spectrum-service";
 import { getAuditContext } from "@/lib/audit";
@@ -73,31 +74,31 @@ export async function POST(req: NextRequest) {
 
     if (err.code === "BILLING_REGISTRATION_FAILED") {
       return NextResponse.json(
-        { error: err.message },
+        { error: "Billing registration failed" },
         { status: 500 }
       );
     }
 
     if (err.code === "NOT_FOUND") {
       return NextResponse.json(
-        { error: err.message },
+        { error: "Not found" },
         { status: 404 }
       );
     }
 
     if (err.code === "FORBIDDEN") {
       return NextResponse.json(
-        { error: err.message },
+        { error: "Unauthorized" },
         { status: 403 }
       );
     }
 
     // Generic error
-    const errorMessage = err.message || "An unexpected error occurred";
+    logError("services/spectrum/apps/create", err);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(err),
       },
       { status: 500 }
     );

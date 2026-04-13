@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-// import { vmCreateSchema } from "@/types/zod/vm";
-// import bcrypt from "bcryptjs";
-// import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
 import { timeRange } from "@/config/functions";
 import { authenticateUser } from "@/lib/auth/server-auth";
-// import { generateStrongPassword, timeRange } from "@/config/functions";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -53,17 +50,8 @@ return NextResponse.json({ error: "there is some internal error. please try late
     }
 
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    logError("services/kubernetes/clusters/monitering", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }
 

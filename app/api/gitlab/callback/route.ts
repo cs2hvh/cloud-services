@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     
     if (tokenData.error) {
       console.error('GitLab token error:', tokenData.error);
-      return NextResponse.redirect(`${domain}${returnTo}?error=${tokenData.error}`);
+      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
     }
 
     const accessToken = tokenData.access_token;

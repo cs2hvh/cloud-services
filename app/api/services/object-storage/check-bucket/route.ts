@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { HeadBucketCommand } from "@aws-sdk/client-s3";
 
 import { createS3ClientFromAccessKey } from "@/lib/aws/s3-client";
+import { logError } from "@/lib/api/error-sanitizer";
 
 const DEFAULT_REGION = "nyc3";
 const GLOBAL_SPACES_REGIONS = ["nyc3", "sfo3", "ams3", "sgp1", "fra1", "tor1", "blr1"];
@@ -77,13 +78,13 @@ export async function GET(req: NextRequest) {
         }
 
         // Unknown issue: fail conservative (unavailable) so we don't allow collisions.
-        console.error("check-bucket error:", err);
+        logError("services/object-storage/check-bucket", err);
         return NextResponse.json({
           exists: true,
           available: false,
           statusCode: status,
           checkedRegion: region,
-          error: String(err instanceof Error ? err.message : err),
+          error: "Failed to check bucket availability",
         });
       }
     }

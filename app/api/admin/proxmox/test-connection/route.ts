@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createWorkerClient } from "@/lib/supabase/server";
 import { Agent as UndiciAgent } from "undici";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
     // Get host configuration
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("*")
+      .select("id, name, host_url, allow_insecure_tls, node, token_id, token_secret, username, password")
       .eq("id", hostId)
       .maybeSingle();
 
@@ -242,12 +243,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result);
 
   } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
+    logError("POST /api/admin/proxmox/test-connection", error);
     return NextResponse.json(
       {
         ok: false,
-        error: err.message,
-        stack: err.stack,
+        error: sanitizeError(error),
       },
       { status: 500 }
     );

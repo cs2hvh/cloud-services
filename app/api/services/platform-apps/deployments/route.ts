@@ -4,6 +4,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import jenkins from "@/lib/jenkins";
 import { getAppHistoryType, isReleaseHistoryEntry, parseOperationDetails } from "@/lib/app-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 // Limit for deployment history - matches UI pagination and reduces API calls
 const DEPLOYMENT_HISTORY_LIMIT = 10;
@@ -279,11 +280,7 @@ export async function GET(req: NextRequest) {
       total: deployments.length,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting deployments:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get deployments";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/deployments", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

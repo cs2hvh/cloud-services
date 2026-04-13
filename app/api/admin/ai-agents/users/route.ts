@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/supabase/auth';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,9 +157,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
-    console.error('[Admin AI Agents Users] Error:', err);
+    logError('GET /api/admin/ai-agents/users', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to fetch users' },
+      { error: sanitizeError(err) },
       { status: 500 }
     );
   }

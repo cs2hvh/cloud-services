@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDomainTransferService } from "@/lib/domain-service/transfer";
+import { logError } from "@/lib/api/error-sanitizer";
 
 /**
  * POST /api/domains/transfer/poll
@@ -45,9 +46,9 @@ export async function POST(req: Request) {
       message: `Polled ${result.polled} transfers: ${result.processed} processed, ${result.errors} errors`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Polling failed";
+    logError("domains/transfer/poll", error);
     return NextResponse.json(
-      { error: "INTERNAL_ERROR", message },
+      { error: "INTERNAL_ERROR", message: "Polling failed" },
       { status: 500 }
     );
   }

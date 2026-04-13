@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/jenkins/build-logs?app=myapp&build=1&start=0
@@ -98,10 +98,9 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    console.error("[API] Error getting build logs:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to get build logs";
+    logError("[API] Error getting build logs", error);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

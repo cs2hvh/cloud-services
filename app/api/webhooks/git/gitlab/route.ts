@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GitLabWebhookHandler } from '@/lib/webhooks/gitlab';
 import { Platform_App_Webhooks } from '@/lib/supabase/queries';
 import { AutoDeployService } from '@/lib/services/auto-deploy';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 import { KubernetesInfoService } from '@/lib/services/kubernetes-info';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import type { WebhookResult } from '@/lib/webhooks/types';
@@ -240,13 +241,12 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
       build_number: deployResult.buildNumber,
     });
   } catch (error: unknown) {
-    console.error('[GitLab Webhook] Unexpected error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logError('POST /api/webhooks/git/gitlab', error);
     return NextResponse.json(
       {
         success: false,
         action: 'error',
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

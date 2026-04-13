@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Helper function to check if user is admin
 async function checkAdminAuth() {
@@ -73,13 +74,11 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin spectrum app delete error:", errorMessage);
-    
+    logError("DELETE /api/admin/network-ddos/apps/delete", error);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -13,6 +13,7 @@ import { KnowledgeBaseUpdate } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 // Validation schema for updating a knowledge base
 const updateKBSchema = z.object({
@@ -114,8 +115,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const validation = updateKBSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('PATCH /api/knowledge-bases/[id] validation', validation.error);
       return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

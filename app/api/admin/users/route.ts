@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     // Build query
     let query = supabase
       .from("user_profiles")
-      .select("*", { count: "exact" });
+      .select("id, username, display_name, avatar, roles, suspend, created_at", { count: "exact" });
 
     // Apply search filter
     if (search) {
@@ -198,7 +198,7 @@ export async function PATCH(request: Request) {
       .from("user_profiles")
       .update(updates)
       .eq("id", userId)
-      .select("*")
+      .select("id, username, display_name, avatar, roles, suspend, created_at")
       .single();
 
     if (error) {

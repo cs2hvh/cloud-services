@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { RuntimeLogsService } from "@/lib/services/runtime-logs";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/services/platform-apps/runtime-logs?app_id=xxx
@@ -204,11 +205,7 @@ export async function GET(req: NextRequest) {
       timestamp: new Date().toISOString(),
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting runtime logs:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get runtime logs";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/runtime-logs", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

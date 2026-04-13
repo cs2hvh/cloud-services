@@ -8,6 +8,7 @@ import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { AppStatusService } from "@/lib/services/app-status";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { AppOperationError, ResourceMutationLockService } from "@/lib/app-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -137,13 +138,11 @@ export async function POST(req: NextRequest) {
         }
       } catch { /* best-effort revert */ }
 
-      return NextResponse.json(
-        { error: errorMsg, message: errorMsg },
-        { status: statusCode }
-      );
+      logError("services/platform-apps/delete (inner)", error);
+      return NextResponse.json({ error: sanitizeError(error) }, { status: statusCode });
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
+    logError("services/platform-apps/delete", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

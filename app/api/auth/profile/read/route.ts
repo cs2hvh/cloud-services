@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server"; // use your own configured supabase helper
-import { UserIdentity } from "@supabase/supabase-js";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 type AuthProfile = {
   id: string;
@@ -9,7 +9,6 @@ type AuthProfile = {
   profilePic: string | undefined;
   displayName: string | undefined;
   userName: string | undefined;
-  identities?: UserIdentity[];
   created_at?: string;
   updated_at?: string;
 };
@@ -36,15 +35,13 @@ export async function GET() {
       profilePic: u.user_metadata?.avatar_url ?? undefined,
       displayName: u.user_metadata?.display_name ?? undefined,
       userName: u.user_metadata?.username ?? undefined,
-      identities: u.identities,
       created_at: u.created_at,
       updated_at: (u as { updated_at?: string }).updated_at,
     };
 
     return NextResponse.json(payload, { status: 200 });
   } catch (e: unknown) {
-    const message =
-      e instanceof Error ? e.message : "Failed to update profile.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    logError("GET /api/auth/profile/read", e);
+    return NextResponse.json({ error: sanitizeError(e) }, { status: 500 });
   }
 }

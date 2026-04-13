@@ -18,6 +18,7 @@ import { Platform_App_Webhooks } from '@/lib/supabase/queries';
 import { AutoDeployService } from '@/lib/services/auto-deploy';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import type { WebhookResult } from '@/lib/webhooks/types';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 
 export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult>> {
   const startTime = Date.now();
@@ -250,12 +251,11 @@ export async function POST(req: NextRequest): Promise<NextResponse<WebhookResult
     });
 
   } catch (error: unknown) {
-    console.error('[GitHub Webhook] Unexpected error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logError('POST /api/webhooks/git/github', error);
     return NextResponse.json({
       success: false,
       action: 'error',
-      message: errorMessage,
+      message: sanitizeError(error),
     }, { status: 500 });
   }
 }

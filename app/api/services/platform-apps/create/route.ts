@@ -3,6 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { getAuditContext } from "@/lib/audit";
@@ -188,12 +189,7 @@ export async function POST(req: NextRequest) {
       },
     }, { status: 201 });
   } catch (err: unknown) {
-    console.error('[platform-apps/create] Unexpected error:', err);
-    const errorMsg = err instanceof Error ? err.message : 'Something went wrong';
-    
-    return NextResponse.json(
-      { error: errorMsg },
-      { status: 500 }
-    );
+    logError("services/platform-apps/create", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import {
   getDropletSizes,
   DropletSize,
@@ -56,12 +57,11 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     console.error("[DigitalOcean Sizes API] Error:", error);
 
-    const errorMessage =
-      error instanceof Error ? error.message : "Failed to fetch droplet sizes";
+    logError("[DigitalOcean Sizes API]", error);
 
     return NextResponse.json(
       {
-        error: errorMessage,
+        error: sanitizeError(error),
         sizes: [],
         count: 0,
       },

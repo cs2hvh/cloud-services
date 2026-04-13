@@ -5,6 +5,7 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -34,7 +35,8 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (readError) {
-      return NextResponse.json({ error: readError.message }, { status: 400 });
+      logError("services/kubernetes/clusters/update_project read", readError);
+      return NextResponse.json({ error: sanitizeError(readError) }, { status: 400 });
     }
 
     const oldProjectId = clusterData?.project_id;
@@ -48,7 +50,8 @@ export async function POST(req: NextRequest) {
       .eq("cluster_id", cluster_id);
 
     if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 400 });
+      logError("services/kubernetes/clusters/update_project update", updateError);
+      return NextResponse.json({ error: sanitizeError(updateError) }, { status: 400 });
     }
 
     // Create audit log
@@ -123,16 +126,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    logError("services/kubernetes/clusters/update_project", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

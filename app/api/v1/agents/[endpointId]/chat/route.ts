@@ -33,6 +33,7 @@ import {
 } from '@/lib/ai';
 import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 import type { ChunkSearchResult } from '@/lib/ai/types';
 
 // Type for clients that support streaming
@@ -167,8 +168,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const validation = chatRequestSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('POST /api/v1/agents/[endpointId]/chat validation', validation.error);
       return NextResponse.json(
-        { error: 'Invalid request', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }
@@ -438,7 +440,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'error',
-                error: error instanceof Error ? error.message : 'Streaming error'
+                error: 'Streaming error'
               })}\n\n`)
             );
             controller.close();
@@ -544,7 +546,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     console.error('[Agent Chat] Error:', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

@@ -6,6 +6,7 @@ import { addHostRoute } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
+import { BillingCredits } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -234,7 +235,7 @@ export async function POST(req: NextRequest) {
   // 1. Find all active hosts in the requested region
   const { data: regionHosts, error: regionErr } = await supabase
     .from("proxmox_hosts")
-    .select("*")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb")
     .eq("region", region)
     .eq("is_active", true);
 
@@ -469,6 +470,17 @@ export async function POST(req: NextRequest) {
 
   const hourlyCost = calculateHourlyCost(serverSpecs);
   const minimumHours = 1;
+
+  // Balance check — user must have at least 1 hour of credit before provisioning
+  const minimumBalance = hourlyCost * minimumHours;
+  const hasFunds = await BillingCredits.hasSufficientBalance(user.id, minimumBalance);
+  if (!hasFunds) {
+    if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+    return Response.json(
+      { ok: false, error: `Insufficient balance. You need at least $${minimumBalance.toFixed(2)} to create this server.` },
+      { status: 402 }
+    );
+  }
 
   const gateway = cfg.gateway_ip || undefined;
   const dns1 = cfg.dns_primary || "8.8.8.8";

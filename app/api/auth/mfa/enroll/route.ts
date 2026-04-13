@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 // Rate limiter: 3 enrollments per minute per user
 const limiter = rateLimit({
@@ -82,13 +83,10 @@ export async function POST(req: NextRequest) {
           }));
         }
       } catch (cleanupError) {
-        console.error("Enrollment cleanup error:", cleanupError);
+          logError("POST /api/auth/mfa/enroll cleanup", cleanupError);
         return NextResponse.json(
           {
-            error:
-              cleanupError instanceof Error
-                ? cleanupError.message
-                : "Failed to clean up existing factors",
+            error: sanitizeAuthError(cleanupError),
           },
           { status: 500 }
         );
@@ -96,9 +94,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (enrollError) {
-      console.error("MFA enrollment error:", enrollError);
+      logError("POST /api/auth/mfa/enroll", enrollError);
       return NextResponse.json(
-        { error: enrollError.message },
+        { error: sanitizeAuthError(enrollError) },
         { status: 400 }
       );
     }
@@ -124,11 +122,10 @@ export async function POST(req: NextRequest) {
       uri: data.totp.uri,
     });
   } catch (error) {
-    console.error("MFA enrollment error:", error);
+    logError("POST /api/auth/mfa/enroll", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to enroll MFA",
+        error: sanitizeAuthError(error),
       },
       { status: 500 }
     );

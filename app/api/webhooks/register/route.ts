@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUser } from '@/lib/supabase/auth';
 import { Platform_Apps, Platform_App_Webhooks } from '@/lib/supabase/queries';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 import { WebhookManager } from '@/lib/services/webhook-manager';
 
 export async function POST(req: NextRequest) {
@@ -100,10 +101,9 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error('[Webhook Register] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logError('POST /api/webhooks/register', error);
     return NextResponse.json({ 
-      error: errorMessage 
+      error: sanitizeError(error) 
     }, { status: 500 });
   }
 }
@@ -155,10 +155,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ apps: appsWithWebhooks });
 
   } catch (error: unknown) {
-    console.error('[Webhook List] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logError('GET /api/webhooks/register', error);
     return NextResponse.json({ 
-      error: errorMessage 
+      error: sanitizeError(error) 
     }, { status: 500 });
   }
 }
@@ -217,10 +216,9 @@ export async function DELETE(req: NextRequest) {
     });
 
   } catch (error: unknown) {
-    console.error('[Webhook Delete] Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    logError('DELETE /api/webhooks/register', error);
     return NextResponse.json({ 
-      error: errorMessage 
+      error: sanitizeError(error) 
     }, { status: 500 });
   }
 }
