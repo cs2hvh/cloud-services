@@ -20,7 +20,7 @@ export async function POST(
   const body = await req.json().catch(() => null);
   const { data, error } = await supabase
     .from("clusters")
-    .select("*")
+    .select("create_droplet, create_status, connect_status, verify_status, status")
     .eq("cluster_id", body.clusterId)
     .single<Row>();
 

@@ -356,23 +356,28 @@ Tasks:
 
 ---
 
-### Step 4: Fix `select("*")` Queries ⬜
+### Step 4: Fix `select("*")` Queries ✅
 **Priority:** 🔴 Critical  
 **Tables affected:** proxmox_hosts, clusters, database_clusters, user_profiles
 
-| File | Line | Table | Safe Columns | Status |
-|------|------|-------|--------------|--------|
-| `compute/vms/[id]/console/route.ts` | 90 | proxmox_hosts | See reference | ⬜ |
-| `compute/vms/[id]/metrics/route.ts` | 126 | proxmox_hosts | See reference | ⬜ |
-| `admin/servers/route.ts` | 176, 251, 333 | proxmox_hosts | See reference | ⬜ |
-| `admin/proxmox/vms/create/route.ts` | 223 | proxmox_hosts | See reference | ⬜ |
-| `admin/proxmox/test-connection/route.ts` | 85 | proxmox_hosts | See reference | ⬜ |
-| `compute/vms/create/route.ts` | 237 | servers | Review | ⬜ |
-| `admin/users/[id]/route.ts` | 57 | user_profiles | See reference | ⬜ |
-| `admin/users/route.ts` | 201 | user_profiles | See reference | ⬜ |
-| `admin/databases/route.ts` | 181 | database_clusters | See reference | ⬜ |
-| `kubernetes/clusters/update-status/route.ts` | 34 | clusters | See reference | ⬜ |
-| `kubernetes/clusters/ready_by_id/route.ts` | 23 | clusters | See reference | ⬜ |
+| File | Line | Table | Status |
+|------|------|-------|--------|
+| `compute/vms/[id]/console/route.ts` | 90 | proxmox_hosts | ✅ |
+| `compute/vms/[id]/metrics/route.ts` | 126 | proxmox_hosts | ✅ |
+| `admin/servers/route.ts` | 251, 333 | proxmox_hosts | ✅ |
+| `admin/proxmox/vms/create/route.ts` | 223 | proxmox_hosts | ✅ |
+| `admin/proxmox/test-connection/route.ts` | 85 | proxmox_hosts | ✅ |
+| `compute/vms/create/route.ts` | 237 | proxmox_hosts | ✅ |
+| `admin/databases/route.ts` | 181 | database_cluster | ✅ |
+| `kubernetes/clusters/update-status/route.ts` | 34 | clusters | ✅ |
+| `kubernetes/clusters/ready_by_id/route.ts` | 23 | clusters | ✅ |
+
+**Notes:**
+- proxmox_hosts: credentials still selected server-side (needed for Proxmox API calls) but never returned to client
+- database_cluster: `password` and `ca_certificate` stripped from PUT response with `Object.fromEntries` filter
+- clusters: only fields actually used are now selected
+
+**Completed:** April 13, 2026
 
 ---
 
@@ -476,7 +481,7 @@ bio, discord, steam - Check privacy settings
 | 1 | Create Error Sanitizer Utility | 4 tasks | 4 | ✅ |
 | 2 | Fix Auth Routes Error Messages | 8 files | 8 | ✅ |
 | 3 | Fix Validation Error Exposure | 8 files | 8 | ✅ |
-| 4 | Fix `select("*")` Queries | 11 queries | 0 | ⬜ |
+| 4 | Fix `select("*")` Queries | 11 queries | 9 | ✅ |
 | 5 | Filter API Response Data | 3 files | 0 | ⬜ |
 | 6 | Fix Webhook Error Responses | 5 files | 0 | ⬜ |
 | 7 | Audit All Admin Routes | 34 routes | 0 | ⬜ |
@@ -488,7 +493,7 @@ bio, discord, steam - Check privacy settings
 
 ## Quick Start - Next Action
 
-**Current Step:** Step 4 - Fix `select("*")` Queries on sensitive tables
+**Current Step:** Step 5 - Filter API Response Data (`auth/profile/read`, `admin/users`)
 
 ---
 

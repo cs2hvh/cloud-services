@@ -191,7 +191,12 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({
       message: "Database updated successfully",
-      data,
+      // Strip credentials — never return password or ca_certificate to client
+      data: Object.fromEntries(
+        Object.entries(data as Record<string, unknown>).filter(
+          ([k]) => k !== "password" && k !== "ca_certificate"
+        )
+      ),
     });
   } catch (err) {
     console.error("[Admin API] Unexpected error:", err);

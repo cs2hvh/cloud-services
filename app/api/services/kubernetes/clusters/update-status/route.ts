@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     // Get current cluster data
     const { data: cluster, error: fetchError } = await supabase
       .from("clusters")
-      .select("*")
+      .select("cluster_id, status, owner_id, create_droplet, project_id, cluster_name")
       .eq("cluster_id", cluster_id)
       .single();
 

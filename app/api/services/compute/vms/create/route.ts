@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
   // 1. Find all active hosts in the requested region
   const { data: regionHosts, error: regionErr } = await supabase
     .from("proxmox_hosts")
-    .select("*")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password, region, is_active, total_cpu_cores, total_memory_mb, total_disk_gb")
     .eq("region", region)
     .eq("is_active", true);
 

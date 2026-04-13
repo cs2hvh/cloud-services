@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
     // Verify host exists and is active
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("*")
+      .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, template_vmid, gateway_ip, dns_primary, dns_secondary, token_id, token_secret, username, password")
       .eq("id", body.hostId)
       .eq("is_active", true)
       .single();

@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     // Get host configuration
     const { data: host, error: hostErr } = await supabase
       .from("proxmox_hosts")
-      .select("*")
+      .select("id, name, host_url, allow_insecure_tls, node, token_id, token_secret, username, password")
       .eq("id", hostId)
       .maybeSingle();
 
