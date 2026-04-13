@@ -138,7 +138,9 @@ export async function POST(request: Request) {
     const identity = user.identities?.find((id) => id.provider === provider);
     if (identity) {
       const response = await supabase.auth.unlinkIdentity(identity);
-      if (response.error !== null) {          logError("POST /api/auth/link disconnect", response.error);        return NextResponse.json({ error: sanitizeAuthError(response.error) }, { status: 400 });
+      if (response.error !== null) {
+        logError("POST /api/auth/link disconnect", response.error);
+        return NextResponse.json({ error: sanitizeAuthError(response.error) }, { status: 400 });
       }
     }
     

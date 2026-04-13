@@ -137,37 +137,42 @@ export function sanitizeAuthError(error: unknown): string {
 /**
  * Sanitize Zod validation errors.
  * Dev:  returns full path + message per field for easy debugging.
- * Prod: returns only field names (never validation logic details).
+ * Prod: returns only field names with no validation message details.
+ *
+ * Response shape: { error: string; details?: Array<{path?: string[]; message?: string}> }
+ * Matches what frontend consumers expect from .details
  */
 export function sanitizeValidationError(
   errors: Array<{ path?: (string | number)[]; message?: string }>
-): { error: string; fields?: string[] } {
+): { error: string; details?: Array<{ path?: string[]; message?: string }> } {
   if (!Array.isArray(errors) || errors.length === 0) {
     return { error: SAFE_MESSAGES.validation_error };
   }
 
   if (isDev) {
+    // Full detail for debugging
     return {
       error: "Validation error",
-      fields: errors.map((e) =>
-        e.path?.length
-          ? `${e.path.join(".")}: ${e.message ?? "invalid"}`
-          : (e.message ?? "invalid")
-      ),
+      details: errors.map((e) => ({
+        path: e.path?.map(String),
+        message: e.message ?? "invalid",
+      })),
     };
   }
 
-  // Prod: only expose top-level field names, deduplicated
-  const fieldNames = Array.from(
-    new Set(
-      errors
-        .map((e) => e.path?.[0]?.toString())
-        .filter((f): f is string => Boolean(f))
-    )
-  );
+  // Prod: expose field names only — no validation messages (they reveal schema logic)
+  const seen = new Set<string>();
+  const details: Array<{ path: string[] }> = [];
+  for (const e of errors) {
+    const fieldName = e.path?.[0]?.toString();
+    if (fieldName && !seen.has(fieldName)) {
+      seen.add(fieldName);
+      details.push({ path: [fieldName] });
+    }
+  }
 
   return {
     error: SAFE_MESSAGES.validation_error,
-    ...(fieldNames.length > 0 && { fields: fieldNames }),
+    ...(details.length > 0 && { details }),
   };
 }
