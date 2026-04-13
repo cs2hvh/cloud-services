@@ -49,6 +49,9 @@ const SENSITIVE_PATTERNS = [
   /stack.*trace|at line \d+/i,
   /\.(ts|js):\d+/,
   /node_modules/i,
+  /jwt|bearer|token|secret|password|credential/i,
+  /relation .* does not exist|column .* does not exist/i,
+  /\/home\/|\/var\/|\/usr\/|\/etc\//i,
 ];
 
 function hasSensitiveContent(message: string): boolean {
@@ -96,7 +99,9 @@ export function sanitizeError(
     return SAFE_MESSAGES[fallbackKey];
   }
 
-  // No recognised safe content — return the fallback rather than leaking unknown messages
+  // Always return fallback in production for unknown errors.
+  // Routes with controlled user-facing messages (e.g. AppOperationError)
+  // should return err.message directly instead of calling sanitizeError.
   return SAFE_MESSAGES[fallbackKey];
 }
 
@@ -160,19 +165,19 @@ export function sanitizeValidationError(
     };
   }
 
-  // Prod: expose field names only — no validation messages (they reveal schema logic)
+  // Prod: expose field names + safe message — no schema-revealing Zod internals
   const seen = new Set<string>();
-  const details: Array<{ path: string[] }> = [];
+  const details: Array<{ path: string[]; message: string }> = [];
   for (const e of errors) {
     const fieldName = e.path?.[0]?.toString();
     if (fieldName && !seen.has(fieldName)) {
       seen.add(fieldName);
-      details.push({ path: [fieldName] });
+      details.push({ path: [fieldName], message: "invalid" });
     }
   }
 
   return {
-    error: SAFE_MESSAGES.validation_error,
+    error: "Validation error",
     ...(details.length > 0 && { details }),
   };
 }

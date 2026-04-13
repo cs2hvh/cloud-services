@@ -32,12 +32,12 @@ function scheduleActivationRun(params: {
         domainId: params.domainId,
         userId: params.actor.userId,
       });
-    } catch {
+    } catch (activateErr: unknown) {
       console.error("[domains.activate] Background activation failed", {
         operationId: params.operationId,
         domainId: params.domainId,
         userId: params.actor.userId,
-        error: "Unknown error",
+        error: activateErr instanceof Error ? activateErr.message : String(activateErr),
       });
     }
   };
