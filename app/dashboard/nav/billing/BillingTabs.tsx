@@ -322,7 +322,7 @@ export default function BillingTabs({
               <button
                 disabled={loadingTopup}
                 type="submit"
-                className="cursor-pointer w-full px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+                className="cursor-pointer inline-flex items-center justify-center px-4 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {loadingTopup ? (paymentMethod === "crypto" ? "Processing..." : "Redirecting to Stripe...") : "Pay"}
               </button>
