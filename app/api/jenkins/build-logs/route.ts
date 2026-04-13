@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
+import { authenticateUser } from "@/lib/auth/server-auth";
 
 /**
  * GET /api/jenkins/build-logs?app=myapp&build=1&start=0
