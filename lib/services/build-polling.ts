@@ -18,6 +18,8 @@ export interface BuildPollConfig {
   appName: string;
   buildNumber: number;
   userId?: string;
+  userEmail?: string;
+  operationId?: string; // required for resize: the DB record ID to update by
   trigger?: 'manual' | 'webhook' | 'rollback' | 'resize';
   resizeContext?: {
     previousSize: 'small' | 'medium' | 'large';
@@ -113,6 +115,7 @@ export class BuildPollingService {
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     desiredSize?: PlatformAppSize | null;
     userId?: string; // Optional: for audit logging during recovery
+    operationId?: string; // Required for resize: the DB record UUID
   }): Promise<{
     success: boolean;
     recovered: boolean;
@@ -121,7 +124,7 @@ export class BuildPollingService {
     message?: string;
     error?: string;
   }> {
-    const { appId, appName, buildNumber, trigger, desiredSize, userId } = params;
+    const { appId, appName, buildNumber, trigger, desiredSize, userId, operationId } = params;
 
     const resizeContext =
       trigger === 'resize'
@@ -131,7 +134,7 @@ export class BuildPollingService {
     let buildStatus: Awaited<ReturnType<typeof JenkinsService.checkBuildStatus>>;
 
     try {
-      buildStatus = await JenkinsService.checkBuildStatus(appName, buildNumber);
+      buildStatus = await this.checkBuildStatusForTrigger(appName, buildNumber, trigger);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('not found')) {
@@ -141,6 +144,7 @@ export class BuildPollingService {
           appId,
           appName,
           buildNumber,
+          operationId,
           trigger,
           status: 'failed',
           failureReason,
@@ -177,8 +181,10 @@ export class BuildPollingService {
       buildStatus,
       buildNumber,
       userId, // userId now optionally available from recovery context
+      undefined, // userEmail not available in recovery context
       trigger,
-      resizeContext
+      resizeContext,
+      operationId
     );
 
     return {
@@ -193,6 +199,7 @@ export class BuildPollingService {
       appId: string;
       appName: string;
       buildNumber?: number;
+      operationId?: string;
       trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
       status: 'success' | 'failed';
       failureReason?: string | null;
@@ -204,13 +211,15 @@ export class BuildPollingService {
       appId,
       appName,
       buildNumber,
+      operationId,
       trigger,
       status,
       failureReason,
       allowedCurrentStatuses,
     } = params;
 
-    if (!buildNumber) return;
+    // For resize, operationId is the identity; for all others, buildNumber is required
+    if (!buildNumber && !operationId) return;
 
     const imageIdentity =
       status === 'success' ? await this.getCurrentImageIdentity(appName) : {};
@@ -219,6 +228,7 @@ export class BuildPollingService {
       appId,
       appName,
       buildNumber,
+      operationId,
       trigger,
       status,
       failureReason: status === 'failed' ? (failureReason ?? null) : null,
@@ -233,12 +243,43 @@ export class BuildPollingService {
    * Start polling for build status
    * Runs in background and updates database when complete
    */
+  private static async logResizeAudit(params: {
+    appId: string;
+    appName: string;
+    userId: string;
+    userEmail?: string;
+    resizeContext: NonNullable<BuildPollConfig['resizeContext']>;
+    trigger: string;
+    status: 'success' | 'failed';
+    failureReason?: string;
+  }): Promise<void> {
+    try {
+      const { AuditLogService } = await import('@/lib/audit');
+      await AuditLogService.create({
+        user_id: params.userId,
+        user_role: 'user',
+        ...(params.userEmail ? { user_email: params.userEmail } : {}),
+        action: 'update',
+        service_type: 'platform_apps',
+        service_id: params.appId,
+        service_name: params.appName,
+        before_state: { size: params.resizeContext.previousSize },
+        after_state: params.status === 'success' ? { size: params.resizeContext.targetSize } : undefined,
+        metadata: { update_type: 'resize', trigger: params.trigger, status: params.status, ...(params.failureReason ? { failure_reason: params.failureReason } : {}) },
+      });
+    } catch (auditErr) {
+      console.warn(`[BuildPolling] ⚠️ Failed to create audit log for resize:`, auditErr);
+    }
+  }
+
   static async startPolling(config: BuildPollConfig): Promise<void> {
     const {
       appId,
       appName,
       buildNumber,
       userId,
+      userEmail,
+      operationId,
       trigger = 'manual',
       resizeContext,
       maxPolls = this.DEFAULT_MAX_POLLS,
@@ -257,6 +298,8 @@ export class BuildPollingService {
         appName,
         buildNumber,
         userId,
+        userEmail,
+        operationId,
         trigger,
         resizeContext,
         maxPolls,
@@ -276,6 +319,8 @@ export class BuildPollingService {
     appName: string;
     buildNumber: number;
     userId?: string;
+    userEmail?: string;
+    operationId?: string;
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
     resizeContext?: BuildPollConfig['resizeContext'];
     maxPolls: number;
@@ -284,19 +329,19 @@ export class BuildPollingService {
     pollCount: number;
     buildFound: boolean;
   }): Promise<void> {
-    const { appId, appName, buildNumber, userId, trigger, maxPolls, pollInterval, resizeContext } = context;
+    const { appId, appName, buildNumber, userId, userEmail, operationId, trigger, maxPolls, pollInterval, resizeContext } = context;
     let { pollCount, buildFound } = context;
 
     pollCount++;
 
     // Check for timeout
     if (pollCount > maxPolls) {
-      await this.handleTimeout(appId, appName, pollCount, pollInterval, buildNumber, trigger, resizeContext);
+      await this.handleTimeout(appId, appName, pollCount, pollInterval, buildNumber, trigger, resizeContext, operationId);
       return;
     }
 
     try {
-      const buildStatus = await JenkinsService.checkBuildStatus(appName, buildNumber);
+      const buildStatus = await this.checkBuildStatusForTrigger(appName, buildNumber, trigger);
 
       // Mark build as found on first successful poll
       if (!buildFound) {
@@ -309,7 +354,7 @@ export class BuildPollingService {
 
       // Check if build is complete
       if (!buildStatus.building) {
-        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber, userId, trigger, resizeContext);
+        await this.handleBuildComplete(appId, appName, buildStatus, buildNumber, userId, userEmail, trigger, resizeContext, operationId);
         return;
       }
 
@@ -343,8 +388,10 @@ export class BuildPollingService {
     buildStatus: { status: string; result: string | null; building: boolean },
     buildNumber?: number,
     userId?: string,
+    userEmail?: string,
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
-    resizeContext?: BuildPollConfig['resizeContext']
+    resizeContext?: BuildPollConfig['resizeContext'],
+    operationId?: string
   ): Promise<void> {
     console.log(`[BuildPolling] ✅ Build complete for ${appName}`);
     console.log(`[BuildPolling] Final status: ${buildStatus.status} (result: ${buildStatus.result || 'unknown'})`);
@@ -364,12 +411,16 @@ export class BuildPollingService {
         appId,
         appName,
         buildNumber,
+        operationId,
         trigger,
         status: 'failed',
         failureReason,
         allowedCurrentStatuses: ['building'],
         resizeContext,
       });
+      if (trigger === 'resize' && resizeContext && userId) {
+        await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
+      }
       console.log(`[BuildPolling] App status set to failed for build #${buildNumber ?? 'unknown'}`);
       return;
     }
@@ -393,45 +444,23 @@ export class BuildPollingService {
             appId,
             appName,
             buildNumber,
+            operationId,
             trigger,
             status: 'failed',
             failureReason,
             allowedCurrentStatuses: ['building', 'success'],
             resizeContext,
           });
+          if (userId) {
+            await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
+          }
           return;
         }
       }
 
-      // Update billing rate for successful resize (after verification, before marking as running)
-      if (trigger === 'resize' && resizeContext?.targetSize && userId) {
-        try {
-          const { Billing } = await import('@/lib/supabase/queries/billing');
-          const { getRatesForPlatformApp } = await import('@/config/pricing');
-          const { hourlyRate } = await getRatesForPlatformApp(resizeContext.targetSize);
-          await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });
-          console.log(`[BuildPolling] ✅ Billing rate updated for resize to ${resizeContext.targetSize} (${hourlyRate}/hr)`);
-        } catch (billingErr) {
-          console.warn(`[BuildPolling] ⚠️ Failed to update billing rate for successful resize:`, billingErr);
-          // Don't fail the entire build - the app is healthy and resized, billing update is secondary
-        }
-
-        try {
-          const { AuditLogService } = await import('@/lib/audit');
-          await AuditLogService.create({
-            user_id: userId,
-            user_role: 'user',
-            action: 'update',
-            service_type: 'platform_apps',
-            service_id: appId,
-            service_name: appName,
-            after_state: { size: resizeContext.targetSize },
-            metadata: { update_type: 'resize', trigger },
-          });
-        } catch (auditErr) {
-          console.warn(`[BuildPolling] ⚠️ Failed to create audit log for resize:`, auditErr);
-        }
-      }
+      // Billing rate update + app.size update + lock release all happen in
+      // finalizeBuildRecord → AppOperationFinalizer → AppBuildSideEffectsService
+      // No need to handle them inline here.
 
       console.log(`[BuildPolling] ✅ App ${appName} is healthy and running`);
       // Use AppStatusService for consistent status management
@@ -446,11 +475,16 @@ export class BuildPollingService {
         appId,
         appName,
         buildNumber,
+        operationId,
         trigger,
         status: 'success',
         allowedCurrentStatuses: ['building'],
         resizeContext,
       });
+      // Audit log fires after finalization so it only records confirmed outcomes
+      if (trigger === 'resize' && resizeContext && userId) {
+        await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'success' });
+      }
 
       console.log(`[BuildPolling] ✅ Build #${buildNumber} confirmed healthy`);
     } else {
@@ -468,12 +502,16 @@ export class BuildPollingService {
         appId,
         appName,
         buildNumber,
+        operationId,
         trigger,
         status: 'failed',
         failureReason,
         allowedCurrentStatuses: ['building', 'success'],
         resizeContext,
       });
+      if (trigger === 'resize' && resizeContext && userId) {
+        await this.logResizeAudit({ appId, appName, userId, userEmail, resizeContext, trigger, status: 'failed', failureReason });
+      }
       
       console.log(`[BuildPolling] 📝 Recorded health-check failure for build #${buildNumber ?? 'unknown'}`);
     }
@@ -539,7 +577,8 @@ export class BuildPollingService {
     pollInterval: number,
     buildNumber?: number,
     trigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
-    resizeContext?: BuildPollConfig['resizeContext']
+    resizeContext?: BuildPollConfig['resizeContext'],
+    operationId?: string
   ): Promise<void> {
     const timeoutMinutes = Math.floor((pollCount * pollInterval) / 60000);
     const failureReason = `Build timeout: No response after ${timeoutMinutes} minutes`;
@@ -557,6 +596,7 @@ export class BuildPollingService {
       appId,
       appName,
       buildNumber,
+      operationId,
       trigger,
       status: 'failed',
       failureReason,
@@ -575,6 +615,7 @@ export class BuildPollingService {
       appName: string;
       buildNumber: number;
       trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
+      operationId?: string;
       resizeContext?: BuildPollConfig['resizeContext'];
       maxPolls: number;
       pollInterval: number;
@@ -612,6 +653,7 @@ export class BuildPollingService {
           appId,
           appName,
           buildNumber: context.buildNumber,
+          operationId: context.operationId,
           trigger: context.trigger,
           status: 'failed',
           failureReason,
@@ -658,5 +700,20 @@ export class BuildPollingService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Dispatch to the correct Jenkins check method based on trigger type.
+   * Resize uses the dedicated resize job; everything else uses the main app job.
+   */
+  private static checkBuildStatusForTrigger(
+    appName: string,
+    buildNumber: number,
+    trigger: 'manual' | 'webhook' | 'rollback' | 'resize',
+  ) {
+    if (trigger === 'resize') {
+      return JenkinsService.checkResizeBuildStatus(appName, buildNumber);
+    }
+    return JenkinsService.checkBuildStatus(appName, buildNumber);
   }
 }
