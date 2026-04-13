@@ -381,37 +381,75 @@ Tasks:
 
 ---
 
-### Step 5: Filter API Response Data ⬜
+### Step 5: Filter API Response Data ✅
 **Priority:** 🟠 High
 
 | File | Issue | Fix | Status |
 |------|-------|-----|--------|
-| `auth/profile/read/route.ts` | Returns `identities` array | Remove or filter | ⬜ |
-| `admin/users/route.ts` | Maps auth emails | Filter sensitive fields | ⬜ |
-| `admin/users/[id]/route.ts` | Full user data | Filter sensitive fields | ⬜ |
+| `auth/profile/read/route.ts` | Returns full `identities` (OAuth tokens) + raw error catch | Removed `identities`, added `logError`+`sanitizeError` | ✅ |
+| `admin/users/route.ts` | `select("*")` on user_profiles (GET + PATCH) | Explicit cols: id, username, display_name, avatar, roles, suspend, created_at | ✅ |
+| `admin/users/[id]/route.ts` | `select("*")` on user_profiles | Same explicit column list | ✅ |
+
+**Completed:** April 13, 2026
 
 ---
 
-### Step 6: Fix Webhook Error Responses ⬜
+### Step 6: Fix Webhook Error Responses ✅
 **Priority:** 🟡 Medium
 
 | File | Lines | Status |
 |------|-------|--------|
-| `webhooks/git/github/route.ts` | 254 | ⬜ |
-| `webhooks/git/gitlab/route.ts` | 244 | ⬜ |
-| `webhooks/git/bitbucket/route.ts` | 244 | ⬜ |
-| `webhooks/register/route.ts` | 104, 159 | ⬜ |
-| `billing/webhook/route.ts` | Review | ⬜ |
+| `webhooks/git/github/route.ts` | 254 | ✅ |
+| `webhooks/git/gitlab/route.ts` | 244 | ✅ |
+| `webhooks/git/bitbucket/route.ts` | 244 | ✅ |
+| `webhooks/register/route.ts` | 104, 159, 221 (3 catch blocks) | ✅ |
+| `billing/webhook/route.ts` | Reviewed — response bodies use static strings; `err.message` only goes to internal DB audit function | ✅ no change needed |
+
+**Also fixed:** `auth/link/route.ts` line 141 — code collapse formatting corrected  
+**Completed:** April 13, 2026
 
 ---
 
-### Step 7: Audit All Admin Routes ⬜
+### Step 7: Audit All Admin Routes ✅
 **Priority:** 🟠 High  
-**Routes:** 34 total
+**Routes:** 30 audited
 
-- [ ] Verify all use `requireAdmin()` or role checks
-- [ ] Ensure no credentials in responses
-- [ ] Review `select()` statements
+**Findings & Fixes:**
+
+| File | Issue | Status |
+|------|-------|--------|
+| `admin/products/route.ts` | Local `getErrorMessage()` helper leaked `error.message` in 4 responses (GET/POST/PUT/DELETE) | ✅ Replaced with `sanitizeError` |
+| `admin/pricing/promos/route.ts` | Same local helper, 4 responses | ✅ Replaced |
+| `admin/pricing/categories/route.ts` | Same local helper, 4 responses | ✅ Replaced |
+| `admin/audit-logs/route.ts` | `details: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/audit-logs/[logId]/route.ts` | `details: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/audit-logs/stats/route.ts` | `details: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/cluster-metrics/route.ts` | `error: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/cluster/fix-coredns/route.ts` | `detail: message` (raw) + stack pattern in response | ✅ Fixed |
+| `admin/network-ddos/apps/delete/route.ts` | `message: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/object-storage/buckets/delete/route.ts` | `message: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/object-storage/buckets/read-all/route.ts` | `message: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/kubernetes/clusters/delete/route.ts` | `message: errorMessage` (raw) in response | ✅ Fixed |
+| `admin/ai-agents/agents/route.ts` | `err.message` in response | ✅ Fixed |
+| `admin/ai-agents/users/route.ts` | `err.message` in response | ✅ Fixed |
+| `admin/ai-agents/stats/route.ts` | `err.message` in response | ✅ Fixed |
+| `admin/coupons/route.ts` | `error.message` in 4 responses | ✅ Fixed |
+| `admin/database/assign/route.ts` | Raw `e.message` in billing error detail | ✅ Fixed |
+| `admin/database-options/route.ts` | `error.response?.data?.message \|\| error.message` in response | ✅ Fixed |
+| `admin/proxmox/test-connection/route.ts` | `err.message` + `err.stack` exposed in response | ✅ Fixed (stack removed) |
+| `admin/proxmox/hosts/route.ts` | Reviewed — response bodies already use static strings | ✅ No change needed |
+| `admin/users/route.ts` | Already fixed in Step 5 | ✅ |
+| `admin/users/[id]/route.ts` | Already fixed in Step 5 | ✅ |
+| `admin/databases/route.ts` | Already fixed in Step 4/5 | ✅ |
+| `admin/proxmox/vms/create/route.ts` | Already fixed in Step 4 | ✅ |
+| `admin/servers/route.ts` | Already fixed in Step 4 | ✅ |
+| `admin/ai-agents/models/route.ts` | `console.error` only (not in response body) | ✅ No change needed |
+| `admin/ai-agents/models/[id]/route.ts` | `console.error` only (not in response body) | ✅ No change needed |
+| `admin/support/tickets/route.ts` | `console.error` only | ✅ No change needed |
+| `admin/support/tickets/[ticketId]/route.ts` | `console.error` only | ✅ No change needed |
+| `admin/proxmox/vms/create/route.ts` | `provisionErr.message` goes to DB status update, not response | ✅ No change needed |
+
+**Completed:** April 13, 2026
 
 ---
 

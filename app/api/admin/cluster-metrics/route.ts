@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { PrometheusService, ClusterMetrics } from "@/lib/services/prometheus";
 import { createClient } from "@/lib/supabase/server";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Helper function to check if user is admin
 async function checkAdminAuth() {
@@ -46,10 +47,9 @@ export async function GET() {
       data: metrics,
     });
   } catch (error: unknown) {
-    console.error("[Admin Cluster Metrics] Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    logError("GET /api/admin/cluster-metrics", error);
     return NextResponse.json(
-      { error: errorMessage },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

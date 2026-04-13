@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { requireAdmin } from '@/lib/supabase/auth';
+import { logError, sanitizeError } from '@/lib/api/error-sanitizer';
 
 export const dynamic = 'force-dynamic';
 
@@ -155,9 +156,9 @@ export async function GET() {
       },
     });
   } catch (err) {
-    console.error('[Admin AI Agents Stats] Error:', err);
+    logError('GET /api/admin/ai-agents/stats', err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to fetch stats' },
+      { error: sanitizeError(err) },
       { status: 500 }
     );
   }

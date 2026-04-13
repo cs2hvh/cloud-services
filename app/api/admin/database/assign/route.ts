@@ -12,6 +12,7 @@ import { DatabaseUser } from "@/lib/supabase/types";
 import { createClient } from "@/lib/supabase/server";
 import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
 import { getRatesForDatabase } from "@/config/pricing";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 interface database_error {
   response: {
@@ -193,17 +194,11 @@ export async function POST(req: NextRequest) {
             addActive: Billing.add_active_database,
           });
         } catch (e) {
-          const message =
-            e instanceof Error
-              ? e.message
-              : typeof e === "string"
-                ? e
-                : JSON.stringify(e);
-
+          logError("POST /api/admin/database/assign billing", e);
           return NextResponse.json(
             {
               error: "Post-provision billing failed",
-              details: message,
+              details: sanitizeError(e),
             },
             { status: 500 }
           );
