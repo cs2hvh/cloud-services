@@ -28,7 +28,7 @@ export async function GET() {
     // List all factors
     const factors = await supabase.auth.mfa.listFactors();
     if (factors.error) {
-        logError("GET /api/auth/mfa/status listFactors", factors.error);
+      logError("GET /api/auth/mfa/status listFactors", factors.error);
       return NextResponse.json(
         { error: sanitizeAuthError(factors.error) },
         { status: 400 }

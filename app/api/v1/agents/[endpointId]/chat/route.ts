@@ -33,6 +33,7 @@ import {
 } from '@/lib/ai';
 import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 import type { ChunkSearchResult } from '@/lib/ai/types';
 
 // Type for clients that support streaming
@@ -167,8 +168,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const validation = chatRequestSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('POST /api/v1/agents/[endpointId]/chat validation', validation.error);
       return NextResponse.json(
-        { error: 'Invalid request', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

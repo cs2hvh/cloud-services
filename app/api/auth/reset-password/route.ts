@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { reset_password_schema } from "@/types/zod/password-reset";
 import { OTPs } from "@/lib/supabase/queries/otps";
+import { sanitizeValidationError, logError } from "@/lib/api/error-sanitizer";
 import { Users } from "@/lib/supabase/queries/users";
 
 /**
@@ -15,11 +16,9 @@ export async function POST(request: NextRequest) {
     // Validate request body
     const validation = reset_password_schema.safeParse(body);
     if (!validation.success) {
+      logError('POST /api/auth/reset-password validation', validation.error);
       return NextResponse.json(
-        { 
-          message: "Invalid request data",
-          errors: validation.error.errors 
-        },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

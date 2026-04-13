@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     // Create challenge
     const challenge = await supabase.auth.mfa.challenge({ factorId });
     if (challenge.error) {
-        logError("POST /api/auth/mfa/verify challenge", challenge.error);
+      logError("POST /api/auth/mfa/verify challenge", challenge.error);
       return NextResponse.json(
         { error: sanitizeAuthError(challenge.error) },
         { status: 400 }
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
         );
       }
       
-        logError("POST /api/auth/mfa/verify", verify.error);
+      logError("POST /api/auth/mfa/verify", verify.error);
       return NextResponse.json(
         { error: sanitizeAuthError(verify.error) },
         { status: 400 }

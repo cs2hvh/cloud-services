@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-        logError("POST /api/auth/mfa/unenroll", unenroll.error);
+      logError("POST /api/auth/mfa/unenroll", unenroll.error);
       return NextResponse.json(
         { error: sanitizeAuthError(unenroll.error) },
         { status: 400 }

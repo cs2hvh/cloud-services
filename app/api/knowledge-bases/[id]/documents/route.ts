@@ -22,6 +22,7 @@ import {
 } from '@/lib/ai/document-parsers';
 import { createServiceClient } from '@/lib/supabase/server';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 // Validation schema for JSON body (text/URL sources)
 const addDocumentSchema = z.object({
@@ -154,8 +155,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const validation = addDocumentSchema.safeParse(body);
       
       if (!validation.success) {
+        logError('POST /api/knowledge-bases/[id]/documents validation', validation.error);
         return NextResponse.json(
-          { error: 'Validation error', details: validation.error.errors },
+          sanitizeValidationError(validation.error.errors),
           { status: 400 }
         );
       }

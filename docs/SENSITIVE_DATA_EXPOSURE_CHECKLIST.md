@@ -336,20 +336,23 @@ Tasks:
 
 ---
 
-### Step 3: Fix Validation Error Exposure ⬜
+### Step 3: Fix Validation Error Exposure ✅
 **Priority:** 🟠 High  
 **Routes to fix:** 8 files
 
 | File | Lines | Status |
 |------|-------|--------|
-| `ai-agents/route.ts` | 117-119 | ⬜ |
-| `ai-agents/[id]/route.ts` | 129 | ⬜ |
-| `ai-agents/[id]/test/route.ts` | 84 | ⬜ |
-| `knowledge-bases/route.ts` | 91 | ⬜ |
-| `knowledge-bases/[id]/route.ts` | 118 | ⬜ |
-| `knowledge-bases/[id]/documents/route.ts` | 158 | ⬜ |
-| `v1/agents/[endpointId]/chat/route.ts` | 171 | ⬜ |
-| `auth/reset-password/route.ts` | 21 | ⬜ |
+| `ai-agents/route.ts` | 117-119 | ✅ |
+| `ai-agents/[id]/route.ts` | 129 | ✅ |
+| `ai-agents/[id]/test/route.ts` | 84 | ✅ |
+| `knowledge-bases/route.ts` | 91 | ✅ |
+| `knowledge-bases/[id]/route.ts` | 118 | ✅ |
+| `knowledge-bases/[id]/documents/route.ts` | 158 | ✅ |
+| `v1/agents/[endpointId]/chat/route.ts` | 171 | ✅ |
+| `auth/reset-password/route.ts` | 21 | ✅ |
+
+**Also fixed:** Removed debug `console.log` body dump in `ai-agents/route.ts`  
+**Completed:** April 13, 2026
 
 ---
 
@@ -472,7 +475,7 @@ bio, discord, steam - Check privacy settings
 |------|-------------|-------|-----------|--------|
 | 1 | Create Error Sanitizer Utility | 4 tasks | 4 | ✅ |
 | 2 | Fix Auth Routes Error Messages | 8 files | 8 | ✅ |
-| 3 | Fix Validation Error Exposure | 8 files | 0 | ⬜ |
+| 3 | Fix Validation Error Exposure | 8 files | 8 | ✅ |
 | 4 | Fix `select("*")` Queries | 11 queries | 0 | ⬜ |
 | 5 | Filter API Response Data | 3 files | 0 | ⬜ |
 | 6 | Fix Webhook Error Responses | 5 files | 0 | ⬜ |
@@ -485,13 +488,7 @@ bio, discord, steam - Check privacy settings
 
 ## Quick Start - Next Action
 
-**Current Step:** Step 3 - Fix Validation Error Exposure
-
-Files to update:
-- `app/api/ai-agents/route.ts`
-- `app/api/ai-agents/[id]/route.ts`
-- `app/api/knowledge-bases/route.ts`
-- `app/api/auth/reset-password/route.ts`
+**Current Step:** Step 4 - Fix `select("*")` Queries on sensitive tables
 
 ---
 
