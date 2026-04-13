@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createSSRClient } from "@/lib/supabase/server"; // your server-side helper
+import { createSSRClient } from "@/lib/supabase/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export const dynamic = "force-dynamic"; // avoid caching
 
@@ -26,7 +27,7 @@ export async function POST(
 
   if (error) {
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: "Cluster not found" },
       { status: 400 }
     );
   }

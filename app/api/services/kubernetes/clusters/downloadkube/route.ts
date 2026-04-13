@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { rateLimit } from "@/lib/rate-limit";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 // import { readFile } from "node:fs/promises";
 // import path from "node:path";
 // import fs from "node:fs/promises";
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   try {
     await limiter.check(req as NextRequest, 15);
   } catch (e) {
-    return NextResponse.json({ error: "Too many requests" ,message:e}, { status: 429 });
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));
 
@@ -42,8 +43,9 @@ export async function POST(req: Request) {
         : await query.eq("owner_id", auth.user.id).single();
 
       if (error) {
+        logError("services/kubernetes/clusters/downloadkube", error);
         return NextResponse.json(
-          { success: false, error: error.message },
+          { success: false, error: "Failed to fetch cluster configuration" },
           { status: 400 }
         );
       }
@@ -81,16 +83,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    logError("services/kubernetes/clusters/downloadkube", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

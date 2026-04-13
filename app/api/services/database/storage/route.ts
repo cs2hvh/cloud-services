@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -54,16 +55,7 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message || "Failed to upgrade database storage tier" },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "An unexpected error occurred" },
-      { status: 500 }
-    );
+    logError("services/database/storage", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { limitByEmail } from "@/lib/cooldown/emailbased";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: NextRequest) {
   const { email, password } = await request.json();
@@ -41,7 +42,8 @@ console.log(email, "...........email in signin route.ts........");
     "verified";
 
   if (error) {
-    return Response.json({ message: error.message }, { status: 401 });
+    logError("auth/signin/email", error);
+    return Response.json({ message: sanitizeAuthError(error) }, { status: 401 });
   }
 
   if (!data.user) {

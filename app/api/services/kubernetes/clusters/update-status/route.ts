@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   // Check authentication
@@ -103,17 +104,7 @@ export async function POST(req: NextRequest) {
       { status: 200 }
     );
   } catch (err: unknown) {
-    console.error("[updateClusterStatus] Error:", err);
-    if (err instanceof Error) {
-      return NextResponse.json(
-        { error: err.message ?? "Invalid request" },
-        { status: 400 }
-      );
-    } else {
-      return NextResponse.json(
-        { error: "Unknown error occurred" },
-        { status: 400 }
-      );
-    }
+    logError("services/kubernetes/clusters/update-status", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { getAuditContext } from "@/lib/audit/context";
 import { clusterOperations } from "@/lib/services/kubernetes/cluster-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -65,11 +66,7 @@ export async function POST(req: NextRequest) {
       { status: 202 }
     );
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error("[createdroplet route] Error:", errorMsg, err);
-    return NextResponse.json(
-      { message: `Error: ${errorMsg}` },
-      { status: 400 }
-    );
+    logError("services/kubernetes/manageip/createdroplet", err);
+    return NextResponse.json({ message: sanitizeError(err) }, { status: 500 });
   }
 }

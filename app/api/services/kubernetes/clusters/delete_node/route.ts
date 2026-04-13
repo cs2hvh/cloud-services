@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { getAuditContext } from "@/lib/audit/context";
 import { clusterOperations } from "@/lib/services/kubernetes/cluster-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -28,9 +29,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: "cluster deleted successfully" }, { status: 200 });
   } catch (err: unknown) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unknown error occurred" },
-      { status: 400 }
-    );
+    logError("services/kubernetes/clusters/delete_node", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }
