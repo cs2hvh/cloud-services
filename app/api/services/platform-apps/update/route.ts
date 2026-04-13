@@ -4,6 +4,7 @@ import { updatePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -87,7 +88,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(result.data);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

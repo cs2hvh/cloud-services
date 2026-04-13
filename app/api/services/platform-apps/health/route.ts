@@ -4,6 +4,7 @@ import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { PrometheusService } from "@/lib/services/prometheus";
 import { AppStatusService } from "@/lib/services/app-status";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/services/platform-apps/health?app_id=xxx
@@ -72,11 +73,7 @@ export async function GET(req: NextRequest) {
       timestamp: health.timestamp,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting health:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get health status";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/health", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

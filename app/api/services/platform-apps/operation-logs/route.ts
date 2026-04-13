@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { AppDeploymentRepository, parseOperationDetails } from "@/lib/app-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { JenkinsService } from "@/lib/services/jenkins";
 
 function synthesizeOperationLogs(params: {
@@ -151,10 +152,7 @@ export async function GET(req: NextRequest) {
       logs,
     });
   } catch (error) {
-    console.error("[platform-app-operation-logs] Error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to load operation logs" },
-      { status: 500 }
-    );
+    logError("services/platform-apps/operation-logs", error);
+    return NextResponse.json({ error: sanitizeError(error) }, { status: 500 });
   }
 }

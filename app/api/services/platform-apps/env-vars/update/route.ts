@@ -3,6 +3,7 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { updateEnvVarsSchema } from "@/lib/validation/platform-apps";
 import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { analyzeEnvLifecycle } from "@/lib/env/lifecycle";
@@ -213,8 +214,7 @@ export async function POST(req: NextRequest) {
       throw error;
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error('[env-vars/update] Error:', msg);
-    return NextResponse.json({ error: msg }, { status: 400 });
+    logError("services/platform-apps/env-vars/update", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

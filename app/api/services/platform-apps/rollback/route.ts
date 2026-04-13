@@ -4,6 +4,7 @@ import { rollbackPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_App_Deployments, Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { KubernetesInfoService } from "@/lib/services/kubernetes-info";
 import { getIdempotencyKey } from "@/lib/idempotency";
 import {
@@ -160,9 +161,9 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     if (err instanceof AppOperationError) {
-      return NextResponse.json({ error: err.message, code: err.code }, { status: err.statusCode });
+      return NextResponse.json({ error: sanitizeError(err), code: err.code }, { status: err.statusCode });
     }
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg }, { status: 400 });
+    logError("services/platform-apps/rollback", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

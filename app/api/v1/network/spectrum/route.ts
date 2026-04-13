@@ -3,6 +3,7 @@
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { createSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { SpectrumService } from "@/lib/services/spectrum-service";
+import { logError } from "@/lib/api/error-sanitizer";
 
 function getDnsOriginalName(dns: unknown): string | null {
   if (!dns || typeof dns !== "object") return null;
@@ -106,9 +107,9 @@ export const POST = withV1Auth("spectrum:create", async (req, auth) => {
       return v1Error("INSUFFICIENT_CREDITS", 402, "Insufficient credits", error.details);
     }
     if (error.code === "BILLING_REGISTRATION_FAILED") {
-      return v1Error("BILLING_REGISTRATION_FAILED", 500, error.message || "Billing registration failed after provisioning");
+      return v1Error("BILLING_REGISTRATION_FAILED", 500, "Billing registration failed after provisioning");
     }
-    console.error("[POST /api/v1/network/spectrum]", error);
-    return v1Error("INTERNAL_ERROR", 500, error.message || "Failed to create spectrum app");
+    logError("[POST /api/v1/network/spectrum]", error);
+    return v1Error("INTERNAL_ERROR", 500, "Failed to create spectrum app");
   }
 });

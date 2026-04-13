@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const limiter = rateLimit({ interval: 60_000, uniqueTokenPerInterval: 500 });
   try {
     await limiter.check(req as NextRequest, 15);
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
   const body = await req.json().catch(() => ({}));

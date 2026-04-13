@@ -41,5 +41,4 @@ export async function POST(req: NextRequest) {
     logError("services/kubernetes/manageip/readdroplet", err);
     return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
-  }
 }

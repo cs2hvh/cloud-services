@@ -4,6 +4,7 @@ import { z } from "zod";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
@@ -261,20 +262,18 @@ export async function POST(req: NextRequest) {
     } catch (jenkinsError: unknown) {
       if (jenkinsError instanceof AppOperationError) {
         return NextResponse.json(
-          { error: jenkinsError.message, code: jenkinsError.code },
+          { error: sanitizeError(jenkinsError), code: jenkinsError.code },
           { status: jenkinsError.statusCode }
         );
       }
-      const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : "Unknown error";
-      console.error(`[Redeploy] Jenkins error for ${app.name}:`, errorMessage);
+      console.error(`[Redeploy] Jenkins error for ${app.name}:`, jenkinsError);
       return NextResponse.json(
-        { error: `Failed to trigger redeploy: ${errorMessage}` },
+        { error: "Failed to trigger redeploy" },
         { status: 500 }
       );
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[Redeploy] Error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[Redeploy] Error:", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

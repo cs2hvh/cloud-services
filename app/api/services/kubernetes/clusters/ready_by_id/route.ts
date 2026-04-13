@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createSSRClient } from "@/lib/supabase/server";
-import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export const dynamic = "force-dynamic"; // avoid caching
 

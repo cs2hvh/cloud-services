@@ -4,6 +4,7 @@ import { resizePlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
@@ -285,21 +286,19 @@ export async function POST(req: NextRequest) {
     } catch (jenkinsError: unknown) {
       if (jenkinsError instanceof AppOperationError) {
         return NextResponse.json(
-          { error: jenkinsError.message, code: jenkinsError.code },
+          { error: sanitizeError(jenkinsError), code: jenkinsError.code },
           { status: jenkinsError.statusCode }
         );
       }
-      const errorMessage = jenkinsError instanceof Error ? jenkinsError.message : "Unknown error";
-      console.error(`[Resize] Jenkins error for ${app.name}:`, errorMessage);
+      console.error(`[Resize] Jenkins error for ${app.name}:`, jenkinsError);
 
       return NextResponse.json(
-        { error: `Failed to resize app: ${errorMessage}` },
+        { error: "Failed to resize app" },
         { status: 500 }
       );
     }
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    console.error("[Resize] Error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    console.error("[Resize] Error:", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

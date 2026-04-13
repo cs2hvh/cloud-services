@@ -203,46 +203,60 @@ All admin routes require verification that they:
 
 ---
 
-## 🟡 MEDIUM: Service APIs - Platform Apps (25 routes)
+## 🟡 MEDIUM: Service APIs - Platform Apps (27 routes)
 
 | # | Route | Auth | No Secrets | Error Safe | Status |
 |---|-------|------|------------|------------|--------|
-| 1 | `/api/services/platform-apps/create` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 2 | `/api/services/platform-apps/delete` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 3 | `/api/services/platform-apps/deployments` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 4 | `/api/services/platform-apps/details` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 5 | `/api/services/platform-apps/env-vars/update` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 6 | `/api/services/platform-apps/events` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 7 | `/api/services/platform-apps/get` | ⬜ | ⬜ | ⬜ | ⬜ |
-| 8+ | (17 more platform-apps routes) | ⬜ | ⬜ | ⬜ | ⬜ |
-
-**Sensitive Data to Verify:**
-- Environment variables never returned in GET responses
-- Build logs don't contain secrets
-- Git tokens not exposed in deployment info
+| 1 | `/api/services/platform-apps/create` | ✅ | ✅ | ✅ Fixed: `err.message` → `sanitizeError` | ✅ |
+| 2 | `/api/services/platform-apps/delete` | ✅ | ✅ | ✅ Fixed: `errorMsg` + `msg` in 2 catches | ✅ |
+| 3 | `/api/services/platform-apps/deployments` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 4 | `/api/services/platform-apps/details` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 5 | `/api/services/platform-apps/env-vars/update` | ✅ | ✅ | ✅ Fixed: `msg` | ✅ |
+| 6 | `/api/services/platform-apps/events` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 7 | `/api/services/platform-apps/get` | ✅ | ✅ | ✅ Fixed: `msg` | ✅ |
+| 8 | `/api/services/platform-apps/health` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 9 | `/api/services/platform-apps/integrations/link` | ✅ | ✅ | ✅ | ✅ |
+| 10 | `/api/services/platform-apps/integrations/linked` | ✅ | ✅ | ✅ | ✅ |
+| 11 | `/api/services/platform-apps/integrations/storage/link` | ✅ | ✅ | ✅ | ✅ |
+| 12 | `/api/services/platform-apps/integrations/storage/linked` | ✅ | ✅ | ✅ | ✅ |
+| 13 | `/api/services/platform-apps/integrations/storage/unlink` | ✅ | ✅ | ✅ | ✅ |
+| 14 | `/api/services/platform-apps/integrations/unlink` | ✅ | ✅ | ✅ | ✅ |
+| 15 | `/api/services/platform-apps/list` | ✅ | ✅ | ✅ Fixed: `msg` | ✅ |
+| 16 | `/api/services/platform-apps/logs` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 17 | `/api/services/platform-apps/metrics` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 18 | `/api/services/platform-apps/operation-logs` | ✅ | ✅ | ✅ Fixed: inline leak; `error.message` in log text is stored operation detail (safe) | ✅ |
+| 19 | `/api/services/platform-apps/pods` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 20 | `/api/services/platform-apps/prices` | ✅ | ✅ | ✅ | ✅ |
+| 21 | `/api/services/platform-apps/recover-build` | ✅ | ✅ | ✅ `error.message` used for logic only, response is static | ✅ |
+| 22 | `/api/services/platform-apps/redeploy` | ✅ | ✅ | ✅ Fixed: `jenkinsError.message` + `errorMessage` + `msg` | ✅ |
+| 23 | `/api/services/platform-apps/resize` | ✅ | ✅ | ✅ Fixed: `jenkinsError.message` + `errorMessage` + `msg` | ✅ |
+| 24 | `/api/services/platform-apps/rollback` | ✅ | ✅ | ✅ Fixed: `err.message` in AppOperationError catch + outer catch | ✅ |
+| 25 | `/api/services/platform-apps/runtime-logs` | ✅ | ✅ | ✅ Fixed: `errorMessage` | ✅ |
+| 26 | `/api/services/platform-apps/update-project` | ✅ | ✅ | ✅ | ✅ |
+| 27 | `/api/services/platform-apps/update` | ✅ | ✅ | ✅ Fixed: `msg` | ✅ |
 
 ---
 
-## 🟡 MEDIUM: V1 Public API Routes (30+ routes)
+## 🟡 MEDIUM: V1 Public API Routes (33 routes)
 
 All V1 routes are public API endpoints. Extra care needed:
 
-| Category | Routes | Check |
-|----------|--------|-------|
-| `/api/v1/agents/*` | 1 route | ⬜ |
-| `/api/v1/apps/*` | 5 routes | ⬜ |
-| `/api/v1/databases/*` | 11 routes | ⬜ |
-| `/api/v1/domains/*` | 12 routes | ⬜ |
-| `/api/v1/kubernetes/*` | 2 routes | ⬜ |
-| `/api/v1/network/spectrum/*` | 2 routes | ⬜ |
-| `/api/v1/projects/*` | 2 routes | ⬜ |
-| `/api/v1/storage/buckets/*` | 2 routes | ⬜ |
+| Category | Routes | Auth | Error Safe | Status |
+|----------|--------|------|------------|--------|
+| `/api/v1/agents/*` | 1 route | ✅ | ✅ Fixed: `err.message` + streaming `error.message` → static strings | ✅ |
+| `/api/v1/apps/*` | 5 routes | ✅ | ✅ Fixed: `error.details \|\| error.message` in `details` field | ✅ |
+| `/api/v1/databases/*` | 11 routes | ✅ | ✅ No leaks found | ✅ |
+| `/api/v1/domains/*` | 12 routes | ✅ | ✅ `issue.message` is Zod validation field messages (safe, public API standard) | ✅ |
+| `/api/v1/kubernetes/*` | 2 routes | ✅ | ✅ No leaks found | ✅ |
+| `/api/v1/network/spectrum/*` | 2 routes | ✅ | ✅ Fixed: 4 `error.message` leaks in POST/PATCH/DELETE catches | ✅ |
+| `/api/v1/projects/*` | 2 routes | ✅ | ✅ No leaks found | ✅ |
+| `/api/v1/storage/buckets/*` | 2 routes | ✅ | ✅ No leaks found | ✅ |
 
 **Key Checks:**
-- All use proper API key authentication
-- Response data is filtered (no internal IDs)
-- Validation errors use `v1TransformValidationError`
-- No stack traces in error responses
+- All use `withV1Auth` authentication wrapper ✅
+- Validation errors use `v1ValidationError` (Zod field messages are intentional for public API) ✅
+- Internal errors use static `v1Error` messages ✅
+- No stack traces in error responses ✅
 
 ---
 
@@ -531,10 +545,10 @@ bio, discord, steam - Check privacy settings
 
 **Remaining (not in original scope):**
 - Billing routes (9) — ✅ audited (2⚠️ Stripe IDs required by frontend)
-- Database service routes (20) — ✅ audited + fixed (14 fixes staged)
-- Kubernetes routes (14 of 14) — ✅ audited + fixed (staged)
-- Platform Apps routes (25) — not audited
-- V1 Public API routes (30+) — not audited
+- Database service routes (20) — ✅ audited + fixed (14 fixes)
+- Kubernetes routes (14 of 14) — ✅ audited + fixed
+- Platform Apps routes (27) — ✅ audited + fixed (18 routes fixed, 9 already safe)
+- V1 Public API routes (33) — ✅ audited + fixed (4 leaks fixed in spectrum + agents + apps)
 - ~90 service/domain/project routes have `error.message` pattern — candidates for future pass
 
 ---

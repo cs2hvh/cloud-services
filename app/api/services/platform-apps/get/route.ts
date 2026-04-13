@@ -4,6 +4,7 @@ import { getPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { Platform_Apps } from "@/lib/supabase/queries";
 
 export async function POST(req: NextRequest) {
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
         );
       }
     }
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
+    logError("services/platform-apps/get", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }
