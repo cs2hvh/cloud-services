@@ -6,6 +6,7 @@ import { addHostRoute } from "@/lib/proxmox-utils";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { redis } from "@/lib/redis";
 import { checkIdempotency, getIdempotencyKey } from "@/lib/idempotency";
+import { BillingCredits } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -469,6 +470,17 @@ export async function POST(req: NextRequest) {
 
   const hourlyCost = calculateHourlyCost(serverSpecs);
   const minimumHours = 1;
+
+  // Balance check — user must have at least 1 hour of credit before provisioning
+  const minimumBalance = hourlyCost * minimumHours;
+  const hasFunds = await BillingCredits.hasSufficientBalance(user.id, minimumBalance);
+  if (!hasFunds) {
+    if (ipLockKey) await redis.del(ipLockKey).catch(() => {});
+    return Response.json(
+      { ok: false, error: `Insufficient balance. You need at least $${minimumBalance.toFixed(2)} to create this server.` },
+      { status: 402 }
+    );
+  }
 
   const gateway = cfg.gateway_ip || undefined;
   const dns1 = cfg.dns_primary || "8.8.8.8";
