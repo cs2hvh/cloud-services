@@ -8,7 +8,6 @@ import { sanitizeError } from "@/lib/api/error-sanitizer";
 import { Projects } from "@/lib/supabase/queries/projects";
 import { JenkinsService } from "@/lib/services/jenkins";
 import { BuildPollingService } from "@/lib/services/build-polling";
-import { getGitProviderToken, buildAuthenticatedGitUrl } from "@/lib/git/provider-token";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { reconcileRuntimeEnv } from "@/lib/services/runtime-env-reconciler";
 import { getIdempotencyKey } from "@/lib/idempotency";
@@ -104,23 +103,6 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // Get git provider from app data
-      const gitProvider = app.git_provider as 'github' | 'gitlab' | 'bitbucket' | undefined;
-      
-      // Get fresh access token for private repository access
-      let authenticatedUrl = app.repository_url;
-      if (gitProvider) {
-        console.log(`[Resize] Getting fresh token for ${gitProvider}...`);
-        const accessToken = await getGitProviderToken(auth.user!.id, gitProvider);
-        
-        if (accessToken) {
-          authenticatedUrl = buildAuthenticatedGitUrl(app.repository_url, accessToken, gitProvider);
-          console.log(`[Resize] Token injected for ${gitProvider}`);
-        } else {
-          console.warn(`[Resize] No token available for ${gitProvider}, using stored URL`);
-        }
-      }
-
       // Fetch environment variables for the app
       const envVarsData = await Platform_Apps.get_env_vars(app_id);
       const envVars = envVarsData.map((ev: { key: string; value: string }) => ({ 
@@ -159,25 +141,25 @@ export async function POST(req: NextRequest) {
             throw new Error(runtimeSync.error || runtimeSync.reason);
           }
         },
-        executor: async () => {
-          await JenkinsService.updateJobConfig(
+        executor: async (operationId: string) => {
+          // Create/update the dedicated resize job with the new size
+          await JenkinsService.ensureResizeJob(
             app.name,
             app.id,
-            authenticatedUrl,
-            app.branch || "main",
-            app.framework || undefined,
             new_size,
-            "resize",
-            envVars
+            envVars,
+            app.port ?? undefined,
+            app.framework ?? undefined,
+            operationId,
           );
 
-          const execution = await jenkins.triggerBuild({
+          // Trigger the resize job (separate from the main app build job)
+          const execution = await jenkins.triggerResizeBuild({
             appName: app.name,
-            resizeOnly: true,
           });
 
           console.log(
-            `[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered build #${execution.buildNumber}`
+            `[Resize] Resized ${app.name} from ${currentSize} to ${new_size}, triggered resize build #${execution.buildNumber}`
           );
 
           return {
@@ -246,6 +228,8 @@ export async function POST(req: NextRequest) {
           appName: app.name,
           buildNumber,
           userId: auth.user!.id,
+          userEmail: auth.user!.email,
+          operationId: operation.operation.id,
           trigger: 'resize',
           resizeContext: {
             previousSize: currentSize as 'small' | 'medium' | 'large',

@@ -14,6 +14,7 @@ import { createAngularPipeline } from './angular';
 import { createSvelteKitPipeline } from './sveltekit';
 import { createDockerfilePipeline } from './generic-docker';
 import { createJavaPipeline } from './java';
+import { createResizePipeline } from './resize';
 
 export { 
   createSimpleTestPipeline, 
@@ -29,6 +30,7 @@ export {
   createSvelteKitPipeline,
   createDockerfilePipeline,
   createJavaPipeline,
+  createResizePipeline,
 };
 
 /**

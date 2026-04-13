@@ -397,7 +397,7 @@ export default function AppDetailPage() {
     }
 
     return buildInfo;
-  }, [activeBuildNumber, activeBuildTrigger, buildInfo]);
+  }, [activeBuildNumber, activeBuildTrigger, buildInfo, buildDeployments]);
   const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
@@ -429,8 +429,10 @@ export default function AppDetailPage() {
 
   const fetchBuildInfo = useCallback(async (appName: string): Promise<BuildInfo | null> => {
     try {
-       const res = await api.get(`/jenkins/build-info?app=${appName}`);
-      if (res.data) {
+       const res = await api.get(`/jenkins/build-info?app=${appName}`, {
+         validateStatus: (status) => status < 500,
+       });
+      if (res.status === 200 && res.data && !res.data.error) {
         setBuildInfo((prev) => {
           // Guard: after triggering a redeploy, Jenkins takes ~5s to register
           // the new build. During that window it returns the PREVIOUS build's
@@ -564,13 +566,14 @@ export default function AppDetailPage() {
   }, [app?.name, fetchBuildInfo]);
 
   useEffect(() => {
-    const targetBuildNumber = activeBuildNumber ?? buildInfo?.number ?? null;
+    // Use displayBuildInfo number (already filters out resize builds) instead of raw buildInfo
+    const targetBuildNumber = activeBuildNumber ?? displayBuildInfo?.number ?? null;
     if (app?.name && targetBuildNumber && activeBuildTrigger !== 'resize') {
       // Use raw logs while building (deployment stage hasn't run yet),
       // switch to deployment-filtered summary once the build completes.
       fetchBuildLogs(app.name, targetBuildNumber, isBuilding);
     }
-  }, [app?.name, activeBuildNumber, activeBuildTrigger, buildInfo?.number, isBuilding, fetchBuildLogs]);
+  }, [app?.name, activeBuildNumber, activeBuildTrigger, displayBuildInfo?.number, isBuilding, fetchBuildLogs]);
 
   // Poll build info and APPEND new log lines while a build is actively running.
   // - 2s interval (down from 5s) for faster perceived updates
@@ -826,6 +829,8 @@ export default function AppDetailPage() {
     setRedeploying(true);
     setEnvVarError(null);
     setEnvVarSuccess(null);
+    // Clear stale failure reason optimistically so it doesn't flash while the build starts
+    setApp(prev => prev ? { ...prev, last_failure_reason: null } : null);
 
     try {
       const res = await fetch('/api/services/platform-apps/redeploy', {
@@ -872,6 +877,8 @@ export default function AppDetailPage() {
     setResizing(true);
     setResizeError(null);
     setResizeSuccess(null);
+    // Clear stale failure reason optimistically so it doesn't flash while the build starts
+    setApp(prev => prev ? { ...prev, last_failure_reason: null } : null);
 
     try {
       const res = await fetch('/api/services/platform-apps/resize', {
@@ -1141,7 +1148,7 @@ export default function AppDetailPage() {
                 </button>
               </div>
 
-              {app.status === 'failed' && app.last_failure_reason && (
+              {app.status === 'failed' && app.last_failure_reason && !isBuilding && (
                 <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>

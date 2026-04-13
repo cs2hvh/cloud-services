@@ -337,9 +337,6 @@ export function generateTrivyImageScanStage(config: Partial<SecurityConfig> = {}
 
   return `
     stage('Security: Image Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('trivy') {
           script {
@@ -448,9 +445,6 @@ export function generateDependencyScanStage(language: 'node' | 'python' | 'docke
   if (language === 'docker') {
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -578,9 +572,6 @@ ${generateLoggingHelpers()}
   if (language === 'node') {
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -650,9 +641,6 @@ ${generateLoggingHelpers()}
     // Python
     return `
     stage('Security: Dependency Scan') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -735,9 +723,6 @@ export function generateDockerfileLintStage(): string {
   
   return `
     stage('Security: Dockerfile Lint') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -875,9 +860,6 @@ export function generateSecretScanStage(): string {
   
   return `
     stage('Security: Secret Detection') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1029,9 +1011,6 @@ export function generateStaticAnalysisStage(language: 'node' | 'python' | 'docke
   if (language === 'docker') {
     return `
     stage('Security: Generic Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1130,9 +1109,6 @@ ${generateLoggingHelpers()}
   if (language === 'node') {
     return `
     stage('Security: Static Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1216,9 +1192,6 @@ ${generateLoggingHelpers()}
     // Python
     return `
     stage('Security: Static Code Analysis') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {
@@ -1298,9 +1271,6 @@ ${generateLoggingHelpers()}
 export function generateK8sManifestValidationStage(): string {
   return `
     stage('Security: K8s Manifest Validation') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           script {

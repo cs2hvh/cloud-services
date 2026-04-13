@@ -81,12 +81,16 @@ export function BuildLogsPanel({
   const buildOptions = useMemo<DeploymentSummary[]>(() => {
     // Jenkins is authoritative: if it confirms the build is done, override any
     // stale 'BUILDING' status that Supabase hasn't propagated yet.
+    // However, if Jenkins result is null (health-check phase), keep BUILDING
+    // to avoid a false FAILURE flash before Supabase finalizes.
     const opts = deployments.map((d) => {
       if (
         d.build_number === buildInfo?.number &&
         buildInfo.building === false &&
         d.status === 'BUILDING'
       ) {
+        // result is null during post-build health verification — don't override yet
+        if (buildInfo.result === null) return d;
         const terminalStatus =
           buildInfo.result === 'SUCCESS'
             ? 'SUCCESS'

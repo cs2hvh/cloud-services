@@ -21,6 +21,11 @@ export async function GET(req: NextRequest) {
   const start = searchParams.get("start") || "0";
 
   try {
+    const auth = await authenticateUser();
+    if (!auth.authenticated) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     if (!appName) {
       return NextResponse.json(
         { error: "Missing 'app' parameter" },
