@@ -396,28 +396,8 @@ export default function AppDetailPage() {
       };
     }
 
-    // If the latest Jenkins build is a resize/operation build, show the latest
-    // release build instead so the Build Logs panel doesn't display resize logs.
-    // Guard: only match if the deployment is an operation (not a release) to avoid
-    // false positives when main job and resize job happen to share the same build number.
-    if (buildInfo) {
-      const isResizeBuild = buildDeployments.some(
-        (d) => d.build_number === buildInfo.number && d.trigger === 'resize' && d.history_type !== 'release'
-      );
-      if (isResizeBuild && latestReleaseDeployment) {
-        return {
-          number: latestReleaseDeployment.build_number,
-          building: false,
-          result: latestReleaseDeployment.status === 'SUCCESS' ? 'SUCCESS' : latestReleaseDeployment.status === 'FAILURE' ? 'FAILURE' : null,
-          duration: 0,
-          timestamp: new Date(latestReleaseDeployment.started_at).getTime(),
-          url: '',
-        };
-      }
-    }
-
     return buildInfo;
-  }, [activeBuildNumber, activeBuildTrigger, buildInfo, buildDeployments, latestReleaseDeployment]);
+  }, [activeBuildNumber, activeBuildTrigger, buildInfo, buildDeployments]);
   const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
