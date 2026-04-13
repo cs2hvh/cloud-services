@@ -161,7 +161,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err: unknown) {
     if (err instanceof AppOperationError) {
-      return NextResponse.json({ error: sanitizeError(err), code: err.code }, { status: err.statusCode });
+      return NextResponse.json({ error: err.message, code: err.code }, { status: err.statusCode });
     }
     logError("services/platform-apps/rollback", err);
     return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });

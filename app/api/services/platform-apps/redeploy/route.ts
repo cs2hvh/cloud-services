@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
     } catch (jenkinsError: unknown) {
       if (jenkinsError instanceof AppOperationError) {
         return NextResponse.json(
-          { error: sanitizeError(jenkinsError), code: jenkinsError.code },
+          { error: jenkinsError.message, code: jenkinsError.code },
           { status: jenkinsError.statusCode }
         );
       }
