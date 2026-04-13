@@ -32,12 +32,12 @@ function scheduleActivationRun(params: {
         domainId: params.domainId,
         userId: params.actor.userId,
       });
-    } catch (error) {
+    } catch {
       console.error("[domains.activate] Background activation failed", {
         operationId: params.operationId,
         domainId: params.domainId,
         userId: params.actor.userId,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Unknown error",
       });
     }
   };
@@ -121,7 +121,7 @@ export async function POST(
     console.error("[domains.activate] Activation request failed", {
       domainId: domainIdForLog,
       userId: auth.user.id,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: "Unknown error",
     });
     return toDashboardDomainErrorResponse(error);
   }

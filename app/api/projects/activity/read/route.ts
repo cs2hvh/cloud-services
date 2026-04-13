@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Activities } from "@/lib/supabase/queries/activities";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function GET(req: Request) {
   try {
@@ -86,11 +87,10 @@ export async function GET(req: Request) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[GET /api/projects/activity/read]", error);
+    logError("[GET /api/projects/activity/read]", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Internal server error",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { listSpectrumApps } from "@/config/spectrum-functions";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function GET() {
   const auth = await authenticateUser();
@@ -25,13 +26,12 @@ export async function GET() {
     const result = await listSpectrumApps(auth.user?.id);
     return NextResponse.json(result);
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Spectrum app list error:", errorMessage);
+    logError("services/spectrum/apps/list", error);
     
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

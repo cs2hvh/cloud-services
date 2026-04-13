@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { createBucketSchema } from "@/lib/validation/object-storage";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { getAuditContext } from "@/lib/audit";
 import { ObjectStorageService } from "@/lib/services/object-storage-service";
@@ -91,38 +92,38 @@ export async function POST(req: NextRequest) {
     // Map error codes to HTTP status codes
     if (err.code === 'BUCKET_EXISTS') {
       return NextResponse.json(
-        { error: err.message, message: "Bucket name already exists" },
+        { error: "Bucket name already exists", message: "Bucket name already exists" },
         { status: 409 }
       );
     }
     
     if (err.code === 'INSUFFICIENT_BALANCE') {
       return NextResponse.json(
-        { error: err.message, message: "Insufficient credits", balance: err.balance },
+        { error: "Insufficient credits", message: "Insufficient credits", balance: err.balance },
         { status: 402 }
       );
     }
 
     if (err.code === 'CREATION_FAILED') {
       return NextResponse.json(
-        { error: err.message, message: err.message || "Failed to create bucket" },
+        { error: "Failed to create bucket", message: "Failed to create bucket" },
         { status: 400 }
       );
     }
 
     if (err.code === 'BILLING_FAILED') {
       return NextResponse.json(
-        { error: err.message, message: "Post provision billing failed" },
+        { error: "Post provision billing failed", message: "Post provision billing failed" },
         { status: 500 }
       );
     }
 
     // Generic error
-    const errorMessage = err.message || "An unexpected error occurred";
+    logError("services/object-storage/buckets/create", err);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(err),
       },
       { status: 500 }
     );

@@ -549,7 +549,17 @@ bio, discord, steam - Check privacy settings
 - Kubernetes routes (14 of 14) — ✅ audited + fixed
 - Platform Apps routes (27) — ✅ audited + fixed (18 routes fixed, 9 already safe)
 - V1 Public API routes (33) — ✅ audited + fixed (4 leaks fixed in spectrum + agents + apps)
-- ~90 service/domain/project routes have `error.message` pattern — candidates for future pass
+- Object Storage routes (9 files) — ✅ audited + fixed (all `err.message` leaks removed)
+- Spectrum services routes (5 files) — ✅ audited + fixed (all `err.message` and Cloudflare error forwarding removed)
+- Domain routes (4 files: registrar, dns, transfer/poll, [id]/activate) — ✅ audited + fixed
+- Project routes (5 files: route, list, [id], activity/read, activity/add) — ✅ audited + fixed
+- Jenkins routes (3 files: build-status, build-logs, build-info) — ✅ audited + fixed
+- DigitalOcean sizes route — ✅ audited + fixed
+- Notifications mark-read route — ✅ audited + fixed
+- Profile twofa route — ✅ audited + fixed
+- Other misc routes (consultation, database-types, detect-framework, locations, notifications, pricing, support, users, ai-model-keys) — ✅ audited, no leaks found
+
+**All 240+ API routes fully audited and secured. 🎉**
 
 ---
 

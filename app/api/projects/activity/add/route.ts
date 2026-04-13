@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { addActivitySchema } from "@/types/zod/activity";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(req: Request) {
   try {
@@ -81,7 +82,7 @@ export async function POST(req: Request) {
     if (error) {
       console.error("[POST /api/projects/activity/add]", error);
       return NextResponse.json(
-        { message: error.message },
+        { message: "Database error" },
         { status: 500 }
       );
     }
@@ -94,11 +95,10 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("[POST /api/projects/activity/add]", error);
+    logError("[POST /api/projects/activity/add]", error);
     return NextResponse.json(
       {
-        message:
-          error instanceof Error ? error.message : "Internal server error",
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { validateRequest } from "@/lib/middleware/validate-request";
 import { deleteSpectrumAppSchema } from "@/lib/validation/spectrum";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { SpectrumService } from "@/lib/services/spectrum-service";
 import { getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
@@ -57,24 +58,24 @@ export async function POST(req: NextRequest) {
     // Map error codes to HTTP status codes
     if (err.code === "NOT_FOUND") {
       return NextResponse.json(
-        { error: err.message },
+        { error: "Not found" },
         { status: 404 }
       );
     }
 
     if (err.code === "FORBIDDEN") {
       return NextResponse.json(
-        { error: err.message },
+        { error: "Unauthorized" },
         { status: 403 }
       );
     }
 
     // Generic error
-    const errorMessage = err.message || "An unexpected error occurred";
+    logError("services/spectrum/apps/delete", err);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(err),
       },
       { status: 500 }
     );
