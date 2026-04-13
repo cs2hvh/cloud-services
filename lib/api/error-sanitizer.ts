@@ -58,6 +58,18 @@ function hasSensitiveContent(message: string): boolean {
   return SENSITIVE_PATTERNS.some((p) => p.test(message));
 }
 
+// ─── Log redaction ────────────────────────────────────────────────────────
+
+const REDACT_PATTERNS: [RegExp, string][] = [
+  [/(password|token|secret|key|credential)=[^\s&]+/gi, "$1=[REDACTED]"],
+  [/Bearer\s+[A-Za-z0-9\-_./]+/gi, "Bearer [REDACTED]"],
+  [/eyJ[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*/g, "[JWT_REDACTED]"],
+];
+
+function redactMessage(message: string): string {
+  return REDACT_PATTERNS.reduce((m, [pattern, replacement]) => m.replace(pattern, replacement), message);
+}
+
 // ─── Logging ───────────────────────────────────────────────────────────────
 
 /**
@@ -68,10 +80,20 @@ function hasSensitiveContent(message: string): boolean {
  * @param error    The raw error
  */
 export function logError(context: string, error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  const stack = error instanceof Error ? error.stack : undefined;
-  // In production these go to your hosting provider's log drain (Vercel, etc.)
-  console.error(`[${context}]`, message, stack ?? "");
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error !== null && "message" in error
+        ? String((error as Record<string, unknown>).message)
+        : String(error);
+
+  if (isDev) {
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error(`[${context}]`, message, stack ?? "");
+  } else {
+    // Prod: redact sensitive values, omit stack traces
+    console.error(`[${context}]`, redactMessage(message));
+  }
 }
 
 // ─── Core sanitizers ───────────────────────────────────────────────────────
@@ -91,7 +113,9 @@ export function sanitizeError(
       ? error.message
       : typeof error === "string"
         ? error
-        : "";
+        : typeof error === "object" && error !== null && "message" in error
+          ? String((error as Record<string, unknown>).message)
+          : "";
 
   if (isDev) return message || SAFE_MESSAGES[fallbackKey];
 
