@@ -78,8 +78,8 @@ export default function PromosTab({ promos: initialPromos, categories: initialCa
   const fetchCategories = async () => {
     try {
       const response = await api.get("/admin/pricing/categories");
-      if (response.status === 200 && response.data.categories) {
-        setCategoriesList(response.data.categories);
+      if (response.status === 200 && response?.data?.categories) {
+        setCategoriesList(response?.data?.categories ?? []);
       }
     } catch (error) {
       console.error("Error fetching categories:", error);
@@ -91,8 +91,8 @@ export default function PromosTab({ promos: initialPromos, categories: initialCa
     try {
       const response = await api.get("/admin/pricing/promos");
       if (response.status === 200) {
-        setPromosList(response.data.promos);
-        return response.data.promos;
+        setPromosList(response?.data?.promos ?? []);
+        return response?.data?.promos ?? [];
       }
     } catch (error) {
       console.error("Error fetching promos:", error);

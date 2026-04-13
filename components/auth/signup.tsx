@@ -82,7 +82,7 @@ export default function SignUpMultiStep({
   async function onSubmitSignup(data: SignupFormData) {
     const response = await api.post("/auth/onboarding", data);
     if (response.status === 200) {
-      toast.success(response.data.message);
+      toast.success(response?.data?.message);
       setPendingEmail(data.email);
       setStep(2);
     } else {
@@ -99,7 +99,7 @@ export default function SignUpMultiStep({
       });
 
       if (response.status === 200) {
-        toast.success(response.data.message);
+        toast.success(response?.data?.message);
         router.push(nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin");
       }
     } finally {
@@ -134,8 +134,8 @@ export default function SignUpMultiStep({
           ? { type, next: nextPath || undefined }
           : { next: nextPath || undefined };
       const response = await api.post(endpoint, payload);
-      if (response.data?.url) {
-        window.location.href = response.data.url;
+      if (response?.data?.url) {
+        window.location.href = response?.data?.url;
       }
     } finally {
       setIsLoading(false);

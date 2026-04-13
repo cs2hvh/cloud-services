@@ -69,13 +69,13 @@ export function SignInForm() {
         rememberMe,
       });
 
-      if (res.data?.twofastatus) {
+      if (res?.data?.twofastatus) {
         setTwofaRequired(true);
         return;
       }
 
       if (res.status === 200) {
-        toast.success(`Welcome back ${res.data?.name || ""}!`);
+        toast.success(`Welcome back ${res?.data?.name || ""}!`);
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           await supabase.auth.setSession(data.session);
@@ -111,7 +111,7 @@ export function SignInForm() {
       const response = await api.post(endpoint, payload);
 
       if (response?.data?.url) {
-        window.location.href = response.data.url;
+        window.location.href = response?.data?.url;
       }
     } finally {
       setIsLoading(false);

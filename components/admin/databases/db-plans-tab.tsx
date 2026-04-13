@@ -90,8 +90,8 @@ export default function DbPlansTab({ all_products }: DbPlansTabProps) {
     try {
       const response = await api.get("/admin/products?type=database");
       if (response.status === 200) {
-        setProductsList(response.data.products);
-        return response.data.products;
+        setProductsList(response?.data?.products ?? []);
+        return response?.data?.products;
       }
     } catch (error) {
       console.error("Error fetching products:", error);

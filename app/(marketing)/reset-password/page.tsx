@@ -136,8 +136,8 @@ function ResetPasswordContent() {
         resetForm.setValue("email", values.email);
         setStep("reset");
         // Set expiration time if provided
-        if (response.data.expiresAt) {
-          setOtpExpiresAt(response.data.expiresAt);
+        if (response?.data?.expiresAt) {
+          setOtpExpiresAt(response?.data?.expiresAt ?? null);
         }
       }
     } catch (error: unknown) {
@@ -173,8 +173,8 @@ function ResetPasswordContent() {
         if (response.status === 200) {
           toast.success("New reset code sent! Check your email.");
           // Update expiration time if provided
-          if (response.data.expiresAt) {
-            setOtpExpiresAt(response.data.expiresAt);
+          if (response?.data?.expiresAt) {
+            setOtpExpiresAt(response?.data?.expiresAt ?? null);
           }
         }
       } catch (error: unknown) {

@@ -90,7 +90,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
       });
 
       if (response.status === 200) {
-        setUsers(response.data.data || []);
+        setUsers(response?.data?.data || []);
       }
     } catch (error) {
       console.error("[fetchUsers] Error:", error);
@@ -114,7 +114,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
       });
 
       if (response.status === 200) {
-        setDatabases(response.data.data || []);
+        setDatabases(response?.data?.data || []);
       }
     } catch (error) {
       console.error("[fetchDatabases] Error:", error);
@@ -143,7 +143,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
       });
 
       if (response.status === 200) {
-        const createdUser = response.data?.data;
+        const createdUser = response?.data?.data;
         if (createdUser?.name && createdUser?.password) {
           setCredentialModal({
             show: true,
@@ -202,7 +202,7 @@ export const UsersDbsTab = ({ clusterId, engine }: UsersDbsTabProps) => {
         setCredentialModal({
           show: true,
           username,
-          password: response.data.data.password,
+          password: response?.data?.data?.password ?? "",
           mode: "reset",
         });
         toast.success("Password reset successfully!");

@@ -95,7 +95,7 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
       error?: string;
       data?: AdminTicketDetailWithUrl;
     };
-    if (!response.ok || !json.data) {
+    if (!response.ok || !json?.data) {
       throw new Error(json.error || "Failed to update ticket");
     }
 

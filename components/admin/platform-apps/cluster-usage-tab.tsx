@@ -68,7 +68,7 @@ export default function ClusterUsageTab() {
 
       const response = await api.get("/admin/cluster-metrics");
 
-      setMetrics(response.data.data);
+      setMetrics(response?.data?.data ?? null);
       setLastUpdated(new Date());
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";

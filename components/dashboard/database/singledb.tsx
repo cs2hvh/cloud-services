@@ -85,7 +85,7 @@ const Singledb = ({ databaseId, products }: SingleDbProps) => {
       });
 
       if (response.status === 200) {
-        const dbData = response.data.data;
+        const dbData = response?.data?.data;
         setDatabase(dbData);
         setLoading(false);
 

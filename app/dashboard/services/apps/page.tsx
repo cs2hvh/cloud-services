@@ -118,9 +118,9 @@ export default function ApplicationDeploymentPage() {
     api
       .get("/services/platform-apps/list")
       .then(res => {
-        if (res.data?.apps) {
+        if (res?.data?.apps) {
           const map = new Map(
-            (res.data.apps as Array<{
+            (res?.data?.apps as Array<{
               id: string;
               can_rollback?: boolean;
               serving_build_number?: number | null;

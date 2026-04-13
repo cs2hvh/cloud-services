@@ -89,8 +89,8 @@ export default function AddPlanDialog({
     setLoadingSizes(true);
     try {
       const response = await api.get<DOOptionsResponse>("/admin/database-options");
-      if (response.data.success) {
-        setDoSizes(response.data.data.sizesByType);
+      if (response?.data?.success) {
+        setDoSizes(response?.data?.data?.sizesByType ?? {});
       }
     } catch (error) {
       console.error("Error fetching DO sizes:", error);

@@ -117,7 +117,7 @@ const SpectrumAppSettings = ({ spectrumApp}: SpectrumAppSettingsProps) => {
         payload
       );
 
-      if (response.data) {
+      if (response?.data) {
         toast.success(
           `${setting.charAt(0).toUpperCase() + setting.slice(1)} updated successfully`
         );

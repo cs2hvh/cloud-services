@@ -384,7 +384,7 @@ export default function DomainTransferPage() {
         throw new Error(json.message || "Failed to fetch transfers");
       }
 
-      setTransfers(json.data || []);
+      setTransfers(json?.data || []);
       setActivityError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to fetch transfers";
@@ -509,7 +509,7 @@ export default function DomainTransferPage() {
         return;
       }
 
-      const result = json.data as EligibilityResult;
+      const result = json?.data as EligibilityResult;
       setEligibility(result);
 
       if (result.eligible) {

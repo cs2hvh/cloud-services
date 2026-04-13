@@ -71,13 +71,13 @@ const BucketSettings = ({ bucket }: BucketSettingsProps) => {
 
       const response = await axios.post(endpoint, payload);
 
-      if (response.data.success) {
+      if (response?.data?.success) {
         toast.success(
           `${setting.charAt(0).toUpperCase() + setting.slice(1)} updated successfully`
         );
         setEditMode((prev) => ({ ...prev, [setting]: false }));
       } else {
-        throw new Error(response.data.error || "Update failed");
+        throw new Error(response?.data?.error || "Update failed");
       }
     } catch (error: unknown) {
       console.error("Error updating setting:", error);

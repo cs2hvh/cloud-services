@@ -95,13 +95,13 @@ export default function AdminCoupons({ all_coupons }: PageProps) {
       setLoading(true);
       const res = await api.delete(`/admin/coupons?id=${couponToDelete.id}`);
       
-      if (res.data.success) {
+      if (res?.data?.success) {
         setCoupons(coupons.filter((c) => c.id !== couponToDelete.id));
         toast.success("Coupon deleted successfully");
         setDeleteDialogOpen(false);
         setCouponToDelete(null);
       } else {
-        toast.error(res.data.error || "Failed to delete coupon");
+        toast.error(res?.data?.error || "Failed to delete coupon");
       }
     } catch (error: unknown) {
       console.error("Error deleting coupon:", error);
