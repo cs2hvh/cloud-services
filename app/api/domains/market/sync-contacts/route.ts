@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDomainMarketplaceService } from "@/lib/domain-service/marketplace";
 import { logError } from "@/lib/api/error-sanitizer";
@@ -75,7 +75,6 @@ function safeCompare(a: string, b: string): boolean {
   try {
     // Hash both sides to a fixed-length digest before comparing. This eliminates
     // length-based timing leaks even when the two secrets differ in byte length.
-    const { createHash } = require("node:crypto");
     const hashA = createHash("sha256").update(a).digest();
     const hashB = createHash("sha256").update(b).digest();
     return timingSafeEqual(hashA, hashB);
