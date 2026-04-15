@@ -187,7 +187,8 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const navLinks = [
     { href: "/pricing", label: "Pricing" },
     { href: "/resources", label: "Resources" },
-    { href: "/docs", label: "Docs" },
+    { href: "/terms", label: "Legal" },
+    { href: "/api-docs", label: "Docs" },
   ];
 
   return (
