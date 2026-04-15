@@ -6,7 +6,7 @@ if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   process.exit(1);
 }
 const sb = createClient(
-  process.env.SUPABASE_URL || "https://xafjjpgazdxhktpfeuri.supabase.co",
+  process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 const vmid = process.argv[2] || "104";
