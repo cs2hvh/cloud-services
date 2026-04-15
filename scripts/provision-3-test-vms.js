@@ -11,7 +11,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 const { createClient } = require('@supabase/supabase-js');
 const { Client: SSHClient } = require('ssh2');
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xafjjpgazdxhktpfeuri.supabase.co';
+const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!SUPABASE_KEY) {
   console.error('Error: SUPABASE_SERVICE_ROLE_KEY environment variable is required');

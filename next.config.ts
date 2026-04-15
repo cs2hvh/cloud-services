@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xafjjpgazdxhktpfeuri.supabase.co";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is required");
+}
 const supabaseWs = supabaseUrl.replace("https://", "wss://");
 
 // Content-Security-Policy: restrict script sources and data exfiltration targets.
