@@ -78,7 +78,7 @@ export function AppsList({
   const refreshAppMetadata = async () => {
     try {
       const res = await api.get("/services/platform-apps/list");
-      const enrichedApps = Array.isArray(res.data?.apps) ? res.data.apps as App[] : [];
+      const enrichedApps = Array.isArray(res?.data?.apps) ? res?.data?.apps as App[] : [];
       const enrichedMap = new Map(enrichedApps.map((app) => [app.id, app]));
       onUpdateApps((prev) =>
         prev.map((app) => mergeDeploymentPresentation(app, enrichedMap.get(app.id)))

@@ -25,7 +25,7 @@ export default function StoragePlansTab() {
     const fetchPrice = async () => {
       try {
         const response = await axios.get("/api/admin/products?type=object-storage");
-        const products = response.data.products;
+        const products = response?.data?.products;
         
         if (products && products.length > 0) {
           const storageProduct = products[0];

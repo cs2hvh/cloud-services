@@ -68,7 +68,7 @@ export default function PricingTab() {
     try {
       setLoading(true);
       const response = await axios.get("/api/admin/products?type=platform-apps");
-      setProducts(response.data.products || []);
+      setProducts(response?.data?.products || []);
     } catch (error) {
       console.error("Error fetching products:", error);
       toast.error("Failed to load pricing data");

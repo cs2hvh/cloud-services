@@ -104,12 +104,12 @@ export default function EditCouponDialog({
       setLoading(true);
       const res = await api.put("/admin/coupons", data);
 
-      if (res.data.success) {
+      if (res?.data?.success) {
         toast.success("Coupon updated successfully!");
-        onCouponUpdated(res.data.data);
+        onCouponUpdated(res?.data?.data);
         onOpenChange(false);
       } else {
-        toast.error(res.data.error || "Failed to update coupon");
+        toast.error(res?.data?.error || "Failed to update coupon");
       }
     } catch (error: unknown) {
       console.error("Error updating coupon:", error);

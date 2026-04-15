@@ -114,7 +114,7 @@ export default function BillingTabs({
         const res = await api.post("/billing/create-checkout-session", {
           amount: parsed,
         });
-        const data = res.data;
+        const data = res?.data;
         if (data.url) {
           window.location.href = data.url;
         } else {
@@ -131,12 +131,12 @@ export default function BillingTabs({
   const refreshRecurringTopup = async () => {
     const res = await api.get("/billing/recurring");
     if (res?.data?.success) {
-      setRecurringTopup(res.data.data ?? null);
-      if (res.data.data?.amount) {
-        setRecurringAmount(String(res.data.data.amount));
+      setRecurringTopup(res?.data?.data ?? null);
+      if (res?.data?.data?.amount) {
+        setRecurringAmount(String(res?.data?.data?.amount));
       }
-      if (res.data.data?.interval) {
-        setRecurringInterval(res.data.data.interval);
+      if (res?.data?.data?.interval) {
+        setRecurringInterval(res?.data?.data?.interval);
       }
     }
   };
@@ -161,7 +161,7 @@ export default function BillingTabs({
       });
 
       if (res?.data?.url) {
-        window.location.href = res.data.url;
+        window.location.href = res?.data?.url;
         return;
       }
 
@@ -194,13 +194,13 @@ export default function BillingTabs({
     // try {
       const res = await api.post("/billing/coupons/redeem", { code });
       
-      if (res.data.success) {
-        setBalance(res.data.balance);
+      if (res?.data?.success) {
+        setBalance((prev) => res?.data?.balance ?? prev);
         setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
       }
       // } else {
-      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
       // }
     // } catch (error: unknown) {
     //   pushToast("error", (error as { response?: { data?: { error?: string } } }).response?.data?.error || "Failed to redeem coupon");
@@ -220,13 +220,13 @@ export default function BillingTabs({
       const res = await api.post("/billing/coupons/redeem", { code });
       
       if (res?.data?.success) {
-        setBalance(res.data.balance);
+        setBalance((prev) => res?.data?.balance ?? prev);
         setCoupons(coupons.filter((c) => c.code !== code));
-        pushToast("success", res.data.message || "Coupon redeemed successfully!");
+        pushToast("success", res?.data?.message || "Coupon redeemed successfully!");
         setManualCouponCode("");
       }
       // } else {
-      //   pushToast("error", res.data.error || "Failed to redeem coupon");
+      //   pushToast("error", res?.data?.error || "Failed to redeem coupon");
       // }
     }
     // } catch (error: unknown) {
@@ -683,7 +683,7 @@ function TransactionsTab() {
       }
 
       const res = await api.get(`/billing/transactions?${params.toString()}`);
-      const data = res.data;
+      const data = res?.data;
       setTransactions(data.data ?? []);
       setTotal(data.pagination?.total ?? 0);
       setTotalPages(data.pagination?.totalPages ?? 1);

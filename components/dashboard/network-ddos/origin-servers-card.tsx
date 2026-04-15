@@ -43,7 +43,7 @@ const OriginServersCard = ({ spectrumId, initialOrigins, protocol }: OriginServe
         toast.success("Origin servers updated successfully");
         setEditMode(false);
       } else {
-        toast.error(response.data.error || "Failed to update origin servers");
+        toast.error(response?.data?.error || "Failed to update origin servers");
       }
     } catch (error) {
       console.error("Error updating origin servers:", error);

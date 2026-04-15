@@ -846,8 +846,8 @@ function SingleCluster({
   //     const loadUserData = async () => {
   //       try {
   //         const res = await api.get("/profile/read");
-  //         if (res.status === 200 && res.data.user) {
-  //           const userId = res.data.user.id;
+  //         if (res.status === 200 && res?.data?.user) {
+  //           const userId = res?.data?.user.id;
   //           setCurrentUserId(userId);
   //         }
   //       } catch (error) {
@@ -872,9 +872,9 @@ function SingleCluster({
           const res = await api.post("/services/kubernetes/clusters/read", {
             cluster_id: clusterId,
           });
-          if (res.status === 200 && res.data.cluster?.project_id) {
-            setCurrentProjectId(res.data.cluster.project_id);
-            setSelectedProjectId(res.data.cluster.project_id);
+          if (res.status === 200 && res?.data?.cluster?.project_id) {
+            setCurrentProjectId(res?.data?.cluster?.project_id ?? "");
+            setSelectedProjectId(res?.data?.cluster?.project_id ?? "select");
           }
         } catch (error) {
           console.error("[fetchClusterProject] Error:", error);

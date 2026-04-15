@@ -229,8 +229,8 @@ export const SettingsTab = ({
         const response = await axios.get(
           `/api/services/database/maintenance/read?database_id=${database.cluster_id}`
         );
-        if (response.data.maintenance_window) {
-          const window = response.data.maintenance_window;
+        if (response?.data?.maintenance_window) {
+          const window = response?.data?.maintenance_window;
           const normalizedWindow = {
             day: normalizeMaintenanceDay(window.day),
             hour: normalizeMaintenanceHour(window.hour),
@@ -266,7 +266,7 @@ export const SettingsTab = ({
           `/api/services/database/readForMigrate?database_id=${database.cluster_id}&target_region=${targetRegion}`
         );
         
-        if (response.data.migration_complete) {
+        if (response?.data?.migration_complete) {
           setIsMigrating(false);
           setSelectedRegion(targetRegion);
           toast.success("Database migration completed successfully!");

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -284,7 +284,7 @@ export default function AppDetailPage() {
   const prevBuildingRef = useRef<boolean | undefined>(undefined);
   const prevBuildNumberRef = useRef<number | null>(null);
   // Tracks consecutive polls where Jenkins says "done" but the DB row is still
-  // BUILDING — used to detect potentially orphaned builds and ask the backend
+  // BUILDING � used to detect potentially orphaned builds and ask the backend
   // to run the canonical recovery path.
   const stalePollingCountRef = useRef(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -413,12 +413,12 @@ export default function AppDetailPage() {
     try {
       const res = await api.post('/services/platform-apps/get', { app_id: appId });
       
-      if (!res.data) {
+      if (!res?.data) {
         setError('Failed to load app');
         return;
       }
 
-      setApp(res.data);
+      setApp(res?.data);
     } catch (err) {
       console.error('Error fetching app:', err);
       setError('Failed to load app');
@@ -432,19 +432,19 @@ export default function AppDetailPage() {
        const res = await api.get(`/jenkins/build-info?app=${appName}`, {
          validateStatus: (status) => status < 500,
        });
-      if (res.status === 200 && res.data && !res.data.error) {
+      if (res.status === 200 && res?.data && !res?.data?.error) {
         setBuildInfo((prev) => {
           // Guard: after triggering a redeploy, Jenkins takes ~5s to register
           // the new build. During that window it returns the PREVIOUS build's
           // info (older number, building=false). Don't let that overwrite our
           // optimistic state for the new build. Once Jenkins knows about the
           // new build number, accept all updates (including completion).
-          if (prev?.building && res.data.number < prev.number) {
+          if (prev?.building && res?.data?.number < prev.number) {
             return prev;
           }
-          return res.data;
+          return res?.data;
         });
-        return res.data as BuildInfo;
+        return res?.data as BuildInfo;
       }
     } catch (error) {
       console.error('Error fetching build info:', error);
@@ -459,7 +459,7 @@ export default function AppDetailPage() {
     append = false,
   ): Promise<boolean /* more */> => {
     if (!append) {
-      // Full replacement (initial fetch or build switch) — show skeleton
+      // Full replacement (initial fetch or build switch) � show skeleton
       setInitialLogLoading(true);
       logOffsetRef.current = 0;
     }
@@ -469,18 +469,18 @@ export default function AppDetailPage() {
         ? `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=${start}`
         : `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`;
       const res = await api.get(url);
-      if (res.data) {
-        const newChunk: string = res.data.logs || '';
+      if (res?.data) {
+        const newChunk: string = res?.data?.logs || '';
         if (append && newChunk) {
           setBuildLogs((prev) => prev + newChunk);
         } else if (!append) {
           setBuildLogs(newChunk || 'No logs available');
         }
         // Use the byte offset returned by Jenkins (X-Text-Size header), not character count
-        if (res.data.next_start != null) {
-          logOffsetRef.current = res.data.next_start;
+        if (res?.data?.next_start != null) {
+          logOffsetRef.current = res?.data?.next_start;
         }
-        return !!res.data.more;
+        return !!res?.data?.more;
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
@@ -498,7 +498,7 @@ export default function AppDetailPage() {
       const res = await api.get(
         `/services/platform-apps/operation-logs?app_id=${app.id}&operation_id=${operationId}`
       );
-      setOperationLogs(res.data?.logs || 'No operation logs available.');
+      setOperationLogs(res?.data?.logs || 'No operation logs available.');
       setSelectedOperationId(operationId);
     } catch (error) {
       console.error('Error fetching operation logs:', error);
@@ -540,7 +540,7 @@ export default function AppDetailPage() {
 
   // Sync real-time app updates to local state.
   // Preserve computed fields (e.g. can_rollback) that come from the API but are
-  // absent in the Supabase realtime payload — spread realtimeApp AFTER prev so
+  // absent in the Supabase realtime payload � spread realtimeApp AFTER prev so
   // undefined fields in realtimeApp don't overwrite known values.
   useEffect(() => {
     if (realtimeApp) {
@@ -589,7 +589,7 @@ export default function AppDetailPage() {
     let catchupId: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(async () => {
-      // Cancel any pending catch-up — the regular tick covers it
+      // Cancel any pending catch-up � the regular tick covers it
       if (catchupId) { clearTimeout(catchupId); catchupId = null; }
 
       const [latestBuildInfo, more] = await Promise.all([
@@ -608,13 +608,13 @@ export default function AppDetailPage() {
           stalePollingCountRef.current = 0;
           api
             .post('/services/platform-apps/recover-build', { app_id: appId })
-            .catch(() => {/* non-critical — recovery is best-effort */});
+            .catch(() => {/* non-critical � recovery is best-effort */});
         }
       } else {
         stalePollingCountRef.current = 0;
       }
 
-      // Jenkins has more buffered output  — fetch again quickly without waiting the full 2s
+      // Jenkins has more buffered output  � fetch again quickly without waiting the full 2s
       if (more) {
         catchupId = setTimeout(async () => {
           catchupId = null;
@@ -688,7 +688,7 @@ export default function AppDetailPage() {
     if (!activeBuildNumber) return;
     const prev = prevBuildNumberRef.current;
     prevBuildNumberRef.current = activeBuildNumber;
-    // prev === null means this is the first fetch — don't toast for an already-running build.
+    // prev === null means this is the first fetch � don't toast for an already-running build.
     if (prev === null) return;
     if (activeBuildNumber > prev) {
       toast.info(`Build #${activeBuildNumber} started`, { duration: 5000 });
@@ -775,7 +775,7 @@ export default function AppDetailPage() {
         setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
         toast.success('Environment changes saved', {
           description:
-            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect â€” click Redeploy to trigger a rebuild.',
+            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect — click Redeploy to trigger a rebuild.',
           duration: 7000,
         });
       } else if (data.requiresRedeploy) {
@@ -817,7 +817,7 @@ export default function AppDetailPage() {
     if (buildInfo?.number !== buildNumber) {
       setBuildInfo({ number: buildNumber, building: false, result: null, duration: 0, timestamp: 0, url: '' });
     } else {
-      // Same build — force a log refresh
+      // Same build � force a log refresh
       fetchBuildLogs(app.name, buildNumber);
     }
     setActiveTab('build-logs');
@@ -975,7 +975,7 @@ export default function AppDetailPage() {
     [activeTab]
   );
 
-  // ── Transparency: derive which build is actually serving traffic ──
+  // -- Transparency: derive which build is actually serving traffic --
   const servingBuildNumber = useMemo(() => {
     // The running container's imageTag is the Jenkins BUILD_NUMBER (e.g. "14")
     const tag = details?.container?.imageTag;
@@ -1026,23 +1026,23 @@ export default function AppDetailPage() {
   );
 
   // Detect "degraded" state: app status is running (old pod healthy) but the
-  // latest deployment failed — meaning the new code never took over.
+  // latest deployment failed � meaning the new code never took over.
   const isDegraded = useMemo(() => {
     if (app?.status !== 'running') return false;
     if (!latestReleaseDeployment) return false;
-    // While a deploy is in progress the new pod hasn't started yet — not degraded.
+    // While a deploy is in progress the new pod hasn't started yet � not degraded.
     if (latestReleaseDeployment.status === 'BUILDING') return false;
-    // While actively building — not degraded.
+    // While actively building � not degraded.
     if (isBuilding) return false;
-    // No image tag info yet — can't determine serving version.
+    // No image tag info yet � can't determine serving version.
     if (servingBuildNumber === null) return false;
-    // Details still loading — don't flash a false degraded banner.
+    // Details still loading � don't flash a false degraded banner.
     if (detailsLoading) return false;
     // Sole ground truth: is a completed deployment (any recorded status) sitting at
     // a higher build number than what the pod is actually running?
     // We intentionally ignore latestDeployment.status here because the deployment
     // record is written by a webhook that can silently fail (e.g. WEBHOOK_BASE_URL
-    // misconfigured). The running container's image tag is always reliable — if the
+    // misconfigured). The running container's image tag is always reliable � if the
     // build number matches what's serving, the deploy succeeded regardless of what
     // the database says.
     return latestReleaseDeployment.build_number > servingBuildNumber;
@@ -1108,7 +1108,7 @@ export default function AppDetailPage() {
                   Application Deployment
                 </p>
                 {getStatusBadge(app.status, isBuilding)}
-                {/* Live badge — but show Degraded when new deploy failed and old pod is serving */}
+                {/* Live badge � but show Degraded when new deploy failed and old pod is serving */}
               {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
                     <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
@@ -1168,7 +1168,7 @@ export default function AppDetailPage() {
                 <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
                   <RefreshCw className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Pod has restarted {restartCount} times. This may indicate a CrashLoop — check Runtime Logs.
+                    Pod has restarted {restartCount} times. This may indicate a CrashLoop � check Runtime Logs.
                   </span>
                 </div>
               )}
@@ -1278,7 +1278,7 @@ export default function AppDetailPage() {
                 <div>
                   <p className="text-sm font-semibold capitalize text-white">{currentSize}</p>
                   <p className="text-xs text-white/45">
-                    {currentSizeSpec.cpu} · {currentSizeSpec.memory}
+                    {currentSizeSpec.cpu} � {currentSizeSpec.memory}
                   </p>
                   {resizeInProgress ? (
                     <p className="mt-1 text-[11px] text-amber-300/80">
@@ -1583,7 +1583,7 @@ export default function AppDetailPage() {
                                 <span className="text-white/50">{event.message}</span>
                                 {event.count > 1 && (
                                   <Badge className="rounded-none bg-yellow-500/10 text-yellow-400/60 text-[10px] ml-auto shrink-0">
-                                    ×{event.count}
+                                    �{event?.count}
                                   </Badge>
                                 )}
                               </div>

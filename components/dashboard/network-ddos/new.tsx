@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from "react";
 import { ArrowLeft, CheckCircle2, FolderTree, AlertCircle, User, Search, Loader2 } from "lucide-react";
 import Image from "next/image";
@@ -97,14 +97,14 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
       try {
         if (role === "admin") {
           const response = await axios.get("/api/admin/products?type=network-ddos");
-          const products = response.data.products;
+          const products = response?.data?.products;
           if (products && products.length > 0) {
             setSpectrumPrice(parseFloat(products[0].price) || 0);
           }
         } else {
           const response = await axios.get("/api/pricing?category=network-ddos");
           const monthly =
-            response.data?.category?.tiers?.[0]?.price?.monthly;
+            response?.data?.category?.tiers?.[0]?.price?.monthly;
           if (typeof monthly === "number" && Number.isFinite(monthly)) {
             setSpectrumPrice(monthly);
           }
@@ -704,7 +704,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                   Estimated monthly cost
                 </div>
                 <div className="mt-2 text-2xl font-semibold text-white">
-                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "—"}
+                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "�"}
                 </div>
               </div>
               {!loadingPrice && spectrumPrice > 0 && (

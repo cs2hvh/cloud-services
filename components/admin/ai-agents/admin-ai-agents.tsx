@@ -234,8 +234,8 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
     try {
       setStatsLoading(true);
       const res = await api.get('/admin/ai-agents/stats');
-      if (res.data.success) {
-        setStats(res.data.data);
+      if (res?.data?.success) {
+        setStats(res?.data?.data ?? null);
       }
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -252,8 +252,8 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       const res = await api.get('/admin/ai-agents/agents', {
         params: { search: agentsSearch }
       });
-      if (res.data.success) {
-        setAgents(res.data.data?.agents || []);
+      if (res?.data?.success) {
+        setAgents(res?.data?.data?.agents || []);
       }
     } catch (error) {
       console.error("Error fetching agents:", error);
@@ -270,8 +270,8 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       const res = await api.get('/admin/ai-agents/users', {
         params: { search: usersSearch }
       });
-      if (res.data.success) {
-        setUsers(res.data.data?.users || []);
+      if (res?.data?.success) {
+        setUsers(res?.data?.data?.users || []);
       }
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -346,13 +346,15 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       setLoading(true);
       const res = await api.post('/admin/ai-agents/models', formData);
       
-      if (res.data.success) {
-        setModels([...models, res.data.data]);
+      if (res?.data?.success) {
+        if (res?.data?.data) {
+          setModels([...models, res.data.data]);
+        }
         toast.success("Model created successfully");
         setCreateDialogOpen(false);
         resetForm();
       } else {
-        toast.error(res.data.error || "Failed to create model");
+        toast.error(res?.data?.error || "Failed to create model");
       }
     } catch (error: unknown) {
       console.error("Error creating model:", error);
@@ -403,14 +405,18 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
         sort_order: formData.sort_order,
       });
       
-      if (res.data.success) {
-        setModels(models.map(m => m.id === selectedModel.id ? res.data.data : m));
+      if (res?.data?.success) {
+        setModels(
+          models.map((m) =>
+            m.id === selectedModel.id ? (res?.data?.data ?? m) : m
+          )
+        );
         toast.success("Model updated successfully");
         setEditDialogOpen(false);
         resetForm();
         setSelectedModel(null);
       } else {
-        toast.error(res.data.error || "Failed to update model");
+        toast.error(res?.data?.error || "Failed to update model");
       }
     } catch (error: unknown) {
       console.error("Error updating model:", error);
@@ -433,13 +439,13 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
       setLoading(true);
       const res = await api.delete(`/admin/ai-agents/models/${modelToDelete.id}`);
       
-      if (res.data.success) {
+      if (res?.data?.success) {
         setModels(models.filter(m => m.id !== modelToDelete.id));
         toast.success("Model deleted successfully");
         setDeleteDialogOpen(false);
         setModelToDelete(null);
       } else {
-        toast.error(res.data.error || "Failed to delete model");
+        toast.error(res?.data?.error || "Failed to delete model");
       }
     } catch (error: unknown) {
       console.error("Error deleting model:", error);
@@ -456,7 +462,7 @@ export default function AdminAIAgents({ initialModels }: PageProps) {
         is_active: !model.is_active,
       });
       
-      if (res.data.success) {
+      if (res?.data?.success) {
         setModels(models.map(m => m.id === model.id ? { ...m, is_active: !m.is_active } : m));
         toast.success(`Model ${!model.is_active ? 'enabled' : 'disabled'}`);
       }

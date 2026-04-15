@@ -17,16 +17,16 @@ const POLLING_STATUSES = new Set(["pending", "confirming"]);
 
 async function PaymentContent({ paymentId }: { paymentId: string }) {
   const result = await getPublicPayment(paymentId);
-  if (!result.success || !result.data) {
+  if (!result.success || !result?.data) {
     return <ErrorCard text={result.error || "Payment not found"} />
   }
 
-  const status = result.data.status;
+  const status = result?.data?.status;
 
   return (
     <>
       {POLLING_STATUSES.has(status) && <AutoRefresh />}
-      <PaymentDetails payment={result.data} />
+      <PaymentDetails payment={result?.data} />
     </>
   );
 }

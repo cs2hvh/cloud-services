@@ -162,7 +162,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
 
       return {
         success: true,
-        bucket_id: result.data?.id,
+        bucket_id: result?.data?.id,
       };
     } catch (err) {
       return {

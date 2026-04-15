@@ -143,8 +143,8 @@ export default function AddPlanDialog({
     setIsLoadingDroplets(true);
     try {
       const response = await api.get("/digitalocean/sizes?kubernetes=true");
-      if (response.status === 200 && response.data.sizes) {
-        setDropletSizes(response.data.sizes);
+      if (response.status === 200 && response?.data?.sizes) {
+        setDropletSizes(response?.data?.sizes ?? []);
       }
     } catch (error) {
       console.error("Error fetching droplet sizes:", error);

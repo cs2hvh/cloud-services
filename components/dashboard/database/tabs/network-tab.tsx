@@ -69,7 +69,7 @@ export const NetworkTab = ({
       });
 
       if (response.status === 200) {
-        setRules(response.data.data || []);
+        setRules(response?.data?.data || []);
       }
     } catch (error) {
       console.error("[fetchNetworkRules] Error:", error);

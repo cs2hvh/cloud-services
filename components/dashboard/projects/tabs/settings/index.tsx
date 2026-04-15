@@ -19,7 +19,7 @@ const ProjectSettingsPage = async ({ project }: PageProps) => {
     // const response = await axios.get(
     //   `${process.env.DOMAIN}/api/users?ids=${userIds}`
     // );
-   // users = response.data;
+   // users = response?.data;
   }
 
   return (
