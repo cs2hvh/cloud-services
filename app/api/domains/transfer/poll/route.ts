@@ -56,14 +56,12 @@ export async function POST(req: Request) {
 
 function safeCompare(a: string, b: string): boolean {
   try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) {
-      // Compare against self to keep constant time, then return false
-      timingSafeEqual(bufA, bufA);
-      return false;
-    }
-    return timingSafeEqual(bufA, bufB);
+    // Hash both sides to a fixed-length digest before comparing. This eliminates
+    // length-based timing leaks even when the two secrets differ in byte length.
+    const { createHash } = require("node:crypto");
+    const hashA = createHash("sha256").update(a).digest();
+    const hashB = createHash("sha256").update(b).digest();
+    return timingSafeEqual(hashA, hashB);
   } catch {
     return false;
   }

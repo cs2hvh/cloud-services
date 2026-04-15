@@ -363,7 +363,8 @@ export class DomainMarketplaceService {
     // to the platform admin inbox. This is non-blocking — a failure here does NOT
     // roll back the purchase.
     if (actor.userEmail && this.registrar.setRegistrantContact) {
-      const [firstName, ...rest] = (actor.userName || "").trim().split(" ");
+      const [rawFirst, ...rest] = (actor.userName || "").trim().split(" ");
+      const firstName = rawFirst || undefined;
       const lastName = rest.join(" ") || undefined;
       this.emitNonBlocking(async () => {
         let contactSynced = false;

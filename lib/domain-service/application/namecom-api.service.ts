@@ -12,8 +12,25 @@ import {
 } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
 import type { DomainMarketplaceRegistrarPort } from "@/lib/domain-service/core/ports";
 
+const REQUIRED_CONTACT_ENVS = [
+  "PLATFORM_CONTACT_PHONE",
+  "PLATFORM_CONTACT_ADDRESS",
+  "PLATFORM_CONTACT_CITY",
+  "PLATFORM_CONTACT_STATE",
+  "PLATFORM_CONTACT_ZIP",
+  "PLATFORM_CONTACT_COUNTRY",
+] as const;
+
 export class NameComApiService implements DomainMarketplaceRegistrarPort {
-  constructor(private readonly client: NameComRegistrarAdapter) {}
+  constructor(private readonly client: NameComRegistrarAdapter) {
+    const missing = REQUIRED_CONTACT_ENVS.filter((k) => !process.env[k]);
+    if (missing.length > 0) {
+      console.warn(
+        `[NameComApiService] Missing required env vars: ${missing.join(", ")}. ` +
+        "setRegistrantContact will throw at runtime — ICANN verification emails will not be routed to users."
+      );
+    }
+  }
 
   async hello() {
     return this.client.hello();
