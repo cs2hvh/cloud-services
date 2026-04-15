@@ -357,6 +357,50 @@ export class DomainMarketplaceService {
       lastError: null,
     });
 
+    // After a successful purchase the name.com account-level contacts are used as
+    // the default registrant. For white-label: update the registrant email to the
+    // purchasing user so ICANN contact-verification emails are routed to them, not
+    // to the platform admin inbox. This is non-blocking — a failure here does NOT
+    // roll back the purchase.
+    if (actor.userEmail && this.registrar.setRegistrantContact) {
+      const [firstName, ...rest] = (actor.userName || "").trim().split(" ");
+      const lastName = rest.join(" ") || undefined;
+      this.emitNonBlocking(async () => {
+        let contactSynced = false;
+        try {
+          await this.registrar.setRegistrantContact!(cleanDomain, {
+            email: actor.userEmail!,
+            ...(firstName ? { firstName } : {}),
+            ...(lastName ? { lastName } : {}),
+          });
+          contactSynced = true;
+          // Persist the email so operators can trace ICANN verification issues.
+          await this.purchaseRequests.updateStatus({
+            requestId: request.id,
+            status: "completed",
+            registrantEmail: actor.userEmail,
+          });
+        } catch (err) {
+          console.warn("[DomainMarketplace] setRegistrantContact failed (non-fatal)", {
+            domain: cleanDomain,
+            email: actor.userEmail,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+        await this.emitAudit({
+          actor,
+          action: "update",
+          serviceId: request.id,
+          serviceName: cleanDomain,
+          metadata: {
+            event: "domain_registrant_contact_sync",
+            registrant_email: actor.userEmail,
+            contact_synced: contactSynced,
+          },
+        });
+      });
+    }
+
     await this.emitNonBlocking(async () => {
       await this.emitAudit({
         actor,
@@ -391,7 +435,7 @@ export class DomainMarketplaceService {
         severity: "info",
         alertTitle: "Domain purchase completed",
         serviceName: cleanDomain,
-        summary: `Your domain purchase for ${cleanDomain} has completed successfully.`,
+        summary: `Your domain purchase for ${cleanDomain} has completed successfully. Check your inbox for an ICANN contact verification email and click the link to unlock DNS activation.`,
         metadata: {
           source_app_id: input.appId || "none",
           amount: first.purchasePrice ?? 0,
@@ -439,6 +483,74 @@ export class DomainMarketplaceService {
     }
 
     return toPublicPurchaseRequest(request);
+  }
+
+  /**
+   * Reconciliation job — called by the hourly cron to retry setRegistrantContact
+   * for any completed purchases where the initial async call failed or was skipped.
+   * Up to `limit` records are processed per run (oldest first).
+   *
+   * @param lookupEmail  Caller-provided function to resolve a user ID → email.
+   *                     Kept as a callback so the service stays decoupled from auth infra.
+   */
+  async reconcileRegistrantContacts(params: {
+    limit?: number;
+    lookupUser: (userId: string) => Promise<{ email: string | null; firstName?: string; lastName?: string } | null>;
+  }): Promise<{ processed: number; failed: number; skipped: number; failures: Array<{ domain: string; error: string }> }> {
+    if (!this.registrar.setRegistrantContact) {
+      return { processed: 0, failed: 0, skipped: 0, failures: [] };
+    }
+
+    const unsynced = await this.purchaseRequests.findUnsyncedCompleted(params.limit ?? 20);
+    let processed = 0;
+    let failed = 0;
+    let skipped = 0;
+    const failures: Array<{ domain: string; error: string }> = [];
+
+    for (const record of unsynced) {
+      try {
+        const user = await params.lookupUser(record.user_id);
+        if (!user?.email) {
+          skipped++;
+          continue;
+        }
+
+        await this.registrar.setRegistrantContact(record.domain, {
+          email: user.email,
+          ...(user.firstName ? { firstName: user.firstName } : {}),
+          ...(user.lastName ? { lastName: user.lastName } : {}),
+        });
+        await this.purchaseRequests.updateStatus({
+          requestId: record.id,
+          status: "completed",
+          registrantEmail: user.email,
+        });
+        processed++;
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn("[DomainMarketplace] reconcileRegistrantContacts: failed for domain", {
+          domain: record.domain,
+          error: errMsg,
+        });
+        // If the domain doesn't exist at the registrar (e.g. sandbox purchase), permanently
+        // skip it so it never shows up in reconcile again.
+        const isNotFound = err instanceof DomainServiceError
+          && err.code === DOMAIN_ERROR_CODES.DOMAIN_NOT_FOUND;
+        if (isNotFound) {
+          await this.purchaseRequests.updateStatus({
+            requestId: record.id,
+            status: "completed",
+            registrantEmail: "sandbox@not-found.invalid",
+          }).catch(() => {});
+          skipped++;
+        } else {
+          failures.push({ domain: record.domain, error: errMsg });
+          failed++;
+        }
+      }
+    }
+
+    return { processed, failed, skipped, failures };
   }
 
   private async emitFailureEvents(params: {

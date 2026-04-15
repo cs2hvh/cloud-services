@@ -26,7 +26,7 @@ END $$;
 
 ALTER TABLE support.support_tickets
   ADD CONSTRAINT support_tickets_status_check
-  CHECK (status IN ('open', 'in_progress', 'pending', 'resolved', 'closed', 'cancelled'));
+  CHECK (status IN ('open', 'in_progress', 'pending', 'resolved', 'closed', 'cancelled')) NOT VALID;
 
 -- Update user-update policy to allow edits while ticket is still open/active.
 DROP POLICY IF EXISTS "Users can update open support tickets" ON support.support_tickets;

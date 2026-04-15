@@ -41,6 +41,16 @@ export interface DomainMarketplaceRegistrarPort {
     order?: number;
     totalPaid?: number;
   }>;
+  /**
+   * Optional: Update the registrant contact on a domain after purchase.
+   * Used for white-label flows so ICANN contact verification emails are
+   * routed to the purchasing user rather than the platform admin account.
+   * Implementations may be no-ops if the provider does not support it.
+   */
+  setRegistrantContact?(
+    domainName: string,
+    contact: { email: string; firstName?: string; lastName?: string }
+  ): Promise<void>;
 }
 
 export interface DomainRegistrarPort {
@@ -164,11 +174,18 @@ export interface DomainPurchaseRequestRepositoryPort {
     appId?: string;
     limit?: number;
   }): Promise<DomainPurchaseRequest[]>;
+  /**
+   * Returns completed purchase requests where registrant_email is NULL.
+   * Used by the reconciliation cron to retry failed setRegistrantContact calls.
+   * Only looks at records created within the last 20 days (ICANN window is 15 days).
+   */
+  findUnsyncedCompleted(limit: number): Promise<DomainPurchaseRequest[]>;
   updateStatus(params: {
     requestId: string;
     status: DomainPurchaseRequestStatus;
     providerRequestId?: string | null;
     lastError?: string | null;
+    registrantEmail?: string | null;
   }): Promise<void>;
 }
 

@@ -106,6 +106,7 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
   DOMAIN_NOT_VERIFIED: 'Domain must be verified before activation.',
   OPERATION_IN_PROGRESS: 'Another setup operation is already running for this domain. Please wait.',
   PROVIDER_RATE_LIMITED: 'The provider rate-limited this request. Please wait and try again.',
+  PROVIDER_VALIDATION_FAILED: 'Domain activation was blocked by a registrar hold. This is usually caused by a pending ICANN contact verification email — check the registrant email inbox for a verification link, then retry activation.',
   INGRESS_APPLY_FAILED: 'Domain setup failed in infrastructure. Please retry in a moment.',
   INTEGRATION_CONFIG_ERROR: 'Platform integration is not fully configured. Contact support if this persists.',
   TOO_MANY_REQUESTS: 'Too many requests — please wait a moment and try again.',

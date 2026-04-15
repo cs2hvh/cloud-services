@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Loader2, Search, ShieldCheck, SlidersHorizontal, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
 import { SearchResults } from './domain-marketplace/search-results';
 import { TldSelector } from './domain-marketplace/tld-selector';
 import type { MarketplaceSummary, SearchResultItem } from './domain-marketplace/types';
@@ -63,6 +64,14 @@ export function DomainMarketplaceTab({
   const [searching, setSearching] = useState(false);
   const [requestingDomain, setRequestingDomain] = useState<string | null>(null);
   const [showTldPanel, setShowTldPanel] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setUserEmail(data?.user?.email ?? null);
+    });
+  }, []);
 
   useEffect(() => {
     if (initialQuery) setQuery(initialQuery);
@@ -168,7 +177,12 @@ export function DomainMarketplaceTab({
         toast.error(data?.message || data?.error || 'Failed to submit request');
         return;
       }
-      toast.success(`Purchase request submitted for ${domain}`);
+      toast.success(`Domain purchased: ${domain}`, {
+        description: userEmail
+          ? `An ICANN contact verification email will be sent to ${userEmail} — click the link before activating the domain.`
+          : 'Check your email for an ICANN verification link and click it before activating the domain.',
+        duration: 8000,
+      });
     } catch {
       toast.error('Failed to submit purchase request');
     } finally {

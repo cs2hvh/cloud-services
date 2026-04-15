@@ -9,6 +9,7 @@ import {
   Copy,
   Globe,
   Loader2,
+  Mail,
   RefreshCw,
   Search,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ interface DomainPurchase {
   status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
   last_error: string | null;
+  registrant_email: string | null;
 }
 
 interface DomainConnection {
@@ -220,6 +222,28 @@ function DomainRow({ item, parentDomain }: { item: DomainInventoryItem; parentDo
             <Copy className="h-3 w-3" />
           </button>
         </div>
+        {item.purchase?.status === 'completed' && (() => {
+          const withinIcannWindow = item.purchase.created_at
+            ? Date.now() - new Date(item.purchase.created_at).getTime() < 15 * 24 * 60 * 60 * 1000
+            : false;
+          const isSandboxSentinel = item.purchase.registrant_email?.endsWith('@not-found.invalid');
+          const displayEmail = isSandboxSentinel ? null : item.purchase.registrant_email;
+          if (!displayEmail && !withinIcannWindow) return null;
+          return (
+            <div className="mt-1 flex items-center gap-1.5 pl-0">
+              <Mail className="h-2.5 w-2.5 shrink-0 text-white/25" />
+              {displayEmail ? (
+                <span className="text-[10px] text-white/35" title="ICANN verification email sent to this address">
+                  ICANN email → <span className="font-mono text-white/50">{displayEmail}</span>
+                </span>
+              ) : (
+                <span className="text-[10px] text-amber-400/70" title="Verification email routing pending — retries automatically">
+                  ICANN email routing pending…
+                </span>
+              )}
+            </div>
+          );
+        })()}
       </td>
 
       {/* Status */}
