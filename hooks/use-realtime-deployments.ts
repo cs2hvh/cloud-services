@@ -49,7 +49,7 @@ interface DeploymentRecord extends Record<string, unknown> {
 }
 
 // UI-friendly format (what we expose to components)
-interface Deployment {
+export interface Deployment {
   id: string;
   app_id: string;
   build_number: number | null;

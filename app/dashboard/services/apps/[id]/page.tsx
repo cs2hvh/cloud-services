@@ -68,6 +68,9 @@ import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
 import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-editor';
+import { DeploymentHistory } from '@/components/dashboard/apps/deployment-history';
+import { AppStatusBadge } from '@/components/dashboard/apps/app-status-badge';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
 
 
@@ -100,28 +103,6 @@ interface AppDetail {
   rollback_target_commit_sha?: string | null;
   // Failure tracking
   last_failure_reason?: string | null;
-}
-
-function makeIdempotencyKey(prefix: string) {
-  return `${prefix}:${Date.now()}:${crypto.randomUUID()}`;
-}
-
-function getDeploymentEventLabel(params: {
-  buildNumber: number | null;
-  trigger?: string | null;
-  rollbackTargetBuildNumber?: number | null;
-  operationDetails?: {
-    type?: string;
-    source?: { size?: string };
-    target?: { size?: string };
-  } | null;
-}) {
-  return getAppOperationLabel({
-    buildNumber: params.buildNumber,
-    trigger: params.trigger,
-    rollbackTargetBuildNumber: params.rollbackTargetBuildNumber,
-    operationDetails: params.operationDetails,
-  });
 }
 
 type PlatformAppSize = 'small' | 'medium' | 'large';
@@ -218,54 +199,6 @@ const SECTION_META: Array<{
   },
 ];
 
-function getStatusBadge(status: string, building?: boolean) {
-  if (building) {
-    return (
-      <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
-        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-        Building
-      </Badge>
-    );
-  }
-
-  switch (status) {
-    case 'running':
-      return (
-        <Badge className="rounded-none border-green-500/30 bg-green-500/20 text-green-400">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Running
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge className="rounded-none border-red-500/30 bg-red-500/20 text-red-400">
-          <XCircle className="w-3 h-3 mr-1" />
-          Failed
-        </Badge>
-      );
-    case 'building':
-      return (
-        <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
-          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-          Building
-        </Badge>
-      );
-    case 'deleting':
-      return (
-        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
-          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-          Deleting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
-          Pending
-        </Badge>
-      );
-  }
-}
-
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -283,6 +216,9 @@ export default function AppDetailPage() {
   const logOffsetRef = useRef(0);
   const prevBuildingRef = useRef<boolean | undefined>(undefined);
   const prevBuildNumberRef = useRef<number | null>(null);
+  // Which build's logs the user is viewing — null means "show the active/latest build".
+  // Separate from buildInfo so polling doesn't hijack the user's selection.
+  const [viewingBuildNumber, setViewingBuildNumber] = useState<number | null>(null);
   // Tracks consecutive polls where Jenkins says "done" but the DB row is still
   // BUILDING � used to detect potentially orphaned builds and ask the backend
   // to run the canonical recovery path.
@@ -378,9 +314,25 @@ export default function AppDetailPage() {
     return latestBuildDeployment?.status === 'BUILDING' && latestBuildDeployment.trigger === 'resize';
   }, [latestBuildDeployment, pendingResizeSize]);
   const displayBuildInfo = useMemo<BuildInfo | null>(() => {
-    if (activeBuildTrigger === 'resize') {
-      return null;
+
+    // User explicitly selected a historical build to view
+    if (viewingBuildNumber !== null) {
+      // If the viewing build happens to be the active build, show live Jenkins info
+      if (activeBuildNumber !== null && viewingBuildNumber === activeBuildNumber && buildInfo?.number === activeBuildNumber) {
+        return { ...buildInfo, building: true };
+      }
+      // Historical build — show a static stub (not building)
+      return {
+        number: viewingBuildNumber,
+        building: false,
+        result: null,
+        duration: 0,
+        timestamp: 0,
+        url: '',
+      };
     }
+
+    // No explicit selection — show the active build if one is running
     if (activeBuildNumber !== null) {
       if (buildInfo?.number === activeBuildNumber) {
         return { ...buildInfo, building: true };
@@ -397,7 +349,7 @@ export default function AppDetailPage() {
     }
 
     return buildInfo;
-  }, [activeBuildNumber, activeBuildTrigger, buildInfo, buildDeployments]);
+  }, [activeBuildNumber, activeBuildTrigger, buildInfo, viewingBuildNumber]);
   const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
@@ -565,57 +517,62 @@ export default function AppDetailPage() {
     }
   }, [app?.name, fetchBuildInfo]);
 
+  // When a new build starts, auto-switch to it (clear any historical selection)
   useEffect(() => {
-    // Use displayBuildInfo number (already filters out resize builds) instead of raw buildInfo
-    const targetBuildNumber = activeBuildNumber ?? displayBuildInfo?.number ?? null;
-    if (app?.name && targetBuildNumber && activeBuildTrigger !== 'resize') {
-      // Use raw logs while building (deployment stage hasn't run yet),
-      // switch to deployment-filtered summary once the build completes.
-      fetchBuildLogs(app.name, targetBuildNumber, isBuilding);
+    if (activeBuildNumber !== null) {
+      setViewingBuildNumber(null);
     }
-  }, [app?.name, activeBuildNumber, activeBuildTrigger, displayBuildInfo?.number, isBuilding, fetchBuildLogs]);
+  }, [activeBuildNumber]);
 
-  // Poll build info and APPEND new log lines while a build is actively running.
-  // - 2s interval (down from 5s) for faster perceived updates
-  // - fetchBuildInfo and fetchBuildLogs run in parallel to halve per-tick latency
-  // - when Jenkins signals more data is ready (X-More-Data: true), schedule
-  //   a catch-up fetch 400ms later instead of waiting the full 2s
+  // Fetch logs for the build the user is currently viewing.
+  // - If viewing the active build (or no explicit selection): raw streaming logs while building,
+  //   deployment-filtered summary once complete.
+  // - If viewing a historical build: deployment-filtered summary (non-raw).
+  useEffect(() => {
+    const isViewingActiveBuild = viewingBuildNumber === null || viewingBuildNumber === activeBuildNumber;
+    const targetBuildNumber = viewingBuildNumber ?? activeBuildNumber ?? displayBuildInfo?.number ?? null;
+    if (app?.name && targetBuildNumber && activeBuildTrigger !== 'resize') {
+      const useRaw = isViewingActiveBuild && isBuilding;
+      fetchBuildLogs(app.name, targetBuildNumber, useRaw);
+    }
+  }, [app?.name, viewingBuildNumber, activeBuildNumber, activeBuildTrigger, displayBuildInfo?.number, isBuilding, fetchBuildLogs]);
+
+  // Poll Jenkins build status (and stream logs) while a build is actively running.
+  // Only appends log output if the user is currently viewing the active build.
   useEffect(() => {
     if (!app?.name || !isBuilding || !activeBuildNumber || activeBuildTrigger === 'resize') return;
 
-    // Capture stable values to avoid stale closures inside the interval
     const appName = app.name;
     const buildNum = activeBuildNumber;
+    // Are we viewing the active build? If user switched to a historical build,
+    // we still poll Jenkins for status but don't overwrite the displayed logs.
+    const isViewingActive = viewingBuildNumber === null || viewingBuildNumber === activeBuildNumber;
     let catchupId: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(async () => {
-      // Cancel any pending catch-up � the regular tick covers it
       if (catchupId) { clearTimeout(catchupId); catchupId = null; }
 
-      const [latestBuildInfo, more] = await Promise.all([
+      const promises: [Promise<BuildInfo | null>, Promise<boolean | void>] = [
         fetchBuildInfo(appName),
-        fetchBuildLogs(appName, buildNum, true, true),
-      ]);
+        isViewingActive
+          ? fetchBuildLogs(appName, buildNum, true, true)
+          : Promise.resolve(false),
+      ];
+      const [latestBuildInfo, more] = await Promise.all(promises);
 
-      // Stale-build detection: Jenkins says the build is finished but the
-      // Supabase deployment row is still BUILDING. After a few consecutive
-      // "Jenkins done" polls, ask the backend to run stale-build recovery.
-      // The backend decides whether the build is truly orphaned or still within
-      // the normal post-build health verification window.
       if (latestBuildInfo && !latestBuildInfo.building) {
         stalePollingCountRef.current += 1;
         if (stalePollingCountRef.current >= 3) {
           stalePollingCountRef.current = 0;
           api
             .post('/services/platform-apps/recover-build', { app_id: appId })
-            .catch(() => {/* non-critical � recovery is best-effort */});
+            .catch(() => {});
         }
       } else {
         stalePollingCountRef.current = 0;
       }
 
-      // Jenkins has more buffered output  � fetch again quickly without waiting the full 2s
-      if (more) {
+      if (more && isViewingActive) {
         catchupId = setTimeout(async () => {
           catchupId = null;
           await fetchBuildLogs(appName, buildNum, true, true);
@@ -628,23 +585,29 @@ export default function AppDetailPage() {
       if (catchupId) clearTimeout(catchupId);
       stalePollingCountRef.current = 0;
     };
-  }, [app?.name, appId, isBuilding, activeBuildNumber, activeBuildTrigger, fetchBuildInfo, fetchBuildLogs]);
+  }, [app?.name, appId, isBuilding, activeBuildNumber, activeBuildTrigger, viewingBuildNumber, fetchBuildInfo, fetchBuildLogs]);
 
-  // After a build completes, refetch K8s details so servingBuildNumber reflects
-  // the new pod's image tag and clears any false-positive degraded banner.
+  // After a build completes, poll K8s details until servingBuildNumber reflects
+  // the new pod's image tag. K8s rolling updates can take 10-30s after the build
+  // finishes — a single delayed fetch is unreliable.
   useEffect(() => {
     const wasBuilding = prevBuildingRef.current;
     prevBuildingRef.current = isBuilding;
 
     if (wasBuilding === true && !isBuilding) {
-      // Immediately refetch deployments to pick up any status already written to DB
       refetchDeployments();
-      // Give K8s a few seconds to complete the rolling update, then refetch both
-      const t = setTimeout(() => {
+
+      // Poll details every 5s for up to 60s until the K8s pod image updates
+      let attempts = 0;
+      const maxAttempts = 12;
+      const pollId = setInterval(() => {
+        attempts++;
         refetchDetails();
-        refetchDeployments();
-      }, 8000);
-      return () => clearTimeout(t);
+        if (attempts >= maxAttempts) {
+          clearInterval(pollId);
+        }
+      }, 5000);
+      return () => clearInterval(pollId);
     }
   }, [isBuilding, refetchDetails, refetchDeployments]);
 
@@ -752,7 +715,7 @@ export default function AppDetailPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': makeIdempotencyKey('env-update'),
+          'Idempotency-Key': generateIdempotencyKey('env-update'),
         },
         body: JSON.stringify({
           app_id: app.id,
@@ -813,12 +776,11 @@ export default function AppDetailPage() {
   const handleSelectBuild = (buildNumber: number) => {
     if (!app?.name) return;
     setSelectedOperationId(null);
-    // Only update if it's actually a different build
-    if (buildInfo?.number !== buildNumber) {
-      setBuildInfo({ number: buildNumber, building: false, result: null, duration: 0, timestamp: 0, url: '' });
+    // If selecting the active build, clear the override so we follow live state
+    if (activeBuildNumber !== null && buildNumber === activeBuildNumber) {
+      setViewingBuildNumber(null);
     } else {
-      // Same build � force a log refresh
-      fetchBuildLogs(app.name, buildNumber);
+      setViewingBuildNumber(buildNumber);
     }
     setActiveTab('build-logs');
   };
@@ -837,7 +799,7 @@ export default function AppDetailPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': makeIdempotencyKey('redeploy'),
+          'Idempotency-Key': generateIdempotencyKey('redeploy'),
         },
         body: JSON.stringify({ app_id: app.id }),
       });
@@ -885,7 +847,7 @@ export default function AppDetailPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Idempotency-Key': makeIdempotencyKey('resize'),
+          'Idempotency-Key': generateIdempotencyKey('resize'),
         },
         body: JSON.stringify({ app_id: app.id, new_size: selectedSize }),
       });
@@ -1013,7 +975,7 @@ export default function AppDetailPage() {
   }, [app?.last_operation_trigger, latestOperationDeployment]);
   const lastOperationLabel = useMemo(() => {
     if (!lastOperationTrigger && lastOperationBuildNumber === null) return null;
-    return getDeploymentEventLabel({
+    return getAppOperationLabel({
       buildNumber: lastOperationBuildNumber,
       trigger: lastOperationTrigger,
       rollbackTargetBuildNumber: latestOperationDeployment?.rollback_target_build_number ?? null,
@@ -1045,8 +1007,19 @@ export default function AppDetailPage() {
     // misconfigured). The running container's image tag is always reliable � if the
     // build number matches what's serving, the deploy succeeded regardless of what
     // the database says.
-    return latestReleaseDeployment.build_number > servingBuildNumber;
-  }, [app?.status, latestReleaseDeployment, servingBuildNumber, isBuilding, detailsLoading]);
+    if (latestReleaseDeployment.build_number <= servingBuildNumber) return false;
+    // Not degraded if the user intentionally rolled back from the latest release build —
+    // a successful rollback operation after that build's creation time means it was
+    // deliberately replaced, not stuck.
+    const latestReleasedAt = new Date(latestReleaseDeployment.created_at).getTime();
+    const wasRolledBackFrom = operationDeployments.some(
+      (d) =>
+        d.trigger === 'rollback' &&
+        d.status === 'SUCCESS' &&
+        new Date(d.created_at).getTime() > latestReleasedAt
+    );
+    return !wasRolledBackFrom;
+  }, [app?.status, latestReleaseDeployment, servingBuildNumber, isBuilding, detailsLoading, operationDeployments]);
 
   // High restart count warning (CrashLoopBackOff signature)
   const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
@@ -1107,7 +1080,7 @@ export default function AppDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
                   Application Deployment
                 </p>
-                {getStatusBadge(app.status, isBuilding)}
+                {<AppStatusBadge status={app.status} building={isBuilding} />}
                 {/* Live badge � but show Degraded when new deploy failed and old pod is serving */}
               {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
@@ -1278,7 +1251,7 @@ export default function AppDetailPage() {
                 <div>
                   <p className="text-sm font-semibold capitalize text-white">{currentSize}</p>
                   <p className="text-xs text-white/45">
-                    {currentSizeSpec.cpu} � {currentSizeSpec.memory}
+                    {currentSizeSpec.cpu} – {currentSizeSpec.memory}
                   </p>
                   {resizeInProgress ? (
                     <p className="mt-1 text-[11px] text-amber-300/80">
@@ -1715,170 +1688,17 @@ export default function AppDetailPage() {
 
           {/* Deployments Tab */}
           <TabsContent value="deployments">
-            <Card className="glass-panel rounded-none border-white/[0.08]">
-              <CardHeader className="border-b border-white/[0.06]">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Layers className="w-5 h-5" />
-                    Deployment History
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    {connectionStatus === 'connected' && (
-                      <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
-                        <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
-                        Live Updates
-                      </Badge>
-                    )}
-                    {connectionStatus === 'connecting' && (
-                      <Badge className="rounded-none bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        Connecting...
-                      </Badge>
-                    )}
-                    {connectionStatus === 'disconnected' && (
-                      <Badge className="rounded-none bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        Disconnected
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-5">
-                {deploymentsLoading && deployments.length === 0 ? (
-                  <div className="text-center py-8 text-white/50">
-                    <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin" />
-                    <p>Loading deployments...</p>
-                  </div>
-                ) : deployments.length > 0 ? (
-                  <div className="space-y-2">
-                    {deployments.map((deployment) => {
-                      const buildNumber =
-                        typeof deployment.build_number === 'number' && deployment.build_number > 0
-                          ? deployment.build_number
-                          : null;
-                      const isBuildEntry = buildNumber !== null;
-                      // Only real builds (not rollback records that copy the same build number)
-                      // should show the "Serving" badge
-                      const isCurrentlyServing =
-                        isBuildEntry &&
-                        deployment.history_type === 'release' &&
-                        servingBuildNumber !== null &&
-                        buildNumber === servingBuildNumber;
-                      return (
-                      <div
-                        key={deployment.id}
-                        className={`flex flex-col gap-3 border px-4 py-4 ${
-                          isCurrentlyServing
-                            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
-                            : 'border-white/[0.08] bg-white/[0.03]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-mono text-white">
-                              {getDeploymentEventLabel({
-                                buildNumber,
-                                trigger: deployment.trigger,
-                                rollbackTargetBuildNumber: deployment.rollback_target_build_number ?? null,
-                                operationDetails: deployment.operation_details ?? null,
-                              })}
-                            </span>
-                            <Badge className={`rounded-none ${
-                              deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
-                              deployment.status === 'FAILURE' ? 'bg-red-500/20 text-red-400' :
-                              'bg-yellow-500/20 text-yellow-400'
-                            }`}>
-                              {deployment.status}
-                            </Badge>
-                            {isCurrentlyServing && (
-                              <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/15 text-emerald-300 text-xs">
-                                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse inline-block" />
-                                Serving
-                              </Badge>
-                            )}
-                            {/* Flag when build succeeded but never became the serving version */}
-                            {deployment.status === 'SUCCESS' && deployment.history_type === 'release' && isBuildEntry && !isCurrentlyServing && servingBuildNumber !== null && buildNumber > servingBuildNumber && (
-                              <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
-                                Deploy Failed
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-white/50">
-                            <span>
-                              {new Date(deployment.started_at).toLocaleString()}
-                            </span>
-                            {deployment.history_type === 'release' && isBuildEntry && (
-                              <button
-                                onClick={() => handleSelectBuild(buildNumber)}
-                                className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
-                              >
-                                <Terminal className="w-3 h-3" />
-                                View Logs
-                              </button>
-                            )}
-                            {deployment.history_type === 'operation' && (
-                              <button
-                                onClick={() => {
-                                  setActiveTab('build-logs');
-                                  fetchOperationLogs(deployment.id);
-                                }}
-                                className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
-                              >
-                                <Terminal className="w-3 h-3" />
-                                View Operation Logs
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {/* Commit Info Row */}
-                        {deployment.commit_sha && (
-                          <div className="flex items-center gap-2 text-xs text-white/60 pl-1">
-                            <GitCommit className="w-3 h-3 text-white/40" />
-                            <code className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-200">
-                              {deployment.commit_sha.substring(0, 7)}
-                            </code>
-                          </div>
-                        )}
-                        {deployment.trigger === 'resize' && deployment.status === 'SUCCESS' && servingBuildNumber !== null && buildNumber !== null && buildNumber !== servingBuildNumber && (
-                          <div className="flex items-center gap-2 border border-blue-500/20 bg-blue-500/10 px-2 py-2 text-xs text-blue-200">
-                            <Box className="w-3 h-3 flex-shrink-0" />
-                            <span>{`Resize succeeded using the currently serving image from Build #${servingBuildNumber}.`}</span>
-                          </div>
-                        )}
-                        {deployment.operation_details?.verification?.status === 'degraded' && (
-                          <div className="flex items-center gap-2 border border-orange-500/20 bg-orange-500/10 px-2 py-2 text-xs text-orange-300">
-                            <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                            <span>{deployment.operation_details?.verification?.message || 'Verification is still converging.'}</span>
-                          </div>
-                        )}
-                        {/* Failure Reason Row */}
-                        {deployment.status === 'FAILURE' && deployment.failure_reason && (
-                          <div className="flex items-center gap-2 border border-red-500/20 bg-red-500/10 px-2 py-2 text-xs text-red-300">
-                            <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                            <span>{deployment.failure_reason}</span>
-                          </div>
-                        )}
-                        {/* Trigger Badge */}
-                        {deployment.trigger && (
-                          <div className="flex items-center gap-2 text-xs text-white/40 pl-1">
-                            <Badge variant="outline" className="rounded-none text-xs capitalize">
-                              {deployment.trigger}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-white/50">
-                    <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No deployment history available</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <DeploymentHistory
+              deployments={deployments}
+              deploymentsLoading={deploymentsLoading}
+              connectionStatus={connectionStatus}
+              servingBuildNumber={servingBuildNumber}
+              onSelectBuild={handleSelectBuild}
+              onViewOperationLogs={(deploymentId) => {
+                setActiveTab('build-logs');
+                fetchOperationLogs(deploymentId);
+              }}
+            />
           </TabsContent>
 
           {/* Settings Tab */}

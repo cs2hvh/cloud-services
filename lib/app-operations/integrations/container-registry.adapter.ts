@@ -1,34 +1,8 @@
+import { parseImageRef } from "@/lib/container-image/image-ref";
+
 type RegistryLookupResult =
   | { exists: true }
-  | { exists: false; reason: string };
-
-function splitImageRef(imageRef: string) {
-  const trimmed = imageRef.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  const digestIndex = trimmed.indexOf("@");
-  if (digestIndex >= 0) {
-    return {
-      repository: trimmed.slice(0, digestIndex),
-      reference: trimmed.slice(digestIndex + 1),
-    };
-  }
-
-  const lastColon = trimmed.lastIndexOf(":");
-  if (lastColon > trimmed.lastIndexOf("/")) {
-    return {
-      repository: trimmed.slice(0, lastColon),
-      reference: trimmed.slice(lastColon + 1),
-    };
-  }
-
-  return {
-    repository: trimmed,
-    reference: "latest",
-  };
-}
+  | { exists: false; confirmed: boolean; reason: string };
 
 export class ContainerRegistryAdapter {
   private async getDockerHubToken(repository: string): Promise<string> {
@@ -54,18 +28,23 @@ export class ContainerRegistryAdapter {
   }
 
   async verifyImageExists(imageRef: string): Promise<RegistryLookupResult> {
-    const parsed = splitImageRef(imageRef);
+    const parsed = parseImageRef(imageRef);
     if (!parsed) {
-      return { exists: false, reason: "Image reference is empty" };
+      return { exists: false, confirmed: false, reason: "Image reference is empty" };
     }
 
-    const { repository, reference } = parsed;
+    const { repository: rawRepository, reference } = parsed;
+
+    // parseImageRef already strips the docker.io/ prefix from the repository.
+    // Alias for clarity.
+    const repository = rawRepository;
 
     const registryNamespace = process.env.CONTAINER_REGISTRY_NAMESPACE ?? "hav0ky";
     if (!repository.startsWith(`${registryNamespace}/`)) {
       return {
         exists: false,
-        reason: `Unsupported registry for image preflight: ${repository}`,
+        confirmed: false,
+        reason: `Unsupported registry for image preflight: ${rawRepository}`,
       };
     }
 
@@ -90,17 +69,22 @@ export class ContainerRegistryAdapter {
       if (response.status === 404) {
         return {
           exists: false,
-          reason: `Image not found in registry for ${repository}@${reference}`,
+          confirmed: true,
+          reason: `Image not found in registry for ${repository}:${reference}`,
         };
       }
 
+      // Non-404 failure (auth, rate-limit, server error) — cannot confirm non-existence
       return {
         exists: false,
+        confirmed: false,
         reason: `Registry preflight failed with status ${response.status}`,
       };
     } catch (error) {
+      // Network or token error — cannot confirm non-existence
       return {
         exists: false,
+        confirmed: false,
         reason: error instanceof Error ? error.message : "Registry preflight failed",
       };
     }

@@ -149,6 +149,13 @@ export function useAppBuildState(deployedApps: App[]): AppBuildState {
           delete updated[app.name];
           return updated;
         });
+        // Clear stale logs so the new build's output doesn't append to old logs
+        setBuildLogs((curr) => {
+          const updated = { ...curr };
+          delete updated[app.name];
+          return updated;
+        });
+        logOffsetRef.current[app.name] = 0;
         reconciledRef.current.delete(app.id);
         justStartedBuildingRef.current.add(app.id);
       }
