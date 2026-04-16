@@ -2,7 +2,13 @@
  * Idempotency Helper
  * Uses Redis to prevent duplicate operations based on Idempotency-Key header
  */
+import { randomUUID as nodeRandomUUID } from "crypto";
 import { redis } from "./redis";
+
+function randomUUID(): string {
+  // Node 14 compat: prefer the built-in 'crypto' module; fall back to the Web Crypto API (browser / edge).
+  return nodeRandomUUID();
+}
 
 export type IdempotencyResult = 
   | {
@@ -94,5 +100,5 @@ export function getIdempotencyKey(headers: Headers): string | null {
  * Format: `{prefix}:{timestamp}:{uuid}`
  */
 export function generateIdempotencyKey(prefix: string): string {
-  return `${prefix}:${Date.now()}:${crypto.randomUUID()}`;
+  return `${prefix}:${Date.now()}:${randomUUID()}`;
 }
