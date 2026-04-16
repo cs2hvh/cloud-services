@@ -74,6 +74,7 @@ export const SettingsTab = ({
   const { projects } = useProjects();
   const [loading, setLoading] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [isMigrating, setIsMigrating] = useState(database.status === "migrating");
   const [targetRegion, setTargetRegion] = useState(database.region || "");
   const router = useRouter();
@@ -483,6 +484,11 @@ export const SettingsTab = ({
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {
+    if (deleteConfirmInput !== database.name) {
+      toast.error(`Please type "${database.name}" to confirm deletion`);
+      return;
+    }
+
     setLoading("delete");
     try {
       const response = await axios.post("/api/services/database/delete", {
@@ -503,6 +509,7 @@ export const SettingsTab = ({
     } finally {
       setLoading(null);
       setShowDeleteConfirm(false);
+      setDeleteConfirmInput("");
     }
   };
 
@@ -524,39 +531,39 @@ export const SettingsTab = ({
                 <FolderKanban className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
                   Project
                 </p>
                 <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Update Project</h3>
               </div>
             </div>
             <div className="px-5 py-4">
-              <p className="text-xs text-white/40 mb-4 leading-5">
+              <p className="text-xs text-white/60 mb-4 leading-5">
                 Assign this database to a different project
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Select Project
                 </label>
                 <select
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
-                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-400/40 focus:bg-white/[0.06] transition-colors"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "project"}
                 >
-                  <option value="" className="bg-[#0f1117]">
-                    Select a project
+                  <option value="" className="bg-slate-900">
+                    {projects.length === 0 ? "No projects available" : "Select a project"}
                   </option>
-                  {projects.map((project) => (
+                  {projects && projects.length > 0 ? projects.map((project) => (
                     <option
                       key={project.id}
                       value={project.id}
-                      className="bg-[#0f1117]"
+                      className="bg-slate-900"
                     >
                       {project.name}
                     </option>
-                  ))}
+                  )) : null}
                 </select>
               </div>
 
@@ -564,7 +571,7 @@ export const SettingsTab = ({
                 <button
                   onClick={handleUpdateProject}
                   disabled={loading === "project" || !selectedProject}
-                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "project" ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving...</>
@@ -575,7 +582,7 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedProject(database.project_id || "")}
                   disabled={loading === "project"}
-                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-colors hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -592,24 +599,24 @@ export const SettingsTab = ({
                 <Calendar className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Maintenance</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Maintenance</p>
                 <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Configure Maintenance Window</h3>
               </div>
             </div>
             <div className="px-5 py-4">
-              <p className="text-xs text-white/40 mb-4 leading-5">
+              <p className="text-xs text-white/60 mb-4 leading-5">
                 Set the preferred time for automatic maintenance updates
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Day of Week
                 </label>
                 <select
                   value={maintenanceDay}
                   onChange={(e) => setMaintenanceDay(e.target.value)}
-                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-colors"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "maintenance"}
                 >
                   {DAYS.map((day) => (
@@ -634,7 +641,7 @@ export const SettingsTab = ({
                 <select
                   value={maintenanceHour}
                   onChange={(e) => setMaintenanceHour(e.target.value)}
-                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-colors"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "maintenance"}
                 >
                   {TIME_SLOTS.map((time) => (
@@ -661,7 +668,7 @@ export const SettingsTab = ({
                     !maintenanceHour ||
                     !hasMaintenanceChanges
                   }
-                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "maintenance" ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving...</>
@@ -677,14 +684,14 @@ export const SettingsTab = ({
                     }
                   }}
                   disabled={loading === "maintenance"}
-                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-colors hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
               </div>
               {!hasMaintenanceChanges && maintenanceDay && maintenanceHour && (
-                <p className="text-[11px] text-white/30 pt-1">
+                <p className="text-xs text-white/45 pt-1">
                   No maintenance changes detected.
                 </p>
               )}
@@ -702,21 +709,21 @@ export const SettingsTab = ({
                 <MapPin className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Region</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Region</p>
                 <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Update Database Region</h3>
               </div>
             </div>
             <div className="px-5 py-4">
-              <p className="text-xs text-white/40 mb-4 leading-5">
+              <p className="text-xs text-white/60 mb-4 leading-5">
                 Migrate your database cluster to a different datacenter
               </p>
-              <div className="space-y-3">
+              <div className="space-y-4">
               {isMigrating && (
                 <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
                   <Loader2 className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5 animate-spin" />
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration In Progress</p>
-                    <p className="text-xs text-white/50 leading-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration In Progress</p>
+                    <p className="text-xs text-white/60 leading-5">
                       Migrating to {REGIONS.find((r) => r.slug === targetRegion)?.name}. This typically takes 10–30 minutes.
                     </p>
                   </div>
@@ -724,34 +731,34 @@ export const SettingsTab = ({
               )}
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Select Region
                 </label>
                 <select
                   value={selectedRegion}
                   onChange={(e) => setSelectedRegion(e.target.value)}
-                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400/40 focus:bg-white/[0.06] transition-colors"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "region" || isMigrating || isMongoDbCluster}
                 >
                   <option value="" className="bg-slate-900">
-                    Select a region
+                    {REGIONS.length === 0 ? "No regions available" : "Select a region"}
                   </option>
-                  {REGIONS.map((region) => (
+                  {REGIONS && REGIONS.length > 0 ? REGIONS.map((region) => (
                     <option
                       key={region.slug}
                       value={region.slug}
-                      className={`bg-[#0f1117] ${region.slug === database.region ? "font-bold" : ""}`}
+                      className={`bg-slate-900 ${region.slug === database.region ? "font-bold" : ""}`}
                     >
                       {region.name}
                       {region.slug === database.region && " (Current)"}
                     </option>
-                  ))}
+                  )) : null}
                 </select>
               </div>
 
               {isMongoDbCluster && (
                 <div className="border border-blue-400/20 bg-blue-500/10 px-3 py-2.5">
-                  <p className="text-xs text-white/50">
+                  <p className="text-xs text-white/60">
                     Region migration is currently unavailable for MongoDB clusters.
                   </p>
                 </div>
@@ -761,8 +768,8 @@ export const SettingsTab = ({
                 <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration Notice</p>
-                    <p className="text-xs text-white/50 leading-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration Notice</p>
+                    <p className="text-xs text-white/60 leading-5">
                       Migrating will cause temporary unavailability. The cluster will transition back to online when complete.
                     </p>
                   </div>
@@ -779,7 +786,7 @@ export const SettingsTab = ({
                     isMigrating ||
                     isMongoDbCluster
                   }
-                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "region" ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Migrating...</>
@@ -790,7 +797,7 @@ export const SettingsTab = ({
                 <button
                   onClick={() => setSelectedRegion(database.region || "")}
                   disabled={loading === "region" || isMigrating || isMongoDbCluster}
-                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-colors hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -800,71 +807,58 @@ export const SettingsTab = ({
             </div>
           </div>
 
-        </div>
-      </div>
-
-      {/* Upsize Storage - Full Width */}
-      <div className="border border-white/[0.08] bg-white/[0.03]">
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
+          {/* Upsize Storage */}
+          <div className="border border-white/[0.08] bg-white/[0.03]">
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-white/[0.06]">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-cyan-400/20 bg-cyan-500/10 text-cyan-300">
             <HardDrive className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Storage</p>
-            <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Upsize Storage (Disk Only)</h3>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Storage</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white">Upsize Storage — Current: {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}</h3>
           </div>
           {/* Current storage badge */}
           <div className="shrink-0 border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-white/30 mb-0.5">Current</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50 mb-0.5">Current</p>
             <p className="text-sm font-semibold text-white">
               {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}
             </p>
           </div>
         </div>
-        <div className="px-5 py-4 space-y-3">
-          <p className="text-xs text-white/40 leading-5">
-            Increase disk storage without changing CPU/RAM. Storage can only be increased, not decreased.
-          </p>
-
+        <div className="px-5 py-3 space-y-2">
           <div>
-            <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mb-2">
+            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
               Select New Storage Size (GiB)
             </label>
             <select
               value={selectedStorageGiB}
               onChange={(e) => setSelectedStorageGiB(Number(e.target.value))}
-              className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400/40 focus:bg-white/[0.06] transition-colors"
+              className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400/40 focus:bg-white/[0.06] transition-all duration-150"
               disabled={loading === "upsize" || isMongoDbCluster}
             >
-              <option value={0} className="bg-[#0f1117]">
-                Select storage size
+              <option value={0} className="bg-slate-900">
+                {getStorageOptions().length === 0 ? "No storage options available" : "Select storage size"}
               </option>
-              {getStorageOptions().map((size) => (
-                <option key={size} value={size} className="bg-[#0f1117]">
+              {getStorageOptions().length > 0 ? getStorageOptions().map((size) => (
+                <option key={size} value={size} className="bg-slate-900">
                   {size} GiB
                 </option>
-              ))}
+              )) : null}
             </select>
           </div>
-
           {isMongoDbCluster && (
-            <div className="border border-blue-400/20 bg-blue-500/10 px-3 py-2.5">
-              <p className="text-xs text-white/50">
-                Storage upsize is currently unavailable for MongoDB clusters.
-              </p>
+            <div className="border border-blue-400/20 bg-blue-500/10 px-3 py-2">
+              <p className="text-xs text-white/60">Storage upsize unavailable for MongoDB clusters.</p>
             </div>
           )}
 
           {selectedStorageGiB > 0 && (
-            <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
+            <div className="flex items-start gap-2 border border-amber-400/20 bg-amber-500/10 px-3 py-2">
               <AlertTriangle className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5" />
-              <p className="text-xs text-white/50 leading-5">
-                Increase of {selectedStorageGiB - currentStorageGiB} GiB will be applied permanently.
-              </p>
+              <p className="text-xs text-white/60">+{selectedStorageGiB - currentStorageGiB} GiB permanent increase.</p>
             </div>
           )}
-
-          <div className="flex items-center gap-2 pt-1">
+          <div className="flex items-center gap-2">
             <button
               onClick={handleUpsizeStorage}
               disabled={
@@ -874,22 +868,23 @@ export const SettingsTab = ({
                 selectedStorageGiB === 0 ||
                 selectedStorageGiB <= currentStorageGiB
               }
-              className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 border border-white/[0.12] bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading === "upsize" ? (
-                <><Loader2 className="h-3.5 w-3.5 animate-spin" />Upsizing...</>
+                <><Loader2 className="h-3 w-3 animate-spin" />Upsizing</>
               ) : (
-                <><HardDrive className="h-3.5 w-3.5" />Upsize Storage</>
+                <><HardDrive className="h-3 w-3" />Upsize</>
               )}
             </button>
             <button
               onClick={() => setSelectedStorageGiB(0)}
               disabled={loading === "upsize"}
-              className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-colors hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+              className="inline-flex items-center gap-1 border border-white/[0.08] bg-transparent px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
             >
-              <X className="h-3.5 w-3.5" />
-              Cancel
+              <X className="h-3 w-3" />
             </button>
+          </div>
+        </div>
           </div>
         </div>
       </div>
@@ -901,7 +896,7 @@ export const SettingsTab = ({
             <Trash2 className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-red-400/60">Danger Zone</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-400/70">Danger Zone</p>
             <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Delete Database Cluster</h3>
           </div>
         </div>
@@ -909,8 +904,8 @@ export const SettingsTab = ({
           <div className="flex items-start gap-2.5 border border-red-400/20 bg-red-500/[0.06] px-3 py-3">
             <AlertTriangle className="h-3.5 w-3.5 text-red-300 shrink-0 mt-0.5" />
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-red-300 mb-0.5">This action cannot be undone</p>
-              <p className="text-xs text-white/45 leading-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-300 mb-0.5">This action cannot be undone</p>
+              <p className="text-xs text-white/60 leading-5">
                 Deleting will permanently remove all data, backups, and configurations associated with this cluster.
               </p>
             </div>
@@ -919,21 +914,31 @@ export const SettingsTab = ({
           {!showDeleteConfirm ? (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="inline-flex items-center gap-1.5 border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 transition-colors hover:bg-red-500/20 hover:border-red-400/50"
+              className="inline-flex items-center gap-1.5 border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 transition-all duration-150 hover:bg-red-500/20 hover:border-red-400/50"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete Cluster
             </button>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs font-medium text-white/70">
-                Are you absolutely sure you want to permanently delete this cluster?
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-white/70">
+                  Type the cluster name <span className="font-semibold text-white">&quot;</span><span className="font-semibold text-red-400">{database.name}</span><span className="font-semibold text-white">&quot;</span> to confirm deletion
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder={`Type: ${database.name}`}
+                  className="w-full border border-red-400/30 bg-red-500/5 px-3 py-2 text-sm text-white placeholder:text-red-300/40 focus:outline-none focus:border-red-400/60 focus:bg-red-500/10 transition-all duration-150"
+                  disabled={loading === "delete"}
+                />
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDeleteCluster}
-                  disabled={loading === "delete"}
-                  className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-colors hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={loading === "delete" || deleteConfirmInput !== database.name}
+                  className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-all duration-150 hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "delete" ? (
                     <><Loader2 className="h-3.5 w-3.5 animate-spin" />Deleting...</>
@@ -942,9 +947,9 @@ export const SettingsTab = ({
                   )}
                 </button>
                 <button
-                  onClick={() => setShowDeleteConfirm(false)}
+                  onClick={() => {setShowDeleteConfirm(false); setDeleteConfirmInput("");}}
                   disabled={loading === "delete"}
-                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-colors hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
