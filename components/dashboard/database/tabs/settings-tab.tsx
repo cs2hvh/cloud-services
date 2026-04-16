@@ -74,6 +74,7 @@ export const SettingsTab = ({
   const { projects } = useProjects();
   const [loading, setLoading] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState("");
   const [isMigrating, setIsMigrating] = useState(database.status === "migrating");
   const [targetRegion, setTargetRegion] = useState(database.region || "");
   const router = useRouter();
@@ -307,6 +308,7 @@ export const SettingsTab = ({
 
   // Update Project
   const handleUpdateProject = async () => {
+    if (loading) return;
     if (!selectedProject) {
       toast.error("Please select a project");
       return;
@@ -334,6 +336,7 @@ export const SettingsTab = ({
 
   // Configure Maintenance Window
   const handleUpdateMaintenanceWindow = async () => {
+    if (loading) return;
     if (!maintenanceDay || !maintenanceHour) {
       toast.error("Please select both maintenance day and time.");
       return;
@@ -372,6 +375,7 @@ export const SettingsTab = ({
 
   // Update Database Region
   const handleUpdateRegion = async () => {
+    if (loading) return;
     if (isMongoDbCluster) {
       toast.info("Region migration is currently unavailable for MongoDB clusters.");
       return;
@@ -415,6 +419,7 @@ export const SettingsTab = ({
 
   // Upsize Storage (Disk Only)
   const handleUpsizeStorage = async () => {
+    if (loading) return;
     if (isMongoDbCluster) {
       toast.info("Storage upsize is currently unavailable for MongoDB clusters.");
       return;
@@ -483,6 +488,12 @@ export const SettingsTab = ({
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {
+    if (loading) return;
+    if (deleteConfirmInput.trim().toLowerCase() !== database.name.trim().toLowerCase()) {
+      toast.error(`Please type "${database.name}" to confirm deletion`);
+      return;
+    }
+
     setLoading("delete");
     try {
       const response = await axios.post("/api/services/database/delete", {
@@ -503,48 +514,53 @@ export const SettingsTab = ({
     } finally {
       setLoading(null);
       setShowDeleteConfirm(false);
+      setDeleteConfirmInput("");
     }
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6"
+      transition={{ duration: 0.2 }}
+      className="space-y-3"
     >
-      {/* Two Column Layout for Large Screens */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Two Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Left Column */}
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Update Project */}
-          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <FolderKanban className="h-5 w-5 text-blue-400" />
+          <div className="border border-white/[0.08] bg-white/[0.03]">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10 text-blue-300">
+                <FolderKanban className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">Update Project</h3>
-                <p className="text-sm text-slate-400">
-                  Assign this database to a different project
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
+                  Project
                 </p>
+                <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Update Project</h3>
               </div>
             </div>
-
-            <div className="space-y-4">
+            <div className="px-5 py-4">
+              <p className="text-xs text-white/60 mb-4 leading-5">
+                Assign this database to a different project
+              </p>
+              <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Select Project
                 </label>
                 <select
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-48 overflow-y-auto"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-blue-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "project"}
                 >
                   <option value="" className="bg-slate-900">
-                    Select a project
+                    {projects.length === 0 ? "No projects available" : "Select a project"}
                   </option>
-                  {projects.map((project) => (
+                  {projects.length > 0 ? projects.map((project) => (
                     <option
                       key={project.id}
                       value={project.id}
@@ -552,83 +568,61 @@ export const SettingsTab = ({
                     >
                       {project.name}
                     </option>
-                  ))}
+                  )) : null}
                 </select>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={handleUpdateProject}
                   disabled={loading === "project" || !selectedProject}
-                  className="flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "project" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving...</>
                   ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Save
-                    </>
+                    <><Save className="h-3.5 w-3.5" />Save</>  
                   )}
                 </button>
                 <button
                   onClick={() => setSelectedProject(database.project_id || "")}
                   disabled={loading === "project"}
-                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel project selection"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
+              </div>
               </div>
             </div>
           </div>
 
           {/* Configure Maintenance Window */}
-          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
-                <Calendar className="h-5 w-5 text-purple-400" />
+          <div className="border border-white/[0.08] bg-white/[0.03]">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-purple-400/20 bg-purple-500/10 text-purple-300">
+                <Calendar className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Configure Maintenance Window
-                </h3>
-                <p className="text-sm text-slate-400">
-                  Set the preferred time for automatic maintenance updates
-                </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Maintenance</p>
+                <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Configure Maintenance Window</h3>
               </div>
             </div>
-
-            <div className="space-y-4">
-              {/* {currentMaintenanceWindow && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-3">
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-slate-300">
-                      <p className="font-semibold text-blue-400 mb-1">
-                        Current Window
-                      </p>
-                      <p className="text-xs">
-                        {currentMaintenanceWindow.day.charAt(0).toUpperCase() +
-                          currentMaintenanceWindow.day.slice(1)}{" "}
-                        at {currentMaintenanceWindow.hour} (UTC)
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )} */}
+            <div className="px-5 py-4">
+              <p className="text-xs text-white/60 mb-4 leading-5">
+                Set the preferred time for automatic maintenance updates
+              </p>
+              <div className="space-y-4">
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Day of Week
                 </label>
                 <select
                   value={maintenanceDay}
                   onChange={(e) => setMaintenanceDay(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-48 overflow-y-auto"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "maintenance"}
                 >
                   {DAYS.map((day) => (
@@ -647,13 +641,13 @@ export const SettingsTab = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Time (UTC)
                 </label>
                 <select
                   value={maintenanceHour}
                   onChange={(e) => setMaintenanceHour(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 max-h-48 overflow-y-auto"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "maintenance"}
                 >
                   {TIME_SLOTS.map((time) => (
@@ -671,7 +665,7 @@ export const SettingsTab = ({
                 </select>
               </div>
 
-              <div className="flex gap-3">
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={handleUpdateMaintenanceWindow}
                   disabled={
@@ -680,18 +674,12 @@ export const SettingsTab = ({
                     !maintenanceHour ||
                     !hasMaintenanceChanges
                   }
-                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "maintenance" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Updating...
-                    </>
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving...</>
                   ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Save
-                    </>
+                    <><Save className="h-3.5 w-3.5" />Save</>
                   )}
                 </button>
                 <button
@@ -702,72 +690,67 @@ export const SettingsTab = ({
                     }
                   }}
                   disabled={loading === "maintenance"}
-                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel maintenance window selection"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
               </div>
               {!hasMaintenanceChanges && maintenanceDay && maintenanceHour && (
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-white/45 pt-1">
                   No maintenance changes detected.
                 </p>
               )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Right Column */}
-        <div className="space-y-6">
+        <div className="space-y-3">
           {/* Update Database Region */}
-          <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                <MapPin className="h-5 w-5 text-green-400" />
+          <div className="border border-white/[0.08] bg-white/[0.03]">
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/[0.06]">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
+                <MapPin className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-white">
-                  Update Database Region
-                </h3>
-                <p className="text-sm text-slate-400">
-                  Migrate your database cluster to a different datacenter
-                </p>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Region</p>
+                <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Update Database Region</h3>
               </div>
             </div>
-
-            <div className="space-y-4">
+            <div className="px-5 py-4">
+              <p className="text-xs text-white/60 mb-4 leading-5">
+                Migrate your database cluster to a different datacenter
+              </p>
+              <div className="space-y-4">
               {isMigrating && (
-                <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <Loader2 className="h-4 w-4 text-orange-400 flex-shrink-0 mt-0.5 animate-spin" />
-                    <div className="text-xs text-slate-300">
-                      <p className="font-semibold text-orange-400 mb-1">
-                        Migration In Progress
-                      </p>
-                      <p>
-                        Migrating to{" "}
-                        {REGIONS.find((r) => r.slug === targetRegion)?.name}. This
-                        typically takes 10-30 minutes.
-                      </p>
-                    </div>
+                <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
+                  <Loader2 className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5 animate-spin" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration In Progress</p>
+                    <p className="text-xs text-white/60 leading-5">
+                      Migrating to {REGIONS.find((r) => r.slug === targetRegion)?.name}. This typically takes 10–30 minutes.
+                    </p>
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Select Region
                 </label>
                 <select
                   value={selectedRegion}
                   onChange={(e) => setSelectedRegion(e.target.value)}
-                  className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-green-500 max-h-48 overflow-y-auto"
+                  className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-400/40 focus:bg-white/[0.06] transition-all duration-150"
                   disabled={loading === "region" || isMigrating || isMongoDbCluster}
                 >
                   <option value="" className="bg-slate-900">
-                    Select a region
+                    {REGIONS.length === 0 ? "No regions available" : "Select a region"}
                   </option>
-                  {REGIONS.map((region) => (
+                  {REGIONS && REGIONS.length > 0 ? REGIONS.map((region) => (
                     <option
                       key={region.slug}
                       value={region.slug}
@@ -776,35 +759,31 @@ export const SettingsTab = ({
                       {region.name}
                       {region.slug === database.region && " (Current)"}
                     </option>
-                  ))}
+                  )) : null}
                 </select>
               </div>
 
               {isMongoDbCluster && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                  <p className="text-xs text-slate-300">
+                <div className="border border-blue-400/20 bg-blue-500/10 px-3 py-2.5">
+                  <p className="text-xs text-white/60">
                     Region migration is currently unavailable for MongoDB clusters.
                   </p>
                 </div>
               )}
 
               {selectedRegion && selectedRegion !== database.region && !isMigrating && (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs text-slate-300">
-                      <p className="font-semibold text-yellow-400 mb-1">
-                        Migration Notice
-                      </p>
-                      <p>
-                        Migrating will cause temporary unavailability. The cluster will transition back to online when complete.
-                      </p>
-                    </div>
+                <div className="flex items-start gap-2.5 border border-amber-400/20 bg-amber-500/10 px-3 py-3">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-300 mb-0.5">Migration Notice</p>
+                    <p className="text-xs text-white/60 leading-5">
+                      Migrating will cause temporary unavailability. The cluster will transition back to online when complete.
+                    </p>
                   </div>
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex items-center gap-2 pt-1">
                 <button
                   onClick={handleUpdateRegion}
                   disabled={
@@ -814,234 +793,173 @@ export const SettingsTab = ({
                     isMigrating ||
                     isMongoDbCluster
                   }
-                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "region" ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Migrating...
-                    </>
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" />Migrating...</>
                   ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      Migrate
-                    </>
+                    <><MapPin className="h-3.5 w-3.5" />Migrate</>
                   )}
                 </button>
                 <button
                   onClick={() => setSelectedRegion(database.region || "")}
                   disabled={loading === "region" || isMigrating || isMongoDbCluster}
-                  className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel region selection"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
+                  Cancel
+                </button>
+              </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Upsize Storage */}
+          <div className="border border-white/[0.08] bg-white/[0.03]">
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-white/[0.06]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-cyan-400/20 bg-cyan-500/10 text-cyan-300">
+            <HardDrive className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Storage</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white">Upsize Storage — Current: {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}</h3>
+          </div>
+        </div>
+        <div className="px-5 py-3 space-y-2">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
+              Select New Storage Size (GiB)
+            </label>
+            <select
+              value={selectedStorageGiB}
+              onChange={(e) => setSelectedStorageGiB(Number(e.target.value))}
+              className="w-full border border-white/[0.10] bg-white/[0.04] px-3 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400/40 focus:bg-white/[0.06] transition-all duration-150"
+              disabled={loading === "upsize" || isMongoDbCluster}
+            >
+              <option value={0} className="bg-slate-900">
+                {getStorageOptions().length === 0 ? "No storage options available" : "Select storage size"}
+              </option>
+              {getStorageOptions().length > 0 ? getStorageOptions().map((size) => (
+                <option key={size} value={size} className="bg-slate-900">
+                  {size} GiB
+                </option>
+              )) : null}
+            </select>
+          </div>
+          {isMongoDbCluster && (
+            <div className="border border-blue-400/20 bg-blue-500/10 px-3 py-2">
+              <p className="text-xs text-white/60">Storage upsize unavailable for MongoDB clusters.</p>
+            </div>
+          )}
+
+          {selectedStorageGiB > 0 && (
+            <div className="flex items-start gap-2 border border-amber-400/20 bg-amber-500/10 px-3 py-2">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-300 shrink-0 mt-0.5" />
+              <p className="text-xs text-white/60">+{selectedStorageGiB - currentStorageGiB} GiB permanent increase.</p>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleUpsizeStorage}
+              disabled={
+                loading === "upsize" ||
+                isMongoDbCluster ||
+                !selectedStorageGiB ||
+                selectedStorageGiB === 0 ||
+                selectedStorageGiB <= currentStorageGiB
+              }
+              className="inline-flex items-center gap-1 border border-white/[0.12] bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {loading === "upsize" ? (
+                <><Loader2 className="h-3 w-3 animate-spin" />Upsizing Storage</>
+              ) : (
+                <><HardDrive className="h-3 w-3" />Upsize Storage</>
+              )}
+            </button>
+            <button
+              onClick={() => setSelectedStorageGiB(0)}
+              disabled={loading === "upsize"}
+              className="inline-flex items-center gap-1 border border-white/[0.08] bg-transparent px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+              aria-label="Clear storage selection"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Delete Database Cluster - Full Width */}
+      <div className="border border-red-400/20 bg-red-500/[0.04]">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-red-400/[0.12]">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center border border-red-400/25 bg-red-500/15 text-red-300">
+            <Trash2 className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-400/70">Danger Zone</p>
+            <h3 className="mt-0.5 text-sm font-semibold text-white truncate">Delete Database Cluster</h3>
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="flex items-start gap-2.5 border border-red-400/20 bg-red-500/[0.06] px-3 py-3">
+            <AlertTriangle className="h-3.5 w-3.5 text-red-300 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-red-300 mb-0.5">This action cannot be undone</p>
+              <p className="text-xs text-white/60 leading-5">
+                Deleting will permanently remove all data, backups, and configurations associated with this cluster.
+              </p>
+            </div>
+          </div>
+
+          {!showDeleteConfirm ? (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="inline-flex items-center gap-1.5 border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-300 transition-all duration-150 hover:bg-red-500/20 hover:border-red-400/50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Cluster
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-white/70">
+                  Type the cluster name <span className="font-semibold text-white">&quot;</span><span className="font-semibold text-red-400">{database.name}</span><span className="font-semibold text-white">&quot;</span> to confirm deletion
+                </p>
+                <input
+                  type="text"
+                  value={deleteConfirmInput}
+                  onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                  placeholder={`Type: ${database.name}`}
+                  className="w-full border border-red-400/30 bg-red-500/5 px-3 py-2 text-sm text-white placeholder:text-red-300/40 focus:outline-none focus:border-red-400/60 focus:bg-red-500/10 transition-all duration-150"
+                  disabled={loading === "delete"}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDeleteCluster}
+                  disabled={loading === "delete" || deleteConfirmInput.trim().toLowerCase() !== database.name.trim().toLowerCase()}
+                  className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-all duration-150 hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {loading === "delete" ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" />Deleting...</>
+                  ) : (
+                    <><Trash2 className="h-3.5 w-3.5" />Yes, Delete Permanently</>
+                  )}
+                </button>
+                <button
+                  onClick={() => {setShowDeleteConfirm(false); setDeleteConfirmInput("");}}
+                  disabled={loading === "delete"}
+                  className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                >
+                  <X className="h-3.5 w-3.5" />
                   Cancel
                 </button>
               </div>
             </div>
-          </div>
-
-          {/* Upgrade Plan Tier */}
-
-
-
-           {/* Upsize Storage - Full Width */}
-      <div className="rounded-xl bg-white/5 shadow-lg ring-1 ring-white/10 p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center">
-            <HardDrive className="h-5 w-5 text-cyan-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              Upsize Storage (Disk Only)
-            </h3>
-            <p className="text-sm text-slate-400">
-              Increase disk storage without changing CPU/RAM
-            </p>
-          </div>
+          )}
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Current Storage Info */}
-          <div>
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
-              <div className="text-xs text-slate-300">
-                <p className="font-semibold text-blue-400 mb-1">
-                  Current Storage
-                </p>
-                <p className="text-white font-medium text-lg">
-                  {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}
-                </p>
-                <p className="text-slate-400 text-xs mt-1">
-                  {database.storage_size_mib ? `${database.storage_size_mib} MiB` : "N/A"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Storage Selection and Action */}
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Select New Storage Size (GiB)
-              </label>
-              <select
-                value={selectedStorageGiB}
-                onChange={(e) => setSelectedStorageGiB(Number(e.target.value))}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                disabled={loading === "upsize" || isMongoDbCluster}
-              >
-                <option value={0} className="bg-slate-900">
-                  Select storage size
-                </option>
-                {getStorageOptions().map((size) => (
-                  <option key={size} value={size} className="bg-slate-900">
-                    {size} GiB
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {isMongoDbCluster && (
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                <p className="text-xs text-slate-300">
-                  Storage upsize is currently unavailable for MongoDB clusters.
-                </p>
-              </div>
-            )}
-
-            {/* Warning Notice */}
-            {selectedStorageGiB > 0 && (
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                  <div className="text-xs text-slate-300">
-                    <p className="font-semibold text-yellow-400 mb-1">
-                      Storage Upsize Notice
-                    </p>
-                    <p>
-                      Storage can only be increased, not decreased. Increase of{" "}
-                      {selectedStorageGiB - currentStorageGiB} GiB will be applied.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Buttons */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleUpsizeStorage}
-                disabled={
-                  loading === "upsize" ||
-                  isMongoDbCluster ||
-                  !selectedStorageGiB ||
-                  selectedStorageGiB === 0 ||
-                  selectedStorageGiB <= currentStorageGiB
-                }
-                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-100 disabled:bg-slate-700 disabled:text-slate-500 text-black rounded-lg font-medium transition-colors"
-              >
-                {loading === "upsize" ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Upsizing...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Upsize Storage
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => setSelectedStorageGiB(0)}
-                disabled={loading === "upsize"}
-                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
-              >
-                <X className="h-4 w-4" />
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-         
-        </div>
-      </div>
-
-     
-
-      {/* Delete Database Cluster - Full Width */}
-      <div className="rounded-xl bg-black border border-red-500/30 shadow-lg p-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
-            <Trash2 className="h-5 w-5 text-red-400" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              Delete Database Cluster
-            </h3>
-            <p className="text-sm text-red-300">
-              Permanently delete this database cluster and all its data
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-black border border-red-500/30 rounded-lg p-3 mb-4">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-slate-300">
-              <p className="font-semibold text-red-400 mb-1">
-                Warning: This action cannot be undone!
-              </p>
-              <p>
-                Deleting will permanently remove all data, backups, and configurations.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {!showDeleteConfirm ? (
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 text-red-400 rounded-lg font-medium transition-colors"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete Cluster
-          </button>
-        ) : (
-          <div className="space-y-3">
-            <p className="text-sm text-slate-300 font-medium">
-              Are you absolutely sure you want to delete this cluster?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleDeleteCluster}
-                disabled={loading === "delete"}
-                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg font-medium transition-colors"
-              >
-                {loading === "delete" ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="h-4 w-4" />
-                    Yes, Delete Permanently
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                disabled={loading === "delete"}
-                className="cursor-pointer flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-medium transition-colors"
-              >
-                <X className="h-4 w-4" />
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </motion.div>
   );
