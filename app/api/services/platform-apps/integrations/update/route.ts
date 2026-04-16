@@ -68,6 +68,13 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    if (!UUID_RE.test(database_id)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid database_id format", code: "INVALID_DATABASE_ID" },
+        { status: 400 }
+      );
+    }
+
     // Perform update
     const result = await DatabaseIntegrationService.updateIntegration({
       app_id,

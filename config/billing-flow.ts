@@ -106,12 +106,14 @@ export async function closeActiveBilling({
   const { finalCharge } = await closeActive();
 
   if (finalCharge > 0) {
+    const newBalance = await Billing.deduct(userId, finalCharge);
     try {
       await Billing.save_transaction({
         userId,
         amount: finalCharge,
         status: "completed",
         type: "usage",
+        balanceAfter: newBalance,
         serviceId,
         serviceType,
         description: `Final prorated ${serviceType.replace("_", " ")} charge`,
