@@ -368,6 +368,8 @@ export async function billSingleService(tableName, svc) {
       ? new Date(created_at).toISOString()
       : null;
   const periodEnd = now.toISOString();
+  const billedAtIso = periodEnd;
+  const expectedLastBilledAtIso = periodStart;
 
   // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
   // If credit deduction fails, timestamp is updated but no charge occurs (safer than opposite)
@@ -376,6 +378,12 @@ export async function billSingleService(tableName, svc) {
     .from(tableName)
     .update({ last_billed_at: now.toISOString() })
     .eq("service_id", service_id);
+
+  if (updateError) {
+    console.error(
+      `BILLING: Pre-atomic timestamp update failed for ${tableName} service_id=${service_id}: ${updateError.message}`
+    );
+  }
 
   const { data: cycleResult, error: cycleError } = await runAtomicBillingCycle({
     p_table_name: tableName,
@@ -564,6 +572,42 @@ cron.schedule("*/5 * * * *", async () => {
 console.log("🚀 Cron worker started successfully");
 console.log("📅 Schedule: Every 5 minutes (*/5 * * * *)");
 console.log("🔧 Supabase connected:", process.env.SUPABASE_URL ? "✓" : "✗");
+
+// -----------------------------
+// DOMAIN REGISTRANT CONTACT SYNC
+// Runs every hour — retries setRegistrantContact for purchases where the
+// initial async call failed (registrant_email IS NULL). Prevents ICANN holds
+// from hitting users because the verification email never reached them.
+// -----------------------------
+cron.schedule("0 * * * *", async () => {
+  const appUrl = process.env.DOMAIN;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!appUrl || !cronSecret) {
+    console.warn("[domain-contact-sync] Skipped: DOMAIN or CRON_SECRET not set");
+    return;
+  }
+
+  try {
+    console.log("[domain-contact-sync] Running reconciliation:", new Date().toISOString());
+    const res = await fetch(`${appUrl}/api/domains/market/sync-contacts`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ limit: 20 }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      console.error("[domain-contact-sync] Reconciliation failed:", data);
+    } else {
+      console.log("[domain-contact-sync] Reconciliation completed:", data.message);
+    }
+  } catch (error) {
+    console.error("[domain-contact-sync] Reconciliation error:", error.message);
+  }
+});
 console.log(
   "Security limits: Max rate=$" +
     SECURITY_LIMITS.MAX_HOURLY_RATE +

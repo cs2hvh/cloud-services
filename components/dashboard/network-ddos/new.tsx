@@ -704,7 +704,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
                   Estimated monthly cost
                 </div>
                 <div className="mt-2 text-2xl font-semibold text-white">
-                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "—"}
+                  {!loadingPrice && spectrumPrice > 0 ? `$${spectrumPrice.toFixed(2)}` : "â€”"}
                 </div>
               </div>
               {!loadingPrice && spectrumPrice > 0 && (

@@ -34,4 +34,5 @@ export interface PurchaseRequest {
   currency: string;
   created_at: string;
   last_error: string | null;
+  registrant_email: string | null;
 }

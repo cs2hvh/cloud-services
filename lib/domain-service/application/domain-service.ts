@@ -1215,6 +1215,13 @@ type ActivationFailure = {
   retryable: boolean;
 };
 
+// name.com error strings that indicate an ICANN Contact Verification Hold.
+// Centralised here so a name.com wording change only needs one update.
+const CONTACT_VERIFICATION_HOLD_STRINGS = [
+  "contact verification hold",
+  "parameter value error - contact verification hold",
+] as const;
+
 function classifyActivationFailure(error: DomainServiceError): ActivationFailure {
   const raw = error.message || "Domain activation failed.";
   const lower = raw.toLowerCase();
@@ -1297,6 +1304,19 @@ function classifyActivationFailure(error: DomainServiceError): ActivationFailure
       code: DOMAIN_ERROR_CODES.INGRESS_APPLY_FAILED,
       retryable: true,
       message: "Domain setup failed. Please retry activation.",
+    };
+  }
+
+  // Contact Verification Hold — ICANN requires the registrant email to be
+  // verified after registration. DNS record mutations are blocked until the
+  // verification link in the registrar admin inbox is clicked.
+  if (CONTACT_VERIFICATION_HOLD_STRINGS.some((s) => lower.includes(s))) {
+    return {
+      code: DOMAIN_ERROR_CODES.PROVIDER_VALIDATION_FAILED,
+      retryable: false,
+      message:
+        "Domain activation is blocked by a registrar contact-verification hold. " +
+        "A verification email was sent to the registrant email address — click the link in that email, then retry activation.",
     };
   }
 

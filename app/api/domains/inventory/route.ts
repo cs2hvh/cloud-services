@@ -37,6 +37,7 @@ type DomainPurchase = {
   status: 'requested' | 'processing' | 'completed' | 'failed' | 'cancelled';
   created_at: string;
   last_error: string | null;
+  registrant_email: string | null;
 };
 
 type DomainInventoryItem = {
@@ -187,7 +188,7 @@ export async function GET(req: NextRequest) {
         .order('created_at', { ascending: false }),
       supabase
         .from('domain_purchase_requests')
-        .select('id, app_id, domain, status, created_at, last_error')
+        .select('id, app_id, domain, status, created_at, last_error, registrant_email')
         .eq('user_id', auth.user.id)
         .order('created_at', { ascending: false })
         .limit(1000),
@@ -219,6 +220,7 @@ export async function GET(req: NextRequest) {
         status: row.status,
         created_at: row.created_at,
         last_error: row.last_error || null,
+        registrant_email: row.registrant_email || null,
       });
     });
 
