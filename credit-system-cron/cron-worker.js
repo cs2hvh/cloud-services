@@ -63,6 +63,47 @@ function roundToCurrency(value) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function parseBillingTimestamp(value) {
+  if (!value) return null;
+
+  const parsed =
+    typeof value === "string"
+      ? new Date(
+          value.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(value)
+            ? value
+            : `${value}Z`
+        )
+      : new Date(value);
+
+  if (isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientSupabaseError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    code === "40001" || // serialization_failure
+    code === "40P01" || // deadlock_detected
+    code === "55P03" || // lock_not_available
+    code === "57014" || // statement_timeout
+    code === "08006" || // connection_failure
+    code === "08001" || // sqlclient_unable_to_establish_sqlconnection
+    message.includes("timeout") ||
+    message.includes("temporarily") ||
+    message.includes("connection") ||
+    message.includes("network")
+  );
+}
+
 function isTransactionHistorySchemaMismatch(error) {
   if (!error || typeof error !== "object") return false;
   const message = typeof error.message === "string" ? error.message.toLowerCase() : "";
@@ -202,6 +243,85 @@ function rateToMetadata(value) {
   if (typeof value === "number") return value;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function runAtomicBillingCycle(params) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const { data, error } = await supabase
+      .schema("billing")
+      .rpc("bill_service_cycle_atomic", params);
+
+    if (!error) {
+      return { data, error: null };
+    }
+
+    lastError = error;
+    if (!isTransientSupabaseError(error) || attempt === 2) {
+      break;
+    }
+
+    await sleep(200);
+  }
+
+  return { data: null, error: lastError };
+}
+
+async function recordBillingFailure({
+  tableName,
+  serviceId,
+  userId,
+  amount,
+  failureType,
+  errorCode = null,
+  errorMessage = null,
+  occurredAt,
+  lastBilledAt = null,
+}) {
+  try {
+    await supabase
+      .schema("billing")
+      .from("billing_failure_events")
+      .insert({
+        service_table: tableName,
+        service_id: serviceId,
+        user_id: userId,
+        amount,
+        failure_type: failureType,
+        error_code: errorCode,
+        error_message: errorMessage,
+        occurred_at: occurredAt,
+        billing_attempted_at: occurredAt,
+        last_billed_at: lastBilledAt,
+      });
+  } catch (error) {
+    console.error("WARN: Failed to record billing failure event", {
+      tableName,
+      serviceId,
+      userId,
+      failureType,
+      error: error?.message || String(error),
+    });
+  }
+}
+
+async function resolveBillingFailures(tableName, serviceId, userId) {
+  try {
+    await supabase
+      .schema("billing")
+      .from("billing_failure_events")
+      .update({
+        resolved: true,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("service_table", tableName)
+      .eq("service_id", serviceId)
+      .eq("user_id", userId)
+      .eq("resolved", false);
+  } catch {
+    // Best effort only. Failure tracking should never break billing flow.
+  }
 }
 
 export async function billSingleService(tableName, svc) {
@@ -364,26 +484,10 @@ export async function billSingleService(tableName, svc) {
 
   const periodStart = last
     ? last.toISOString()
-    : created_at
-      ? new Date(created_at).toISOString()
-      : null;
+    : parseBillingTimestamp(created_at)?.toISOString() || null;
   const periodEnd = now.toISOString();
   const billedAtIso = periodEnd;
-  const expectedLastBilledAtIso = periodStart;
-
-  // CRITICAL FIX: Update last_billed_at BEFORE deducting credit to prevent double billing
-  // If credit deduction fails, timestamp is updated but no charge occurs (safer than opposite)
-  const { error: updateError } = await supabase
-    .schema("billing")
-    .from(tableName)
-    .update({ last_billed_at: now.toISOString() })
-    .eq("service_id", service_id);
-
-  if (updateError) {
-    console.error(
-      `BILLING: Pre-atomic timestamp update failed for ${tableName} service_id=${service_id}: ${updateError.message}`
-    );
-  }
+  const expectedLastBilledAtIso = last ? last.toISOString() : null;
 
   const { data: cycleResult, error: cycleError } = await runAtomicBillingCycle({
     p_table_name: tableName,
@@ -452,6 +556,8 @@ export async function billSingleService(tableName, svc) {
     });
     return;
   }
+
+  await resolveBillingFailures(tableName, service_id, user_id);
 
   const balanceAfter =
     transactionHistoryMode === "legacy"
