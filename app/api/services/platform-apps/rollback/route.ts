@@ -12,19 +12,7 @@ import {
   AppRuntimeMutationService,
   parseOperationDetails,
 } from "@/lib/app-operations";
-
-function buildImageRef(imageTag?: string | null, imageDigest?: string | null): string | null {
-  const tag = imageTag?.trim();
-  const digest = imageDigest?.trim();
-
-  if (tag && digest && !tag.includes("@")) {
-    return `${tag}@${digest}`;
-  }
-
-  if (tag) return tag;
-
-  return null;
-}
+import { buildImageRef } from "@/lib/container-image/image-ref";
 
 /**
  * POST /api/services/platform-apps/rollback
@@ -35,8 +23,10 @@ export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
   if (!auth.authenticated) return auth.response;
 
+  const userId = auth.user.id;
+
   try {
-    const rl = await limitByUser(auth.user!.id, {
+    const rl = await limitByUser(userId, {
       prefix: "rl:platform-app-rollback",
       limit: 5,
       windowMs: 60_000,
@@ -60,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const app = appResult.data as { user_id: string; active_deployment_id?: string | null; name: string };
-    if (app.user_id !== auth.user!.id) {
+    if (app.user_id !== userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 

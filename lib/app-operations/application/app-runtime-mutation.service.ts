@@ -172,18 +172,14 @@ export class AppRuntimeMutationService {
     let imageAvailability: Awaited<ReturnType<ContainerRegistryAdapter["verifyImageExists"]>>;
     try {
       imageAvailability = await this.registry.verifyImageExists(params.imageRef);
-    } catch (error) {
-      try { await this.locks.releaseAppMutationLock(lock.id); } catch { /* best effort */ }
-      throw new AppOperationError({
-        code: "ROLLBACK_IMAGE_UNAVAILABLE",
-        message:
-          error instanceof Error
-            ? `Failed to verify rollback image: ${error.message}`
-            : "Failed to verify rollback image",
-        statusCode: 409,
-      });
+    } catch {
+      // Registry check threw unexpectedly — treat as unverifiable and proceed.
+      imageAvailability = { exists: false, confirmed: false, reason: "Registry preflight threw unexpectedly" };
     }
-    if (!imageAvailability.exists) {
+    // Only hard-block if the registry confirmed the image does not exist (404).
+    // Unverifiable results (auth failure, rate-limit, network error) are treated as
+    // "proceed" — the K8s patch will fail if the image is genuinely missing.
+    if (!imageAvailability.exists && imageAvailability.confirmed) {
       try { await this.locks.releaseAppMutationLock(lock.id); } catch { /* best effort */ }
       throw new AppOperationError({
         code: "ROLLBACK_IMAGE_UNAVAILABLE",

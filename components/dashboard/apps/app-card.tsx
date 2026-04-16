@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import {
@@ -37,6 +37,7 @@ import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
 import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
+import { AppStatusBadge } from './app-status-badge';
 
 interface AppCardProps {
   app: App;
@@ -52,54 +53,6 @@ interface AppCardProps {
   health?: AppHealth | null;
   metricsLoading?: boolean;
   onRollback: () => void;
-}
-
-function getStatusBadge(status: string, build?: BuildInfo) {
-  if (build?.building) {
-    return (
-      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-        <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-        Building
-      </Badge>
-    );
-  }
-
-  switch (status) {
-    case 'running':
-      return (
-        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
-          <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-          Running
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
-          <XCircle className="w-2.5 h-2.5 mr-1" />
-          Failed
-        </Badge>
-      );
-    case 'building':
-      return (
-        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Building
-        </Badge>
-      );
-    case 'deleting':
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Deleting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          Pending
-        </Badge>
-      );
-  }
 }
 
 export function AppCard({
@@ -123,6 +76,17 @@ export function AppCard({
   const isAppDeleting = app.status === 'deleting';
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
+
+  // When the card is expanded and the active build number changes (new build started),
+  // fetch a fresh set of logs so the panel doesn't show stale output.
+  useEffect(() => {
+    const prev = prevBuildNumberRef.current;
+    prevBuildNumberRef.current = build?.number;
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+      onFetchLogs(build.number);
+    }
+  }, [build?.number, isExpanded, activeTab, onFetchLogs]);
   
   // Fetch detailed info when metrics tab is active and expanded
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -202,7 +166,7 @@ export function AppCard({
                 >
                   {app.name}
                 </Link>
-                {getStatusBadge(app.status, build)}
+                <AppStatusBadge status={app.status} building={build?.building} size="sm" />
               </div>
               <a
                 href={`https://${domain}`}

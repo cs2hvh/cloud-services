@@ -88,3 +88,11 @@ export async function checkIdempotency(
 export function getIdempotencyKey(headers: Headers): string | null {
   return headers.get("idempotency-key") || headers.get("Idempotency-Key");
 }
+
+/**
+ * Generate a client-side idempotency key for a mutation request.
+ * Format: `{prefix}:{timestamp}:{uuid}`
+ */
+export function generateIdempotencyKey(prefix: string): string {
+  return `${prefix}:${Date.now()}:${crypto.randomUUID()}`;
+}

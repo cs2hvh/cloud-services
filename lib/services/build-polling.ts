@@ -6,6 +6,7 @@ import { JenkinsService } from "./jenkins";
 import { AppStatusService } from "./app-status";
 import { KubernetesInfoService } from "./kubernetes-info";
 import { AppOperationFinalizer } from "@/lib/app-operations";
+import { extractDigestFromImageID, parseImageRef } from "@/lib/container-image/image-ref";
 import {
   BUILD_POLLING_FINALIZATION_GRACE_MS,
   BUILD_POLLING_HEALTH_CHECK_INTERVAL_MS,
@@ -97,10 +98,16 @@ export class BuildPollingService {
       const primary = images[0];
       if (!primary) return {};
 
-      const digestMatch = primary.imageID?.match(/@sha256:[a-f0-9]+$/i);
+      // Normalize: strip docker.io/ prefix Kubernetes adds to short image refs
+      const parsed = primary.image ? parseImageRef(primary.image) : null;
+      const normalizedTag = parsed
+        ? primary.image?.trim().replace(/^docker\.io\//, '') ?? null
+        : null;
+
+      // Capture only the digest itself — exclude the leading '@' separator
       return {
-        image_tag: primary.image || null,
-        image_digest: digestMatch?.[0] ?? null,
+        image_tag: normalizedTag ?? null,
+        image_digest: extractDigestFromImageID(primary.imageID),
       };
     } catch (error) {
       console.warn(`[BuildPolling] Failed to read deployment image identity for ${appName}:`, error);
