@@ -308,6 +308,7 @@ export const SettingsTab = ({
 
   // Update Project
   const handleUpdateProject = async () => {
+    if (loading) return;
     if (!selectedProject) {
       toast.error("Please select a project");
       return;
@@ -335,6 +336,7 @@ export const SettingsTab = ({
 
   // Configure Maintenance Window
   const handleUpdateMaintenanceWindow = async () => {
+    if (loading) return;
     if (!maintenanceDay || !maintenanceHour) {
       toast.error("Please select both maintenance day and time.");
       return;
@@ -373,6 +375,7 @@ export const SettingsTab = ({
 
   // Update Database Region
   const handleUpdateRegion = async () => {
+    if (loading) return;
     if (isMongoDbCluster) {
       toast.info("Region migration is currently unavailable for MongoDB clusters.");
       return;
@@ -416,6 +419,7 @@ export const SettingsTab = ({
 
   // Upsize Storage (Disk Only)
   const handleUpsizeStorage = async () => {
+    if (loading) return;
     if (isMongoDbCluster) {
       toast.info("Storage upsize is currently unavailable for MongoDB clusters.");
       return;
@@ -484,7 +488,8 @@ export const SettingsTab = ({
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {
-    if (deleteConfirmInput.trim().toLowerCase() !== database.name.toLowerCase()) {
+    if (loading) return;
+    if (deleteConfirmInput.trim().toLowerCase() !== database.name.trim().toLowerCase()) {
       toast.error(`Please type "${database.name}" to confirm deletion`);
       return;
     }
@@ -934,7 +939,7 @@ export const SettingsTab = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDeleteCluster}
-                  disabled={loading === "delete" || deleteConfirmInput.trim().toLowerCase() !== database.name.toLowerCase()}
+                  disabled={loading === "delete" || deleteConfirmInput.trim().toLowerCase() !== database.name.trim().toLowerCase()}
                   className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-all duration-150 hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "delete" ? (
