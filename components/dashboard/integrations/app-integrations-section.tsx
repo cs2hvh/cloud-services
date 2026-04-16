@@ -14,7 +14,10 @@ import {
 import { LinkedDatabaseCard } from './linked-database-card';
 import { LinkDatabaseModal } from './link-database-modal-v2';
 import { UnlinkConfirmationModal } from './unlink-confirmation-modal';
+import { EditIntegrationModal } from './edit-integration-modal';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+import { fetchDatabasePlansAction } from '@/actions/fetch-database-plans';
 import type { 
   LinkedDatabase, 
   AvailableDatabase, 
@@ -47,6 +50,8 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
   const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [unlinkTarget, setUnlinkTarget] = useState<LinkedDatabase | null>(null);
+  const [editTarget, setEditTarget] = useState<LinkedDatabase | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Get current user ID
@@ -122,29 +127,13 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
   const fetchDatabasePlans = useCallback(async () => {
     setLoadingPlans(true);
     try {
-      const res = await fetch('/api/admin/products?type=database');
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch plans' }));
-        throw new Error(errorData.error || 'Failed to fetch plans');
-      }
-      
-      const data = await res.json();
+      const result = await fetchDatabasePlansAction();
 
-      if (data.error) {
-        throw new Error(data.error);
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch plans');
       }
 
-      // API returns { products: [...] }
-      // Filter to only MySQL, PostgreSQL, MongoDB plans based on 'sub' field
-      const validEngines = ['mysql', 'pg', 'mongodb'];
-      const allPlans = data.products || data.data || [];
-      const plans = allPlans.filter((plan: DatabasePlan) => {
-        const sub = (plan.sub || '').toLowerCase();
-        // Match exact engine type in 'sub' field
-        return validEngines.includes(sub);
-      });
-
+      const plans = result.plans || [];
       setDatabasePlans(plans);
     } catch (err) {
       console.error('Error fetching database plans:', err);
@@ -224,11 +213,16 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
         };
       }
 
-      // Find the selected plan to get CPU/RAM for size calculation
+      // Use the plan's slug if available (matches main DB page behaviour),
+      // otherwise derive from resources, or fall back to smallest tier
       const selectedPlan = databasePlans.find(p => p.id === data.plan_id);
-      const cpu = selectedPlan?.resources?.cpu || 1;
-      const ram = selectedPlan?.resources?.ram || 1;
-      const size = `db-s-${cpu}vcpu-${ram}gb`;
+      const slug = selectedPlan?.slug;
+      const cpu = selectedPlan?.resources?.cpu;
+      const ram = selectedPlan?.resources?.ram;
+      const size = slug
+        || ((cpu && cpu > 0 && ram && ram > 0)
+          ? `db-s-${cpu}vcpu-${ram}gb`
+          : 'db-s-1vcpu-1gb');
 
       const res = await fetch('/api/services/database/create', {
         method: 'POST',
@@ -292,6 +286,47 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
     }
   };
 
+  // Retry a failed integration — unlink failed record then reopen link modal
+  const handleRetry = async (databaseId: string): Promise<void> => {
+    // First, remove the failed record via unlink
+    setUnlinkingId(databaseId);
+    try {
+      const res = await fetch('/api/services/platform-apps/integrations/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: appId, database_id: databaseId }),
+      });
+      const data = await res.json();
+      if (!data.success && data.code !== 'NOT_LINKED') {
+        toast.error(data.error || 'Failed to clear failed integration');
+        return;
+      }
+      await fetchLinkedDatabases();
+      // Open the link modal so user can retry
+      setLinkModalOpen(true);
+      toast.info('Failed integration cleared — you can re-link now');
+    } catch (error) {
+      toast.error('Network error while retrying');
+    } finally {
+      setUnlinkingId(null);
+    }
+  };
+
+  // Edit integration — open modal to rename env var keys
+  const handleEdit = (databaseId: string): void => {
+    const db = linkedDatabases.find(d => d.database_cluster_id === databaseId);
+    if (db) {
+      setEditTarget(db);
+      setEditModalOpen(true);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    setEditModalOpen(false);
+    setEditTarget(null);
+    await fetchLinkedDatabases();
+  };
+
   // Handle modal close
   const handleUnlinkModalClose = (open: boolean) => {
     setUnlinkModalOpen(open);
@@ -333,7 +368,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       await fetchLinkedDatabases();
     } catch (err) {
       console.error('Error unlinking database:', err);
-      alert(err instanceof Error ? err.message : 'Failed to unlink database');
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink database');
     } finally {
       setUnlinkingId(null);
     }
@@ -399,6 +434,8 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
                   key={db.integration_id}
                   database={db}
                   onUnlink={handleUnlink}
+                  onEdit={handleEdit}
+                  onRetry={handleRetry}
                   unlinking={unlinkingId === db.database_cluster_id}
                 />
               ))}
@@ -409,8 +446,8 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
           {linkedDatabases.length > 0 && (
             <div className="mt-4 pt-4 border-t border-white/10">
               <p className="text-xs text-white/40">
-                💡 Linked databases automatically inject environment variables (DATABASE_URL, etc.) 
-                into your app. Changes trigger a redeploy if the app is running.
+                Linked databases automatically inject connection environment variables into your app.
+                Changes trigger a redeploy if the app is running.
               </p>
             </div>
           )}
@@ -431,6 +468,15 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
         onLink={handleLink}
         onCreateDatabase={handleCreateDatabase}
         onSuccess={fetchLinkedDatabases}
+      />
+
+      {/* Edit Integration Modal */}
+      <EditIntegrationModal
+        open={editModalOpen}
+        onOpenChange={(open: boolean) => { setEditModalOpen(open); if (!open) setEditTarget(null); }}
+        appId={appId}
+        integration={editTarget}
+        onSuccess={handleEditSuccess}
       />
 
       {/* Unlink Confirmation Modal */}

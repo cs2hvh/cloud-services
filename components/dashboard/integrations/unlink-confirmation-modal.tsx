@@ -43,7 +43,7 @@ export function UnlinkConfirmationModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md bg-[#0a0a0f] border-white/10">
+      <DialogContent className="max-w-md bg-neutral-900 border-neutral-800 text-white">
         <DialogHeader>
           <DialogTitle className="text-xl flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-400" />
@@ -58,7 +58,6 @@ export function UnlinkConfirmationModal({
           {/* Resource Info */}
           <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="text-sm font-medium text-amber-400">
                   You&apos;re about to unlink: <span className="font-bold">{resourceName}</span>
@@ -90,7 +89,7 @@ export function UnlinkConfirmationModal({
           {/* Warning */}
           <div className="text-xs text-white/50 bg-black/20 p-3 rounded border border-white/5">
             <p>
-              ⚠️ Make sure your application doesn&apos;t rely on these credentials before proceeding.
+              Ensure your application does not rely on these credentials before proceeding.
               This action cannot be undone.
             </p>
           </div>

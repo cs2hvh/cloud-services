@@ -4,16 +4,18 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
-  HardDrive, 
   Plus, 
   Loader2, 
   RefreshCw,
   AlertTriangle,
+  Archive,
 } from 'lucide-react';
 import { LinkedStorageCard } from './linked-storage-card';
 import { LinkStorageModal } from './link-storage-modal';
 import { UnlinkConfirmationModal } from './unlink-confirmation-modal';
+import { EditStorageIntegrationModal } from './edit-storage-integration-modal';
 import { createClient } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 import type { 
   LinkedBucket, 
   AvailableBucket, 
@@ -41,6 +43,8 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
   const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
   const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
   const [unlinkTarget, setUnlinkTarget] = useState<LinkedBucket | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<LinkedBucket | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Get current user ID
@@ -57,6 +61,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
 
   // Fetch linked buckets for this app
   const fetchLinkedBuckets = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await fetch(`/api/services/platform-apps/integrations/storage/linked?app_id=${appId}`);
       const data = await res.json();
@@ -122,8 +127,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
     if (linkModalOpen && userId) {
       fetchAvailableBuckets(linkedBuckets);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linkModalOpen, userId]);
+  }, [linkModalOpen, userId, linkedBuckets, fetchAvailableBuckets]);
 
   // Handle create bucket
   const handleCreateBucket = async (data: {
@@ -202,6 +206,56 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
     }
   };
 
+  // Retry a failed integration by re-linking with the same env var keys
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const handleRetry = async (bucketId: string): Promise<void> => {
+    if (retryingId) return; // prevent concurrent retries
+    const bucket = linkedBuckets.find(b => b.bucket_id === bucketId);
+    if (!bucket) return;
+
+    setRetryingId(bucketId);
+    try {
+      const envConfigs: EnvVarConfig[] = bucket.injected_vars.map((key) => ({
+        originalKey: key,
+        customKey: key,
+        value: '(fetched securely on link)',
+        description: key,
+      }));
+
+      const res = await fetch('/api/services/platform-apps/integrations/storage/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_id: appId,
+          bucket_id: bucketId,
+          env_configs: envConfigs,
+          force: true,
+          includeAwsVars: false,
+        }),
+      });
+
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Retry failed');
+
+      toast.success('Storage integration recovered successfully');
+      await fetchLinkedBuckets();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to retry integration');
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
+  // Open edit modal
+  const handleEdit = (bucketId: string) => {
+    const bucket = linkedBuckets.find(b => b.bucket_id === bucketId);
+    if (bucket) {
+      setEditTarget(bucket);
+      setEditModalOpen(true);
+    }
+  };
+
   // Open unlink confirmation modal
   const handleUnlink = async (bucketId: string): Promise<void> => {
     const bucket = linkedBuckets.find(b => b.bucket_id === bucketId);
@@ -252,7 +306,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
       await fetchLinkedBuckets();
     } catch (err) {
       console.error('Error unlinking bucket:', err);
-      alert(err instanceof Error ? err.message : 'Failed to unlink bucket');
+      toast.error(err instanceof Error ? err.message : 'Failed to unlink bucket');
     } finally {
       setUnlinkingId(null);
     }
@@ -263,8 +317,8 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
       <Card className="bg-white/5 border-white/10">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-purple-400" />
-            Object Storage
+            <Archive className="w-5 h-5 text-neutral-300" />
+            Object Storage Integrations
           </CardTitle>
           <div className="flex items-center gap-2">
             <Button
@@ -298,7 +352,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
             </div>
           ) : linkedBuckets.length === 0 ? (
             <div className="text-center py-8">
-              <HardDrive className="w-12 h-12 text-white/20 mx-auto mb-4" />
+              <Archive className="w-12 h-12 opacity-20 mx-auto mb-4 text-white" />
               <h3 className="text-lg font-medium text-white/70 mb-2">No Buckets Linked</h3>
               <p className="text-sm text-white/50 mb-4">
                 Connect an S3-compatible bucket to automatically inject credentials
@@ -318,7 +372,10 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
                   key={bucket.integration_id}
                   bucket={bucket}
                   onUnlink={handleUnlink}
+                  onEdit={handleEdit}
+                  onRetry={handleRetry}
                   unlinking={unlinkingId === bucket.bucket_id}
+                  retrying={retryingId === bucket.bucket_id}
                 />
               ))}
             </div>
@@ -328,7 +385,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
           {linkedBuckets.length > 0 && (
             <div className="mt-4 pt-4 border-t border-white/10">
               <p className="text-xs text-white/40">
-                💡 Linked buckets automatically inject S3 credentials (S3_BUCKET, S3_ACCESS_KEY_ID, etc.) 
+                 Linked buckets automatically inject S3 credentials (S3_BUCKET, S3_ACCESS_KEY_ID, etc.) 
                 into your app. Changes trigger a redeploy if the app is running.
               </p>
             </div>
@@ -358,6 +415,22 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
         resourceType="bucket"
         resourceName={unlinkTarget?.bucket_name || ''}
         injectedVars={unlinkTarget?.injected_vars || []}
+      />
+
+      {/* Edit Storage Integration Modal */}
+      <EditStorageIntegrationModal
+        open={editModalOpen}
+        onOpenChange={(open) => {
+          setEditModalOpen(open);
+          if (!open) setEditTarget(null);
+        }}
+        appId={appId}
+        integration={editTarget}
+        onSuccess={() => {
+          setEditModalOpen(false);
+          setEditTarget(null);
+          fetchLinkedBuckets();
+        }}
       />
     </>
   );

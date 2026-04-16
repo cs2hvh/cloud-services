@@ -62,7 +62,8 @@ export function CreateDatabaseForm({
   // Available versions for selected engine
   const versions = engine ? DATABASE_VERSIONS[engine] : [];
 
-  // Validate database name
+  // Validate database name — must match NAMING_RULES.CLUSTER_NAME_PATTERN
+  // (start & end with alphanumeric, lowercase letters, numbers, hyphens only)
   const validateName = (value: string) => {
     if (!value) {
       setNameError('Name is required');
@@ -76,8 +77,8 @@ export function CreateDatabaseForm({
       setNameError('Name must be less than 63 characters');
       return false;
     }
-    if (!/^[a-z][a-z0-9-]*$/.test(value)) {
-      setNameError('Name must start with a letter and contain only lowercase letters, numbers, and hyphens');
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(value)) {
+      setNameError('Must start and end with a letter or number; only lowercase letters, numbers, and hyphens');
       return false;
     }
     setNameError('');
@@ -159,7 +160,7 @@ export function CreateDatabaseForm({
               onChange={(e) => handleNameChange(e.target.value)}
               placeholder={`my-${engine}-database`}
               disabled={disabled}
-              className={`bg-white/5 border-white/10 text-white ${
+              className={`bg-neutral-800/50 border-neutral-700 text-white ${
                 nameError ? 'border-red-500/50' : ''
               }`}
             />
@@ -167,7 +168,7 @@ export function CreateDatabaseForm({
               <p className="text-xs text-red-400">{nameError}</p>
             ) : (
               <p className="text-xs text-white/40">
-                Lowercase letters, numbers, and hyphens only. Must start with a letter.
+                Start and end with a letter or number. Lowercase, numbers, and hyphens only.
               </p>
             )}
           </div>
@@ -176,12 +177,12 @@ export function CreateDatabaseForm({
           <div className="space-y-2">
             <Label className="text-white/70">Version</Label>
             <Select value={version} onValueChange={setVersion} disabled={disabled}>
-              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+              <SelectTrigger className="bg-neutral-800/50 border-neutral-700 text-white">
                 <SelectValue placeholder="Select version" />
               </SelectTrigger>
-              <SelectContent className="bg-[#1a1a1a] border-white/10">
+              <SelectContent className="bg-neutral-800 border-neutral-700">
                 {versions.map((v) => (
-                  <SelectItem key={v} value={v} className="text-white hover:bg-white/10">
+                  <SelectItem key={v} value={v} className="text-white hover:bg-neutral-700">
                     {DATABASE_ENGINES[engine].label} {v}
                   </SelectItem>
                 ))}
@@ -220,18 +221,33 @@ export function CreateDatabaseForm({
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="font-medium text-white text-sm">{plan.name}</p>
-                        {plan.resources && (
-                          <p className="text-xs text-white/50 mt-0.5">
-                            {plan.resources.cpu} vCPU • {plan.resources.ram}GB RAM • {plan.resources.storage}GB Storage
+                        {plan.description && (
+                          <p className="text-xs text-white/50 mt-0.5">{plan.description}</p>
+                        )}
+                        {plan.resources && (plan.resources.cpu || plan.resources.ram || plan.resources.storage) ? (
+                          <p className="text-xs text-white/40 mt-0.5">
+                            {plan.resources.cpu ? `${plan.resources.cpu} vCPU` : ''}
+                            {plan.resources.cpu && plan.resources.ram ? ' · ' : ''}
+                            {plan.resources.ram ? `${plan.resources.ram}GB RAM` : ''}
+                            {(plan.resources.cpu || plan.resources.ram) && plan.resources.storage ? ' · ' : ''}
+                            {plan.resources.storage ? `${plan.resources.storage}GB` : ''}
                           </p>
-                        )}
+                        ) : null}
                       </div>
-                      <div className="text-right">
-                        {plan.price === 0 || plan.price === null ? (
-                          <span className="text-green-400 font-medium">Free</span>
-                        ) : (
-                          <span className="text-white font-medium">${plan.price}/mo</span>
-                        )}
+                      <div className="text-right flex-shrink-0">
+                        {(() => {
+                          const discount = Number(plan.discount ?? 0);
+                          const raw = plan.price ?? 0;
+                          const effective = discount > 0 ? raw * (1 - discount / 100) : raw;
+                          if (!effective || effective === 0) {
+                            return <span className="text-green-400 font-medium text-sm">Free</span>;
+                          }
+                          return (
+                            <span className="text-white font-medium text-sm">
+                              ${effective.toFixed(2)}/mo
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   </button>
@@ -249,26 +265,30 @@ export function CreateDatabaseForm({
               </div>
             ) : (
               <Select value={region} onValueChange={setRegion} disabled={disabled}>
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="bg-neutral-800/50 border-neutral-700 text-white">
                   <SelectValue placeholder="Select region" />
                 </SelectTrigger>
-                <SelectContent className="bg-[#1a1a1a] border-white/10">
+                <SelectContent className="bg-neutral-800 border-neutral-700">
                   {regions.length > 0 ? (
                     regions.map((r) => (
-                      <SelectItem key={r.id} value={r.id} className="text-white hover:bg-white/10">
+                      <SelectItem key={r.id} value={r.id} className="text-white hover:bg-neutral-700">
                         {r.city} ({r.id})
                       </SelectItem>
                     ))
                   ) : (
-                    // Fallback regions if not loaded
+                    // Fallback regions — synced with VALID_DATABASE_REGIONS
                     <>
-                      <SelectItem value="nyc1" className="text-white hover:bg-white/10">New York (nyc1)</SelectItem>
-                      <SelectItem value="sfo3" className="text-white hover:bg-white/10">San Francisco (sfo3)</SelectItem>
-                      <SelectItem value="ams3" className="text-white hover:bg-white/10">Amsterdam (ams3)</SelectItem>
-                      <SelectItem value="sgp1" className="text-white hover:bg-white/10">Singapore (sgp1)</SelectItem>
-                      <SelectItem value="lon1" className="text-white hover:bg-white/10">London (lon1)</SelectItem>
-                      <SelectItem value="fra1" className="text-white hover:bg-white/10">Frankfurt (fra1)</SelectItem>
-                      <SelectItem value="blr1" className="text-white hover:bg-white/10">Bangalore (blr1)</SelectItem>
+                      <SelectItem value="nyc1" className="text-white hover:bg-neutral-700">New York 1 (nyc1)</SelectItem>
+                      <SelectItem value="nyc3" className="text-white hover:bg-neutral-700">New York 3 (nyc3)</SelectItem>
+                      <SelectItem value="sfo2" className="text-white hover:bg-neutral-700">San Francisco 2 (sfo2)</SelectItem>
+                      <SelectItem value="sfo3" className="text-white hover:bg-neutral-700">San Francisco 3 (sfo3)</SelectItem>
+                      <SelectItem value="ams3" className="text-white hover:bg-neutral-700">Amsterdam (ams3)</SelectItem>
+                      <SelectItem value="sgp1" className="text-white hover:bg-neutral-700">Singapore (sgp1)</SelectItem>
+                      <SelectItem value="lon1" className="text-white hover:bg-neutral-700">London (lon1)</SelectItem>
+                      <SelectItem value="fra1" className="text-white hover:bg-neutral-700">Frankfurt (fra1)</SelectItem>
+                      <SelectItem value="tor1" className="text-white hover:bg-neutral-700">Toronto (tor1)</SelectItem>
+                      <SelectItem value="blr1" className="text-white hover:bg-neutral-700">Bangalore (blr1)</SelectItem>
+                      <SelectItem value="syd1" className="text-white hover:bg-neutral-700">Sydney (syd1)</SelectItem>
                     </>
                   )}
                 </SelectContent>
@@ -277,14 +297,12 @@ export function CreateDatabaseForm({
           </div>
 
           {/* Info */}
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-blue-400/70">
-                Database will be created and automatically linked to your app. 
-                You&apos;ll be able to customize environment variable names in the next step.
-              </p>
-            </div>
+          <div className="flex items-start gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
+            <Info className="w-4 h-4 text-white/40 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-white/50 leading-relaxed">
+              Database will be created and automatically linked to your app.
+              You&apos;ll customize environment variable names in the next step.
+            </p>
           </div>
         </>
       )}

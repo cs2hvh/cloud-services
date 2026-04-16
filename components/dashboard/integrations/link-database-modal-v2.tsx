@@ -283,20 +283,19 @@ export function LinkDatabaseModal({
         
       case 'select-existing':
         if (selectedDb) {
-          // Generate env configs from selected database
-          // We'll fetch connection info and generate configs
           setStep('configure-env');
-          // For existing db, we need to get connection info
-          // For now, use placeholder - actual values come from link API
+          // For existing DB: show key names only — actual values are fetched
+          // securely by the backend from DigitalOcean API at link time
+          const port = selectedDb.engine === 'mongodb' ? 27017 : selectedDb.engine === 'mysql' ? 3306 : 5432;
           setEnvConfigs(generateDefaultEnvConfigs(
             selectedDb.engine,
             {
-              host: `${selectedDb.cluster_id}.db.example.com`,
-              port: selectedDb.engine === 'mongodb' ? 27017 : selectedDb.engine === 'mysql' ? 3306 : 5432,
-              user: 'doadmin',
-              password: '••••••••',
-              database: 'defaultdb',
-              uri: `${selectedDb.engine}://doadmin:****@${selectedDb.cluster_id}.db.example.com/${selectedDb.name}`,
+              host: '(fetched securely on link)',
+              port,
+              user: '(fetched securely on link)',
+              password: '(fetched securely on link)',
+              database: '(fetched securely on link)',
+              uri: '(fetched securely on link)',
             },
             'DATABASE'
           ));
@@ -478,8 +477,8 @@ export function LinkDatabaseModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="bg-[#0a0a0a] border-white/10 text-white max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="bg-neutral-900 border-neutral-800 text-white max-w-lg max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-neutral-800 flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Database className="w-5 h-5 text-blue-400" />
             {getStepTitle()}
@@ -493,68 +492,89 @@ export function LinkDatabaseModal({
             {step === 'configure-env' && 'Customize environment variable names'}
           </DialogDescription>
           
-          {/* Progress indicator */}
-          <div className="flex items-center gap-2 pt-2">
-            {[1, 2, 3].map((num) => (
-              <div
-                key={num}
-                className={`h-1 flex-1 rounded-full transition-colors ${
-                  num <= getStepNumber() ? 'bg-blue-500' : 'bg-white/10'
-                }`}
-              />
-            ))}
+          {/* Progress indicator with labels */}
+          <div className="flex items-center gap-1 pt-2">
+            {(['Source', 'Select', 'Configure'] as const).map((label, idx) => {
+              const num = idx + 1;
+              const active = num <= getStepNumber();
+              return (
+                <div key={label} className="flex-1 flex flex-col gap-1">
+                  <div className={`h-[3px] rounded-full transition-colors ${active ? 'bg-blue-500' : 'bg-neutral-700'}`} />
+                  <span className={`text-[10px] ${active ? 'text-blue-400/80' : 'text-white/25'}`}>{label}</span>
+                </div>
+              );
+            })}
           </div>
         </DialogHeader>
 
         {success ? (
-          <div className="py-6 text-center">
-            <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-white mb-2">Database Linked!</h3>
-            <p className="text-white/60 text-sm mb-4">
-              {success.injectedVars.length} environment variables injected
-            </p>
-            {success.redeployTriggered && (
-              <p className="text-sm text-blue-400">
-                Redeploy triggered to apply changes
+          <div className="flex-1 overflow-y-auto py-6 px-6 space-y-5">
+            <div className="flex flex-col items-center text-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-green-500/15 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-green-400" />
+              </div>
+              <h3 className="text-base font-semibold text-white">Database linked</h3>
+              <p className="text-sm text-white/50">
+                {success.injectedVars.length} environment variable{success.injectedVars.length !== 1 ? 's' : ''} injected into your app
+              </p>
+            </div>
+
+            {success.injectedVars.length > 0 && (
+              <div className="rounded-md border border-white/[0.08] bg-white/[0.03] overflow-hidden divide-y divide-white/[0.06]">
+                {success.injectedVars.map((key) => (
+                  <div key={key} className="px-3 py-2 font-mono text-xs text-white/60">
+                    {key}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {success.redeployTriggered ? (
+              <p className="text-center text-xs text-blue-400/80">
+                A redeploy was triggered to apply the new variables.
+              </p>
+            ) : (
+              <p className="text-center text-xs text-white/40">
+                Redeploy your app to apply the new environment variables.
               </p>
             )}
           </div>
         ) : (
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4">
             {/* Step 1: Choose Source */}
             {step === 'choose-source' && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={() => setSource('existing')}
                   className={`
-                    p-6 rounded-lg border-2 transition-all text-center
+                    p-4 rounded-lg border-2 transition-all text-left
                     ${source === 'existing'
-                      ? 'bg-blue-500/20 border-blue-500/50'
-                      : 'bg-white/5 border-white/10 hover:bg-white/10'
+                      ? 'bg-blue-500/15 border-blue-500/50'
+                      : 'bg-neutral-800/30 border-neutral-700 hover:bg-neutral-800/50 hover:border-neutral-600'
                     }
                   `}
                 >
-                  <Server className="w-8 h-8 text-blue-400 mx-auto mb-3" />
-                  <p className="font-medium text-white">Use Existing</p>
-                  <p className="text-xs text-white/50 mt-1">
-                    Link an existing database
+                  <Server className="w-5 h-5 text-blue-400 mb-2" />
+                  <p className="font-medium text-white text-sm">Use Existing</p>
+                  <p className="text-xs text-white/45 mt-0.5 leading-relaxed">
+                    Link a database you already have
                   </p>
                 </button>
                 
                 <button
                   onClick={() => setSource('create')}
                   className={`
-                    p-6 rounded-lg border-2 transition-all text-center
+                    p-4 rounded-lg border-2 transition-all text-left
                     ${source === 'create'
-                      ? 'bg-blue-500/20 border-blue-500/50'
-                      : 'bg-white/5 border-white/10 hover:bg-white/10'
+                      ? 'bg-blue-500/15 border-blue-500/50'
+                      : 'bg-neutral-800/30 border-neutral-700 hover:bg-neutral-800/50 hover:border-neutral-600'
                     }
                   `}
                 >
-                  <Plus className="w-8 h-8 text-green-400 mx-auto mb-3" />
-                  <p className="font-medium text-white">Create New</p>
-                  <p className="text-xs text-white/50 mt-1">
-                    Deploy a new database
+                  <Plus className="w-5 h-5 text-green-400 mb-2" />
+                  <p className="font-medium text-white text-sm">Create New</p>
+                  <p className="text-xs text-white/45 mt-0.5 leading-relaxed">
+                    Deploy a managed database
                   </p>
                 </button>
               </div>
@@ -570,7 +590,7 @@ export function LinkDatabaseModal({
                     placeholder="Search databases..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 bg-white/5 border-white/10 text-white"
+                    className="pl-9 bg-neutral-800/50 border-neutral-700 text-white"
                   />
                 </div>
 
@@ -599,34 +619,69 @@ export function LinkDatabaseModal({
                       </Button>
                     </div>
                   ) : (
-                    filteredDatabases.map((db) => (
-                      <button
-                        key={db.cluster_id}
-                        onClick={() => setSelectedDb(db)}
-                        disabled={db.status !== 'online'}
-                        className={`
-                          w-full p-3 rounded-lg border transition-all text-left
-                          ${selectedDb?.cluster_id === db.cluster_id
-                            ? 'bg-blue-500/20 border-blue-500/50'
-                            : 'bg-white/5 border-white/10 hover:bg-white/10'
-                          }
-                          ${db.status !== 'online' ? 'opacity-50 cursor-not-allowed' : ''}
-                        `}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Database className="w-5 h-5 text-blue-400" />
-                          <div className="flex-1">
-                            <p className="font-medium text-white">{db.name}</p>
-                            <p className="text-xs text-white/50">
-                              {getEngineLabel(db.engine)} • {db.region || 'Unknown region'}
+                    filteredDatabases.map((db) => {
+                      const engineColors: Record<string, string> = {
+                        pg: 'text-blue-400',
+                        mysql: 'text-orange-400',
+                        mongodb: 'text-green-400',
+                      };
+                      const EngineIcon = () => {
+                        switch (db.engine) {
+                          case 'pg': return (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <ellipse cx="12" cy="5" rx="7" ry="3" />
+                              <path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5" />
+                              <path d="M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" />
+                            </svg>
+                          );
+                          case 'mysql': return (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <ellipse cx="12" cy="5" rx="7" ry="3" />
+                              <path d="M5 5v14c0 1.66 3.13 3 7 3s7-1.34 7-3V5" />
+                              <path d="M5 12h14" />
+                            </svg>
+                          );
+                          case 'mongodb': return (
+                            <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M12 2C9 6 7 9 7 13a5 5 0 0 0 5 5 5 5 0 0 0 5-5c0-4-2-7-5-11z" />
+                              <path d="M12 18v4" />
+                            </svg>
+                          );
+                          default: return <Database className="w-4 h-4 flex-shrink-0 text-blue-400" />;
+                        }
+                      };
+                      return (
+                        <button
+                          key={db.cluster_id}
+                          onClick={() => setSelectedDb(db)}
+                          disabled={db.status !== 'online'}
+                          className={`
+                            w-full px-3 py-2.5 rounded-lg border transition-all text-left flex items-center gap-3
+                            ${selectedDb?.cluster_id === db.cluster_id
+                              ? 'bg-blue-500/15 border-blue-500/50'
+                              : 'bg-neutral-800/30 border-neutral-700 hover:bg-neutral-800/50'
+                            }
+                            ${db.status !== 'online' ? 'opacity-50 cursor-not-allowed' : ''}
+                          `}
+                        >
+                          <span className={engineColors[db.engine] || 'text-blue-400'}>
+                            <EngineIcon />
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white text-sm truncate">{db.name}</p>
+                            <p className="text-xs text-white/45">
+                              {getEngineLabel(db.engine)}{db.region ? ` · ${db.region}` : ''}
                             </p>
                           </div>
                           {db.status !== 'online' && (
-                            <span className="text-xs text-yellow-400">{db.status}</span>
+                            <span className="text-xs text-yellow-400 flex-shrink-0">{db.status}</span>
                           )}
-                        </div>
-                      </button>
-                    ))
+                          {selectedDb?.cluster_id === db.cluster_id && (
+                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </>
@@ -669,29 +724,21 @@ export function LinkDatabaseModal({
 
                 {/* Database status indicator for newly created databases */}
                 {source === 'create' && !isDatabaseReady && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
-                      <div>
-                        <p className="text-sm text-blue-400 font-medium">
-                          Database is provisioning...
-                        </p>
-                        <p className="text-xs text-blue-400/70 mt-0.5">
-                          Status: {databaseStatus}. This typically takes 3-5 minutes. You can link once it&apos;s online.
-                        </p>
-                      </div>
+                  <div className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-neutral-800/60 border border-white/[0.07]">
+                    <Loader2 className="w-4 h-4 text-white/40 animate-spin flex-shrink-0" />
+                    <div>
+                      <p className="text-xs text-white/60 font-medium">Database provisioning</p>
+                      <p className="text-[11px] text-white/35 mt-0.5">
+                        Status: {databaseStatus} — typically 3–5 minutes. You can link once it&apos;s online.
+                      </p>
                     </div>
                   </div>
                 )}
                 
                 {source === 'create' && isDatabaseReady && (
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <Server className="w-5 h-5 text-green-400 flex-shrink-0" />
-                      <p className="text-sm text-green-400">
-                        Database is online and ready to link!
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-500/10 border border-green-500/20">
+                    <Server className="w-4 h-4 text-green-400 flex-shrink-0" />
+                    <p className="text-xs text-green-400">Database online — ready to link</p>
                   </div>
                 )}
               </>
@@ -699,16 +746,14 @@ export function LinkDatabaseModal({
 
             {/* Error */}
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-400">{error}</p>
-                </div>
+              <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-md bg-red-500/10 border border-red-500/20">
+                <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-red-400">{error}</p>
               </div>
             )}
 
             {/* Actions */}
-            <div className="flex justify-between gap-3 pt-2 border-t border-white/10">
+            <div className="flex justify-between gap-3 pt-4 border-t border-neutral-800">
               {step !== 'choose-source' ? (
                 <Button
                   variant="ghost"

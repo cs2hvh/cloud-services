@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   GitBranch,
-  GitCommit,
   Terminal,
   Activity,
   Settings,
