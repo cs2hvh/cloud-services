@@ -5,7 +5,7 @@ export interface PostProvisionBillingArgs {
   initialCost: number;
   hourlyRate: number;
   serviceId: string;
-  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum";
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps";
   addActive: (args: { userId: string; serviceId: string; hourlyRate: number }) => Promise<void>;
 }
 
@@ -85,5 +85,42 @@ export async function postProvisionBilling({
       );
     }
     throw insertError;
+  }
+}
+
+/**
+ * Close an active service billing row — deducts the final prorated charge
+ * and removes the active row. If the delete fails after deduction, refunds.
+ */
+export async function closeActiveBilling({
+  userId,
+  serviceId,
+  serviceType,
+  closeActive,
+}: {
+  userId: string;
+  serviceId: string;
+  serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps";
+  closeActive: () => Promise<{ finalCharge: number }>;
+}): Promise<void> {
+  const { finalCharge } = await closeActive();
+
+  if (finalCharge > 0) {
+    try {
+      await Billing.save_transaction({
+        userId,
+        amount: finalCharge,
+        status: "completed",
+        type: "usage",
+        serviceId,
+        serviceType,
+        description: `Final prorated ${serviceType.replace("_", " ")} charge`,
+      });
+    } catch (error) {
+      console.warn(
+        "[closeActiveBilling] Failed to record final charge transaction:",
+        error instanceof Error ? error.message : String(error)
+      );
+    }
   }
 }

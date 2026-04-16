@@ -77,4 +77,95 @@ export class PlatformAppEnvService {
 
     return { success: true, data: null };
   }
+
+  /**
+   * Add or update a single env var without replacing the entire array.
+   * If the key exists, its value is updated. Otherwise it's appended.
+   */
+  static async upsertEnvVar(
+    appId: string,
+    key: string,
+    value: string
+  ): Promise<EnvServiceResult<AppEnvVar[]>> {
+    try {
+      const existing = await this.getEnvVars(appId);
+      const idx = existing.findIndex((e) => e.key === key);
+      if (idx >= 0) {
+        existing[idx].value = value;
+      } else {
+        existing.push({ key, value });
+      }
+      const saveResult = await this.setEnvVars(appId, existing);
+      if (!saveResult.success) {
+        return saveResult as EnvServiceResult<AppEnvVar[]>;
+      }
+      return { success: true, data: existing };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Upsert failed",
+        errorCode: "DB_ERROR",
+      };
+    }
+  }
+
+  /**
+   * Remove a single env var by key. No-op if the key doesn't exist.
+   */
+  static async removeEnvVar(
+    appId: string,
+    key: string
+  ): Promise<EnvServiceResult<{ removed: boolean; remaining: AppEnvVar[] }>> {
+    try {
+      const existing = await this.getEnvVars(appId);
+      const filtered = existing.filter((e) => e.key !== key);
+      const removed = filtered.length < existing.length;
+
+      if (removed) {
+        const saveResult = await this.setEnvVars(appId, filtered);
+        if (!saveResult.success) {
+          return saveResult as EnvServiceResult<{ removed: boolean; remaining: AppEnvVar[] }>;
+        }
+      }
+
+      return { success: true, data: { removed, remaining: filtered } };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Remove failed",
+        errorCode: "DB_ERROR",
+      };
+    }
+  }
+
+  /**
+   * Bulk add/update multiple env vars without replacing unrelated vars.
+   * Existing vars with matching keys are updated; new keys are appended.
+   */
+  static async bulkUpsertEnvVars(
+    appId: string,
+    vars: AppEnvVar[]
+  ): Promise<EnvServiceResult<AppEnvVar[]>> {
+    try {
+      const existing = await this.getEnvVars(appId);
+      const existingMap = new Map(existing.map((e) => [e.key, e]));
+
+      for (const v of vars) {
+        existingMap.set(v.key, v);
+      }
+
+      const merged = Array.from(existingMap.values());
+      const saveResult = await this.setEnvVars(appId, merged);
+      if (!saveResult.success) {
+        return saveResult as EnvServiceResult<AppEnvVar[]>;
+      }
+      return { success: true, data: merged };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Bulk upsert failed",
+        errorCode: "DB_ERROR",
+      };
+    }
+  }
 }

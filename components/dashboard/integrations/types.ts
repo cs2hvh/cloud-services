@@ -11,13 +11,12 @@ export type DatabaseEngineType = 'pg' | 'mysql' | 'mongodb';
 
 export const DATABASE_ENGINES: Record<DatabaseEngineType, {
   label: string;
-  icon: string;
   color: string;
   defaultPort: number;
 }> = {
-  pg: { label: 'PostgreSQL', icon: '🐘', color: 'text-blue-400', defaultPort: 5432 },
-  mysql: { label: 'MySQL', icon: '🐬', color: 'text-orange-400', defaultPort: 3306 },
-  mongodb: { label: 'MongoDB', icon: '🍃', color: 'text-green-400', defaultPort: 27017 },
+  pg: { label: 'PostgreSQL', color: 'text-blue-400', defaultPort: 5432 },
+  mysql: { label: 'MySQL', color: 'text-orange-400', defaultPort: 3306 },
+  mongodb: { label: 'MongoDB', color: 'text-green-400', defaultPort: 27017 },
 };
 
 export interface LinkedDatabase {
@@ -89,6 +88,7 @@ export interface DatabasePlan {
   price: number | null;
   discount?: string | null;
   sub?: string;  // Database type: mysql, pg, mongodb
+  slug?: string; // DO size slug (e.g. db-s-1vcpu-1gb)
   resources?: {
     cpu?: number;
     ram?: number;
@@ -151,11 +151,11 @@ export interface LinkWizardState {
   error: string | null;
 }
 
-// Available database versions per engine
+// Available database versions per engine — must stay in sync with lib/validation/constants.ts
 export const DATABASE_VERSIONS: Record<DatabaseEngineType, string[]> = {
-  pg: ['16', '15', '14', '13'],
+  pg: ['17', '16', '15', '14', '13', '12'],
   mysql: ['8'],
-  mongodb: ['7', '6'],
+  mongodb: ['8', '7', '6', '5', '4'],
 };
 
 // ============================================
