@@ -484,7 +484,7 @@ export const SettingsTab = ({
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {
-    if (deleteConfirmInput !== database.name) {
+    if (deleteConfirmInput.trim() !== database.name) {
       toast.error(`Please type "${database.name}" to confirm deletion`);
       return;
     }
@@ -623,7 +623,7 @@ export const SettingsTab = ({
                     <option
                       key={day}
                       value={day}
-                      className={`bg-[#0f1117] ${
+                      className={`bg-slate-900 ${
                         day === currentMaintenanceWindow?.day ? "font-bold" : ""
                       }`}
                     >
@@ -635,7 +635,7 @@ export const SettingsTab = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mb-2">
+                <label className="block text-xs font-semibold uppercase tracking-[0.12em] text-white/50 mb-2">
                   Time (UTC)
                 </label>
                 <select
@@ -648,7 +648,7 @@ export const SettingsTab = ({
                     <option
                       key={time}
                       value={time}
-                      className={`bg-[#0f1117] ${
+                      className={`bg-slate-900 ${
                         time === currentMaintenanceWindow?.hour ? "font-bold" : ""
                       }`}
                     >
@@ -817,13 +817,6 @@ export const SettingsTab = ({
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Storage</p>
             <h3 className="mt-0.5 text-sm font-semibold text-white">Upsize Storage — Current: {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}</h3>
           </div>
-          {/* Current storage badge */}
-          <div className="shrink-0 border border-white/[0.08] bg-white/[0.04] px-3 py-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/50 mb-0.5">Current</p>
-            <p className="text-sm font-semibold text-white">
-              {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}
-            </p>
-          </div>
         </div>
         <div className="px-5 py-3 space-y-2">
           <div>
@@ -871,9 +864,9 @@ export const SettingsTab = ({
               className="inline-flex items-center gap-1 border border-white/[0.12] bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-white transition-all duration-150 hover:bg-white/[0.10] disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {loading === "upsize" ? (
-                <><Loader2 className="h-3 w-3 animate-spin" />Upsizing</>
+                <><Loader2 className="h-3 w-3 animate-spin" />Upsizing Storage</>
               ) : (
-                <><HardDrive className="h-3 w-3" />Upsize</>
+                <><HardDrive className="h-3 w-3" />Upsize Storage</>
               )}
             </button>
             <button
@@ -937,7 +930,7 @@ export const SettingsTab = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDeleteCluster}
-                  disabled={loading === "delete" || deleteConfirmInput !== database.name}
+                  disabled={loading === "delete" || deleteConfirmInput.trim() !== database.name}
                   className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-all duration-150 hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "delete" ? (
