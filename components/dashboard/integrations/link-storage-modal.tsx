@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import {
   Dialog,
   DialogContent,
@@ -12,23 +13,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
 import { 
-  HardDrive, 
   Loader2, 
   AlertTriangle,
   Check,
-  MapPin,
   ChevronRight,
   Search,
   ArrowLeft,
   ArrowRight,
-  Sparkles,
   Server,
   CheckCircle,
   XCircle,
   Globe,
   Lock,
+  Unlock,
   Info,
+  Archive,
+  HardDrive,
 } from 'lucide-react';
 import { EnvConfigStep } from './env-config-step';
 import type { AvailableBucket, LinkStorageResponse, EnvVarConfig } from './types';
@@ -97,7 +100,7 @@ function generateDefaultStorageEnvConfigs(
   configs.push({
     originalKey: `${prefix}_ENDPOINT`,
     customKey: `${prefix}_ENDPOINT`,
-    value: '••••••••••••••••••••••••',
+    value: '(fetched securely on link)',
     description: 'S3 endpoint URL',
   });
 
@@ -111,14 +114,14 @@ function generateDefaultStorageEnvConfigs(
   configs.push({
     originalKey: `${prefix}_ACCESS_KEY_ID`,
     customKey: `${prefix}_ACCESS_KEY_ID`,
-    value: '••••••••••••••••••••••••',
+    value: '(fetched securely on link)',
     description: 'Access key ID',
   });
 
   configs.push({
     originalKey: `${prefix}_SECRET_ACCESS_KEY`,
     customKey: `${prefix}_SECRET_ACCESS_KEY`,
-    value: '••••••••••••••••••••••••••••••••••••••••••••',
+    value: '(fetched securely on link)',
     description: 'Secret access key',
   });
 
@@ -128,14 +131,14 @@ function generateDefaultStorageEnvConfigs(
     configs.push({
       originalKey: 'AWS_ACCESS_KEY_ID',
       customKey: 'AWS_ACCESS_KEY_ID',
-      value: '••••••••••••••••••••••••',
+      value: '(fetched securely on link)',
       description: 'AWS SDK access key (optional)',
     });
 
     configs.push({
       originalKey: 'AWS_SECRET_ACCESS_KEY',
       customKey: 'AWS_SECRET_ACCESS_KEY',
-      value: '••••••••••••••••••••••••••••••••••••••••••••',
+      value: '(fetched securely on link)',
       description: 'AWS SDK secret key (optional)',
     });
 
@@ -149,7 +152,7 @@ function generateDefaultStorageEnvConfigs(
     configs.push({
       originalKey: 'AWS_ENDPOINT_URL',
       customKey: 'AWS_ENDPOINT_URL',
-      value: '••••••••••••••••••••••••',
+      value: '(fetched securely on link)',
       description: 'AWS SDK endpoint (optional)',
     });
   }
@@ -159,13 +162,13 @@ function generateDefaultStorageEnvConfigs(
 
 // Available regions for object storage
 const STORAGE_REGIONS = [
-  { value: 'nyc3', label: 'New York 3', flag: '🇺🇸' },
-  { value: 'sfo3', label: 'San Francisco 3', flag: '🇺🇸' },
-  { value: 'ams3', label: 'Amsterdam 3', flag: '🇳🇱' },
-  { value: 'sgp1', label: 'Singapore 1', flag: '🇸🇬' },
-  { value: 'fra1', label: 'Frankfurt 1', flag: '🇩🇪' },
-  { value: 'blr1', label: 'Bangalore 1', flag: '🇮🇳' },
-  { value: 'syd1', label: 'Sydney 1', flag: '🇦🇺' },
+  { id: '1', short: 'nyc3', city: 'New York', country: 'United States', country_code: 'US', available: true },
+  { id: '2', short: 'sfo3', city: 'San Francisco', country: 'United States', country_code: 'US', available: true },
+  { id: '3', short: 'ams3', city: 'Amsterdam', country: 'Netherlands', country_code: 'NL', available: true },
+  { id: '4', short: 'sgp1', city: 'Singapore', country: 'Singapore', country_code: 'SG', available: true },
+  { id: '5', short: 'fra1', city: 'Frankfurt', country: 'Germany', country_code: 'DE', available: true },
+  { id: '6', short: 'blr1', city: 'Bangalore', country: 'India', country_code: 'IN', available: true },
+  { id: '7', short: 'syd1', city: 'Sydney', country: 'Australia', country_code: 'AU', available: true },
 ];
 
 type WizardStep = 'choose-source' | 'select-existing' | 'create-bucket' | 'configure-env' | 'success';
@@ -423,7 +426,9 @@ export function LinkStorageModal({
         if (source === 'existing') {
           setStep('select-existing');
         } else {
-          setStep('choose-source');
+          // source === 'create': bucket already provisioned — cannot go back to re-create.
+          // Going back to choose-source would orphan the created bucket.
+          // Stay on configure-env (back button is hidden for this case).
         }
         break;
     }
@@ -531,10 +536,10 @@ export function LinkStorageModal({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[90vh] bg-[#0a0a0f] border-white/10 flex flex-col overflow-hidden">
+      <DialogContent className="max-w-lg max-h-[90vh] bg-neutral-900 border-neutral-800 flex flex-col overflow-hidden">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-xl flex items-center gap-2">
-            <HardDrive className="w-5 h-5 text-purple-400" />
+            <Archive className="w-5 h-5 text-neutral-300" />
             {stepTitles[step]}
           </DialogTitle>
           <DialogDescription className="text-white/60">
@@ -555,11 +560,11 @@ export function LinkStorageModal({
               className={`w-full p-4 rounded-lg border transition-all text-left ${
                 source === 'existing'
                   ? 'bg-purple-500/10 border-purple-500/50'
-                  : 'bg-white/5 border-white/10 hover:border-white/20'
+                  : 'bg-neutral-800/30 border-neutral-700 hover:border-neutral-600'
               }`}
             >
               <div className="flex items-start gap-4">
-                <div className={`p-3 rounded-lg ${source === 'existing' ? 'bg-purple-500/20' : 'bg-white/10'}`}>
+                <div className={`p-3 rounded-lg ${source === 'existing' ? 'bg-purple-500/20' : 'bg-neutral-800'}`}>
                   <Server className={`w-6 h-6 ${source === 'existing' ? 'text-purple-400' : 'text-white/60'}`} />
                 </div>
                 <div className="flex-1">
@@ -588,12 +593,12 @@ export function LinkStorageModal({
               className={`w-full p-4 rounded-lg border transition-all text-left ${
                 source === 'create'
                   ? 'bg-purple-500/10 border-purple-500/50'
-                  : 'bg-white/5 border-white/10 hover:border-white/20'
+                  : 'bg-neutral-800/30 border-neutral-700 hover:border-neutral-600'
               } ${!onCreateBucket ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <div className="flex items-start gap-4">
-                <div className={`p-3 rounded-lg ${source === 'create' ? 'bg-purple-500/20' : 'bg-white/10'}`}>
-                  <Sparkles className={`w-6 h-6 ${source === 'create' ? 'text-purple-400' : 'text-white/60'}`} />
+                <div className={`p-3 rounded-lg ${source === 'create' ? 'bg-purple-500/20' : 'bg-neutral-800'}`}>
+                  <Archive className={`w-6 h-6 ${source === 'create' ? 'text-purple-400' : 'text-white/60'}`} />
                 </div>
                 <div className="flex-1">
                   <h3 className={`font-semibold mb-1 ${source === 'create' ? 'text-purple-400' : 'text-white'}`}>
@@ -638,7 +643,7 @@ export function LinkStorageModal({
                 placeholder="Search buckets..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white/5 border-white/10"
+                className="pl-10 bg-neutral-800/50 border-neutral-700"
               />
             </div>
 
@@ -649,7 +654,7 @@ export function LinkStorageModal({
               </div>
             ) : filteredBuckets.length === 0 ? (
               <div className="text-center py-8">
-                <HardDrive className="w-12 h-12 text-white/20 mx-auto mb-4" />
+                <Archive className="w-12 h-12 opacity-20 mx-auto mb-4 text-white" />
                 <h3 className="text-lg font-medium text-white/70 mb-2">
                   {searchQuery ? 'No buckets match your search' : 'No Buckets Available'}
                 </h3>
@@ -666,22 +671,19 @@ export function LinkStorageModal({
                     className={`w-full p-4 rounded-lg border transition-all text-left ${
                       selectedBucket?.id === bucket.id
                         ? 'bg-purple-500/10 border-purple-500/50'
-                        : 'bg-white/5 border-white/10 hover:border-white/20'
+                        : 'bg-neutral-800/30 border-neutral-700 hover:border-neutral-600'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${
-                          selectedBucket?.id === bucket.id ? 'bg-purple-500/20' : 'bg-purple-500/10'
+                          selectedBucket?.id === bucket.id ? 'bg-neutral-700' : 'bg-neutral-800'
                         }`}>
-                          <HardDrive className="w-5 h-5 text-purple-400" />
+                          <Archive className="w-5 h-5 text-neutral-300" />
                         </div>
                         <div>
                           <h4 className="font-medium text-white">{bucket.name}</h4>
-                          <div className="flex items-center gap-2 text-sm text-white/50">
-                            <MapPin className="w-3 h-3" />
-                            <span>{bucket.region}</span>
-                          </div>
+                          <p className="text-sm text-white/50">{bucket.region}</p>
                         </div>
                       </div>
                       {selectedBucket?.id === bucket.id ? (
@@ -725,7 +727,7 @@ export function LinkStorageModal({
                   value={newBucketName}
                   onChange={(e) => handleBucketNameChange(e.target.value)}
                   placeholder="my-app-bucket"
-                  className={`bg-white/5 border-white/10 pr-10 ${
+                  className={`bg-neutral-800/50 border-neutral-700 pr-10 ${
                     nameError ? 'border-red-500/50' : 
                     nameAvailable === true ? 'border-green-500/50' : ''
                   }`}
@@ -755,41 +757,79 @@ export function LinkStorageModal({
 
             {/* Region */}
             <div className="space-y-2">
-              <Label className="text-white/70">Region</Label>
-              <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto">
+              <Label className="text-white/70">Location</Label>
+              <RadioGroup
+                value={newBucketRegion}
+                onValueChange={setNewBucketRegion}
+                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+              >
                 {STORAGE_REGIONS.map((region) => (
-                  <button
-                    key={region.value}
-                    onClick={() => setNewBucketRegion(region.value)}
-                    className={`p-3 rounded-lg border transition-all text-left ${
-                      newBucketRegion === region.value
-                        ? 'bg-purple-500/10 border-purple-500/50'
-                        : 'bg-white/5 border-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span>{region.flag}</span>
-                      <span className="text-sm text-white">{region.label}</span>
-                    </div>
-                  </button>
+                  <div key={region.id}>
+                    <RadioGroupItem
+                      value={region.short}
+                      id={region.city}
+                      className="peer sr-only"
+                      disabled={!region.available}
+                    />
+                    <Label
+                      htmlFor={region.city}
+                      className="flex items-center gap-3 rounded-md bg-white/10 border-2 border-transparent cursor-pointer p-4 transition-all peer-data-[state=checked]:border-blue-500"
+                    >
+                      <Image
+                        src={`https://flagsapi.com/${region.country_code}/flat/64.png`}
+                        alt={region.city}
+                        width={32}
+                        height={24}
+                        className="rounded-sm"
+                      />
+                      <div>
+                        <div className="font-medium text-white">
+                          {region.city}
+                        </div>
+                        <div className="text-xs text-white/60">
+                          {region.country}
+                        </div>
+                      </div>
+                      {!region.available && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs ml-auto text-white/70 border-white/30"
+                        >
+                          Coming soon
+                        </Badge>
+                      )}
+                    </Label>
+                  </div>
                 ))}
-              </div>
+              </RadioGroup>
             </div>
 
             {/* Access Control */}
             <div className="space-y-2">
-              <Label className="text-white/70">Access Control</Label>
+              <div className="flex items-center gap-2">
+                {newBucketAcl === 'private' ? (
+                  <Lock className="h-4 w-4 text-green-400" />
+                ) : (
+                  <Unlock className="h-4 w-4 text-blue-400" />
+                )}
+                <Label className="text-white/70">Access Control (ACL)</Label>
+              </div>
+              <p className="text-sm text-white/60">
+                {newBucketAcl === 'private'
+                  ? 'Private (recommended)'
+                  : 'Public read access'}
+              </p>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setNewBucketAcl('private')}
                   className={`p-3 rounded-lg border transition-all text-left ${
                     newBucketAcl === 'private'
-                      ? 'bg-purple-500/10 border-purple-500/50'
-                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                      ? 'bg-green-500/10 border-green-500/50'
+                      : 'bg-neutral-800/30 border-neutral-700 hover:border-neutral-600'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Lock className={`w-4 h-4 ${newBucketAcl === 'private' ? 'text-purple-400' : 'text-white/60'}`} />
+                    <Lock className={`w-4 h-4 ${newBucketAcl === 'private' ? 'text-green-400' : 'text-white/60'}`} />
                     <span className="text-sm text-white">Private</span>
                   </div>
                   <p className="text-xs text-white/40 mt-1">Secure, API access only</p>
@@ -798,12 +838,12 @@ export function LinkStorageModal({
                   onClick={() => setNewBucketAcl('public-read')}
                   className={`p-3 rounded-lg border transition-all text-left ${
                     newBucketAcl === 'public-read'
-                      ? 'bg-purple-500/10 border-purple-500/50'
-                      : 'bg-white/5 border-white/10 hover:border-white/20'
+                      ? 'bg-blue-500/10 border-blue-500/50'
+                      : 'bg-neutral-800/30 border-neutral-700 hover:border-neutral-600'
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Globe className={`w-4 h-4 ${newBucketAcl === 'public-read' ? 'text-purple-400' : 'text-white/60'}`} />
+                    <Unlock className={`w-4 h-4 ${newBucketAcl === 'public-read' ? 'text-blue-400' : 'text-white/60'}`} />
                     <span className="text-sm text-white">Public Read</span>
                   </div>
                   <p className="text-xs text-white/40 mt-1">Anyone can read files</p>
@@ -812,7 +852,7 @@ export function LinkStorageModal({
             </div>
 
             {/* Optional Settings */}
-            <div className="space-y-3 p-3 rounded-lg bg-white/5 border border-white/10">
+            <div className="space-y-3 p-3 rounded-lg bg-neutral-800/30 border border-neutral-700">
               <div className="flex items-center gap-2 text-white/60 text-sm">
                 <Info className="w-4 h-4" />
                 <span>Optional Settings</span>
@@ -820,9 +860,12 @@ export function LinkStorageModal({
               
               {/* CORS */}
               <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-white/70">Enable CORS</Label>
-                  <p className="text-xs text-white/40">Allow browser access from web apps</p>
+                <div className="flex items-start gap-2 flex-1">
+                  <Globe className="w-4 h-4 text-blue-400 mt-0.5" />
+                  <div>
+                    <Label className="text-white/70">CORS (Cross-Origin Resource Sharing)</Label>
+                    <p className="text-xs text-white/40">Allow cross-origin requests to your bucket</p>
+                  </div>
                 </div>
                 <Switch
                   checked={newBucketCorsEnabled}
@@ -832,9 +875,12 @@ export function LinkStorageModal({
 
               {/* Versioning */}
               <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-white/70">Enable Versioning</Label>
-                  <p className="text-xs text-white/40">Keep history of file changes (adds cost)</p>
+                <div className="flex items-start gap-2 flex-1">
+                  <HardDrive className="w-4 h-4 text-purple-400 mt-0.5" />
+                  <div>
+                    <Label className="text-white/70">Object Versioning</Label>
+                    <p className="text-xs text-white/40">Keep multiple versions of objects in your bucket</p>
+                  </div>
                 </div>
                 <Switch
                   checked={newBucketVersioningEnabled}
@@ -884,10 +930,10 @@ export function LinkStorageModal({
         {step === 'configure-env' && (
           <div className="space-y-6">
             {/* Selected Bucket Info */}
-            <div className="p-4 rounded-lg bg-white/5 border border-white/10">
+            <div className="p-4 rounded-lg bg-neutral-800/30 border border-neutral-700">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-500/10">
-                  <HardDrive className="w-5 h-5 text-purple-400" />
+                <div className="p-2 rounded-lg bg-neutral-800">
+                  <Archive className="w-5 h-5 text-neutral-300" />
                 </div>
                 <div>
                   <h4 className="font-medium text-white">
@@ -901,7 +947,7 @@ export function LinkStorageModal({
             </div>
 
             {/* AWS SDK Variables Toggle */}
-            <div className="p-3 rounded-lg bg-white/5 border border-white/10">
+            <div className="p-3 rounded-lg bg-neutral-800/30 border border-neutral-700">
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-white/70">Include AWS SDK Variables</Label>
@@ -947,10 +993,14 @@ export function LinkStorageModal({
 
             {/* Navigation */}
             <div className="flex justify-between pt-4">
-              <Button variant="ghost" onClick={goBack} disabled={isLinking} className="text-white/60">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
+              {source === 'existing' ? (
+                <Button variant="ghost" onClick={goBack} disabled={isLinking} className="text-white/60">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back
+                </Button>
+              ) : (
+                <div /> /* Back not available after bucket creation */
+              )}
               <div className="flex gap-2">
                 {conflicts.length > 0 && !force && (
                   <Button
@@ -973,7 +1023,7 @@ export function LinkStorageModal({
                     </>
                   ) : (
                     <>
-                      <HardDrive className="w-4 h-4 mr-2" />
+                      <ChevronRight className="w-4 h-4 mr-2" />
                       Link Bucket
                     </>
                   )}

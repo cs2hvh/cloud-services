@@ -14,3 +14,4 @@ export { AppIntegrationsSection } from './app-integrations-section';
 export { LinkedStorageCard } from './linked-storage-card';
 export { LinkStorageModal } from './link-storage-modal';
 export { StorageIntegrationsSection } from './storage-integrations-section';
+export { EditStorageIntegrationModal } from './edit-storage-integration-modal';
