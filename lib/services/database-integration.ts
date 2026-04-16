@@ -395,9 +395,10 @@ export class DatabaseIntegrationService {
           `https://api.digitalocean.com/v2/databases/${database_id}`,
           {
             headers: {
-              Authorization: process.env.DIGITAL_OCEAN_TOKEN!,
+              Authorization: process.env.DIGITAL_OCEAN_TOKEN,
               "Content-Type": "application/json",
             },
+            timeout: 10000,
           }
         );
 
@@ -725,7 +726,7 @@ export class DatabaseIntegrationService {
         const axios = (await import("axios")).default;
         const response = await axios.get(
           `https://api.digitalocean.com/v2/databases/${database_id}`,
-          { headers: { Authorization: process.env.DIGITAL_OCEAN_TOKEN!, "Content-Type": "application/json" } }
+          { headers: { Authorization: process.env.DIGITAL_OCEAN_TOKEN, "Content-Type": "application/json" }, timeout: 10000 }
         );
         if (response.status === 200) {
           const dbData = response.data.database;

@@ -207,10 +207,14 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
   };
 
   // Retry a failed integration by re-linking with the same env var keys
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
   const handleRetry = async (bucketId: string): Promise<void> => {
+    if (retryingId) return; // prevent concurrent retries
     const bucket = linkedBuckets.find(b => b.bucket_id === bucketId);
     if (!bucket) return;
 
+    setRetryingId(bucketId);
     try {
       const envConfigs: EnvVarConfig[] = bucket.injected_vars.map((key) => ({
         originalKey: key,
@@ -238,6 +242,8 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
       await fetchLinkedBuckets();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to retry integration');
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -369,6 +375,7 @@ export function StorageIntegrationsSection({ appId, appName, projectId }: Storag
                   onEdit={handleEdit}
                   onRetry={handleRetry}
                   unlinking={unlinkingId === bucket.bucket_id}
+                  retrying={retryingId === bucket.bucket_id}
                 />
               ))}
             </div>

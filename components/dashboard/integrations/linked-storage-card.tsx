@@ -22,6 +22,7 @@ interface LinkedStorageCardProps {
   onEdit?: (bucketId: string) => void;
   onRetry?: (bucketId: string) => void;
   unlinking?: boolean;
+  retrying?: boolean;
 }
 
 /**
@@ -32,7 +33,8 @@ export function LinkedStorageCard({
   onUnlink,
   onEdit,
   onRetry,
-  unlinking = false 
+  unlinking = false,
+  retrying = false 
 }: LinkedStorageCardProps) {
   const [showEnvVars, setShowEnvVars] = useState(false);
 
@@ -98,10 +100,15 @@ export function LinkedStorageCard({
                 variant="ghost"
                 size="sm"
                 onClick={() => onRetry(bucket.bucket_id)}
+                disabled={retrying}
                 className="text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10"
                 title="Retry linking"
               >
-                <RotateCw className="w-4 h-4" />
+                {retrying ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RotateCw className="w-4 h-4" />
+                )}
               </Button>
             )}
             <Button
