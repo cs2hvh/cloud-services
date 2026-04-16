@@ -484,7 +484,7 @@ export const SettingsTab = ({
 
   // Delete Database Cluster
   const handleDeleteCluster = async () => {
-    if (deleteConfirmInput.trim() !== database.name) {
+    if (deleteConfirmInput.trim().toLowerCase() !== database.name.toLowerCase()) {
       toast.error(`Please type "${database.name}" to confirm deletion`);
       return;
     }
@@ -555,7 +555,7 @@ export const SettingsTab = ({
                   <option value="" className="bg-slate-900">
                     {projects.length === 0 ? "No projects available" : "Select a project"}
                   </option>
-                  {projects && projects.length > 0 ? projects.map((project) => (
+                  {projects.length > 0 ? projects.map((project) => (
                     <option
                       key={project.id}
                       value={project.id}
@@ -583,6 +583,7 @@ export const SettingsTab = ({
                   onClick={() => setSelectedProject(database.project_id || "")}
                   disabled={loading === "project"}
                   className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel project selection"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -685,6 +686,7 @@ export const SettingsTab = ({
                   }}
                   disabled={loading === "maintenance"}
                   className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel maintenance window selection"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -798,6 +800,7 @@ export const SettingsTab = ({
                   onClick={() => setSelectedRegion(database.region || "")}
                   disabled={loading === "region" || isMigrating || isMongoDbCluster}
                   className="inline-flex items-center gap-1.5 border border-white/[0.08] bg-transparent px-3 py-2 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+                  aria-label="Cancel region selection"
                 >
                   <X className="h-3.5 w-3.5" />
                   Cancel
@@ -873,6 +876,7 @@ export const SettingsTab = ({
               onClick={() => setSelectedStorageGiB(0)}
               disabled={loading === "upsize"}
               className="inline-flex items-center gap-1 border border-white/[0.08] bg-transparent px-3 py-1.5 text-xs font-medium text-white/60 transition-all duration-150 hover:text-white hover:border-white/[0.14] disabled:opacity-40"
+              aria-label="Clear storage selection"
             >
               <X className="h-3 w-3" />
             </button>
@@ -930,7 +934,7 @@ export const SettingsTab = ({
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleDeleteCluster}
-                  disabled={loading === "delete" || deleteConfirmInput.trim() !== database.name}
+                  disabled={loading === "delete" || deleteConfirmInput.trim().toLowerCase() !== database.name.toLowerCase()}
                   className="inline-flex items-center gap-1.5 border border-red-500/50 bg-red-500/20 px-3 py-2 text-xs font-medium text-red-200 transition-all duration-150 hover:bg-red-500/35 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {loading === "delete" ? (
