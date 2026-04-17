@@ -1,5 +1,46 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { createHmac } from "crypto";
+
+function getAppBaseUrl(request: Request): string {
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const hostHeader = request.headers.get("host");
+
+  if (forwardedHost) {
+    return `${forwardedProto || "https"}://${forwardedHost}`;
+  }
+
+  if (hostHeader) {
+    const normalizedHost = hostHeader.replace(/^0\.0\.0\.0(?=[:]|$)/, "localhost");
+    const proto =
+      process.env.NODE_ENV === "development" ? "http" : "https";
+    return `${proto}://${normalizedHost}`;
+  }
+
+  return (process.env.DOMAIN || "http://localhost:3000").replace(/\/$/, "");
+}
+
+function getStateSecret(): string {
+  return (
+    process.env.GITLAB_STATE_SECRET ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    ""
+  );
+}
+
+function createSignedState(userId: string, returnTo: string): string {
+  const secret = getStateSecret();
+  if (!secret) {
+    throw new Error(
+      "Missing GITLAB_STATE_SECRET (or SUPABASE_SERVICE_ROLE_KEY) for OAuth state signing"
+    );
+  }
+  const payload = { userId, returnTo, issuedAt: Date.now() };
+  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", secret).update(payloadB64).digest("base64url");
+  return `${payloadB64}.${signature}`;
+}
 
 /**
  * GitLab App OAuth flow for repository access
@@ -64,7 +105,7 @@ export async function POST(request: Request) {
 
     // GitLab App OAuth flow for repository access
     const clientId = process.env.GITLAB_CLIENT_ID;
-    const domain = process.env.DOMAIN;
+    const domain = getAppBaseUrl(request);
     const redirectUri = `${domain}/api/gitlab/callback`;
     
     if (!clientId) {
@@ -79,11 +120,11 @@ export async function POST(request: Request) {
     // - read_user: Read user profile
     const scopes = 'api read_user';
     
-    // Generate state parameter for CSRF protection and return path
-    // Format: userId-timestamp-returnPath (base64 encoded)
-    const returnPath = returnTo || '/dashboard/settings';
-    const stateData = `${user.id}|${Date.now()}|${returnPath}`;
-    const state = Buffer.from(stateData).toString('base64');
+    // Generate HMAC-signed state for CSRF protection
+    const returnPath = typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//')
+      ? returnTo
+      : '/dashboard/settings';
+    const state = createSignedState(user.id, returnPath);
     
     // Build GitLab authorization URL
     const gitlabAuthUrl = `https://gitlab.com/oauth/authorize?` +

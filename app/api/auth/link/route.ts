@@ -65,7 +65,6 @@ export async function POST(request: Request) {
   // After consent, the provider redirects back to Supabase then to your app's /auth/callback,
   // where you call exchangeCodeForSession (you likely have this already).
   const origin = request.headers.get("origin") || "http://localhost:3000";
-  console.log(origin, "....................52");
 
   // Define scopes for each provider
   const getProviderScopes = (p: string): string | undefined => {
@@ -144,13 +143,12 @@ export async function POST(request: Request) {
       }
     }
     
-    // Also delete from database token tables (for git API access)
-    if (provider === 'github') {
+    // GitHub tokens are sourced from Supabase OAuth, so they're tied to the identity.
+    // GitLab and Bitbucket tokens come from a separate direct OAuth flow (/api/gitlab/app-auth,
+    // /api/bitbucket/app-auth) and are completely independent — unlinking login must NOT remove them.
+    // Only delete github_tokens when we actually unlinked a GitHub identity.
+    if (provider === 'github' && identity) {
       await supabase.from('github_tokens').delete().eq('user_id', user.id);
-    } else if (provider === 'gitlab') {
-      await supabase.from('gitlab_tokens').delete().eq('user_id', user.id);
-    } else if (provider === 'bitbucket') {
-      await supabase.from('bitbucket_tokens').delete().eq('user_id', user.id);
     }
     
     // Audit log: provider disconnect

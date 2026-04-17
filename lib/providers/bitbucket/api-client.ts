@@ -36,35 +36,102 @@ interface BitbucketPaginatedResponse<T> {
   size?: number;
 }
 
+// /2.0/user/workspaces returns { values: [{ workspace: { slug, name, uuid }, permission }] }
+interface BitbucketWorkspaceMembership {
+  workspace: {
+    slug: string;
+    name: string;
+    uuid: string;
+  };
+}
+
 export class BitbucketApiClient {
   private baseUrl = 'https://api.bitbucket.org/2.0';
 
   /**
-   * Get all repositories for the authenticated user
+   * Get all workspaces the authenticated user has access to
+   * Uses the new /2.0/user/workspaces endpoint (replaces deprecated /2.0/workspaces)
+   * Follows pagination to return all workspaces.
    */
-  async getRepositories(accessToken: string): Promise<Repository[]> {
-    const response = await fetch(
-      `${this.baseUrl}/repositories?role=member&sort=-updated_on&pagelen=100`,
-      {
+  private async getWorkspaces(accessToken: string): Promise<{ slug: string; name: string; uuid: string }[]> {
+    const results: { slug: string; name: string; uuid: string }[] = [];
+    let url: string | undefined = `${this.baseUrl}/user/workspaces?pagelen=100`;
+
+    while (url) {
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Accept': 'application/json',
           'User-Agent': 'AhuraSense-Cloud-Platform',
         },
-      }
-    );
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Bitbucket API] Failed to fetch repositories:', response.status, errorText);
-      throw new Error(`Bitbucket API error: ${response.status}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Bitbucket API] Failed to fetch workspaces:', response.status, errorText);
+        throw new Error(`Bitbucket API error fetching workspaces: ${response.status}`);
+      }
+
+      const data: BitbucketPaginatedResponse<BitbucketWorkspaceMembership> = await response.json();
+      results.push(...data.values.map((m) => m.workspace));
+      url = data.next;
     }
 
-    const data: BitbucketPaginatedResponse<BitbucketRepository> = await response.json();
+    return results;
+  }
+
+  /**
+   * Get all repositories for the authenticated user
+   * Uses workspace-scoped endpoint /2.0/repositories/{workspace} (replaces deprecated /2.0/repositories)
+   * See: https://developer.atlassian.com/cloud/bitbucket/changelog/#CHANGE-3022
+   */
+  async getRepositories(accessToken: string): Promise<Repository[]> {
+    // Step 1: Get all workspaces
+    const workspaces = await this.getWorkspaces(accessToken);
+
+    if (workspaces.length === 0) {
+      console.warn('[Bitbucket API] No workspaces found for user');
+      return [];
+    }
+
+    // Step 2: Fetch repos from each workspace in parallel (with pagination)
+    const repoPromises = workspaces.map(async (ws) => {
+      const wsRepos: BitbucketRepository[] = [];
+      let url: string | undefined =
+        `${this.baseUrl}/repositories/${ws.slug}?sort=-updated_on&pagelen=100`;
+
+      while (url) {
+        try {
+          const response = await fetch(url, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Accept': 'application/json',
+              'User-Agent': 'AhuraSense-Cloud-Platform',
+            },
+          });
+
+          if (!response.ok) {
+            console.error(`[Bitbucket API] Failed to fetch repos for workspace ${ws.slug}:`, response.status);
+            break;
+          }
+
+          const data: BitbucketPaginatedResponse<BitbucketRepository> = await response.json();
+          wsRepos.push(...data.values);
+          url = data.next;
+        } catch (error) {
+          console.error(`[Bitbucket API] Error fetching repos for workspace ${ws.slug}:`, error);
+          break;
+        }
+      }
+
+      return wsRepos;
+    });
+
+    const repoArrays = await Promise.all(repoPromises);
+    const allRepos = repoArrays.flat();
 
     // Transform to normalized Repository format
-    return data.values.map((repo) => {
-      // Get clone URL (prefer HTTPS)
+    return allRepos.map((repo) => {
       const cloneUrl = repo.links?.clone?.find(c => c.name === 'https')?.href 
         || `https://bitbucket.org/${repo.full_name}.git`;
 

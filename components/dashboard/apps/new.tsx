@@ -63,11 +63,14 @@ interface GitProvider {
   name: string;
   icon: string;
   connected: boolean;
+  username?: string | null;
 }
 
 interface ProviderConnection {
   provider: string;
   status: boolean;
+  integration_connected: boolean;
+  integration_username: string | null;
 }
 
 // Framework detection and build settings
@@ -306,15 +309,18 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
         const data = await response.json();
         const providers = data.providers || [];
 
-        // Update git providers with real connection status - replace 'any' with proper type
+        // Use integration_connected (repo tokens) not identity status
         setGitProviders((prev) =>
-          prev.map((provider) => ({
-            ...provider,
-            connected:
-              providers.find(
-                (p: ProviderConnection) => p.provider === provider.id,
-              )?.status || false,
-          })),
+          prev.map((provider) => {
+            const match = providers.find(
+              (p: ProviderConnection) => p.provider === provider.id,
+            );
+            return {
+              ...provider,
+              connected: match?.integration_connected ?? false,
+              username: match?.integration_username ?? null,
+            };
+          }),
         );
       } else {
         toast.error("Failed to fetch provider status");
@@ -626,6 +632,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
   const { connectProvider: performConnection } = useProviderConnection({
     returnTo: "/dashboard/services/apps/new",
+    mode: "integration",
   });
 
   const connectProvider = async (providerId: string) => {
@@ -633,7 +640,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     setConnectingProvider(providerId);
     setConnectionError(null); // Clear previous errors
     try {
-      const result = await performConnection(providerId, "connect");
+      const result = await performConnection(providerId, "connect", {
+        mode: "integration",
+      });
       if (!result.success && result.error) {
         setConnectionError({ provider: providerId, message: result.error });
       }
@@ -1006,8 +1015,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                             </div>
                             <div className="text-sm text-white/60">
                               {provider.connected
-                                ? "Connected and ready to use"
-                                : "Not connected"}
+                                ? `Repo access connected${provider.username ? ` — @${provider.username}` : ""}`
+                                : "Repo access not connected"}
                             </div>
                           </div>
                           {provider.connected ? (
@@ -1051,7 +1060,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 )}
                 <div className="flex justify-between items-center mt-4">
                   <p className="text-xs text-white/60">
-                    Connect your Git provider to access your repositories
+                    Connect a Git provider to access your repositories for deployment
                   </p>
                   <Button
                     onClick={fetchProviderStatus}
