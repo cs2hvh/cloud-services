@@ -216,10 +216,10 @@ const Accounts = () => {
     try {
       await performIntegrationAction(provider, "connect", {
         returnTo: "/dashboard/settings",
-        mode: "integration",
       });
     } catch (error) {
       console.error("Connect repo failed:", error);
+    } finally {
       setLoadingProvider(null);
       setLoadingSection(null);
       connectInProgressRef.current = false;
@@ -248,10 +248,10 @@ const Accounts = () => {
     try {
       await performIntegrationAction(provider, "connect", {
         returnTo: "/dashboard/settings",
-        mode: "integration",
       });
     } catch (error) {
       console.error("Reconnect repo failed:", error);
+    } finally {
       setLoadingProvider(null);
       setLoadingSection(null);
       connectInProgressRef.current = false;
@@ -283,7 +283,6 @@ const Accounts = () => {
       void (async () => {
         const result = await performIntegrationAction(autoRepoConnect, "connect", {
           returnTo: "/dashboard/settings",
-          mode: "integration",
         });
         if (!result.success) {
           setLoadingProvider(null);

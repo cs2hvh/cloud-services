@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket OAuth callback handler
@@ -36,14 +37,7 @@ type ParsedStateResult =
     };
 
 function getStateSecret(): string {
-  if (!process.env.BITBUCKET_STATE_SECRET) {
-    console.warn(
-      "[Bitbucket OAuth] BITBUCKET_STATE_SECRET is not set. " +
-        "Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. " +
-        "Set a dedicated BITBUCKET_STATE_SECRET env var."
-    );
-  }
-  return process.env.BITBUCKET_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return getOAuthStateSecret(process.env.BITBUCKET_STATE_SECRET, "Bitbucket", "BITBUCKET_STATE_SECRET");
 }
 
 function safeReturnPath(path: string | undefined): string {

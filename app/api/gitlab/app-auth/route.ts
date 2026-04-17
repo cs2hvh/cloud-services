@@ -1,30 +1,14 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
-import { createHmac } from "crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret, createSignedOAuthState } from "@/lib/api/oauth-state";
 
 function getStateSecret(): string {
-  if (!process.env.GITLAB_STATE_SECRET) {
-    console.warn(
-      "[GitLab OAuth] GITLAB_STATE_SECRET is not set. " +
-        "Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. " +
-        "Set a dedicated GITLAB_STATE_SECRET env var."
-    );
-  }
-  return process.env.GITLAB_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return getOAuthStateSecret(process.env.GITLAB_STATE_SECRET, "GitLab", "GITLAB_STATE_SECRET");
 }
 
 function createSignedState(userId: string, returnTo: string): string {
-  const secret = getStateSecret();
-  if (!secret) {
-    throw new Error(
-      "Missing GITLAB_STATE_SECRET (or SUPABASE_SERVICE_ROLE_KEY) for OAuth state signing"
-    );
-  }
-  const payload = { userId, returnTo, issuedAt: Date.now() };
-  const payloadB64 = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const signature = createHmac("sha256", secret).update(payloadB64).digest("base64url");
-  return `${payloadB64}.${signature}`;
+  return createSignedOAuthState(getStateSecret(), userId, returnTo);
 }
 
 /**

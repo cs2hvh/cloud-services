@@ -51,6 +51,11 @@ export async function refreshGitLabToken(refreshToken: string): Promise<{
         client_secret: clientSecret,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
+        // redirect_uri is intentionally omitted: RFC 6749 §6 does not require it on
+        // token refresh, and GitLab's OAuth implementation accepts refreshes without it.
+        // If your GitLab OAuth app has strict redirect_uri enforcement enabled and
+        // refreshes start failing with invalid_grant, add it back here matching the
+        // original callback URL (e.g. `${process.env.DOMAIN}/api/gitlab/callback`).
       }),
     });
 

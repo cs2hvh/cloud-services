@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret } from "@/lib/api/oauth-state";
 
 /**
  * GitLab OAuth callback handler
@@ -20,14 +21,7 @@ import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
  */
 
 function getStateSecret(): string {
-  if (!process.env.GITLAB_STATE_SECRET) {
-    console.warn(
-      "[GitLab OAuth] GITLAB_STATE_SECRET is not set. " +
-        "Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. " +
-        "Set a dedicated GITLAB_STATE_SECRET env var."
-    );
-  }
-  return process.env.GITLAB_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  return getOAuthStateSecret(process.env.GITLAB_STATE_SECRET, "GitLab", "GITLAB_STATE_SECRET");
 }
 
 /** Verifies HMAC-signed state and extracts payload. Returns null if invalid. */

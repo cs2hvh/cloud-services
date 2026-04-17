@@ -51,6 +51,11 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
 
         const mode = overrides?.mode || options?.mode || 'integration';
         const isGitIntegrationProvider = provider === 'gitlab' || provider === 'bitbucket';
+        // In integration mode: GitLab/Bitbucket connect AND disconnect go to their own
+        // /api/{provider}/app-auth endpoint (which handles both connect + delete).
+        // GitHub always goes to /api/auth/link regardless of mode; the link route has
+        // an `&& identity` guard that prevents deleting github_tokens unless a GitHub
+        // identity was actually unlinked.
         const endpoint =
           mode === 'identity'
             ? '/api/auth/link'
