@@ -4,8 +4,26 @@
  */
 import { redis } from "./redis";
 
+function randomUUID(): string {
+  // Use the Web Crypto API – available in browsers, Node.js 19+, and edge runtimes.
+  // Falls back to a Math.random-based v4 UUID for older environments.
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export type IdempotencyResult = 
-  | { status: "new"; reserve: () => Promise<boolean>; complete: (data: unknown) => Promise<void> }
+  | {
+      status: "new";
+      reserve: () => Promise<boolean>;
+      complete: (data: unknown) => Promise<void>;
+      abort: () => Promise<void>;
+    }
   | { status: "in-progress"; retryAfter: number }
   | { status: "completed"; data: unknown };
 
@@ -61,6 +79,9 @@ export async function checkIdempotency(
           { ex: ttlSeconds }
         );
       },
+      abort: async () => {
+        await redis.del(redisKey);
+      },
     };
   } catch (error) {
     console.error("[Idempotency] Redis error:", error);
@@ -69,6 +90,7 @@ export async function checkIdempotency(
       status: "new",
       reserve: async () => true,
       complete: async () => {},
+      abort: async () => {},
     };
   }
 }
@@ -78,4 +100,12 @@ export async function checkIdempotency(
  */
 export function getIdempotencyKey(headers: Headers): string | null {
   return headers.get("idempotency-key") || headers.get("Idempotency-Key");
+}
+
+/**
+ * Generate a client-side idempotency key for a mutation request.
+ * Format: `{prefix}:{timestamp}:{uuid}`
+ */
+export function generateIdempotencyKey(prefix: string): string {
+  return `${prefix}:${Date.now()}:${randomUUID()}`;
 }

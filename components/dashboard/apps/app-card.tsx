@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
 import {
@@ -36,7 +36,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { App, BuildInfo } from './types';
 import { AppMetrics, AppHealth, useAppDetails } from '@/hooks/use-app-metrics';
-import { toast } from 'sonner';
+import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
+import { AppStatusBadge } from './app-status-badge';
 
 interface AppCardProps {
   app: App;
@@ -51,54 +52,7 @@ interface AppCardProps {
   metrics?: AppMetrics | null;
   health?: AppHealth | null;
   metricsLoading?: boolean;
-}
-
-function getStatusBadge(status: string, build?: BuildInfo) {
-  if (build?.building) {
-    return (
-      <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-        <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-        Building
-      </Badge>
-    );
-  }
-
-  switch (status) {
-    case 'running':
-      return (
-        <Badge className="bg-green-500/20 text-green-400 border-green-500/30 text-[10px] px-1.5 py-0">
-          <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-          Running
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
-          <XCircle className="w-2.5 h-2.5 mr-1" />
-          Failed
-        </Badge>
-      );
-    case 'building':
-      return (
-        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Building
-        </Badge>
-      );
-    case 'deleting':
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          <Loader2 className="w-2.5 h-2.5 mr-1 animate-spin" />
-          Deleting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
-          Pending
-        </Badge>
-      );
-  }
+  onRollback: () => void;
 }
 
 export function AppCard({
@@ -114,14 +68,25 @@ export function AppCard({
   metrics,
   health,
   metricsLoading,
+  onRollback,
 }: AppCardProps) {
   const domain = app.deployment_url
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const isAppDeleting = app.status === 'deleting';
-  const [rollingBack, setRollingBack] = useState(false);
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs');
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const prevBuildNumberRef = useRef<number | null | undefined>(undefined);
+
+  // When the card is expanded and the active build number changes (new build started),
+  // fetch a fresh set of logs so the panel doesn't show stale output.
+  useEffect(() => {
+    const prev = prevBuildNumberRef.current;
+    prevBuildNumberRef.current = build?.number;
+    if (isExpanded && activeTab === 'logs' && build?.number != null && prev !== undefined && prev !== build.number) {
+      onFetchLogs(build.number);
+    }
+  }, [build?.number, isExpanded, activeTab, onFetchLogs]);
   
   // Fetch detailed info when metrics tab is active and expanded
   const { details, loading: detailsLoading, refetch: refetchDetails } = useAppDetails({
@@ -157,35 +122,10 @@ export function AppCard({
   };
 
   const canRollback = !!app.can_rollback;
-  const rollbackDisabled = isAppDeleting || rollingBack || !canRollback;
-
-  const handleRollback = async () => {
-    if (rollbackDisabled) return;
-
-    setRollingBack(true);
-    try {
-      const res = await fetch('/api/services/platform-apps/rollback', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ app_id: app.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(json?.error || 'Rollback failed');
-      }
-
-      toast.success('Rollback started');
-      if (isExpanded && activeTab === 'metrics') {
-        refetchDetails();
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Rollback failed';
-      toast.error(msg);
-    } finally {
-      setRollingBack(false);
-    }
-  };
+  const isAppBuilding = app.status === 'building';
+  const hasActiveBuild = isAppBuilding || !!build?.building;
+  const rollbackDisabled = isAppDeleting || hasActiveBuild || !canRollback;
+  const deleteDisabled = isAppDeleting || hasActiveBuild;
 
   return (
     <div
@@ -226,7 +166,7 @@ export function AppCard({
                 >
                   {app.name}
                 </Link>
-                {getStatusBadge(app.status, build)}
+                <AppStatusBadge status={app.status} building={build?.building} size="sm" />
               </div>
               <a
                 href={`https://${domain}`}
@@ -251,21 +191,36 @@ export function AppCard({
               <p className="text-xs text-white/40 mb-0.5">Port</p>
               <p className="text-sm text-white font-mono">{app.port}</p>
             </div>
-            {build && (
+            {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
               <div className="text-center">
-                <p className="text-xs text-white/40 mb-0.5">Build</p>
+                <p className="text-xs text-white/40 mb-0.5">Serving</p>
                 <p className="text-sm text-white font-mono flex items-center gap-1">
-                  #{build.number}
-                  {build.building ? (
+                  #{app.serving_build_number ?? build?.number}
+                  {app.serving_build_number == null && build?.building ? (
                     <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                  ) : build.result === 'SUCCESS' ? (
+                  ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                     <CheckCircle2 className="w-3 h-3 text-green-400" />
-                  ) : build.result === 'FAILURE' ? (
+                  ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                     <XCircle className="w-3 h-3 text-red-400" />
                   ) : null}
                 </p>
               </div>
-            )}
+            ) : null}
+            {(app.last_operation_build_number !== null && app.last_operation_build_number !== undefined) || app.last_operation_trigger ? (
+              <div className="text-center">
+                <p className="text-xs text-white/40 mb-0.5">Last Op</p>
+                <p className="text-xs text-white/70">
+                  {getAppOperationLabel({
+                    buildNumber: app.last_operation_build_number ?? null,
+                    trigger: app.last_operation_trigger,
+                    rollbackTargetBuildNumber:
+                      app.last_operation_trigger === 'rollback'
+                        ? app.last_operation_build_number ?? null
+                        : null,
+                  })}
+                </p>
+              </div>
+            ) : null}
             {/* Quick Metrics Summary */}
             {app.status === 'running' && (
               <div 
@@ -325,21 +280,23 @@ export function AppCard({
               size="sm"
               variant="ghost"
               disabled={rollbackDisabled}
-              onClick={handleRollback}
+              onClick={onRollback}
               className="cursor-pointer h-8 px-2 text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-50"
-              title={canRollback ? 'Rollback to previous successful deployment' : 'No previous successful deployment available'}
+              title={
+                canRollback
+                  ? app.rollback_target_build_number
+                    ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                    : 'Rollback to the previous successful release'
+                  : 'No previous release available. Resize-only operations do not create rollback targets.'
+              }
             >
-              {rollingBack ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <RotateCcw className="w-4 h-4" />
-              )}
+              <RotateCcw className="w-4 h-4" />
             </Button>
 
             <Button
               size="sm"
               variant="ghost"
-              disabled={isAppDeleting}
+              disabled={deleteDisabled}
               onClick={onDelete}
               className="cursor-pointer h-8 px-2 text-red-400/60 hover:text-red-400 hover:bg-red-500/10"
               title="Delete App"
@@ -359,18 +316,18 @@ export function AppCard({
             <GitBranch className="w-3 h-3" />
             Port {app.port}
           </span>
-          {build && (
+          {(app.serving_build_number !== null && app.serving_build_number !== undefined) || build ? (
             <span className="flex items-center gap-1">
-              Build #{build.number}
-              {build.building ? (
+              Serving #{app.serving_build_number ?? build?.number}
+              {app.serving_build_number == null && build?.building ? (
                 <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-              ) : build.result === 'SUCCESS' ? (
+              ) : app.serving_build_number == null && build?.result === 'SUCCESS' ? (
                 <CheckCircle2 className="w-3 h-3 text-green-400" />
-              ) : build.result === 'FAILURE' ? (
+              ) : app.serving_build_number == null && build?.result === 'FAILURE' ? (
                 <XCircle className="w-3 h-3 text-red-400" />
               ) : null}
             </span>
-          )}
+          ) : null}
           {app.status === 'running' && (
             <button
               onClick={handleToggleMetrics}

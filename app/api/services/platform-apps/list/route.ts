@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 export async function GET() {
   const auth = await authenticateUser();
@@ -31,7 +32,7 @@ export async function GET() {
 
     return NextResponse.json({ apps });
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: msg, message: msg }, { status: 400 });
+    logError("services/platform-apps/list", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

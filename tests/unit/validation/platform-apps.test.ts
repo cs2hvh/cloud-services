@@ -424,13 +424,13 @@ describe('Platform Apps Validation Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should accept framework update', () => {
+    it('should reject framework update', () => {
       const payload = {
         app_id: '550e8400-e29b-41d4-a716-446655440000',
         framework: 'React',
       };
       const result = updatePlatformAppSchema.safeParse(payload);
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it('should accept deployment_url update', () => {

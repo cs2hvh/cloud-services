@@ -7,16 +7,7 @@ import {
   deletePromoSchema,
 } from "@/lib/validation/pricing";
 import { validateRequest } from "@/lib/middleware/validate-request";
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === "string") {
-    return error;
-  }
-  return "An unexpected error occurred";
-}
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // GET - Fetch all pricing promos
 export async function GET() {
@@ -44,9 +35,9 @@ export async function GET() {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Promos API] GET error:", error);
+    logError("GET /api/admin/pricing/promos", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to fetch promos" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -88,9 +79,9 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("[Pricing Promos API] POST error:", error);
+    logError("POST /api/admin/pricing/promos", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to create promo" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -140,9 +131,9 @@ export async function PUT(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Promos API] PUT error:", error);
+    logError("PUT /api/admin/pricing/promos", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to update promo" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -183,9 +174,9 @@ export async function DELETE(req: NextRequest) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("[Pricing Promos API] DELETE error:", error);
+    logError("DELETE /api/admin/pricing/promos", error);
     return NextResponse.json(
-      { error: getErrorMessage(error) || "Failed to delete promo" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

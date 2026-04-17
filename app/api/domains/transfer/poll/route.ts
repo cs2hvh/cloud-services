@@ -1,6 +1,7 @@
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getDomainTransferService } from "@/lib/domain-service/transfer";
+import { logError } from "@/lib/api/error-sanitizer";
 
 /**
  * POST /api/domains/transfer/poll
@@ -45,9 +46,9 @@ export async function POST(req: Request) {
       message: `Polled ${result.polled} transfers: ${result.processed} processed, ${result.errors} errors`,
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Polling failed";
+    logError("domains/transfer/poll", error);
     return NextResponse.json(
-      { error: "INTERNAL_ERROR", message },
+      { error: "INTERNAL_ERROR", message: "Polling failed" },
       { status: 500 }
     );
   }
@@ -55,14 +56,11 @@ export async function POST(req: Request) {
 
 function safeCompare(a: string, b: string): boolean {
   try {
-    const bufA = Buffer.from(a);
-    const bufB = Buffer.from(b);
-    if (bufA.length !== bufB.length) {
-      // Compare against self to keep constant time, then return false
-      timingSafeEqual(bufA, bufA);
-      return false;
-    }
-    return timingSafeEqual(bufA, bufB);
+    // Hash both sides to a fixed-length digest before comparing. This eliminates
+    // length-based timing leaks even when the two secrets differ in byte length.
+    const hashA = createHash("sha256").update(a).digest();
+    const hashB = createHash("sha256").update(b).digest();
+    return timingSafeEqual(hashA, hashB);
   } catch {
     return false;
   }

@@ -180,7 +180,7 @@ const Accounts = () => {
     try {
       const response = await api.get("/auth/providers");
       if (response.status === 200) {
-        setProviders(response.data.providers);
+        setProviders(response?.data?.providers ?? []);
       }
     } catch (error) {
       console.error("Failed to fetch providers:", error);

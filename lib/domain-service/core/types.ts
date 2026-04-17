@@ -67,6 +67,7 @@ export interface DomainPurchaseRequest {
   idempotency_key: string | null;
   provider_request_id: string | null;
   last_error: string | null;
+  registrant_email: string | null;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;

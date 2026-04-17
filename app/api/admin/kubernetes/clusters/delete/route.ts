@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Helper function to check if user is admin
 async function checkAdminAuth() {
@@ -138,13 +139,11 @@ export async function POST(req: NextRequest) {
     );
 
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
-    console.error("Admin kubernetes cluster delete error:", errorMessage);
-    
+    logError("DELETE /api/admin/kubernetes/clusters/delete", error);
     return NextResponse.json(
       {
         error: "Request processing failed",
-        message: errorMessage,
+        message: sanitizeError(error),
       },
       { status: 500 }
     );

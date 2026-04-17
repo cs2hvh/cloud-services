@@ -103,6 +103,23 @@ export interface NameComUpdateDomainInput {
   privacyEnabled?: boolean;
 }
 
+export interface NameComContactInput {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  address1?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}
+
+export interface NameComSetContactsInput {
+  registrant?: NameComContactInput;
+}
+
 type NameComAdapterOptions = {
   baseUrl?: string;
   username?: string;
@@ -207,6 +224,15 @@ export class NameComRegistrarAdapter implements DomainRegistrarPort, DomainTrans
     return this.request<NameComDomainResponse>(`/domains/${encodedDomain}:setNameservers`, {
       method: "POST",
       body: JSON.stringify({ nameservers }),
+    });
+  }
+
+  async setContacts(domainName: string, input: NameComSetContactsInput): Promise<NameComDomainResponse> {
+    const encodedDomain = encodeURIComponent(domainName);
+
+    return this.request<NameComDomainResponse>(`/domains/${encodedDomain}:setContacts`, {
+      method: "POST",
+      body: JSON.stringify({ contacts: input }),
     });
   }
 

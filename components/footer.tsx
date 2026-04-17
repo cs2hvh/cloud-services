@@ -5,7 +5,7 @@ const FOOTER_LINKS = [
   {
     heading: "Company",
     links: [
-      { label: "Blog", href: "#" },
+      { label: "Blog", href: "/blog" },
       { label: "Careers", href: "#" },
       { label: "Pricing", href: "/pricing" },
       { label: "Customers", href: "#" },
@@ -14,9 +14,9 @@ const FOOTER_LINKS = [
   {
     heading: "Resources",
     links: [
-      { label: "Documentation", href: "/docs" },
-     
-      
+      { label: "Resources Hub", href: "/resources" },
+      { label: "API Reference", href: "/api-docs" },
+      { label: "Pricing", href: "/pricing" },
       { label: "Changelog", href: "#" },
     ],
   },
@@ -34,10 +34,10 @@ const FOOTER_LINKS = [
   {
     heading: "Legal",
     links: [
-      { label: "Terms of Service", href: "#" },
-      { label: "Privacy Policy", href: "#" },
-      { label: "Cookies Policy", href: "#" },
-      { label: "Data Processing", href: "#" },
+      { label: "Terms of Service", href: "/terms" },
+      { label: "Privacy Policy", href: "/privacy" },
+      { label: "Cookies Policy", href: "/cookies" },
+      { label: "Data Processing", href: "/dpa" },
     ],
   },
 ];

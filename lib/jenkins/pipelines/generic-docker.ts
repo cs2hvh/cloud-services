@@ -21,7 +21,7 @@ export function createDockerfilePipeline(
   appId: string = '',
   webhookBaseUrl: string = '',
   deploymentRecordSecret: string = '',
-  deployTrigger: 'manual' | 'webhook' | 'rollback' | 'resize' = 'manual',
+  deployTrigger: 'manual' | 'webhook' | 'rollback' = 'manual',
   envVars: EnvVar[] = [],
   containerPort: number = 3000, // Default port, can be overridden
 ): string {
@@ -81,11 +81,6 @@ export function createDockerfilePipeline(
           <defaultValue></defaultValue>
           <trim>true</trim>
         </hudson.model.StringParameterDefinition>
-        <hudson.model.BooleanParameterDefinition>
-          <name>RESIZE_ONLY</name>
-          <description>Skip build stages and only update Kubernetes deployment (for resize operations)</description>
-          <defaultValue>false</defaultValue>
-        </hudson.model.BooleanParameterDefinition>
       </parameterDefinitions>
     </hudson.model.ParametersDefinitionProperty>
   </properties>
@@ -121,9 +116,6 @@ pipeline {
   stages {
 
     stage('Checkout Repo') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
@@ -149,9 +141,6 @@ pipeline {
 ${generateSecurityStages({ language: 'docker' })}
 
     stage('Validate Dockerfile') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('git') {
           sh '''
@@ -265,9 +254,6 @@ ${generateSecurityStages({ language: 'docker' })}
     }
 
     stage('Build Image with Kaniko') {
-      when {
-        expression { return !params.RESIZE_ONLY }
-      }
       steps {
         container('kaniko') {
           withCredentials([usernamePassword(credentialsId: 'dockerhublogin',
@@ -370,14 +356,7 @@ SECRET_EOF
           sh '''
             echo "STAGE: Deploy to Kubernetes"
             
-            # Use latest image for resize operations, new build image otherwise
-            if [ "\${RESIZE_ONLY}" = "true" ]; then
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_LATEST}"
-              echo "Resize mode: Using existing latest image"
-            else
-              DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
-              echo "Full deploy: Using newly built image"
-            fi
+            DEPLOY_IMAGE="\${DOCKER_IMAGE_VERSION}"
             
             echo "Generating Kubernetes deployment manifest"
             cat > deployment.yaml << DEPLOY_EOF
@@ -390,6 +369,7 @@ metadata:
     app: \${APP_NAME}
 spec:
   replicas: ${replicas}
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app: \${APP_NAME}
@@ -495,7 +475,7 @@ INGRESS_EOF
 
           sh 'kubectl apply -f deployment.yaml'
           sh '''
-            if [ "\${RESIZE_ONLY}" = "true" ] || [ "\${BUILD_NUMBER}" != "1" ]; then
+            if [ "\${BUILD_NUMBER}" != "1" ]; then
               echo "Restarting deployment to pull new image"
               kubectl rollout restart deployment/\${APP_NAME} -n default
             else

@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Platform_App_Deployments, Platform_Apps } from '@/lib/supabase/queries';
-import { createServiceClient } from '@/lib/supabase/server';
+import { Platform_Apps } from '@/lib/supabase/queries';
 import * as crypto from 'crypto';
+import { AppOperationFinalizer } from '@/lib/app-operations';
 
 type DeploymentRecordPayload = {
   app_id: string;
   build_number?: number | string | null;
+  operation_id?: string | null; // resize: DB record UUID, bypasses build_number lookup
   commit_sha?: string | null;
   image_tag?: string | null;
   image_digest?: string | null;
+  failure_reason?: string | null;
   status: 'success' | 'failed';
   trigger: 'manual' | 'webhook' | 'rollback' | 'resize';
 };
@@ -80,73 +82,59 @@ export async function POST(req: NextRequest) {
     }
 
     const buildNumber = normalizeInt(body.build_number);
+    const operationId = typeof body.operation_id === 'string' && body.operation_id ? body.operation_id : null;
 
-    // Record should include at least one stable image identity.
+    // For resize, we use operationId; for all other triggers, build_number is required
+    if (body.trigger === 'resize') {
+      if (!operationId) {
+        return NextResponse.json(
+          { error: 'Missing required field: operation_id (required for resize trigger)' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (buildNumber === null) {
+        return NextResponse.json(
+          { error: 'Missing required field: build_number' },
+          { status: 400 }
+        );
+      }
+    }
+
     const image_tag = body.image_tag ?? null;
     const image_digest = body.image_digest ?? null;
-    if (!image_tag && !image_digest) {
+    const failure_reason = body.failure_reason ?? null;
+    if (body.status === 'success' && !image_tag && !image_digest) {
       return NextResponse.json(
         { error: 'Missing required fields: image_tag or image_digest' },
         { status: 400 }
       );
     }
 
-    const insert = await Platform_App_Deployments.create({
-      app_id: body.app_id,
-      build_number: buildNumber,
-      commit_sha: body.commit_sha ?? null,
-      image_tag,
-      image_digest,
-      status: body.status,
+    const finalizer = new AppOperationFinalizer();
+    const appLookup = await Platform_Apps.get(body.app_id);
+    const appName =
+      appLookup.success && appLookup.data?.name
+        ? appLookup.data.name
+        : image_tag?.split("/").pop()?.split(":")[0] || body.app_id;
+    const finalization = await finalizer.finalizeBuildOperation({
+      appId: body.app_id,
+      appName,
+      buildNumber: buildNumber ?? undefined,
+      operationId: operationId ?? undefined,
       trigger: body.trigger,
+      status: body.status,
+      failureReason: body.status === 'failed' ? failure_reason : null,
+      imageTag: image_tag,
+      imageDigest: image_digest,
+      commitSha: body.commit_sha ?? null,
+      allowedCurrentStatuses: ['building'],
+      allowLegacyCreate: false,
     });
 
-    // Handle idempotency: Jenkins/webhook retries can repeat the same build_number.
-    let deployment = insert.success ? insert.data : null;
+    const deployment = finalization.record;
 
-    if (!deployment && insert.error && buildNumber !== null) {
-      const msg = String(insert.error);
-      const looksLikeDuplicate =
-        msg.includes('duplicate') ||
-        msg.includes('uq_platform_app_deployments_app_build_number') ||
-        msg.includes('unique') ||
-        msg.includes('23505');
-
-      if (looksLikeDuplicate) {
-        const supabase = await createServiceClient();
-        const { data } = await supabase
-          .from('platform_app_deployments')
-          .select('*')
-          .eq('app_id', body.app_id)
-          .eq('build_number', buildNumber)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        deployment = data || null;
-      }
-    }
-
-    if (!deployment) {
-      console.error('[DeploymentRecordWebhook] Failed to create deployment record:', insert.error);
-      return NextResponse.json(
-        { error: insert.error || 'Failed to create deployment record' },
-        { status: 500 }
-      );
-    }
-
-    // Mark as active + update app status on successful deploy
-    if (body.status === 'success') {
-      console.log('[DeploymentRecordWebhook] Setting deployment as active:', deployment.id);
-      await Platform_App_Deployments.set_active_for_app(body.app_id, deployment.id);
-      await Platform_Apps.update(body.app_id, {
-        status: 'running',
-        last_deploy_trigger: body.trigger,
-        last_deploy_commit: body.commit_sha ?? null,
-      });
-    }
-
-    console.log('[DeploymentRecordWebhook] ✅ Deployment record created:', deployment.id);
+    console.log('[DeploymentRecordWebhook] ✅ Deployment record finalized:', deployment.id);
 
     return NextResponse.json({
       success: true,

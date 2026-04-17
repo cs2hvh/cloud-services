@@ -4,6 +4,7 @@
 import { withV1Auth, v1Ok, v1Error, v1ValidationError } from "@/lib/api/v1-middleware";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { z } from "zod";
+import { logError } from "@/lib/api/error-sanitizer";
 
 // Helper to extract and validate app ID
 async function getValidatedAppId(context: { params: Promise<{ [key: string]: string | string[] }> } | undefined) {
@@ -117,7 +118,8 @@ export const PATCH = withV1Auth("apps:update", async (req, auth, context) => {
     if (error.code === "FORBIDDEN") {
       return v1Error("FORBIDDEN", 403, "Access denied");
     }
-    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: error.details || error.message });
+    logError("v1/apps/[id] update", updateError);
+    return v1Error("UPDATE_FAILED", 500, "Failed to update app", { details: error.details });
   }
 
   return v1Ok({

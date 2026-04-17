@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -98,10 +99,10 @@ export async function POST(request: Request) {
     if (error) {
       // If that provider account is already linked to ANOTHER Supabase user,
       // Supabase returns an error. Surface a friendly message.
-      console.log({ ...error }, ".......................58");
+        logError("POST /api/auth/link connect", error);
       const msg = /already linked/i.test(error.message)
         ? `This ${provider} account is already connected to a different user. You may be logged in somewhere else.`
-        : error.message || "Could not start linking flow.";
+        : sanitizeAuthError(error);
       return NextResponse.json({ error: msg }, { status: 409 });
     }
     
@@ -138,7 +139,8 @@ export async function POST(request: Request) {
     if (identity) {
       const response = await supabase.auth.unlinkIdentity(identity);
       if (response.error !== null) {
-        return NextResponse.json({ error: response.error.message }, { status: 400 });
+        logError("POST /api/auth/link disconnect", response.error);
+        return NextResponse.json({ error: sanitizeAuthError(response.error) }, { status: 400 });
       }
     }
     

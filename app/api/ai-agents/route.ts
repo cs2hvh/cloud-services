@@ -12,6 +12,7 @@ import { AIAgentInsert } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 // Validation schema for creating an agent
 const createAgentSchema = z.object({
@@ -110,13 +111,12 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate body
     const body = await request.json();
-    console.log('[AI Agents] Received body:', JSON.stringify(body, null, 2));
     const validation = createAgentSchema.safeParse(body);
     
     if (!validation.success) {
-      console.log('[AI Agents] Validation errors:', JSON.stringify(validation.error.errors, null, 2));
+      logError('POST /api/ai-agents validation', validation.error);
       return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

@@ -86,9 +86,9 @@ export default function CreateCouponDialog({
       setLoading(true);
       const res = await api.post("/admin/coupons", data);
 
-      if (res.data.success) {
+      if (res?.data?.success) {
         toast.success("Coupon created successfully!");
-        onCouponCreated(res.data.data);
+        onCouponCreated(res?.data?.data);
         onOpenChange(false);
         setFormData({
           code: "",
@@ -98,7 +98,7 @@ export default function CreateCouponDialog({
           max_redemptions: "",
         });
       } else {
-        toast.error(res.data.error || "Failed to create coupon");
+        toast.error(res?.data?.error || "Failed to create coupon");
       }
     } catch (error: unknown) {
       console.error("Error creating coupon:", error);

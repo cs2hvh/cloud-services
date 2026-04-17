@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 
 // Helper function to check if user is admin
 async function checkAdminAuth() {
@@ -41,9 +42,9 @@ export async function GET() {
     const coupons = await Promocodes.get_all();
     return NextResponse.json({ success: true, data: coupons });
   } catch (error: unknown) {
-    console.error("[Admin Coupons] Error fetching coupons:", error);
+    logError("GET /api/admin/coupons", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch coupons" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -97,9 +98,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: result.data });
   } catch (error: unknown) {
-    console.error("[Admin Coupons] Error creating coupon:", error);
+    logError("POST /api/admin/coupons", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create coupon" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -145,9 +146,9 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ success: true, data: result.data });
   } catch (error: unknown) {
-    console.error("[Admin Coupons] Error updating coupon:", error);
+    logError("PUT /api/admin/coupons", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update coupon" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }
@@ -186,9 +187,9 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {
-    console.error("[Admin Coupons] Error deleting coupon:", error);
+    logError("DELETE /api/admin/coupons", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to delete coupon" },
+      { error: sanitizeError(error) },
       { status: 500 }
     );
   }

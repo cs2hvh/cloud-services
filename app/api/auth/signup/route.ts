@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 export async function POST(request: NextRequest) {
   const { email, password, username, display_name } = await request.json();
@@ -25,7 +26,8 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
-    return Response.json({ message: error.message }, { status: 400 });
+    logError("POST /api/auth/signup", error);
+    return Response.json({ message: sanitizeAuthError(error) }, { status: 400 });
   }
 
   if (!data.user) {

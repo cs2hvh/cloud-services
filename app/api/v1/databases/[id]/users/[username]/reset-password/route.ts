@@ -26,11 +26,15 @@ export const POST = withV1Auth("databases:users:reset-password", async (_req, au
   }
   const clusterId = v1ResolveDatabaseClusterId(ownership.cluster, id);
 
-  const result = await DatabaseService.resetDatabaseUserPassword({
-    clusterId,
-    username: usernameParam.value,
-    userId: auth.userId,
-  });
+  const result = await DatabaseService.resetDatabaseUserPassword(
+    {
+      clusterId,
+      username: usernameParam.value,
+      userId: auth.userId,
+    },
+    _req,
+    auth.kind === "session" ? auth.email : undefined
+  );
 
   if (!result.success) {
     return v1DatabaseServiceError(result, "UPDATE_FAILED", "Failed to reset database user password");

@@ -199,7 +199,7 @@ export default function AdminUsers({ all_users }: PageProps) {
   //   try {
   //     setDetailsLoading(true);
   //     const response = await api.get(`/admin/users/${userId}`);
-  //     setSelectedUser(response.data);
+  //     setSelectedUser(response?.data);
   //   } catch (error) {
   //     console.error("Error fetching user details:", error);
   //     toast.error("Failed to fetch user details");
@@ -273,7 +273,7 @@ export default function AdminUsers({ all_users }: PageProps) {
 
       setLoading(false)
 
-      console.log("Update response:", response.data);
+      console.log("Update response:", response?.data);
       toast.success("User updated successfully");
       setIsRoleDialogOpen(false);
       // Refresh the page to get updated data from parent

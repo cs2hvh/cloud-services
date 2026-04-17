@@ -3,12 +3,14 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps, Platform_App_Deployments } from "@/lib/supabase/queries";
 import jenkins from "@/lib/jenkins";
+import { getAppHistoryType, isReleaseHistoryEntry, parseOperationDetails } from "@/lib/app-operations";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 // Limit for deployment history - matches UI pagination and reduces API calls
 const DEPLOYMENT_HISTORY_LIMIT = 10;
 
 interface BuildInfo {
-  build_number: number;
+  build_number: number | null;
   status: string;
   started_at: string;
   duration?: number;
@@ -17,6 +19,11 @@ interface BuildInfo {
   commit_message?: string;
   trigger?: string;
   failure_reason?: string | null;
+  rollback_target_build_number?: number | null;
+  operation_details?: Record<string, unknown> | null;
+  operation_type?: string;
+  history_type?: 'release' | 'operation';
+  is_release_build?: boolean;
 }
 
 /**
@@ -82,10 +89,11 @@ export async function GET(req: NextRequest) {
     const dbDeployments = await Platform_App_Deployments.list_by_app(appId, DEPLOYMENT_HISTORY_LIMIT);
     const dbDeploymentMap = new Map<number, typeof dbDeployments[0]>();
     for (const dep of dbDeployments) {
-      if (dep.build_number) {
+      if (typeof dep.build_number === 'number') {
         dbDeploymentMap.set(dep.build_number, dep);
       }
     }
+    const seenBuildNumbers = new Set<number>();
 
     try {
       // Get job info which includes build history
@@ -157,6 +165,18 @@ export async function GET(req: NextRequest) {
             // Get additional info from database (failure_reason, trigger)
             const dbRecord = dbDeploymentMap.get(buildInfo.number);
             
+            const operationDetails = dbRecord?.operation_details
+              ? parseOperationDetails(dbRecord.operation_details, {
+                  trigger: dbRecord.trigger,
+                })
+              : null;
+
+            const historyType = getAppHistoryType({
+              trigger: dbRecord?.trigger,
+              buildNumber: buildInfo.number,
+              operationDetails,
+            });
+
             return {
               build_number: buildInfo.number,
               status: buildInfo.building ? 'BUILDING' : (buildInfo.result || 'UNKNOWN'),
@@ -167,27 +187,91 @@ export async function GET(req: NextRequest) {
               commit_message: commitMessage,
               trigger: dbRecord?.trigger,
               failure_reason: dbRecord?.failure_reason,
+              rollback_target_build_number: dbRecord?.rollback_target_build_number ?? null,
+              operation_details: operationDetails,
+              operation_type: operationDetails?.type ?? (dbRecord?.trigger === 'resize' ? 'resize' : 'deploy'),
+              history_type: historyType,
+              is_release_build: historyType === 'release',
             };
           } catch {
             // Even on Jenkins error, try to get info from DB
             const dbRecord = dbDeploymentMap.get(build.number);
+            const operationDetails = dbRecord?.operation_details
+              ? parseOperationDetails(dbRecord.operation_details, {
+                  trigger: dbRecord.trigger,
+                })
+              : null;
+            const historyType = getAppHistoryType({
+              trigger: dbRecord?.trigger,
+              buildNumber: build.number,
+              operationDetails,
+            });
             return {
               build_number: build.number,
               status: dbRecord?.status === 'success' ? 'SUCCESS' : dbRecord?.status === 'failed' ? 'FAILURE' : 'UNKNOWN',
               started_at: dbRecord?.created_at || new Date().toISOString(),
               trigger: dbRecord?.trigger,
               failure_reason: dbRecord?.failure_reason,
+              rollback_target_build_number: dbRecord?.rollback_target_build_number ?? null,
+              operation_details: operationDetails,
+              operation_type: operationDetails?.type ?? (dbRecord?.trigger === 'resize' ? 'resize' : 'deploy'),
+              history_type: historyType,
+              is_release_build: historyType === 'release',
             };
           }
         });
 
-        const builds = await Promise.all(buildPromises);
+        const builds: BuildInfo[] = await Promise.all(buildPromises);
+        builds.forEach((build: BuildInfo) => {
+          if (typeof build.build_number === 'number') {
+            seenBuildNumbers.add(build.build_number);
+          }
+        });
         deployments.push(...builds);
       }
     } catch (jenkinsError) {
       console.error(`[API] Error fetching Jenkins builds for ${jobName}:`, jenkinsError);
       // Return empty array if Jenkins fails - don't block the response
     }
+
+    for (const dep of dbDeployments) {
+      const hasJenkinsEntry =
+        typeof dep.build_number === 'number' && seenBuildNumbers.has(dep.build_number);
+
+      if (hasJenkinsEntry) continue;
+
+      const operationDetails = dep.operation_details
+        ? parseOperationDetails(dep.operation_details, {
+            trigger: dep.trigger,
+          })
+        : null;
+      const historyType = getAppHistoryType({
+        trigger: dep.trigger,
+        buildNumber: dep.build_number ?? null,
+        operationDetails,
+      });
+      deployments.push({
+        build_number: dep.build_number ?? null,
+        status: dep.status === 'success' ? 'SUCCESS' : dep.status === 'failed' ? 'FAILURE' : 'BUILDING',
+        started_at: dep.created_at,
+        commit_sha: dep.commit_sha?.substring(0, 7) ?? undefined,
+        trigger: dep.trigger,
+        failure_reason: dep.failure_reason,
+        rollback_target_build_number: dep.rollback_target_build_number ?? null,
+        operation_details: operationDetails,
+        operation_type: operationDetails?.type ?? (dep.trigger === 'resize' ? 'resize' : dep.trigger === 'rollback' ? 'rollback' : 'deploy'),
+        history_type: historyType,
+        is_release_build: isReleaseHistoryEntry({
+          trigger: dep.trigger,
+          buildNumber: dep.build_number ?? null,
+          operationDetails,
+        }),
+      });
+    }
+
+    deployments.sort(
+      (a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+    );
 
     return NextResponse.json({
       app_id: appId,
@@ -196,11 +280,7 @@ export async function GET(req: NextRequest) {
       total: deployments.length,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting deployments:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get deployments";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/deployments", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

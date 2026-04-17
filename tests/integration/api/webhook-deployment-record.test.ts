@@ -1,12 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { POST } from '@/app/api/webhooks/platform-apps/deployment-record/route';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { POST } from '@/app/api/webhooks/platform-apps/deployment-record/route';
+
+const finalizeBuildOperationMock = vi.fn();
 
 vi.mock('@/lib/supabase/queries');
-vi.mock('@/lib/supabase/server');
+vi.mock('@/lib/app-operations', () => {
+  class MockAppOperationFinalizer {
+    finalizeBuildOperation = finalizeBuildOperationMock;
+  }
+
+  return {
+    AppOperationFinalizer: MockAppOperationFinalizer,
+  };
+});
 
 describe('POST /api/webhooks/platform-apps/deployment-record', () => {
   const testUrl = 'http://localhost:3000/api/webhooks/platform-apps/deployment-record';
+  const webhookSecret = 'test-deployment-record-secret';
 
   const validPayload = {
     app_id: 'app-1',
@@ -17,249 +28,143 @@ describe('POST /api/webhooks/platform-apps/deployment-record', () => {
     commit_sha: 'abc123',
   };
 
-  const mockDeployment = {
-    id: 'deploy-1',
-    app_id: 'app-1',
-    build_number: 42,
-    status: 'success',
-    trigger: 'webhook',
-    image_tag: 'my-app:42',
-  };
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-
-    const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.create).mockResolvedValue({
-      success: true,
-      data: mockDeployment,
-    } as any);
-    vi.mocked(Platform_App_Deployments.set_active_for_app).mockResolvedValue(undefined as any);
-    vi.mocked(Platform_Apps.update).mockResolvedValue({ success: true } as any);
-  });
-
-  function createRequest(body: Record<string, unknown>): NextRequest {
+  function createRequest(
+    body: Record<string, unknown>,
+    headers?: Record<string, string>
+  ): NextRequest {
     return new NextRequest(testUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-deployment-record-secret': webhookSecret,
+        ...headers,
+      },
       body: JSON.stringify(body),
     });
   }
 
-  // === Missing required fields ===
-  it('should return 400 when app_id is missing', async () => {
-    const req = createRequest({ status: 'success', trigger: 'webhook', image_tag: 'tag' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('app_id');
-  });
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    process.env.JENKINS_DEPLOYMENT_RECORD_SECRET = webhookSecret;
 
-  it('should return 400 when status is missing', async () => {
-    const req = createRequest({ app_id: 'app-1', trigger: 'webhook', image_tag: 'tag' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('status');
-  });
+    const { Platform_Apps } = await import('@/lib/supabase/queries');
+    vi.mocked(Platform_Apps.get).mockResolvedValue({
+      success: true,
+      data: {
+        id: 'app-1',
+        name: 'my-app',
+      },
+    } as any);
 
-  it('should return 400 when trigger is missing', async () => {
-    const req = createRequest({ app_id: 'app-1', status: 'success', image_tag: 'tag' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('trigger');
-  });
-
-  // === Invalid status ===
-  it('should return 400 for invalid status value', async () => {
-    const req = createRequest({ app_id: 'app-1', status: 'running', trigger: 'webhook', image_tag: 'tag' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('Invalid status');
-  });
-
-  // === Invalid trigger ===
-  it('should return 400 for invalid trigger value', async () => {
-    const req = createRequest({ app_id: 'app-1', status: 'success', trigger: 'auto', image_tag: 'tag' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('Invalid trigger');
-  });
-
-  // === Missing image identity ===
-  it('should return 400 when both image_tag and image_digest are missing', async () => {
-    const req = createRequest({ app_id: 'app-1', status: 'success', trigger: 'webhook' });
-    const res = await POST(req);
-    expect(res.status).toBe(400);
-    const data = await res.json();
-    expect(data.error).toContain('image_tag or image_digest');
-  });
-
-  // === Accepts image_digest instead of image_tag ===
-  it('should accept image_digest without image_tag', async () => {
-    const req = createRequest({
-      app_id: 'app-1',
-      status: 'success',
-      trigger: 'webhook',
-      image_digest: 'sha256:abc123',
-    });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.success).toBe(true);
-  });
-
-  // === Successful creation ===
-  it('should create deployment record successfully', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-
-    const req = createRequest(validPayload);
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(data.success).toBe(true);
-    expect(data.deployment).toBeDefined();
-
-    expect(Platform_App_Deployments.create).toHaveBeenCalledWith(
-      expect.objectContaining({
+    finalizeBuildOperationMock.mockResolvedValue({
+      record: {
+        id: 'deploy-1',
         app_id: 'app-1',
+        build_number: 42,
         status: 'success',
         trigger: 'webhook',
         image_tag: 'my-app:42',
-        build_number: 42,
+        failure_reason: null,
+        commit_sha: 'abc123',
+      },
+      legacyCreated: false,
+    });
+  });
+
+  it('returns 401 when the shared secret is missing', async () => {
+    const req = createRequest(validPayload, { 'x-deployment-record-secret': '' });
+    const res = await POST(req);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 when required fields are missing', async () => {
+    const req = createRequest({ status: 'success', trigger: 'webhook', image_tag: 'tag' });
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('app_id');
+  });
+
+  it('returns 400 when build_number is missing', async () => {
+    const req = createRequest({ ...validPayload, build_number: null });
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('build_number');
+  });
+
+  it('still requires image identity for successful completions', async () => {
+    const req = createRequest({
+      ...validPayload,
+      image_tag: null,
+      image_digest: null,
+    });
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(data.error).toContain('image_tag or image_digest');
+  });
+
+  it('allows failed completions without an image identity', async () => {
+    const req = createRequest({
+      ...validPayload,
+      status: 'failed',
+      image_tag: null,
+      image_digest: null,
+      failure_reason: 'Build failed before image creation',
+    });
+
+    const res = await POST(req);
+    const data = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(finalizeBuildOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: 'app-1',
+        buildNumber: 42,
+        status: 'failed',
+        imageTag: null,
+        imageDigest: null,
+        failureReason: 'Build failed before image creation',
+        allowLegacyCreate: false,
       })
     );
   });
 
-  // === Success status marks active + updates app ===
-  it('should set deployment as active and update app on success status', async () => {
-    const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
-
+  it('finalizes a successful deployment through the shared finalizer', async () => {
     const req = createRequest(validPayload);
     const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    expect(Platform_App_Deployments.set_active_for_app).toHaveBeenCalledWith('app-1', 'deploy-1');
-    expect(Platform_Apps.update).toHaveBeenCalledWith('app-1', expect.objectContaining({
-      status: 'running',
-      last_deploy_trigger: 'webhook',
-    }));
-  });
-
-  // === Failed status does NOT mark active ===
-  it('should not set deployment as active on failed status', async () => {
-    const { Platform_App_Deployments, Platform_Apps } = await import('@/lib/supabase/queries');
-
-    const req = createRequest({ ...validPayload, status: 'failed' });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    expect(Platform_App_Deployments.set_active_for_app).not.toHaveBeenCalled();
-    expect(Platform_Apps.update).not.toHaveBeenCalled();
-  });
-
-  // === Build number normalization ===
-  it('should normalize string build_number to integer', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-
-    const req = createRequest({ ...validPayload, build_number: '42' });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    expect(Platform_App_Deployments.create).toHaveBeenCalledWith(
-      expect.objectContaining({ build_number: 42 })
-    );
-  });
-
-  it('should handle null build_number', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-
-    const req = createRequest({ ...validPayload, build_number: null });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-
-    expect(Platform_App_Deployments.create).toHaveBeenCalledWith(
-      expect.objectContaining({ build_number: null })
-    );
-  });
-
-  // === Idempotency: duplicate build_number ===
-  it('should handle duplicate build_number via idempotency', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.create).mockResolvedValue({
-      success: false,
-      error: 'duplicate key value violates unique constraint "uq_platform_app_deployments_app_build_number"',
-      data: null,
-    } as any);
-
-    const { createServiceClient } = await import('@/lib/supabase/server');
-    const mockMaybeSingle = vi.fn().mockResolvedValue({ data: mockDeployment });
-    const mockLimit = vi.fn().mockReturnValue({ maybeSingle: mockMaybeSingle });
-    const mockOrder = vi.fn().mockReturnValue({ limit: mockLimit });
-    const mockEqBuild = vi.fn().mockReturnValue({ order: mockOrder });
-    const mockEqApp = vi.fn().mockReturnValue({ eq: mockEqBuild });
-    const mockSelect = vi.fn().mockReturnValue({ eq: mockEqApp });
-    const mockFrom = vi.fn().mockReturnValue({ select: mockSelect });
-
-    vi.mocked(createServiceClient).mockResolvedValue({
-      from: mockFrom,
-    } as any);
-
-    const req = createRequest(validPayload);
-    const res = await POST(req);
-    expect(res.status).toBe(200);
     const data = await res.json();
+
+    expect(res.status).toBe(200);
     expect(data.success).toBe(true);
-    expect(data.deployment).toBeDefined();
+    expect(finalizeBuildOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appId: 'app-1',
+        appName: 'my-app',
+        buildNumber: 42,
+        trigger: 'webhook',
+        status: 'success',
+        imageTag: 'my-app:42',
+        commitSha: 'abc123',
+        allowLegacyCreate: false,
+      })
+    );
   });
 
-  // === Create failure ===
-  it('should return 500 when deployment creation fails', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.create).mockResolvedValue({
-      success: false,
-      error: 'Database error',
-      data: null,
-    } as any);
+  it('returns 500 when finalization throws', async () => {
+    finalizeBuildOperationMock.mockRejectedValueOnce(new Error('Database error'));
 
     const req = createRequest(validPayload);
     const res = await POST(req);
-    expect(res.status).toBe(500);
     const data = await res.json();
-    expect(data.error).toBeDefined();
-  });
 
-  // === Unexpected error ===
-  it('should return 500 on unexpected error', async () => {
-    const { Platform_App_Deployments } = await import('@/lib/supabase/queries');
-    vi.mocked(Platform_App_Deployments.create).mockRejectedValue(new Error('DB crash'));
-
-    const req = createRequest(validPayload);
-    const res = await POST(req);
     expect(res.status).toBe(500);
-    const data = await res.json();
-    expect(data.error).toContain('DB crash');
-  });
-
-  // === Valid trigger values ===
-  it('should accept manual trigger', async () => {
-    const req = createRequest({ ...validPayload, trigger: 'manual' });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-  });
-
-  it('should accept rollback trigger', async () => {
-    const req = createRequest({ ...validPayload, trigger: 'rollback' });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
-  });
-
-  it('should accept resize trigger', async () => {
-    const req = createRequest({ ...validPayload, trigger: 'resize' });
-    const res = await POST(req);
-    expect(res.status).toBe(200);
+    expect(data.error).toContain('Internal server error');
   });
 });

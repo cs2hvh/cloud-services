@@ -132,53 +132,85 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     ],
   },
   {
-    id: "gpu",
-    label: "GPU",
+    id: "gpu-instance",
+    label: "GPU Instances",
     description:
-      "High-performance GPU instances for AI/ML, rendering, and compute-intensive workloads.",
+      "GPU-accelerated plans for model training, inference, and high-performance AI workloads.",
     promos: [
       {
-        badge: "Crypto Deal",
-        badgeNote: "Limited-time",
-        title: "Get GPU and Application Deployment",
+        badge: "Launch Offer",
+        badgeNote: "Static pricing",
+        title: "GPU plans available now",
         description:
-          "Pay with supported cryptocurrencies and unlock a limited-time promo price on the Balanced tier.",
-        subtext:
-          "Applies to new purchases only. One promo per account. Taxes/fees may apply",
+          "Choose between H200, H100, and L4OS classes. Pricing is static for now and will move to dynamic products next.",
+        subtext: "Limited stock by region for premium GPU classes.",
         linkText: "See terms",
         linkHref: "/pricing",
       },
     ],
     tiers: [
       {
-        id: "enterprise",
-        name: "Enterprise",
-        shortDescription:
-          "A strong sweet spot for busy web platforms, ecommerce, and realtime services with sustained load.",
-        price: { monthly: 79, yearly: 949 },
-        billingPeriod: "per month billed monthly",
-        specs: ["8 vCPU", "32GB DDR5", "400GB NVMe", "5 Gbit/s"],
+        id: "gpu-h200",
+        name: "H200 Cluster",
+        machineType: "H200",
+        shortDescription: "Best for large training and high-throughput inference pipelines.",
+        price: { monthly: 2899, yearly: 34788 },
+        billingPeriod: "per node/month",
+        specs: ["16 vCPU", "128 GB RAM", "1.6 TB NVMe", "200 Gbit/s fabric"],
         features: [
-          "Root access + full OS control",
-          "Snapshots & automated backups",
-          "IPv4 + IPv6",
-          "Firewall rules (ingress/egress)",
-          "Monitoring & alerting",
-          "API + CLI provisioning",
-          "DDoS baseline protection",
-          "99.99% uptime target",
+          "1x NVIDIA H200",
+          "CUDA + drivers managed",
+          "Private networking",
+          "Snapshot backups",
+          "Priority support",
         ],
-        summary: {
-          billing: "Yearly",
-          support: "Standard",
-          provisioning: "Instant",
-          guarantee: "60 Days",
-          buttonText: "Create VM",
-        },
         highlighted: true,
+        ctaText: "Deploy H200",
+        ctaLink: "/signup",
+      },
+      {
+        id: "gpu-h100",
+        name: "H100 Cluster",
+        machineType: "H100",
+        shortDescription: "Strong balance for production-scale AI training and serving.",
+        price: { monthly: 2199, yearly: 26388 },
+        billingPeriod: "per node/month",
+        specs: ["16 vCPU", "96 GB RAM", "1 TB NVMe", "100 Gbit/s fabric"],
+        features: [
+          "1x NVIDIA H100",
+          "Multi-node ready",
+          "Managed monitoring",
+          "DDoS baseline protection",
+          "Daily backups",
+        ],
         isFeatured: true,
-        ctaText: "Learn More",
-        ctaLink: "/contact",
+        summary: {
+          billing: "Monthly",
+          support: "Priority",
+          provisioning: "Fast",
+          guarantee: "60 Days",
+          buttonText: "Deploy H100",
+        },
+        ctaText: "Deploy H100",
+        ctaLink: "/signup",
+      },
+      {
+        id: "gpu-l4os",
+        name: "L4OS Cluster",
+        machineType: "L4OS",
+        shortDescription: "Cost-efficient inference and media AI workloads.",
+        price: { monthly: 899, yearly: 10788 },
+        billingPeriod: "per node/month",
+        specs: ["8 vCPU", "48 GB RAM", "500 GB NVMe", "25 Gbit/s network"],
+        features: [
+          "1x NVIDIA L4OS",
+          "Ideal for inference APIs",
+          "Managed upgrades",
+          "Auto-healing",
+          "Standard support",
+        ],
+        ctaText: "Deploy L4OS",
+        ctaLink: "/signup",
       },
     ],
   },
@@ -225,44 +257,99 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
     description: "Managed database clusters for PostgreSQL, MySQL, and MongoDB.",
     tiers: [
       {
-        id: "developer",
-        name: "Developer",
-        price: { monthly: 0, yearly: 0 },
-        billingPeriod: "Free tier",
-        features: ["500MB database", "Basic queries", "Community support"],
+        id: "mysql-basic",
+        name: "MySQL Basic",
+        subType: "mysql",
+        cpuType: "basic",
+        price: { monthly: 39, yearly: 468 },
+        billingPeriod: "per month",
+        features: ["20GB storage", "Single AZ", "Automated patching", "Community support"],
         ctaText: "Start Free",
         ctaLink: "/signup",
       },
       {
-        id: "professional",
-        name: "Professional",
-        price: { monthly: 99, yearly: 1188 },
+        id: "postgres-general",
+        name: "PostgreSQL General",
+        subType: "postgres",
+        cpuType: "general-purpose",
+        price: { monthly: 119, yearly: 1428 },
         billingPeriod: "per month",
         features: [
-          "50GB database",
-          "Advanced queries",
-          "Automated backups",
+          "80GB storage",
           "Read replicas",
           "Point-in-time recovery",
+          "Automated backups",
         ],
         highlighted: true,
         ctaText: "Get Started",
         ctaLink: "/signup",
       },
       {
-        id: "enterprise",
-        name: "Enterprise",
-        price: { monthly: 399, yearly: 4788 },
+        id: "mongodb-storage",
+        name: "MongoDB Storage Optimized",
+        subType: "mongodb",
+        cpuType: "storage-optimized",
+        price: { monthly: 219, yearly: 2628 },
         billingPeriod: "per month",
         features: [
-          "500GB+ database",
-          "Multi-region",
+          "500GB storage",
+          "IO tuned volumes",
+          "Replica set",
+          "Cross-region backups",
+          "Priority support",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "mysql-storage",
+        name: "MySQL Storage Optimized",
+        subType: "mysql",
+        cpuType: "storage-optimized",
+        price: { monthly: 199, yearly: 2388 },
+        billingPeriod: "per month",
+        features: [
+          "400GB storage",
+          "High IOPS volume",
+          "Point-in-time restore",
+          "Read replicas",
+          "24/7 monitoring",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "postgres-basic",
+        name: "PostgreSQL Basic",
+        subType: "postgres",
+        cpuType: "basic",
+        price: { monthly: 59, yearly: 708 },
+        billingPeriod: "per month",
+        features: [
+          "40GB storage",
+          "Single AZ",
+          "Automated updates",
+          "Daily backups",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
+        id: "mongodb-general",
+        name: "MongoDB General",
+        subType: "mongodb",
+        cpuType: "general-purpose",
+        price: { monthly: 149, yearly: 1788 },
+        billingPeriod: "per month",
+        features: [
+          "120GB storage",
+          "Replica set",
+          "Automated scaling",
           "Advanced security",
           "Dedicated support",
-          "Custom SLA",
         ],
-        ctaText: "Contact Sales",
-        ctaLink: "/contact",
+        ctaText: "Get Started",
+        ctaLink: "/signup",
       },
     ],
   },
@@ -274,6 +361,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
       {
         id: "starter-cluster",
         name: "Starter Cluster",
+        cpuType: "basic",
         price: { monthly: 49, yearly: 588 },
         billingPeriod: "per cluster/month",
         features: ["3 nodes", "Basic monitoring", "Auto-scaling", "Load balancing"],
@@ -283,6 +371,7 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
       {
         id: "production-cluster",
         name: "Production Cluster",
+        cpuType: "general-purpose",
         price: { monthly: 149, yearly: 1788 },
         billingPeriod: "per cluster/month",
         features: [
@@ -297,8 +386,25 @@ const FALLBACK_PRICING_DATA: ServiceCategory[] = [
         ctaLink: "/contact",
       },
       {
+        id: "storage-optimized-cluster",
+        name: "Storage Optimized Cluster",
+        cpuType: "storage-optimized",
+        price: { monthly: 299, yearly: 3588 },
+        billingPeriod: "per cluster/month",
+        features: [
+          "8 nodes",
+          "High IOPS persistent volumes",
+          "Automated backups",
+          "Stateful workload optimized",
+          "Dedicated support",
+        ],
+        ctaText: "Get Started",
+        ctaLink: "/signup",
+      },
+      {
         id: "enterprise-cluster",
         name: "Enterprise Cluster",
+        cpuType: "general-purpose",
         price: { monthly: 499, yearly: 5988 },
         billingPeriod: "per cluster/month",
         features: [
@@ -469,6 +575,29 @@ async function PricingContent() {
   // Use fallback data if no data in database
   if (!pricingData || pricingData.length === 0) {
     pricingData = FALLBACK_PRICING_DATA;
+  } else {
+    // Keep GPU pricing static from fallback while other categories remain dynamic.
+    const staticGpuCategory = FALLBACK_PRICING_DATA.find(
+      (category) => category.id === "gpu-instance"
+    );
+
+    if (staticGpuCategory) {
+      const firstGpuIndex = pricingData.findIndex(
+        (category) => category.id === "gpu" || category.id === "gpu-instance"
+      );
+
+      const withoutGpuCategories = pricingData.filter(
+        (category) => category.id !== "gpu" && category.id !== "gpu-instance"
+      );
+
+      const insertIndex =
+        firstGpuIndex >= 0
+          ? Math.min(firstGpuIndex, withoutGpuCategories.length)
+          : Math.min(1, withoutGpuCategories.length);
+
+      withoutGpuCategories.splice(insertIndex, 0, staticGpuCategory);
+      pricingData = withoutGpuCategories;
+    }
   }
 
   return <PricingClient categories={pricingData} />;

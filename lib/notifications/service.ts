@@ -217,6 +217,9 @@ export function createServiceNotification(params: {
       case 'user_deleted':
         message = `Database user "${metadata.userName}" has been deleted from ${serviceName}.`;
         break;
+      case 'user_password_reset':
+        message = `Password reset completed for database user "${metadata.userName}" on ${serviceName}.`;
+        break;
       case 'database_created':
         message = `Database "${metadata.dbName}" has been created in cluster ${serviceName}.`;
         break;

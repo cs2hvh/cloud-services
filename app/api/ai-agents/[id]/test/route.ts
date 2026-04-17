@@ -31,6 +31,7 @@ import {
 } from '@/lib/ai';
 import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 const testRequestSchema = z.object({
   message: z.string().min(1).max(10000),
@@ -80,8 +81,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const validation = testRequestSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('POST /api/ai-agents/[id]/test validation', validation.error);
       return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

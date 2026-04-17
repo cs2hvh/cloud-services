@@ -310,9 +310,9 @@ const VPSSelect = ({ locations, computeOptions }: PageProps) => {
       toast.success('VPS deployment initiated successfully!');
       
       // Optionally redirect or show VM details
-      console.log('VM created:', result.data);
+      console.log('VM created:', result?.data);
       // You could redirect to the new VPS details page here
-      // router.push(`/dashboard/compute/vms/${result.data.id}`);
+      // router.push(`/dashboard/compute/vms/${result?.data?.id}`);
     } catch (error) {
       console.error('[VPS Create]', error);
       const msg = error instanceof Error ? error.message : '';

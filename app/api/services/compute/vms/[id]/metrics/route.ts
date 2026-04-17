@@ -123,7 +123,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   /* ── Fetch Proxmox host config ────────────────────── */
   const { data: host, error: hostError } = await supabase
     .from("proxmox_hosts")
-    .select("*")
+    .select("id, name, host_url, allow_insecure_tls, node, storage, bridge, gateway_ip, dns_primary, dns_secondary, template_vmid, is_active, token_id, token_secret, username, password")
     .eq("id", server.location)
     .maybeSingle();
 

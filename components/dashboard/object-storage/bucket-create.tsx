@@ -108,7 +108,7 @@ const BucketCreate = ({ projects, locations, userId, buckets, role, allUsers = [
     const fetchPrice = async () => {
       try {
         const response = await axios.get("/api/admin/products?type=object-storage");
-        const products = response.data.products;
+        const products = response?.data?.products;
         
         if (products && products.length > 0) {
           setStoragePrice(parseFloat(products[0].price) || 0);

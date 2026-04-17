@@ -3,10 +3,12 @@ import { validateRequest } from "@/lib/middleware/validate-request";
 import { createPlatformAppSchema } from "@/lib/validation/platform-apps";
 import { validateEnvVars } from "@/lib/validation/env-vars";
 import { authenticateUser } from "@/lib/auth/server-auth";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 import { getAuditContext } from "@/lib/audit";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { getIdempotencyKey } from "@/lib/idempotency";
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateUser();
@@ -27,8 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { 
         error: 'Server configuration error',
-        message: `Missing required environment variables: ${missingVars.join(', ')}`,
-        details: 'Please configure all required environment variables in .env.local'
+        message: 'The server is not properly configured. Please contact support.',
       },
       { status: 500 }
     );
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
         request_id: auditContext.requestId,
         user_role: isAdmin ? "admin" : "user",
       },
+      idempotencyKey: getIdempotencyKey(req.headers),
     });
 
     if (!result.success) {
@@ -159,18 +161,10 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (result.errorCode === 'POST_PROVISION_BILLING_FAILED') {
+      if (result.errorCode === 'OPERATION_IN_PROGRESS') {
         return NextResponse.json(
-          {
-            error: result.error || "Billing registration failed after deployment",
-            partial_success: result.partialSuccess || false,
-            app_id: result.appId,
-            deployment_url: result.deploymentUrl,
-            port: result.port,
-            message:
-              "App deployment was started, but billing registration failed. Do not redeploy with the same name; contact support with the app_id.",
-          },
-          { status: 500 }
+          { error: result.error || "App creation is already in progress" },
+          { status: 409 }
         );
       }
 
@@ -182,7 +176,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      message: 'Created App Successfully!',
+      message: 'App created. Initial deployment in progress.',
       app_id: result.appId,
       deployment_url: result.deploymentUrl,
       port: result.port,
@@ -191,15 +185,11 @@ export async function POST(req: NextRequest) {
         initial_cost: result.billingInfo?.initialCost,
         hourly_rate: result.billingInfo?.hourlyRate,
         instance_size: appData.size || 'small',
+        activation: 'on_first_successful_deployment',
       },
     }, { status: 201 });
   } catch (err: unknown) {
-    console.error('[platform-apps/create] Unexpected error:', err);
-    const errorMsg = err instanceof Error ? err.message : 'Something went wrong';
-    
-    return NextResponse.json(
-      { error: errorMsg },
-      { status: 500 }
-    );
+    logError("services/platform-apps/create", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

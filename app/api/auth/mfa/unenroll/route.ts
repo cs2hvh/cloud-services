@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimit } from "@/lib/rate-limit";
+import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
 
 // Rate limiter: 3 unenrollment attempts per minute per user
 const limiter = rateLimit({
@@ -42,9 +43,9 @@ export async function POST(req: NextRequest) {
     // Get current factors
     const factors = await supabase.auth.mfa.listFactors();
     if (factors.error) {
-      console.error("List factors error:", factors.error);
+      logError("POST /api/auth/mfa/unenroll listFactors", factors.error);
       return NextResponse.json(
-        { error: factors.error.message },
+        { error: sanitizeAuthError(factors.error) },
         { status: 400 }
       );
     }
@@ -89,9 +90,9 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      console.error("MFA unenroll error:", unenroll.error);
+      logError("POST /api/auth/mfa/unenroll", unenroll.error);
       return NextResponse.json(
-        { error: unenroll.error.message },
+        { error: sanitizeAuthError(unenroll.error) },
         { status: 400 }
       );
     }
@@ -101,11 +102,10 @@ export async function POST(req: NextRequest) {
       message: "2FA factor successfully removed",
     });
   } catch (error) {
-    console.error("MFA unenrollment error:", error);
+    logError("POST /api/auth/mfa/unenroll", error);
     return NextResponse.json(
       {
-        error:
-          error instanceof Error ? error.message : "Failed to unenroll MFA",
+        error: sanitizeAuthError(error),
       },
       { status: 500 }
     );

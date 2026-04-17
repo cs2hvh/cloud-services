@@ -167,7 +167,7 @@ export default function AIAgentsPage() {
               onClick={loadAgents}
               variant="outline"
               disabled={loading}
-              className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]"
+              className="border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08] cursor-pointer"
             >
               <RotateCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               Refresh

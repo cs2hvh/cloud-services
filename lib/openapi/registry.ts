@@ -10,6 +10,7 @@ import { registerDomainPaths } from '@/lib/openapi/paths/domains';
 import { registerKubernetesPaths } from '@/lib/openapi/paths/kubernetes';
 import { registerNetworkPaths } from '@/lib/openapi/paths/network';
 import { registerProjectPaths } from '@/lib/openapi/paths/projects';
+import { registerResourcePaths } from '@/lib/openapi/paths/resources';
 import { registerStoragePaths } from '@/lib/openapi/paths/storage';
 
 export const registry = new OpenAPIRegistry();
@@ -23,6 +24,7 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
 
 registerAppPaths(registry);
 registerProjectPaths(registry);
+registerResourcePaths(registry);
 registerStoragePaths(registry);
 registerNetworkPaths(registry);
 registerDatabasePaths(registry);
@@ -131,6 +133,10 @@ For more examples, see the API reference below.
       {
         name: 'Projects',
         description: 'Manage projects used to organize cloud services and ownership.',
+      },
+      {
+        name: 'Resources',
+        description: 'List available product plans/resources and filter by type.',
       },
       {
         name: 'Databases',

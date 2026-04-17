@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xafjjpgazdxhktpfeuri.supabase.co";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is required");
+}
 const supabaseWs = supabaseUrl.replace("https://", "wss://");
 
 // Content-Security-Policy: restrict script sources and data exfiltration targets.
@@ -11,6 +14,8 @@ const cspDirectives = [
   "default-src 'self'",
   // Next.js needs 'unsafe-inline' for inline scripts; 'unsafe-eval' only in dev for HMR/source maps
   `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
+  // Block inline event-handler attributes (onclick, onerror, etc.) even when inline scripts are allowed.
+  "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com",
   "font-src 'self'",
@@ -63,6 +68,18 @@ const nextConfig: NextConfig = {
           {
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=()",
+          },
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "X-Permitted-Cross-Domain-Policies",
+            value: "none",
           },
         ],
       },

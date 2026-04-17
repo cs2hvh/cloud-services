@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   GitBranch,
-  GitCommit,
   Terminal,
   Activity,
   Settings,
@@ -32,6 +31,7 @@ import {
   Zap,
   Server,
   AlertTriangle,
+  RotateCcw,
   FolderOpen,
   Edit2,
   type LucideIcon,
@@ -50,19 +50,26 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DeleteAppModal } from '@/components/dashboard/apps/delete-app-modal';
+import { RollbackAppModal } from '@/components/dashboard/apps/rollback-app-modal';
+import { mergeDeploymentPresentation } from '@/components/dashboard/apps/types';
 import { CustomDomainsManager } from '@/components/dashboard/apps/custom-domains/manager';
 import { RuntimeLogs } from '@/components/dashboard/apps/runtime-logs';
 import { AppIssues } from '@/components/dashboard/apps/app-issues';
 import { BuildLogsPanel } from '@/components/dashboard/apps/build-logs';
+import { OperationLogsPanel } from '@/components/dashboard/apps/operation-logs';
 import { AppIntegrationsSection, StorageIntegrationsSection } from '@/components/dashboard/integrations';
 import { BuildInfo } from '@/components/dashboard/apps/types';
 import { useAppDetails, useAppMetrics } from '@/hooks/use-app-metrics';
 import { useRealtimeDeployments } from '@/hooks/use-realtime-deployments';
 import { useRealtimeApp } from '@/hooks/use-realtime-app';
 import api from '@/lib/axios/axios';
+import { getAppOperationLabel } from '@/lib/app-operations/core/presentation';
 import { toast } from 'sonner';
 import { useProjects } from '@/app/dashboard/provider';
 import { EnvVarsEditor, EnvVar } from '@/components/dashboard/apps/env-vars-editor';
+import { DeploymentHistory } from '@/components/dashboard/apps/deployment-history';
+import { AppStatusBadge } from '@/components/dashboard/apps/app-status-badge';
+import { generateIdempotencyKey } from '@/lib/idempotency';
 
 
 
@@ -87,18 +94,35 @@ interface AppDetail {
   output_directory?: string;
   env_vars?: Array<{ key: string; value: string }>;
   size?: string;
+  can_rollback?: boolean;
+  serving_build_number?: number | null;
+  last_operation_build_number?: number | null;
+  last_operation_trigger?: string | null;
+  rollback_target_build_number?: number | null;
+  rollback_target_commit_sha?: string | null;
   // Failure tracking
   last_failure_reason?: string | null;
 }
 
-// Size specifications
-const SIZE_SPECS = {
-  small: { cpu: "0.5 CPU", memory: "512MB", replicas: 1, price: "$5/mo" },
-  medium: { cpu: "1 CPU", memory: "1GB", replicas: 2, price: "$15/mo" },
-  large: { cpu: "2 CPU", memory: "2GB", replicas: 3, price: "$30/mo" },
-} as const;
+type PlatformAppSize = 'small' | 'medium' | 'large';
+type SizeKey = PlatformAppSize;
 
-type SizeKey = keyof typeof SIZE_SPECS;
+type PlatformAppRates = {
+  initialCost: number;
+  hourlyRate: number;
+  price: number;
+};
+
+const PLATFORM_APP_SIZE_ORDER: SizeKey[] = ['small', 'medium', 'large'];
+
+const PLATFORM_APP_SIZE_SPECS: Record<
+  SizeKey,
+  { cpu: string; memory: string; replicas: number }
+> = {
+  small: { cpu: '0.5 CPU', memory: '512MB', replicas: 1 },
+  medium: { cpu: '1 CPU', memory: '1GB', replicas: 2 },
+  large: { cpu: '2 CPU', memory: '2GB', replicas: 3 },
+};
 
 const SECTION_META: Array<{
   value: string;
@@ -134,11 +158,11 @@ const SECTION_META: Array<{
   },
   {
     value: 'build-logs',
-    label: 'Build Logs',
-    description: 'Trace build output, pipeline execution, and release logs.',
+    label: 'Build & Ops',
+    description: 'Trace build output, pipeline execution, and operational rollout logs.',
     eyebrow: 'Build',
     icon: Terminal,
-    helper: 'Use build logs to validate pipeline output and diagnose release failures quickly.',
+    helper: 'Use these logs to validate release builds, resize runs, and rollout execution details.',
   },
   {
     value: 'runtime-logs',
@@ -174,54 +198,6 @@ const SECTION_META: Array<{
   },
 ];
 
-function getStatusBadge(status: string, building?: boolean) {
-  if (building) {
-    return (
-      <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
-        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-        Building
-      </Badge>
-    );
-  }
-
-  switch (status) {
-    case 'running':
-      return (
-        <Badge className="rounded-none border-green-500/30 bg-green-500/20 text-green-400">
-          <CheckCircle2 className="w-3 h-3 mr-1" />
-          Running
-        </Badge>
-      );
-    case 'failed':
-      return (
-        <Badge className="rounded-none border-red-500/30 bg-red-500/20 text-red-400">
-          <XCircle className="w-3 h-3 mr-1" />
-          Failed
-        </Badge>
-      );
-    case 'building':
-      return (
-        <Badge className="rounded-none border-blue-500/30 bg-blue-500/20 text-blue-400">
-          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-          Building
-        </Badge>
-      );
-    case 'deleting':
-      return (
-        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
-          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-          Deleting
-        </Badge>
-      );
-    default:
-      return (
-        <Badge className="rounded-none border-yellow-500/30 bg-yellow-500/20 text-yellow-400">
-          Pending
-        </Badge>
-      );
-  }
-}
-
 export default function AppDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -237,6 +213,15 @@ export default function AppDetailPage() {
   const [initialLogLoading, setInitialLogLoading] = useState(false);
   // tracks the byte/char offset for incremental raw log fetches during active builds
   const logOffsetRef = useRef(0);
+  const prevBuildingRef = useRef<boolean | undefined>(undefined);
+  const prevBuildNumberRef = useRef<number | null>(null);
+  // Which build's logs the user is viewing — null means "show the active/latest build".
+  // Separate from buildInfo so polling doesn't hijack the user's selection.
+  const [viewingBuildNumber, setViewingBuildNumber] = useState<number | null>(null);
+  // Tracks consecutive polls where Jenkins says "done" but the DB row is still
+  // BUILDING � used to detect potentially orphaned builds and ask the backend
+  // to run the canonical recovery path.
+  const stalePollingCountRef = useRef(0);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
@@ -246,15 +231,20 @@ export default function AppDetailPage() {
   const [envVarsModified, setEnvVarsModified] = useState(false);
   const [savingEnvVars, setSavingEnvVars] = useState(false);
   const [redeploying, setRedeploying] = useState(false);
+  const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
   const [envVarSuccess, setEnvVarSuccess] = useState<string | null>(null);
 
   // Resize state
   const [selectedSize, setSelectedSize] = useState<SizeKey | null>(null);
+  const [pendingResizeSize, setPendingResizeSize] = useState<SizeKey | null>(null);
   const [resizing, setResizing] = useState(false);
   const [resizeError, setResizeError] = useState<string | null>(null);
   const [resizeSuccess, setResizeSuccess] = useState<string | null>(null);
-  const [sizePrices, setSizePrices] = useState<Record<string, number>>({});
+  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null);
+  const [operationLogs, setOperationLogs] = useState('');
+  const [operationLogsLoading, setOperationLogsLoading] = useState(false);
+  const [platformPricing, setPlatformPricing] = useState<Partial<Record<SizeKey, PlatformAppRates>>>({});
 
   // Project assignment state
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -278,12 +268,88 @@ export default function AppDetailPage() {
   const { 
     deployments, 
     loading: deploymentsLoading, 
-    connectionStatus 
+    connectionStatus,
+    refetch: refetchDeployments,
   } = useRealtimeDeployments({ 
     appId,
     limit: 50,
     enabled: !!app 
   });
+
+  const buildDeployments = useMemo(
+    () =>
+      deployments.filter(
+        (deployment): deployment is typeof deployment & { build_number: number } =>
+          typeof deployment.build_number === 'number' &&
+          deployment.build_number > 0
+      ),
+    [deployments]
+  );
+
+  const operationDeployments = useMemo(
+    () => deployments.filter((deployment) => deployment.history_type === 'operation'),
+    [deployments]
+  );
+  const latestOperationDeployment = operationDeployments[0] ?? deployments[0] ?? null;
+  const latestBuildDeployment = buildDeployments[0] ?? null;
+  const releaseDeployments = useMemo(
+    () => buildDeployments.filter((deployment) => deployment.history_type === 'release'),
+    [buildDeployments]
+  );
+  const latestReleaseDeployment = releaseDeployments[0] ?? null;
+  const activeBuildTrigger = latestBuildDeployment?.status === 'BUILDING'
+    ? latestBuildDeployment.trigger
+    : buildInfo?.building
+      ? latestBuildDeployment?.trigger ?? null
+      : null;
+  const activeBuildNumber = useMemo(() => {
+    if (buildInfo?.building && buildInfo.number) return buildInfo.number;
+    if (latestBuildDeployment?.status === 'BUILDING') return latestBuildDeployment.build_number;
+    return null;
+  }, [buildInfo?.building, buildInfo?.number, latestBuildDeployment]);
+  const isBuilding = activeBuildNumber !== null;
+  const resizeInProgress = useMemo(() => {
+    if (pendingResizeSize) return true;
+    return latestBuildDeployment?.status === 'BUILDING' && latestBuildDeployment.trigger === 'resize';
+  }, [latestBuildDeployment, pendingResizeSize]);
+  const displayBuildInfo = useMemo<BuildInfo | null>(() => {
+
+    // User explicitly selected a historical build to view
+    if (viewingBuildNumber !== null) {
+      // If the viewing build happens to be the active build, show live Jenkins info
+      if (activeBuildNumber !== null && viewingBuildNumber === activeBuildNumber && buildInfo?.number === activeBuildNumber) {
+        return { ...buildInfo, building: true };
+      }
+      // Historical build — show a static stub (not building)
+      return {
+        number: viewingBuildNumber,
+        building: false,
+        result: null,
+        duration: 0,
+        timestamp: 0,
+        url: '',
+      };
+    }
+
+    // No explicit selection — show the active build if one is running
+    if (activeBuildNumber !== null) {
+      if (buildInfo?.number === activeBuildNumber) {
+        return { ...buildInfo, building: true };
+      }
+
+      return {
+        number: activeBuildNumber,
+        building: true,
+        result: null,
+        duration: 0,
+        timestamp: Date.now(),
+        url: '',
+      };
+    }
+
+    return buildInfo;
+  }, [activeBuildNumber, activeBuildTrigger, buildInfo, viewingBuildNumber]);
+  const deploymentMutationBlocked = isBuilding || app?.status === 'building' || app?.status === 'deleting';
 
   // Real-time app metadata updates
   const { 
@@ -298,12 +364,12 @@ export default function AppDetailPage() {
     try {
       const res = await api.post('/services/platform-apps/get', { app_id: appId });
       
-      if (!res.data) {
+      if (!res?.data) {
         setError('Failed to load app');
         return;
       }
 
-      setApp(res.data);
+      setApp(res?.data);
     } catch (err) {
       console.error('Error fetching app:', err);
       setError('Failed to load app');
@@ -312,25 +378,29 @@ export default function AppDetailPage() {
     }
   }, [appId]);
 
-  const fetchBuildInfo = useCallback(async (appName: string) => {
+  const fetchBuildInfo = useCallback(async (appName: string): Promise<BuildInfo | null> => {
     try {
-       const res = await api.get(`/jenkins/build-info?app=${appName}`);
-      if (res.data) {
+       const res = await api.get(`/jenkins/build-info?app=${appName}`, {
+         validateStatus: (status) => status < 500,
+       });
+      if (res.status === 200 && res?.data && !res?.data?.error) {
         setBuildInfo((prev) => {
           // Guard: after triggering a redeploy, Jenkins takes ~5s to register
           // the new build. During that window it returns the PREVIOUS build's
           // info (older number, building=false). Don't let that overwrite our
           // optimistic state for the new build. Once Jenkins knows about the
           // new build number, accept all updates (including completion).
-          if (prev?.building && res.data.number < prev.number) {
+          if (prev?.building && res?.data?.number < prev.number) {
             return prev;
           }
-          return res.data;
+          return res?.data;
         });
+        return res?.data as BuildInfo;
       }
     } catch (error) {
       console.error('Error fetching build info:', error);
     }
+    return null;
   }, []);
 
   const fetchBuildLogs = useCallback(async (
@@ -340,7 +410,7 @@ export default function AppDetailPage() {
     append = false,
   ): Promise<boolean /* more */> => {
     if (!append) {
-      // Full replacement (initial fetch or build switch) — show skeleton
+      // Full replacement (initial fetch or build switch) � show skeleton
       setInitialLogLoading(true);
       logOffsetRef.current = 0;
     }
@@ -350,18 +420,18 @@ export default function AppDetailPage() {
         ? `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=${start}`
         : `/jenkins/build-logs?app=${appName}&build=${buildNumber}&start=0&deployment=true`;
       const res = await api.get(url);
-      if (res.data) {
-        const newChunk: string = res.data.logs || '';
+      if (res?.data) {
+        const newChunk: string = res?.data?.logs || '';
         if (append && newChunk) {
           setBuildLogs((prev) => prev + newChunk);
         } else if (!append) {
           setBuildLogs(newChunk || 'No logs available');
         }
         // Use the byte offset returned by Jenkins (X-Text-Size header), not character count
-        if (res.data.next_start != null) {
-          logOffsetRef.current = res.data.next_start;
+        if (res?.data?.next_start != null) {
+          logOffsetRef.current = res?.data?.next_start;
         }
-        return !!res.data.more;
+        return !!res?.data?.more;
       }
     } catch (error) {
       console.error('Error fetching build logs:', error);
@@ -371,17 +441,69 @@ export default function AppDetailPage() {
     return false;
   }, []);
 
+  const fetchOperationLogs = useCallback(async (operationId: string) => {
+    if (!app) return;
+
+    setOperationLogsLoading(true);
+    try {
+      const res = await api.get(
+        `/services/platform-apps/operation-logs?app_id=${app.id}&operation_id=${operationId}`
+      );
+      setOperationLogs(res?.data?.logs || 'No operation logs available.');
+      setSelectedOperationId(operationId);
+    } catch (error) {
+      console.error('Error fetching operation logs:', error);
+      setOperationLogs('Failed to load operation logs.');
+    } finally {
+      setOperationLogsLoading(false);
+    }
+  }, [app]);
+
   useEffect(() => {
     fetchApp();
   }, [fetchApp]);
 
-  // Sync real-time app updates to local state
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchPlatformPricing = async () => {
+      try {
+        const res = await fetch('/api/services/platform-apps/prices');
+        if (!res.ok) {
+          throw new Error('Failed to load platform pricing');
+        }
+
+        const data = await res.json();
+        if (!cancelled && data?.rates) {
+          setPlatformPricing(data.rates);
+        }
+      } catch (error) {
+        console.error('Error fetching platform pricing:', error);
+      }
+    };
+
+    fetchPlatformPricing();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Sync real-time app updates to local state.
+  // Preserve computed fields (e.g. can_rollback) that come from the API but are
+  // absent in the Supabase realtime payload � spread realtimeApp AFTER prev so
+  // undefined fields in realtimeApp don't overwrite known values.
   useEffect(() => {
     if (realtimeApp) {
       setApp((prev) => {
-        // Only update if there are actual changes
-        if (!prev || JSON.stringify(prev) !== JSON.stringify({ ...prev, ...realtimeApp })) {
-          return { ...prev, ...realtimeApp } as AppDetail;
+        if (!prev) return { ...realtimeApp } as AppDetail;
+        // Merge realtime fields but preserve deployment metadata from the API
+        const merged = mergeDeploymentPresentation(
+          { ...prev, ...realtimeApp } as AppDetail,
+          prev,
+        );
+        if (JSON.stringify(prev) !== JSON.stringify(merged)) {
+          return merged;
         }
         return prev;
       });
@@ -394,38 +516,62 @@ export default function AppDetailPage() {
     }
   }, [app?.name, fetchBuildInfo]);
 
+  // When a new build starts, auto-switch to it (clear any historical selection)
   useEffect(() => {
-    if (app?.name && buildInfo?.number) {
-      // Use raw logs while building (deployment stage hasn't run yet),
-      // switch to deployment-filtered summary once the build completes.
-      fetchBuildLogs(app.name, buildInfo.number, !!buildInfo.building);
+    if (activeBuildNumber !== null) {
+      setViewingBuildNumber(null);
     }
-  }, [app?.name, buildInfo?.number, buildInfo?.building, fetchBuildLogs]);
+  }, [activeBuildNumber]);
 
-  // Poll build info and APPEND new log lines while a build is actively running.
-  // - 2s interval (down from 5s) for faster perceived updates
-  // - fetchBuildInfo and fetchBuildLogs run in parallel to halve per-tick latency
-  // - when Jenkins signals more data is ready (X-More-Data: true), schedule
-  //   a catch-up fetch 400ms later instead of waiting the full 2s
+  // Fetch logs for the build the user is currently viewing.
+  // - If viewing the active build (or no explicit selection): raw streaming logs while building,
+  //   deployment-filtered summary once complete.
+  // - If viewing a historical build: deployment-filtered summary (non-raw).
   useEffect(() => {
-    if (!app?.name || !buildInfo?.building || !buildInfo?.number) return;
+    const isViewingActiveBuild = viewingBuildNumber === null || viewingBuildNumber === activeBuildNumber;
+    const targetBuildNumber = viewingBuildNumber ?? activeBuildNumber ?? displayBuildInfo?.number ?? null;
+    if (app?.name && targetBuildNumber && activeBuildTrigger !== 'resize') {
+      const useRaw = isViewingActiveBuild && isBuilding;
+      fetchBuildLogs(app.name, targetBuildNumber, useRaw);
+    }
+  }, [app?.name, viewingBuildNumber, activeBuildNumber, activeBuildTrigger, displayBuildInfo?.number, isBuilding, fetchBuildLogs]);
 
-    // Capture stable values to avoid stale closures inside the interval
+  // Poll Jenkins build status (and stream logs) while a build is actively running.
+  // Only appends log output if the user is currently viewing the active build.
+  useEffect(() => {
+    if (!app?.name || !isBuilding || !activeBuildNumber || activeBuildTrigger === 'resize') return;
+
     const appName = app.name;
-    const buildNum = buildInfo.number;
+    const buildNum = activeBuildNumber;
+    // Are we viewing the active build? If user switched to a historical build,
+    // we still poll Jenkins for status but don't overwrite the displayed logs.
+    const isViewingActive = viewingBuildNumber === null || viewingBuildNumber === activeBuildNumber;
     let catchupId: ReturnType<typeof setTimeout> | null = null;
 
     const interval = setInterval(async () => {
-      // Cancel any pending catch-up — the regular tick covers it
       if (catchupId) { clearTimeout(catchupId); catchupId = null; }
 
-      const [, more] = await Promise.all([
+      const promises: [Promise<BuildInfo | null>, Promise<boolean | void>] = [
         fetchBuildInfo(appName),
-        fetchBuildLogs(appName, buildNum, true, true),
-      ]);
+        isViewingActive
+          ? fetchBuildLogs(appName, buildNum, true, true)
+          : Promise.resolve(false),
+      ];
+      const [latestBuildInfo, more] = await Promise.all(promises);
 
-      // Jenkins has more buffered output  — fetch again quickly without waiting the full 2s
-      if (more) {
+      if (latestBuildInfo && !latestBuildInfo.building) {
+        stalePollingCountRef.current += 1;
+        if (stalePollingCountRef.current >= 3) {
+          stalePollingCountRef.current = 0;
+          api
+            .post('/services/platform-apps/recover-build', { app_id: appId })
+            .catch(() => {});
+        }
+      } else {
+        stalePollingCountRef.current = 0;
+      }
+
+      if (more && isViewingActive) {
         catchupId = setTimeout(async () => {
           catchupId = null;
           await fetchBuildLogs(appName, buildNum, true, true);
@@ -436,8 +582,80 @@ export default function AppDetailPage() {
     return () => {
       clearInterval(interval);
       if (catchupId) clearTimeout(catchupId);
+      stalePollingCountRef.current = 0;
     };
-  }, [app?.name, buildInfo?.building, buildInfo?.number, fetchBuildInfo, fetchBuildLogs]);
+  }, [app?.name, appId, isBuilding, activeBuildNumber, activeBuildTrigger, viewingBuildNumber, fetchBuildInfo, fetchBuildLogs]);
+
+  // After a build completes, poll K8s details until servingBuildNumber reflects
+  // the new pod's image tag. K8s rolling updates can take 10-30s after the build
+  // finishes — a single delayed fetch is unreliable.
+  useEffect(() => {
+    const wasBuilding = prevBuildingRef.current;
+    prevBuildingRef.current = isBuilding;
+
+    if (wasBuilding === true && !isBuilding) {
+      refetchDeployments();
+
+      // Poll details every 5s for up to 60s until the K8s pod image updates
+      let attempts = 0;
+      const maxAttempts = 12;
+      const pollId = setInterval(() => {
+        attempts++;
+        refetchDetails();
+        if (attempts >= maxAttempts) {
+          clearInterval(pollId);
+        }
+      }, 5000);
+      return () => clearInterval(pollId);
+    }
+  }, [isBuilding, refetchDetails, refetchDeployments]);
+
+  // Idle poll: when no build is running, check Jenkins every 15 s so webhook-triggered
+  // builds (started entirely on the backend) are detected promptly. Once Jenkins
+  // reports building=true the fast 2 s polling loop above takes over.
+  useEffect(() => {
+    if (!app?.name || isBuilding) return;
+    const id = setInterval(() => fetchBuildInfo(app.name), 15_000);
+    return () => clearInterval(id);
+  }, [app?.name, isBuilding, fetchBuildInfo]);
+
+  useEffect(() => {
+    if (!isBuilding) {
+      setPendingResizeSize(null);
+      stalePollingCountRef.current = 0;
+    }
+  }, [isBuilding]);
+
+  useEffect(() => {
+    if (operationDeployments.length === 0) {
+      setSelectedOperationId(null);
+      setOperationLogs('');
+      return;
+    }
+
+    const nextSelected =
+      selectedOperationId && operationDeployments.some((deployment) => deployment.id === selectedOperationId)
+        ? selectedOperationId
+        : operationDeployments[0].id;
+
+    if (nextSelected !== selectedOperationId) {
+      fetchOperationLogs(nextSelected);
+    }
+  }, [fetchOperationLogs, operationDeployments, selectedOperationId]);
+
+  // Notify when a new active build number appears.
+  // This follows the merged active build state (optimistic local start or DB row),
+  // so it still works during the realtime gap after manual resize/redeploy.
+  useEffect(() => {
+    if (!activeBuildNumber) return;
+    const prev = prevBuildNumberRef.current;
+    prevBuildNumberRef.current = activeBuildNumber;
+    // prev === null means this is the first fetch � don't toast for an already-running build.
+    if (prev === null) return;
+    if (activeBuildNumber > prev) {
+      toast.info(`Build #${activeBuildNumber} started`, { duration: 5000 });
+    }
+  }, [activeBuildNumber]);
 
   // Initialize edited env vars when app data loads
   useEffect(() => {
@@ -458,21 +676,6 @@ export default function AppDetailPage() {
       setProjectId(app.project_id || null);
     }
   }, [app?.project_id]);
-
-  // Fetch platform app prices from products table
-  useEffect(() => {
-    const fetchPrices = async () => {
-      try {
-        const res = await api.get('/services/platform-apps/prices');
-        if (res.data) {
-          setSizePrices(res.data.prices || {});
-        }
-      } catch (error) {
-        console.error('Error fetching platform app prices:', error);
-      }
-    };
-    fetchPrices();
-  }, []);
 
   // Handle env var changes - now handled by EnvVarsEditor
   const handleEnvVarsChange = (vars: EnvVar[]) => {
@@ -509,7 +712,10 @@ export default function AppDetailPage() {
     try {
       const res = await fetch('/api/services/platform-apps/env-vars/update', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey('env-update'),
+        },
         body: JSON.stringify({
           app_id: app.id,
           env_vars: validEnvVars.map(env => ({
@@ -531,7 +737,7 @@ export default function AppDetailPage() {
         setEnvVarSuccess(`${data.message}\n${data.hint || ''}`);
         toast.success('Environment changes saved', {
           description:
-            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect â€” click Redeploy to trigger a rebuild.',
+            'Runtime environment variables have been applied and are live. Client-side build-time variables (NEXT_PUBLIC_*, NUXT_PUBLIC_*, PUBLIC_*, VITE_*) require a rebuild to take effect — click Redeploy to trigger a rebuild.',
           duration: 7000,
         });
       } else if (data.requiresRedeploy) {
@@ -568,12 +774,12 @@ export default function AppDetailPage() {
   // Navigate to build logs for a specific historical build
   const handleSelectBuild = (buildNumber: number) => {
     if (!app?.name) return;
-    // Only update if it's actually a different build
-    if (buildInfo?.number !== buildNumber) {
-      setBuildInfo({ number: buildNumber, building: false, result: null, duration: 0, timestamp: 0, url: '' });
+    setSelectedOperationId(null);
+    // If selecting the active build, clear the override so we follow live state
+    if (activeBuildNumber !== null && buildNumber === activeBuildNumber) {
+      setViewingBuildNumber(null);
     } else {
-      // Same build — force a log refresh
-      fetchBuildLogs(app.name, buildNumber);
+      setViewingBuildNumber(buildNumber);
     }
     setActiveTab('build-logs');
   };
@@ -584,11 +790,16 @@ export default function AppDetailPage() {
     setRedeploying(true);
     setEnvVarError(null);
     setEnvVarSuccess(null);
+    // Clear stale failure reason optimistically so it doesn't flash while the build starts
+    setApp(prev => prev ? { ...prev, last_failure_reason: null } : null);
 
     try {
       const res = await fetch('/api/services/platform-apps/redeploy', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey('redeploy'),
+        },
         body: JSON.stringify({ app_id: app.id }),
       });
 
@@ -598,6 +809,15 @@ export default function AppDetailPage() {
       }
 
       const data = await res.json();
+      setSelectedOperationId(null);
+
+      if (res.status === 202 || typeof data.build_number !== 'number') {
+        setEnvVarSuccess(data.message || 'Redeploy is already in progress.');
+        setActiveTab('build-logs');
+        refetchDeployments();
+        return;
+      }
+
       setEnvVarSuccess(`Redeploy triggered (Build #${data.build_number})`);
 
       // Clear stale logs immediately and reflect the new in-progress build
@@ -618,11 +838,16 @@ export default function AppDetailPage() {
     setResizing(true);
     setResizeError(null);
     setResizeSuccess(null);
+    // Clear stale failure reason optimistically so it doesn't flash while the build starts
+    setApp(prev => prev ? { ...prev, last_failure_reason: null } : null);
 
     try {
       const res = await fetch('/api/services/platform-apps/resize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Idempotency-Key': generateIdempotencyKey('resize'),
+        },
         body: JSON.stringify({ app_id: app.id, new_size: selectedSize }),
       });
 
@@ -632,13 +857,13 @@ export default function AppDetailPage() {
         throw new Error(data.error || data.message || 'Failed to resize app');
       }
 
-      setResizeSuccess(`App resized to ${selectedSize} (Build #${data.build_number})`);
+      setPendingResizeSize(selectedSize);
+      setResizeSuccess(data.message || `Resize operation started to ${selectedSize}`);
       setSelectedSize(null);
-
-      // Clear stale logs immediately and reflect the new in-progress build
-      setBuildLogs('');
-      logOffsetRef.current = 0;
-      setBuildInfo({ number: data.build_number, building: true, result: null, duration: 0, timestamp: Date.now(), url: '' });
+      if (data.operation_id) {
+        setActiveTab('build-logs');
+        fetchOperationLogs(data.operation_id);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to resize app';
       setResizeError(message);
@@ -646,6 +871,13 @@ export default function AppDetailPage() {
       setResizing(false);
     }
   };
+
+  const handleRollbackSuccess = useCallback(async () => {
+    setEnvVarError(null);
+    setEnvVarSuccess('Rollback completed successfully');
+    await Promise.all([refetchDeployments(), refetchDetails()]);
+    await fetchApp();
+  }, [fetchApp, refetchDeployments, refetchDetails]);
 
   const handleSaveProject = async () => {
     if (!app) return;
@@ -704,7 +936,7 @@ export default function AppDetailPage() {
     [activeTab]
   );
 
-  // ── Transparency: derive which build is actually serving traffic ──
+  // -- Transparency: derive which build is actually serving traffic --
   const servingBuildNumber = useMemo(() => {
     // The running container's imageTag is the Jenkins BUILD_NUMBER (e.g. "14")
     const tag = details?.container?.imageTag;
@@ -712,26 +944,81 @@ export default function AppDetailPage() {
     const num = parseInt(tag, 10);
     return Number.isNaN(num) ? null : num;
   }, [details?.container?.imageTag]);
+  const lastOperationBuildNumber = useMemo(() => {
+    if (
+      typeof latestOperationDeployment?.build_number === 'number' &&
+      latestOperationDeployment.build_number > 0
+    ) {
+      return latestOperationDeployment.build_number;
+    }
+
+    if (
+      typeof latestOperationDeployment?.rollback_target_build_number === 'number' &&
+      latestOperationDeployment.rollback_target_build_number > 0
+    ) {
+      return latestOperationDeployment.rollback_target_build_number;
+    }
+
+    return typeof app?.last_operation_build_number === 'number'
+      ? app.last_operation_build_number
+      : null;
+  }, [app?.last_operation_build_number, latestOperationDeployment]);
+  const lastOperationTrigger = useMemo(() => {
+    if (typeof latestOperationDeployment?.trigger === 'string') {
+      return latestOperationDeployment.trigger;
+    }
+
+    return typeof app?.last_operation_trigger === 'string'
+      ? app.last_operation_trigger
+      : null;
+  }, [app?.last_operation_trigger, latestOperationDeployment]);
+  const lastOperationLabel = useMemo(() => {
+    if (!lastOperationTrigger && lastOperationBuildNumber === null) return null;
+    return getAppOperationLabel({
+      buildNumber: lastOperationBuildNumber,
+      trigger: lastOperationTrigger,
+      rollbackTargetBuildNumber: latestOperationDeployment?.rollback_target_build_number ?? null,
+      operationDetails: latestOperationDeployment?.operation_details ?? null,
+    });
+  }, [lastOperationBuildNumber, lastOperationTrigger, latestOperationDeployment]);
+  const canRollback = useMemo(
+    () => !!app?.can_rollback,
+    [app?.can_rollback]
+  );
 
   // Detect "degraded" state: app status is running (old pod healthy) but the
-  // latest deployment failed — meaning the new code never took over.
-  const latestDeployment = deployments.length > 0 ? deployments[0] : null;
+  // latest deployment failed � meaning the new code never took over.
   const isDegraded = useMemo(() => {
     if (app?.status !== 'running') return false;
-    if (!latestDeployment) return false;
-    // While a deploy is in progress the new pod hasn't started yet — not degraded.
-    if (latestDeployment.status === 'BUILDING') return false;
-    // No image tag info yet — can't determine serving version.
+    if (!latestReleaseDeployment) return false;
+    // While a deploy is in progress the new pod hasn't started yet � not degraded.
+    if (latestReleaseDeployment.status === 'BUILDING') return false;
+    // While actively building � not degraded.
+    if (isBuilding) return false;
+    // No image tag info yet � can't determine serving version.
     if (servingBuildNumber === null) return false;
+    // Details still loading � don't flash a false degraded banner.
+    if (detailsLoading) return false;
     // Sole ground truth: is a completed deployment (any recorded status) sitting at
     // a higher build number than what the pod is actually running?
     // We intentionally ignore latestDeployment.status here because the deployment
     // record is written by a webhook that can silently fail (e.g. WEBHOOK_BASE_URL
-    // misconfigured). The running container's image tag is always reliable — if the
+    // misconfigured). The running container's image tag is always reliable � if the
     // build number matches what's serving, the deploy succeeded regardless of what
     // the database says.
-    return latestDeployment.build_number > servingBuildNumber;
-  }, [app?.status, latestDeployment, servingBuildNumber]);
+    if (latestReleaseDeployment.build_number <= servingBuildNumber) return false;
+    // Not degraded if the user intentionally rolled back from the latest release build —
+    // a successful rollback operation after that build's creation time means it was
+    // deliberately replaced, not stuck.
+    const latestReleasedAt = new Date(latestReleaseDeployment.created_at).getTime();
+    const wasRolledBackFrom = operationDeployments.some(
+      (d) =>
+        d.trigger === 'rollback' &&
+        d.status === 'SUCCESS' &&
+        new Date(d.created_at).getTime() > latestReleasedAt
+    );
+    return !wasRolledBackFrom;
+  }, [app?.status, latestReleaseDeployment, servingBuildNumber, isBuilding, detailsLoading, operationDeployments]);
 
   // High restart count warning (CrashLoopBackOff signature)
   const restartCount = details?.container?.restartCount ?? health?.restart_count ?? 0;
@@ -766,8 +1053,9 @@ export default function AppDetailPage() {
     ? new URL(app.deployment_url).hostname
     : `${app.slug}.galaxyhvh.com`;
   const ActiveSectionIcon = activeSection.icon;
-  const currentSize = (app.size || 'small') as SizeKey;
-  const currentSizeSpec = SIZE_SPECS[currentSize];
+  const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
+  const currentSizeSpec = PLATFORM_APP_SIZE_SPECS[currentSize];
+  const currentSizePrice = platformPricing[currentSize]?.price ?? 0;
 
   return (
     <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
@@ -791,9 +1079,9 @@ export default function AppDetailPage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
                   Application Deployment
                 </p>
-                {getStatusBadge(app.status, buildInfo?.building)}
-                {/* Live badge — but show Degraded when new deploy failed and old pod is serving */}
-                {appConnectionStatus === 'connected' && app.status === 'running' && !buildInfo?.building && (
+                {<AppStatusBadge status={app.status} building={isBuilding} />}
+                {/* Live badge � but show Degraded when new deploy failed and old pod is serving */}
+              {appConnectionStatus === 'connected' && app.status === 'running' && !isBuilding && (
                   isDegraded ? (
                     <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
                       <AlertTriangle className="mr-1.5 h-2 w-2" />
@@ -807,9 +1095,14 @@ export default function AppDetailPage() {
                   )
                 )}
                 {/* Show which build is actually serving traffic */}
-                {servingBuildNumber !== null && app.status === 'running' && !buildInfo?.building && (
+                {servingBuildNumber !== null && app.status === 'running' && !isBuilding && (
                   <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs font-mono">
                     Serving Build #{servingBuildNumber}
+                  </Badge>
+                )}
+                {lastOperationLabel && !isBuilding && (
+                  <Badge className="rounded-none border-white/10 bg-white/[0.05] text-white/60 text-xs">
+                    Last Operation: {lastOperationLabel}
                   </Badge>
                 )}
               </div>
@@ -827,27 +1120,27 @@ export default function AppDetailPage() {
                 </button>
               </div>
 
-              {app.status === 'failed' && app.last_failure_reason && (
+              {app.status === 'failed' && app.last_failure_reason && !isBuilding && (
                 <div className="mt-3 flex items-center gap-2 border border-red-400/20 bg-red-500/10 px-3 py-2 text-sm text-red-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{app.last_failure_reason}</span>
                 </div>
               )}
               {/* Degraded state warning: newer deploy exists but old build is still serving */}
-              {isDegraded && latestDeployment && servingBuildNumber !== null && (
+              {isDegraded && latestReleaseDeployment && servingBuildNumber !== null && (
                 <div className="mt-3 flex items-center gap-2 border border-orange-400/20 bg-orange-500/10 px-3 py-2 text-sm text-orange-300">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    {`Build #${latestDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
+                    {`Build #${latestReleaseDeployment.build_number} did not take over. Still serving Build #${servingBuildNumber}.`}
                   </span>
                 </div>
               )}
               {/* High restart warning */}
-              {hasHighRestarts && app.status === 'running' && !buildInfo?.building && (
+              {hasHighRestarts && app.status === 'running' && !isBuilding && (
                 <div className="mt-3 flex items-center gap-2 border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-300">
                   <RefreshCw className="h-4 w-4 flex-shrink-0" />
                   <span>
-                    Pod has restarted {restartCount} times. This may indicate a CrashLoop — check Runtime Logs.
+                    Pod has restarted {restartCount} times. This may indicate a CrashLoop � check Runtime Logs.
                   </span>
                 </div>
               )}
@@ -878,6 +1171,23 @@ export default function AppDetailPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setRollbackModalOpen(true)}
+              disabled={deploymentMutationBlocked || !canRollback}
+              className="rounded-none border-white/[0.12] bg-white/[0.03] text-white hover:bg-white/[0.08]"
+              title={
+                canRollback
+                  ? app?.rollback_target_build_number
+                    ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                    : 'Rollback to the previous successful release'
+                  : 'No previous release available. Resize-only operations do not create rollback targets.'
+              }
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Rollback Release
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 if (app.name) fetchBuildInfo(app.name);
                 refetchDetails();
@@ -891,6 +1201,7 @@ export default function AppDetailPage() {
               variant="destructive"
               size="sm"
               onClick={() => setDeleteModalOpen(true)}
+              disabled={deploymentMutationBlocked}
               className="rounded-none"
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -933,17 +1244,22 @@ export default function AppDetailPage() {
             </div>
             <div className="border border-white/[0.08] bg-white/[0.03] px-3 py-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Runtime Size
+                {resizeInProgress ? 'Requested Size' : 'Runtime Size'}
               </div>
               <div className="mt-1.5 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold capitalize text-white">{currentSize}</p>
                   <p className="text-xs text-white/45">
-                    {currentSizeSpec.cpu} · {currentSizeSpec.memory}
+                    {currentSizeSpec.cpu} – {currentSizeSpec.memory}
                   </p>
+                  {resizeInProgress ? (
+                    <p className="mt-1 text-[11px] text-amber-300/80">
+                      Resize rollout in progress. Serving capacity updates after deployment finishes.
+                    </p>
+                  ) : null}
                 </div>
                 <Badge className="rounded-none border-white/[0.08] bg-white/[0.04] text-white/75">
-                  {currentSizeSpec.price}
+                  {currentSizePrice > 0 ? `$${currentSizePrice.toFixed(2)}/mo` : 'Free'}
                 </Badge>
               </div>
             </div>
@@ -1137,6 +1453,14 @@ export default function AppDetailPage() {
                                 <p className="text-sm font-mono text-emerald-300">#{servingBuildNumber}</p>
                               </div>
                             )}
+                            {lastOperationLabel && (
+                              <div>
+                                <p className="text-xs text-white/40 mb-1">Last Operation</p>
+                                <p className="text-sm text-white">
+                                  {lastOperationLabel}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1231,7 +1555,7 @@ export default function AppDetailPage() {
                                 <span className="text-white/50">{event.message}</span>
                                 {event.count > 1 && (
                                   <Badge className="rounded-none bg-yellow-500/10 text-yellow-400/60 text-[10px] ml-auto shrink-0">
-                                    ×{event.count}
+                                    �{event?.count}
                                   </Badge>
                                 )}
                               </div>
@@ -1318,15 +1642,29 @@ export default function AppDetailPage() {
 
           {/* Build Logs Tab */}
           <TabsContent value="build-logs">
-            <BuildLogsPanel 
-              buildInfo={buildInfo} 
-              buildLogs={buildLogs}
-              initialLoading={initialLogLoading}
-              appName={app.name}
-              fetchBuildLogs={fetchBuildLogs}
-              deployments={deployments}
-              onSelectBuild={handleSelectBuild}
-            />
+            <div className="space-y-4">
+              <BuildLogsPanel 
+                buildInfo={displayBuildInfo} 
+                buildLogs={buildLogs}
+                initialLoading={initialLogLoading}
+                appName={app.name}
+                fetchBuildLogs={fetchBuildLogs}
+                deployments={releaseDeployments}
+                onSelectBuild={handleSelectBuild}
+              />
+              <OperationLogsPanel
+                operations={operationDeployments}
+                selectedOperationId={selectedOperationId}
+                logs={operationLogs}
+                loading={operationLogsLoading}
+                onSelectOperation={fetchOperationLogs}
+                onRefresh={() => {
+                  if (selectedOperationId) {
+                    fetchOperationLogs(selectedOperationId);
+                  }
+                }}
+              />
+            </div>
           </TabsContent>
 
           {/* Runtime Logs Tab */}
@@ -1349,130 +1687,17 @@ export default function AppDetailPage() {
 
           {/* Deployments Tab */}
           <TabsContent value="deployments">
-            <Card className="glass-panel rounded-none border-white/[0.08]">
-              <CardHeader className="border-b border-white/[0.06]">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Layers className="w-5 h-5" />
-                    Deployment History
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    {connectionStatus === 'connected' && (
-                      <Badge className="rounded-none bg-green-500/20 text-green-400 border-green-500/30 text-xs">
-                        <span className="w-2 h-2 bg-green-400 rounded-full mr-1.5 animate-pulse" />
-                        Live Updates
-                      </Badge>
-                    )}
-                    {connectionStatus === 'connecting' && (
-                      <Badge className="rounded-none bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs">
-                        <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        Connecting...
-                      </Badge>
-                    )}
-                    {connectionStatus === 'disconnected' && (
-                      <Badge className="rounded-none bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">
-                        <XCircle className="w-3 h-3 mr-1" />
-                        Disconnected
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-5">
-                {deploymentsLoading && deployments.length === 0 ? (
-                  <div className="text-center py-8 text-white/50">
-                    <Loader2 className="w-8 h-8 mx-auto mb-2 opacity-50 animate-spin" />
-                    <p>Loading deployments...</p>
-                  </div>
-                ) : deployments.length > 0 ? (
-                  <div className="space-y-2">
-                    {deployments.map((deployment) => {
-                      const isCurrentlyServing = servingBuildNumber !== null && deployment.build_number === servingBuildNumber;
-                      return (
-                      <div
-                        key={deployment.id}
-                        className={`flex flex-col gap-3 border px-4 py-4 ${
-                          isCurrentlyServing
-                            ? 'border-emerald-500/20 bg-emerald-500/[0.04]'
-                            : 'border-white/[0.08] bg-white/[0.03]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-mono text-white">
-                              #{deployment.build_number}
-                            </span>
-                            <Badge className={`rounded-none ${
-                              deployment.status === 'SUCCESS' ? 'bg-green-500/20 text-green-400' :
-                              deployment.status === 'FAILURE' ? 'bg-red-500/20 text-red-400' :
-                              'bg-yellow-500/20 text-yellow-400'
-                            }`}>
-                              {deployment.status}
-                            </Badge>
-                            {isCurrentlyServing && (
-                              <Badge className="rounded-none border-emerald-400/20 bg-emerald-500/15 text-emerald-300 text-xs">
-                                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse inline-block" />
-                                Serving
-                              </Badge>
-                            )}
-                            {/* Flag when build succeeded but never became the serving version */}
-                            {deployment.status === 'SUCCESS' && !isCurrentlyServing && servingBuildNumber !== null && deployment.build_number > servingBuildNumber && (
-                              <Badge className="rounded-none border-orange-400/20 bg-orange-500/10 text-orange-300 text-xs">
-                                Deploy Failed
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-white/50">
-                            <span>
-                              {new Date(deployment.started_at).toLocaleString()}
-                            </span>
-                            {deployment.build_number > 0 && (
-                              <button
-                                onClick={() => handleSelectBuild(deployment.build_number)}
-                                className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.03] px-2 py-1 text-xs text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
-                              >
-                                <Terminal className="w-3 h-3" />
-                                View Logs
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        {/* Commit Info Row */}
-                        {deployment.commit_sha && (
-                          <div className="flex items-center gap-2 text-xs text-white/60 pl-1">
-                            <GitCommit className="w-3 h-3 text-white/40" />
-                            <code className="border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 font-mono text-blue-200">
-                              {deployment.commit_sha.substring(0, 7)}
-                            </code>
-                          </div>
-                        )}
-                        {/* Failure Reason Row */}
-                        {deployment.status === 'FAILURE' && deployment.failure_reason && (
-                          <div className="flex items-center gap-2 border border-red-500/20 bg-red-500/10 px-2 py-2 text-xs text-red-300">
-                            <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-                            <span>{deployment.failure_reason}</span>
-                          </div>
-                        )}
-                        {/* Trigger Badge */}
-                        {deployment.trigger && (
-                          <div className="flex items-center gap-2 text-xs text-white/40 pl-1">
-                            <Badge variant="outline" className="rounded-none text-xs capitalize">
-                              {deployment.trigger}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-white/50">
-                    <Layers className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p>No deployment history available</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <DeploymentHistory
+              deployments={deployments}
+              deploymentsLoading={deploymentsLoading}
+              connectionStatus={connectionStatus}
+              servingBuildNumber={servingBuildNumber}
+              onSelectBuild={handleSelectBuild}
+              onViewOperationLogs={(deploymentId) => {
+                setActiveTab('build-logs');
+                fetchOperationLogs(deploymentId);
+              }}
+            />
           </TabsContent>
 
           {/* Settings Tab */}
@@ -1484,23 +1709,41 @@ export default function AppDetailPage() {
                     <Settings className="w-5 h-5" />
                     App Settings
                   </CardTitle>
-                  <Button
-                    onClick={handleRedeploy}
-                    disabled={redeploying || app.status === 'building' || app.status === 'deleting'}
-                    className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {redeploying ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Redeploying...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4 mr-2" />
-                        Redeploy
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => setRollbackModalOpen(true)}
+                      disabled={deploymentMutationBlocked || !canRollback}
+                      variant="outline"
+                      className="rounded-none border-white/15 bg-transparent text-white hover:bg-white/10"
+                      title={
+                        canRollback
+                          ? app?.rollback_target_build_number
+                            ? `Rollback release to Build #${app.rollback_target_build_number}; current size stays unchanged`
+                            : 'Rollback to the previous successful release'
+                          : 'No previous release available. Resize-only operations do not create rollback targets.'
+                      }
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2" />
+                      Rollback Release
+                    </Button>
+                    <Button
+                      onClick={handleRedeploy}
+                      disabled={redeploying || deploymentMutationBlocked}
+                      className="rounded-none bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {redeploying ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Redeploying...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4 mr-2" />
+                          Redeploy
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5 pt-5">
@@ -1622,15 +1865,16 @@ export default function AppDetailPage() {
                   )}
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {(Object.keys(SIZE_SPECS) as SizeKey[]).map((size) => {
-                      const specs = SIZE_SPECS[size];
-                      const currentSize = (app.size || 'small') as SizeKey;
+                    {PLATFORM_APP_SIZE_ORDER.map((size) => {
+                      const specs = PLATFORM_APP_SIZE_SPECS[size];
+                      const monthlyPrice = platformPricing[size]?.price ?? 0;
+                      const currentSize = (app.size === 'medium' || app.size === 'large' ? app.size : 'small') as SizeKey;
                       const isCurrent = size === currentSize;
-                      const isUpgrade = SIZE_SPECS[size] && 
-                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(size) > 
-                        (Object.keys(SIZE_SPECS) as SizeKey[]).indexOf(currentSize);
+                      const isUpgrade =
+                        PLATFORM_APP_SIZE_ORDER.indexOf(size) >
+                        PLATFORM_APP_SIZE_ORDER.indexOf(currentSize);
                       const isSelected = selectedSize === size;
-                      const isDisabled = !isUpgrade || app.status === 'building' || app.status === 'deleting';
+                      const isDisabled = !isUpgrade || deploymentMutationBlocked;
 
                       return (
                         <div
@@ -1676,7 +1920,7 @@ export default function AppDetailPage() {
                           </div>
 
                           <p className="mt-3 text-sm font-medium text-white/90">
-                            {sizePrices[size] ? `$${sizePrices[size]}/mo` : specs.price}
+                            {monthlyPrice > 0 ? `$${monthlyPrice.toFixed(2)}/mo` : 'Free'}
                           </p>
                         </div>
                       );
@@ -1687,7 +1931,7 @@ export default function AppDetailPage() {
                     <div className="mt-4 flex items-center gap-3">
                       <Button
                         onClick={handleResize}
-                        disabled={resizing || app.status === 'building'}
+                        disabled={resizing || deploymentMutationBlocked}
                         className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {resizing ? (
@@ -1739,7 +1983,7 @@ export default function AppDetailPage() {
                     <div className="mt-4 flex items-center gap-3">
                       <Button
                         onClick={handleSaveEnvVars}
-                        disabled={savingEnvVars}
+                        disabled={savingEnvVars || deploymentMutationBlocked}
                         className="rounded-none bg-green-600 hover:bg-green-700 text-white"
                       >
                         {savingEnvVars ? (
@@ -1781,6 +2025,7 @@ export default function AppDetailPage() {
                   <Button
                     variant="destructive"
                     onClick={() => setDeleteModalOpen(true)}
+                    disabled={deploymentMutationBlocked}
                     className="w-full rounded-none md:w-auto"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
@@ -1808,7 +2053,17 @@ export default function AppDetailPage() {
         onDeleteSuccess={handleDeleteSuccess}
         onDeleteError={() => setApp(prev => prev ? { ...prev, status: 'failed' } : null)}
       />
+      <RollbackAppModal
+        open={rollbackModalOpen}
+        onOpenChange={setRollbackModalOpen}
+        appId={app?.id || null}
+        appName={app?.name || null}
+        currentBuildNumber={servingBuildNumber}
+        targetBuildNumber={app?.rollback_target_build_number ?? null}
+        targetCommitSha={app?.rollback_target_commit_sha ?? null}
+        currentSizeLabel={app?.size ?? null}
+        onRollbackSuccess={handleRollbackSuccess}
+      />
     </div>
   );
 }
-

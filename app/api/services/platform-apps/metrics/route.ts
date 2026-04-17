@@ -3,6 +3,7 @@ import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { Platform_Apps } from "@/lib/supabase/queries";
 import { PrometheusService } from "@/lib/services/prometheus";
+import { sanitizeError, logError } from "@/lib/api/error-sanitizer";
 
 /**
  * GET /api/services/platform-apps/metrics?app_id=xxx
@@ -94,11 +95,7 @@ export async function GET(req: NextRequest) {
       timestamp: metrics.timestamp,
     });
   } catch (err: unknown) {
-    console.error("[API] Error getting metrics:", err);
-    const errorMessage = err instanceof Error ? err.message : "Failed to get metrics";
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    logError("services/platform-apps/metrics", err);
+    return NextResponse.json({ error: sanitizeError(err) }, { status: 500 });
   }
 }

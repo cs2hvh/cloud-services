@@ -67,5 +67,8 @@ export function operationFailureFallback(errorCode: unknown): string {
   if (errorCode === 'INGRESS_APPLY_FAILED') {
     return 'Domain setup failed. Please retry activation.';
   }
+  if (errorCode === 'PROVIDER_VALIDATION_FAILED') {
+    return 'Domain activation was blocked by a registrar hold. This is usually caused by a pending ICANN contact verification email — check the registrant email inbox for a verification link, then retry activation.';
+  }
   return 'Domain setup failed. Please try again or contact support.';
 }

@@ -144,18 +144,18 @@ export type CreatePlatformAppPayload = z.infer<typeof createPlatformAppSchema>;
 export const updatePlatformAppSchema = z.object({
   app_id: z.string().uuid("App ID must be a valid UUID"),
   
-  // Only safe metadata fields that don't require redeployment
+  // Only safe metadata fields that don't require redeployment.
   name: z.string().min(NAMING_RULES.MIN_CLUSTER_NAME_LENGTH).max(NAMING_RULES.MAX_CLUSTER_NAME_LENGTH).optional(),
   auto_deploy: z.boolean().optional(),
   
-  // NOTE: Build config fields (branch, framework, build_command, output_directory) are NOT allowed
-  // These require redeployment - use the redeploy endpoint instead
+  // NOTE: Build config fields (branch, framework, build_command, output_directory) are NOT allowed.
+  // These require redeployment - use the redeploy endpoint instead.
   
   // Internal-only fields (not exposed via API v1)
   status: z.enum(["pending", "building", "running", "failed", "stopped"]).optional(),
   deployment_url: z.string().url().optional(),
   container_port: z.number().int().min(1).max(65535).optional(),
-});
+}).strict();
 
 export type UpdatePlatformAppPayload = z.infer<typeof updatePlatformAppSchema>;
 

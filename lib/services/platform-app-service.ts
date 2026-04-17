@@ -11,7 +11,8 @@ import { NotificationService, createServiceNotification } from "@/lib/notificati
 import { AuditLogService } from "@/lib/audit";
 import { AppStatusService } from "./app-status";
 import { getRatesForPlatformApp } from "@/config/pricing";
-import { ensureBalance, postProvisionBilling } from "@/config/billing-flow";
+import { ensureBalance } from "@/config/billing-flow";
+import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
 
 export interface CreateAppRequest {
   name: string;
@@ -37,6 +38,7 @@ export interface CreateAppRequest {
     request_id?: string;
     user_role?: 'user' | 'admin';
   };
+  idempotencyKey?: string | null;
 }
 
 export interface CreateAppResult {
@@ -74,6 +76,32 @@ export interface DeleteAppResult {
   success: boolean;
   appName: string;
   error?: string;
+  warning?: string;
+}
+
+export interface ResizeAppOptions {
+  appId: string;
+  userId: string;
+  newSize: 'small' | 'medium' | 'large';
+  audit_context?: {
+    ip_address?: string;
+    user_agent?: string;
+    request_id?: string;
+    user_email?: string;
+    user_role?: 'user' | 'admin';
+  };
+}
+
+export interface ResizeAppResult {
+  success: boolean;
+  appId?: string;
+  appName?: string;
+  oldSize?: string;
+  newSize?: string;
+  buildNumber?: number;
+  operationId?: string;
+  error?: string;
+  errorCode?: string;
 }
 
 export interface GetAppOptions {
@@ -88,6 +116,24 @@ export interface ListAppsOptions {
   includeRollbackInfo?: boolean;  // Check deployment history for rollback capability
 }
 
+export interface DeploymentPresentation {
+  can_rollback: boolean;
+  serving_build_number: number | null;
+  last_operation_build_number: number | null;
+  last_operation_trigger: string | null;
+  rollback_target_build_number: number | null;
+  rollback_target_commit_sha: string | null;
+}
+
+const DEFAULT_DEPLOYMENT_PRESENTATION: DeploymentPresentation = {
+  can_rollback: false,
+  serving_build_number: null,
+  last_operation_build_number: null,
+  last_operation_trigger: null,
+  rollback_target_build_number: null,
+  rollback_target_commit_sha: null,
+};
+
 export interface UpdateAppMetadataOptions {
   appId: string;
   userId: string;
@@ -98,6 +144,50 @@ export interface UpdateAppMetadataOptions {
 type GitProvider = CreateAppRequest["git_provider"];
 
 export class PlatformAppService {
+  static async getDeploymentPresentation(options: {
+    appId: string;
+    activeDeploymentId?: string | null;
+  }): Promise<DeploymentPresentation> {
+    const { appId, activeDeploymentId = null } = options;
+
+    try {
+      const ctx = await Platform_App_Deployments.get_rollback_context(appId, activeDeploymentId);
+
+      if (!ctx.success) {
+        console.warn(`[PlatformAppService.getDeploymentPresentation] Failed for ${appId}:`, ctx.error);
+        return DEFAULT_DEPLOYMENT_PRESENTATION;
+      }
+
+      const { serving_release, rollback_target, latest_operation, can_rollback } = ctx.data;
+
+      return {
+        can_rollback,
+        serving_build_number:
+          typeof serving_release?.build_number === "number" ? serving_release.build_number : null,
+        last_operation_build_number:
+          typeof latest_operation?.build_number === "number"
+            ? latest_operation.build_number
+            : typeof (latest_operation as { rollback_target_build_number?: unknown } | null)
+                ?.rollback_target_build_number === "number"
+              ? ((latest_operation as { rollback_target_build_number?: number }).rollback_target_build_number ?? null)
+              : null,
+        last_operation_trigger:
+          typeof latest_operation?.trigger === "string" ? latest_operation.trigger : null,
+        rollback_target_build_number:
+          can_rollback && typeof rollback_target?.build_number === "number"
+            ? rollback_target.build_number
+            : null,
+        rollback_target_commit_sha:
+          can_rollback && typeof rollback_target?.commit_sha === "string"
+            ? rollback_target.commit_sha
+            : null,
+      };
+    } catch (err) {
+      console.warn(`[PlatformAppService.getDeploymentPresentation] Failed for ${appId}:`, err);
+      return DEFAULT_DEPLOYMENT_PRESENTATION;
+    }
+  }
+
   private static async getSessionProviderToken(provider: GitProvider): Promise<string | null> {
     try {
       const { createClient } = await import("@/lib/supabase/server");
@@ -208,6 +298,30 @@ export class PlatformAppService {
    * - Registers webhook if auto_deploy enabled
    */
   static async createApp(request: CreateAppRequest): Promise<CreateAppResult> {
+    const idempotency = new PlatformAppCreateIdempotencyService();
+    const operation = await idempotency.begin<CreateAppResult>({
+      userId: request.userId,
+      idempotencyKey: request.idempotencyKey ?? null,
+      shouldPersistResult: (result) => result.success,
+      execute: async () => this.createAppUnchecked(request),
+    });
+
+    if (operation.kind === "completed") {
+      return operation.result;
+    }
+
+    if (operation.kind === "in_progress") {
+      return {
+        success: false,
+        error: `App creation is already in progress. Retry after ${operation.retryAfter}s.`,
+        errorCode: "OPERATION_IN_PROGRESS",
+      };
+    }
+
+    return operation.execute();
+  }
+
+  private static async createAppUnchecked(request: CreateAppRequest): Promise<CreateAppResult> {
     try {
       // 1. Validate project ownership
       if (request.project_id) {
@@ -295,6 +409,7 @@ export class PlatformAppService {
         deploy_branch: request.deploy_branch || request.branch || 'main',
         project_id: request.project_id,
         container_port: request.container_port,
+        idempotencyKey: request.idempotencyKey ?? null,
       };
 
       const deploymentResult = await DeploymentService.deploy(deploymentConfig);
@@ -321,44 +436,7 @@ export class PlatformAppService {
         }
       }
 
-      // 8. Register billing — failure is returned as an error (matches K8s pattern)
-      try {
-        await postProvisionBilling({
-          userId: request.userId,
-          initialCost: INITIAL_COST,
-          hourlyRate: HOURLY_RATE,
-          serviceId: appId,
-          addActive: Billing.add_active_platform_app,
-        });
-      } catch (billingErr) {
-        const billingMessage = billingErr instanceof Error ? billingErr.message : String(billingErr);
-        try {
-          await NotificationService.create(
-            createServiceNotification({
-              userId: request.userId,
-              type: "error",
-              action: "failed",
-              serviceType: "platform_app",
-              serviceName: request.name,
-              serviceId: appId,
-              error: `Billing registration failed after deployment: ${billingMessage}`,
-            })
-          );
-        } catch (notifErr) {
-          console.error("[PlatformAppService.createApp] Billing failure notification failed:", notifErr);
-        }
-        return {
-          success: false,
-          error: `Post-provision billing failed: ${billingMessage}`,
-          errorCode: "POST_PROVISION_BILLING_FAILED",
-          appId,
-          deploymentUrl: deploymentResult.deployment_url,
-          port: deploymentResult.port,
-          partialSuccess: true,
-        };
-      }
-
-      // 9. Create audit log
+      // 8. Create audit log
       if (request.auditContext) {
         try {
           await AuditLogService.create({
@@ -394,28 +472,33 @@ export class PlatformAppService {
         }
       }
 
-      // 10. Send success notification
+      // 9. Send creation/start notification.
+      // The app record now exists, but the initial deployment may still be building.
+      // Keep the user-facing message truthful and avoid implying the first release
+      // is already healthy or billable.
       try {
         await NotificationService.create(
-          createServiceNotification({
-            userId: request.userId,
-            type: 'success',
+          {
+            user_id: request.userId,
+            type: 'info',
+            title: 'Application Deployment Started',
+            message: `Application "${request.name}" has been created and the initial deployment is in progress. Billing will activate after the first successful deployment.`,
+            service_type: 'platform_app',
+            service_id: appId,
             action: 'created',
-            serviceType: 'platform_app',
-            serviceName: request.name,
-            serviceId: appId,
             metadata: {
+              serviceName: request.name,
               framework: request.framework,
               repository: request.repository_name,
               branch: request.branch || 'main',
             },
-          })
+          }
         );
       } catch (notifErr) {
         console.error('[PlatformAppService.createApp] Notification failed:', notifErr);
       }
 
-      // 11. Register webhook if auto_deploy enabled
+      // 10. Register webhook if auto_deploy enabled
       if (request.auto_deploy) {
         try {
           // providerToken was already resolved in step 5 — reuse it directly
@@ -559,17 +642,11 @@ export class PlatformAppService {
     // Add rollback capability check
     const appsWithRollback = await Promise.all(
       (apps || []).map(async (app: { id: string; active_deployment_id?: string | null }) => {
-        try {
-          const prev = await Platform_App_Deployments.get_previous_successful(
-            app.id,
-            app.active_deployment_id ?? null
-          );
-          const canRollback = !!(prev.success && prev.data);
-          return { ...app, can_rollback: canRollback };
-        } catch (err) {
-          console.warn(`[PlatformAppService.listApps] Rollback check failed for ${app.id}:`, err);
-          return { ...app, can_rollback: false };
-        }
+        const deploymentPresentation = await PlatformAppService.getDeploymentPresentation({
+          appId: app.id,
+          activeDeploymentId: app.active_deployment_id ?? null,
+        });
+        return { ...app, ...deploymentPresentation };
       })
     );
 
@@ -637,10 +714,11 @@ export class PlatformAppService {
     const appName = appDetails.success ? appDetails.data?.name : 'Unknown';
     const projectId = appDetails.success ? appDetails.data?.project_id : null;
     const repoName = appDetails.success ? appDetails.data?.repository_name : 'Unknown';
+    let billingWarning: string | undefined;
 
     try {
       // 1. Delete infrastructure using deployment service
-      await DeploymentService.delete(appId, userId, isAdmin);
+      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
 
       // 2. Close active billing (prorated final charge)
       try {
@@ -656,7 +734,10 @@ export class PlatformAppService {
         });
       } catch (billingError) {
         console.warn('[PlatformAppService.deleteApp] Failed to close billing:', billingError);
-        // Don't fail the deletion - billing cleanup can be handled separately
+        billingWarning =
+          billingError instanceof Error
+            ? billingError.message
+            : String(billingError);
       }
 
       // 3. Add project activity log if project_id exists
@@ -709,7 +790,8 @@ export class PlatformAppService {
         console.error('[PlatformAppService.deleteApp] Failed to create notification:', notifError);
       }
 
-      return { success: true, appName };
+      const warning = [deploymentDeletion.warning, billingWarning].filter(Boolean).join("; ") || undefined;
+      return { success: true, appName, warning };
 
     } catch (error: unknown) {
       const errorMsg = error instanceof Error ? error.message : "Unknown error";
@@ -733,4 +815,111 @@ export class PlatformAppService {
       throw error; // Re-throw for caller to handle
     }
   }
+
+  /**
+   * Resize a platform app (upsize only)
+   * - Validates ownership and upsize direction
+   * - Updates billing rate
+   * - Creates audit log
+   */
+  static async resizeApp(options: ResizeAppOptions): Promise<ResizeAppResult> {
+    const { appId, userId, newSize, audit_context } = options;
+
+    // Get the app
+    const appResult = await Platform_Apps.get(appId);
+    if (!appResult.success || !appResult.data) {
+      const error = new Error('App not found') as Error & { code?: string };
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    const app = appResult.data;
+
+    // Verify ownership
+    if (app.user_id !== userId) {
+      const error = new Error('Unauthorized') as Error & { code?: string };
+      error.code = 'FORBIDDEN';
+      throw error;
+    }
+
+    const currentSize = (app.size || 'small') as 'small' | 'medium' | 'large';
+    const SIZE_ORDER: Record<string, number> = {
+      small: 1,
+      medium: 2,
+      large: 3,
+    };
+
+    // Validate upsize only
+    if (SIZE_ORDER[newSize] <= SIZE_ORDER[currentSize]) {
+      const error = new Error(
+        `Cannot resize from ${currentSize} to ${newSize}. Only upsizing is allowed.`
+      ) as Error & { code?: string };
+      error.code = 'INVALID_RESIZE';
+      throw error;
+    }
+
+    // Update billing rate (non-fatal)
+    try {
+      const { hourlyRate } = await getRatesForPlatformApp(newSize);
+      await Billing.update_active_platform_app_rate({ serviceId: appId, newHourlyRate: hourlyRate });
+      console.log(`[PlatformAppService.resizeApp] Billing rate updated for app ${appId}`);
+    } catch (billingErr) {
+      console.warn(`[PlatformAppService.resizeApp] Billing rate update failed for app ${appId}:`, billingErr);
+    }
+
+    // Create audit log
+    if (audit_context) {
+      try {
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: audit_context.user_role || 'user',
+          user_email: audit_context.user_email,
+          action: 'update',
+          service_type: 'platform_apps',
+          service_id: appId,
+          service_name: app.name,
+          after_state: { ...app, size: newSize } as Record<string, unknown>,
+          ip_address: audit_context.ip_address,
+          user_agent: audit_context.user_agent,
+          request_id: audit_context.request_id,
+          metadata: {
+            old_size: currentSize,
+            new_size: newSize,
+          },
+        });
+      } catch (auditErr) {
+        console.warn('[PlatformAppService.resizeApp] Audit log failed:', auditErr);
+      }
+    }
+
+    return {
+      success: true,
+      appId,
+      appName: app.name,
+      oldSize: currentSize,
+      newSize,
+    };
+  }
+
+  /**
+   * Check whether the user's balance covers the target resize tier's hourly rate.
+   * Returns a result object — never throws.
+   */
+  static async checkBalanceForResize(
+    userId: string,
+    newSize: 'small' | 'medium' | 'large'
+  ): Promise<{ ok: boolean; balance?: number; required?: number }> {
+    let hourlyRate: number;
+    try {
+      ({ hourlyRate } = await getRatesForPlatformApp(newSize));
+    } catch {
+      // Pricing data is corrupt (e.g. negative price guard). Block resize rather than charging wrong rate.
+      console.error(`[PlatformAppService.checkBalanceForResize] Failed to get rates for size "${newSize}"`);
+      return { ok: false };
+    }
+    if (hourlyRate <= 0) return { ok: true };
+    const check = await ensureBalance(userId, hourlyRate);
+    return { ok: check.ok, balance: check.balance ?? 0, required: hourlyRate };
+  }
+
 }

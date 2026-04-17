@@ -150,21 +150,55 @@ export class SupabaseDomainPurchaseRequestRepository implements DomainPurchaseRe
     return (data || []) as DomainPurchaseRequest[];
   }
 
+  async findUnsyncedCompleted(limit: number): Promise<DomainPurchaseRequest[]> {
+    const supabase = await createServiceClient();
+    // Only look at the last 20 days — ICANN hold window is 15 days, but give a
+    // 5-day buffer so the reconciliation job can still fix recently-missed syncs.
+    const cutoff = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("*")
+      .eq("status", "completed")
+      .is("registrant_email", null)
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: true })
+      .limit(limit);
+
+    if (error) {
+      throw new DomainServiceError({
+        code: DOMAIN_ERROR_CODES.INTERNAL_ERROR,
+        message: `Failed to query unsynced purchase requests: ${error.message}`,
+      });
+    }
+
+    return (data || []) as DomainPurchaseRequest[];
+  }
+
   async updateStatus(params: {
     requestId: string;
     status: DomainPurchaseRequestStatus;
     providerRequestId?: string | null;
     lastError?: string | null;
+    registrantEmail?: string | null;
   }): Promise<void> {
     const supabase = await createServiceClient();
+    const update: Record<string, unknown> = {
+      status: params.status,
+      updated_at: new Date().toISOString(),
+    };
+    if (params.providerRequestId !== undefined) {
+      update.provider_request_id = params.providerRequestId;
+    }
+    if (params.lastError !== undefined) {
+      update.last_error = params.lastError;
+    }
+    if (params.registrantEmail !== undefined) {
+      update.registrant_email = params.registrantEmail;
+    }
     const { error } = await supabase
       .from(TABLE)
-      .update({
-        status: params.status,
-        provider_request_id: params.providerRequestId ?? null,
-        last_error: params.lastError ?? null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(update)
       .eq("id", params.requestId);
 
     if (error) {

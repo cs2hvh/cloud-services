@@ -1,7 +1,115 @@
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ServiceCategory, PricingTier } from "@/lib/supabase/queries/pricing";
+
+type FilterTab = {
+  value: string;
+  label: string;
+};
+
+const DATABASE_TYPE_TABS: FilterTab[] = [
+  { value: "all", label: "All DB Types" },
+  { value: "mysql", label: "MySQL" },
+  { value: "mongodb", label: "MongoDB" },
+  { value: "postgres", label: "PostgreSQL" },
+];
+
+const DEFAULT_CPU_TABS: FilterTab[] = [
+  { value: "all", label: "All CPU Types" },
+  { value: "basic", label: "Basic" },
+  { value: "general-purpose", label: "General-purpose" },
+  { value: "storage-optimized", label: "Storage-optimized" },
+];
+
+const GPU_CPU_TABS: FilterTab[] = [
+  { value: "all", label: "All GPU Types" },
+  { value: "h200", label: "H200" },
+  { value: "h100", label: "H100" },
+  { value: "l4os", label: "L4OS" },
+];
+
+function normalizeValue(value?: string | null): string {
+  if (!value) return "";
+  return value.toLowerCase().trim().replace(/[_\s]+/g, "-");
+}
+
+function normalizeDatabaseType(value?: string | null): string {
+  const normalized = normalizeValue(value);
+  if (!normalized) return "";
+  if (normalized.includes("mysql")) return "mysql";
+  if (normalized.includes("mongo")) return "mongodb";
+  if (normalized.includes("postgres") || normalized === "pg") return "postgres";
+  return normalized;
+}
+
+function normalizeCpuType(value?: string | null): string {
+  const normalized = normalizeValue(value);
+  if (!normalized) return "";
+  if (normalized.includes("general")) return "general-purpose";
+  if (normalized.includes("storage")) return "storage-optimized";
+  if (normalized.includes("basic")) return "basic";
+  return normalized;
+}
+
+function formatCpuTypeLabel(value: string): string {
+  const normalized = normalizeValue(value);
+  if (!normalized) return "CPU";
+  return normalized
+    .split("-")
+    .map((part) => {
+      if (part.toLowerCase() === "gpu") return "GPU";
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(" ");
+}
+
+function normalizeGpuType(value?: string | null): string {
+  const normalized = normalizeValue(value);
+  if (!normalized) return "";
+  if (normalized.includes("h200")) return "h200";
+  if (normalized.includes("h100")) return "h100";
+  if (normalized.includes("l4os") || normalized.includes("l40s")) return "l4os";
+  return normalized;
+}
+
+function FilterTabs({
+  label,
+  tabs,
+  activeValue,
+  onChange,
+}: {
+  label: string;
+  tabs: FilterTab[];
+  activeValue: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] uppercase tracking-[0.14em] text-white/40">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((tab) => {
+          const isActive = tab.value === activeValue;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              onClick={() => onChange(tab.value)}
+              className={cn(
+                "cursor-pointer border px-3 py-1.5 text-[11px] font-medium transition-colors",
+                isActive
+                  ? "border-white bg-white text-black"
+                  : "border-white/20 bg-white/[0.02] text-white/65 hover:border-white/45 hover:text-white"
+              )}
+            >
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 
 
@@ -18,8 +126,83 @@ export function PricingContent({
   expandedTierId,
   setExpandedTierId,
 }: PricingContentProps) {
-  const featuredTier = category?.tiers.find((tier) => tier.isFeatured);
-  const listTiers = category?.tiers.filter((tier) => !tier.isFeatured) ?? [];
+  const [databaseTypeFilter, setDatabaseTypeFilter] = useState("all");
+  const [cpuTypeFilter, setCpuTypeFilter] = useState("all");
+
+  const categoryId = normalizeValue(category?.id);
+  const isDatabaseCategory = categoryId === "database";
+  const isKubernetesCategory = categoryId === "kubernetes";
+  const isGpuCategory = categoryId === "gpu" || categoryId === "gpu-instance";
+
+  const kubernetesCpuTabs = useMemo<FilterTab[]>(() => {
+    if (!isKubernetesCategory) return DEFAULT_CPU_TABS;
+
+    const uniqueCpuTypes = Array.from(
+      new Set(
+        (category?.tiers ?? [])
+          .map((tier) => normalizeValue(tier.cpuType))
+          .filter(Boolean)
+      )
+    );
+
+    if (uniqueCpuTypes.length === 0) {
+      return DEFAULT_CPU_TABS;
+    }
+
+    return [
+      { value: "all", label: "All CPU Types" },
+      ...uniqueCpuTypes.map((cpuType) => ({
+        value: cpuType,
+        label: formatCpuTypeLabel(cpuType),
+      })),
+    ];
+  }, [category?.tiers, isKubernetesCategory]);
+
+  useEffect(() => {
+    setDatabaseTypeFilter("all");
+    setCpuTypeFilter("all");
+  }, [categoryId]);
+
+  const filteredTiers = useMemo(() => {
+    const tiers = category?.tiers ?? [];
+
+    return tiers.filter((tier) => {
+      if (isDatabaseCategory) {
+        const dbType = normalizeDatabaseType(tier.subType || tier.name);
+        const cpuType = normalizeCpuType(tier.cpuType || tier.machineType || tier.name);
+
+        const matchesDatabaseType =
+          databaseTypeFilter === "all" || dbType === normalizeDatabaseType(databaseTypeFilter);
+        const matchesCpuType =
+          cpuTypeFilter === "all" || cpuType === normalizeCpuType(cpuTypeFilter);
+
+        return matchesDatabaseType && matchesCpuType;
+      }
+
+      if (isKubernetesCategory) {
+        const cpuType = normalizeValue(tier.cpuType);
+        if (!cpuType) return cpuTypeFilter === "all";
+        return cpuTypeFilter === "all" || cpuType === normalizeValue(cpuTypeFilter);
+      }
+
+      if (isGpuCategory) {
+        const gpuType = normalizeGpuType(tier.machineType || tier.cpuType || tier.subType || tier.name);
+        return cpuTypeFilter === "all" || gpuType === normalizeGpuType(cpuTypeFilter);
+      }
+
+      return true;
+    });
+  }, [
+    category?.tiers,
+    cpuTypeFilter,
+    databaseTypeFilter,
+    isDatabaseCategory,
+    isGpuCategory,
+    isKubernetesCategory,
+  ]);
+
+  const featuredTier = filteredTiers.find((tier) => tier.isFeatured);
+  const listTiers = filteredTiers.filter((tier) => !tier.isFeatured);
 
   const formatPrice = (value: number) =>
     Number.isInteger(value) ? value.toString() : value.toFixed(2);
@@ -86,6 +269,26 @@ export function PricingContent({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {(isDatabaseCategory || isKubernetesCategory || isGpuCategory) && (
+          <div className="space-y-4 border border-white/10 bg-white/[0.02] p-4">
+            {isDatabaseCategory && (
+              <FilterTabs
+                label="Database Type"
+                tabs={DATABASE_TYPE_TABS}
+                activeValue={databaseTypeFilter}
+                onChange={setDatabaseTypeFilter}
+              />
+            )}
+
+            <FilterTabs
+              label={isGpuCategory ? "GPU Type" : "CPU Type"}
+              tabs={isGpuCategory ? GPU_CPU_TABS : isKubernetesCategory ? kubernetesCpuTabs : DEFAULT_CPU_TABS}
+              activeValue={cpuTypeFilter}
+              onChange={setCpuTypeFilter}
+            />
           </div>
         )}
 
@@ -170,6 +373,12 @@ export function PricingContent({
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {filteredTiers.length === 0 && (
+          <div className="border border-white/10 bg-white/[0.02] px-5 py-4 text-sm text-white/70">
+            No plans match the selected filters.
           </div>
         )}
 

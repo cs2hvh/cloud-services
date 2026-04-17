@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createHmac, timingSafeEqual } from "crypto";
+import { encryptOAuthToken } from "@/lib/security/token-crypto";
 
 /**
  * Bitbucket OAuth callback handler
@@ -242,7 +243,7 @@ export async function GET(request: NextRequest) {
     
     if (tokenData.error) {
       console.error('Bitbucket token error:', tokenData.error);
-      return NextResponse.redirect(`${domain}${returnTo}?error=${tokenData.error}`);
+      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
     }
 
     const accessToken = tokenData.access_token;
@@ -280,11 +281,11 @@ export async function GET(request: NextRequest) {
       .from('bitbucket_tokens')
       .upsert({
         user_id: userId,
-        access_token: accessToken,
+        access_token: encryptOAuthToken(accessToken),
         bitbucket_username: bitbucketUser.username || bitbucketUser.nickname,
         bitbucket_user_id: bitbucketUser.account_id || bitbucketUser.uuid,
         scopes: 'repository account',
-        refresh_token: refreshToken, // Critical for Bitbucket - tokens expire in 1 hour!
+        refresh_token: encryptOAuthToken(refreshToken), // Critical for Bitbucket - tokens expire in 1 hour!
         expires_at: expiresAt,
         auth_source: 'direct', // Mark as direct OAuth - we can refresh this!
         created_at: new Date().toISOString(),

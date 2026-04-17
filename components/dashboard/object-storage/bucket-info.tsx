@@ -44,8 +44,8 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
           bucket_id: bucket.id,
         });
         
-        if (response.data.success && response.data.data) {
-          setBucketData(response.data.data);
+        if (response?.data?.success && response?.data?.data) {
+          setBucketData(response?.data?.data);
         }
       } catch (error) {
         console.error("Error fetching bucket stats:", error);

@@ -13,6 +13,7 @@ import { AIAgentUpdate } from '@/lib/ai/types';
 import { NotificationService, createServiceNotification } from '@/lib/notifications/service';
 import { AuditLogService, getAuditContext } from '@/lib/audit';
 import { z } from 'zod';
+import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 
 // Validation schema for updating an agent
 const updateAgentSchema = z.object({
@@ -125,8 +126,9 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     const validation = updateAgentSchema.safeParse(body);
     
     if (!validation.success) {
+      logError('PATCH /api/ai-agents/[id] validation', validation.error);
       return NextResponse.json(
-        { error: 'Validation error', details: validation.error.errors },
+        sanitizeValidationError(validation.error.errors),
         { status: 400 }
       );
     }

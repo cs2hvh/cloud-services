@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
+import { logError } from "@/lib/api/error-sanitizer";
 import { NameComRegistrarAdapter } from "@/lib/domain-service/integrations/namecom-registrar.adapter";
 import {
   isValidDomain,
@@ -54,10 +55,11 @@ export async function GET(req: NextRequest) {
         domain,
       });
     } catch (error: unknown) {
+      logError("domains/registrar/ownership", error);
       return NextResponse.json(
         {
           error: "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Failed to load domain ownership",
+          message: "Failed to load domain ownership",
         },
         { status: 500 }
       );
@@ -106,10 +108,11 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/registrar/GET", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to load registrar settings",
+        message: "Failed to load registrar settings",
       },
       { status: 500 }
     );
@@ -170,10 +173,11 @@ export async function PATCH(req: NextRequest) {
         domain,
       });
     } catch (error: unknown) {
+      logError("domains/registrar/ownership", error);
       return NextResponse.json(
         {
           error: "INTERNAL_ERROR",
-          message: error instanceof Error ? error.message : "Failed to load domain ownership",
+          message: "Failed to load domain ownership",
         },
         { status: 500 }
       );
@@ -220,10 +224,11 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (error: unknown) {
+    logError("domains/registrar/PATCH", error);
     return NextResponse.json(
       {
         error: "INTERNAL_ERROR",
-        message: error instanceof Error ? error.message : "Failed to update registrar settings",
+        message: "Failed to update registrar settings",
       },
       { status: 500 }
     );

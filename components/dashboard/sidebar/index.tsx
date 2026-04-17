@@ -335,6 +335,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     { name: "Proxmox Hosts", href: "/dashboard/admin/hosts", current: pathname === "/dashboard/admin/hosts" || pathname.startsWith("/dashboard/admin/hosts/"), icon: Network },
     { name: "All Servers", href: "/dashboard/admin/servers", current: pathname === "/dashboard/admin/servers" || pathname.startsWith("/dashboard/admin/servers/"), icon: Server },
     { name: "Users", href: "/dashboard/admin/users", current: pathname === "/dashboard/admin/users" || pathname.startsWith("/dashboard/admin/users/"), icon: Users },
+    { name: "Support Tickets", href: "/dashboard/admin/support", current: pathname === "/dashboard/admin/support" || pathname.startsWith("/dashboard/admin/support/"), icon: HelpCircle },
     { name: "Databases", href: "/dashboard/admin/databases", current: pathname === "/dashboard/admin/databases" || pathname.startsWith("/dashboard/admin/databases/"), icon: Database },
     { name: "Object Storage", href: "/dashboard/admin/object-storage", current: pathname === "/dashboard/admin/object-storage" || pathname.startsWith("/dashboard/admin/object-storage/"), icon: Archive },
     { name: "Network DDoS", href: "/dashboard/admin/network-ddos", current: pathname === "/dashboard/admin/network-ddos" || pathname.startsWith("/dashboard/admin/network-ddos/"), icon: Shield },
@@ -366,8 +367,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     },
     {
       name: "Help Center",
-      href: "/support",
-      current: false,
+      href: "/dashboard/support",
+      current: pathname.includes("/dashboard/support"),
       icon: HelpCircle,
     },
   ];

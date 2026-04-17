@@ -5,6 +5,8 @@ import { AuditLogService, getAuditContext } from "@/lib/audit";
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { Projects } from "@/lib/supabase/queries/projects";
+import { Billing } from "@/lib/supabase/queries/billing";
+import { getRatesForDatabaseBySlug } from "@/config/pricing";
 
 import { getDigitalOceanHeaders, parseAxiosError } from "../helpers";
 import type {
@@ -83,6 +85,35 @@ export const scalingResourceOperations = {
       }
 
       await Database_Clusters.update_storage(clusterId, requestedSize);
+
+      // Update billing rate to match the new plan so future cron charges are correct
+      try {
+        const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+        if (hourlyRate > 0) {
+          await Billing.update_active_database_rate({
+            serviceId: clusterId,
+            newHourlyRate: hourlyRate,
+          });
+        }
+      } catch (billingRateErr) {
+        console.error("[updateStorage] Failed to update billing hourly rate:", billingRateErr);
+      }
+
+      try {
+        await AuditLogService.create({
+          user_id: userId,
+          user_role: "user",
+          action: "update",
+          service_type: "database",
+          service_id: clusterId,
+          service_name: String(clusterData.name),
+          before_state: { size: clusterData.size },
+          after_state: { size: requestedSize },
+          metadata: { update_type: "tier_resize" },
+        });
+      } catch (auditErr) {
+        console.error("[updateStorage] Failed to create audit log:", auditErr);
+      }
 
       if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
         await Projects.add_log({
@@ -174,7 +205,37 @@ export const scalingResourceOperations = {
           console.error("[updateStorageInternal] Failed to update Supabase:", supabaseUpdate.error);
         }
 
+        // Update billing rate to match the new plan
+        try {
+          const { hourlyRate } = await getRatesForDatabaseBySlug(requestedSize);
+          if (hourlyRate > 0) {
+            await Billing.update_active_database_rate({
+              serviceId: clusterId,
+              newHourlyRate: hourlyRate,
+            });
+          }
+        } catch (billingRateErr) {
+          console.error("[updateStorageInternal] Failed to update billing hourly rate:", billingRateErr);
+        }
+
         const clusterData = access.cluster;
+
+        try {
+          await AuditLogService.create({
+            user_id: userId,
+            user_role: "user",
+            action: "update",
+            service_type: "database",
+            service_id: clusterId,
+            service_name: String(clusterData.name),
+            before_state: { size: clusterData.size },
+            after_state: { size: requestedSize },
+            metadata: { update_type: "tier_resize" },
+          });
+        } catch (auditErr) {
+          console.error("[updateStorageInternal] Failed to create audit log:", auditErr);
+        }
+
         if (typeof clusterData.project_id === "string" && clusterData.project_id.length > 0) {
           await Projects.add_log({
             project_id: clusterData.project_id,
@@ -198,7 +259,6 @@ export const scalingResourceOperations = {
         } catch (notifErr) {
           console.error("[updateStorageInternal] Failed to create notification:", notifErr);
         }
-
         return { success: true, statusCode: 200 };
       }
 
@@ -382,6 +442,28 @@ export const scalingResourceOperations = {
 
       if (migrationComplete) {
         await Database_Clusters.update_region(request.clusterId, request.targetRegion, "online");
+
+        if (access.cluster.status !== "online") {
+          try {
+            await NotificationService.create(
+              createServiceNotification({
+                userId: String(access.cluster.owner_id),
+                type: "success",
+                action: "migrated",
+                serviceType: "database",
+                serviceName: String(access.cluster.name),
+                serviceId: request.clusterId,
+                metadata: {
+                  updateType: "region",
+                  newRegion: request.targetRegion,
+                },
+              })
+            );
+          } catch (notifErr) {
+            console.error("[readMigrationStatus] Failed to create notification:", notifErr);
+          }
+
+        }
       }
 
       return {
