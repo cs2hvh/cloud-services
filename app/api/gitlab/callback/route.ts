@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { createHmac, timingSafeEqual } from "crypto";
+import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
 
 /**
  * GitLab OAuth callback handler
@@ -17,35 +18,16 @@ import { createHmac, timingSafeEqual } from "crypto";
  *   "created_at": 1607635748
  * }
  */
-function getAppBaseUrl(request: NextRequest): string {
-  const requestUrl = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const hostHeader = request.headers.get("host");
-
-  if (forwardedHost) {
-    return `${forwardedProto || "https"}://${forwardedHost}`;
-  }
-
-  const host = hostHeader || requestUrl.host;
-  if (host) {
-    const normalizedHost = host.replace(/^0\.0\.0\.0(?=[:]|$)/, "localhost");
-    const proto =
-      process.env.NODE_ENV === "development"
-        ? "http"
-        : requestUrl.protocol.replace(":", "") || "https";
-    return `${proto}://${normalizedHost}`;
-  }
-
-  return (process.env.DOMAIN || "http://localhost:3000").replace(/\/$/, "");
-}
 
 function getStateSecret(): string {
-  return (
-    process.env.GITLAB_STATE_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    ""
-  );
+  if (!process.env.GITLAB_STATE_SECRET) {
+    console.warn(
+      "[GitLab OAuth] GITLAB_STATE_SECRET is not set. " +
+        "Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. " +
+        "Set a dedicated GITLAB_STATE_SECRET env var."
+    );
+  }
+  return process.env.GITLAB_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
 
 /** Verifies HMAC-signed state and extracts payload. Returns null if invalid. */

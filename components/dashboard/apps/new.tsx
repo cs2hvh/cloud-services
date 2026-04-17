@@ -640,9 +640,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     setConnectingProvider(providerId);
     setConnectionError(null); // Clear previous errors
     try {
-      const result = await performConnection(providerId, "connect", {
-        mode: "integration",
-      });
+      const result = await performConnection(providerId, "connect");
       if (!result.success && result.error) {
         setConnectionError({ provider: providerId, message: result.error });
       }

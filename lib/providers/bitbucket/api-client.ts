@@ -128,7 +128,12 @@ export class BitbucketApiClient {
     });
 
     const repoArrays = await Promise.all(repoPromises);
-    const allRepos = repoArrays.flat();
+    const seen = new Set<string>();
+    const allRepos = repoArrays.flat().filter((repo) => {
+      if (seen.has(repo.full_name)) return false;
+      seen.add(repo.full_name);
+      return true;
+    });
 
     // Transform to normalized Repository format
     return allRepos.map((repo) => {

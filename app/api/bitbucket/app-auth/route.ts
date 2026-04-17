@@ -13,11 +13,14 @@ import { createHmac } from "crypto";
  */
 
 function getStateSecret(): string {
-  return (
-    process.env.BITBUCKET_STATE_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    ""
-  );
+  if (!process.env.BITBUCKET_STATE_SECRET) {
+    console.warn(
+      "[Bitbucket OAuth] BITBUCKET_STATE_SECRET is not set. " +
+        "Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. " +
+        "Set a dedicated BITBUCKET_STATE_SECRET env var."
+    );
+  }
+  return process.env.BITBUCKET_STATE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
 
 function createSignedState(userId: string, returnTo: string): string {
