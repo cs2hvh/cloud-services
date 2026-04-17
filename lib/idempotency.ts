@@ -2,12 +2,19 @@
  * Idempotency Helper
  * Uses Redis to prevent duplicate operations based on Idempotency-Key header
  */
-import { randomUUID as nodeRandomUUID } from "crypto";
 import { redis } from "./redis";
 
 function randomUUID(): string {
-  // Node 14 compat: prefer the built-in 'crypto' module; fall back to the Web Crypto API (browser / edge).
-  return nodeRandomUUID();
+  // Use the Web Crypto API – available in browsers, Node.js 19+, and edge runtimes.
+  // Falls back to a Math.random-based v4 UUID for older environments.
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export type IdempotencyResult = 
