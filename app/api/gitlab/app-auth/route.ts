@@ -1,5 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
+import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret, createSignedOAuthState, sanitizeReturnTo } from "@/lib/api/oauth-state";
+
+function getStateSecret(): string {
+  return getOAuthStateSecret(process.env.GITLAB_STATE_SECRET, "GitLab", "GITLAB_STATE_SECRET");
+}
+
+function createSignedState(userId: string, returnTo: string): string {
+  return createSignedOAuthState(getStateSecret(), userId, returnTo);
+}
 
 /**
  * GitLab App OAuth flow for repository access
@@ -64,7 +74,7 @@ export async function POST(request: Request) {
 
     // GitLab App OAuth flow for repository access
     const clientId = process.env.GITLAB_CLIENT_ID;
-    const domain = process.env.DOMAIN;
+    const domain = getAppBaseUrl(request);
     const redirectUri = `${domain}/api/gitlab/callback`;
     
     if (!clientId) {
@@ -79,11 +89,9 @@ export async function POST(request: Request) {
     // - read_user: Read user profile
     const scopes = 'api read_user';
     
-    // Generate state parameter for CSRF protection and return path
-    // Format: userId-timestamp-returnPath (base64 encoded)
-    const returnPath = returnTo || '/dashboard/settings';
-    const stateData = `${user.id}|${Date.now()}|${returnPath}`;
-    const state = Buffer.from(stateData).toString('base64');
+    // Generate HMAC-signed state for CSRF protection
+    const returnPath = sanitizeReturnTo(returnTo);
+    const state = createSignedState(user.id, returnPath);
     
     // Build GitLab authorization URL
     const gitlabAuthUrl = `https://gitlab.com/oauth/authorize?` +

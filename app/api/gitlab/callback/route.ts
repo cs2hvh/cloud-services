@@ -2,6 +2,9 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
+import { createHmac, timingSafeEqual } from "crypto";
+import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * GitLab OAuth callback handler
@@ -16,9 +19,55 @@ import { encryptOAuthToken } from "@/lib/security/token-crypto";
  *   "created_at": 1607635748
  * }
  */
+
+function getStateSecret(): string {
+  return getOAuthStateSecret(process.env.GITLAB_STATE_SECRET, "GitLab", "GITLAB_STATE_SECRET");
+}
+
+/** Verifies HMAC-signed state and extracts payload. Returns null if invalid. */
+function verifySignedState(
+  state: string
+): { userId: string; returnTo: string; issuedAt: number } | null {
+  try {
+    const secret = getStateSecret();
+    if (!secret) return null;
+
+    const dotIdx = state.lastIndexOf(".");
+    if (dotIdx === -1) return null;
+
+    const payloadB64 = state.slice(0, dotIdx);
+    const signature = state.slice(dotIdx + 1);
+
+    const expectedSig = createHmac("sha256", secret)
+      .update(payloadB64)
+      .digest("base64url");
+
+    // Constant-time comparison to prevent timing attacks
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expectedSig);
+    if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf-8"));
+    if (!payload.userId || !payload.issuedAt) return null;
+
+    // Reject states older than 10 minutes
+    if (Date.now() - payload.issuedAt > 10 * 60 * 1000) return null;
+
+    return {
+      userId: payload.userId,
+      returnTo: sanitizeReturnTo(payload.returnTo),
+      issuedAt: payload.issuedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: NextRequest) {
-  // Define domain once at the top for all redirects
-  const domain = process.env.DOMAIN || 'http://localhost:3000';
+  // Derive domain from request so OAuth works in both dev and production
+  const domain = getAppBaseUrl(request);
   
   try {
     const { searchParams } = new URL(request.url);
@@ -29,20 +78,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${domain}/dashboard/settings?error=missing_code`);
     }
 
-    // Extract user ID and returnTo from state
-    // State format: userId|timestamp|returnPath (base64 encoded)
-    let userId: string;
-    let returnTo = '/dashboard/settings';
-    try {
-      const stateData = Buffer.from(state, 'base64').toString('utf-8');
-      const [id, , path] = stateData.split('|');
-      userId = id;
-      returnTo = path || '/dashboard/settings';
-    } catch {
-      // Fallback for old state format: userId-timestamp
-      userId = state.split('-')[0];
-      returnTo = '/dashboard/settings';
+    // Verify HMAC-signed state and extract userId + returnTo
+    const statePayload = verifySignedState(state);
+    if (!statePayload) {
+      console.error('[GitLab Callback] Invalid or expired state parameter');
+      return NextResponse.redirect(`${domain}/dashboard/settings?error=invalid_state`);
     }
+    const { userId, returnTo } = statePayload;
     
     const supabase = await createClient();
     

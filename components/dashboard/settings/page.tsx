@@ -38,10 +38,10 @@ const SECTION_META: Record<
     eyebrow: "Identity",
   },
   account: {
-    title: "Connected Accounts",
-    description: "Manage linked providers and account access relationships.",
+    title: "Connections",
+    description: "Manage login methods and repository connections separately.",
     icon: Shield,
-    helper: "Review connected accounts regularly and remove providers you no longer use.",
+    helper: "Login methods are for authentication. Repository connections grant repo access for deployments.",
     eyebrow: "Access",
   },
   security: {
