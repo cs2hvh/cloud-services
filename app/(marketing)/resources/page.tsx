@@ -147,7 +147,7 @@ export default function ResourcesPage() {
               <Link
                 key={guide.title}
                 href={guide.href}
-                className="group border border-white/[0.08] bg-white/[0.02] p-6 hover:bg-white/[0.04] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
+                className="group border border-white/[0.08] bg-white/[0.02] p-6 hover:bg-white/[0.04] transition-colors focus-visible:outline  focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
               >
                 <guide.icon className="h-5 w-5 text-[#0095FF]" />
                 <p className="mt-3 text-xs uppercase tracking-[0.14em] text-white/55">
@@ -202,7 +202,7 @@ export default function ResourcesPage() {
                   <Link
                     key={item.title}
                     href={item.href}
-                    className="inline-flex items-center justify-between border border-white/[0.08] px-4 py-3 text-sm text-white/75 hover:text-white hover:bg-white/[0.04] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
+                    className="inline-flex items-center justify-between border border-white/[0.08] px-4 py-3 text-sm text-white/75 hover:text-white hover:bg-white/[0.04] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
                   >
                     {item.title}
                     <ArrowRight className="h-4 w-4" />
@@ -221,7 +221,7 @@ export default function ResourcesPage() {
                   <Link
                     key={doc.href}
                     href={doc.href}
-                    className="inline-flex w-full items-center justify-between border border-white/[0.08] px-4 py-3 text-sm text-white/75 hover:text-white hover:bg-white/[0.04] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
+                    className="inline-flex w-full items-center justify-between border border-white/[0.08] px-4 py-3 text-sm text-white/75 hover:text-white hover:bg-white/[0.04] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
                   >
                     <span className="inline-flex items-center gap-2">
                       <doc.icon className="h-4 w-4 text-[#0095FF]" />
@@ -233,7 +233,7 @@ export default function ResourcesPage() {
               </div>
               <Link
                 href="/blog"
-                className="mt-6 inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 hover:bg-white/[0.08] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
+                className="mt-6 inline-flex items-center gap-1.5 border border-white/[0.12] bg-white/[0.04] px-4 py-2.5 text-sm text-white/80 hover:bg-white/[0.08] hover:text-white transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
               >
                 Explore all articles
                 <ArrowRight className="h-4 w-4" />

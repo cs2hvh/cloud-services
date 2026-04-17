@@ -33,6 +33,11 @@ type ServiceHeroSectionProps = {
   className?: string;
 };
 
+type ServiceDashboardTargets = {
+  main: string;
+  deploy: string;
+};
+
 export function ServiceHeroSection({
   badge,
   title,
@@ -51,26 +56,63 @@ export function ServiceHeroSection({
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 
-  const getPrimaryActionTarget = (path: string) => {
+  const getServiceDashboardTargets = (path: string): ServiceDashboardTargets | null => {
     if (path.includes("/services/compute") || path.includes("/services/gpu")) {
-      return "/dashboard/services/compute/vps/new";
+      return {
+        main: "/dashboard/services/compute",
+        deploy: "/dashboard/services/compute/vps/new",
+      };
     }
     if (path.includes("/services/kubernetes")) {
-      return "/dashboard/services/kubernetes/new";
+      return {
+        main: "/dashboard/services/kubernetes",
+        deploy: "/dashboard/services/kubernetes/new",
+      };
     }
     if (path.includes("/services/database")) {
-      return "/dashboard/services/database/new";
+      return {
+        main: "/dashboard/services/database",
+        deploy: "/dashboard/services/database/new",
+      };
     }
     if (path.includes("/services/security")) {
-      return "/dashboard/services/network-ddos/new";
+      return {
+        main: "/dashboard/services/network-ddos",
+        deploy: "/dashboard/services/network-ddos/new",
+      };
     }
     if (path.includes("/services/object-storage")) {
-      return "/dashboard/services/object-storage/new";
+      return {
+        main: "/dashboard/services/object-storage",
+        deploy: "/dashboard/services/object-storage/new",
+      };
     }
     if (path.includes("/services/app-deployment") || path.includes("/services/application-deployment")) {
-      return "/dashboard/services/apps/new";
+      return {
+        main: "/dashboard/services/apps",
+        deploy: "/dashboard/services/apps/new",
+      };
     }
-    return primaryAction?.href ?? "/signin";
+    return null;
+  };
+
+  const getPrimaryActionTarget = (path: string, label: string) => {
+    const targets = getServiceDashboardTargets(path);
+    if (!targets) return primaryAction?.href ?? "/signin";
+
+    const normalizedLabel = label.toLowerCase();
+    const shouldGoToMain =
+      normalizedLabel.includes("get started") ||
+      normalizedLabel.includes("start");
+
+    return shouldGoToMain ? targets.main : targets.deploy;
+  };
+
+  const getSecondaryActionTarget = (label: string, fallbackHref: string) => {
+    if (label.toLowerCase().includes("documentation")) {
+      return "/api-doc";
+    }
+    return fallbackHref;
   };
 
   const handlePrimaryActionClick = async () => {
@@ -80,7 +122,9 @@ export function ServiceHeroSection({
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const target = user ? getPrimaryActionTarget(pathname) : "/signin";
+      const target = user
+        ? getPrimaryActionTarget(pathname, primaryAction.label)
+        : "/signin";
       router.push(target);
     } finally {
       setIsRouting(false);
@@ -155,7 +199,10 @@ export function ServiceHeroSection({
 
                     {secondaryAction && (
                       <Link
-                        href={secondaryAction.href}
+                        href={getSecondaryActionTarget(
+                          secondaryAction.label,
+                          secondaryAction.href
+                        )}
                         className="cursor-pointer inline-flex items-center justify-center gap-2 border border-white/[0.12] bg-white/[0.04] backdrop-blur-sm text-white/80 px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/[0.08] hover:text-white transition-colors"
                       >
                         {secondaryAction.label}

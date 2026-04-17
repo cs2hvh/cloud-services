@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { WideContainer } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 const mobileCards = [
   {
@@ -74,13 +74,14 @@ export default function DomainChoiceSection() {
             <h2 className="mt-7 max-w-[560px] text-[30px] font-medium leading-[0.96] tracking-tight text-white sm:mt-8 sm:text-4xl">
               Choose a Domain That Works for You
             </h2>
-            <Link
-              href="/signup"
+            <AuthAwareServiceCta
+              service="domain"
+              intent="main"
               className="mt-4 inline-flex items-center gap-2 text-base sm:text-lg font-medium text-white/90 transition-opacity hover:opacity-80"
             >
               Get Started
               <ArrowRight className="h-5 w-5" />
-            </Link>
+            </AuthAwareServiceCta>
           </div>
 
           <div className="hidden lg:flex justify-center">
@@ -170,13 +171,14 @@ export default function DomainChoiceSection() {
               <h2 className="max-w-[520px] text-[60px] font-semibold leading-[0.93] tracking-tight text-white">
                 Choose a Domain That Works for You
               </h2>
-              <Link
-                href="/signup"
+              <AuthAwareServiceCta
+                service="domain"
+                intent="main"
                 className="mt-5 inline-flex items-center gap-2 text-4xl font-medium text-white transition-opacity hover:opacity-80"
               >
                 Get Started
                 <ArrowRight className="h-9 w-9" />
-              </Link>
+              </AuthAwareServiceCta>
             </div>
               </div>
             </div>

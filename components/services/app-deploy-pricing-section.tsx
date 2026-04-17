@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ArrowRight } from "lucide-react";
 import { Container } from "@/components/ui/container";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 type Cycle = "monthly" | "yearly";
 
@@ -178,17 +179,32 @@ export default function AppDeployPricingSection({ plans = FALLBACK_PLANS }: AppD
               </div>
 
               {/* CTA */}
-              <a
-                href={plan.isCustom ? "/contact" : "/signup"}
-                className={`cursor-pointer inline-flex items-center justify-center gap-2 h-10 text-[13px] font-medium transition-colors duration-200 mb-8 ${
-                  plan.featured
-                    ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
-                    : "border border-white/[0.12] bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white"
-                }`}
-              >
-                {plan.cta}
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
+              {plan.isCustom ? (
+                <a
+                  href="/contact"
+                  className={`cursor-pointer inline-flex items-center justify-center gap-2 h-10 text-[13px] font-medium transition-colors duration-200 mb-8 ${
+                    plan.featured
+                      ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
+                      : "border border-white/[0.12] bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white"
+                  }`}
+                >
+                  {plan.cta}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </a>
+              ) : (
+                <AuthAwareServiceCta
+                  service="app-deployment"
+                  intent="main"
+                  className={`cursor-pointer inline-flex items-center justify-center gap-2 h-10 text-[13px] font-medium transition-colors duration-200 mb-8 ${
+                    plan.featured
+                      ? "bg-[#0095FF] text-white hover:bg-[#0080dd]"
+                      : "border border-white/[0.12] bg-white/[0.04] text-white/80 hover:bg-white/[0.08] hover:text-white"
+                  }`}
+                >
+                  {plan.cta}
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </AuthAwareServiceCta>
+              )}
 
               {/* Divider */}
               <div className="border-t border-white/[0.06] pt-6">

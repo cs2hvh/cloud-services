@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
 import {
   ArrowRight,
   CircuitBoard,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { Container } from "@/components/ui/container";
 import WorldMap from "@/components/ui/worldmap";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 interface VirtualPlan {
   vcpu: number;
@@ -444,13 +444,14 @@ function VirtualPlanCard({ plan, index }: { plan: VirtualPlan; index: number }) 
         </div>
       </div>
 
-      <Link
-        href="/signup"
+      <AuthAwareServiceCta
+        service="compute"
+        intent="new"
         className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
       >
         Deploy {getPlanName(index, false)}
         <ArrowRight className="h-4 w-4" />
-      </Link>
+      </AuthAwareServiceCta>
     </div>
   );
 }
@@ -502,13 +503,14 @@ function BareMetalPlanCard({ plan, index }: { plan: BareMetalPlan; index: number
         </div>
       </div>
 
-      <Link
-        href="/signup"
+      <AuthAwareServiceCta
+        service="compute"
+        intent="new"
         className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 bg-white text-sm font-medium text-black transition-colors hover:bg-white/90"
       >
         Configure {getPlanName(index, true)}
         <ArrowRight className="h-4 w-4" />
-      </Link>
+      </AuthAwareServiceCta>
     </div>
   );
 }
@@ -736,13 +738,14 @@ export default function ComputePricingSection({
                           <div className="text-[12px] text-white/55">${formatHourlyPrice(plan.price)}/hr</div>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <Link
-                            href="/signup"
+                          <AuthAwareServiceCta
+                            service="compute"
+                            intent="new"
                             className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
                           >
                             Configure
                             <ArrowRight className="h-3.5 w-3.5" />
-                          </Link>
+                          </AuthAwareServiceCta>
                         </td>
                       </tr>
                     );
@@ -796,13 +799,14 @@ export default function ComputePricingSection({
                           <div className="text-[12px] text-white/55">${formatHourlyPrice(plan.price)}/hr</div>
                         </td>
                         <td className="px-6 py-5 text-right">
-                          <Link
-                            href="/signup"
+                          <AuthAwareServiceCta
+                            service="compute"
+                            intent="new"
                             className="inline-flex h-10 items-center justify-center gap-2 bg-white px-5 text-[13px] font-medium text-black transition-colors hover:bg-white/90"
                           >
                             Deploy
                             <ArrowRight className="h-3.5 w-3.5" />
-                          </Link>
+                          </AuthAwareServiceCta>
                         </td>
                       </tr>
                     );

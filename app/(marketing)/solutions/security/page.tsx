@@ -63,7 +63,7 @@ const SolutionsSecurityPage = () => {
     tags: ["Security", "Kubernetes", "Database", "Object Storage", "IAM"],
     actions: [
       { label: "Build similar architecture", href: "/signup", variant: "primary" as const },
-      { label: "Explore capabilities", href: "/docs", variant: "link" as const },
+      { label: "Explore capabilities", href: "#what-you-can-build", variant: "link" as const },
     ],
   };
 
@@ -86,7 +86,7 @@ const SolutionsSecurityPage = () => {
         badge={["Zero Trust", "WAF & DDoS", "Compliance", "SOC2/ISO/GDPR"]}
         title="Secure Enterprise Cloud Infrastructure"
         description="Harden your cloud workloads with zero-trust security, identity controls, network segmentation, compliance automation, and defense-in-depth architecture."
-        primaryAction={{ label: "Explore Capabilities", href: "/signup" }}
+        primaryAction={{ label: "Explore Capabilities", href: "#what-you-can-build" }}
         secondaryAction={{ label: "View Customer Sales", href: "/docs" }}
         backgroundImage={{ src: "/images/hero/service-hero-bg.png", alt: "" }}
         illustration={{ src: "/images/main-page/solution-home-security.png", alt: "Security infrastructure" }}

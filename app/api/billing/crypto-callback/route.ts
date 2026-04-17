@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server';
+import { resolveGraceForUserAfterTopup } from '@/lib/billing/grace/recovery';
 import crypto from 'crypto';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -71,6 +72,19 @@ export async function POST(request: Request) {
 
     if (!result?.success) {
         console.error('[CryptoCallback] Not processed:', result?.message ?? 'Unknown error');
+    }
+
+    const resolvedUserId =
+        typeof result?.user_id === 'string' && result.user_id.length > 0
+            ? result.user_id
+            : null;
+
+    if (resolvedUserId) {
+        try {
+            await resolveGraceForUserAfterTopup({ userId: resolvedUserId });
+        } catch (graceErr) {
+            console.warn('[CryptoCallback] Grace recovery hook failed:', graceErr);
+        }
     }
 
     return NextResponse.json({ success: true });

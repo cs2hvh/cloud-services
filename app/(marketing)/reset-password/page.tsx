@@ -377,14 +377,14 @@ function ResetPasswordContent() {
                 <button
                   onClick={resendCode}
                   disabled={isLoading}
-                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors disabled:opacity-50"
+                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   Resend code
                 </button>
                 <span className="text-white/60">•</span>
                 <button
                   onClick={() => setStep("email")}
-                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors"
+                  className="text-[#00a2ff] hover:text-[#53beff] transition-colors cursor-pointer"
                 >
                   Use different email
                 </button>
@@ -392,7 +392,7 @@ function ResetPasswordContent() {
             ) : null}
             <p className="mt-2 text-sm text-white">
               Remember your password?{" "}
-              <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff]">
+              <Link href="/signin" className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
                 Sign in
               </Link>
             </p>
