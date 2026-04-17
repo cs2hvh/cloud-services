@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
-import { getOAuthStateSecret, createSignedOAuthState } from "@/lib/api/oauth-state";
+import { getOAuthStateSecret, createSignedOAuthState, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 function getStateSecret(): string {
   return getOAuthStateSecret(process.env.GITLAB_STATE_SECRET, "GitLab", "GITLAB_STATE_SECRET");
@@ -90,9 +90,7 @@ export async function POST(request: Request) {
     const scopes = 'api read_user';
     
     // Generate HMAC-signed state for CSRF protection
-    const returnPath = typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//')
-      ? returnTo
-      : '/dashboard/settings';
+    const returnPath = sanitizeReturnTo(returnTo);
     const state = createSignedState(user.id, returnPath);
     
     // Build GitLab authorization URL

@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
-import { getOAuthStateSecret } from "@/lib/api/oauth-state";
+import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * GitLab OAuth callback handler
@@ -57,7 +57,7 @@ function verifySignedState(
 
     return {
       userId: payload.userId,
-      returnTo: payload.returnTo || "/dashboard/settings",
+      returnTo: sanitizeReturnTo(payload.returnTo),
       issuedAt: payload.issuedAt,
     };
   } catch {

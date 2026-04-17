@@ -94,42 +94,50 @@ export class BitbucketApiClient {
       return [];
     }
 
-    // Step 2: Fetch repos from each workspace in parallel (with pagination)
-    const repoPromises = workspaces.map(async (ws) => {
-      const wsRepos: BitbucketRepository[] = [];
-      let url: string | undefined =
-        `${this.baseUrl}/repositories/${ws.slug}?sort=-updated_on&pagelen=100`;
+    // Step 2: Fetch repos from each workspace with bounded concurrency (max 3 parallel)
+    // to avoid bursting the Bitbucket API rate limits when a user belongs to many workspaces.
+    const CONCURRENCY = 3;
+    const allWsRepos: BitbucketRepository[][] = [];
 
-      while (url) {
-        try {
-          const response = await fetch(url, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Accept': 'application/json',
-              'User-Agent': 'AhuraSense-Cloud-Platform',
-            },
-          });
+    for (let i = 0; i < workspaces.length; i += CONCURRENCY) {
+      const batch = workspaces.slice(i, i + CONCURRENCY);
+      const batchResults = await Promise.all(
+        batch.map(async (ws) => {
+          const wsRepos: BitbucketRepository[] = [];
+          let url: string | undefined =
+            `${this.baseUrl}/repositories/${ws.slug}?sort=-updated_on&pagelen=100`;
 
-          if (!response.ok) {
-            console.error(`[Bitbucket API] Failed to fetch repos for workspace ${ws.slug}:`, response.status);
-            break;
+          while (url) {
+            try {
+              const response = await fetch(url, {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Accept': 'application/json',
+                  'User-Agent': 'AhuraSense-Cloud-Platform',
+                },
+              });
+
+              if (!response.ok) {
+                console.error(`[Bitbucket API] Failed to fetch repos for workspace ${ws.slug}:`, response.status);
+                break;
+              }
+
+              const data: BitbucketPaginatedResponse<BitbucketRepository> = await response.json();
+              wsRepos.push(...data.values);
+              url = data.next;
+            } catch (error) {
+              console.error(`[Bitbucket API] Error fetching repos for workspace ${ws.slug}:`, error);
+              break;
+            }
           }
 
-          const data: BitbucketPaginatedResponse<BitbucketRepository> = await response.json();
-          wsRepos.push(...data.values);
-          url = data.next;
-        } catch (error) {
-          console.error(`[Bitbucket API] Error fetching repos for workspace ${ws.slug}:`, error);
-          break;
-        }
-      }
-
-      return wsRepos;
-    });
-
-    const repoArrays = await Promise.all(repoPromises);
+          return wsRepos;
+        })
+      );
+      allWsRepos.push(...batchResults);
+    }
     const seen = new Set<string>();
-    const allRepos = repoArrays.flat().filter((repo) => {
+    const allRepos = allWsRepos.flat().filter((repo) => {
       if (seen.has(repo.full_name)) return false;
       seen.add(repo.full_name);
       return true;

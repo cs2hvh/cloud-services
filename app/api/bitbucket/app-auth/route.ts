@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AuditLogService, createAuditContext } from "@/lib/audit";
-import { getOAuthStateSecret, createSignedOAuthState } from "@/lib/api/oauth-state";
+import { getOAuthStateSecret, createSignedOAuthState, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket App OAuth flow for repository access
@@ -89,14 +89,8 @@ export async function POST(request: Request) {
     const scopes = 'repository account';
     
     // Generate state parameter for CSRF protection + returnTo path
-    const returnPath = returnTo || '/dashboard/settings';
-    const safeReturnPath =
-      typeof returnPath === "string" &&
-      returnPath.startsWith("/") &&
-      !returnPath.startsWith("//")
-        ? returnPath
-        : "/dashboard/settings";
-    const state = createSignedState(user.id, safeReturnPath);
+    const returnPath = sanitizeReturnTo(returnTo);
+    const state = createSignedState(user.id, returnPath);
     
     // Build Bitbucket authorization URL
     // Bitbucket supports omitting redirect_uri to use the consumer callback URL.

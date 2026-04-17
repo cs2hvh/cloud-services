@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
-import { getOAuthStateSecret } from "@/lib/api/oauth-state";
+import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket OAuth callback handler
@@ -41,14 +41,7 @@ function getStateSecret(): string {
 }
 
 function safeReturnPath(path: string | undefined): string {
-  if (
-    typeof path === "string" &&
-    path.startsWith("/") &&
-    !path.startsWith("//")
-  ) {
-    return path;
-  }
-  return "/dashboard/settings";
+  return sanitizeReturnTo(path);
 }
 
 function parseSignedState(state: string): ParsedStateResult {

@@ -3,15 +3,9 @@ import { createHmac } from "crypto";
 /**
  * Returns the HMAC secret for signing OAuth state parameters.
  *
- * Prefers the provider-specific secret env var. Falls back to
- * SUPABASE_SERVICE_ROLE_KEY with a loud warning so the misconfiguration
- * is visible in logs. A dedicated secret is strongly preferred — if the
- * service role key rotates or is compromised the OAuth state signing is
- * also affected.
- *
- * @param providerSecretEnvVar  Value of the provider-specific env var (e.g. process.env.GITLAB_STATE_SECRET)
- * @param providerLabel         Human-readable label used in the warning message (e.g. "GitLab")
- * @param dedicatedEnvVarName   Name of the env var that should be set (used in warning message)
+ * In production, a dedicated env var is REQUIRED — using the service role key
+ * as a fallback is too risky (key rotation or exposure would compromise OAuth state).
+ * In development/test a fallback to SUPABASE_SERVICE_ROLE_KEY is allowed with a warning.
  */
 export function getOAuthStateSecret(
   providerSecretEnvVar: string | undefined,
@@ -19,22 +13,40 @@ export function getOAuthStateSecret(
   dedicatedEnvVarName: string
 ): string {
   if (!providerSecretEnvVar) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        `[${providerLabel} OAuth] ${dedicatedEnvVarName} is not set. ` +
+          `This env var is required in production for OAuth state signing. ` +
+          `Add it to your deployment environment variables.`
+      );
+    }
     console.warn(
       `[${providerLabel} OAuth] ${dedicatedEnvVarName} is not set. ` +
         `Falling back to SUPABASE_SERVICE_ROLE_KEY for OAuth state signing. ` +
-        `Set a dedicated ${dedicatedEnvVarName} env var.`
+        `Set a dedicated ${dedicatedEnvVarName} env var (required in production).`
     );
   }
   return providerSecretEnvVar || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 }
 
 /**
+ * Validates a returnTo path, restricting it to internal /dashboard routes only.
+ * Rejects anything that could be used for open redirect (external URLs, protocol-relative paths).
+ */
+export function sanitizeReturnTo(path: unknown): string {
+  if (
+    typeof path === "string" &&
+    path.startsWith("/dashboard") &&
+    !path.startsWith("//")
+  ) {
+    return path;
+  }
+  return "/dashboard/settings";
+}
+
+/**
  * Creates an HMAC-signed OAuth state parameter.
  * Format: base64url(payload).base64url(HMAC-SHA256(payload))
- *
- * @param secret   HMAC secret (from getOAuthStateSecret)
- * @param userId   Supabase user ID to embed in the state
- * @param returnTo Path to redirect to after the OAuth flow completes
  */
 export function createSignedOAuthState(
   secret: string,

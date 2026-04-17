@@ -21,7 +21,6 @@ export async function POST(request: Request) {
   if (!user) {
     const authHeader = request.headers.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
-      console.log("18");
       const token = authHeader.replace("Bearer ", "");
       // console.log(token,"20")
       const {
@@ -147,8 +146,15 @@ export async function POST(request: Request) {
     // GitLab and Bitbucket tokens come from a separate direct OAuth flow (/api/gitlab/app-auth,
     // /api/bitbucket/app-auth) and are completely independent — unlinking login must NOT remove them.
     // Only delete github_tokens when we actually unlinked a GitHub identity.
-    if (provider === 'github' && identity) {
-      await supabase.from('github_tokens').delete().eq('user_id', user.id);
+    if (provider === 'github') {
+      if (identity) {
+        await supabase.from('github_tokens').delete().eq('user_id', user.id);
+      } else {
+        // Disconnect was requested but no GitHub identity was found on this user —
+        // this can happen if the user manually removed the identity elsewhere.
+        // Log it so we can detect stale state issues, but don't error out.
+        console.warn('[Auth/Link] Disconnect requested for github but no identity found on user', user.id);
+      }
     }
     
     // Audit log: provider disconnect

@@ -24,6 +24,7 @@ export async function refreshBitbucketToken(refreshToken: string): Promise<{
   accessToken: string | null;
   newRefreshToken: string | null;
   expiresIn: number | null;
+  isInvalidGrant: boolean;
 }> {
   try {
     const clientId = process.env.BITBUCKET_CLIENT_ID || '';
@@ -31,7 +32,7 @@ export async function refreshBitbucketToken(refreshToken: string): Promise<{
     
     if (!clientId || !clientSecret) {
       console.error('[Bitbucket Token Refresh] Missing client credentials');
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: false };
     }
     
     // Create Basic Auth header
@@ -52,15 +53,23 @@ export async function refreshBitbucketToken(refreshToken: string): Promise<{
 
     if (!response.ok) {
       const errorText = await response.text();
+      let isInvalidGrant = false;
+      try {
+        const errorJson = JSON.parse(errorText);
+        isInvalidGrant = errorJson.error === 'invalid_grant';
+        if (isInvalidGrant) {
+          console.error('[Bitbucket Token Refresh] invalid_grant — refresh token revoked or expired');
+        }
+      } catch { /* not JSON */ }
       console.error('[Bitbucket Token Refresh] Failed to refresh token:', response.status, errorText);
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant };
     }
 
     const tokenData = await response.json();
     
     if (tokenData.error) {
       console.error('[Bitbucket Token Refresh] Error:', tokenData.error, tokenData.error_description);
-      return { accessToken: null, newRefreshToken: null, expiresIn: null };
+      return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: tokenData.error === 'invalid_grant' };
     }
 
     console.log('[Bitbucket Token Refresh] Successfully refreshed token');
@@ -68,10 +77,11 @@ export async function refreshBitbucketToken(refreshToken: string): Promise<{
       accessToken: tokenData.access_token || null,
       newRefreshToken: tokenData.refresh_token || null,
       expiresIn: tokenData.expires_in || null,
+      isInvalidGrant: false,
     };
   } catch (error) {
     console.error('[Bitbucket Token Refresh] Exception:', error);
-    return { accessToken: null, newRefreshToken: null, expiresIn: null };
+    return { accessToken: null, newRefreshToken: null, expiresIn: null, isInvalidGrant: false };
   }
 }
 
@@ -137,12 +147,12 @@ export async function getValidBitbucketToken(userId: string): Promise<string | n
     const refreshResult = await refreshBitbucketToken(currentRefreshToken);
     
     if (!refreshResult.accessToken) {
-      console.log('[Bitbucket Token] Failed to refresh token, user needs to re-authenticate');
-      // Delete the expired/invalid token
-      await supabase
-        .from('bitbucket_tokens')
-        .delete()
-        .eq('user_id', userId);
+      if (refreshResult.isInvalidGrant) {
+        console.log('[Bitbucket Token] Token revoked (invalid_grant) — removing stored token, user must reconnect');
+        await supabase.from('bitbucket_tokens').delete().eq('user_id', userId);
+      } else {
+        console.log('[Bitbucket Token] Token refresh failed (transient error) — keeping stored token for retry');
+      }
       return null;
     }
 
