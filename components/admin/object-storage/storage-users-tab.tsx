@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Admin_Bucket } from "@/lib/supabase/types";
+import { DO_SPACES_REGION_NAMES } from "@/lib/validation/object-storage";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,7 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { dbLocations } from "@/config/locations";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,10 +75,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
       filtered = filtered.filter(
         (bucket) =>
           bucket.name?.toLowerCase().includes(query) ||
-          dbLocations
-            ?.find((location) => location.short === bucket.region)
-            ?.city.toLowerCase()
-            .includes(query) ||
+          (bucket.region && DO_SPACES_REGION_NAMES[bucket.region]?.toLowerCase().includes(query)) ||
           bucket.id?.toLowerCase().includes(query) ||
           bucket.owner_email?.toLowerCase().includes(query) ||
           bucket.owner_username?.toLowerCase().includes(query)
@@ -396,9 +393,7 @@ export default function StorageUsersTab({ all_buckets }: StorageUsersTabProps) {
 
                       <td className="px-6 py-4">
                         <div className="text-sm text-neutral-300">
-                          {dbLocations.find(
-                            (location) => location.short === bucket.region
-                          )?.city || (
+                          {(bucket.region && DO_SPACES_REGION_NAMES[bucket.region]) || bucket.region || (
                             <span className="text-neutral-600">N/A</span>
                           )}
                         </div>

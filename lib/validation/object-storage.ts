@@ -13,6 +13,17 @@ export const DO_SPACES_REGIONS = [
 
 export type DOSpacesRegion = typeof DO_SPACES_REGIONS[number];
 
+// Human-readable display names for DO Spaces regions
+export const DO_SPACES_REGION_NAMES: Record<string, string> = {
+  nyc3: 'New York',
+  sfo2: 'San Francisco',
+  sfo3: 'San Francisco',
+  sgp1: 'Singapore',
+  ams3: 'Amsterdam',
+  fra1: 'Frankfurt',
+  blr1: 'Bangalore',
+};
+
 // Bucket naming rules (DNS-compliant)
 export const BUCKET_NAME_RULES = {
   minLength: 3,
