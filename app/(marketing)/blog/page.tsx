@@ -133,7 +133,7 @@ export default function BlogPage() {
             </div>
             <Link
               href={FEATURED_POST.href}
-              className="mt-6 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0095FF]"
+              className="mt-6 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors focus-visible:outline-offset-2 focus-visible:outline-[#0095FF] cursor-pointer"
             >
               Read article
               <ArrowRight className="h-4 w-4" />
@@ -148,7 +148,7 @@ export default function BlogPage() {
             <h2 className="text-3xl sm:text-4xl font-normal tracking-tight">Latest Articles</h2>
             <Link
               href="/resources"
-              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-[#9ad5ff] transition-colors"
+              className="inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-[#9ad5ff] transition-colors cursor-pointer"
             >
               View all resources
               <ArrowRight className="h-4 w-4" />
@@ -172,7 +172,7 @@ export default function BlogPage() {
                 </div>
                 <Link
                   href={post.href}
-                  className="mt-5 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors"
+                  className="mt-5 inline-flex items-center gap-1.5 text-sm text-white/75 hover:text-[#9ad5ff] transition-colors cursor-pointer"
                 >
                   Read article
                   <ArrowRight className="h-4 w-4" />

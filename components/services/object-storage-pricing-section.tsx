@@ -15,6 +15,7 @@ import {
 import { Container } from "@/components/ui/container";
 import { StarsBackground } from "@/components/ui/stars-background";
 import { Spotlight } from "@/components/ui/spotlight";
+import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
 
 interface Plan {
   storage: string;
@@ -314,13 +315,24 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
                     <td className="px-6 py-5 text-[13px] text-white/55">{plan.sla}</td>
                   )}
                   <td className="px-6 py-5 text-right">
-                    <a
-                      href={isEnterprise && plan.storage === "Contact Sales" ? "/contact" : "/signup"}
-                      className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
-                    >
-                      {isEnterprise && plan.storage === "Contact Sales" ? "Contact Sales" : "Get Started"}
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </a>
+                    {isEnterprise && plan.storage === "Contact Sales" ? (
+                      <a
+                        href="/contact"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
+                      >
+                        Contact Sales
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </a>
+                    ) : (
+                      <AuthAwareServiceCta
+                        service="object-storage"
+                        intent="main"
+                        className="cursor-pointer inline-flex items-center gap-2 bg-white text-black px-5 py-2 text-[13px] font-medium hover:bg-white/90 transition-colors"
+                      >
+                        Get Started
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </AuthAwareServiceCta>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -351,13 +363,14 @@ export default function ObjectStoragePricingSection({ categories = FALLBACK_CATE
 
         {/* ── CTA ── */}
         <div className="mt-12 flex flex-col items-center">
-          <a
-            href="/signup"
+          <AuthAwareServiceCta
+            service="object-storage"
+            intent="main"
             className="cursor-pointer inline-flex items-center justify-center gap-2.5 bg-white text-black px-10 h-12 text-[15px] font-[500] hover:bg-white/90 transition-colors"
           >
             Start Storing Objects Today
             <ArrowRight className="w-4.5 h-4.5" />
-          </a>
+          </AuthAwareServiceCta>
           <p className="mt-4 text-[13px] text-white/30">
             No credit card required &middot; 50 GB free tier included
           </p>

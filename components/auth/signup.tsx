@@ -166,16 +166,16 @@ export default function SignUpMultiStep({
       {step !== 2 && (
         <>
           <div className="mx-auto mt-4 w-full max-w-[320px] flex items-center justify-between gap-4 sm:gap-6">
-            <button type="button" aria-label="Sign up with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90" onClick={() => handleSignIn("github")} disabled={isLoading}>
+            <button type="button" aria-label="Sign up with GitHub" className="flex-1 flex items-center justify-center text-white/95 transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("github")} disabled={isLoading}>
               <Icons.gitHub className="h-8 w-8" />
             </button>
-            <button type="button" aria-label="Sign up with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
+            <button type="button" aria-label="Sign up with GitLab" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("gitlab")} disabled={isLoading}>
               <Image src="/gitlab.png" alt="GitLab" width={32} height={32} className="h-8 w-8" />
             </button>
-            <button type="button" aria-label="Sign up with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
+            <button type="button" aria-label="Sign up with Bitbucket" className="flex-1 flex items-center justify-center transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("bitbucket")} disabled={isLoading}>
               <Image src="/BitBucket.png" alt="Bitbucket" width={32} height={32} className="h-8 w-8" />
             </button>
-            <button type="button" aria-label="Sign up with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90" onClick={() => handleSignIn("google")} disabled={isLoading}>
+            <button type="button" aria-label="Sign up with Google" className="flex-1 flex items-center justify-center text-[#f4f4f5] transition hover:opacity-90 cursor-pointer" onClick={() => handleSignIn("google")} disabled={isLoading}>
               <Icons.google className="h-8 w-8" />
             </button>
           </div>
@@ -327,7 +327,7 @@ export default function SignUpMultiStep({
               <Button
                 type="button"
                 onClick={() => setStep(0)}
-                className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10"
+                className="h-10 rounded-full border border-white/25 bg-transparent px-5 text-white hover:bg-white/10 cursor-pointer"
               >
                 Back
               </Button>
@@ -394,7 +394,7 @@ export default function SignUpMultiStep({
 
       <p className="mt-4 text-center text-sm text-white">
         {step === 0 ? "Do you already have an account?" : "Already have an account?"}{" "}
-        <Link href={nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin"} className="text-[#00a2ff] hover:text-[#53beff]">
+        <Link href={nextPath ? `/signin?next=${encodeURIComponent(nextPath)}` : "/signin"} className="text-[#00a2ff] hover:text-[#53beff] cursor-pointer">
           Log In
         </Link>
       </p>

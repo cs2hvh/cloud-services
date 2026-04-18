@@ -1,9 +1,14 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { Container } from "@/components/ui/container";
+import { createClient } from "@/lib/supabase/client";
 
 type HeroAction = {
   label: string;
@@ -41,6 +46,51 @@ export function SolutionsHeroSection({
 }: ServiceHeroSectionProps) {
   const imageLeft = align === "left";
   const isIllustrationSvg = illustration.src.endsWith(".svg");
+  const [isRouting, setIsRouting] = useState(false);
+  const pathname = usePathname();
+  const router = useRouter();
+  const supabase = useMemo(() => createClient(), []);
+
+  const getSolutionsDeployTarget = (path: string) => {
+    if (path.includes("/solutions/database")) return "/dashboard/services/database/new";
+    if (path.includes("/solutions/kubernetes")) return "/dashboard/services/kubernetes/new";
+    if (path.includes("/solutions/security")) return "/dashboard/services/network-ddos/new";
+    if (path.includes("/solutions/storage")) return "/dashboard/services/object-storage/new";
+    if (path.includes("/solutions/ecommerce")) return "/dashboard/services/apps/new";
+    if (path.includes("/solutions/web-hosting")) return "/dashboard/services/apps/new";
+    if (path.includes("/solutions/game-dev")) return "/dashboard/services/compute/vps/new";
+    return null;
+  };
+
+  const handlePrimaryActionClick = async () => {
+    if (!primaryAction || isRouting) return;
+    setIsRouting(true);
+    try {
+      // Handle hash links for same-page navigation
+      if (primaryAction.href.startsWith("#")) {
+        const element = document.getElementById(primaryAction.href.slice(1));
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth" });
+        }
+        setIsRouting(false);
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const target = getSolutionsDeployTarget(pathname);
+      if (user && target) {
+        router.push(target);
+        return;
+      }
+
+      router.push(primaryAction.href);
+    } finally {
+      setIsRouting(false);
+    }
+  };
 
   return (
     <section
@@ -86,13 +136,15 @@ export function SolutionsHeroSection({
                 {(primaryAction || secondaryAction) && (
                   <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 sm:gap-4 pt-2">
                     {primaryAction && (
-                      <Link
-                        href={primaryAction.href}
+                      <button
+                        type="button"
+                        onClick={handlePrimaryActionClick}
+                        disabled={isRouting}
                         className="inline-flex items-center justify-center gap-2 bg-white text-black px-5 sm:px-6 h-10 sm:h-11 text-xs sm:text-sm font-medium hover:bg-white/90 transition-colors"
                       >
                         {primaryAction.label}
                         <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                      </Link>
+                      </button>
                     )}
 
                     {secondaryAction && (
