@@ -91,7 +91,8 @@ export function useProviderConnection(options?: UseProviderConnectionOptions) {
 
         // Handle disconnect success
         if (method === 'disconnect') {
-          toast.success('Provider disconnected successfully');
+          const label = provider.charAt(0).toUpperCase() + provider.slice(1);
+          toast.success(`${label} disconnected successfully`);
           return { success: true };
         }
 
