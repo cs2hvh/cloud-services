@@ -639,19 +639,15 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
     setIsLoading(true);
     setConnectingProvider(providerId);
     setConnectionError(null); // Clear previous errors
-    try {
-      const result = await performConnection(providerId, "connect");
-      if (!result.success && result.error) {
-        setConnectionError({ provider: providerId, message: result.error });
-      }
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Connection failed";
-      setConnectionError({ provider: providerId, message: errorMessage });
-    } finally {
+    // performConnection catches all errors internally and returns { success, error }.
+    // It never throws, so no try/catch needed here.
+    const result = await performConnection(providerId, "connect");
+    if (!result.success && result.error) {
+      setConnectionError({ provider: providerId, message: result.error });
       setIsLoading(false);
       setConnectingProvider(null);
     }
+    // On success the hook redirects via window.location.href — no cleanup needed.
   };
 
   // Auto-refresh provider status when window regains focus (after OAuth redirect)

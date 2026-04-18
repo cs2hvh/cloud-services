@@ -14,6 +14,7 @@ import {
 
 import api from "@/lib/axios/axios";
 import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
+import { toast } from "sonner";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -200,6 +201,7 @@ const Accounts = () => {
       }
     } catch (error) {
       console.error("Failed to fetch providers:", error);
+      toast.error("Failed to load provider status. Please refresh the page.");
     }
   };
 
@@ -294,9 +296,17 @@ const Accounts = () => {
 
     if (
       params.get("gitlab_connected") === "true" ||
-      params.get("bitbucket_connected") === "true"
+      params.get("bitbucket_connected") === "true" ||
+      params.get("github_connected") === "true"
     ) {
+      const connectedProvider =
+        params.get("github_connected") === "true"
+          ? "GitHub"
+          : params.get("gitlab_connected") === "true"
+          ? "GitLab"
+          : "Bitbucket";
       window.history.replaceState({}, "", window.location.pathname);
+      toast.success(`${connectedProvider} connected successfully`);
       setTimeout(() => fetchProviders(), 500);
     }
   }, [performIntegrationAction]);
