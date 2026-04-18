@@ -84,11 +84,11 @@ function parseReminderOffsetsEnv() {
 
 const GRACE_CONFIG = {
   ENABLED: (process.env.BILLING_GRACE_AUTODELETE_ENABLED ?? "true").toLowerCase() !== "false",
-  PERIOD_DAYS: parsePositiveNumberEnv("BILLING_GRACE_PERIOD_DAYS", 7),
-  FINAL_WARNING_HOURS: parsePositiveNumberEnv("BILLING_FINAL_WARNING_HOURS", 6),
+  PERIOD_DAYS: parsePositiveNumberEnv("BILLING_GRACE_PERIOD_DAYS", 0.006944444),
+  FINAL_WARNING_HOURS: parsePositiveNumberEnv("BILLING_FINAL_WARNING_HOURS",0.1),
   REMINDER_OFFSETS_DAYS: parseReminderOffsetsEnv(),
   DELETE_MAX_RETRIES: Math.max(1, Math.floor(parsePositiveNumberEnv("BILLING_DELETE_MAX_RETRIES", 5))),
-  DELETE_RETRY_BACKOFF_SECONDS: parsePositiveNumberEnv("BILLING_DELETE_RETRY_BACKOFF_SECONDS", 60),
+  DELETE_RETRY_BACKOFF_SECONDS: parsePositiveNumberEnv("BILLING_DELETE_RETRY_BACKOFF_SECONDS", 15),
   RECOVERY_MIN_HOURS_COVERAGE: parsePositiveNumberEnv("BILLING_RECOVERY_MIN_HOURS_COVERAGE", 1),
 };
 
@@ -956,14 +956,14 @@ async function recordUsageTransaction({
         service_type: serviceType,
         period_start: periodStart,
         period_end: periodEnd,
-        metadata: {
-          source: "credit-system-cron",
-          table: tableName,
-          hourly_rate: rateToMetadata(hourlyRate),
-          hours_used: Number(hoursUsed.toFixed(6)),
-        },
-        completed_at: periodEnd,
-      });
+      metadata: {
+        source: "credit-system-cron",
+        table: tableName,
+        hourly_rate: rateToMetadata(hourlyRate),
+        hours_used: Number(hoursUsed.toFixed(2)),
+      },
+      completed_at: periodEnd,
+    });
     error = result?.error || null;
   } catch (caughtError) {
     error = {
@@ -1227,7 +1227,7 @@ export async function billSingleService(tableName, svc) {
 
   console.log(
     `BILLING ${tableName} -> service_id=${service_id}, user_id=${user_id}, hours=${hoursUsed.toFixed(
-      4
+      2
     )}, rate=${rate}, cost=$${finalCost.toFixed(2)}`
   );
 

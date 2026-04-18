@@ -72,6 +72,8 @@ export default function BillingTabs({
 
   // Show toast on return from Stripe checkout
   useEffect(() => {
+    if (!paymentStatus) return;
+
     if (paymentStatus === "success") {
       pushToast("success", "Payment successful! Your balance will update shortly.");
     } else if (paymentStatus === "cancelled") {
@@ -80,6 +82,15 @@ export default function BillingTabs({
       pushToast("success", "Recurring auto top-up enabled successfully.");
     } else if (paymentStatus === "recurring_cancelled") {
       pushToast("error", "Recurring auto top-up setup was cancelled.");
+    }
+
+    // Remove one-time payment query params so refresh doesn't replay the toast.
+    if (typeof window !== "undefined") {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("status");
+      nextUrl.searchParams.delete("session_id");
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      window.history.replaceState({}, "", nextPath);
     }
   }, [paymentStatus]);
 
@@ -643,6 +654,13 @@ interface Transaction {
   created_at: string;
 }
 
+type UsageBreakdown = {
+  serviceName: string;
+  hourlyRate: number | null;
+  hoursUsed: number | null;
+  cost: number;
+};
+
 type StatusFilter = "" | "completed" | "pending" | "failed";
 type TypeFilter = "" | "topup" | "refund" | "coupon" | "recurring" | "setup" | "usage";
 type ServiceTypeFilter = "" | "kubernetes" | "database" | "objectspace" | "spectrum" | "platform_apps";
@@ -754,6 +772,95 @@ function TransactionsTab() {
   const formatAmount = (txn: Transaction) => {
     const sign = CREDIT_TRANSACTION_TYPES.has(txn.type) ? "+" : "-";
     return `${sign}$${txn.amount.toFixed(2)}`;
+  };
+
+  const toNumber = (value: unknown): number | null => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const formatCurrency = (value: number | null) =>
+    value == null ? "N/A" : `$${value.toFixed(2)}`;
+
+  const formatHours = (value: number | null) =>
+    value == null ? "N/A" : value.toFixed(2);
+
+  const getServiceTypeLabel = (serviceType: string | null) => {
+    const map: Record<string, string> = {
+      kubernetes: "Kubernetes",
+      database: "Database",
+      objectspace: "Object Storage",
+      spectrum: "Spectrum",
+      platform_apps: "Platform App",
+    };
+    if (!serviceType) return "Service";
+    return map[serviceType] ?? serviceType.replace("_", " ");
+  };
+
+  const getUsageBreakdown = (txn: Transaction): UsageBreakdown | null => {
+    if (txn.type !== "usage") return null;
+
+    const metadata = txn.metadata ?? {};
+    const metadataServiceName =
+      typeof metadata.service_name === "string"
+        ? metadata.service_name
+        : typeof metadata.serviceName === "string"
+          ? metadata.serviceName
+          : null;
+
+    const serviceTail = txn.service_id ? txn.service_id.slice(0, 8) : null;
+    const serviceName =
+      metadataServiceName ??
+      `${getServiceTypeLabel(txn.service_type)}${serviceTail ? ` (${serviceTail}...)` : ""}`;
+
+    let hoursUsed = toNumber(metadata.hours_used);
+    if (hoursUsed == null && txn.period_start && txn.period_end) {
+      const start = new Date(txn.period_start).getTime();
+      const end = new Date(txn.period_end).getTime();
+      if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+        hoursUsed = (end - start) / (1000 * 60 * 60);
+      }
+    }
+
+    let hourlyRate = toNumber(metadata.hourly_rate);
+    if (hourlyRate == null && hoursUsed != null && hoursUsed > 0) {
+      hourlyRate = txn.amount / hoursUsed;
+    }
+
+    return {
+      serviceName,
+      hourlyRate,
+      hoursUsed,
+      cost: txn.amount,
+    };
+  };
+
+  const renderUsageBreakdown = (txn: Transaction) => {
+    const breakdown = getUsageBreakdown(txn);
+    if (!breakdown) return null;
+
+    return (
+      <div className="mt-1.5 rounded-md border border-orange-500/25 bg-orange-500/5 p-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+          <span className="text-neutral-400">Service</span>
+          <span className="text-right text-neutral-200 truncate" title={breakdown.serviceName}>
+            {breakdown.serviceName}
+          </span>
+          <span className="text-neutral-400">Hourly rate</span>
+          <span className="text-right text-neutral-200">{formatCurrency(breakdown.hourlyRate)}</span>
+          <span className="text-neutral-400">Hours</span>
+          <span className="text-right text-neutral-200">{formatHours(breakdown.hoursUsed)}</span>
+          <span className="text-neutral-400">Formula</span>
+          <span className="text-right text-neutral-200">
+            {`${formatCurrency(breakdown.hourlyRate)} × ${formatHours(breakdown.hoursUsed)}`}
+          </span>
+          <span className="text-neutral-400">Cost</span>
+          <span className="text-right text-neutral-100 font-medium">
+            {formatCurrency(breakdown.cost)}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -922,6 +1029,7 @@ function TransactionsTab() {
                         {txn.description && (
                           <p className="text-xs text-neutral-500">{txn.description}</p>
                         )}
+                        {renderUsageBreakdown(txn)}
                       </div>
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-white">
@@ -999,6 +1107,7 @@ function TransactionsTab() {
                     {txn.description}
                   </div>
                 )}
+                {renderUsageBreakdown(txn)}
                 {txn.receipt_url && (
                   <a
                     href={txn.receipt_url}
