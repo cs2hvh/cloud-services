@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
+import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
+import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
 
 /**
  * Bitbucket OAuth callback handler
@@ -16,29 +18,6 @@ import { encryptOAuthToken } from "@/lib/security/token-crypto";
  *   "scopes": "repository account"
  * }
  */
-
-function getAppBaseUrl(request: NextRequest): string {
-  const requestUrl = new URL(request.url);
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const hostHeader = request.headers.get("host");
-
-  if (forwardedHost) {
-    return `${forwardedProto || "https"}://${forwardedHost}`;
-  }
-
-  const host = hostHeader || requestUrl.host;
-  if (host) {
-    const normalizedHost = host.replace(/^0\.0\.0\.0(?=[:]|$)/, "localhost");
-    const proto =
-      process.env.NODE_ENV === "development"
-        ? "http"
-        : requestUrl.protocol.replace(":", "") || "https";
-    return `${proto}://${normalizedHost}`;
-  }
-
-  return (process.env.DOMAIN || "http://localhost:3000").replace(/\/$/, "");
-}
 
 type ParsedState = {
   userId: string;
@@ -58,22 +37,11 @@ type ParsedStateResult =
     };
 
 function getStateSecret(): string {
-  return (
-    process.env.BITBUCKET_STATE_SECRET ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    ""
-  );
+  return getOAuthStateSecret(process.env.BITBUCKET_STATE_SECRET, "Bitbucket", "BITBUCKET_STATE_SECRET");
 }
 
 function safeReturnPath(path: string | undefined): string {
-  if (
-    typeof path === "string" &&
-    path.startsWith("/") &&
-    !path.startsWith("//")
-  ) {
-    return path;
-  }
-  return "/dashboard/settings";
+  return sanitizeReturnTo(path);
 }
 
 function parseSignedState(state: string): ParsedStateResult {
