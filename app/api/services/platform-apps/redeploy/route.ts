@@ -88,18 +88,27 @@ export async function POST(req: NextRequest) {
       console.log(`[Redeploy] Git provider: ${gitProvider}`);
 
       if (gitProvider === 'github' || gitProvider === 'gitlab' || gitProvider === 'bitbucket') {
+        let accessToken: string | null = null;
         try {
-          const accessToken = await getGitProviderToken(auth.user!.id, gitProvider);
-          if (accessToken) {
-            gitUrl = buildAuthenticatedGitUrl(gitUrl, accessToken, gitProvider);
-            console.log(`[Redeploy] ✅ Injected ${gitProvider} token for private repository access`);
-          } else {
-            console.warn(`[Redeploy] ⚠️ No ${gitProvider} token found - private repos may fail. Using unauthenticated URL.`);
-          }
+          accessToken = await getGitProviderToken(auth.user!.id, gitProvider);
         } catch (tokenError) {
-          console.warn(`[Redeploy] Failed to get ${gitProvider} token:`, tokenError);
-          console.warn(`[Redeploy] Proceeding with unauthenticated URL - private repos may fail`);
+          console.warn(`[Redeploy] Failed to retrieve ${gitProvider} token:`, tokenError);
         }
+
+        if (!accessToken) {
+          console.warn(`[Redeploy] ⚠️ No valid ${gitProvider} token found — blocking redeploy.`);
+          return NextResponse.json(
+            {
+              error: `Your ${gitProvider} account is not connected or the access token has expired. Please reconnect it in Account Settings before redeploying.`,
+              code: "GIT_TOKEN_MISSING",
+              provider: gitProvider,
+            },
+            { status: 403 }
+          );
+        }
+
+        gitUrl = buildAuthenticatedGitUrl(gitUrl, accessToken, gitProvider);
+        console.log(`[Redeploy] ✅ Injected ${gitProvider} token for private repository access`);
       }
 
       const releaseBuildService = new AppReleaseBuildService();

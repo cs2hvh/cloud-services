@@ -592,6 +592,35 @@ describe('POST /api/services/platform-apps/create', () => {
   // for unit tests of the provider itself.
 
   // ============================================
+  // Git Token Missing Tests
+  // ============================================
+  describe('Git Token Missing Tests', () => {
+    beforeEach(async () => {
+      await mockAuthenticatedUser(mockPlatformAppUser.id);
+    });
+
+    it('should return 403 GIT_TOKEN_MISSING when provider token is unavailable', async () => {
+      const { PlatformAppService } = await import('@/lib/services/platform-app-service');
+      vi.mocked(PlatformAppService.createApp).mockResolvedValue({
+        success: false,
+        error: 'Your github account is not connected or the access token has expired. Please reconnect it in Account Settings before deploying.',
+        errorCode: 'GIT_TOKEN_MISSING',
+      });
+
+      const request = createMockPostRequest(
+        'http://localhost:3000/api/services/platform-apps/create',
+        mockCreatePlatformAppPayload
+      );
+
+      const response = await POST(request as NextRequest);
+      const data = await expectResponseStatus(response, 403);
+      expect(data.code).toBe('GIT_TOKEN_MISSING');
+      expect(data.provider).toBe(mockCreatePlatformAppPayload.git_provider);
+      expect(data.error).toBeDefined();
+    });
+  });
+
+  // ============================================
   // Server Configuration Error Tests
   // ============================================
   describe('Server Configuration Error Tests', () => {

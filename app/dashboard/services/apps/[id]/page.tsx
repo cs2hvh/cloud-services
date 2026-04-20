@@ -235,6 +235,8 @@ export default function AppDetailPage() {
   const [revealingKey, setRevealingKey] = useState<string | null>(null);
   // Tracks per-key auto-expiry timers so revealed values don't linger indefinitely
   const revealTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Timer for the token-expired redirect — cleared on unmount to prevent ghost navigation
+  const redirectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [redeploying, setRedeploying] = useState(false);
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
@@ -463,6 +465,26 @@ export default function AppDetailPage() {
       setOperationLogsLoading(false);
     }
   }, [app]);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+    };
+  }, []);
+
+  // When the OAuth callback redirects back here after a successful git provider reconnect,
+  // show a success toast and strip the ?*_connected=true param from the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connectedParam =
+      params.get('github_connected') === 'true' ? 'GitHub' :
+      params.get('gitlab_connected') === 'true' ? 'GitLab' :
+      params.get('bitbucket_connected') === 'true' ? 'Bitbucket' : null;
+    if (connectedParam) {
+      window.history.replaceState({}, '', window.location.pathname);
+      toast.success(`${connectedParam} reconnected successfully. You can now redeploy.`, { duration: 6000 });
+    }
+  }, []);
 
   useEffect(() => {
     fetchApp();
@@ -895,6 +917,15 @@ export default function AppDetailPage() {
 
       if (!res.ok) {
         const data = await res.json();
+        if (data.code === 'GIT_TOKEN_MISSING') {
+          const validProviders = ['github', 'gitlab', 'bitbucket'];
+          const provider: string = validProviders.includes(data.provider) ? (data.provider as string) : 'github';
+          setEnvVarError(`Your ${provider} account is not connected or the token has expired. Redirecting to Account Settings to reconnect…`);
+          redirectTimerRef.current = setTimeout(() => {
+            router.push(`/dashboard/nav/account?reconnect=${provider}&returnTo=/dashboard/services/apps/${app.id}`);
+          }, 1500);
+          return;
+        }
         throw new Error(data.error || 'Failed to trigger redeploy');
       }
 

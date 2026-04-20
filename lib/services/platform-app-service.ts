@@ -385,7 +385,18 @@ export class PlatformAppService {
       }
 
       // 5. Inject repository tokens for private repo access
+      const knownProviders: GitProvider[] = ["github", "gitlab", "bitbucket"];
       const providerToken = await this.resolveProviderToken(request.git_provider, request.userId);
+
+      if (!providerToken && knownProviders.includes(request.git_provider)) {
+        console.warn(`[PlatformAppService] ⚠️ No valid ${request.git_provider} token — blocking deployment.`);
+        return {
+          success: false,
+          error: `Your ${request.git_provider} account is not connected or the access token has expired. Please reconnect it in Account Settings before deploying.`,
+          errorCode: "GIT_TOKEN_MISSING",
+        };
+      }
+
       const authenticatedUrl = this.injectProviderToken(
         request.repository_url,
         request.git_provider,

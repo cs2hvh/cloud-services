@@ -192,6 +192,8 @@ const Accounts = () => {
   const [providers, setProviders] = useState<ProviderItem[]>([]);
   const autoRepoConnectStartedRef = useRef(false);
   const connectInProgressRef = useRef(false);
+  // Stores the page the user should return to after reconnecting a git provider
+  const returnToRef = useRef<string | null>(null);
 
   const fetchProviders = async () => {
     try {
@@ -217,7 +219,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings",
       });
     } catch (error) {
       console.error("Connect repo failed:", error);
@@ -249,7 +251,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings",
       });
     } catch (error) {
       console.error("Reconnect repo failed:", error);
@@ -264,6 +266,22 @@ const Accounts = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+
+    // Redirected here because a git token expired before a redeploy
+    const reconnectProvider = params.get("reconnect");
+    if (reconnectProvider && ["github", "gitlab", "bitbucket"].includes(reconnectProvider)) {
+      const rawReturnTo = params.get("returnTo") ?? "";
+      // Only allow internal dashboard paths to prevent open-redirect abuse
+      if (rawReturnTo.startsWith("/dashboard/")) {
+        returnToRef.current = rawReturnTo;
+      }
+      params.delete("reconnect");
+      params.delete("returnTo");
+      window.history.replaceState({}, "", window.location.pathname);
+      const label = reconnectProvider.charAt(0).toUpperCase() + reconnectProvider.slice(1);
+      toast.warning(`Your ${label} token has expired. Please reconnect your account below, then return to redeploy.`);
+    }
+
     const autoRepoConnect = params.get("auto_repo_connect");
     const shouldAutoConnectRepo =
       !autoRepoConnectStartedRef.current &&
