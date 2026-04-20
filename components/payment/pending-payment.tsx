@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { FaqSheet } from "./faq-sheet";
 import { Spinner } from "../ui/spinner";
 import Link from "next/link";
+import Image from "next/image";
 
 interface PendingPaymentProps {
   payment: PublicPaymentData;
@@ -65,7 +66,7 @@ export function PendingPayment({ payment }: PendingPaymentProps) {
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <img
+              <Image
                 src={`/currencies/${currencySymbol}.svg`}
                 alt={payment.currency}
                 className="w-10 h-10"
