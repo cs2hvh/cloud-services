@@ -189,11 +189,16 @@ function FieldError({ message }: { message: string }) {
   );
 }
 
-function SummaryRow({ label, value }: { label: string; value: React.ReactNode }) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -508,9 +513,9 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
   const selectedMonthlyPrice = getEffectivePrice(selectedDatabase);
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
               Database Provisioning
@@ -523,25 +528,14 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               focused review before provisioning begins.
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {currentStep} / {STEP_META.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Monthly
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedDatabase ? getPriceLabel(selectedDatabase) : "-"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da database.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -1079,12 +1073,12 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">
                 Summary
               </p>
-              <h3 className="mt-1.5 text-lg font-semibold text-white">Deployment Configuration</h3>
+              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
             </div>
 
-            <div className="px-6 py-5">
+            <div className="px-6 py-4">
               {selectedDbTypeInfo && (
-                <div className="mb-5 flex items-center gap-3 rounded border border-white/[0.08] bg-white/[0.04] p-3.5">
+                <div className="mb-4 flex items-center gap-3 border border-white/[0.08] bg-white/[0.04] p-3.5">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-blue-400/20 bg-blue-500/10">
                     <Image
                       src={selectedDbTypeInfo.icon_url}
@@ -1105,28 +1099,24 @@ const DatabaseSelect = ({ products, locations, projects, userId, clusters }: Pag
                 </div>
               )}
 
-              {(state.selectedName || selectedLocationData || selectedDbTypeInfo || selectedDatabase || selectedProjectData) ? (
-                <div className="divide-y divide-white/[0.05]">
-                  {state.selectedName && (
-                    <SummaryRow label="Cluster name" value={state.selectedName} />
-                  )}
-                  {selectedLocationData && (
-                    <SummaryRow label="Region" value={selectedLocationData.city} />
-                  )}
-                  {selectedDbTypeInfo && (
-                    <SummaryRow label="Engine" value={selectedDbTypeInfo.name} />
-                  )}
-                  {selectedDatabase && (
-                    <SummaryRow label="CPU profile" value={CPU_META[selectedCpuType].label} />
-                  )}
-                  {selectedDatabase && (
-                    <SummaryRow label="Plan" value={selectedDatabase.name} />
-                  )}
-                  {selectedProjectData && (
-                    <SummaryRow label="Project" value={selectedProjectData.name} />
-                  )}
-                </div>
-              ) : null}
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard icons/name.png" label="Cluster name" value={state.selectedName || "—"} empty={!state.selectedName} />
+                <SummaryRow icon="/dashboard icons/region .png" label="Region" value={selectedLocationData?.city ?? "—"} empty={!selectedLocationData} />
+                <SummaryRow icon="/dashboard icons/engine .png" label="Engine" value={selectedDbTypeInfo?.name ?? "—"} empty={!selectedDbTypeInfo} />
+              </div>
+
+              {(selectedDatabase) && (
+                <>
+                  <div className="my-3 border-t border-white/[0.05]" />
+                  <div className="space-y-0.5">
+                    <SummaryRow icon="/dashboard icons/cpu .png" label="CPU profile" value={CPU_META[selectedCpuType].label} />
+                    <SummaryRow icon="/dashboard icons/plan _1.png" label="Plan" value={selectedDatabase.name} />
+                    {selectedProjectData && (
+                      <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={selectedProjectData.name} />
+                    )}
+                  </div>
+                </>
+              )}
 
               <Separator className="my-4 bg-white/[0.08]" />
 

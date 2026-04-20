@@ -234,17 +234,16 @@ const STEP_META = [
 
 const panelClassName = "glass-panel overflow-hidden";
 
-function SummaryRow({
-  label,
-  value,
-}: {
-  label: string;
-  value: React.ReactNode;
-}) {
+function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
   return (
-    <div className="flex items-start justify-between gap-4 py-2.5">
-      <span className="text-sm text-white/42">{label}</span>
-      <div className="text-right text-sm font-medium text-white/88">{value}</div>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div className="flex items-center gap-2">
+        {icon && (
+          <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? "opacity-20" : "opacity-50"}`} />
+        )}
+        <span className={`text-sm ${empty ? "text-white/28" : "text-white/42"}`}>{label}</span>
+      </div>
+      <span className={`text-right text-sm ${empty ? "text-white/20" : "font-medium text-white/88"}`}>{value}</span>
     </div>
   );
 }
@@ -828,9 +827,9 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
   });
 
   return (
-    <div className="space-y-6 px-2 py-4 text-white sm:px-3 lg:px-4">
+    <div className="space-y-6 px-2 pt-4 text-white sm:px-3 lg:px-4">
       <div className={panelClassName}>
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">
               Application Deployment
@@ -842,25 +841,14 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
               {activeStepMeta.description}
             </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[240px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Progress
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {currentStep} / {STEP_META.length}
-              </div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">
-                Monthly
-              </div>
-              <div className="mt-1.5 text-lg font-semibold text-white">
-                {selectedSizePrice?.price ? `$${selectedSizePrice.price.toFixed(2)}/mo` : "Free"}
-              </div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da application deployment.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+          />
         </div>
 
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
@@ -2018,80 +2006,63 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
         {/* Summary Sidebar */}
         <div>
-          <div className="sticky top-6 space-y-6">
-            <Card className={`${panelClassName} sticky top-6`}>
-              <CardHeader className="border-b border-white/[0.06] px-6 py-5 sm:px-7">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/35">
-                  Summary
+          <div className={`${panelClassName} lg:sticky lg:top-8`}>
+            <div className="border-b border-white/[0.06] px-6 py-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
+              <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+            </div>
+            <div className="px-6 py-4">
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard icons/provider .png" label="Git provider" value={selectedProviderData?.name ?? "—"} empty={!selectedProviderData} />
+                <SummaryRow icon="/dashboard icons/repository.png" label="Repository" value={selectedRepoData?.name ?? "—"} empty={!selectedRepoData} />
+                <SummaryRow label="Branch" value={(selectedBranch || selectedRepoData?.defaultBranch) ?? "—"} empty={!(selectedBranch || selectedRepoData?.defaultBranch)} />
+                <SummaryRow icon="/dashboard icons/name.png" label="App name" value={appName || "—"} empty={!appName} />
+                <SummaryRow icon="/dashboard icons/apptype .png" label="Framework" value={framework || "—"} empty={!framework} />
+              </div>
+
+              <div className="my-3 border-t border-white/[0.05]" />
+
+              <div className="space-y-0.5">
+                <SummaryRow icon="/dashboard icons/plan _1.png" label="Instance" value={`${size.charAt(0).toUpperCase() + size.slice(1)} / ${selectedSizeConfig.cpu} CPU / ${selectedSizeConfig.ram} RAM`} />
+                <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
+                {selectedProject && selectedProject !== "none" && (
+                  <SummaryRow icon="/dashboard icons/project _1.png" label="Project" value={projects.find((p) => p.id === selectedProject)?.name || "Assigned"} />
+                )}
+              </div>
+
+              <Separator className="my-4 bg-white/[0.08]" />
+
+              <div className="rounded border border-blue-400/20 bg-blue-500/10 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
+                  Estimated cost
                 </p>
-                <CardTitle className="mt-1.5 text-lg font-semibold text-white">
-                  Deployment Configuration
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 py-5 sm:px-7">
-                {(selectedProviderData || selectedRepoData || appName || selectedBranch || framework) ? (
-                  <div className="divide-y divide-white/[0.05]">
-                    {selectedProviderData && (
-                      <SummaryRow label="Git provider" value={selectedProviderData.name} />
-                    )}
-                    {selectedRepoData && (
-                      <SummaryRow label="Repository" value={selectedRepoData.name} />
-                    )}
-                    {(selectedBranch || selectedRepoData?.defaultBranch) && (
-                      <SummaryRow label="Deploy branch" value={selectedBranch || selectedRepoData?.defaultBranch} />
-                    )}
-                    {appName && (
-                      <SummaryRow label="Application name" value={appName} />
-                    )}
-                    {framework && (
-                      <SummaryRow label="Framework" value={framework} />
-                    )}
-                    {selectedProject && selectedProject !== "none" && (
-                      <SummaryRow label="Project" value={projects.find((p) => p.id === selectedProject)?.name || "Assigned"} />
-                    )}
-                    <SummaryRow
-                      label="Instance"
-                      value={`${size.charAt(0).toUpperCase() + size.slice(1)} / ${selectedSizeConfig.cpu} CPU / ${selectedSizeConfig.ram} RAM`}
-                    />
-                    <SummaryRow label="Auto deploy" value={autoDeploy ? "Enabled" : "Manual only"} />
-                  </div>
-                ) : null}
-
-                <Separator className="my-4 bg-white/[0.08]" />
-
-                <div className="rounded border border-blue-400/20 bg-blue-500/10 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200/80">
-                    Estimated cost
-                  </p>
-                  {selectedSizePrice?.price ? (
-                    <>
-                      <div className="mt-2 text-2xl font-semibold text-white">
-                        ${selectedSizePrice.price.toFixed(2)}
-                        <span className="ml-1 text-sm font-medium text-white/50">/mo</span>
-                      </div>
-                      <p className="mt-1 text-sm text-white/55">
-                        {selectedSizePrice.hourlyRate > 0
-                          ? `$${selectedSizePrice.hourlyRate.toFixed(4)}/hour usage rate`
-                          : "Billed hourly based on runtime usage."}
+                {selectedSizePrice?.price ? (
+                  <>
+                    <div className="mt-2 text-2xl font-semibold text-white">
+                      ${selectedSizePrice.price.toFixed(2)}
+                      <span className="ml-1 text-sm font-medium text-white/50">/mo</span>
+                    </div>
+                    <p className="mt-1 text-sm text-white/55">
+                      {selectedSizePrice.hourlyRate > 0
+                        ? `$${selectedSizePrice.hourlyRate.toFixed(4)}/hour usage rate`
+                        : "Billed hourly based on runtime usage."}
+                    </p>
+                    {selectedSizePrice.initialCost > 0 && (
+                      <p className="mt-2 text-sm text-white/55">
+                        + ${selectedSizePrice.initialCost.toFixed(2)} one-time setup fee
                       </p>
-                      {selectedSizePrice.initialCost > 0 && (
-                        <p className="mt-2 text-sm text-white/55">
-                          + ${selectedSizePrice.initialCost.toFixed(2)} one-time setup fee
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div className="mt-2 text-2xl font-semibold text-white">Free</div>
-                      <p className="mt-1 text-sm text-white/55">
-                        Included with the current platform profile.
-                      </p>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div className="mt-2 text-2xl font-semibold text-white">Free</div>
+                    <p className="mt-1 text-sm text-white/55">
+                      Included with the current platform profile.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>

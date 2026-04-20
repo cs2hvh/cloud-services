@@ -35,7 +35,7 @@ export function StatsCards({ totalApps, activeDeployments, totalBuilds, successR
               <p className="text-2xl font-bold text-white">{activeDeployments}</p>
             </div>
             <div className="flex h-12 w-12 shrink-0 items-center justify-center">
-              <Image src="/dashboard icons/healthy.png" alt="Active Deployments" width={44} height={44} className="h-11 w-11 object-contain" />
+              <Image src="/dashboard icons/healthy .png" alt="Active Deployments" width={44} height={44} className="h-11 w-11 object-contain" />
             </div>
           </div>
         </CardContent>

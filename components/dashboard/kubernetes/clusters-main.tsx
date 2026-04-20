@@ -151,7 +151,7 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
           label="Healthy"
           value={readyClusters}
           meta="Clusters ready to accept workloads"
-          iconSrc="/dashboard icons/healthy.png"
+          iconSrc="/dashboard icons/healthy .png"
         />
         <MetricCard
           label="Active Nodes"

@@ -254,7 +254,7 @@ const DatabasePage = () => {
           label="Healthy"
           value={onlineClusters}
           meta="Currently online and serving"
-          iconSrc="/dashboard icons/healthy.png"
+          iconSrc="/dashboard icons/healthy .png"
         />
         <MetricCard
           label="Provisioning"

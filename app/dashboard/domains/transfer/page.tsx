@@ -6,21 +6,17 @@ import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
-  ArrowRightLeft,
   CheckCircle2,
   Clock3,
   ExternalLink,
   Eye,
   EyeOff,
   Loader2,
-  Mail,
   RefreshCw,
-  Search,
-  ShieldCheck,
-  Wallet,
   X,
   XCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import {
@@ -35,9 +31,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -93,101 +87,76 @@ const journeySteps = [
   },
 ] as const;
 
-function getStatusBadge(status: TransferRequest["status"]) {
+function statusColor(status: TransferRequest["status"]) {
   switch (status) {
     case "initiated":
     case "pending":
-      return (
-        <Badge className="border-amber-500/30 bg-amber-500/15 text-amber-100">
-          <Clock3 className="mr-1 h-3 w-3" /> In Progress
-        </Badge>
-      );
+      return "bg-amber-500/15 text-amber-300 border-amber-500/25";
     case "approved":
-      return (
-        <Badge className="border-sky-500/30 bg-sky-500/15 text-sky-100">
-          <CheckCircle2 className="mr-1 h-3 w-3" /> Approved
-        </Badge>
-      );
+      return "bg-sky-500/15 text-sky-300 border-sky-500/25";
     case "completed":
-      return (
-        <Badge className="border-emerald-500/30 bg-emerald-500/15 text-emerald-100">
-          <CheckCircle2 className="mr-1 h-3 w-3" /> Completed
-        </Badge>
-      );
+      return "bg-emerald-500/15 text-emerald-300 border-emerald-500/25";
     case "failed":
-      return (
-        <Badge className="border-red-500/30 bg-red-500/15 text-red-100">
-          <XCircle className="mr-1 h-3 w-3" /> Failed
-        </Badge>
-      );
+      return "bg-red-500/15 text-red-300 border-red-500/25";
     case "cancelled":
-      return (
-        <Badge className="border-white/20 bg-white/10 text-white/75">
-          <X className="mr-1 h-3 w-3" /> Cancelled
-        </Badge>
-      );
+      return "bg-white/[0.06] text-white/50 border-white/10";
   }
+}
+
+function StatusBadge({ status }: { status: TransferRequest["status"] }) {
+  const icons: Record<TransferRequest["status"], React.ReactNode> = {
+    initiated: <Clock3 className="h-3 w-3" />,
+    pending: <Clock3 className="h-3 w-3" />,
+    approved: <CheckCircle2 className="h-3 w-3" />,
+    completed: <CheckCircle2 className="h-3 w-3" />,
+    failed: <XCircle className="h-3 w-3" />,
+    cancelled: <X className="h-3 w-3" />,
+  };
+  const labels: Record<TransferRequest["status"], string> = {
+    initiated: "In Progress", pending: "In Progress",
+    approved: "Approved", completed: "Completed",
+    failed: "Failed", cancelled: "Cancelled",
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 border px-2 py-0.5 text-[11px] font-medium ${statusColor(status)}`}>
+      {icons[status]}
+      {labels[status]}
+    </span>
+  );
 }
 
 function getStatusMessage(transfer: TransferRequest): string {
   const providerStatus = transfer.provider_status?.toLowerCase() || "";
-
   if (transfer.status === "pending" || transfer.status === "initiated") {
-    if (providerStatus.includes("retrieving email")) {
+    if (providerStatus.includes("retrieving email"))
       return "We are retrieving the approval contact email from the registry before the transfer can move forward.";
-    }
-    if (providerStatus.includes("pending approval")) {
+    if (providerStatus.includes("pending approval"))
       return transfer.provider_email
         ? `Approval is pending. The registrar should send instructions to ${transfer.provider_email}.`
         : "Approval is pending with the current registrar.";
-    }
     return "The transfer has been created and is now moving through registrar checks. Most transfers complete in 5 to 7 days.";
   }
-
-  if (transfer.status === "approved") {
-    return "Approval has been recorded and the transfer is moving into final completion.";
-  }
-
-  if (transfer.status === "completed") {
-    return "Transfer completed successfully. The domain is now managed in your AhuraCloud account.";
-  }
-
-  if (transfer.status === "failed") {
-    return transfer.last_error || "The registrar rejected the transfer. Review the error and retry after correcting the issue.";
-  }
-
-  if (transfer.status === "cancelled") {
-    return "This transfer request was cancelled before completion.";
-  }
-
+  if (transfer.status === "approved") return "Approval has been recorded and the transfer is moving into final completion.";
+  if (transfer.status === "completed") return "Transfer completed successfully. The domain is now managed in your account.";
+  if (transfer.status === "failed") return transfer.last_error || "The registrar rejected the transfer. Review the error and retry after correcting the issue.";
+  if (transfer.status === "cancelled") return "This transfer request was cancelled before completion.";
   return "Transfer initiated.";
 }
 
 function getTransferProgress(status: TransferRequest["status"]) {
   switch (status) {
-    case "initiated":
-      return 20;
-    case "pending":
-      return 45;
-    case "approved":
-      return 75;
-    case "completed":
-      return 100;
-    case "failed":
-    case "cancelled":
-      return 100;
+    case "initiated": return 20;
+    case "pending": return 45;
+    case "approved": return 75;
+    case "completed": return 100;
+    default: return 100;
   }
 }
 
 function formatCurrency(amount: number | null, currency: string) {
-  if (amount === null) return "Pricing confirmed during initiation";
-
+  if (amount === null) return "Confirmed on initiation";
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      maximumFractionDigits: 2,
-    }).format(amount);
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
   } catch {
     return `${currency} ${amount}`;
   }
@@ -195,32 +164,8 @@ function formatCurrency(amount: number | null, currency: string) {
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
   });
-}
-
-function TransferSummaryStat({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <Card className="border-white/10 bg-white/[0.03]">
-      <CardContent className="p-4">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-white/45">{label}</p>
-        <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
-        <p className="mt-1 text-xs text-white/55">{hint}</p>
-      </CardContent>
-    </Card>
-  );
 }
 
 function TransferActivityCard({
@@ -232,108 +177,104 @@ function TransferActivityCard({
   cancellingId: string | null;
   onCancel: (transferId: string) => void;
 }) {
-  const isActive = transfer.status === "initiated" || transfer.status === "pending" || transfer.status === "approved";
+  const isActive = ["initiated", "pending", "approved"].includes(transfer.status);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 p-4 sm:p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-base font-semibold text-white">{transfer.domain}</p>
-            {getStatusBadge(transfer.status)}
-          </div>
+    <div className="border border-white/[0.07] bg-white/[0.02]">
+      {/* Status accent bar */}
+      <div className={`h-0.5 w-full ${transfer.status === "completed" ? "bg-emerald-500/60" : transfer.status === "failed" ? "bg-red-500/60" : transfer.status === "cancelled" ? "bg-white/20" : "bg-cyan-500/60"}`} />
 
-          <p className="mt-3 text-sm leading-6 text-white/70">{getStatusMessage(transfer)}</p>
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <p className="font-mono text-sm font-semibold text-white">{transfer.domain}</p>
+              <StatusBadge status={transfer.status} />
+            </div>
 
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between text-xs text-white/55">
-              <span>Transfer progress</span>
-              <span>{getTransferProgress(transfer.status)}%</span>
-            </div>
-            <Progress
-              value={getTransferProgress(transfer.status)}
-              className="h-2 bg-white/10 [&_[data-slot=progress-indicator]]:bg-cyan-400"
-            />
-          </div>
+            <p className="mt-2.5 text-sm leading-6 text-white/60">{getStatusMessage(transfer)}</p>
 
-          <div className="mt-4 grid gap-3 text-xs text-white/55 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Started</p>
-              <p className="mt-1 text-sm text-white/80">{formatDateTime(transfer.created_at)}</p>
+            <div className="mt-4 space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-white/45">
+                <span>Transfer progress</span>
+                <span className="tabular-nums">{getTransferProgress(transfer.status)}%</span>
+              </div>
+              <Progress
+                value={getTransferProgress(transfer.status)}
+                className="h-1.5 bg-white/[0.07] [&_[data-slot=progress-indicator]]:bg-cyan-400"
+              />
             </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Last update</p>
-              <p className="mt-1 text-sm text-white/80">{formatDateTime(transfer.updated_at)}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Transfer fee</p>
-              <p className="mt-1 text-sm text-white/80">{formatCurrency(transfer.purchase_price, transfer.currency)}</p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Approval email</p>
-              <p className="mt-1 break-all text-sm text-white/80">{transfer.provider_email || "Waiting for registrar"}</p>
-            </div>
-          </div>
 
-          {(transfer.provider_status || transfer.last_error) && (
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
-              {transfer.provider_status && (
-                <div className="rounded-lg border border-white/10 bg-white/5 p-3 text-xs text-white/60">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Registrar status</p>
-                  <p className="mt-1 text-sm text-white/80">{transfer.provider_status}</p>
+            <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-4">
+              {[
+                { label: "Started", value: formatDateTime(transfer.created_at) },
+                { label: "Last update", value: formatDateTime(transfer.updated_at) },
+                { label: "Transfer fee", value: formatCurrency(transfer.purchase_price, transfer.currency) },
+                { label: "Approval email", value: transfer.provider_email || "Waiting for registrar" },
+              ].map(({ label, value }) => (
+                <div key={label} className="border border-white/[0.07] bg-white/[0.03] p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">{label}</p>
+                  <p className="mt-1 break-all text-sm text-white/75">{value}</p>
                 </div>
-              )}
-              {transfer.last_error && (
-                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-100/85">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-red-100/60">Last error</p>
-                  <p className="mt-1 text-sm">{transfer.last_error}</p>
-                </div>
-              )}
+              ))}
             </div>
-          )}
-        </div>
 
-        <div className="flex shrink-0 flex-row gap-2 lg:flex-col lg:items-end">
-          {transfer.status === "completed" && (
-            <Link href={`/dashboard/domains/${encodeURIComponent(transfer.domain)}`}>
-              <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                Manage Domain
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          )}
+            {(transfer.provider_status || transfer.last_error) && (
+              <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                {transfer.provider_status && (
+                  <div className="border border-white/[0.07] bg-white/[0.03] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">Registrar status</p>
+                    <p className="mt-1 text-sm text-white/75">{transfer.provider_status}</p>
+                  </div>
+                )}
+                {transfer.last_error && (
+                  <div className="border border-red-500/20 bg-red-500/10 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-red-300/60">Last error</p>
+                    <p className="mt-1 text-sm text-red-200/80">{transfer.last_error}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
-          {isActive && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="border-red-500/25 text-red-100 hover:bg-red-500/10"
-                  disabled={cancellingId === transfer.id}
-                >
-                  {cancellingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Cancel Transfer
+          <div className="flex shrink-0 flex-row gap-2 lg:flex-col lg:items-end">
+            {transfer.status === "completed" && (
+              <Link href={`/dashboard/domains/${encodeURIComponent(transfer.domain)}`}>
+                <Button variant="outline" className="rounded-none border-white/15 text-white hover:bg-white/[0.08]">
+                  Manage Domain
+                  <ExternalLink className="ml-2 h-4 w-4" />
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent className="border-white/10 bg-zinc-900">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="text-white">Cancel transfer?</AlertDialogTitle>
-                  <AlertDialogDescription className="text-white/60">
-                    Are you sure you want to cancel the transfer for <span className="font-medium text-white/80">{transfer.domain}</span>? This may not be reversible and could require restarting the process.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel className="border-white/10 text-white hover:bg-white/10">Keep Transfer</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-red-600 text-white hover:bg-red-700"
-                    onClick={() => onCancel(transfer.id)}
+              </Link>
+            )}
+            {isActive && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="rounded-none border-red-500/25 text-red-300 hover:bg-red-500/10"
+                    disabled={cancellingId === transfer.id}
                   >
-                    Cancel Transfer
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+                    {cancellingId === transfer.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Cancel
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="border-white/10 bg-zinc-900">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="text-white">Cancel transfer?</AlertDialogTitle>
+                    <AlertDialogDescription className="text-white/60">
+                      Cancel the transfer for <span className="font-medium text-white/80">{transfer.domain}</span>? This may not be reversible.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel className="rounded-none border-white/10 text-white hover:bg-white/10">Keep Transfer</AlertDialogCancel>
+                    <AlertDialogAction className="rounded-none bg-red-600 text-white hover:bg-red-700" onClick={() => onCancel(transfer.id)}>
+                      Cancel Transfer
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -361,16 +302,9 @@ export default function DomainTransferPage() {
   useEffect(() => {
     const domainParam = searchParams.get("domain");
     if (domainParam) {
-      const cleanedParam = decodeURIComponent(domainParam).trim().toLowerCase();
-      // Ignore values that look like emails or invalid domains to avoid
-      // unintentionally pre-filling the domain input (browser autofill or bad links)
-      if (
-        !cleanedParam.includes("@") &&
-        cleanedParam.includes(".") &&
-        cleanedParam.length >= 3 &&
-        cleanedParam.length <= 253
-      ) {
-        setDomain(cleanedParam);
+      const cleaned = decodeURIComponent(domainParam).trim().toLowerCase();
+      if (!cleaned.includes("@") && cleaned.includes(".") && cleaned.length >= 3 && cleaned.length <= 253) {
+        setDomain(cleaned);
       }
     }
   }, [searchParams]);
@@ -379,148 +313,59 @@ export default function DomainTransferPage() {
     try {
       const response = await fetch("/api/domains/transfer?limit=50");
       const json = await response.json();
-
-      if (!response.ok) {
-        throw new Error(json.message || "Failed to fetch transfers");
-      }
-
+      if (!response.ok) throw new Error(json.message || "Failed to fetch transfers");
       setTransfers(json.data || []);
       setActivityError(null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to fetch transfers";
-      setActivityError(message);
+      setActivityError(error instanceof Error ? error.message : "Failed to fetch transfers");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  useEffect(() => {
-    void fetchTransfers();
-  }, [fetchTransfers]);
+  useEffect(() => { void fetchTransfers(); }, [fetchTransfers]);
 
-  const activeTransfers = useMemo(
-    () => transfers.filter((transfer) => ["initiated", "pending", "approved"].includes(transfer.status)),
-    [transfers]
-  );
+  const activeTransfers = useMemo(() => transfers.filter((t) => ["initiated", "pending", "approved"].includes(t.status)), [transfers]);
+  const historyTransfers = useMemo(() => transfers.filter((t) => ["completed", "failed", "cancelled"].includes(t.status)), [transfers]);
+  const completedCount = useMemo(() => transfers.filter((t) => t.status === "completed").length, [transfers]);
+  const failedCount = useMemo(() => transfers.filter((t) => t.status === "failed").length, [transfers]);
 
-  const historyTransfers = useMemo(
-    () => transfers.filter((transfer) => ["completed", "failed", "cancelled"].includes(transfer.status)),
-    [transfers]
-  );
-
-  const completedCount = useMemo(
-    () => transfers.filter((transfer) => transfer.status === "completed").length,
-    [transfers]
-  );
-
-  const failedCount = useMemo(
-    () => transfers.filter((transfer) => transfer.status === "failed").length,
-    [transfers]
-  );
-
-  /**
-   * Normalize whatever the user typed/pasted into a bare domain name.
-   * Strips http(s):// protocol, www prefix, trailing slashes, paths, and
-   * query strings so that pasting a browser URL just works.
-   */
   function normalizeDomainInput(value: string): string {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, "")   // strip protocol
-      .replace(/^www\./, "")          // strip leading www.
-      .replace(/\/.*$/, "")           // strip path and query string
-      .replace(/\?.*$/, "")           // strip any remaining query string
-      .replace(/\.+$/, "");           // strip trailing dots
+    return value.trim().toLowerCase()
+      .replace(/^https?:\/\//, "").replace(/^www\./, "")
+      .replace(/\/.*$/, "").replace(/\?.*$/, "").replace(/\.+$/, "");
   }
 
   const handleCheckEligibility = useCallback(async () => {
-    // Normalize first — strip protocol, paths, etc. — and update the input field
     const cleanDomain = normalizeDomainInput(domain);
-    if (cleanDomain !== domain) {
-      setDomain(cleanDomain);
+    if (cleanDomain !== domain) setDomain(cleanDomain);
+    if (!cleanDomain) { setEligibilityFeedback("Please enter a domain name."); return; }
+    if (cleanDomain.includes("@")) { setEligibilityFeedback("Please enter a domain name, not an email address."); return; }
+    if (!cleanDomain.includes(".")) { setEligibilityFeedback("Please enter a valid domain such as mybrand.com."); return; }
+    if (cleanDomain.length < 3 || cleanDomain.length > 253) { setEligibilityFeedback("Domain must be between 3 and 253 characters."); return; }
+    const parts = cleanDomain.split(".");
+    if (parts.some((l) => !l || l.length > 63 || /^-|-$/.test(l) || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(l))) {
+      setEligibilityFeedback("Domain contains invalid characters. Each label must start and end with a letter or number."); return;
     }
-
-    // Empty check
-    if (!cleanDomain) {
-      setEligibilityFeedback("Please enter a domain name.");
-      return;
-    }
-
-    // Reject email addresses (after normalization, a bare email still has @)
-    if (cleanDomain.includes("@")) {
-      setEligibilityFeedback("Please enter a domain name (e.g., example.com), not an email address.");
-      return;
-    }
-
-    // Must have at least one dot (TLD present)
-    if (!cleanDomain.includes(".")) {
-      setEligibilityFeedback("Please enter a valid domain name such as mybrand.com.");
-      return;
-    }
-
-    // Length check (DNS spec: 3-253)
-    if (cleanDomain.length < 3 || cleanDomain.length > 253) {
-      setEligibilityFeedback("Domain must be between 3 and 253 characters.");
-      return;
-    }
-
-    // Each label: alphanumeric, hyphens allowed in the middle, 1-63 chars
-    const domainParts = cleanDomain.split(".");
-    if (domainParts.some(label => !label || label.length > 63 || /^-|-$/.test(label) || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label))) {
-      const message = "Domain contains invalid characters. Each label must start and end with a letter or number.";
-      setEligibilityFeedback(message);
-      return;
-    }
-
-    // TLD must be at least 2 characters (e.g. .co, .com, .guru)
-    const tld = domainParts[domainParts.length - 1];
-    if (tld.length < 2) {
-      const message = "Domain extension must be at least 2 characters (e.g., .com, .net, .guru).";
-      setEligibilityFeedback(message);
-      return;
-    }
-
-    // Block obvious subdomains (4+ labels). 3-label ccTLDs (brand.co.uk) are allowed.
-    // The server-side validation will catch anything invalid.
-    if (domainParts.length > 3) {
-      const message = "This looks like a subdomain. Domain transfers only work on root-level registered domains.";
-      setEligibilityFeedback(message);
-      return;
-    }
+    if (parts[parts.length - 1].length < 2) { setEligibilityFeedback("Domain extension must be at least 2 characters."); return; }
+    if (parts.length > 3) { setEligibilityFeedback("This looks like a subdomain. Transfers only work on root-level domains."); return; }
 
     setChecking(true);
     setEligibilityFeedback(null);
     setSubmittedDomain(null);
-
     try {
       const response = await fetch("/api/domains/transfer/validate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain: cleanDomain }),
       });
-
       const json = await response.json();
-
-      if (!response.ok) {
-        const message = json.message || "Failed to check transfer eligibility.";
-        setEligibilityFeedback(message);
-        return;
-      }
-
+      if (!response.ok) { setEligibilityFeedback(json.message || "Failed to check transfer eligibility."); return; }
       const result = json.data as EligibilityResult;
       setEligibility(result);
-
-      if (result.eligible) {
-        setStage("authorize");
-        setEligibilityFeedback(null);
-        toast.success(`${result.domain} is eligible for transfer.`);
-      } else {
-        const message = result.reason || "This domain is not eligible for transfer.";
-        setStage("lookup");
-        setEligibilityFeedback(message);
-      }
+      if (result.eligible) { setStage("authorize"); setEligibilityFeedback(null); toast.success(`${result.domain} is eligible for transfer.`); }
+      else { setStage("lookup"); setEligibilityFeedback(result.reason || "This domain is not eligible for transfer."); }
     } catch {
       setEligibilityFeedback("Failed to check domain eligibility. Please try again.");
     } finally {
@@ -529,54 +374,32 @@ export default function DomainTransferPage() {
   }, [domain]);
 
   const handleStartTransfer = useCallback(async () => {
-    if (!eligibility?.eligible || !authCode.trim()) {
-      setEligibilityFeedback("Enter the authorization code from your current registrar before starting the transfer.");
-      return;
-    }
-
-    if (authCode.trim().length < 4) {
-      setEligibilityFeedback("Authorization code must be at least 4 characters. Copy it directly from your registrar panel.");
-      return;
-    }
+    if (!eligibility?.eligible || !authCode.trim()) { setEligibilityFeedback("Enter the authorization code from your current registrar."); return; }
+    if (authCode.trim().length < 4) { setEligibilityFeedback("Authorization code must be at least 4 characters."); return; }
 
     setSubmitting(true);
-    const submittedAuthCode = authCode.trim();
-
     try {
       const response = await fetch("/api/domains/transfer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          domain: eligibility.domain,
-          auth_code: submittedAuthCode,
-          purchase_price: eligibility.transferPrice ?? undefined,
-        }),
+        body: JSON.stringify({ domain: eligibility.domain, auth_code: authCode.trim(), purchase_price: eligibility.transferPrice ?? undefined }),
       });
-
       const json = await response.json();
-
       if (!response.ok) {
         const errorMap: Record<string, string> = {
-          TRANSFER_AUTH_CODE_INVALID: "The authorization code is invalid. Copy it again from your current registrar and retry.",
+          TRANSFER_AUTH_CODE_INVALID: "The authorization code is invalid. Copy it again from your current registrar.",
           TRANSFER_DOMAIN_LOCKED: "The domain is locked. Unlock it at your current registrar first.",
           TRANSFER_NOT_ELIGIBLE: "The domain is not eligible for transfer right now.",
           TRANSFER_ALREADY_IN_PROGRESS: "A transfer is already in progress for this domain.",
           INSUFFICIENT_CREDITS: "Your account does not have enough credits for this transfer.",
-          PROVIDER_VALIDATION_FAILED: "The registrar rejected the request. Ensure the domain is unlocked, the auth code is correct, and you are transferring a root-level domain (e.g., sabpatahai.guru, not test.sabpatahai.guru).",
+          PROVIDER_VALIDATION_FAILED: "The registrar rejected the request. Ensure the domain is unlocked and the auth code is correct.",
         };
-
-        const message = errorMap[json.error] || json.message || "Failed to start transfer.";
-        setEligibilityFeedback(message);
+        setEligibilityFeedback(errorMap[json.error] || json.message || "Failed to start transfer.");
         return;
       }
-
       setSubmittedDomain(eligibility.domain);
-      setDomain("");
-      setAuthCode("");
-      setStage("lookup");
-      setEligibility(null);
-      setEligibilityFeedback(null);
-      toast.success("Transfer initiated. You will receive status updates as it progresses.");
+      setDomain(""); setAuthCode(""); setStage("lookup"); setEligibility(null); setEligibilityFeedback(null);
+      toast.success("Transfer initiated. Status updates will appear as it progresses.");
       void fetchTransfers();
     } catch {
       setEligibilityFeedback("Failed to start transfer. Please try again.");
@@ -587,19 +410,10 @@ export default function DomainTransferPage() {
 
   const handleCancelTransfer = useCallback(async (transferId: string) => {
     setCancellingId(transferId);
-
     try {
-      const response = await fetch(`/api/domains/transfer/${transferId}/cancel`, {
-        method: "POST",
-      });
-
+      const response = await fetch(`/api/domains/transfer/${transferId}/cancel`, { method: "POST" });
       const json = await response.json().catch(() => ({}));
-
-      if (!response.ok) {
-        toast.error(json.message || "Failed to cancel transfer.");
-        return;
-      }
-
+      if (!response.ok) { toast.error(json.message || "Failed to cancel transfer."); return; }
       toast.success("Transfer cancelled.");
       void fetchTransfers();
     } catch {
@@ -610,268 +424,242 @@ export default function DomainTransferPage() {
   }, [fetchTransfers]);
 
   const stageIndex = stage === "lookup" ? 1 : 2;
+  const inputCls = "rounded-none border-white/[0.18] bg-black/35 text-white placeholder:text-white/45 focus:border-white/30 transition-colors";
 
   return (
-    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8 xl:px-9">
-      <div className="mb-6 space-y-6">
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-sky-600/20 via-cyan-500/10 to-emerald-500/10 p-5 sm:p-7">
-          <div className="absolute right-0 top-0 h-44 w-44 translate-x-1/4 -translate-y-1/4 rounded-full bg-cyan-400/20 blur-3xl" />
-          <div className="absolute bottom-0 left-0 h-36 w-36 -translate-x-1/3 translate-y-1/3 rounded-full bg-emerald-400/20 blur-3xl" />
+    <div className="flex-1 min-h-screen px-6 py-5 text-white sm:px-8 sm:py-8">
 
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">
-                Domain Transfer Center
-              </p>
-              <h1 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                Transfer an existing domain into your AhuraCloud account.
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70 sm:text-[15px]">
-                This page now covers the complete operational flow: eligibility check, auth code submission, approval expectations,
-                transfer progress, and historical outcomes. Most transfers finish within 5 to 7 days with no downtime to the website.
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge className="border-cyan-500/20 bg-cyan-500/15 text-cyan-100">Registrar-backed workflow</Badge>
-                <Badge className="border-white/20 bg-white/10 text-white/90">Email and dashboard status updates</Badge>
-                <Badge className="border-emerald-500/20 bg-emerald-500/15 text-emerald-100">Zero-downtime transfer path</Badge>
-              </div>
+      {/* Header */}
+      <div className="mb-6 glass-panel overflow-hidden">
+        <div className="flex flex-col gap-4 px-6 py-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300/70">Domain Transfer Center</p>
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+              Transfer an existing domain into your account.
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-white/45">
+              Validate eligibility, submit your auth code, and track progress from initiation to completion. Most transfers finish in 5–7 days.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {["Registrar-backed workflow", "Email & dashboard updates", "Zero-downtime transfer"].map((tag) => (
+                <span key={tag} className="inline-flex items-center border border-white/[0.1] bg-white/[0.04] px-2.5 py-1 text-[11px] text-white/42">{tag}</span>
+              ))}
             </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Link href="/dashboard/domains">
-                <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
-                  Open Domains Dashboard
-                </Button>
-              </Link>
-              <Link href="/dashboard/domains/marketplace">
-                <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm" className="rounded-none border-white/15 text-white hover:bg-white/[0.08]">
+                <Link href="/dashboard/domains">Open Domains</Link>
+              </Button>
+              <Button asChild size="sm" className="rounded-none border border-cyan-400/25 bg-cyan-500/90 text-slate-950 hover:bg-cyan-400">
+                <Link href="/dashboard/domains/marketplace">
                   Buy New Domain
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+                  <ArrowRight className="ml-2 h-3.5 w-3.5" />
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <TransferSummaryStat
-            label="Active Transfers"
-            value={String(activeTransfers.length)}
-            hint="Currently waiting on registrar progress or approval."
-          />
-          <TransferSummaryStat
-            label="Completed"
-            value={String(completedCount)}
-            hint="Finished successfully and ready to manage from your domains dashboard."
-          />
-          <TransferSummaryStat
-            label="Failed"
-            value={String(failedCount)}
-            hint="Transfers that need a corrected auth code, unlock, or registrar action."
-          />
-          <TransferSummaryStat
-            label="Typical Window"
-            value="5-7 days"
-            hint="The transfer duration after approval and registrar processing begins."
-          />
-        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,0.9fr)]">
-        <Card className="glass-panel border-white/10 bg-white/[0.03]">
-          <CardHeader>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-xl text-white">
-                  <ArrowRightLeft className="h-5 w-5 text-cyan-300" />
-                  Start a Transfer
-                </CardTitle>
-                <CardDescription className="mt-2 max-w-2xl text-white/60">
-                  Run the transfer in order: validate the domain, add the registrar auth code, then submit and track status from this page.
-                </CardDescription>
-              </div>
+      {/* Stats */}
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {[
+          { label: "Active Transfers", value: String(activeTransfers.length), hint: "Waiting on registrar or approval" },
+          { label: "Completed", value: String(completedCount), hint: "Successfully transferred domains" },
+          { label: "Failed", value: String(failedCount), hint: "Need corrected code or unlock" },
+          { label: "Typical Window", value: "5–7 days", hint: "After approval & processing begins" },
+        ].map((stat) => (
+          <div key={stat.label} className="glass-panel p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">{stat.label}</p>
+            <p className="mt-3 text-2xl font-semibold tracking-tight text-white tabular-nums">{stat.value}</p>
+            <p className="mt-1 text-xs text-white/40">{stat.hint}</p>
+          </div>
+        ))}
+      </div>
 
-              <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-white/60">
-                <p className="font-medium text-white/85">Current step</p>
-                <p className="mt-1 text-white/70">{stage === "lookup" ? "1 of 2: Validate domain" : "2 of 2: Submit authorization code"}</p>
+      {/* Main two-column layout */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(300px,0.9fr)]">
+
+        {/* Transfer form */}
+        <div className="glass-panel overflow-hidden">
+          <div className="h-px w-full bg-gradient-to-r from-cyan-400/40 via-cyan-300/10 to-transparent" />
+          <div className="border-b border-white/[0.06] px-6 py-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2.5">
+                  <Image src="/dashboard icons/domain.png" alt="" width={20} height={20} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                  <h2 className="text-lg font-semibold text-white">Start a Transfer</h2>
+                </div>
+                <p className="mt-1.5 text-sm text-white/50">
+                  Validate the domain, submit your EPP auth code, then track progress from this page.
+                </p>
+              </div>
+              <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs text-white/55 shrink-0">
+                <p className="font-semibold text-white/80">Current step</p>
+                <p className="mt-0.5">{stage === "lookup" ? "1 of 2 — Validate domain" : "2 of 2 — Submit auth code"}</p>
               </div>
             </div>
-          </CardHeader>
+          </div>
 
-          <CardContent className="space-y-6">
+          <div className="px-6 py-5 space-y-5">
+            {/* Step indicators */}
             <div className="grid gap-3 md:grid-cols-2">
-              <div className={`rounded-xl border p-4 ${stageIndex >= 1 ? "border-cyan-500/25 bg-cyan-500/10" : "border-white/10 bg-white/5"}`}>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/20 text-sm font-semibold text-white">
-                    1
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">Validate domain</p>
-                    <p className="text-xs text-white/60">Confirm the domain can enter the transfer flow.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className={`rounded-xl border p-4 ${stageIndex >= 2 ? "border-cyan-500/25 bg-cyan-500/10" : "border-white/10 bg-white/5"}`}>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/20 text-sm font-semibold text-white">
-                    2
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">Submit auth code</p>
-                    <p className="text-xs text-white/60">Start the registrar transfer with the EPP code.</p>
+              {[
+                { n: 1, title: "Validate domain", desc: "Confirm the domain can enter the transfer flow.", icon: "/dashboard icons/domain.png" },
+                { n: 2, title: "Submit auth code", desc: "Start the registrar transfer with the EPP code.", icon: "/dashboard icons/valid keys .png" },
+              ].map(({ n, title, desc, icon }) => (
+                <div key={n} className={`border p-4 ${stageIndex >= n ? "border-cyan-500/25 bg-cyan-500/[0.08]" : "border-white/[0.07] bg-white/[0.03]"}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`flex h-7 w-7 shrink-0 items-center justify-center border text-sm font-semibold ${stageIndex >= n ? "border-cyan-400/40 bg-cyan-500/20 text-cyan-200" : "border-white/15 bg-white/[0.05] text-white/50"}`}>
+                      {n}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-white">{title}</p>
+                      <p className="text-xs text-white/45">{desc}</p>
+                    </div>
+                    <Image src={icon} alt="" width={28} height={28} className={`h-7 w-7 shrink-0 object-contain ${stageIndex >= n ? "opacity-60" : "opacity-25"}`} />
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
 
             {submittedDomain && (
-              <Alert className="border-emerald-500/25 bg-emerald-500/10 text-emerald-50 [&>svg]:text-emerald-200">
+              <Alert className="border-emerald-500/25 bg-emerald-500/10 text-emerald-50 [&>svg]:text-emerald-300">
                 <CheckCircle2 className="h-4 w-4" />
                 <AlertTitle>Transfer submitted for {submittedDomain}</AlertTitle>
-                <AlertDescription className="text-emerald-50/85">
-                  The request has been created, billing was handled through the transfer service, and status updates will continue through polling, notifications, and email.
+                <AlertDescription className="text-emerald-50/80">
+                  Status updates will continue through polling, notifications, and email.
                 </AlertDescription>
               </Alert>
             )}
 
             {eligibilityFeedback && (
-              <Alert className="border-amber-500/25 bg-amber-500/10 text-amber-50 [&>svg]:text-amber-200">
+              <Alert className="border-amber-500/25 bg-amber-500/10 text-amber-50 [&>svg]:text-amber-300">
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Transfer guidance</AlertTitle>
-                <AlertDescription className="text-amber-50/85">{eligibilityFeedback}</AlertDescription>
+                <AlertDescription className="text-amber-50/80">{eligibilityFeedback}</AlertDescription>
               </Alert>
             )}
 
-            <div className="space-y-4 rounded-xl border border-white/10 bg-black/20 p-5">
+            {/* Domain input */}
+            <div className="overflow-hidden border border-white/[0.12] bg-white/[0.04]">
+              <div className="h-px w-full bg-gradient-to-r from-cyan-400/25 via-cyan-300/5 to-transparent" />
+              <div className="space-y-4 p-5">
               <div className="space-y-2">
-                <Label htmlFor="domain" className="text-white/80">Domain name</Label>
+                <div className="flex items-center gap-2">
+                  <Image src="/dashboard icons/domain.png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55" />
+                  <Label htmlFor="domain" className="text-white/75">Domain name</Label>
+                </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     id="domain"
                     name="domainNoAuto"
-                    placeholder="mybrand.com"
+                    placeholder="Enter the domain to transfer — e.g. yourbrand.com"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="none"
                     spellCheck={false}
-                    inputMode="text"
                     value={domain}
-                    onChange={(event) => setDomain(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void handleCheckEligibility();
-                      }
-                    }}
-                    className="border-white/10 bg-black/30 text-white placeholder:text-white/35"
+                    onChange={(e) => setDomain(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleCheckEligibility(); } }}
+                    className={`${inputCls} h-12`}
                   />
                   <Button
                     onClick={() => void handleCheckEligibility()}
                     disabled={checking || !domain.trim()}
-                    className="min-w-40 bg-cyan-500 text-black hover:bg-cyan-400"
+                    className="rounded-none h-12 min-w-44 bg-cyan-500 text-black hover:bg-cyan-400 disabled:bg-white/[0.07] disabled:text-white/30"
                   >
-                    {checking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
+                    {checking ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Image src="/dashboard icons/healthy .png" alt="" width={16} height={16} className="mr-2 h-4 w-4 shrink-0 object-contain" />
+                    )}
                     Check Eligibility
                   </Button>
                 </div>
               </div>
 
               {eligibility && (
-                <div className={`rounded-xl border p-4 ${eligibility.eligible ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10"}`}>
+                <div className={`border p-4 ${eligibility.eligible ? "border-emerald-500/25 bg-emerald-500/10" : "border-amber-500/25 bg-amber-500/10"}`}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <p className={`text-sm font-semibold ${eligibility.eligible ? "text-emerald-100" : "text-amber-100"}`}>
-                        {eligibility.eligible ? `${eligibility.domain} is eligible for transfer` : `${eligibility.domain} needs attention before transfer`}
+                      <p className={`text-sm font-semibold ${eligibility.eligible ? "text-emerald-200" : "text-amber-200"}`}>
+                        {eligibility.eligible ? `${eligibility.domain} is eligible for transfer` : `${eligibility.domain} needs attention`}
                       </p>
-                      <p className="mt-2 text-sm text-white/70">
+                      <p className="mt-1.5 text-sm text-white/65">
                         {eligibility.eligible
-                          ? "You can continue with the auth code from your current registrar."
+                          ? "Continue with the auth code from your current registrar."
                           : eligibility.reason || "Resolve the registrar-side issue, then re-run validation."}
                       </p>
-                      <p className="mt-3 text-xs text-white/55">
+                      <p className="mt-2 text-xs text-white/45">
                         Transfer fee: {formatCurrency(eligibility.transferPrice, eligibility.currency)}
                       </p>
                     </div>
-
                     <Button
                       variant="ghost"
-                      className="justify-start text-white hover:bg-white/10 hover:text-white"
-                      onClick={() => {
-                        setStage("lookup");
-                        setEligibility(null);
-                        setAuthCode("");
-                        setEligibilityFeedback(null);
-                      }}
+                      size="sm"
+                      className="rounded-none justify-start text-white/60 hover:bg-white/[0.06] hover:text-white"
+                      onClick={() => { setStage("lookup"); setEligibility(null); setAuthCode(""); setEligibilityFeedback(null); }}
                     >
-                      Change Domain
+                      Change domain
                     </Button>
                   </div>
                 </div>
               )}
 
               {stage === "authorize" && eligibility?.eligible && (
-                <div className="space-y-4 rounded-xl border border-white/10 bg-white/5 p-4">
+                <div className="border border-white/[0.07] bg-white/[0.02] p-4 space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="auth-code" className="text-white/80">Authorization code</Label>
+                    <div className="flex items-center gap-2">
+                      <Image src="/dashboard icons/valid keys .png" alt="" width={14} height={14} className="h-3.5 w-3.5 shrink-0 object-contain opacity-55" />
+                      <Label htmlFor="auth-code" className="text-white/75">Authorization code (EPP code)</Label>
+                    </div>
                     <div className="relative">
                       <Input
                         id="auth-code"
                         type={showAuthCode ? "text" : "password"}
-                        placeholder="Paste the EPP or auth code"
+                        placeholder="Paste the EPP / auth code from your registrar's domain panel"
                         value={authCode}
-                        onChange={(event) => setAuthCode(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            void handleStartTransfer();
-                          }
-                        }}
-                        className="border-white/10 bg-black/30 pr-10 text-white placeholder:text-white/35"
+                        onChange={(e) => setAuthCode(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleStartTransfer(); } }}
+                        className={`${inputCls} h-12 pr-10`}
                       />
                       <button
                         type="button"
-                        onClick={() => setShowAuthCode((prev) => !prev)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+                        onClick={() => setShowAuthCode((p) => !p)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-white/38 hover:text-white/65"
                         tabIndex={-1}
                       >
                         {showAuthCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
-                    <p className="text-xs leading-5 text-white/55">
-                      The auth code (EPP code) is typically 6–16 characters. Copy it from your current registrar&apos;s domain management panel. It is sent directly to the registrar and cleared from the system after submission.
+                    <p className="text-xs leading-5 text-white/45">
+                      The auth code (EPP code) is typically 6–16 characters. Copy it from your registrar&apos;s domain panel.
                     </p>
                   </div>
 
-                  <div className="grid gap-3 rounded-xl border border-white/10 bg-black/20 p-4 sm:grid-cols-3">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Billing</p>
-                      <p className="mt-1 text-sm text-white/80">Credits are charged before registrar initiation and refunded if setup fails.</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Notifications</p>
-                      <p className="mt-1 text-sm text-white/80">Dashboard notifications and email alerts are sent for important status changes.</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-white/40">Approval step</p>
-                      <p className="mt-1 text-sm text-white/80">Watch the domain contact inbox for registrar approval instructions.</p>
-                    </div>
+                  <div className="grid gap-2 border border-white/[0.07] bg-white/[0.03] p-4 sm:grid-cols-3">
+                    {[
+                      { label: "Billing", text: "Credits are charged before registrar initiation and refunded if setup fails." },
+                      { label: "Notifications", text: "Dashboard and email alerts are sent for important status changes." },
+                      { label: "Approval step", text: "Watch the domain contact inbox for registrar approval instructions." },
+                    ].map(({ label, text }) => (
+                      <div key={label}>
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/38">{label}</p>
+                        <p className="mt-1 text-xs text-white/60">{text}</p>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Button
                       variant="outline"
-                      className="border-white/20 text-white hover:bg-white/10"
-                      onClick={() => {
-                        setStage("lookup");
-                        setAuthCode("");
-                        setEligibilityFeedback(null);
-                      }}
+                      className="rounded-none border-white/15 text-white hover:bg-white/[0.08]"
+                      onClick={() => { setStage("lookup"); setAuthCode(""); setEligibilityFeedback(null); }}
                     >
                       Back
                     </Button>
                     <Button
-                      className="bg-cyan-500 text-black hover:bg-cyan-400 sm:flex-1"
+                      className="rounded-none bg-cyan-500 text-black hover:bg-cyan-400 sm:flex-1 disabled:bg-white/[0.07] disabled:text-white/30"
                       onClick={() => void handleStartTransfer()}
                       disabled={submitting || !authCode.trim() || authCode.trim().length < 6}
                     >
@@ -881,197 +669,140 @@ export default function DomainTransferPage() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <div className="space-y-6">
-          <Card className="border-white/10 bg-white/[0.03]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <ShieldCheck className="h-4 w-4 text-cyan-300" />
-                Before You Transfer
-              </CardTitle>
-              <CardDescription className="text-white/55">
-                Complete these prerequisites before you submit the domain to avoid preventable transfer failures.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
+        {/* Right sidebar */}
+        <div className="space-y-5">
+          {/* Before you transfer */}
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Image src="/dashboard icons/ip firewall .png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                <h3 className="text-sm font-semibold text-white">Before You Transfer</h3>
+              </div>
+              <p className="mt-1 text-xs text-white/45">Complete these steps to avoid preventable failures.</p>
+            </div>
+            <div className="px-5 py-4 space-y-2">
               {prepChecklist.map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-white/75">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                <div key={item} className="flex items-start gap-3 border border-white/[0.06] bg-white/[0.02] p-3 text-sm text-white/65">
+                  <Image src="/dashboard icons/healthy .png" alt="" width={14} height={14} className="mt-0.5 h-3.5 w-3.5 shrink-0 object-contain opacity-70" />
                   <p>{item}</p>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <Card className="border-white/10 bg-white/[0.03]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Mail className="h-4 w-4 text-cyan-300" />
-                Operational Flow
-              </CardTitle>
-              <CardDescription className="text-white/55">
-                The UI now exposes the real transfer lifecycle instead of just the submission form.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {journeySteps.map((step, index) => (
-                <div key={step.title} className="relative rounded-lg border border-white/10 bg-black/20 p-4">
-                  <div className="mb-2 flex items-center gap-3">
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/5 text-xs font-semibold text-white/85">
-                      {index + 1}
-                    </div>
-                    <p className="text-sm font-semibold text-white">{step.title}</p>
+          {/* Operational flow */}
+          <div className="glass-panel overflow-hidden">
+            <div className="border-b border-white/[0.06] px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <Image src="/dashboard icons/configure.png" alt="" width={18} height={18} className="h-5 w-5 shrink-0 object-contain opacity-70" />
+                <h3 className="text-sm font-semibold text-white">How It Works</h3>
+              </div>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {[
+                { ...journeySteps[0], icon: "/dashboard icons/domain.png" },
+                { ...journeySteps[1], icon: "/dashboard icons/valid keys .png" },
+                { ...journeySteps[2], icon: "/dashboard icons/messages .png" },
+                { ...journeySteps[3], icon: "/dashboard icons/pending .png" },
+              ].map((step, i) => (
+                <div key={step.title} className="flex gap-3 border border-white/[0.06] bg-white/[0.02] p-3">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center border border-white/15 bg-white/[0.05] text-xs font-semibold text-white/70">
+                    {i + 1}
                   </div>
-                  <p className="text-sm leading-6 text-white/60">{step.description}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-white">{step.title}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-white/50">{step.description}</p>
+                  </div>
+                  <Image src={step.icon} alt="" width={22} height={22} className="mt-0.5 h-5 w-5 shrink-0 object-contain opacity-35" />
                 </div>
               ))}
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-white/[0.03]">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Wallet className="h-4 w-4 text-cyan-300" />
-                What This Page Covers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 text-sm text-white/65">
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                The page now explains prep, submission, approval, tracking, and post-completion management instead of showing only a light form.
-              </div>
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                Active transfers are always visible in the activity area with progress, registrar state, timestamps, and cancellation actions.
-              </div>
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3">
-                History remains accessible even when there are no active transfers, so the screen never feels empty or incomplete.
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </div>
       </div>
 
-      <Card id="transfer-activity" className="mt-6 glass-panel border-white/10 bg-white/[0.03]">
-        <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      {/* Transfer Activity */}
+      <div id="transfer-activity" className="mt-6 glass-panel overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-white/[0.06] px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="text-white">Transfer Activity</CardTitle>
-            <CardDescription className="text-white/55">
-              Review current requests, understand each status, and inspect completed or failed transfer attempts.
-            </CardDescription>
+            <h2 className="text-lg font-semibold text-white">Transfer Activity</h2>
+            <p className="mt-1 text-sm text-white/45">Current requests, status details, and completed or failed attempts.</p>
           </div>
-
           <Button
             variant="outline"
-            className="border-white/20 text-white hover:bg-white/10"
-            onClick={() => {
-              setRefreshing(true);
-              void fetchTransfers();
-            }}
+            size="sm"
+            className="rounded-none border-white/15 text-white hover:bg-white/[0.08] self-start"
+            onClick={() => { setRefreshing(true); void fetchTransfers(); }}
             disabled={refreshing}
           >
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh Activity
+            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
           </Button>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-4">
+        <div className="px-6 py-5">
           {activityError && (
-            <Alert className="border-red-500/25 bg-red-500/10 text-red-50 [&>svg]:text-red-200">
+            <Alert className="mb-4 border-red-500/25 bg-red-500/10 text-red-50 [&>svg]:text-red-300">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Unable to load transfer activity</AlertTitle>
-              <AlertDescription className="text-red-50/85">{activityError}</AlertDescription>
+              <AlertDescription className="text-red-50/80">{activityError}</AlertDescription>
             </Alert>
           )}
 
           {loading ? (
-            <div className="flex min-h-48 items-center justify-center rounded-xl border border-white/10 bg-black/20">
-              <div className="flex items-center gap-3 text-sm text-white/60">
+            <div className="flex min-h-48 items-center justify-center border border-white/[0.07] bg-white/[0.02]">
+              <div className="flex items-center gap-3 text-sm text-white/50">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading transfer activity...
               </div>
             </div>
           ) : (
             <Tabs defaultValue="active" className="space-y-4">
-              <TabsList className="h-auto flex-wrap gap-1 border border-white/10 bg-white/5 p-1">
-                <TabsTrigger value="active" className="data-[state=active]:bg-white/10 text-white/80">
+              <TabsList className="h-auto flex-wrap gap-1 border border-white/[0.08] bg-white/[0.04] p-1">
+                <TabsTrigger value="active" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   Active ({activeTransfers.length})
                 </TabsTrigger>
-                <TabsTrigger value="history" className="data-[state=active]:bg-white/10 text-white/80">
+                <TabsTrigger value="history" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   History ({historyTransfers.length})
                 </TabsTrigger>
-                <TabsTrigger value="all" className="data-[state=active]:bg-white/10 text-white/80">
+                <TabsTrigger value="all" className="rounded-none data-[state=active]:bg-white/10 text-white/70 data-[state=active]:text-white">
                   All ({transfers.length})
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="active" className="space-y-3">
-                {activeTransfers.length > 0 ? (
-                  activeTransfers.map((transfer) => (
-                    <TransferActivityCard
-                      key={transfer.id}
-                      transfer={transfer}
-                      cancellingId={cancellingId}
-                      onCancel={(transferId) => void handleCancelTransfer(transferId)}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
-                    <ArrowRightLeft className="mx-auto h-10 w-10 text-white/25" />
-                    <p className="mt-4 text-lg font-medium text-white">No active transfers</p>
-                    <p className="mt-2 text-sm text-white/55">
-                      Start with the validation step above. Once submitted, this tab will show registrar progress, approval status, and cancellation controls.
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="history" className="space-y-3">
-                {historyTransfers.length > 0 ? (
-                  historyTransfers.map((transfer) => (
-                    <TransferActivityCard
-                      key={transfer.id}
-                      transfer={transfer}
-                      cancellingId={cancellingId}
-                      onCancel={(transferId) => void handleCancelTransfer(transferId)}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
-                    <Clock3 className="mx-auto h-10 w-10 text-white/25" />
-                    <p className="mt-4 text-lg font-medium text-white">No transfer history yet</p>
-                    <p className="mt-2 text-sm text-white/55">
-                      Completed, failed, and cancelled transfers will remain here so users can audit past actions and outcomes.
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="all" className="space-y-3">
-                {transfers.length > 0 ? (
-                  transfers.map((transfer) => (
-                    <TransferActivityCard
-                      key={transfer.id}
-                      transfer={transfer}
-                      cancellingId={cancellingId}
-                      onCancel={(transferId) => void handleCancelTransfer(transferId)}
-                    />
-                  ))
-                ) : (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
-                    <AlertTriangle className="mx-auto h-10 w-10 text-white/25" />
-                    <p className="mt-4 text-lg font-medium text-white">No transfer records yet</p>
-                    <p className="mt-2 text-sm text-white/55">
-                      This screen is no longer visually empty, but there are still no transfer records for this account. Use the transfer form above to create the first request.
-                    </p>
-                  </div>
-                )}
-              </TabsContent>
+              {[
+                { value: "active", items: activeTransfers, emptyIcon: <Image src="/dashboard icons/pending .png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No active transfers", emptyMsg: "Start with the validation step above. Once submitted, progress appears here." },
+                { value: "history", items: historyTransfers, emptyIcon: <Image src="/dashboard icons/review .png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No transfer history yet", emptyMsg: "Completed, failed, and cancelled transfers will stay here for auditing." },
+                { value: "all", items: transfers, emptyIcon: <Image src="/dashboard icons/domain.png" alt="" width={48} height={48} className="mx-auto h-12 w-12 object-contain opacity-20" />, emptyTitle: "No transfer records yet", emptyMsg: "Use the form above to start your first domain transfer request." },
+              ].map(({ value, items, emptyIcon, emptyTitle, emptyMsg }) => (
+                <TabsContent key={value} value={value} className="space-y-3">
+                  {items.length > 0 ? (
+                    items.map((transfer) => (
+                      <TransferActivityCard
+                        key={transfer.id}
+                        transfer={transfer}
+                        cancellingId={cancellingId}
+                        onCancel={(id) => void handleCancelTransfer(id)}
+                      />
+                    ))
+                  ) : (
+                    <div className="border border-dashed border-white/[0.08] bg-white/[0.01] px-6 py-14 text-center">
+                      {emptyIcon}
+                      <p className="mt-4 text-base font-semibold text-white">{emptyTitle}</p>
+                      <p className="mt-2 max-w-sm mx-auto text-sm text-white/45">{emptyMsg}</p>
+                    </div>
+                  )}
+                </TabsContent>
+              ))}
             </Tabs>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

@@ -16,7 +16,6 @@ import {
   Cpu,
   Database,
   FileText,
-  Gamepad2,
   Globe,
   HardDrive,
   HelpCircle,
@@ -240,12 +239,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
       href: "/dashboard/services/kubernetes",
       current: pathname.includes("/services/kubernetes"),
       icon: Box,
-    },
-    {
-      name: "Game Servers",
-      href: "/dashboard/services/game",
-      current: pathname.includes("/services/game"),
-      icon: Gamepad2,
     },
     {
       name: "Network DDoS Protection",

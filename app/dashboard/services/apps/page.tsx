@@ -204,7 +204,7 @@ export default function ApplicationDeploymentPage() {
           label="Healthy"
           value={runningApps}
           meta="Applications serving live traffic"
-          iconSrc="/dashboard icons/healthy.png"
+          iconSrc="/dashboard icons/healthy .png"
         />
         <MetricCard
           label="Active Builds"

@@ -46,7 +46,7 @@ function PresetButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded border border-white/[0.1] bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/55 hover:border-white/[0.2] hover:text-white/80 hover:bg-white/[0.06] transition-colors"
+      className="flex items-center gap-1.5 border border-white/[0.1] bg-white/[0.03] px-2.5 py-1 text-[11px] text-white/55 hover:border-white/[0.2] hover:text-white/80 hover:bg-white/[0.06] transition-colors"
     >
       <Icon className="w-3 h-3" />
       {label}
@@ -65,7 +65,7 @@ function SelectedTldChip({
     <button
       type="button"
       onClick={onRemove}
-      className="flex items-center gap-1 rounded border border-white/[0.12] bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white/65 hover:bg-red-500/10 hover:border-red-500/25 hover:text-red-300/80 transition-colors"
+      className="flex items-center gap-1 border border-white/[0.12] bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] text-white/65 hover:bg-red-500/10 hover:border-red-500/25 hover:text-red-300/80 transition-colors"
     >
       .{tld}
       <X className="w-2.5 h-2.5" />
@@ -86,7 +86,7 @@ function TldChip({
     <button
       type="button"
       onClick={onToggle}
-      className={`rounded border px-2 py-0.5 font-mono text-[11px] transition-colors ${
+      className={`border px-2 py-0.5 font-mono text-[11px] transition-colors ${
         active
           ? 'border-white/[0.2] bg-white/[0.08] text-white/80'
           : 'border-white/[0.08] bg-transparent text-white/40 hover:border-white/[0.15] hover:text-white/65'
@@ -117,7 +117,7 @@ function CategoryRow({
   const selectedCount = category.tlds.filter((t) => selected.includes(t)).length;
 
   return (
-    <div className="rounded border border-white/[0.07] overflow-hidden">
+    <div className="border border-white/[0.07] overflow-hidden">
       <div className="flex items-center bg-white/[0.02] hover:bg-white/[0.04] transition-colors">
         <button
           type="button"
@@ -267,7 +267,7 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
 
       {/* Active chip strip */}
       {selected.length > 0 && (
-        <div className="rounded border border-white/[0.07] bg-white/[0.02] p-2.5">
+        <div className="border border-white/[0.07] bg-white/[0.02] p-2.5">
           <p className="text-[10px] uppercase tracking-wider text-white/30 mb-1.5">Selected</p>
           <div className="flex flex-wrap gap-1.5">
             {selected.map((tld) => (
@@ -286,7 +286,7 @@ export function TldSelector({ selected, onChange }: TldSelectorProps) {
         value={filterQuery}
         onChange={(e) => setFilterQuery(e.target.value)}
         placeholder="Filter extensions (e.g. shop, ai, cloud)"
-        className="h-8 w-full rounded border border-white/[0.08] bg-white/[0.02] px-3 text-xs text-white placeholder:text-white/30 focus:border-white/[0.18] focus:bg-white/[0.04] focus:outline-none transition-colors"
+        className="h-8 w-full border border-white/[0.08] bg-white/[0.02] px-3 text-xs text-white placeholder:text-white/30 focus:border-white/[0.18] focus:bg-white/[0.04] focus:outline-none transition-colors"
       />
 
       {/* Category accordion */}

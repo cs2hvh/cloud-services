@@ -228,25 +228,37 @@ export default function NewAgentPage() {
   const selectedModelKey = modelKeys.find((key) => key.id === modelKeyId);
   const progressPercentage = (currentStep / STEPS.length) * 100;
 
+  function SummaryRow({ label, value, icon, empty }: { label: string; value: React.ReactNode; icon?: string; empty?: boolean }) {
+    return (
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="flex items-center gap-2">
+          {icon && (
+            <Image src={icon} alt="" width={14} height={14} className={`h-3.5 w-3.5 shrink-0 object-contain ${empty ? 'opacity-20' : 'opacity-50'}`} />
+          )}
+          <span className={`text-sm ${empty ? 'text-white/28' : 'text-white/42'}`}>{label}</span>
+        </div>
+        <span className={`text-right text-sm ${empty ? 'text-white/20' : 'font-medium text-white/88'}`}>{value}</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 px-2 py-4 text-white sm:px-3 lg:px-4">
       <div className="glass-panel overflow-hidden">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-3 px-5 py-4 sm:px-6 sm:py-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-300/70">AI Services</p>
             <h1 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">Create an AI agent with model, behavior, and knowledge controls.</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/48">Move through identity, model policy, prompt design, and knowledge attachment with a focused review before launch.</p>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:min-w-[220px]">
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Progress</div>
-              <div className="mt-1.5 text-lg font-semibold text-white">{currentStep} / {STEPS.length}</div>
-            </div>
-            <div className="border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Status</div>
-              <div className="mt-1.5 text-sm font-semibold text-white">{currentStep === STEPS.length ? 'Review' : 'In progress'}</div>
-            </div>
-          </div>
+          <Image
+            src="/dashboard-services-icons/da ai aniamtion.png"
+            alt=""
+            width={160}
+            height={160}
+            className="hidden shrink-0 object-contain lg:block lg:h-[190px] lg:w-[190px] xl:h-[220px] xl:w-[220px]"
+            priority
+          />
         </div>
         <div className="border-t border-white/[0.06] px-5 py-4 sm:px-6">
           <div className="h-1.5 w-full overflow-hidden bg-white/[0.06]">
@@ -861,50 +873,39 @@ export default function NewAgentPage() {
     </div>
 
     <div className="xl:min-w-0">
-      <div className="glass-panel overflow-hidden xl:sticky xl:top-8 p-5 space-y-5">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/35">Deployment Summary</p>
-            <div className="mt-4 flex justify-center border border-white/[0.08] bg-white/[0.04] px-4 py-5">
-              <Image src="/dashboard icons/agents .png" alt="Agent" width={56} height={56} className="opacity-70" />
-            </div>
+      <div className="glass-panel overflow-hidden xl:sticky xl:top-8">
+        <div className="border-b border-white/[0.06] px-6 py-5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/38">Summary</p>
+          <h3 className="mt-2 text-lg font-semibold text-white">Configuration</h3>
+        </div>
+        <div className="px-6 py-4">
+          <div className="space-y-0.5">
+            <SummaryRow icon="/dashboard icons/agents .png" label="Agent name" value={name || "—"} empty={!name} />
+            <SummaryRow icon="/dashboard icons/model.png" label="Model" value={usePlatformBilling ? (selectedPlatformModel?.name || "—") : (selectedModelKey?.name || "—")} empty={!(usePlatformBilling ? selectedPlatformModel : selectedModelKey)} />
+            <SummaryRow icon="/dashboard icons/model keys .png" label="Billing" value={usePlatformBilling ? 'Platform billing' : 'Own API key'} />
+            <SummaryRow icon="/dashboard icons/knowledge base .png" label="Knowledge base" value={selectedKb?.name || 'None attached'} />
           </div>
 
-          {name && (
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-white/60">Agent</span>
-              <span className="text-right text-sm font-medium text-white">{name}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/60">Model</span>
-            <span className="text-right text-sm font-medium text-white">
-              {usePlatformBilling ? selectedPlatformModel?.name || 'Select a model' : selectedModelKey?.name || 'Bring your own key'}
-            </span>
+          <div className="my-3 border-t border-white/[0.05]" />
+
+          <div className="space-y-0.5">
+            <SummaryRow label="Temperature" value={temperature} />
+            <SummaryRow label="Max tokens" value={maxTokens.toLocaleString()} />
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/60">Billing</span>
-            <span className="text-right text-sm font-medium text-white">{usePlatformBilling ? 'Platform billing' : 'Own API key'}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/60">Knowledge Base</span>
-            <span className="text-right text-sm font-medium text-white">{selectedKb?.name || 'None attached'}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/60">Temperature</span>
-            <span className="text-right text-sm font-medium text-white">{temperature}</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-sm text-white/60">Max Tokens</span>
-            <span className="text-right text-sm font-medium text-white">{maxTokens.toLocaleString()}</span>
-          </div>
+
           {usePlatformBilling && selectedPlatformModel && (
-            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100/90">
-              {selectedPlatformModel.pricing.inputFormatted} input / {selectedPlatformModel.pricing.outputFormatted} output
-            </div>
+            <>
+              <div className="my-3 border-t border-white/[0.05]" />
+              <div className="border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-100/90">
+                {selectedPlatformModel.pricing.inputFormatted} input / {selectedPlatformModel.pricing.outputFormatted} output
+              </div>
+            </>
           )}
-          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/55">
+
+          <div className="mt-4 border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/55">
             Endpoint access and API keys are configured after the agent is created.
           </div>
+        </div>
       </div>
     </div>
   </div>
