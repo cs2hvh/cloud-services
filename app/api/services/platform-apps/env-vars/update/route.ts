@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const validation = validateRequest(updateEnvVarsSchema, body);
     if (!validation.success) return validation.response;
 
-    const { app_id, env_vars } = validation.data;
+    const { app_id, env_vars, kept_keys } = validation.data;
 
     // Verify ownership first
     const existing = await Platform_Apps.get(app_id);
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
           env_var_count: env_vars.length,
         },
         run: async () => {
-          const result = await Platform_Apps.set_env_vars(app_id, env_vars);
+          const result = await Platform_Apps.set_env_vars(app_id, env_vars, kept_keys);
           
           if (!result.success) {
             return NextResponse.json({ error: result.error }, { status: 400 });

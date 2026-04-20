@@ -57,6 +57,9 @@ export function createDockerfilePipeline(
     replicas = 3;
   }
 
+  // Normalize port — handles null/undefined passed from callers even though signature has = 3000
+  const port = containerPort ?? 3000;
+
   // Generate Kubernetes Secret for environment variables
   const { secretYaml, secretName, hasSecret, createInPipeline } = generateEnvSecret(name, envVars);
   const envFromSection = generateEnvFromSection(secretName, hasSecret);
@@ -101,7 +104,7 @@ pipeline {
     SERVICE_NAME = '${serviceName}'
     INGRESS_NAME = '${ingressName}'
     DOMAIN = '${domain}'
-    CONTAINER_PORT = '${containerPort}'
+    CONTAINER_PORT = '${port}'
     PLATFORM_APP_ID = '${appId}'
     WEBHOOK_BASE_URL = '${webhookBaseUrl}'
     JENKINS_DEPLOYMENT_RECORD_SECRET = '${deploymentRecordSecret}'
@@ -120,12 +123,13 @@ pipeline {
         container('git') {
           sh '''
             echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
+            git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
             
             # If COMMIT_SHA parameter is provided, checkout that specific commit
             if [ -n "\${COMMIT_SHA}" ]; then
               echo "Checking out specific commit: \${COMMIT_SHA}"
+              git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
               git checkout \${COMMIT_SHA}
             else
               echo "Using branch HEAD"
@@ -280,6 +284,9 @@ EOF
                 --dockerfile=Dockerfile \\
                 --destination=$DOCKER_IMAGE_VERSION \\
                 --destination=$DOCKER_IMAGE_LATEST \\
+                --cache=true \\
+                --cache-repo=hav0ky/${appName}-cache \\
+                --use-new-run \\
                 --digest-file=image-digest.txt
             '''
           }
@@ -383,11 +390,11 @@ spec:
         image: \${DEPLOY_IMAGE}
         imagePullPolicy: Always
         ports:
-        - containerPort: ${containerPort}
+        - containerPort: ${port}
 ${envFromSection}
         env:
         - name: PORT
-          value: "${containerPort}"
+          value: "${port}"
         resources:
           requests:
             cpu: ${cpuRequest}
@@ -397,14 +404,14 @@ ${envFromSection}
             memory: ${memoryLimit}
         readinessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 6
         livenessProbe:
           tcpSocket:
-            port: ${containerPort}
+            port: ${port}
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -424,7 +431,7 @@ spec:
   ports:
   - protocol: TCP
     port: 80
-    targetPort: ${containerPort}
+    targetPort: ${port}
   type: ClusterIP
 SERVICE_EOF
 
@@ -474,7 +481,7 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true'
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
           sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
@@ -491,6 +498,9 @@ INGRESS_EOF
             echo "Checking deployment status for $APP_NAME"
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
+            echo "Checking SSL certificate status"
+            kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"
+            kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"
             echo "Deployment verification completed successfully"
           '''
         }

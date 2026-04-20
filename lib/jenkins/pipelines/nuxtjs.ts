@@ -18,62 +18,7 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
 import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
-import { generateImageScanStage } from '../security';
-
-/**
- * Generate dependency scan stage for Nuxt.js (handles pnpm)
- */
-function generateNuxtDependencyScanStage(): string {
-  return `
-    stage('Security: Dependency Scan') {
-      steps {
-        container('git') {
-          script {
-            echo 'STAGE: Security - Dependency Audit'
-            
-            sh(script: '''
-              set -e
-              
-              echo "Checking package manager..."
-              if [ -f pnpm-lock.yaml ]; then
-                echo "[WARN] pnpm detected - npm audit not supported"
-                echo "Skipping dependency scan (pnpm audit requires pnpm installation)"
-                echo "Dependencies will be scanned during Docker build"
-                exit 0
-              elif [ -f yarn.lock ]; then
-                echo "[WARN] yarn detected - npm audit not supported"
-                echo "Skipping dependency scan (yarn audit has different format)"
-                exit 0
-              fi
-              
-              # npm audit for npm-based projects
-              if [ -f package-lock.json ]; then
-                echo "Running npm audit..."
-                npm audit --audit-level=low || true
-                
-                echo "Checking for CRITICAL vulnerabilities..."
-                set +e
-                npm audit --audit-level=critical > /dev/null 2>&1
-                AUDIT_EXIT=$?
-                set -e
-                
-                if [ "$AUDIT_EXIT" -ne "0" ]; then
-                  echo "[FAIL] CRITICAL vulnerabilities found!"
-                  npm audit --audit-level=critical
-                  exit 1
-                fi
-                
-                echo "[PASS] No critical vulnerabilities found"
-              else
-                echo "No package-lock.json found, skipping npm audit"
-              fi
-            ''', returnStatus: false)
-          }
-        }
-      }
-    }
-`.trim();
-}
+import { generateImageScanStage, generateSecurityStages } from '../security';
 
 export function createNuxtJsPipeline(
   name: string,
@@ -228,12 +173,13 @@ pipeline {
         container('git') {
           sh '''
             echo "Cloning repository..."
-            git clone --branch ${branch} ${gitUrl} .
+            git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
             git config --global --add safe.directory "$(pwd)"
             
             # If COMMIT_SHA parameter is provided, checkout that specific commit
             if [ -n "\${COMMIT_SHA}" ]; then
               echo "Checking out specific commit: \${COMMIT_SHA}"
+              git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
               git checkout \${COMMIT_SHA}
             else
               echo "Using branch HEAD"
@@ -246,18 +192,7 @@ pipeline {
       }
     }
 
-    stage('Security: Secrets Scan') {
-      steps {
-        container('git') {
-          script {
-            echo 'STAGE: Security - Secrets Detection'
-            sh 'echo "Scanning for exposed secrets..."'
-          }
-        }
-      }
-    }
-
-${generateNuxtDependencyScanStage()}
+${generateSecurityStages({ language: 'node' })}
 
     stage('Prepare Dockerfile') {
       steps {
@@ -297,6 +232,9 @@ ${getPackageManagerDetectionScript()}
                 --dockerfile=Dockerfile \
                 --destination=$DOCKER_IMAGE_VERSION \\
                 --destination=$DOCKER_IMAGE_LATEST${buildArgsLine} \\
+                --cache=true \\
+                --cache-repo=hav0ky/${appName}-cache \\
+                --use-new-run \\
                 --digest-file=image-digest.txt
             '''
           }
@@ -455,7 +393,7 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true'
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
           sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
@@ -472,6 +410,9 @@ INGRESS_EOF
             echo "Checking deployment status for $APP_NAME"
             kubectl get deployment,service,ingress -l app=$APP_NAME
             kubectl get pods -l app=$APP_NAME
+            echo "Checking SSL certificate status"
+            kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"
+            kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"
             echo "Deployment verification completed successfully"
             echo "Application URL: https://$DOMAIN"
           '''

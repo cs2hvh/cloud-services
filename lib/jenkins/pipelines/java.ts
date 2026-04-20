@@ -141,12 +141,13 @@ pipeline {
             echo 'Fetching source code from repository'
             sh '''
               echo "Cloning repository..."
-              git clone --branch ${branch} ${gitUrl} .
+              git clone --depth=1 --branch ${branch} ${gitUrl} . || git clone --branch ${branch} ${gitUrl} .
               git config --global --add safe.directory "$(pwd)"
               
               # If COMMIT_SHA parameter is provided, checkout that specific commit
               if [ -n "\${COMMIT_SHA}" ]; then
                 echo "Checking out specific commit: \${COMMIT_SHA}"
+                git fetch --depth=1 origin \${COMMIT_SHA} || git fetch origin \${COMMIT_SHA}
                 git checkout \${COMMIT_SHA}
               else
                 echo "Using branch HEAD"
@@ -209,6 +210,9 @@ EOF
                   --dockerfile=Dockerfile \\
                   --destination=\${DOCKER_IMAGE_VERSION} \\
                   --destination=\${DOCKER_IMAGE_LATEST} \\
+                  --cache=true \\
+                  --cache-repo=hav0ky/${appName}-cache \\
+                  --use-new-run \\
                   --digest-file=image-digest.txt
                 
                 echo 'Image build completed successfully'
@@ -348,7 +352,7 @@ spec:
   tls:
   - hosts:
     - \${DOMAIN}
-    secretName: \${APP_NAME}-tls
+    secretName: ${name}-tls
   rules:
   - host: \${DOMAIN}
     http:
@@ -365,8 +369,41 @@ INGRESS_EOF
               echo 'Applying Kubernetes manifests'
               kubectl apply -f deployment.yaml
               
-              echo 'Waiting for deployment rollout'
-              kubectl rollout status deployment/\${APP_NAME} --timeout=5m || true
+              echo 'Applying service manifest'
+              kubectl apply -f /dev/stdin <<SERVICE_APPLY_EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: \${SERVICE_NAME}
+  labels:
+    app: \${APP_NAME}
+spec:
+  selector:
+    app: \${APP_NAME}
+  ports:
+  - port: 80
+    targetPort: \${CONTAINER_PORT}
+    protocol: TCP
+    name: http
+  type: ClusterIP
+SERVICE_APPLY_EOF
+
+              echo 'Applying certificate manifest'
+              kubectl apply -f /dev/stdin <<CERT_APPLY_EOF || echo 'WARNING: cert-manager not installed, skipping certificate'
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${name}-cert
+  namespace: default
+spec:
+  secretName: ${name}-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - \${DOMAIN}
+CERT_APPLY_EOF
+              kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }
               
               echo 'Deployment completed'
               kubectl get deployment \${APP_NAME}
@@ -380,6 +417,41 @@ INGRESS_EOF
               ''',
               returnStatus: false
             )
+          }
+        }
+      }
+    }
+
+    stage('Verify Deployment') {
+      steps {
+        container('kubectl') {
+          script {
+            echo 'STAGE: Verify Deployment'
+            echo "Checking deployment status for \${env.APP_NAME}"
+
+            echo 'Fetching deployment, service, and ingress status'
+            sh(
+              script: 'kubectl get deployment,service,ingress -l app=\${APP_NAME}',
+              returnStatus: false
+            )
+
+            echo 'Fetching pod status'
+            sh(
+              script: 'kubectl get pods -l app=\${APP_NAME}',
+              returnStatus: false
+            )
+
+            echo 'Checking SSL certificate status'
+            sh(
+              script: 'kubectl get certificate ${name}-cert -n default 2>/dev/null && echo "[SSL] Certificate found" || echo "[SSL] INFO: Certificate not found yet"',
+              returnStatus: true
+            )
+            sh(
+              script: 'kubectl wait certificate/${name}-cert --for=condition=Ready --timeout=60s -n default 2>/dev/null && echo "[SSL] Certificate Ready — HTTPS available" || echo "[SSL] WARNING: Certificate not Ready within 60s — HTTPS provisioning in progress"',
+              returnStatus: true
+            )
+
+            echo 'Deployment verification completed successfully'
           }
         }
       }
