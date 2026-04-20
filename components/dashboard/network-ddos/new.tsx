@@ -118,7 +118,7 @@ const SpectrumAppCreate = ({ projects, userId, role = "user", allUsers = [], spe
     };
 
     fetchPrice();
-  }, []);
+  }, [role]);
 
   // Filter users based on search query
   const filteredUsers = allUsers.filter(

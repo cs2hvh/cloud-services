@@ -127,11 +127,10 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
   const fetchDatabasePlans = useCallback(async () => {
     setLoadingPlans(true);
     try {
-      const res = await fetch('/api/products?type=database');
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch plans' }));
-        throw new Error(errorData.error || 'Failed to fetch plans');
+      const result = await fetchDatabasePlansAction();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch plans');
       }
 
       const plans = result.plans || [];
@@ -307,7 +306,7 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
       setLinkModalOpen(true);
       toast.info('Failed integration cleared — you can re-link now');
     } catch (error) {
-      toast.error('Network error while retrying');
+      toast.error(error instanceof Error ? 'Network error while retrying' : 'Network error while retrying');
     } finally {
       setUnlinkingId(null);
     }
