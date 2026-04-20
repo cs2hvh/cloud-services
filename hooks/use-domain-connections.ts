@@ -19,6 +19,7 @@ interface DomainConnectionsState {
   removingConnectionId: string | null;
   removeConfirmConnectionId: string | null;
   checkingSslId: string | null;
+  anyOperationRunning: boolean;
 }
 
 interface ConnectionHandlers {
@@ -277,6 +278,8 @@ export function useDomainConnections(
     [connections, domainName, onRefresh, router]
   );
 
+  const anyOperationRunning = !!(verifyingConnectionId || activatingConnectionId || settingPrimaryConnectionId || removingConnectionId || checkingSslId);
+
   return {
     verifyingConnectionId,
     activatingConnectionId,
@@ -284,6 +287,7 @@ export function useDomainConnections(
     removingConnectionId,
     removeConfirmConnectionId,
     checkingSslId,
+    anyOperationRunning,
     onVerify,
     onActivate,
     onSetPrimary,

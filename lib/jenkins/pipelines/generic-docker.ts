@@ -9,7 +9,7 @@
  * Supports any tech stack: Elixir, Go, Rust, Ruby, etc.
  * Just builds the existing Dockerfile with Kaniko and deploys to K8s
  */
-import { generateEnvSecret, generateEnvFromSection, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
 export function createDockerfilePipeline(
@@ -474,17 +474,11 @@ INGRESS_EOF
           '''
 
           sh 'kubectl apply -f deployment.yaml'
-          sh '''
-            if [ "\${BUILD_NUMBER}" != "1" ]; then
-              echo "Restarting deployment to pull new image"
-              kubectl rollout restart deployment/\${APP_NAME} -n default
-            else
-              echo "First deployment - skipping rollout restart"
-            fi
-          '''
+          sh 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true'
           sh 'kubectl apply -f service.yaml'
           sh 'kubectl apply -f certificate.yaml || echo "WARNING: cert-manager not installed, skipping certificate"'
-          sh 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"'
+          sh '''${generateSmartIngressApplyScript(ingressName, appDomain)}
+          '''
         }
       }
     }

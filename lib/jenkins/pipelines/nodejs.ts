@@ -3,7 +3,7 @@
  * Auto-creates Dockerfile, builds with Kaniko
  * Includes security scanning: secrets, dependencies, dockerfile, image
  */
-import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, EnvVar } from './utils';
+import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, EnvVar } from './utils';
 import { generateNodejsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateSecurityStages, generateImageScanStage } from '../security';
 
@@ -435,17 +435,9 @@ INGRESS_EOF
               script: 'kubectl apply -f deployment.yaml',
               returnStatus: false
             )
-            
-            // Only restart on subsequent builds to pull the new image
+
             sh(
-              script: '''
-                if [ "\${BUILD_NUMBER}" != "1" ]; then
-                  echo "Restarting deployment to pull new image"
-                  kubectl rollout restart deployment/\${APP_NAME} -n default
-                else
-                  echo "First deployment - skipping rollout restart"
-                fi
-              ''',
+              script: 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true',
               returnStatus: false
             )
             
@@ -461,9 +453,9 @@ INGRESS_EOF
               returnStatus: false
             )
             
-            echo 'Applying ingress manifest'
             sh(
-              script: 'kubectl apply -f ingress.yaml || echo "WARNING: ingress webhook timeout, skipping ingress"',
+              script: '''${generateSmartIngressApplyScript(ingressName, appDomain)}
+              ''',
               returnStatus: false
             )
             

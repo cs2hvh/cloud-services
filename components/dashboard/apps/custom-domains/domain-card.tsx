@@ -26,9 +26,11 @@ interface DomainCardProps {
   appStatus: string;
   verifyingId: string | null;
   activatingId: string | null;
+  settingPrimaryId: string | null;
   removingId: string | null;
   copiedField: string | null;
   checkingSslId: string | null;
+  anyOperationRunning: boolean;
   onVerify: (id: string) => void;
   onActivate: (id: string) => void;
   onSetPrimary: (id: string) => void;
@@ -166,9 +168,11 @@ export function DomainCard({
   appStatus,
   verifyingId,
   activatingId,
+  settingPrimaryId,
   removingId,
   copiedField,
   checkingSslId,
+  anyOperationRunning,
   onVerify,
   onActivate,
   onSetPrimary,
@@ -224,7 +228,7 @@ export function DomainCard({
         <SslStatusBadge
           sslStatus={domain.ssl_status as SslStatus}
           id={domain.id}
-          onCheck={onCheckSsl}
+          onCheck={anyOperationRunning ? undefined : onCheckSsl}
           checkingId={checkingSslId}
           variant="card"
           dnsMessage={domain.dns_ready === false ? domain.dns_message : undefined}
@@ -243,7 +247,7 @@ export function DomainCard({
                 size="sm"
                 variant="outline"
                 onClick={() => onVerify(domain.id)}
-                disabled={verifyingId === domain.id}
+                disabled={anyOperationRunning}
                 className="border-white/20 text-white hover:bg-white/10"
               >
                 {verifyingId === domain.id ? (
@@ -259,10 +263,7 @@ export function DomainCard({
               <Button
                 size="sm"
                 onClick={() => onActivate(domain.id)}
-                disabled={
-                  activatingId === domain.id ||
-                  appStatus !== 'running'
-                }
+                disabled={anyOperationRunning || appStatus !== 'running'}
                 className="bg-green-600 text-white hover:bg-green-700 rounded-md px-4 py-1.5"
               >
                 {activatingId === domain.id ? (
@@ -279,9 +280,14 @@ export function DomainCard({
                 size="sm"
                 variant="outline"
                 onClick={() => onSetPrimary(domain.id)}
+                disabled={anyOperationRunning}
                 className="border-white/20 text-white hover:bg-white/10"
               >
-                <Star className="mr-1 h-3.5 w-3.5" />
+                {settingPrimaryId === domain.id ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Star className="mr-1 h-3.5 w-3.5" />
+                )}
                 Set Primary
               </Button>
             )}
@@ -290,7 +296,7 @@ export function DomainCard({
               <Button
                 size="sm"
                 onClick={() => onActivate(domain.id)}
-                disabled={activatingId === domain.id || appStatus !== 'running'}
+                disabled={anyOperationRunning || appStatus !== 'running'}
                 className="bg-orange-600 text-white hover:bg-orange-700 rounded-md px-4 py-1.5"
               >
                 {activatingId === domain.id ? (
@@ -371,7 +377,7 @@ export function DomainCard({
           size="sm"
           variant="outline"
           onClick={() => onRemoveConfirm(domain.id)}
-          disabled={removingId === domain.id}
+          disabled={anyOperationRunning}
           className="ml-auto border-red-500/30 text-red-200 hover:bg-red-500/10"
         >
           {removingId === domain.id ? (
