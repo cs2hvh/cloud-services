@@ -11,6 +11,8 @@ import {
   Check,
   Files,
   Trash2,
+  Unlock,
+  Loader2,
 } from 'lucide-react';
 import {
   type IndexedEnvVar,
@@ -26,9 +28,11 @@ interface EnvVarRowProps {
   isDragging: boolean;
   searchActive: boolean;
   isCopied: boolean;
+  isRevealing?: boolean;
   onUpdate: (idx: number, field: 'key' | 'value', val: string) => void;
   onPaste: (e: React.ClipboardEvent<HTMLInputElement>, idx: number, field: 'key' | 'value') => void;
   onToggleVisible: (idx: number) => void;
+  onReveal: (idx: number) => void;
   onCopy: (env: IndexedEnvVar) => void;
   onDuplicate: (idx: number) => void;
   onRemove: (idx: number) => void;
@@ -43,9 +47,11 @@ export function EnvVarRow({
   isDragging,
   searchActive,
   isCopied,
+  isRevealing = false,
   onUpdate,
   onPaste,
   onToggleVisible,
+  onReveal,
   onCopy,
   onDuplicate,
   onRemove,
@@ -53,6 +59,8 @@ export function EnvVarRow({
   onDragOver,
   onDragEnd,
 }: EnvVarRowProps) {
+  // An existing var that hasn't been revealed yet — value is masked server-side
+  const needsReveal = env.hasValue && !env.revealed;
   const validation = validateKey(env.key, allVars);
   const sensitive = isSensitiveKey(env.key);
   const usedKeys = new Set(allVars.map(e => e.key));
@@ -108,27 +116,51 @@ export function EnvVarRow({
 
         {/* Value input — truncates long revealed values, never wraps */}
         <div className="flex-1 min-w-0 relative">
-          <Input
-            value={env.value ?? ''}
-            onChange={(e) => onUpdate(env.idx, 'value', e.target.value)}
-            onPaste={(e) => onPaste(e, env.idx, 'value')}
-            placeholder="value"
-            type={env.visible ? 'text' : 'password'}
-            className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-8 font-mono text-sm w-full"
-            style={{ textOverflow: 'ellipsis' }}
-          />
-          <button
-            type="button"
-            onClick={() => onToggleVisible(env.idx)}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
-            title={env.visible ? 'Hide value' : 'Show value'}
-          >
-            {env.visible ? (
-              <EyeOff className="h-3.5 w-3.5" />
-            ) : (
-              <Eye className="h-3.5 w-3.5" />
-            )}
-          </button>
+          {needsReveal ? (
+            // Value not yet fetched — show masked placeholder + reveal button
+            <div className="flex items-center h-9 px-3 rounded-md bg-white/10 border border-white/20 gap-2">
+              <span className="font-mono text-sm text-white/30 tracking-widest select-none flex-1">
+                ••••••••
+              </span>
+              <button
+                type="button"
+                onClick={() => onReveal(env.idx)}
+                disabled={isRevealing}
+                className="text-white/40 hover:text-white transition-colors disabled:opacity-50"
+                title="Reveal value"
+              >
+                {isRevealing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Unlock className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </div>
+          ) : (
+            <>
+              <Input
+                value={env.value ?? ''}
+                onChange={(e) => onUpdate(env.idx, 'value', e.target.value)}
+                onPaste={(e) => onPaste(e, env.idx, 'value')}
+                placeholder="value"
+                type={env.visible ? 'text' : 'password'}
+                className="bg-white/10 border-white/20 text-white placeholder:text-white/50 pr-8 font-mono text-sm w-full"
+                style={{ textOverflow: 'ellipsis' }}
+              />
+              <button
+                type="button"
+                onClick={() => onToggleVisible(env.idx)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
+                title={env.visible ? 'Hide value' : 'Show value'}
+              >
+                {env.visible ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )}
+              </button>
+            </>
+          )}
         </div>
 
         {/* Row actions */}

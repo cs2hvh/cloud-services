@@ -232,6 +232,9 @@ export default function AppDetailPage() {
   const [savingEnvVars, setSavingEnvVars] = useState(false);
   const [envVarsLoading, setEnvVarsLoading] = useState(false);
   const [envVarsLoaded, setEnvVarsLoaded] = useState(false);
+  const [revealingKey, setRevealingKey] = useState<string | null>(null);
+  // Tracks per-key auto-expiry timers so revealed values don't linger indefinitely
+  const revealTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [redeploying, setRedeploying] = useState(false);
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
@@ -667,6 +670,19 @@ export default function AppDetailPage() {
     setEnvVarsModified(false);
   }, [app?.id]);
 
+  // Clear decrypted env var values from memory when the user leaves the Settings tab.
+  // Secrets should not persist in React state any longer than necessary.
+  useEffect(() => {
+    if (activeTab !== 'settings') {
+      // Cancel all pending reveal-expiry timers and wipe state when leaving the tab
+      revealTimersRef.current.forEach(t => clearTimeout(t));
+      revealTimersRef.current.clear();
+      setEditedEnvVars([]);
+      setEnvVarsLoaded(false);
+      setEnvVarsModified(false);
+    }
+  }, [activeTab]);
+
   // Lazy-load env var values only when the Settings tab is first opened.
   // Values are intentionally excluded from the main page-load GET response
   // to avoid sending decrypted secrets over the wire unnecessarily.
@@ -682,9 +698,9 @@ export default function AppDetailPage() {
       body: JSON.stringify({ app_id: app.id }),
     })
       .then(res => res.ok ? res.json() : res.json().then(d => Promise.reject(d.error || 'Failed to load')))
-      .then((data: { env_vars: Array<{ key: string; value: string }> }) => {
+      .then((data: { env_vars: Array<{ key: string; hasValue: boolean }>; truncated?: boolean }) => {
         setEditedEnvVars(
-          data.env_vars.map(env => ({ key: env.key, value: env.value, visible: false }))
+          data.env_vars.map(ev => ({ key: ev.key, value: '', hasValue: ev.hasValue, revealed: false, visible: false }))
         );
         setEnvVarsLoaded(true);
       })
@@ -699,6 +715,47 @@ export default function AppDetailPage() {
     }
   }, [app?.project_id]);
 
+  // Reveal the value for a single masked env var by fetching it on demand.
+  const handleRevealVar = useCallback(async (key: string) => {
+    if (!app?.id || revealingKey === key) return;
+    setRevealingKey(key);
+    try {
+      const res = await fetch('/api/services/platform-apps/env-vars/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ app_id: app.id, key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reveal');
+      setEditedEnvVars(prev =>
+        prev.map(ev =>
+          ev.key === key ? { ...ev, value: data.value, revealed: true, visible: true } : ev
+        )
+      );
+
+      // Auto-clear the revealed value after 5 minutes — secrets shouldn't sit in
+      // React state any longer than necessary if the user walks away.
+      const existing = revealTimersRef.current.get(key);
+      if (existing) clearTimeout(existing);
+      const timer = setTimeout(() => {
+        setEditedEnvVars(prev =>
+          prev.map(ev =>
+            ev.key === key && ev.revealed
+              ? { ...ev, value: '', revealed: false, visible: false }
+              : ev
+          )
+        );
+        revealTimersRef.current.delete(key);
+      }, 5 * 60_000);
+      revealTimersRef.current.set(key, timer);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to reveal variable';
+      setEnvVarError(msg);
+    } finally {
+      setRevealingKey(null);
+    }
+  }, [app?.id, revealingKey]);
+
   // Handle env var changes - now handled by EnvVarsEditor
   const handleEnvVarsChange = (vars: EnvVar[]) => {
     setEditedEnvVars(vars);
@@ -710,14 +767,24 @@ export default function AppDetailPage() {
   const handleSaveEnvVars = async () => {
     if (!app) return;
     
-    // Filter out empty entries and validate
-    const validEnvVars = editedEnvVars
+    // Separate vars the user actually has values for from vars that were
+    // never revealed (existing server-side vars the user didn't touch).
+    const allValid = editedEnvVars
       .map((env) => ({
-        key: env.key ?? '',
+        key: (env.key ?? '').trim(),
         value: env.value ?? '',
         visible: env.visible ?? false,
+        revealed: env.revealed ?? false,
+        hasValue: env.hasValue ?? false,
       }))
-      .filter((env) => env.key.trim() !== '');
+      .filter((env) => env.key !== '');
+
+    // Vars to upsert: new vars (hasValue=false) + revealed existing vars
+    const validEnvVars = allValid.filter(env => !env.hasValue || env.revealed);
+    // Vars to preserve server-side without overwriting their stored value
+    const keptKeys = allValid
+      .filter(env => env.hasValue && !env.revealed)
+      .map(env => env.key);
     
     // Check for duplicate keys
     const keys = validEnvVars.map(e => e.key.trim());
@@ -744,6 +811,7 @@ export default function AppDetailPage() {
             key: env.key.trim(),
             value: env.value,
           })),
+          kept_keys: keptKeys,
         }),
       });
 
@@ -2004,7 +2072,7 @@ export default function AppDetailPage() {
                       Loading environment variables…
                     </div>
                   ) : (
-                    <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} />
+                    <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} appId={app?.id} onReveal={handleRevealVar} revealingKey={revealingKey} />
                   )}
 
                   {/* Save Button */}

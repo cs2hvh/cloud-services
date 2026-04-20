@@ -5,11 +5,21 @@ export interface EnvVar {
   key: string;
   value: string;
   visible?: boolean;
+  /** True when this var existed server-side and the user clicked "Reveal" */
+  revealed?: boolean;
+  /** True when the server confirmed a non-empty value exists for this key */
+  hasValue?: boolean;
 }
 
 export interface EnvVarsEditorProps {
   value: EnvVar[];
   onChange: (vars: EnvVar[]) => void;
+  /** App ID — required for the server-side export endpoint */
+  appId?: string;
+  /** Called when the user clicks "Reveal" on a masked var. Parent handles the API call. */
+  onReveal?: (key: string) => void;
+  /** Key currently being fetched — drives the loading spinner in the row */
+  revealingKey?: string | null;
 }
 
 // Indexed variant used internally so filtered lists keep stable indices
@@ -45,6 +55,8 @@ export function normalizeEnvVar(env: Partial<EnvVar> | undefined): EnvVar {
     key: env?.key ?? '',
     value: env?.value ?? '',
     visible: env?.visible ?? false,
+    revealed: env?.revealed ?? false,
+    hasValue: env?.hasValue ?? false,
   };
 }
 

@@ -12,11 +12,13 @@ interface EnvVarsListProps {
   searchQuery: string;
   draggedIndex: number | null;
   copiedField: string | null;
+  revealingKey?: string | null;
   onSearchChange: (q: string) => void;
   onAddVar: () => void;
   onUpdate: (idx: number, field: 'key' | 'value', val: string) => void;
   onPaste: (e: React.ClipboardEvent<HTMLInputElement>, idx: number, field: 'key' | 'value') => void;
   onToggleVisible: (idx: number) => void;
+  onReveal: (idx: number) => void;
   onCopyRow: (env: IndexedEnvVar) => void;
   onDuplicate: (idx: number) => void;
   onRemove: (idx: number) => void;
@@ -30,11 +32,13 @@ export function EnvVarsList({
   searchQuery,
   draggedIndex,
   copiedField,
+  revealingKey,
   onSearchChange,
   onAddVar,
   onUpdate,
   onPaste,
   onToggleVisible,
+  onReveal,
   onCopyRow,
   onDuplicate,
   onRemove,
@@ -113,9 +117,11 @@ export function EnvVarsList({
               isDragging={draggedIndex === env.idx}
               searchActive={!!searchQuery}
               isCopied={copiedField === env.key}
+              isRevealing={revealingKey === env.key}
               onUpdate={onUpdate}
               onPaste={onPaste}
               onToggleVisible={onToggleVisible}
+              onReveal={onReveal}
               onCopy={onCopyRow}
               onDuplicate={onDuplicate}
               onRemove={onRemove}
