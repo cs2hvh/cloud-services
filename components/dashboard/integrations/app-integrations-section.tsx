@@ -127,10 +127,11 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
   const fetchDatabasePlans = useCallback(async () => {
     setLoadingPlans(true);
     try {
-      const result = await fetchDatabasePlansAction();
-
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to fetch plans');
+      const res = await fetch('/api/products?type=database');
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch plans' }));
+        throw new Error(errorData.error || 'Failed to fetch plans');
       }
 
       const plans = result.plans || [];

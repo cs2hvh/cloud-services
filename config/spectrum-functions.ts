@@ -438,21 +438,30 @@ export async function deleteSpectrumApp(appId: string) {
 
   // Get local data before deletion (for project logging)
   const localBefore = await Spectrum_Apps.get(appId);
+  let cloudflareAlreadyDeleted = false;
 
-
-  //console.log(localBefore,"...........localBefore........");
-  //console.log( `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`)
-  //console.log(token,"...........token........");
-  // Delete from Cloudflare
-  const cfResp = await axios.delete<CloudflareResponse<{ id: string }>>(
-    `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,
-    { headers: getCloudflareHeaders(token) }
-  );
-
-  if (!cfResp.data?.success) {
-    throw new Error(
-      cfResp.data?.errors?.[0]?.message || "Failed to delete Spectrum app"
+  try {
+    // Delete from Cloudflare
+    const cfResp = await axios.delete<CloudflareResponse<{ id: string }>>(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/spectrum/apps/${appId}`,
+      { headers: getCloudflareHeaders(token) }
     );
+
+    if (!cfResp.data?.success) {
+      throw new Error(
+        cfResp.data?.errors?.[0]?.message || "Failed to delete Spectrum app"
+      );
+    }
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 404) {
+      // Idempotent delete: if Cloudflare app is already gone, reconcile local state anyway.
+      cloudflareAlreadyDeleted = true;
+      console.warn(
+        `[deleteSpectrumApp] Cloudflare app not found (already deleted): ${appId}`
+      );
+    } else {
+      throw error;
+    }
   }
 
   // Mark as deleted in database (soft delete)
@@ -482,6 +491,9 @@ export async function deleteSpectrumApp(appId: string) {
 
   return {
     id: appId,
-    message: "Spectrum app deleted successfully",
+    already_deleted: cloudflareAlreadyDeleted,
+    message: cloudflareAlreadyDeleted
+      ? "Spectrum app was already deleted in Cloudflare; local state reconciled"
+      : "Spectrum app deleted successfully",
   };
 }

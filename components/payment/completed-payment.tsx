@@ -9,6 +9,7 @@ import { CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 import { formatAmount, formatUSD } from "@/lib/utils";
 import { FaqSheet } from "./faq-sheet";
 import { PublicPaymentData } from "@/types/database/payment";
+import Image from "next/image";
 
 interface CompletedPaymentProps {
   payment: PublicPaymentData;
@@ -44,7 +45,7 @@ export function CompletedPayment({ payment }: CompletedPaymentProps) {
           <div className="flex items-start justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <img
+                <Image
                   src={`/currencies/${payment.currency.toLowerCase()}.svg`}
                   alt={payment.currency}
                   className="w-9 h-9"

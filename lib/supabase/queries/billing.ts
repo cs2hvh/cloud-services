@@ -1,5 +1,6 @@
 import { createServiceClient } from "../server";
 import { Promocode } from "../types";
+import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 
 interface PromocodeRedemptionEntry {
   userId?: string;
@@ -182,6 +183,24 @@ function markServiceLedgerLegacy() {
   lastServiceLedgerMismatchAt = Date.now();
 }
 
+async function triggerGraceRecoveryAfterCreditIncrease(userId: string) {
+  try {
+    const result = await resolveGraceForUserAfterTopup({ userId });
+    if (result.restoredCount > 0) {
+      console.log(
+        `[Billing.topup] Restored ${result.restoredCount} grace lifecycle entr${
+          result.restoredCount === 1 ? "y" : "ies"
+        } for user ${userId}`
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "[Billing.topup] Grace recovery hook failed:",
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
 export const Billing = {
   get_balance: async (userId: string): Promise<number> => {
     const supabase = await createServiceClient();
@@ -255,6 +274,12 @@ export const Billing = {
   }> => {
     ensurePositiveAmount(amount, "Top-up");
     const supabase = await createServiceClient();
+    let topupResult: {
+      credit_balance: number;
+      promo_credits?: number;
+      topup_credits?: number;
+    };
+
     const { data: existing } = await supabase
       .schema("billing")
       .from("user_credits")
@@ -271,46 +296,48 @@ export const Billing = {
         .select("credit_balance")
         .single();
       if (error) throw new Error(`Top-up failed: ${error.message}`);
-      return {
+      topupResult = {
         credit_balance: data?.credit_balance ?? amount,
         promo_credits: 0,
         topup_credits: 0,
       };
+    } else {
+      // Atomic increment - prevents race conditions with concurrent webhooks
+      const { data, error } = await supabase.rpc("billing_topup", {
+        p_user_id: userId,
+        p_amount: amount,
+      });
+
+      if (error) {
+        // Fallback to non-atomic update if RPC not available yet
+        console.warn("[Billing] RPC billing_topup not available, using fallback:", error.message);
+        const prevBal = existing.credit_balance ?? 0;
+        const next = { credit_balance: prevBal + amount };
+        const { data: fallbackData, error: fallbackErr } = await supabase
+          .schema("billing")
+          .from("user_credits")
+          .update(next)
+          .eq("user_id", userId)
+          .select("credit_balance")
+          .single();
+        if (fallbackErr) throw new Error(`Top-up failed: ${fallbackErr.message}`);
+        topupResult = {
+          credit_balance: fallbackData?.credit_balance ?? next.credit_balance,
+          promo_credits: 0,
+          topup_credits: 0,
+        };
+      } else {
+        topupResult = {
+          credit_balance: data as number,
+          promo_credits: 0,
+          topup_credits: 0,
+        };
+      }
     }
 
-    // Atomic increment — prevents race conditions with concurrent webhooks
-    const { data, error } = await supabase.rpc("billing_topup", {
-      p_user_id: userId,
-      p_amount: amount,
-    });
-
-    if (error) {
-      // Fallback to non-atomic update if RPC not available yet
-      console.warn("[Billing] RPC billing_topup not available, using fallback:", error.message);
-      const prevBal = existing.credit_balance ?? 0;
-      const next = { credit_balance: prevBal + amount };
-      const { data: fallbackData, error: fallbackErr } = await supabase
-        .schema("billing")
-        .from("user_credits")
-        .update(next)
-        .eq("user_id", userId)
-        .select("credit_balance")
-        .single();
-      if (fallbackErr) throw new Error(`Top-up failed: ${fallbackErr.message}`);
-      return {
-        credit_balance: fallbackData?.credit_balance ?? next.credit_balance,
-        promo_credits: 0,
-        topup_credits: 0,
-      };
-    }
-
-    return {
-      credit_balance: data as number,
-      promo_credits: 0,
-      topup_credits: 0,
-    };
+    await triggerGraceRecoveryAfterCreditIncrease(userId);
+    return topupResult;
   },
-
   has_balance: async (
     userId: string,
     requiredAmount: number
@@ -1414,3 +1441,4 @@ export const Billing = {
     });
   },
 };
+

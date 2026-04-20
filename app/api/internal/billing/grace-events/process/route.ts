@@ -22,86 +22,347 @@ type OutboxRow = {
   attempts: number;
 };
 
+type EventGroup = "grace_warning" | "grace_resolved" | "grace_deleted" | "billing_update";
+
 type NotificationShape = {
   type: "success" | "info" | "warning" | "error";
   action: "updated" | "failed";
   title: string;
   message: string;
   emailStatus: "paid" | "due" | "overdue" | "failed";
+  dueDate?: string;
+  amount?: string;
+  emailNotes?: string;
+  eventTag: string;
 };
 
-function formatDate(value: unknown): string | undefined {
+function formatDateTime(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return date.toLocaleDateString("en-US");
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
-function getNotificationShape(row: OutboxRow): NotificationShape {
-  const expiresAt = formatDate(row.payload?.grace_expires_at);
+function formatMoney(value: unknown): string | undefined {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return undefined;
+  return `$${amount.toFixed(2)}`;
+}
 
-  switch (row.event_type) {
-    case "grace_started":
-      return {
-        type: "warning",
-        action: "updated",
-        title: "Billing Grace Period Started",
-        message: expiresAt
-          ? `Your service entered a billing grace period and may be auto-deleted on ${expiresAt} if balance is not restored.`
-          : "Your service entered a billing grace period and may be auto-deleted if balance is not restored.",
-        emailStatus: "due",
-      };
-    case "grace_reminder_day3":
-    case "grace_reminder_day1":
-      return {
-        type: "warning",
-        action: "updated",
-        title: "Billing Grace Reminder",
-        message: expiresAt
-          ? `Billing grace is still active. Restore balance before ${expiresAt} to avoid service deletion.`
-          : "Billing grace is still active. Restore balance to avoid service deletion.",
-        emailStatus: "due",
-      };
-    case "grace_reminder_6h":
-      return {
-        type: "warning",
-        action: "updated",
-        title: "Final Billing Grace Warning",
-        message: expiresAt
-          ? `Final warning: restore balance before ${expiresAt} to avoid service deletion.`
-          : "Final warning: restore balance now to avoid service deletion.",
-        emailStatus: "overdue",
-      };
-    case "grace_resolved":
-      return {
-        type: "success",
-        action: "updated",
-        title: "Billing Grace Resolved",
-        message: "Balance has been restored and grace/deletion scheduling is cleared.",
-        emailStatus: "paid",
-      };
-    case "grace_deleted":
-      return {
-        type: "error",
-        action: "failed",
-        title: "Service Deleted Due To Billing",
-        message: "The service was auto-deleted after grace period expiry and insufficient balance.",
-        emailStatus: "failed",
-      };
+function toEventGroup(eventType: string): EventGroup {
+  if (
+    eventType === "grace_started" ||
+    eventType === "grace_reminder_day3" ||
+    eventType === "grace_reminder_day1" ||
+    eventType === "grace_reminder_6h"
+  ) {
+    return "grace_warning";
+  }
+  if (eventType === "grace_resolved") return "grace_resolved";
+  if (eventType === "grace_deleted") return "grace_deleted";
+  return "billing_update";
+}
+
+function serviceTypeLabel(serviceTable: string | null): string {
+  switch (serviceTable) {
+    case "active_kubernetes":
+      return "Kubernetes";
+    case "active_database":
+      return "Database";
+    case "active_objectspace":
+      return "Object Storage";
+    case "active_spectrum":
+      return "Spectrum";
+    case "active_platform_apps":
+      return "Platform App";
     default:
-      return {
-        type: "info",
-        action: "updated",
-        title: "Billing Update",
-        message: "Your billing lifecycle has been updated.",
-        emailStatus: "due",
-      };
+      return "Service";
   }
 }
 
-async function sendUserEmail(row: OutboxRow, shape: NotificationShape): Promise<void> {
+type ServiceDisplay = {
+  key: string;
+  serviceTable: string | null;
+  serviceId: string | null;
+  serviceType: string;
+  serviceName: string;
+  graceExpiresAt?: string;
+  requiredBalance?: string;
+};
+
+function mapFromRowsByService(
+  rows: OutboxRow[],
+  serviceNameLookup: Map<string, string>
+): ServiceDisplay[] {
+  const byService = new Map<string, ServiceDisplay>();
+
+  for (const row of rows) {
+    const serviceTable = row.service_table;
+    const serviceId = row.service_id;
+    const key = `${serviceTable ?? "unknown"}:${serviceId ?? "unknown"}`;
+    const knownName = serviceTable && serviceId ? serviceNameLookup.get(`${serviceTable}:${serviceId}`) : null;
+    const serviceName = knownName || serviceId || "Unknown service";
+
+    const expiresAt = formatDateTime(row.payload?.grace_expires_at);
+    const requiredBalance = formatMoney(row.payload?.required_balance);
+
+    const existing = byService.get(key);
+    if (!existing) {
+      byService.set(key, {
+        key,
+        serviceTable,
+        serviceId,
+        serviceType: serviceTypeLabel(serviceTable),
+        serviceName,
+        graceExpiresAt: expiresAt,
+        requiredBalance,
+      });
+      continue;
+    }
+
+    if (!existing.graceExpiresAt && expiresAt) existing.graceExpiresAt = expiresAt;
+    if (!existing.requiredBalance && requiredBalance) existing.requiredBalance = requiredBalance;
+  }
+
+  return [...byService.values()];
+}
+
+function extractSpectrumName(dns: unknown, spectrumId: unknown): string {
+  if (dns && typeof dns === "object" && !Array.isArray(dns)) {
+    const record = dns as Record<string, unknown>;
+    if (typeof record.original_name === "string" && record.original_name.trim()) {
+      return record.original_name.trim();
+    }
+    if (typeof record.name === "string" && record.name.trim()) {
+      return record.name.trim();
+    }
+  }
+  if (typeof spectrumId === "string" && spectrumId.trim()) {
+    return `Spectrum ${spectrumId}`;
+  }
+  return "Spectrum App";
+}
+
+async function loadServiceNameLookup(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  rows: OutboxRow[]
+): Promise<Map<string, string>> {
+  const lookup = new Map<string, string>();
+
+  const getIds = (table: string) =>
+    [...new Set(rows.filter((row) => row.service_table === table).map((row) => row.service_id).filter(Boolean) as string[])];
+
+  const kubernetesIds = getIds("active_kubernetes");
+  if (kubernetesIds.length > 0) {
+    const { data } = await supabase
+      .from("clusters")
+      .select("cluster_id, cluster_name")
+      .in("cluster_id", kubernetesIds);
+    for (const row of data ?? []) {
+      lookup.set(`active_kubernetes:${row.cluster_id}`, row.cluster_name || row.cluster_id);
+    }
+  }
+
+  const databaseIds = getIds("active_database");
+  if (databaseIds.length > 0) {
+    const { data: byId } = await supabase
+      .from("database_cluster")
+      .select("id, cluster_id, name")
+      .in("id", databaseIds);
+    for (const row of byId ?? []) {
+      lookup.set(`active_database:${row.id}`, row.name || row.cluster_id || row.id);
+    }
+
+    const unresolved = databaseIds.filter((id) => !lookup.has(`active_database:${id}`));
+    if (unresolved.length > 0) {
+      const { data: byClusterId } = await supabase
+        .from("database_cluster")
+        .select("id, cluster_id, name")
+        .in("cluster_id", unresolved);
+      for (const row of byClusterId ?? []) {
+        lookup.set(`active_database:${row.cluster_id}`, row.name || row.cluster_id || row.id);
+      }
+    }
+  }
+
+  const objectSpaceIds = getIds("active_objectspace");
+  if (objectSpaceIds.length > 0) {
+    const { data: byId } = await supabase
+      .from("object_spaces")
+      .select("id, name, bucket_id")
+      .in("id", objectSpaceIds);
+    for (const row of byId ?? []) {
+      lookup.set(`active_objectspace:${row.id}`, row.name || row.bucket_id || row.id);
+    }
+
+    const unresolved = objectSpaceIds.filter((id) => !lookup.has(`active_objectspace:${id}`));
+    if (unresolved.length > 0) {
+      const { data: byBucketId } = await supabase
+        .from("object_spaces")
+        .select("id, name, bucket_id")
+        .in("bucket_id", unresolved);
+      for (const row of byBucketId ?? []) {
+        if (row.bucket_id) {
+          lookup.set(`active_objectspace:${row.bucket_id}`, row.name || row.bucket_id || row.id);
+        }
+      }
+    }
+  }
+
+  const spectrumIds = getIds("active_spectrum");
+  if (spectrumIds.length > 0) {
+    const { data: byId } = await supabase
+      .from("spectrum_apps")
+      .select("id, spectrum_id, dns")
+      .in("id", spectrumIds);
+    for (const row of byId ?? []) {
+      lookup.set(`active_spectrum:${row.id}`, extractSpectrumName(row.dns, row.spectrum_id));
+    }
+
+    const unresolved = spectrumIds.filter((id) => !lookup.has(`active_spectrum:${id}`));
+    if (unresolved.length > 0) {
+      const { data: bySpectrumId } = await supabase
+        .from("spectrum_apps")
+        .select("id, spectrum_id, dns")
+        .in("spectrum_id", unresolved);
+      for (const row of bySpectrumId ?? []) {
+        if (row.spectrum_id) {
+          lookup.set(`active_spectrum:${row.spectrum_id}`, extractSpectrumName(row.dns, row.spectrum_id));
+        }
+      }
+    }
+  }
+
+  const platformAppIds = getIds("active_platform_apps");
+  if (platformAppIds.length > 0) {
+    const { data } = await supabase
+      .from("platform_apps")
+      .select("id, name")
+      .in("id", platformAppIds);
+    for (const row of data ?? []) {
+      lookup.set(`active_platform_apps:${row.id}`, row.name || row.id);
+    }
+  }
+
+  return lookup;
+}
+
+function buildShapeForGroup(rows: OutboxRow[], services: ServiceDisplay[]): NotificationShape {
+  const group = toEventGroup(rows[0]?.event_type ?? "");
+  const hasFinalWarning = rows.some((row) => row.event_type === "grace_reminder_6h");
+  const eventTypes = [...new Set(rows.map((row) => row.event_type))].join(",");
+
+  const shortServiceList = services
+    .slice(0, 4)
+    .map((service) => `${service.serviceType}: ${service.serviceName}`)
+    .join(", ");
+  const remainingCount = Math.max(services.length - 4, 0);
+  const serviceSuffix = remainingCount > 0 ? ` (+${remainingCount} more)` : "";
+
+  const firstDueDate = services.find((service) => service.graceExpiresAt)?.graceExpiresAt;
+  const totalRequired = services.reduce((sum, service) => {
+    const amount = Number(service.requiredBalance?.replace("$", ""));
+    return Number.isFinite(amount) ? sum + amount : sum;
+  }, 0);
+  const totalRequiredText = totalRequired > 0 ? `$${totalRequired.toFixed(2)}` : undefined;
+
+  const detailLines = services
+    .map((service) => {
+      const parts = [`${service.serviceType}: ${service.serviceName}`];
+      if (service.graceExpiresAt) parts.push(`expires ${service.graceExpiresAt}`);
+      if (service.requiredBalance) parts.push(`required ${service.requiredBalance}`);
+      return `- ${parts.join(" | ")}`;
+    })
+    .join("\n");
+
+  if (group === "grace_warning") {
+    return {
+      type: "warning",
+      action: "updated",
+      title: hasFinalWarning ? "Final Billing Grace Warning" : "Billing Grace Reminder",
+      message: shortServiceList
+        ? `Low balance alert for ${services.length} service(s): ${shortServiceList}${serviceSuffix}.`
+        : "Low balance alert: one or more services are in billing grace period.",
+      emailStatus: hasFinalWarning ? "overdue" : "due",
+      dueDate: firstDueDate ?? new Date().toLocaleDateString("en-US"),
+      amount: totalRequiredText ?? "N/A",
+      emailNotes: [
+        hasFinalWarning
+          ? "Final warning: restore credits soon to avoid auto-deletion."
+          : "Some services are in billing grace period due to low balance.",
+        detailLines,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      eventTag: hasFinalWarning ? "grace_warning_final" : "grace_warning",
+    };
+  }
+
+  if (group === "grace_resolved") {
+    return {
+      type: "success",
+      action: "updated",
+      title: "Billing Grace Resolved",
+      message: shortServiceList
+        ? `Grace cleared for ${services.length} service(s): ${shortServiceList}${serviceSuffix}.`
+        : "Balance restored and grace/deletion scheduling is cleared.",
+      emailStatus: "paid",
+      dueDate: new Date().toLocaleDateString("en-US"),
+      amount: "N/A",
+      emailNotes: ["Your balance has been restored.", detailLines].filter(Boolean).join("\n"),
+      eventTag: "grace_resolved",
+    };
+  }
+
+  if (group === "grace_deleted") {
+    return {
+      type: "error",
+      action: "failed",
+      title: "Service Deleted Due To Billing",
+      message: shortServiceList
+        ? `Auto-deleted ${services.length} service(s): ${shortServiceList}${serviceSuffix}.`
+        : "One or more services were auto-deleted due to billing.",
+      emailStatus: "failed",
+      dueDate: new Date().toLocaleDateString("en-US"),
+      amount: "N/A",
+      emailNotes: [
+        "The following services were auto-deleted after grace period expiry:",
+        detailLines,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      eventTag: "grace_deleted",
+    };
+  }
+
+  return {
+    type: "info",
+    action: "updated",
+    title: "Billing Update",
+    message: shortServiceList
+      ? `Billing updates for ${services.length} service(s): ${shortServiceList}${serviceSuffix}.`
+      : "Your billing lifecycle has been updated.",
+    emailStatus: "due",
+    dueDate: new Date().toLocaleDateString("en-US"),
+    amount: "N/A",
+    emailNotes: detailLines || "Your billing lifecycle has been updated.",
+    eventTag: eventTypes || "billing_update",
+  };
+}
+
+async function sendUserEmail(
+  userId: string,
+  invoiceNumber: string,
+  shape: NotificationShape
+): Promise<void> {
   const supabase = await createServiceClient();
-  const { data, error } = await supabase.auth.admin.getUserById(row.user_id);
+  const { data, error } = await supabase.auth.admin.getUserById(userId);
   if (error || !data?.user?.email) return;
 
   const email = data.user.email;
@@ -110,45 +371,54 @@ async function sendUserEmail(row: OutboxRow, shape: NotificationShape): Promise<
     (typeof data.user.user_metadata?.name === "string" && data.user.user_metadata.name) ||
     email.split("@")[0] ||
     "there";
-  const dueDate = formatDate(row.payload?.grace_expires_at) ?? new Date().toLocaleDateString("en-US");
-  const amountRaw = Number(row.payload?.required_balance);
-  const amount = Number.isFinite(amountRaw) ? `$${amountRaw.toFixed(2)}` : "N/A";
 
   await emailService.sendTemplate({
     template: "billingNotification",
     to: email,
     data: {
       customerName: userName,
-      invoiceNumber: row.event_key,
-      amount,
-      dueDate,
+      invoiceNumber,
+      amount: shape.amount ?? "N/A",
+      dueDate: shape.dueDate ?? new Date().toLocaleDateString("en-US"),
       status: shape.emailStatus,
-      notes: shape.message,
+      notes: shape.emailNotes ?? shape.message,
       actionLabel: "Open billing dashboard",
       actionUrl: `${process.env.DOMAIN ?? ""}/dashboard/billing`,
     },
     tags: [
       { name: "source", value: "billing-grace-outbox" },
-      { name: "event", value: row.event_type },
+      { name: "event", value: shape.eventTag },
     ],
   });
 }
 
-async function processRow(row: OutboxRow): Promise<void> {
-  const shape = getNotificationShape(row);
+async function processRowGroup(
+  rows: OutboxRow[],
+  serviceNameLookup: Map<string, string>
+): Promise<void> {
+  if (rows.length === 0) return;
+
+  const services = mapFromRowsByService(rows, serviceNameLookup);
+  const shape = buildShapeForGroup(rows, services);
+  const primaryServiceId = services.length === 1 ? services[0]?.serviceId ?? undefined : undefined;
+  const primaryServiceTable = services.length === 1 ? services[0]?.serviceTable ?? undefined : undefined;
+  const eventTypes = [...new Set(rows.map((row) => row.event_type))];
+  const eventKeys = rows.map((row) => row.event_key);
 
   const notificationResult = await NotificationService.create({
-    user_id: row.user_id,
+    user_id: rows[0].user_id,
     type: shape.type,
     title: shape.title,
     message: shape.message,
     service_type: "billing",
-    service_id: row.service_id ?? undefined,
+    service_id: primaryServiceId,
     action: shape.action,
     metadata: {
-      eventType: row.event_type,
-      serviceTable: row.service_table,
-      ...(row.payload ?? {}),
+      eventTypes,
+      eventKeys,
+      serviceTable: primaryServiceTable,
+      serviceCount: services.length,
+      services,
     },
   });
 
@@ -156,7 +426,11 @@ async function processRow(row: OutboxRow): Promise<void> {
     throw new Error(notificationResult.error || "Failed to create in-app notification");
   }
 
-  await sendUserEmail(row, shape);
+  await sendUserEmail(
+    rows[0].user_id,
+    eventKeys[0] ?? `billing-grace-${Date.now()}`,
+    shape
+  );
 }
 
 export async function POST(req: Request) {
@@ -197,6 +471,7 @@ export async function POST(req: Request) {
   let processed = 0;
   let failed = 0;
   let skipped = 0;
+  const claimedRows: OutboxRow[] = [];
 
   for (const row of (rows ?? []) as OutboxRow[]) {
     const { data: claimedRow, error: claimError } = await supabase
@@ -216,9 +491,27 @@ export async function POST(req: Request) {
       skipped += 1;
       continue;
     }
+    claimedRows.push(row);
+  }
+
+  const serviceNameLookup = await loadServiceNameLookup(supabase, claimedRows);
+  const groupedRows = new Map<string, OutboxRow[]>();
+
+  for (const row of claimedRows) {
+    const groupKey = `${row.user_id}:${toEventGroup(row.event_type)}`;
+    const existing = groupedRows.get(groupKey);
+    if (existing) {
+      existing.push(row);
+    } else {
+      groupedRows.set(groupKey, [row]);
+    }
+  }
+
+  for (const groupRows of groupedRows.values()) {
+    const rowIds = groupRows.map((row) => row.id);
 
     try {
-      await processRow(row);
+      await processRowGroup(groupRows, serviceNameLookup);
       const { error: completeError } = await supabase
         .schema("billing")
         .from("notification_outbox")
@@ -228,10 +521,10 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString(),
           last_error: null,
         })
-        .eq("id", row.id);
+        .in("id", rowIds);
 
       if (completeError) throw new Error(completeError.message);
-      processed += 1;
+      processed += rowIds.length;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown outbox processing failure";
       await supabase
@@ -242,8 +535,8 @@ export async function POST(req: Request) {
           last_error: message,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", row.id);
-      failed += 1;
+        .in("id", rowIds);
+      failed += rowIds.length;
     }
   }
 

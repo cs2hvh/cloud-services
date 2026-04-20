@@ -214,6 +214,7 @@ export class SpectrumService {
     if (!existing.success || !existing.data) {
       throw makeError("NOT_FOUND", "Spectrum app not found");
     }
+    const spectrumId = existing.data.spectrum_id || appId;
     // Admins can delete any user's app; regular users can only delete their own
     if (!isAdmin && existing.data.owner_id !== userId) {
       throw makeError("FORBIDDEN", "Access denied");
@@ -255,7 +256,7 @@ export class SpectrumService {
       console.warn("[SpectrumService.deleteApp] Billing close failed:", billErr);
     }
 
-    const result = await deleteSpectrumApp(appId);
+    const result = await deleteSpectrumApp(spectrumId);
 
     // Notification — always notify the app owner, not the requester (admin may differ)
     try {
@@ -267,7 +268,7 @@ export class SpectrumService {
           action: 'deleted',
           serviceType: 'spectrum',
           serviceName: existing.data.protocol || 'spectrum-app',
-          serviceId: appId,
+          serviceId: spectrumId,
         })
       );
     } catch (notifErr) {
