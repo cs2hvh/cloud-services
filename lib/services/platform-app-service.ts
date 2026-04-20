@@ -13,6 +13,8 @@ import { AppStatusService } from "./app-status";
 import { getRatesForPlatformApp } from "@/config/pricing";
 import { ensureBalance } from "@/config/billing-flow";
 import { PlatformAppCreateIdempotencyService } from "@/lib/services/platform-app-create-idempotency";
+import { DatabaseIntegrationService } from "@/lib/services/database-integration";
+import { ObjectStorageIntegrationService } from "@/lib/services/object-storage-integration";
 
 export interface CreateAppRequest {
   name: string;
@@ -717,10 +719,19 @@ export class PlatformAppService {
     let billingWarning: string | undefined;
 
     try {
-      // 1. Delete infrastructure using deployment service
-      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
+      // 1. Unlink all database and object-storage integrations before the app record is deleted
+      await Promise.all([
+        DatabaseIntegrationService.unlinkAllFromApp(appId, userId).catch((err) => {
+          console.error(`[PlatformAppService] Failed to unlink database integrations for app ${appId}:`, err);
+        }),
+        ObjectStorageIntegrationService.unlinkAllFromApp(appId, userId).catch((err) => {
+          console.error(`[PlatformAppService] Failed to unlink storage integrations for app ${appId}:`, err);
+        }),
+      ]);
 
-      // 2. Close active billing (prorated final charge)
+      // 2. Delete infrastructure using deployment service
+      const deploymentDeletion = await DeploymentService.delete(appId, userId, isAdmin);
+      // 3. Close active billing (prorated final charge)
       try {
         const billingResult = await Billing.close_active_service("platform_apps", {
           userId,
@@ -740,7 +751,7 @@ export class PlatformAppService {
             : String(billingError);
       }
 
-      // 3. Add project activity log if project_id exists
+      // 4. Add project activity log if project_id exists
       if (projectId) {
         try {
           await Projects.add_log({
@@ -753,7 +764,7 @@ export class PlatformAppService {
         }
       }
 
-      // 4. Audit log
+      // 5. Audit log
       if (audit_context) {
         try {
           await AuditLogService.create({
@@ -774,7 +785,7 @@ export class PlatformAppService {
         }
       }
 
-      // 5. Create success notification
+      // 6. Create success notification
       try {
         await NotificationService.create(
           createServiceNotification({

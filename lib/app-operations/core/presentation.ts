@@ -54,7 +54,13 @@ export function isReleaseHistoryEntry(params: {
 }): boolean {
   const operationType = getOperationType(params);
 
-  if (operationType === "rollback" || operationType === "resize" || operationType === "env_update") {
+  if (
+    operationType === "rollback" ||
+    operationType === "resize" ||
+    operationType === "env_update" ||
+    operationType === "domain_add" ||
+    operationType === "domain_remove"
+  ) {
     return false;
   }
 
@@ -98,6 +104,14 @@ export function getAppOperationLabel(params: {
 
   if (operationType === "env_update") {
     return "Environment Update";
+  }
+
+  if (operationType === "domain_add") {
+    return "Domain add";
+  }
+
+  if (operationType === "domain_remove") {
+    return "Domain remove";
   }
 
   if (params.buildNumber == null) {

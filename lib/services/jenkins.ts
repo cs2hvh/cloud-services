@@ -314,6 +314,19 @@ export class JenkinsService {
   }
 
   /**
+   * Delete a Jenkins resize job
+   */
+  static async deleteResizeJob(appName: string): Promise<void> {
+    const jobName = this.getResizeJobName(appName);
+
+    console.log(`[JenkinsService] Deleting resize job: ${jobName}`);
+
+    await jenkins.job.destroy(jobName);
+
+    console.log(`[JenkinsService] Deleted Jenkins resize job: ${jobName}`);
+  }
+
+  /**
    * Check if job exists
    */
   static async jobExists(appName: string): Promise<boolean> {

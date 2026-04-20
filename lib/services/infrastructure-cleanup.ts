@@ -23,6 +23,30 @@ export class InfrastructureCleanupService {
   }
 
   /**
+   * Delete only the resize Jenkins job for an app (decoupled operation).
+   * Best-effort: throws if the job exists but deletion fails; silently skips if the job was never created.
+   */
+  static async deleteResizeJob(appName: string): Promise<void> {
+    console.log(`[InfrastructureCleanupService] Deleting resize Jenkins job for ${appName}`);
+    try {
+      await JenkinsService.deleteResizeJob(appName);
+      console.log(`[InfrastructureCleanupService] ✅ Resize Jenkins job deleted for ${appName}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isNotFound =
+        message.includes('404') ||
+        message.toLowerCase().includes('not found') ||
+        message.toLowerCase().includes('does not exist');
+      if (isNotFound) {
+        console.log(`[InfrastructureCleanupService] Resize job not found for ${appName} — skipping`);
+        return;
+      }
+      console.error(`[InfrastructureCleanupService] ❌ Failed to delete resize Jenkins job for ${appName}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Delete only Kubernetes resources for an app (decoupled operation)
    * This now creates a Jenkins deletion job instead of directly deleting resources
    */

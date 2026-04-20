@@ -372,15 +372,22 @@ export class DeploymentService {
 
       console.log(`[DeploymentService] Cleaning up ${customDomains.length} custom domain(s)`);
 
-      // Clean up each custom domain (Ingress + DNS)
+      // Clean up each custom domain (Ingress + DNS + leftover Jenkins jobs)
       for (const domain of customDomains) {
         try {
-          // Remove from Kubernetes Ingress if active
+          const { KubernetesCustomDomainService } = await import('./kubernetes-custom-domain');
+
+          // Remove from Kubernetes Ingress if active (triggers a remove-domain Jenkins job
+          // which self-cleans up after completion since the fix was applied).
           if (domain.status === 'active') {
-            const { KubernetesCustomDomainService } = await import('./kubernetes-custom-domain');
             await KubernetesCustomDomainService.removeCustomDomainFromIngress(appName, domain.domain);
             console.log(`[DeploymentService] ✅ Removed ${domain.domain} from Ingress`);
           }
+
+          // Clean up any leftover domain Jenkins jobs for this domain.
+          // These accumulate when the self-cleanup fix was not yet in place.
+          await KubernetesCustomDomainService.deleteJobForDomain(appName, "add-domain", domain.domain);
+          await KubernetesCustomDomainService.deleteJobForDomain(appName, "remove-domain", domain.domain);
 
           // Delete DNS record for custom domain
           try {
@@ -466,13 +473,23 @@ export class DeploymentService {
       // Don't throw - continue with other cleanup
     }
 
-    // 2. Delete Jenkins job
+    // 2. Delete Jenkins job (main deploy/redeploy pipeline)
     try {
       await InfrastructureCleanupService.deleteJenkinsJob(appName);
     } catch (error: unknown) {
       console.error(`[DeploymentService] Jenkins cleanup error:`, error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       errors.push(`Jenkins: ${errorMessage}`);
+      // Don't throw - continue with other cleanup
+    }
+
+    // 2b. Delete Jenkins resize pipeline (if one was ever created for this app)
+    try {
+      await InfrastructureCleanupService.deleteResizeJob(appName);
+    } catch (error: unknown) {
+      console.error(`[DeploymentService] Resize job cleanup error:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      errors.push(`Jenkins resize: ${errorMessage}`);
       // Don't throw - continue with other cleanup
     }
 

@@ -130,88 +130,96 @@ export class DomainService {
       return normalizeAddDomainResult(fromIdempotency);
     }
 
-    await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
+    // Load app first (authorization + needed for mutation lock)
+    const app = await this.deps.appRead.getOwnedApp(input.appId, input.actor.userId);
 
-    const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
-    if (existing) {
-      throw new DomainServiceError({
-        code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
-        message:
-          existing.app_id === input.appId
-            ? "This domain is already added to this app"
-            : "This domain is already in use by another app",
-      });
-    }
+    return this.appMutationGuard.withAppMutationLock({
+      app,
+      holder: "domain_add",
+      metadata: { domain: cleanDomain, action: "domain.add" },
+      run: async () => {
+        const existing = await this.deps.domains.findActiveByDomain(cleanDomain);
+        if (existing) {
+          throw new DomainServiceError({
+            code: DOMAIN_ERROR_CODES.DOMAIN_ALREADY_IN_USE,
+            message:
+              existing.app_id === input.appId
+                ? "This domain is already added to this app"
+                : "This domain is already in use by another app",
+          });
+        }
 
-    const ownership = await this.resolveOwnershipMode({
-      domain: cleanDomain,
-      userId: input.actor.userId,
-    });
+        const ownership = await this.resolveOwnershipMode({
+          domain: cleanDomain,
+          userId: input.actor.userId,
+        });
 
-    const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
-    const createdDomain = await this.deps.domains.createPending({
-      appId: input.appId,
-      userId: input.actor.userId,
-      domain: cleanDomain,
-      verificationToken,
-    });
+        const verificationToken = `verify_${randomBytes(8).toString("hex")}`;
+        const createdDomain = await this.deps.domains.createPending({
+          appId: input.appId,
+          userId: input.actor.userId,
+          domain: cleanDomain,
+          verificationToken,
+        });
 
-    const domain = ownership.managedByPlatform
-      ? await this.deps.domains.markVerified(createdDomain.id)
-      : createdDomain;
+        const domain = ownership.managedByPlatform
+          ? await this.deps.domains.markVerified(createdDomain.id)
+          : createdDomain;
 
-    const response = {
-      domain,
-      verification_required: !ownership.managedByPlatform,
-      managed_zone_detected: ownership.managedByPlatform,
-      ownership_source: ownership.source,
-      verification_instructions: ownership.managedByPlatform
-        ? null
-        : {
-            record_type: "TXT" as const,
-            record_name: `galaxyhvh-verify.${cleanDomain}`,
-            record_value: verificationToken,
-            ttl: 300,
-          },
-    };
-
-    await this.persistCompletedIdempotentOperation({
-      action: "domain.add",
-      actorUserId: input.actor.userId,
-      idempotencyKey: input.idempotencyKey,
-      domainId: domain.id,
-      requestData: { app_id: input.appId, domain: cleanDomain },
-      responseData: response as unknown as Record<string, unknown>,
-    });
-
-    await this.emitNonBlocking(async () => {
-      await this.emitAudit({
-        actor: input.actor,
-        action: "create",
-        serviceId: domain.id,
-        serviceName: cleanDomain,
-        metadata: {
-          app_id: input.appId,
-          event: "domain_added",
+        const response = {
+          domain,
+          verification_required: !ownership.managedByPlatform,
           managed_zone_detected: ownership.managedByPlatform,
           ownership_source: ownership.source,
-        },
-      });
-      await this.emitNotification({
-        userId: input.actor.userId,
-        action: "created",
-        serviceName: cleanDomain,
-        serviceId: domain.id,
-        type: "success",
-        metadata: {
-          app_id: input.appId,
-          managed_zone_detected: ownership.managedByPlatform,
-          ownership_source: ownership.source,
-        },
-      });
-    });
+          verification_instructions: ownership.managedByPlatform
+            ? null
+            : {
+                record_type: "TXT" as const,
+                record_name: `galaxyhvh-verify.${cleanDomain}`,
+                record_value: verificationToken,
+                ttl: 300,
+              },
+        };
 
-    return response;
+        await this.persistCompletedIdempotentOperation({
+          action: "domain.add",
+          actorUserId: input.actor.userId,
+          idempotencyKey: input.idempotencyKey,
+          domainId: domain.id,
+          requestData: { app_id: input.appId, domain: cleanDomain },
+          responseData: response as unknown as Record<string, unknown>,
+        });
+
+        await this.emitNonBlocking(async () => {
+          await this.emitAudit({
+            actor: input.actor,
+            action: "create",
+            serviceId: domain.id,
+            serviceName: cleanDomain,
+            metadata: {
+              app_id: input.appId,
+              event: "domain_added",
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+          await this.emitNotification({
+            userId: input.actor.userId,
+            action: "created",
+            serviceName: cleanDomain,
+            serviceId: domain.id,
+            type: "success",
+            metadata: {
+              app_id: input.appId,
+              managed_zone_detected: ownership.managedByPlatform,
+              ownership_source: ownership.source,
+            },
+          });
+        });
+
+        return response;
+      },
+    });
   }
 
   async verifyDomain(input: {

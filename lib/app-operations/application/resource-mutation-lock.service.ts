@@ -21,6 +21,12 @@ function formatInProgressLabel(params: {
   if (type === "env_update" || params.holder === "env_update") {
     return "Environment update";
   }
+  if (type === "domain_add" || params.holder === "domain_add") {
+    return "Domain add";
+  }
+  if (type === "domain_remove" || params.holder === "domain_remove") {
+    return "Domain remove";
+  }
   if (params.holder === "delete") {
     return "Delete";
   }
