@@ -205,7 +205,7 @@ DEPLOY_EOF
             echo "Checking deployment status for \${env.APP_NAME}"
 
             sh(
-              script: 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=5m || true',
+              script: 'kubectl rollout status deployment/\${APP_NAME} -n default --timeout=90s || { echo "WARNING: Rollout did not complete in 90s - deployment may still be starting"; kubectl get pods -n default -l app=\${APP_NAME} --no-headers; }',
               returnStatus: false
             )
 

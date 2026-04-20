@@ -134,7 +134,9 @@ export function AppIntegrationsSection({ appId, appName, projectId }: AppIntegra
         throw new Error(errorData.error || 'Failed to fetch plans');
       }
 
-      const plans = result.plans || [];
+      const data = await res.json();
+
+      const plans = data.plans || [];
       setDatabasePlans(plans);
     } catch (err) {
       console.error('Error fetching database plans:', err);

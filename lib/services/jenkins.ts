@@ -191,14 +191,37 @@ export class JenkinsService {
     );
     const pipeline = this.hardenPipelineXml(pipelineRaw);
 
-    // Create the job
+    // Upsert: update existing job config first, create only if it doesn't exist yet.
+    // This ensures every redeploy picks up the latest pipeline template.
     try {
-      await jenkins.job.create(jobName, pipeline);
-      console.log(`[JenkinsService] Created Jenkins job: ${jobName}`);
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JenkinsService] Failed to create job:`, errorMessage);
-      throw new Error(`Jenkins job creation failed: ${errorMessage}`);
+      await jenkins.job.config(jobName, pipeline);
+      console.log(`[JenkinsService] Updated existing Jenkins job config: ${jobName}`);
+    } catch (updateError: unknown) {
+      const updateMessage = updateError instanceof Error ? updateError.message : String(updateError);
+      const is404 =
+        updateMessage.includes('404') ||
+        updateMessage.toLowerCase().includes('not found') ||
+        updateMessage.toLowerCase().includes('does not exist');
+
+      if (!is404) {
+        console.error(`[JenkinsService] Failed to update job:`, updateMessage);
+        throw new Error(`Jenkins job update failed: ${updateMessage}`);
+      }
+
+      // Job doesn't exist yet — create it
+      try {
+        await jenkins.job.create(jobName, pipeline);
+        console.log(`[JenkinsService] Created Jenkins job: ${jobName}`);
+      } catch (createError: unknown) {
+        const createMessage = createError instanceof Error ? createError.message : String(createError);
+        // Race-safe: if job was created between our check and create, update config
+        try {
+          await jenkins.job.config(jobName, pipeline);
+          console.log(`[JenkinsService] Job config set after create race: ${jobName}`);
+        } catch {
+          throw new Error(`Jenkins job creation failed: ${createMessage}`);
+        }
+      }
     }
 
     // Trigger build immediately (job creation might need a moment, hence the small delay)
@@ -220,10 +243,6 @@ export class JenkinsService {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`[JenkinsService] Error triggering build:`, errorMessage);
-      // Try to delete the created job since build failed
-      await jenkins.job.destroy(jobName).catch((err: unknown) => 
-        console.error(`[JenkinsService] Failed to cleanup job after build failure:`, err)
-      );
       throw new Error(`Jenkins build trigger failed: ${errorMessage}`);
     }
   }

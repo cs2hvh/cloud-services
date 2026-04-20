@@ -230,6 +230,8 @@ export default function AppDetailPage() {
   const [editedEnvVars, setEditedEnvVars] = useState<EnvVar[]>([]);
   const [envVarsModified, setEnvVarsModified] = useState(false);
   const [savingEnvVars, setSavingEnvVars] = useState(false);
+  const [envVarsLoading, setEnvVarsLoading] = useState(false);
+  const [envVarsLoaded, setEnvVarsLoaded] = useState(false);
   const [redeploying, setRedeploying] = useState(false);
   const [rollbackModalOpen, setRollbackModalOpen] = useState(false);
   const [envVarError, setEnvVarError] = useState<string | null>(null);
@@ -657,18 +659,38 @@ export default function AppDetailPage() {
     }
   }, [activeBuildNumber]);
 
-  // Initialize edited env vars when app data loads
+  // Reset env vars state when navigating to a different app
   useEffect(() => {
-    if (app?.env_vars) {
-      setEditedEnvVars(
-        app.env_vars.map((env) => ({
-          key: env?.key ?? '',
-          value: env?.value ?? '',
-          visible: false,
-        }))
-      );
-    }
-  }, [app?.env_vars]);
+    setEnvVarsLoaded(false);
+    setEnvVarsLoading(false);
+    setEditedEnvVars([]);
+    setEnvVarsModified(false);
+  }, [app?.id]);
+
+  // Lazy-load env var values only when the Settings tab is first opened.
+  // Values are intentionally excluded from the main page-load GET response
+  // to avoid sending decrypted secrets over the wire unnecessarily.
+  useEffect(() => {
+    if (activeTab !== 'settings' || !app?.id || envVarsLoaded || envVarsLoading) return;
+
+    setEnvVarsLoading(true);
+    setEnvVarError(null);
+
+    fetch('/api/services/platform-apps/env-vars/list', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ app_id: app.id }),
+    })
+      .then(res => res.ok ? res.json() : res.json().then(d => Promise.reject(d.error || 'Failed to load')))
+      .then((data: { env_vars: Array<{ key: string; value: string }> }) => {
+        setEditedEnvVars(
+          data.env_vars.map(env => ({ key: env.key, value: env.value, visible: false }))
+        );
+        setEnvVarsLoaded(true);
+      })
+      .catch((msg: string) => setEnvVarError(typeof msg === 'string' ? msg : 'Failed to load environment variables'))
+      .finally(() => setEnvVarsLoading(false));
+  }, [activeTab, app?.id, envVarsLoaded, envVarsLoading]);
 
   // Initialize project assignment when app data loads
   useEffect(() => {
@@ -1976,7 +1998,14 @@ export default function AppDetailPage() {
                   )}
 
                   {/* Advanced Environment Variables Editor */}
-                  <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} />
+                  {envVarsLoading ? (
+                    <div className="flex items-center gap-2 py-6 text-white/50 text-sm">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading environment variables…
+                    </div>
+                  ) : (
+                    <EnvVarsEditor value={editedEnvVars} onChange={handleEnvVarsChange} />
+                  )}
 
                   {/* Save Button */}
                   {envVarsModified && (
